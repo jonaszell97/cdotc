@@ -67,6 +67,8 @@ using FunctionInstResult = ActionResult<ast::FunctionDecl*>;
 using MethodInstResult   = ActionResult<ast::MethodDecl*>;
 using AliasInstResult    = ActionResult<ast::AliasDecl*>;
 
+class InstantiatorImpl;
+
 class TemplateInstantiator {
 public:
    using TemplateArgs = sema::FinalTemplateArgumentList;
@@ -153,11 +155,7 @@ public:
    unsigned getInstantiationDepth(ast::NamedDecl *Decl);
    void setInstantiationDepth(ast::NamedDecl *Decl, unsigned Depth);
 
-private:
-   ast::SemaPass &SP;
-   unsigned InstantiationDepth = 0;
-   std::queue<ast::NamedDecl*> PendingInstantiations;
-   llvm::DenseMap<ast::NamedDecl*, unsigned> InstantiationDepthMap;
+   void visitPendingInstantiations();
 
    struct InstantiationDepthRAII {
       InstantiationDepthRAII(TemplateInstantiator &Inst)
@@ -179,10 +177,15 @@ private:
             pop();
       }
 
-   private:
       TemplateInstantiator &Inst;
       bool Popped = false;
    };
+
+private:
+   ast::SemaPass &SP;
+   unsigned InstantiationDepth = 0;
+   std::queue<ast::NamedDecl*> PendingInstantiations;
+   llvm::DenseMap<ast::NamedDecl*, unsigned> InstantiationDepthMap;
 
    bool checkInstantiationDepth(ast::NamedDecl *Inst,
                                 ast::NamedDecl *CurDecl,

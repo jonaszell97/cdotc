@@ -7,6 +7,7 @@
 
 #include "AST/Type.h"
 #include "IdentifierInfo.h"
+#include "Lex/SourceLocation.h"
 
 namespace cdot {
 
@@ -16,6 +17,7 @@ namespace sema {
 
 class DeclarationNameTable;
 class DeclarationNameInfo;
+class NestedNameSpecifier;
 
 class DeclarationName {
 public:
@@ -289,9 +291,15 @@ class DeclarationNameTable {
    ast::ASTContext &Ctx;
    DeclarationName ErrorName;
 
+   // actually a llvm::FoldingSet<NestedNameSpecifier>*
+   void *NestedNameSpecifiers;
+
 public:
    explicit DeclarationNameTable(ast::ASTContext &Ctx);
    ~DeclarationNameTable();
+
+   friend class NestedNameSpecifier;
+   friend class NestedNameSpecifierWithLoc;
 
    DeclarationName getIdentifiedName(DeclarationName::DeclarationKind Kind,
                                      const IdentifierInfo &II);
@@ -341,6 +349,12 @@ diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
 
 diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
                                     IdentifierInfo *II);
+
+diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
+                                    NestedNameSpecifier *Name);
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                              NestedNameSpecifier *Name);
 
 } // namespace cdot
 

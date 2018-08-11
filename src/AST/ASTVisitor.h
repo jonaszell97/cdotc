@@ -717,6 +717,264 @@ protected:
    bool visitMacroExpansionStmt(MacroExpansionStmt*) { return true; }
 };
 
+template<class SubClass>
+class ASTTypeVisitor {
+public:
+   ASTTypeVisitor(bool VisitSubDecls = true) : VisitSubDecls(VisitSubDecls)
+   {}
+
+   void visitType(const SourceType &Ty)
+   {
+      static_cast<SubClass*>(this)->visitType(Ty);
+   }
+
+protected:
+   bool VisitSubDecls;
+
+   void visit(Decl *D)
+   {
+      switch (D->getKind()) {
+#     define CDOT_DECL(Name)                                            \
+         case Decl::Name##ID:                                           \
+            return visit##Name(static_cast<Name*>(D));
+#     include "AST/Decl.def"
+
+      default:
+         llvm_unreachable("not a decl!");
+      }
+   }
+
+   void visitDeclContext(DeclContext *DC)
+   {
+      if (!VisitSubDecls) {
+         return;
+      }
+
+      for (auto *D : DC->getDecls())
+         visit(D);
+   }
+
+   void visitDebugDecl(DebugDecl *D)
+   {
+
+   }
+
+   void visitStaticAssertStmt(StaticAssertStmt *D)
+   {
+
+   }
+
+   void visitStaticPrintStmt(StaticPrintStmt *D)
+   {
+
+   }
+
+   void visitStaticIfDecl(StaticIfDecl *D)
+   {
+      visit(D->getIfDecl());
+      visit(D->getElseDecl());
+   }
+
+   void visitStaticForDecl(StaticForDecl *D)
+   {
+
+   }
+
+   void visitMixinDecl(MixinDecl *D)
+   {
+
+   }
+
+   void visitCompoundDecl(CompoundDecl *D)
+   {
+      visitDeclContext(D);
+   }
+
+   void visitMacroExpansionDecl(MacroExpansionDecl *D)
+   {
+
+   }
+
+   void visitAssociatedTypeDecl(AssociatedTypeDecl *D)
+   {
+      visitType(D->getActualType());
+   }
+
+   void visitPropDecl(PropDecl *D)
+   {
+      visitType(D->getType());
+   }
+
+   void visitSubscriptDecl(SubscriptDecl *D)
+   {
+      visitType(D->getType());
+   }
+
+   void visitTypedefDecl(TypedefDecl *D)
+   {
+      llvm_unreachable("NO!");
+   }
+
+   void visitNamespaceDecl(NamespaceDecl *D)
+   {
+      visitDeclContext(D);
+   }
+
+   void visitUnittestDecl(UnittestDecl *D)
+   {
+
+   }
+
+   void visitAliasDecl(AliasDecl *D)
+   {
+      visitType(D->getType());
+      visitDeclContext(D);
+   }
+
+   void visitPrecedenceGroupDecl(PrecedenceGroupDecl *D)
+   {
+
+   }
+
+   void visitOperatorDecl(OperatorDecl *D)
+   {
+
+   }
+
+   void visitMacroDecl(MacroDecl *D)
+   {
+
+   }
+
+   void visitModuleDecl(ModuleDecl *D)
+   {
+      visitDeclContext(D);
+   }
+
+   void visitImportDecl(ImportDecl *D)
+   {
+
+   }
+
+   void visitUsingDecl(UsingDecl *D)
+   {
+
+   }
+
+   void visitVarDecl(VarDecl *D)
+   {
+      visitType(D->getType());
+   }
+
+   void visitLocalVarDecl(LocalVarDecl *D)
+   {
+      visitVarDecl(D);
+   }
+
+   void visitGlobalVarDecl(GlobalVarDecl *D)
+   {
+      visitVarDecl(D);
+   }
+
+   void visitDestructuringDecl(DestructuringDecl *D)
+   {
+      for (auto *Var : D->getDecls())
+         visit(Var);
+
+      visitType(D->getType());
+   }
+
+   void visitFuncArgDecl(FuncArgDecl *D)
+   {
+      visitVarDecl(D);
+   }
+
+   void visitFieldDecl(FieldDecl *D)
+   {
+      visitVarDecl(D);
+   }
+
+   void visitTemplateParamDecl(TemplateParamDecl *D)
+   {
+      visitType(D->getCovariance());
+      visitType(D->getContravariance());
+   }
+
+   void visitRecordDecl(RecordDecl *D)
+   {
+      visitDeclContext(D);
+
+      for (auto &Conf : D->getConformanceTypes())
+         visitType(Conf);
+   }
+
+   void visitStructDecl(StructDecl *D)
+   {
+      visitRecordDecl(D);
+   }
+
+   void visitClassDecl(ClassDecl *D)
+   {
+      visitStructDecl(D);
+      visitType(D->getParentType());
+   }
+
+   void visitEnumDecl(EnumDecl *D)
+   {
+      visitRecordDecl(D);
+      visitType(D->getRawType());
+   }
+
+   void visitUnionDecl(UnionDecl *D)
+   {
+      visitRecordDecl(D);
+   }
+
+   void visitProtocolDecl(ProtocolDecl *D)
+   {
+      visitRecordDecl(D);
+   }
+
+   void visitExtensionDecl(ExtensionDecl *D)
+   {
+      visitDeclContext(D);
+
+      for (auto &Conf : D->getConformanceTypes())
+         visitType(Conf);
+   }
+
+   void visitCallableDecl(CallableDecl *D)
+   {
+      visitType(D->getReturnType());
+      visitDeclContext(D);
+   }
+
+   void visitFunctionDecl(FunctionDecl *D)
+   {
+      visitCallableDecl(D);
+   }
+
+   void visitMethodDecl(MethodDecl *D)
+   {
+      visitCallableDecl(D);
+   }
+
+   void visitInitDecl(InitDecl *D)
+   {
+      visitMethodDecl(D);
+   }
+
+   void visitDeinitDecl(DeinitDecl *D)
+   {
+      visitMethodDecl(D);
+   }
+
+   void visitEnumCaseDecl(EnumCaseDecl *D)
+   {
+      visitCallableDecl(D);
+   }
+};
+
 } // namespace ast
 } // namespace cdot
 

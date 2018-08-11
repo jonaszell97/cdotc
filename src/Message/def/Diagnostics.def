@@ -374,6 +374,7 @@
    CDOT_NOTE(note_inferred_template_arg_conflict, "candidate not viable: conflicting ${ 0 | select(types,values) } $1 and $2 deduced for template argument $3")
    CDOT_NOTE(note_template_arg_kind_mismatch, "candidate not viable: expected ${ 0 | select(typename, value, variadic typename, variadic value) } but found ${ 1 | select(typename, value, variadic typename, variadic value) } for ${ 2 | ordinal } argument")
    CDOT_NOTE(note_template_arg_type_mismatch, "candidate not viable: expected $0 as ${ 1 | ordinal } argument but found $2")
+   CDOT_NOTE(note_template_arg_covariance, "expected type ${ 0 | select(conforming to protocol, that is a subclass of) } '$1' for template parameter '$2', but got '$3")
    CDOT_NOTE(note_template_parameter_here, "template parameter declared here")
    CDOT_NOTE(note_too_many_template_args, "candidate not viable: expected at most $0 ${ 0 | plural_s(template argument) }, $1 given")
    CDOT_NOTE(note_method_must_be_static, "candidate method not viable: not declared 'static'")

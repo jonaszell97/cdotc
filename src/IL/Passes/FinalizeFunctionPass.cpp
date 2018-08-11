@@ -28,8 +28,7 @@ void FinalizeFunctionPass::run()
    }
 
    auto &Builder = ILGen.Builder;
-   for (auto Assign : Assigns) {
-      auto IP = Builder.saveIP();
+   for (auto Assign : Assigns) {;
       Builder.SetInsertPoint(Assign->getIterator());
 
       auto Ld = Builder.CreateLoad(Assign->getDst());
@@ -45,8 +44,6 @@ void FinalizeFunctionPass::run()
       auto Store = Builder.CreateStore(Assign->getSrc(), Assign->getDst());
       Store->setTagged(Assign->isTagged());
       Store->setMemoryOrder(Assign->getMemoryOrder());
-
-      Builder.restoreIP(IP);
 
       Assign->replaceAllUsesWith(Store);
       Assign->detachAndErase();

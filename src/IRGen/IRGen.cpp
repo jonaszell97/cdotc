@@ -1197,7 +1197,7 @@ llvm::BasicBlock* IRGen::getBasicBlock(BasicBlock *BB)
 
 llvm::Function* IRGen::getFunction(il::Function *F)
 {
-   return M->getFunction(F->getName());
+   return cast<llvm::Function>(ValueMap[F]);
 }
 
 llvm::ConstantInt* IRGen::wordSizedInt(uint64_t val)
@@ -1410,9 +1410,6 @@ llvm::Value* IRGen::getLlvmValue(il::Value const *V)
 
 llvm::Value* IRGen::getPotentiallyBoxedValue(const il::Value *V)
 {
-   if (auto B = dyn_cast<BasicBlock>(V))
-      return getBasicBlock(B->getName());
-
    if (auto C = dyn_cast<Constant>(V))
       return getConstantVal(C);
 

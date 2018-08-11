@@ -8,6 +8,40 @@ using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::support;
 
+static DeclarationName adaptName(ASTContext &Ctx,
+                                 DeclContext &OldCtx,
+                                 DeclContext &NewCtx,
+                                 DeclarationName Name) {
+   switch (Name.getKind()) {
+   default:
+      return Name;
+   case DeclarationName::ConstructorName:
+   case DeclarationName::BaseConstructorName:
+   case DeclarationName::DestructorName: {
+      QualType Ty = Name.getConstructorType();
+      auto *OldRec = dyn_cast<RecordDecl>(&OldCtx);
+      if (!OldRec || OldRec != Ty->getRecord())
+         return Name;
+
+      auto *NewRec = dyn_cast<RecordDecl>(&NewCtx);
+      if (!NewRec)
+         return Name;
+
+      switch (Name.getKind()) {
+      case DeclarationName::ConstructorName:
+         return Ctx.getDeclNameTable().getConstructorName(NewRec->getType());
+      case DeclarationName::BaseConstructorName:
+         return Ctx.getDeclNameTable().getConstructorName(NewRec->getType(),
+                                                          false);
+      case DeclarationName::DestructorName:
+         return Ctx.getDeclNameTable().getDestructorName(NewRec->getType());
+      default:
+         llvm_unreachable("bad name kind");
+      }
+   }
+   }
+}
+
 DeclContextLookupResult SemaPass::LookupOwn(DeclContext &Ctx,
                                             DeclarationName Name,
                                             bool ExternalLookup,
@@ -31,13 +65,12 @@ DeclContextLookupResult SemaPass::LookupOwn(DeclContext &Ctx,
             return Result;
       }
 
-      goto case_record_decl;
+      LLVM_FALLTHROUGH;
    }
    case Decl::ProtocolDeclID:
    case Decl::StructDeclID:
    case Decl::EnumDeclID:
-   case Decl::UnionDeclID:
-   case_record_decl: {
+   case Decl::UnionDeclID: {
       if (Name.getKind() == DeclarationName::ExtensionName)
          break;
 
@@ -85,7 +118,8 @@ void MultiLevelLookupImpl(MultiLevelLookupResult &Result,
                           DeclarationName Name,
                           bool ExternalLookup,
                           bool LocalLookup,
-                          bool FindFirst);
+                          bool FindFirst,
+                          bool ImmediateContextOnly = false);
 
 static void DoLocalLookup(MultiLevelLookupResult &Result,
                           SemaPass &SP,
@@ -93,11 +127,13 @@ static void DoLocalLookup(MultiLevelLookupResult &Result,
                           DeclarationName Name,
                           bool FindFirst) {
    auto &NameTable = SP.getContext().getDeclNameTable();
+   LambdaScope *LS = nullptr;
+
    for (auto S = SP.getCurrentScope(); S; S = S->getEnclosingScope()) {
       switch (S->getTypeID()) {
       case Scope::LambdaScopeID: {
-         if (!Result.getLambdaScope())
-            Result.setLambdaScope(cast<LambdaScope>(S));
+         if (!LS)
+            LS = cast<LambdaScope>(S);
 
          LocalCtx = LocalCtx->getParentCtx();
          LLVM_FALLTHROUGH;
@@ -108,14 +144,16 @@ static void DoLocalLookup(MultiLevelLookupResult &Result,
             ->lookup(Name);
 
          if (ScopedResult) {
-            if (Result.getLambdaScope() == S) {
+            if (LS == S) {
                // this argument isn't captured.
-               Result.setLambdaScope(nullptr);
+               LS = nullptr;
             }
 
-            Result.addResult(DeclContextLookupResult(ScopedResult));
+            Result.addResult(DeclContextLookupResult(ScopedResult), LS);
             if (FindFirst)
                return;
+
+            LS = nullptr;
          }
 
          break;
@@ -126,10 +164,12 @@ static void DoLocalLookup(MultiLevelLookupResult &Result,
 
          auto ScopedResult = LocalCtx->lookup(DN);
          if (ScopedResult) {
-            Result.addResult(ScopedResult);
+            Result.addResult(ScopedResult, LS);
             if (FindFirst) {
                return;
             }
+
+            LS = nullptr;
          }
 
          break;
@@ -155,9 +195,6 @@ static void LookupInRecord(MultiLevelLookupResult &Result,
    if (isa<ProtocolDecl>(R)) {
       LookupInConformances = true;
    }
-   else if (R->isTemplateOrInTemplate()) {
-      LookupInConformances = true;
-   }
 
    // Lookup in protocol conformances.
    if (LookupInConformances) {
@@ -165,8 +202,9 @@ static void LookupInRecord(MultiLevelLookupResult &Result,
                             .getAllConformances(R);
 
       for (auto *Conf : Conformances) {
+         Name = adaptName(SP.getContext(), *R, *Conf->getProto(), Name);
          MultiLevelLookupImpl(Result, SP, *Conf->getProto(), Name,
-                              true, false, FindFirst);
+                              true, false, FindFirst, true);
 
          if (!Result.empty() && FindFirst) {
             return;
@@ -184,7 +222,7 @@ static void LookupInRecord(MultiLevelLookupResult &Result,
    for (auto *D : Extensions) {
       auto *Ext = dyn_cast<ExtensionDecl>(D);
       MultiLevelLookupImpl(Result, SP, *Ext, Name,
-                           true, false, FindFirst);
+                           true, false, FindFirst, true);
 
       if (!Result.empty() && FindFirst) {
          return;
@@ -199,7 +237,7 @@ static void LookupInBaseClass(MultiLevelLookupResult &Result,
                               bool FindFirst) {
    if (auto *Base = C->getParentClass()) {
       MultiLevelLookupImpl(Result, SP, *Base, Name,
-                           true, false, FindFirst);
+                           true, false, FindFirst, true);
 
       if (FindFirst && !Result.empty())
          return;
@@ -227,7 +265,7 @@ static void LookupInExtension(MultiLevelLookupResult &Result,
          break;
 
       MultiLevelLookupImpl(Result, SP, *Conf->getRecord(), Name,
-                           true, false, FindFirst);
+                           true, false, FindFirst, true);
 
       if (Result && FindFirst)
          return;
@@ -254,7 +292,8 @@ void MultiLevelLookupImpl(MultiLevelLookupResult &Result,
                           DeclarationName Name,
                           bool ExternalLookup,
                           bool LocalLookup,
-                          bool FindFirst) {
+                          bool FindFirst,
+                          bool ImmediateContextOnly) {
    auto *Ctx = &CtxRef;
 
    // First do a local lookup considering scoped names. This can only be
@@ -315,6 +354,9 @@ void MultiLevelLookupImpl(MultiLevelLookupResult &Result,
       if (FindFirst && Result)
          return;
 
+      if (ImmediateContextOnly)
+         return;
+
       if (auto *ND = dyn_cast<NamedDecl>(Ctx)) {
          Ctx = ND->getNonTransparentDeclContext();
       }
@@ -327,7 +369,7 @@ void MultiLevelLookupImpl(MultiLevelLookupResult &Result,
    }
 }
 
-DeclContextLookupResult SemaPass::Lookup(DeclContext &Ctx,
+SingleLevelLookupResult SemaPass::Lookup(DeclContext &Ctx,
                                          DeclarationName Name,
                                          bool ExternalLookup,
                                          bool LookInExtensions) {
@@ -349,7 +391,7 @@ DeclContextLookupResult SemaPass::Lookup(DeclContext &Ctx,
    }
 
    if (Result.empty())
-      return DeclContextLookupResult();
+      return SingleLevelLookupResult();
 
    return Result.front();
 }

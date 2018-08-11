@@ -1022,6 +1022,39 @@ src/Basic/Mangle.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Basic/Mangle.cpp.s
 .PHONY : src/Basic/Mangle.cpp.s
 
+src/Basic/NestedNameSpecifier.o: src/Basic/NestedNameSpecifier.cpp.o
+
+.PHONY : src/Basic/NestedNameSpecifier.o
+
+# target to build an object file
+src/Basic/NestedNameSpecifier.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Basic/NestedNameSpecifier.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Basic/NestedNameSpecifier.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Basic/NestedNameSpecifier.cpp.o
+.PHONY : src/Basic/NestedNameSpecifier.cpp.o
+
+src/Basic/NestedNameSpecifier.i: src/Basic/NestedNameSpecifier.cpp.i
+
+.PHONY : src/Basic/NestedNameSpecifier.i
+
+# target to preprocess a source file
+src/Basic/NestedNameSpecifier.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Basic/NestedNameSpecifier.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Basic/NestedNameSpecifier.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Basic/NestedNameSpecifier.cpp.i
+.PHONY : src/Basic/NestedNameSpecifier.cpp.i
+
+src/Basic/NestedNameSpecifier.s: src/Basic/NestedNameSpecifier.cpp.s
+
+.PHONY : src/Basic/NestedNameSpecifier.s
+
+# target to generate assembly for a file
+src/Basic/NestedNameSpecifier.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Basic/NestedNameSpecifier.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Basic/NestedNameSpecifier.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Basic/NestedNameSpecifier.cpp.s
+.PHONY : src/Basic/NestedNameSpecifier.cpp.s
+
 src/Basic/Precedence.o: src/Basic/Precedence.cpp.o
 
 .PHONY : src/Basic/Precedence.o
@@ -5056,6 +5089,9 @@ help:
 	@echo "... src/Basic/Mangle.o"
 	@echo "... src/Basic/Mangle.i"
 	@echo "... src/Basic/Mangle.s"
+	@echo "... src/Basic/NestedNameSpecifier.o"
+	@echo "... src/Basic/NestedNameSpecifier.i"
+	@echo "... src/Basic/NestedNameSpecifier.s"
 	@echo "... src/Basic/Precedence.o"
 	@echo "... src/Basic/Precedence.i"
 	@echo "... src/Basic/Precedence.s"

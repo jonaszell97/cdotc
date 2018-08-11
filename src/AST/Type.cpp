@@ -321,6 +321,14 @@ QualType Type::stripReference() const
    return const_cast<Type*>(this);
 }
 
+QualType Type::stripMetaType() const
+{
+   if (auto *Meta = asMetaType())
+      return Meta->getUnderlyingType();
+
+   return const_cast<Type*>(this);
+}
+
 Type::operator QualType()
 {
    return QualType(this);
@@ -661,6 +669,11 @@ string Type::toString() const
    return OS.str();
 }
 
+std::string Type::toDiagString() const
+{
+   return QualType(const_cast<Type*>(this)).toDiagString();
+}
+
 namespace {
 
 template<class SubClass>
@@ -813,6 +826,11 @@ public:
       OS << Ty->getDecl()->getDeclName();
    }
 
+   void visitDependentNameType(const DependentNameType *Ty)
+   {
+      OS << Ty->getNameSpec();
+   }
+
    void visitPointerType(const PointerType *Ty)
    {
       auto pointee = Ty->getPointeeType();
@@ -880,7 +898,7 @@ public:
    {
       auto TD = cast<TypedefType>(Ty)->getTypedef();
       OS << TD->getDeclName() << " (aka ";
-      visit(TD->getOriginTy().getResolvedType());
+      visit(Ty->getAliasedType());
       OS << ")";
    }
 
@@ -978,6 +996,15 @@ diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &Diag, QualType Ty)
 diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &Diag,
                                     const ast::SourceType &Ty) {
    return Diag << Ty.getResolvedType();
+}
+
+std::string QualType::toDiagString() const
+{
+   std::string str;
+   llvm::raw_string_ostream OS(str);
+
+   DiagTypePrinter(OS).visit(*this);
+   return OS.str();
 }
 
 MutablePointerType::MutablePointerType(QualType pointeeType,
@@ -1151,6 +1178,11 @@ void FunctionType::ParamInfo::Profile(llvm::FoldingSetNodeID &ID) const
    ID.AddInteger((char)Conv);
 }
 
+bool FunctionType::ParamInfo::operator==(const ParamInfo &I) const
+{
+   return Conv == I.Conv;
+}
+
 TupleType::TupleType(llvm::ArrayRef<QualType> containedTypes,
                      Type *CanonicalType, bool Dependent)
    : Type(TupleTypeID, CanonicalType, Dependent),
@@ -1215,14 +1247,18 @@ void AssociatedType::setCanonicalType(QualType CanonicalType)
 
 QualType AssociatedType::getActualType() const
 {
+   if (!AT->isImplementation())
+      return QualType();
+
    return AT->getActualType();
 }
 
-TypedefType::TypedefType(TypedefDecl *td)
+TypedefType::TypedefType(AliasDecl *td)
    : Type(TypedefTypeID, nullptr, false),
      td(td)
 {
-
+   CanonicalType = td->getType()->asMetaType()->getUnderlyingType();
+   Bits.Dependent = CanonicalType->isDependentType();
 }
 
 void TypedefType::setCanonicalType(QualType CanonicalType)
@@ -1233,12 +1269,39 @@ void TypedefType::setCanonicalType(QualType CanonicalType)
 
 QualType TypedefType::getAliasedType() const
 {
-   return td->getOriginTy();
+   return td->getType()->asMetaType()->getUnderlyingType();
 }
 
-llvm::StringRef TypedefType::getAliasName() const
+StringRef TypedefType::getAliasName() const
 {
    return td->getName();
+}
+
+DependentNameType::DependentNameType(NestedNameSpecifierWithLoc *NameSpec)
+   : Type(DependentNameTypeID, nullptr, true), NameSpec(NameSpec)
+{
+
+}
+
+NestedNameSpecifier* DependentNameType::getNameSpec() const
+{
+   return NameSpec->getNameSpec();
+}
+
+void DependentNameType::Profile(llvm::FoldingSetNodeID &ID)
+{
+   Profile(ID, NameSpec);
+}
+
+void DependentNameType::Profile(llvm::FoldingSetNodeID &ID,
+                                NestedNameSpecifierWithLoc *Name) {
+   ID.AddPointer(Name);
+
+   auto SourceLocs = Name->getSourceRanges();
+   for (auto Loc : SourceLocs) {
+      ID.AddInteger(Loc.getStart().getOffset());
+      ID.AddInteger(Loc.getEnd().getOffset());
+   }
 }
 
 } // namespace cdot

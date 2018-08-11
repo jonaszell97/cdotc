@@ -6,6 +6,7 @@
 
 #include "ASTCommon.h"
 #include "AST/TypeVisitor.h"
+#include "Basic/NestedNameSpecifier.h"
 #include "Driver/Compiler.h"
 #include "ILWriter.h"
 #include "IL/Constant.h"
@@ -388,6 +389,11 @@ void ASTTypeWriter::visitDependentSizeArrayType(const DependentSizeArrayType *Ty
    Record.AddTypeRef(Ty->getElementType());
 }
 
+void ASTTypeWriter::visitDependentNameType(const DependentNameType *Ty)
+{
+   Record.AddNestedNameSpecWithLoc(Ty->getNameSpecWithLoc());
+}
+
 void ASTTypeWriter::visitFunctionType(const FunctionType *Ty)
 {
    Record.AddTypeRef(Ty->getReturnType());
@@ -612,6 +618,52 @@ void ASTWriter::AddDeclarationName(DeclarationName Name, ASTRecordWriter &Record
    }
 }
 
+void ASTRecordWriter::AddNestedNameSpec(NestedNameSpecifier *Name)
+{
+   if (auto *Prev = Name->getPrevious()) {
+      push_back(true);
+      AddNestedNameSpec(Prev);
+   }
+   else {
+      push_back(false);
+   }
+
+   push_back(Name->getKind());
+
+   switch (Name->getKind()) {
+   case NestedNameSpecifier::Type:
+      AddTypeRef(Name->getType());
+      break;
+   case NestedNameSpecifier::Identifier:
+      AddIdentifierRef(Name->getIdentifier());
+      break;
+   case NestedNameSpecifier::Namespace:
+      AddDeclRef(Name->getNamespace());
+      break;
+   case NestedNameSpecifier::TemplateParam:
+      AddDeclRef(Name->getParam());
+      break;
+   case NestedNameSpecifier::AssociatedType:
+      AddDeclRef(Name->getAssociatedType());
+      break;
+   case NestedNameSpecifier::Module:
+      AddModuleRef(Name->getModule());
+      break;
+   }
+}
+
+void ASTRecordWriter::AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc *Name)
+{
+   AddNestedNameSpec(Name->getNameSpec());
+
+   auto Locs = Name->getSourceRanges();
+   push_back(Locs.size());
+
+   for (auto Loc : Locs) {
+      AddSourceRange(Loc);
+   }
+}
+
 void ASTRecordWriter::AddTemplateArgument(const ResolvedTemplateArg &Arg)
 {
    push_back(Arg.isNull());
@@ -657,11 +709,13 @@ namespace {
 
 class ASTAttrWriter: public AttrVisitor<ASTAttrWriter> {
    ASTRecordWriter Record;
-   ASTWriter &Writer;
+   IdentifierTable &Idents;
 
 public:
    ASTAttrWriter(ASTWriter &Writer, ASTWriter::RecordDataImpl &Data)
-      : Record(Writer, Data), Writer(Writer)
+      : Record(Writer, Data),
+        Idents(Writer.getWriter().getCompilerInstance()
+                     .getContext().getIdentifiers())
    {}
 
    void visit(Attr *A)
@@ -678,72 +732,9 @@ public:
 
 } // anonymous namespace
 
-void ASTAttrWriter::visit_BuiltinAttr(_BuiltinAttr *A)
-{
-   Record.AddIdentifierRef(&Writer.getWriter().getCompilerInstance()
-                                  .getContext().getIdentifiers()
-                                  .get(A->getBuiltinName()));
-}
 
-void ASTAttrWriter::visitAlignAttr(AlignAttr *A)
-{
-   Record.AddStmt(A->getAlignment());
-}
-
-void ASTAttrWriter::visitAutoClosureAttr(AutoClosureAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitCompileTimeAttr(CompileTimeAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitTestableAttr(TestableAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitDiscardableResultAttr(DiscardableResultAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitExternAttr(ExternAttr *A)
-{
-   Record.push_back(A->getLang());
-}
-
-void ASTAttrWriter::visitInlineAttr(InlineAttr *A)
-{
-   Record.push_back(A->getLevel());
-}
-
-void ASTAttrWriter::visitImplicitAttr(ImplicitAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitOpaqueAttr(OpaqueAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitThinAttr(ThinAttr *A)
-{
-
-}
-
-void ASTAttrWriter::visitVersionDeclAttr(VersionDeclAttr *A)
-{
-   Record.push_back(A->getVersion());
-}
-
-void ASTAttrWriter::visitVersionStmtAttr(VersionStmtAttr *A)
-{
-   Record.push_back(A->getVersion());
-}
+#define CDOT_ATTR_SERIALIZE
+#include "SerializeAttr.inc"
 
 void ASTRecordWriter::AddAttributes(llvm::ArrayRef<const Attr *> Attrs)
 {

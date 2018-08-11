@@ -372,6 +372,12 @@ public:
       return Writer->AddDeclarationName(Name, *this);
    }
 
+   /// Emit a nested name specifier.
+   void AddNestedNameSpec(NestedNameSpecifier *Name);
+
+   /// Emit a nested name specifier.
+   void AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc *Name);
+
    /// Emit a template argument.
    void AddTemplateArgument(const sema::ResolvedTemplateArg &Arg);
 

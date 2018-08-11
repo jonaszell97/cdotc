@@ -72,6 +72,7 @@ public:
    void visitGlobalVarDecl(GlobalVarDecl *node);
 
    void visitDestructuringDecl(DestructuringDecl *D);
+   void doDestructure(DestructuringDecl *D, il::Value *V);
 
    void visitFunctionDecl(FunctionDecl *node);
    void visitCallableDecl(CallableDecl *node);
@@ -327,14 +328,10 @@ public:
       il::TerminatorInst *Term;
    };
 
-   bool hasFunctionDefinition(CallableDecl *C) const;
-   il::Function *getFunc(CallableDecl *C) const;
-   il::Method *getFunc(MethodDecl *M) const;
+   il::Function *getFunc(CallableDecl *C);
+   il::Method *getFunc(MethodDecl *M);
 
-   SemaPass &getSema() const
-   {
-      return SP;
-   }
+   SemaPass &getSema() const { return SP; }
 
    friend class SemaPass;
 
@@ -375,6 +372,7 @@ public:
    il::Module *getModuleFor(NamedDecl *ND);
 
    il::Function *wrapNonLambdaFunction(il::Function *F);
+   il::Function *wrapNonLambdaFunction(il::Value *F);
    il::Function *getPartiallyAppliedLambda(il::Method *M, il::Value *Self);
 
    il::Value *getDefaultValue(QualType Ty);

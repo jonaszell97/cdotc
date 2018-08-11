@@ -96,7 +96,6 @@
    CDOT_KEYWORD(static)
    CDOT_KEYWORD(abstract)
    CDOT_KEYWORD(prop)
-   CDOT_KEYWORD(where)
    CDOT_KEYWORD(continue)
    CDOT_KEYWORD(init)
    CDOT_KEYWORD(associatedType)

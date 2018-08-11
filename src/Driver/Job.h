@@ -308,7 +308,7 @@ public:
 
 class UnittestJob: public Job {
 public:
-   UnittestJob(CompilerInstance &CI);
+   UnittestJob(Job *PreviousJob, CompilerInstance &CI);
 
    void run() override;
    static bool classof(const Job *J) { return J->getKind() == UnittestJobID; }

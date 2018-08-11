@@ -667,6 +667,22 @@ AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl *AT) const
    return New;
 }
 
+DependentNameType*
+ASTContext::getDependentNameType(NestedNameSpecifierWithLoc *Name) const
+{
+   llvm::FoldingSetNodeID ID;
+   DependentNameType::Profile(ID, Name);
+
+   void *insertPos = nullptr;
+   if (auto *Ptr = DependentNameTypes.FindNodeOrInsertPos(ID, insertPos))
+      return Ptr;
+
+   auto New = new (*this, TypeAlignment) DependentNameType(Name);
+   DependentNameTypes.InsertNode(New, insertPos);
+
+   return New;
+}
+
 MetaType* ASTContext::getMetaType(QualType forType) const
 {
    llvm::FoldingSetNodeID ID;
@@ -692,8 +708,11 @@ MetaType* ASTContext::getMetaType(QualType forType) const
    return New;
 }
 
-TypedefType* ASTContext::getTypedefType(cdot::ast::TypedefDecl *TD) const
+TypedefType* ASTContext::getTypedefType(AliasDecl *TD) const
 {
+   assert(TD->wasDeclared()
+          && "should declare alias before using it!");
+
    llvm::FoldingSetNodeID ID;
    TypedefType::Profile(ID, TD);
 

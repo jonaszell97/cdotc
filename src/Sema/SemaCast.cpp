@@ -117,36 +117,80 @@ static void FromPtr(SemaPass &SP,
    Seq.invalidate();
 }
 
+static bool sameFunctionType(FunctionType *LHS, FunctionType *RHS)
+{
+   if (LHS->getRawFlags() != RHS->getRawFlags())
+      return false;
+
+   if (LHS->getReturnType()->getCanonicalType()
+         != RHS->getReturnType()->getCanonicalType())
+      return false;
+
+   if (LHS->getNumParams() != RHS->getNumParams())
+      return false;
+
+   auto LHSParams = LHS->getParamTypes();
+   auto RHSParams = RHS->getParamTypes();
+
+   auto LHSInfo = LHS->getParamInfo();
+   auto RHSInfo = RHS->getParamInfo();
+
+   for (unsigned i = 0, NumParams = LHS->getNumParams(); i < NumParams; ++i) {
+      auto LHSTy = LHSParams[i];
+      auto RHSTy = RHSParams[i];
+
+      if (LHSTy->getCanonicalType() != RHSTy->getCanonicalType())
+         return false;
+
+      if (LHSInfo[i] != RHSInfo[i])
+         return false;
+   }
+
+   return true;
+}
+
 static void FromThinFn(SemaPass &SP, QualType from, QualType to,
                        ConversionSequenceBuilder &Seq) {
    auto FromFn = from->asFunctionType();
-   if (to->isFunctionType()) {
-      auto ToFn = to->asFunctionType();
-      if (!FromFn->throws() && ToFn->throws()) {
-         auto WithoutThrows =
-            SP.getContext().getFunctionType(ToFn->getReturnType(),
-                                            ToFn->getParamTypes(),
-                                            ToFn->getRawFlags()
-                                               & ~FunctionType::Throws);
+   if (!to->isFunctionType()) {
+      // Function pointer -> Void*
+      if (to->isPointerType() && to->getPointeeType()->isVoidType()) {
+         return Seq.addStep(CastKind::BitCast, to, CastStrength::Normal);
+      }
 
-         if (WithoutThrows == FromFn) {
-            return Seq.addStep(CastKind::NoThrowToThrows, to,
-                               CastStrength::Implicit);
-         }
+      // Function Pointer -> Bool
+      if (to->isInt1Ty()) {
+         return Seq.addStep(CastKind::IsNull, to, CastStrength::Implicit);
+      }
+
+      // Function Pointer -> UInt
+      if (to->isIntegerType()) {
+         return Seq.addStep(CastKind::PtrToInt, to, CastStrength::Force);
       }
    }
 
-   if (to->isPointerType() && to->getPointeeType()->isVoidType()) {
-      return Seq.addStep(CastKind::BitCast, to, CastStrength::Normal);
+   auto ToFn = to->asFunctionType();
+
+   // nothrow -> throws
+   if (!FromFn->throws() && ToFn->throws()) {
+      auto WithoutThrows =
+         SP.getContext().getFunctionType(ToFn->getReturnType(),
+                                         ToFn->getParamTypes(),
+                                         ToFn->getRawFlags()
+                                         & ~FunctionType::Throws);
+
+      if (WithoutThrows == FromFn) {
+         return Seq.addStep(CastKind::NoThrowToThrows, to,
+                            CastStrength::Implicit);
+      }
    }
 
-   // allow implicit ptr -> bool
-   if (to->isInt1Ty()) {
-      return Seq.addStep(CastKind::IsNull, to, CastStrength::Implicit);
-   }
-
-   if (to->isIntegerType()) {
-      return Seq.addStep(CastKind::PtrToInt, to, CastStrength::Force);
+   // Thin Function Pointer -> Thick Function Pointer
+   if (ToFn->isLambdaType()) {
+      if (sameFunctionType(FromFn, ToFn)) {
+         return Seq.addStep(CastKind::ThinToThick, to,
+                            CastStrength::Implicit);
+      }
    }
 
    Seq.invalidate();

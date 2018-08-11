@@ -33,6 +33,7 @@ enum ReflectionIdent {
    Endianness, little, big,
    OperatingSystem,
 
+   IsTriviallyCopyable,
    underlyingType, IsDefaultInitializable, defaultValue,
 
    _last
@@ -83,6 +84,7 @@ void SemaPass::initReflectionIdents()
 
    ReflectionIdents[OperatingSystem] = &Idents.get("OperatingSystem");
    ReflectionIdents[underlyingType] = &Idents.get("underlyingType");
+   ReflectionIdents[IsTriviallyCopyable] = &Idents.get("IsTriviallyCopyable");
    ReflectionIdents[IsDefaultInitializable] = &Idents.get("IsDefaultInitializable");
    ReflectionIdents[defaultValue] = &Idents.get("defaultValue");
 
@@ -1254,6 +1256,28 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       ResultExpr = new(Context) IdentifierRefExpr(Expr->getSourceRange(),
                                                   IdentifierKind::MetaType,
                                                   UnderlyingTy);
+   }
+   else if (II == ReflectionIdents[IsTriviallyCopyable]) {
+      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
+          || !Alias->getTemplateArgs().front().isType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+
+         return ExprError();
+      }
+
+      QualType Ty = Alias->getTemplateArgs().front().getType();
+      if (Ty->isDependentType()) {
+         Expr->setIsTypeDependent(true);
+         Expr->setExprType(Context.getUIntTy());
+
+         return Expr;
+      }
+
+      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
+                                       Context.getBoolTy(),
+                                       Context.getTargetInfo()
+                                              .isTriviallyCopyable(Ty));
    }
    else if (II == ReflectionIdents[IsDefaultInitializable]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1

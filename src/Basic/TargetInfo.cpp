@@ -131,6 +131,9 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
       return size;
    }
    case Type::RecordTypeID: {
+      if (Ty->getRecord()->isInvalid())
+         return 1;
+
       assert(Ty->getRecord()->getSize() && "size not calculated!");
       return Ty->getRecord()->getSize();
    }
@@ -173,6 +176,9 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
       return align;
    }
    case Type::RecordTypeID: {
+      if (Ty->getRecord()->isInvalid())
+         return 1;
+
       assert(Ty->getRecord()->getSize() && "alignment not calculated!");
       return Ty->getRecord()->getAlignment();
    }
@@ -227,6 +233,9 @@ bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
       if (Ty->getRecord()->getCopyFn()
             && !Ty->getRecord()->getCopyFn()->isSynthesized())
          return false;
+
+      if (Ty->getRecord()->isInvalid())
+         return true;
 
       assert(Ty->getRecord()->getSize() && "size not calculated!");
       return Ty->getRecord()->isTriviallyCopyable();

@@ -41,6 +41,8 @@ static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
       case CastKind::MutRefToRef:
       case CastKind::RValueToConstRef:
       case CastKind::ToMetaType:
+      case CastKind::NoThrowToThrows:
+      case CastKind::ThinToThick:
          break;
       case CastKind::Ext:
       case CastKind::FPExt:
@@ -70,7 +72,30 @@ static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
    return penalty;
 }
 
-static bool getConversionPenalty(SemaPass &SP,
+static bool isMovable(Expression *Expr)
+{
+   auto *Ident = dyn_cast<IdentifierRefExpr>(Expr);
+   if (!Ident)
+      return true;
+
+   switch (Ident->getKind()) {
+   case IdentifierKind::Field: {
+      // Fields of classes or global variables are not movable.
+      auto *Parent = Ident->getParentExpr();
+      if (Parent->getExprType()->isClass())
+         return false;
+
+      auto *IE = dyn_cast<IdentifierRefExpr>(Parent);
+      return IE && IE->getKind() == IdentifierKind::GlobalVar;
+   }
+   case IdentifierKind::GlobalVar:
+      return false;
+   default:
+      return true;
+   }
+}
+
+static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
                                  QualType NeededTy, QualType GivenTy,
                                  FunctionType::ParamInfo NeededParamInfo,
                                  CandidateSet::Candidate &Cand,
@@ -190,20 +215,23 @@ static bool getConversionPenalty(SemaPass &SP,
          if (Deref->isRefcounted()) {
             AddCopy = true;
          }
+         else if (SP.getContext().getTargetInfo().isTriviallyCopyable(Deref)) {
+            AddCopy = true;
+         }
+         else if (GivenTy->isMutableReferenceType() && isMovable(Expr)) {
+            // Prefer moving a mutable reference where possible.
+            ConvSeq.addStep(CastKind::Forward, GivenTy);
+         }
          else if (SP.IsImplicitlyCopyableType(Deref)) {
             AddCopy = true;
          }
          else {
             // can't pass a non-mutable reference to an owned parameter
-            if (GivenTy->isNonMutableReferenceType()) {
-               Cand.setRequiresRef(ArgNo);
-               return true;
-            }
-
-            ConvSeq.addStep(CastKind::Forward, GivenTy);
+            Cand.setRequiresRef(ArgNo);
+            return true;
          }
       }
-         // if it's an rvalue, forward it
+      // if it's an rvalue, forward it
       else {
          ConvSeq.addStep(CastKind::Forward, GivenTy);
       }
@@ -501,7 +529,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                   return true;
                }
 
-               if (getConversionPenalty(SP, NeededTy, ArgValType,
+               if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
                                         {ArgDecl->getConvention()},
                                         Cand, CandSet, Conversions,
                                         ArgDecl->isSelf(), i)) {
@@ -539,7 +567,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                return true;
             }
 
-            if (getConversionPenalty(SP, NeededTy, ArgValType,
+            if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
                                      {ArgDecl->getConvention()},
                                      Cand, CandSet, Conversions,
                                      ArgDecl->isSelf(), i)) {
@@ -664,7 +692,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                return false;
             }
 
-            if (getConversionPenalty(SP, NeededTy, ArgValType,
+            if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
                                      NeededParamInfo[i],
                                      Cand, CandSet, Conversions,
                                      false, i)) {
@@ -676,7 +704,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
          }
       }
       else {
-         if (getConversionPenalty(SP, NeededTy, ArgVal->getExprType(),
+         if (getConversionPenalty(SP, ArgVal, NeededTy, ArgVal->getExprType(),
                                   NeededParamInfo[i],
                                   Cand, CandSet, Conversions,
                                   false, i)) {
@@ -743,12 +771,15 @@ static void applyConversions(SemaPass &SP,
                                 &Conversions,
                              Statement *Caller) {
    auto &Cand = CandSet.getBestMatch();
-   auto ParamTys = Cand.getFunctionType()->getParamTypes();
-
    ArrayRef<FuncArgDecl*> ArgDecls;
    if (!Cand.isBuiltinCandidate()) {
+      if (Cand.Func->isInvalid())
+         return;
+
       ArgDecls = Cand.Func->getArgs();
    }
+
+   auto ParamTys = Cand.getFunctionType()->getParamTypes();
 
    unsigned i = 0;
    for (auto &SOD : ArgExprs) {
@@ -790,6 +821,18 @@ static void applyConversions(SemaPass &SP,
          }
       }
 
+      // Apply conversion.
+      if (i < Conversions.size()) {
+         auto &ConvSeq = Conversions[i];
+         if (!ConvSeq.isNoOp()) {
+            auto *Seq = ConversionSequence::Create(SP.getContext(), ConvSeq);
+            E = ImplicitCastExpr::Create(SP.getContext(), E, Seq);
+
+            auto Res = SP.visitExpr(E); (void) Res;
+            assert(Res && "bad implicit cast sequence!");
+         }
+      }
+
       // Handle @autoclosure
       if (ArgDecl && ArgDecl->hasAttribute<AutoClosureAttr>()) {
          auto LE = LambdaExpr::Create(
@@ -801,18 +844,6 @@ static void applyConversions(SemaPass &SP,
          CaptureMarker(SP.getContext(), LE).visit(E);
 
          E = LE;
-      }
-
-      // Apply conversion.
-      if (i < Conversions.size()) {
-         auto &ConvSeq = Conversions[i];
-         if (!ConvSeq.isNoOp()) {
-            auto *Seq = ConversionSequence::Create(SP.getContext(), ConvSeq);
-            E = ImplicitCastExpr::Create(SP.getContext(), E, Seq);
-
-            auto Res = SP.visitExpr(E); (void) Res;
-            assert(Res && "bad implicit cast sequence!");
-         }
       }
 
       SOD = E;
@@ -843,7 +874,14 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
    for (unsigned i = 0; i < NumCandidates; ++i) {
       CandidateSet::Candidate &Cand = CandSet.Candidates[i];
       if (Cand.Func) {
-         if (!SP.ensureDeclared(Cand.Func) || Cand.Func->isInvalid()) {
+         if (auto *M = dyn_cast<MethodDecl>(Cand.Func)) {
+            if (!SP.ensureDeclared(M->getRecord()) || M->isInvalid()) {
+               Cand.setIsInvalid();
+               CandSet.InvalidCand = true;
+               continue;
+            }
+         }
+         else if (!SP.ensureDeclared(Cand.Func) || Cand.Func->isInvalid()) {
             Cand.setIsInvalid();
             CandSet.InvalidCand = true;
             continue;

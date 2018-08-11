@@ -165,7 +165,7 @@ static void diagnoseInvalidSeparator(SemaPass &SP,
    case tok::kw_enum: case tok::kw_protocol: case tok::kw_extend:
    case tok::kw_public: case tok::kw_private:
    case tok::kw_protected: case tok::kw_static: case tok::kw_abstract:
-   case tok::kw_prop: case tok::kw_where:
+   case tok::kw_prop:
    case tok::kw_continue: case tok::kw_init:
    case tok::kw_associatedType: case tok::kw_break:
    case tok::kw_infix: case tok::kw_prefix: case tok::kw_postfix:
@@ -177,6 +177,12 @@ static void diagnoseInvalidSeparator(SemaPass &SP,
    case tok::interpolation_begin: case tok::interpolation_end:
       Valid = true;
       break;
+   case tok::ident: {
+      if (Tok.getIdentifierInfo()->isStr("where"))
+         Valid = true;
+
+      break;
+   }
    default:
       break;
    }

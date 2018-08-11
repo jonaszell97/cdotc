@@ -606,8 +606,8 @@ void PrintPhasesJob::run()
    CI.displayPhaseDurations(llvm::errs());
 }
 
-UnittestJob::UnittestJob(CompilerInstance &CI)
-   : Job(UnittestJobID, nullptr, CI)
+UnittestJob::UnittestJob(Job *PreviousJob, CompilerInstance &CI)
+   : Job(UnittestJobID, PreviousJob, CI)
 {
 
 }
@@ -626,9 +626,8 @@ void UnittestJob::run()
    // Create an object file for the rest of the compilation.
    int FD;
    string ObjFile = fs::getTmpFileName("o");
-   IRGen.emitObjectFile(ObjFile,
-                      CI.getCompilationModule()->getILModule()->getLLVMModule(),
-                      true, &FD);
+   IRGen.emitObjectFile(ObjFile, PreviousJob->getLLVMModule(),
+                        true, &FD);
 
    // Emit the unittest executable, linking in the object file.
    string TestExec = fs::getTmpFileName("out");

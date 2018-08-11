@@ -113,7 +113,7 @@ ParseResult Parser::parseExtension()
    }
 
    SmallVector<DeclConstraint*, 4> Constraints;
-   if (lookahead().is(tok::kw_where)) {
+   if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
    }
@@ -414,7 +414,7 @@ void Parser::parseClassHead(RecordHead &Head)
             }
          }
       }
-      else if (next.is(tok::kw_where)) {
+      else if (next.is(Ident_where)) {
          advance();
          advance();
 
@@ -454,15 +454,14 @@ ParseResult Parser::parseConstrDecl()
       advance();
 
    SourceLocation varargLoc;
-   std::vector<FuncArgDecl*> args;
-   parseFuncArgs(varargLoc, args);
+   auto args = parseFuncArgs(varargLoc);
 
    auto Init =  InitDecl::Create(Context, CurDeclAttrs.Access, Loc, args,
                                  move(params), nullptr, DeclarationName(),
                                  IsFallible);
 
    llvm::TinyPtrVector<StaticExpr*> constraints;
-   while (lookahead().is(tok::kw_where)) {
+   while (lookahead().is(Ident_where)) {
       advance();
       advance();
 
@@ -495,9 +494,7 @@ ParseResult Parser::parseDestrDecl()
    advance();
 
    SourceLocation varargLoc;
-
-   std::vector<FuncArgDecl*> args;
-   parseFuncArgs(varargLoc, args);
+   auto args = parseFuncArgs(varargLoc);
 
    if (!args.empty()) {
       SP.diagnose(err_deinit_args, currentTok().getSourceLoc());
@@ -568,24 +565,16 @@ ParseResult Parser::parseFieldDecl()
 
    if (lookahead().is(tok::open_brace)) {
       AccessorInfo Info;
-      parseAccessor(Info, true);
-
-      if (Info.GetterAccess == AccessSpecifier::Default)
-         Info.GetterAccess = AccessSpecifier::Public;
-
-      if (Info.SetterAccess == AccessSpecifier::Default)
-         Info.SetterAccess = AccessSpecifier::Public;
+      SmallVector<FuncArgDecl*, 2> Args{ nullptr };
+      parseAccessor(Loc, fieldName, typeref, CurDeclAttrs.StaticLoc.isValid(),
+                    Args, Info, true);
 
       SourceRange SR(Loc, currentTok().getSourceLoc());
 
       auto prop =
          PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
                           typeref, CurDeclAttrs.StaticLoc,
-                          Info.HasGetter, Info.HasSetter,
-                          Info.GetterAccess, Info.SetterAccess,
-                          Info.GetterBody.tryGetStatement<CompoundStmt>(),
-                          Info.SetterBody.tryGetStatement<CompoundStmt>(),
-                          Info.NewValName);
+                          Info.GetterMethod, Info.SetterMethod);
 
       prop->setSynthesized(true);
       field->setAccessor(prop);
@@ -601,8 +590,10 @@ ParseResult Parser::parseFieldDecl()
    return ActOnDecl(field);
 }
 
-void Parser::parseAccessor(AccessorInfo &Info, bool IsProperty)
-{
+void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
+                           SourceType Type, bool IsStatic,
+                           SmallVectorImpl<FuncArgDecl*> &Args,
+                           AccessorInfo &Info, bool IsProperty) {
    Token next = lookahead();
    if (next.is(tok::open_brace)) {
       advance();
@@ -626,17 +617,15 @@ void Parser::parseAccessor(AccessorInfo &Info, bool IsProperty)
          }
 
          if (next.is(Ident_set)) {
-            advance();
-
-            if (Info.HasSetter) {
+            auto SetLoc = consumeToken();
+            if (Info.SetterMethod) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 1);
             }
 
             SawGetOrSet = true;
-            Info.HasSetter = true;
-            Info.GetterAccess = AS;
 
+            IdentifierInfo *NewValName = nullptr;
             if (lexer->lookahead().is(tok::open_paren)) {
                advance();
                advance();
@@ -648,7 +637,7 @@ void Parser::parseAccessor(AccessorInfo &Info, bool IsProperty)
                   return;
                }
 
-               Info.NewValName = currentTok().getIdentifierInfo();
+               NewValName = currentTok().getIdentifierInfo();
                advance();
 
                if (!currentTok().is(tok::close_paren)) {
@@ -657,26 +646,76 @@ void Parser::parseAccessor(AccessorInfo &Info, bool IsProperty)
                }
             }
 
+            if (!NewValName) {
+               NewValName = &Context.getIdentifiers().get("newVal");
+            }
+
+            DeclarationName DN;
+            if (IsProperty) {
+               DN = Context.getDeclNameTable().getAccessorName(
+                  *Name, DeclarationName::Setter);
+            }
+            else {
+               DN = Context.getDeclNameTable().getSubscriptName(
+                  DeclarationName::SubscriptKind::Setter);
+            }
+
+            Expression *DefaultVal = nullptr;
+            if (!IsProperty) {
+               // the argument needs a dummy default value for overload
+               // resolution.
+               DefaultVal = BuiltinExpr::Create(Context, QualType());
+            }
+
+            auto *NewValArg = FuncArgDecl::Create(Context, SetLoc, SetLoc,
+                                                  NewValName,
+                                                  nullptr,
+                                                  ArgumentConvention::Owned,
+                                                  Type, DefaultVal, false);
+
+            NewValArg->setSynthesized(true);
+
+            Args[0] = SP.MakeSelfArg(SetLoc);
+            Args.push_back(NewValArg);
+
+            Info.SetterMethod = MethodDecl::Create(Context, AS, SetLoc, DN,
+                                                   SourceType(Context.getVoidType()),
+                                                   Args, {}, nullptr, IsStatic);
+
             if (lexer->lookahead().is(tok::open_brace)) {
                if (ParsingProtocol) {
                   SP.diagnose(err_definition_in_protocol, IsProperty ? 1 : 2,
                               currentTok().getSourceLoc());
                }
 
-               Info.SetterBody = parseCompoundStmt();
+               DeclContextRAII DCR(*this, Info.SetterMethod);
+               Info.SetterMethod->setBody(
+                  parseCompoundStmt().tryGetStatement());
             }
          }
          else if (next.is(Ident_get)) {
-            advance();
-
-            if (Info.HasGetter) {
+            auto GetLoc = consumeToken();
+            if (Info.GetterMethod) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 0);
             }
 
             SawGetOrSet = true;
-            Info.HasGetter = true;
-            Info.SetterAccess = AS;
+
+            DeclarationName DN;
+            if (IsProperty) {
+               DN = Context.getDeclNameTable().getAccessorName(
+                  *Name, DeclarationName::Getter);
+            }
+            else {
+               DN = Context.getDeclNameTable().getSubscriptName(
+                  DeclarationName::SubscriptKind::Getter);
+            }
+
+            Args[0] = SP.MakeSelfArg(GetLoc);
+            Info.GetterMethod = MethodDecl::Create(Context, AS, GetLoc, DN,
+                                                   Type, Args, {},
+                                                   nullptr, IsStatic);
 
             if (lexer->lookahead().is(tok::open_brace)) {
                if (ParsingProtocol) {
@@ -684,20 +723,38 @@ void Parser::parseAccessor(AccessorInfo &Info, bool IsProperty)
                               currentTok().getSourceLoc());
                }
 
-               Info.GetterBody = parseCompoundStmt();
+               DeclContextRAII DCR(*this, Info.GetterMethod);
+               Info.GetterMethod->setBody(
+                  parseCompoundStmt().tryGetStatement());
             }
          }
          else if (!SawGetOrSet) {
-            assert(!Info.HasGetter && "found getter but didn't "
-                                      "update SawGetOrSet!");
+            assert(!Info.GetterMethod && "found getter but didn't "
+                                         "update SawGetOrSet!");
             assert(currentTok().is(tok::open_brace) && "shouldn't get here "
                                                        "otherwise");
 
             lexer->backtrack();
 
-            Info.HasGetter = true;
-            Info.GetterAccess = AS;
-            Info.GetterBody = parseCompoundStmt();
+            DeclarationName DN;
+            if (IsProperty) {
+               DN = Context.getDeclNameTable().getAccessorName(
+                  *Name, DeclarationName::Getter);
+            }
+            else {
+               DN = Context.getDeclNameTable().getSubscriptName(
+                  DeclarationName::SubscriptKind::Getter);
+            }
+
+            Args[0] = SP.MakeSelfArg(Loc);
+            Info.GetterMethod = MethodDecl::Create(Context, AS, Loc, DN,
+                                                   Type, Args, {},
+                                                   nullptr, IsStatic);
+
+
+            DeclContextRAII DCR(*this, Info.GetterMethod);
+            Info.GetterMethod->setBody(
+               parseCompoundStmt().tryGetStatement());
 
             break;
          }
@@ -714,9 +771,6 @@ void Parser::parseAccessor(AccessorInfo &Info, bool IsProperty)
       if (SawGetOrSet)
          advance();
    }
-
-   if (!Info.NewValName)
-      Info.NewValName = &Context.getIdentifiers().get("newVal");
 }
 
 ParseResult Parser::parsePropDecl()
@@ -745,26 +799,18 @@ ParseResult Parser::parsePropDecl()
    }
 
    AccessorInfo Info;
-   parseAccessor(Info, true);
+   SmallVector<FuncArgDecl*, 2> Args{ nullptr };
+   parseAccessor(BeginLoc, fieldName, typeref, CurDeclAttrs.StaticLoc.isValid(),
+                 Args, Info, true);
 
-   if (!Info.HasGetter && !Info.HasSetter) {
+   if (!Info.GetterMethod && !Info.SetterMethod) {
       SP.diagnose(err_prop_must_have_get_or_set, BeginLoc, 0 /*property*/);
    }
-
-   if (Info.GetterAccess == AccessSpecifier::Default)
-      Info.GetterAccess = CurDeclAttrs.Access;
-
-   if (Info.SetterAccess == AccessSpecifier::Default)
-      Info.SetterAccess = CurDeclAttrs.Access;
 
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
    auto prop = PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
                                 typeref, CurDeclAttrs.StaticLoc,
-                                Info.HasGetter, Info.HasSetter,
-                                Info.GetterAccess, Info.SetterAccess,
-                                Info.GetterBody.tryGetStatement<CompoundStmt>(),
-                                Info.SetterBody.tryGetStatement<CompoundStmt>(),
-                                Info.NewValName);
+                                Info.GetterMethod, Info.SetterMethod);
 
    return ActOnDecl(prop);
 }
@@ -793,25 +839,18 @@ ParseResult Parser::parseSubscriptDecl()
    }
 
    AccessorInfo Info;
-   parseAccessor(Info, false);
+   Args.insert(Args.begin(), nullptr);
+   parseAccessor(BeginLoc, nullptr, typeref, CurDeclAttrs.StaticLoc.isValid(),
+                 Args, Info, false);
 
-   if (!Info.HasGetter && !Info.HasSetter) {
+   if (!Info.GetterMethod && !Info.SetterMethod) {
       SP.diagnose(err_prop_must_have_get_or_set, BeginLoc, 1 /*subscript*/);
    }
 
-   if (Info.GetterAccess == AccessSpecifier::Default)
-      Info.GetterAccess = CurDeclAttrs.Access;
-
-   if (Info.SetterAccess == AccessSpecifier::Default)
-      Info.SetterAccess = CurDeclAttrs.Access;
-
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
-   auto SD = SubscriptDecl::Create(Context, CurDeclAttrs.Access, SR, Args,
-                                typeref, Info.HasGetter, Info.HasSetter,
-                                Info.GetterAccess, Info.SetterAccess,
-                                Info.GetterBody.tryGetStatement<CompoundStmt>(),
-                                Info.SetterBody.tryGetStatement<CompoundStmt>(),
-                                Info.NewValName);
+   auto SD = SubscriptDecl::Create(Context, CurDeclAttrs.Access, SR,
+                                   typeref, Info.GetterMethod,
+                                   Info.SetterMethod);
 
    return ActOnDecl(SD);
 }
@@ -843,7 +882,7 @@ ParseResult Parser::parseAssociatedType()
    }
 
    SmallVector<DeclConstraint*, 4> Constraints;
-   if (lookahead().is(tok::kw_where)) {
+   if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
    }
@@ -978,7 +1017,7 @@ ParseResult Parser::parseMethodDecl()
    auto templateParams = tryParseTemplateParameters();
    advance();
 
-   std::vector<FuncArgDecl*> args;
+   SmallVector<FuncArgDecl*, 4> args;
    args.push_back(
       FuncArgDecl::Create(Context, SourceLocation(), DefLoc,
                           DeclarationName(Ident_self), nullptr,
@@ -1025,7 +1064,7 @@ ParseResult Parser::parseMethodDecl()
    }
 
    std::vector<StaticExpr*> constraints;
-   while (lookahead().is(tok::kw_where)) {
+   while (lookahead().is(Ident_where)) {
       advance();
       advance();
 
@@ -1093,7 +1132,7 @@ ParseResult Parser::parseEnumCase()
    }
 
    auto caseName = currentTok().getIdentifierInfo();
-   std::vector<FuncArgDecl*> associatedTypes;
+   SmallVector<FuncArgDecl*, 2> associatedTypes;
 
    if (lexer->lookahead().is(tok::open_paren)) {
       advance();

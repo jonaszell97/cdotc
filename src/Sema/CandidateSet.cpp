@@ -628,6 +628,23 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
 
          break;
       }
+      case TemplateArgCovarianceError: {
+         QualType Given = QualType::getFromOpaquePtr((void*)Cand.Data1);
+         auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
+
+         auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
+         assert(templateArg && "bad diagnostic data");
+
+         auto *CovarRec = Param->getCovariance()->getRecord();
+         SP.diagnose(Caller, note_template_arg_covariance,
+                     isa<ClassDecl>(CovarRec), CovarRec->getDeclName(),
+                     Param->getDeclName(), Given, templateArg->getLoc());
+
+         SP.diagnose(Caller, note_template_parameter_here,
+                     Param->getSourceLoc());
+
+         break;
+      }
       }
    }
 }
@@ -873,6 +890,23 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceRange());
+
+         break;
+      }
+      case TemplateArgCovarianceError: {
+         QualType Given = QualType::getFromOpaquePtr((void*)Cand.Data1);
+         auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
+
+         auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
+         assert(templateArg && "bad diagnostic data");
+
+         auto *CovarRec = Param->getCovariance()->getRecord();
+         SP.diagnose(Caller, note_template_arg_covariance,
+                     isa<ClassDecl>(CovarRec), CovarRec->getDeclName(),
+                     Param->getDeclName(), Given, templateArg->getLoc());
+
+         SP.diagnose(Caller, note_template_parameter_here,
+                     Param->getSourceLoc());
 
          break;
       }

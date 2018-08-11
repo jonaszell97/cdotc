@@ -31,6 +31,11 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
    if (type->isDependentType()) {
       Type = type;
    }
+   // FIXME protocol-dependence
+   else if (type->isProtocol()) {
+      Dependent = true;
+      Type = type;
+   }
    else {
       Type = type->getCanonicalType();
    }
@@ -132,29 +137,35 @@ bool ResolvedTemplateArg::isStillDependent() const
    return Dependent;
 }
 
-ResolvedTemplateArg ResolvedTemplateArg::clone(bool Canonicalize) const
+ResolvedTemplateArg ResolvedTemplateArg::clone(bool Canonicalize, bool Freeze)
+const
 {
+   ResolvedTemplateArg Result;
    if (isNull()) {
-      return ResolvedTemplateArg();
+      Result = ResolvedTemplateArg();
    }
-
-   if (isVariadic()) {
+   else if (isVariadic()) {
       std::vector<ResolvedTemplateArg> args;
       for (auto &VA : getVariadicArgs())
          args.emplace_back(VA.clone(Canonicalize));
 
-      return ResolvedTemplateArg(Param, isType(), move(args), getLoc());
+      Result = ResolvedTemplateArg(Param, isType(), move(args), getLoc());
    }
-
-   if (isType()) {
+   else if (isType()) {
       QualType Ty = getType();
       if (Canonicalize)
          Ty = Ty->getCanonicalType();
 
-      return ResolvedTemplateArg(Param, Ty, getLoc());
+      Result = ResolvedTemplateArg(Param, Ty, getLoc());
+   }
+   else {
+      Result = ResolvedTemplateArg(Param, getValueExpr(), getLoc());
    }
 
-   return ResolvedTemplateArg(Param, getValueExpr(), getLoc());
+   if (Freeze && Result.isVariadic())
+      Result.freeze();
+
+   return Result;
 }
 
 std::string ResolvedTemplateArg::toString() const
@@ -328,6 +339,40 @@ public:
       }
    }
 
+   void checkCovariance(TemplateParamDecl *P, QualType Ty)
+   {
+      if (Ty->isDependentType())
+         return;
+
+      QualType Covar = P->getCovariance();
+      if (Covar->isUnknownAnyType())
+         return;
+
+      assert(Covar->isRecordType() && "covariance not a record type?");
+
+      auto *R = Covar->getRecord();
+      if (!Ty->isRecordType()) {
+         return Res.setCovarianceError(Ty, P);
+      }
+
+      auto *GivenRec = Ty->getRecord();
+      if (auto *Proto = dyn_cast<ProtocolDecl>(R)) {
+         auto &ConfTable = SP.getContext().getConformanceTable();
+         if (!ConfTable.conformsTo(GivenRec, Proto)) {
+            return Res.setCovarianceError(Ty, P);
+         }
+      }
+      else {
+         auto *C = cast<ClassDecl>(R);
+         if (R == C || (isa<ClassDecl>(R)
+               && C->isBaseClassOf(cast<ClassDecl>(GivenRec)))) {
+            return;
+         }
+
+         return Res.setCovarianceError(Ty, P);
+      }
+   }
+
    bool makeSingleArgument(TemplateParamDecl *P,
                            ResolvedTemplateArg &Out,
                            Expression *TA) {
@@ -350,9 +395,11 @@ public:
             return false;
          }
 
+         // FIXME protocol-dependence
          if (ty->isProtocol())
             StillDependent = true;
 
+         checkCovariance(P, ty);
          Out = ResolvedTemplateArg(P, ty, TA->getSourceLoc());
       }
       else if (ty->isMetaType()) {
@@ -365,6 +412,7 @@ public:
          if (RealTy->isDependentType() || RealTy->isProtocol())
             StillDependent = true;
 
+         checkCovariance(P, RealTy);
          Out = ResolvedTemplateArg(P, RealTy, TA->getSourceLoc());
       }
       else {
@@ -1291,7 +1339,7 @@ FinalTemplateArgumentList::FinalTemplateArgumentList(
    auto it = getTrailingObjects<ResolvedTemplateArg>();
    for (auto &Arg : Args) {
       assert(!Arg.isNull() && "finalizing null template argument!");
-      new (it++) ResolvedTemplateArg(Arg.clone(Canonicalize));
+      new (it++) ResolvedTemplateArg(Arg.clone(Canonicalize, true));
    }
 }
 

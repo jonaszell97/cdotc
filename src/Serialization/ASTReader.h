@@ -448,6 +448,14 @@ public:
    /// Read a declaration name.
    DeclarationName ReadDeclarationName(const RecordData &Record, unsigned &Idx);
 
+   /// Read a nested name specifier.
+   NestedNameSpecifier *ReadNestedNameSpec(const RecordData &Record,
+                                           unsigned &Idx);
+
+   /// Read a nested name specifier.
+   NestedNameSpecifierWithLoc *ReadNestedNameSpecWithLoc(const RecordData &Record,
+                                                         unsigned &Idx);
+
    /// Read a template argument.
    sema::ResolvedTemplateArg ReadTemplateArgument(const RecordData &Record,
                                                   unsigned &Idx);
@@ -655,6 +663,12 @@ public:
    DeclarationName readDeclarationName()
    {
       return Reader->ReadDeclarationName(Record, Idx);
+   }
+
+   /// Read a nested name specifier.
+   NestedNameSpecifier *readNestedNameSpec()
+   {
+      return Reader->ReadNestedNameSpec(Record, Idx);
    }
 
    /// Read a template argument, advancing Idx.

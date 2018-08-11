@@ -19,6 +19,9 @@
 
 namespace cdot {
 
+class NestedNameSpecifier;
+class NestedNameSpecifierWithLoc;
+
 class FunctionType;
 enum class KnownFunction : unsigned char;
 
@@ -95,6 +98,9 @@ public:
    bool allowTemplate() const { return AllowTemplate; }
    void setAllowTemplate(bool V) { AllowTemplate = V; }
 
+   bool allowNamespaceRef() const;
+   void setAllowNamespaceRef(bool V);
+
    SourceRange getEllipsisRange() const;
    SourceLocation getEllipsisLoc() const { return EllipsisLoc; }
    void setEllipsisLoc(SourceLocation Loc) { EllipsisLoc = Loc; }
@@ -104,6 +110,8 @@ public:
 
    inline Expression *ignoreParens() const;
    inline Expression *ignoreParensAndImplicitCasts() const;
+
+   Expression *ignoreTemplateArgs() const;
 
    Expression *getParentExpr() const;
    void setParentExpr(Expression *E);
@@ -1636,6 +1644,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    IdentifierKind kind = IdentifierKind::Unknown;
    Expression *ParentExpr = nullptr;
    DeclContext *DeclCtx = nullptr;
+   NestedNameSpecifier *NameSpec = nullptr;
 
    union {
       Type *builtinType = nullptr;
@@ -1794,6 +1803,9 @@ public:
 
    TemplateParamDecl *getTemplateParam() const { return templateParam; }
    void setTemplateParam(TemplateParamDecl *P) { templateParam = P; }
+
+   NestedNameSpecifier *getNameSpec() const { return NameSpec; }
+   void setNameSpec(NestedNameSpecifier *V) { NameSpec = V; }
 
    bool isStaticLookup() const { return staticLookup; }
    void setStaticLookup(bool SL) { staticLookup = SL; }

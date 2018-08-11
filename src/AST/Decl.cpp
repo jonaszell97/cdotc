@@ -1649,16 +1649,11 @@ PropDecl::PropDecl(AccessSpecifier access,
                    DeclarationName propName,
                    SourceType type,
                    bool isStatic,
-                   bool hasGetter,
-                   bool hasSetter,
-                   AccessSpecifier GetterAccess,
-                   AccessSpecifier SetterAccess,
-                   CompoundStmt *getter, CompoundStmt *setter,
-                   IdentifierInfo *newValName)
+                   MethodDecl *GetterMethod,
+                   MethodDecl *SetterMethod)
    : NamedDecl(PropDeclID, access, propName),
-     Loc(Loc), type(type), GetterAccess(GetterAccess),
-     SetterAccess(SetterAccess), getterBody(getter), setterBody(setter),
-     HasGetter(hasGetter), HasSetter(hasSetter), newValName(newValName)
+     Loc(Loc), type(type),
+     getterMethod(GetterMethod), setterMethod(SetterMethod)
 {
    setDeclFlag(DF_Static, isStatic);
 }
@@ -1669,15 +1664,10 @@ PropDecl* PropDecl::Create(ASTContext &C,
                            DeclarationName propName,
                            SourceType type,
                            bool isStatic,
-                           bool hasGetter,
-                           bool hasSetter,
-                           AccessSpecifier GetterAccess,
-                           AccessSpecifier SetterAccess,
-                           CompoundStmt *getter, CompoundStmt *setter,
-                           IdentifierInfo *newValName) {
+                           MethodDecl *GetterMethod,
+                           MethodDecl *SetterMethod) {
    return new(C) PropDecl(access, Loc, propName, type, isStatic,
-                          hasGetter, hasSetter, GetterAccess, SetterAccess,
-                          getter, setter, newValName);
+                          GetterMethod, SetterMethod);
 }
 
 PropDecl::PropDecl(EmptyShell)
@@ -1692,54 +1682,35 @@ PropDecl *PropDecl::CreateEmpty(ASTContext &C)
 SubscriptDecl::SubscriptDecl(AccessSpecifier access,
                              SourceRange Loc,
                              DeclarationName Name,
-                             llvm::ArrayRef<FuncArgDecl*> Args,
                              SourceType type,
-                             bool hasGetter, bool hasSetter,
-                             AccessSpecifier GetterAccess,
-                             AccessSpecifier SetterAccess,
-                             CompoundStmt *getter, CompoundStmt *setter,
-                             IdentifierInfo *newValName)
+                             MethodDecl *GetterMethod,
+                             MethodDecl *SetterMethod)
    : NamedDecl(SubscriptDeclID, access, Name),
-     Loc(Loc), type(type), GetterAccess(GetterAccess),
-     SetterAccess(SetterAccess), getterBody(getter), setterBody(setter),
-     HasGetter(hasGetter), HasSetter(hasSetter), newValName(newValName),
-     NumArgs((unsigned)Args.size())
+     Loc(Loc), type(type),
+     getterMethod(GetterMethod), setterMethod(SetterMethod)
 {
-   std::copy(Args.begin(), Args.end(),
-             getTrailingObjects<FuncArgDecl*>());
+
 }
 
 SubscriptDecl* SubscriptDecl::Create(ASTContext &C,
                                      AccessSpecifier access,
                                      SourceRange Loc,
-                                     llvm::ArrayRef<FuncArgDecl*> Args,
                                      SourceType type,
-                                     bool hasGetter,
-                                     bool hasSetter,
-                                     AccessSpecifier GetterAccess,
-                                     AccessSpecifier SetterAccess,
-                                     CompoundStmt *getter, CompoundStmt *setter,
-                                     IdentifierInfo *newValName) {
-   void *Mem = C.Allocate(totalSizeToAlloc<FuncArgDecl*>(Args.size()),
-                          alignof(SubscriptDecl));
-
-   return new(Mem) SubscriptDecl(access, Loc,
+                                     MethodDecl *GetterMethod,
+                                     MethodDecl *SetterMethod) {
+   return new(C) SubscriptDecl(access, Loc,
                                  C.getDeclNameTable().getSubscriptName(
                                     DeclarationName::SubscriptKind::General),
-                                 Args, type, hasGetter, hasSetter, GetterAccess,
-                                 SetterAccess, getter, setter, newValName);
+                                 type, GetterMethod, SetterMethod);
 }
 
-SubscriptDecl::SubscriptDecl(EmptyShell, unsigned N)
-   : NamedDecl(SubscriptDeclID, AccessSpecifier::Default, DeclarationName()),
-     NumArgs(N)
+SubscriptDecl::SubscriptDecl(EmptyShell)
+   : NamedDecl(SubscriptDeclID, AccessSpecifier::Default, DeclarationName())
 {}
 
-SubscriptDecl *SubscriptDecl::CreateEmpty(ASTContext &C, unsigned N)
+SubscriptDecl *SubscriptDecl::CreateEmpty(ASTContext &C)
 {
-    void *Mem = C.Allocate(totalSizeToAlloc<FuncArgDecl*>(N),
-                           alignof(SubscriptDecl));
-    return new(Mem) SubscriptDecl(EmptyShell(), N);
+    return new(C) SubscriptDecl(EmptyShell());
 }
 
 EnumCaseDecl::EnumCaseDecl(AccessSpecifier AS,

@@ -5,6 +5,7 @@
 #ifndef CDOT_TYPEBUILDER_H
 #define CDOT_TYPEBUILDER_H
 
+#include "Basic/NestedNameSpecifier.h"
 #include "Sema/SemaPass.h"
 
 #define DISPATCH(Name)                                  \
@@ -179,6 +180,54 @@ public:
 
    QualType visitGenericType(GenericType *T)
    {
+      return T;
+   }
+
+   NestedNameSpecifier *visitNestedNameSpecifier(NestedNameSpecifier *Name)
+   {
+      if (!Name)
+         return nullptr;
+
+      switch (Name->getKind()) {
+      case NestedNameSpecifier::Type:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                visit(Name->getType()),
+                                visitNestedNameSpecifier(Name->getPrevious()));
+      case NestedNameSpecifier::Identifier:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                Name->getIdentifier(),
+                                visitNestedNameSpecifier(Name->getPrevious()));
+      case NestedNameSpecifier::Namespace:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                              Name->getNamespace(),
+                              visitNestedNameSpecifier(Name->getPrevious()));
+      case NestedNameSpecifier::TemplateParam:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                Name->getParam(),
+                                visitNestedNameSpecifier(Name->getPrevious()));
+
+      case NestedNameSpecifier::AssociatedType:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                Name->getAssociatedType(),
+                                visitNestedNameSpecifier(Name->getPrevious()));
+      case NestedNameSpecifier::Module:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                Name->getModule(),
+                                visitNestedNameSpecifier(Name->getPrevious()));
+      }
+   }
+
+   QualType visitDependentNameType(DependentNameType *T)
+   {
+      auto *Name = visitNestedNameSpecifier(T->getNameSpec());
+      if (Name != T->getNameSpec()) {
+         auto *WithLoc = NestedNameSpecifierWithLoc::Create(
+            Ctx.getDeclNameTable(), Name,
+            T->getNameSpecWithLoc()->getSourceRanges());
+
+         return this->Ctx.getDependentNameType(WithLoc);
+      }
+
       return T;
    }
 

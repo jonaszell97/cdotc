@@ -18,6 +18,7 @@ enum Builtin : unsigned {
    reinterpretCast, unsafeConstCast,
    constructInPlace,
 
+   move, consume,
    copy, deinit, retainValue, releaseValue,
 
    printCTFEStacktrace,

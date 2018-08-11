@@ -37,6 +37,26 @@ void StmtOrDecl::setIsInvalid(bool b) const
    return DISPATCH(setIsInvalid(b), void);
 }
 
+bool StmtOrDecl::isTypeDependent() const
+{
+   return DISPATCH(isTypeDependent(), bool);
+}
+
+void StmtOrDecl::setTypeDependent(bool b) const
+{
+   return DISPATCH(setIsTypeDependent(b), void);
+}
+
+bool StmtOrDecl::isValueDependent() const
+{
+   return DISPATCH(isValueDependent(), bool);
+}
+
+void StmtOrDecl::setValueDependent(bool b) const
+{
+   return DISPATCH(setIsValueDependent(b), void);
+}
+
 void StmtOrDecl::copyStatusFlags(StmtOrDecl Other) const
 {
    if (Union.isNull())

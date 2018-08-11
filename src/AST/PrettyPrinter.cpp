@@ -164,7 +164,7 @@ void PrettyPrinterImpl::visitForStmt(ForStmt* stmt)
 void PrettyPrinterImpl::visitForInStmt(ForInStmt* stmt)
 {
    out << "for ";
-   visitLocalVarDecl(stmt->getDecl());
+   visitDecl(stmt->getDecl());
 
    out << " in ";
    visitExpr(stmt->getRangeExpr());

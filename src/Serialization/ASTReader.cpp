@@ -6,6 +6,7 @@
 
 #include "ASTReaderInternals.h"
 #include "Basic/FileManager.h"
+#include "Basic/NestedNameSpecifier.h"
 #include "BitCodes.h"
 #include "ILReader.h"
 #include "IL/Module.h"
@@ -325,6 +326,10 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       return Context.getValueDependentSizedArrayType(ElementTy,
                                                      cast<StaticExpr>(SizeExpr));
    }
+   case Type::DependentNameTypeID: {
+      auto *NameSpec = ReadNestedNameSpecWithLoc(Record, Idx);
+      return Context.getDependentNameType(NameSpec);
+   }
    case Type::FunctionTypeID:
    case Type::LambdaTypeID: {
       QualType RetTy = readType(Record, Idx);
@@ -442,9 +447,9 @@ QualType ASTReader::readTypeRecord(unsigned ID)
          return QualType();
       }
 
-      auto *RD = ReadDeclAs<TypedefDecl>(Record, Idx);
+      auto *RD = ReadDeclAs<AliasDecl>(Record, Idx);
       auto Ty = Context.getTypedefType(RD);
-      Ty->setCanonicalType(RD->getOriginTy());
+      Ty->setCanonicalType(RD->getType()->asMetaType()->getUnderlyingType());
 
       return Ty;
    }
@@ -1051,6 +1056,65 @@ DeclarationName ASTReader::ReadDeclarationName(const RecordData &Record,
    case DeclarationName::ErrorName:
       return Context.getDeclNameTable().getErrorName();
    }
+}
+
+NestedNameSpecifier *ASTReader::ReadNestedNameSpec(const RecordData &Record,
+                                                   unsigned &Idx) {
+   bool HasPrev = Record[Idx++] != 0;
+   NestedNameSpecifier *Previous = nullptr;
+   if (HasPrev) {
+      Previous = ReadNestedNameSpec(Record, Idx);
+   }
+
+   auto &Tbl = Context.getDeclNameTable();
+   auto Kind = (NestedNameSpecifier::Kind)Record[Idx++];
+
+   NestedNameSpecifier *Name;
+   switch (Kind) {
+   case NestedNameSpecifier::Type:
+      Name = NestedNameSpecifier::Create(Tbl, readType(Record, Idx), Previous);
+      break;
+   case NestedNameSpecifier::Identifier:
+      Name = NestedNameSpecifier::Create(Tbl, GetIdentifierInfo(Record, Idx),
+                                         Previous);
+
+      break;
+   case NestedNameSpecifier::Namespace:
+      Name = NestedNameSpecifier::Create(
+         Tbl, ReadDeclAs<NamespaceDecl>(Record, Idx), Previous);
+      break;
+   case NestedNameSpecifier::TemplateParam:
+      Name = NestedNameSpecifier::Create(
+         Tbl, ReadDeclAs<TemplateParamDecl>(Record, Idx), Previous);
+      break;
+   case NestedNameSpecifier::AssociatedType:
+      Name = NestedNameSpecifier::Create(
+         Tbl, ReadDeclAs<AssociatedTypeDecl>(Record, Idx), Previous);
+      break;
+   case NestedNameSpecifier::Module:
+      Name = NestedNameSpecifier::Create(Tbl, GetModule(Record[Idx++]),
+                                         Previous);
+
+      break;
+   }
+
+   return Name;
+}
+
+NestedNameSpecifierWithLoc*
+ASTReader::ReadNestedNameSpecWithLoc(const RecordData &Record, unsigned &Idx)
+{
+   auto *Name = ReadNestedNameSpec(Record, Idx);
+   auto NumLocs = Record[Idx++];
+
+   SmallVector<SourceRange, 4> Locs;
+   Locs.reserve(NumLocs);
+
+   while (NumLocs--)
+      Locs.push_back(ReadSourceRange(Record, Idx));
+
+   return NestedNameSpecifierWithLoc::Create(Context.getDeclNameTable(),
+                                             Name, Locs);
 }
 
 sema::ResolvedTemplateArg

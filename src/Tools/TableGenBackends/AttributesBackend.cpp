@@ -175,6 +175,7 @@ public:
    void emit();
    void emitAttrDecl(Record *Attr, Class *Base);
    void emitGetVisitationPoint();
+   void emitIsInherited();
 
    void emitPrintPrettyImpl(Record *Attr, Class *Base);
    void emitCloneImpl(Record *Attr, Class *Base);
@@ -321,6 +322,7 @@ void AttrClassEmitter::emit()
    out << "#ifdef CDOT_ATTR_IMPL\n";
 
    emitGetVisitationPoint();
+   emitIsInherited();
 
    i = 0;
    for (auto &Attr : Attrs) {
@@ -527,6 +529,41 @@ void AttrClassEmitter::emitGetVisitationPoint()
 
    out << R"__(
    Attr::VisitationPoint Attr::getVisitationPoint() const {
+      switch (kind) {
+      default: llvm_unreachable("bad attr kind!");
+      )__" << CaseStr << R"__(
+      }
+   }
+)__";
+}
+
+void AttrClassEmitter::emitIsInherited()
+{
+   std::unordered_map<Record*, bool> AttrMap;
+
+   llvm::SmallVector<Record*, 16> Attrs;
+   RK.getAllDefinitionsOf("Attr", Attrs);
+
+   for (auto &Attr : Attrs) {
+      bool IsInherited = cast<IntegerLiteral>(Attr->getFieldValue("Inherited"))
+         ->getVal().getBoolValue();
+
+      AttrMap[Attr] = IsInherited;
+   }
+
+   std::string CaseStr;
+   llvm::raw_string_ostream CS(CaseStr);
+
+   for (auto &Pair : AttrMap) {
+      CS << Tab() << "case AttrKind::" << Pair.first->getName() << ":\n";
+      CS << Tab() << Tab() << "return " << (Pair.second ? "true" : "false")
+         << ";\n";
+   }
+
+   CS.flush();
+
+   out << R"__(
+   bool Attr::isInherited() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
       )__" << CaseStr << R"__(
@@ -1180,6 +1217,225 @@ void AttrParseEmitter::readEnumDefault(llvm::raw_ostream &out,
        << ";\n";
 }
 
+namespace {
+
+class AttrSerializeEmitter {
+public:
+   AttrSerializeEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
+      : out(out), RK(RK)
+   {}
+
+   void emit();
+
+private:
+   llvm::raw_ostream &out;
+   RecordKeeper &RK;
+
+   void emitSerialize(llvm::ArrayRef<Record*> Attrs);
+   void emitDeserialize(llvm::ArrayRef<Record*> Attrs);
+
+   void writeStringArg(llvm::raw_ostream &out,
+                       llvm::StringRef GetterName);
+   void writeIntArg(llvm::raw_ostream &out,
+                    llvm::StringRef GetterName);
+   void writeFloatArg(llvm::raw_ostream &out,
+                      llvm::StringRef GetterName);
+   void writeTypeArg(llvm::raw_ostream &out,
+                     llvm::StringRef GetterName);
+   void writeExprArg(llvm::raw_ostream &out,
+                     llvm::StringRef GetterName);
+   void writeEnumArg(llvm::raw_ostream &out,
+                     llvm::StringRef GetterName);
+
+   void readStringArg(llvm::raw_ostream &out);
+   void readIntArg(llvm::raw_ostream &out);
+   void readFloatArg(llvm::raw_ostream &out);
+   void readTypeArg(llvm::raw_ostream &out);
+   void readExprArg(llvm::raw_ostream &out);
+   void readEnumArg(llvm::raw_ostream &out, llvm::StringRef EnumName);
+};
+
+} // anonymous namespace
+
+void AttrSerializeEmitter::emit()
+{
+   llvm::SmallVector<Record*, 16> Attrs;
+   RK.getAllDefinitionsOf("Attr", Attrs);
+
+   out << "#ifdef CDOT_ATTR_SERIALIZE" << Newline();
+   emitSerialize(Attrs);
+   out << "#endif" << Newline();
+
+   out << "#ifdef CDOT_ATTR_DESERIALIZE" << Newline();
+   emitDeserialize(Attrs);
+   out << "#endif" << Newline();
+
+   out << "#undef CDOT_ATTR_SERIALIZE\n";
+   out << "#undef CDOT_ATTR_DESERIALIZE\n";
+}
+
+void AttrSerializeEmitter::writeStringArg(llvm::raw_ostream &out,
+                                          llvm::StringRef GetterName) {
+   out << "Record.AddIdentifierRef(&Idents.get(A->" << GetterName << "()));\n";
+}
+
+void AttrSerializeEmitter::writeIntArg(llvm::raw_ostream &out,
+                                       llvm::StringRef GetterName) {
+   out << "Record.AddAPSInt(A->" << GetterName << "());\n";
+}
+
+void AttrSerializeEmitter::writeFloatArg(llvm::raw_ostream &out,
+                                         llvm::StringRef GetterName) {
+   out << "Record.AddAPFloat(A->" << GetterName << "());\n";
+}
+
+void AttrSerializeEmitter::writeTypeArg(llvm::raw_ostream &out,
+                                        llvm::StringRef GetterName) {
+   out << "Record.AddType(A->" << GetterName << "());\n";
+}
+
+void AttrSerializeEmitter::writeExprArg(llvm::raw_ostream &out,
+                                        llvm::StringRef GetterName) {
+   out << "Record.AddStmt(A->" << GetterName << "());\n";
+}
+
+void AttrSerializeEmitter::writeEnumArg(llvm::raw_ostream &out,
+                                        llvm::StringRef GetterName) {
+   out << "Record.push_back((uint64_t)A->" << GetterName << "());\n";
+}
+
+void AttrSerializeEmitter::readStringArg(llvm::raw_ostream &out)
+{
+   out << "Record.getIdentifierInfo()->getIdentifier()";
+}
+
+void AttrSerializeEmitter::readIntArg(llvm::raw_ostream &out)
+{
+   out << "Record.readAPSInt()";
+}
+
+void AttrSerializeEmitter::readFloatArg(llvm::raw_ostream &out)
+{
+   out << "Record.readAPFloat()";
+}
+
+void AttrSerializeEmitter::readTypeArg(llvm::raw_ostream &out)
+{
+   out << "Record.readSourceType()";
+}
+
+void AttrSerializeEmitter::readExprArg(llvm::raw_ostream &out)
+{
+   out << "cast<StaticExpr>(Record.readExpr())";
+}
+
+void AttrSerializeEmitter::readEnumArg(llvm::raw_ostream &out,
+                                       llvm::StringRef EnumName) {
+   out << "Record.readEnum<" << EnumName << ">()";
+}
+
+void AttrSerializeEmitter::emitSerialize(llvm::ArrayRef<Record *> Attrs)
+{
+   llvm::SmallString<64> GetterName;
+   for (auto &Attr : Attrs) {
+      out << "void ASTAttrWriter::visit" << Attr->getName()
+          << "Attr(" << Attr->getName() << "Attr *A) {\n";
+
+      auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+      for (auto &Arg : Args) {
+         auto *ArgVal = cast<RecordVal>(Arg);
+         auto C = ArgVal->getRecord()->getBases().front().getBase();
+
+         auto Name = cast<StringLiteral>(
+            ArgVal->getRecord()->getFieldValue("name"))->getVal();
+
+         GetterName += "get";
+         GetterName += (char)::toupper(Name.front());
+         GetterName += Name.substr(1);
+
+         out << "   ";
+         if (C->getName() == "IntArg")
+            writeIntArg(out, GetterName);
+         else if (C->getName() == "FloatArg")
+            writeFloatArg(out, GetterName);
+         else if (C->getName() == "StringArg")
+            writeStringArg(out, GetterName);
+         else if (C->getName() == "TypeArg")
+            writeTypeArg(out, GetterName);
+         else if (C->getName() == "ExprArg")
+            writeExprArg(out, GetterName);
+         else
+            writeEnumArg(out, GetterName);
+
+         GetterName.clear();
+      }
+
+      out << "}\n";
+   }
+}
+
+void AttrSerializeEmitter::emitDeserialize(llvm::ArrayRef<Record *> Attrs)
+{
+   llvm::SmallVector<llvm::StringRef, 4> FieldNames;
+   for (auto &Attr : Attrs) {
+      out << Attr->getName() << "Attr *ASTAttrReader::read" << Attr->getName()
+          << "Attr(SourceRange SR) {\n";
+
+      auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+      for (auto &Arg : Args) {
+         auto *ArgVal = cast<RecordVal>(Arg);
+         auto C = ArgVal->getRecord()->getBases().front().getBase();
+
+         auto Name = cast<StringLiteral>(
+            ArgVal->getRecord()->getFieldValue("name"))->getVal();
+         
+         FieldNames.push_back(Name);
+
+         out << "   auto " << Name << " = ";
+         if (C->getName() == "IntArg")
+            readIntArg(out);
+         else if (C->getName() == "FloatArg")
+            readFloatArg(out);
+         else if (C->getName() == "StringArg")
+            readStringArg(out);
+         else if (C->getName() == "TypeArg")
+            readTypeArg(out);
+         else if (C->getName() == "ExprArg")
+            readExprArg(out);
+         else {
+            std::string EnumName;
+            EnumName += Attr->getName();
+            EnumName += "Attr::";
+            EnumName += (char)::toupper(Name.front());
+            EnumName += Name.substr(1);
+            EnumName += "Kind";
+
+            readEnumArg(out, EnumName);
+         }
+
+         out << ";\n";
+      }
+
+      out << "   return new(C) " << Attr->getName() << "Attr(";
+
+      unsigned i = 0;
+      for (auto Name : FieldNames) {
+         if (i++ != 0)
+            out << ", ";
+
+         out << "std::move(" << Name << ")";
+      }
+
+      if (i++ != 0)
+         out << ", ";
+
+      out << "SR);\n"
+          << "}\n";
+
+      FieldNames.clear();
+   }
+}
+
 extern "C" {
 
 void EmitAttributeDefs(llvm::raw_ostream &out, RecordKeeper &RK)
@@ -1195,6 +1451,11 @@ void EmitAttributeClasses(llvm::raw_ostream &out, RecordKeeper &RK)
 void EmitAttributeParse(llvm::raw_ostream &out, RecordKeeper &RK)
 {
    AttrParseEmitter(out, RK).emit();
+}
+
+void EmitAttributeSerialize(llvm::raw_ostream &out, RecordKeeper &RK)
+{
+   AttrSerializeEmitter(out, RK).emit();
 }
 
 };

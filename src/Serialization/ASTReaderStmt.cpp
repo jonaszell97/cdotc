@@ -229,7 +229,7 @@ void ASTStmtReader::visitForInStmt(ForInStmt *S)
    visitStmt(S);
 
    S->setForLoc(Record.readSourceLocation());
-   S->setDecl(Record.readDeclAs<LocalVarDecl>());
+   S->setDecl(Record.readDecl());
    S->setRangeExpr(Record.readSubExpr());
    S->setBody(Record.readSubStmt());
 
@@ -1034,10 +1034,13 @@ void ASTStmtReader::visitFunctionTypeExpr(FunctionTypeExpr *S)
    visitTypeExpr(S);
 
    auto *Ptr = S->getTrailingObjects<SourceType>();
+   auto *InfoPtr = S->getTrailingObjects<FunctionType::ParamInfo>();
    auto NumArgs = Record.readInt();
 
    while (NumArgs--) {
       *Ptr++ = Record.readSourceType();
+      *InfoPtr++ = FunctionType::ParamInfo(
+         Record.readEnum<ArgumentConvention>());
    }
 
    S->setRetTy(Record.readSourceType());

@@ -398,11 +398,39 @@ static PropDecl *CreateUnionAccessor(SemaPass &SP, ASTContext &Ctx,
       SetterBody = CreateUnionSetterBody(SP, Ctx, FieldTy, Loc);
    }
 
+   SourceType Type(FieldTy);
+
+   // Create the getter.
+   DeclarationName DN = Ctx.getDeclNameTable().getAccessorName(
+      *Name.getIdentifierInfo(), DeclarationName::Getter);
+
+   auto *GetterMethod = MethodDecl::Create(Ctx, AccessSpecifier::Public,
+                                           Loc, DN, Type, SP.MakeSelfArg(Loc),
+                                           {}, GetterBody, false);
+
+   // Create the setter.
+   MethodDecl *SetterMethod = nullptr;
+   if (!Const) {
+      DN = Ctx.getDeclNameTable().getAccessorName(
+         *Name.getIdentifierInfo(), DeclarationName::Setter);
+
+      auto *NewValArg = FuncArgDecl::Create(Ctx, Loc, Loc,
+                                            SP.getIdentifier("newVal"),
+                                            nullptr,
+                                            ArgumentConvention::Owned,
+                                            Type, nullptr, false);
+
+      NewValArg->setSynthesized(true);
+
+      FuncArgDecl *Args[] { SP.MakeSelfArg(Loc), NewValArg };
+      SetterMethod = MethodDecl::Create(Ctx, AccessSpecifier::Public,
+                                        Loc, DN, Type, Args, { },
+                                        SetterBody, false);
+   }
+
    return PropDecl::Create(Ctx, AccessSpecifier::Public, Loc, Name,
-                           SourceType(FieldTy), false, true,
-                           !Const, AccessSpecifier::Public,
-                           AccessSpecifier::Public, GetterBody, SetterBody,
-                           SP.getIdentifier("newValue"));
+                           SourceType(FieldTy), false, GetterMethod,
+                           SetterMethod);
 }
 
 static InitDecl *CreateUnionInit(SemaPass &SP, ASTContext &Ctx,

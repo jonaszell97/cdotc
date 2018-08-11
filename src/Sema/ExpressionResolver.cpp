@@ -892,6 +892,16 @@ static void visitContextDependentExpr(SemaPass &SP, Expression *E)
 
       break;
    }
+   case Statement::CallExprID: {
+      auto *CE = cast<CallExpr>(E);
+      CE->setIsTypeDependent(true);
+
+      for (auto *Arg : CE->getArgs()) {
+         (void) SP.visitExpr(CE, Arg);
+      }
+
+      break;
+   }
    case Statement::LambdaExprID: {
       auto *LE = cast<LambdaExpr>(E);
       LE->setIsTypeDependent(true);

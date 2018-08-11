@@ -48,6 +48,7 @@ public:
    };
 
    VisitationPoint getVisitationPoint() const;
+   bool isInherited() const;
 
    static bool classofKind(AttrKind kind) { return true; }
    static bool classof(const Attr *A) { return classofKind(A->getKind()); }

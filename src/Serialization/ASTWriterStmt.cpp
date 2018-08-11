@@ -119,8 +119,8 @@ void ASTStmtWriter::visitExpr(Expression *E)
 
    uint8_t Flags = 0;
    Flags |= E->isLHSOfAssignment();
-   Flags |= (E->allowTemplate() << 2);
-   Flags |= (E->isMagicArgumentValue() << 3);
+   Flags |= (E->allowTemplate() << 1);
+   Flags |= (E->isMagicArgumentValue() << 2);
 
    Record.push_back(Flags);
 }
@@ -978,10 +978,14 @@ void ASTStmtWriter::visitFunctionTypeExpr(FunctionTypeExpr *S)
    visitTypeExpr(S);
 
    auto Tys = S->getArgTypes();
+   auto Info = S->getParamInfo();
    Record.push_back(Tys.size());
 
-   for (auto &Ty : Tys)
+   unsigned i = 0;
+   for (auto &Ty : Tys) {
       Record.AddTypeRef(Ty);
+      Record.push_back((uint64_t)Info[i++].getConvention());
+   }
 
    Record.AddTypeRef(S->getReturnType());
 

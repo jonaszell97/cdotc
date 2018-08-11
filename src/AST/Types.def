@@ -1,14 +1,20 @@
 
 #ifndef CDOT_TYPE
-#  define CDOT_TYPE(Name, Parent)
+#  define CDOT_TYPE(NAME, PARENT)
+#endif
+
+#ifndef CDOT_DEPENDENT_TYPE
+#  define CDOT_DEPENDENT_TYPE(NAME, PARENT) CDOT_TYPE(NAME, PARENT)
+#endif
+
+#ifndef CDOT_IL_TYPE
+#  define CDOT_IL_TYPE(NAME, PARENT) CDOT_TYPE(NAME, PARENT)
 #endif
 
 CDOT_TYPE(RecordType, Type)
-CDOT_TYPE(DependentRecordType, RecordType)
 CDOT_TYPE(BuiltinType, Type)
 CDOT_TYPE(FunctionType, Type)
 CDOT_TYPE(LambdaType, FunctionType)
-CDOT_TYPE(GenericType, Type)
 CDOT_TYPE(AssociatedType, Type)
 CDOT_TYPE(PointerType, Type)
 CDOT_TYPE(MutablePointerType, PointerType)
@@ -18,13 +24,18 @@ CDOT_TYPE(MutableBorrowType, MutableReferenceType)
 CDOT_TYPE(TupleType, Type)
 CDOT_TYPE(ArrayType, Type)
 CDOT_TYPE(InferredSizeArrayType, ArrayType)
-CDOT_TYPE(DependentSizeArrayType, ArrayType)
 CDOT_TYPE(MetaType, Type)
 CDOT_TYPE(TypedefType, Type)
 
+// Dependent Types
+CDOT_DEPENDENT_TYPE(GenericType, Type)
+CDOT_DEPENDENT_TYPE(DependentSizeArrayType, ArrayType)
+CDOT_DEPENDENT_TYPE(DependentRecordType, RecordType)
+CDOT_DEPENDENT_TYPE(DependentNameType, Type)
+
 // IL Types
-CDOT_TYPE(TokenType, Type)
-CDOT_TYPE(BoxType, Type)
+CDOT_IL_TYPE(TokenType, Type)
+CDOT_IL_TYPE(BoxType, Type)
 
 #ifdef CDOT_BASE_TYPE
    CDOT_BASE_TYPE(Type)

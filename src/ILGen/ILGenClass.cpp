@@ -338,13 +338,7 @@ void ILGenPass::DeclareProperty(PropDecl *P)
 
 void ILGenPass::DefineProperty(PropDecl *P)
 {
-   if (P->hasGetter() && P->getGetterBody()) {
-      DefineFunction(P->getGetterMethod());
-   }
 
-   if (P->hasSetter() && P->getSetterBody()) {
-      DefineFunction(P->getSetterMethod());
-   }
 }
 
 void ILGenPass::visitRecordDecl(RecordDecl *node)
@@ -504,7 +498,7 @@ void ILGenPass::SynthesizeGetterAndSetter(FieldDecl *F)
    if (!Acc)
       return;
 
-   if (!Acc->getGetterBody() && Acc->hasGetter()) {
+   if (Acc->hasGetter() && !Acc->getGetterMethod()->getBody()) {
       InsertPointRAII insertPointRAII(*this);
 
       if (emitDI) {
@@ -534,7 +528,7 @@ void ILGenPass::SynthesizeGetterAndSetter(FieldDecl *F)
       }
    }
 
-   if (!Acc->getSetterBody() && Acc->hasSetter()) {
+   if (Acc->hasSetter() && !Acc->getSetterMethod()->getBody()) {
       InsertPointRAII insertPointRAII(*this);
 
       if (emitDI) {

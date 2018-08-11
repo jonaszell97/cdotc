@@ -124,6 +124,7 @@ private:
    mutable llvm::FoldingSet<MetaType> MetaTypes;
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
+   mutable llvm::FoldingSet<DependentNameType> DependentNameTypes;
 
    /// Map from source IDs to declarations within that file, used for
    /// incremental compilation.
@@ -345,11 +346,13 @@ public:
                                  RecordDecl *R,
                                  sema::FinalTemplateArgumentList *args) const;
 
+   DependentNameType *getDependentNameType(NestedNameSpecifierWithLoc *Name) const;
+
    AssociatedType *getAssociatedType(AssociatedTypeDecl *AT) const;
    GenericType *getTemplateArgType(TemplateParamDecl *Param) const;
 
    MetaType *getMetaType(QualType forType) const;
-   TypedefType *getTypedefType(TypedefDecl *TD) const;
+   TypedefType *getTypedefType(AliasDecl *TD) const;
 
 private:
    mutable llvm::DenseMap<NamedDecl*, SmallVector<NamedDecl*, 0>> InstMap;

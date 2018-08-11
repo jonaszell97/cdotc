@@ -8,15 +8,29 @@ namespace cdot {
 
 class LambdaScope;
 
+struct SingleLevelLookupResult: public ast::DeclContextLookupResult {
+   SingleLevelLookupResult(const ast::DeclContextLookupResult &Result,
+                           LambdaScope *LS)
+      : DeclContextLookupResult(Result), LS(LS)
+   {}
+
+   SingleLevelLookupResult()
+      : DeclContextLookupResult(), LS(nullptr)
+   {}
+
+   LambdaScope *LS = nullptr;
+};
+
 class MultiLevelLookupResult {
-   using ArrayTy = SmallVector<ast::DeclContextLookupResult, 2>;
+   using ArrayTy = SmallVector<SingleLevelLookupResult, 2>;
 
    ArrayTy Vec;
-   LambdaScope *LS = nullptr;
 
 public:
    using iterator       = ArrayTy::iterator;
    using const_iterator = ArrayTy::const_iterator;
+   using reference      = SingleLevelLookupResult&;
+   using const_reference = const SingleLevelLookupResult&;
 
    iterator begin() { return Vec.begin(); }
    iterator end()   { return Vec.end(); }
@@ -27,17 +41,17 @@ public:
    size_t size() const { return Vec.size(); }
    bool empty() const { return Vec.empty(); }
 
-   ast::DeclContextLookupResult const& front() const { return Vec.front(); }
-   ast::DeclContextLookupResult const& back() const { return Vec.back(); }
+   const_reference front() const { return Vec.front(); }
+   const_reference back() const { return Vec.back(); }
 
-   ast::DeclContextLookupResult& front() { return Vec.front(); }
-   ast::DeclContextLookupResult& back() { return Vec.back(); }
+   reference front() { return Vec.front(); }
+   reference back() { return Vec.back(); }
 
    struct all_decl_iterator {
    private:
-      ast::DeclContextLookupResult *CurrArr;
-      ast::DeclContextLookupResult *ArrEnd;
-      ast::DeclContextLookupResult::iterator CurrDecl;
+      SingleLevelLookupResult *CurrArr;
+      SingleLevelLookupResult *ArrEnd;
+      SingleLevelLookupResult::iterator CurrDecl;
 
    public:
       // Begin iterator
@@ -127,12 +141,9 @@ public:
 
    /*implicit*/ operator bool() const { return !empty(); }
 
-   LambdaScope* getLambdaScope() const { return LS; }
-   void setLambdaScope(LambdaScope* V) { LS = V; }
-
-   void addResult(ast::DeclContextLookupResult Result)
-   {
-      Vec.push_back(Result);
+   void addResult(ast::DeclContextLookupResult Result,
+                  LambdaScope *LS = nullptr) {
+      Vec.emplace_back(Result, LS);
    }
 
    void addResult(const MultiLevelLookupResult &Result)

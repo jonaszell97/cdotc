@@ -23,6 +23,7 @@ class Attr<let name: string> {
     let Args: list<Arg> = []
     let Visit: VisitationPoint = AfterDeclaration
     let IgnoreFollowingParens: i1 = false
+    let Inherited: i1 = false
 }
 
 class DeclAttr<name: string, let Decls: list<DeclClass> > : Attr<name>
@@ -37,6 +38,7 @@ def Extern : DeclAttr<"extern", [CallableDecl, GlobalVarDecl]> {
 }
 
 def Inline : DeclAttr<"inline", [CallableDecl]> {
+    Inherited = true
     Args = [EnumArg<"level", ["always", "never", "hint"], true, "hint">]
 }
 
@@ -57,9 +59,14 @@ def Align : DeclAttr<"align", [RecordDecl, VarDecl]> {
 
 def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]> {
     Visit = Never
+    Inherited = true
 }
 
 def AutoClosure : DeclAttr<"autoclosure", [FuncArgDecl]> {
+    Visit = Never
+}
+
+def Escaping : DeclAttr<"escaping", [FuncArgDecl]> {
     Visit = Never
 }
 
@@ -69,6 +76,7 @@ def Testable : DeclAttr<"testable", [Decl]> {
 
 def CompileTime : DeclAttr<"compiletime", [Decl]> {
     Visit = Never
+    Inherited = true
 }
 
 def VersionDecl : DeclAttr<"version", [Decl]> {

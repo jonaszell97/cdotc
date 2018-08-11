@@ -678,6 +678,16 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/NestedNameSpecifier.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Basic/NestedNameSpecifier.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Basic/Precedence.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>

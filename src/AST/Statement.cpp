@@ -327,7 +327,7 @@ ForStmt* ForStmt::Create(ASTContext &C, SourceLocation ForLoc,
 }
 
 ForInStmt::ForInStmt(SourceLocation ForLoc,
-                     LocalVarDecl* decl,
+                     Decl* decl,
                      Expression* range,
                      Statement* body,
                      IdentifierInfo *Label)
@@ -344,7 +344,7 @@ ForInStmt::ForInStmt(EmptyShell)
 
 ForInStmt* ForInStmt::Create(ASTContext &C,
                              SourceLocation ForLoc,
-                             LocalVarDecl *decl,
+                             Decl *decl,
                              Expression *range,
                              Statement *body,
                              IdentifierInfo *Label) {

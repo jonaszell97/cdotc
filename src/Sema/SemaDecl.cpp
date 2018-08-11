@@ -20,6 +20,7 @@
 #include "SemaPass.h"
 #include "Serialization/ModuleFile.h"
 #include "Support/Casting.h"
+#include "Support/SaveAndRestore.h"
 #include "Support/StringSwitch.h"
 #include "TemplateInstantiator.h"
 #include "Template.h"
@@ -45,16 +46,17 @@ namespace ast {
 namespace {
 
 class DeclPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
-   NamedDecl *D;
+   Decl *D;
 
 public:
-   DeclPrettyStackTraceEntry(NamedDecl *D)
+   DeclPrettyStackTraceEntry(Decl *D)
       : D(D)
    {}
 
    void print(llvm::raw_ostream &OS) const override
    {
-      OS << "while declaring " << D->getDeclName() << "\n";
+      if (auto *ND = dyn_cast<NamedDecl>(D))
+         OS << "while declaring " << ND->getDeclName() << "\n";
    }
 };
 
@@ -372,6 +374,11 @@ void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
    }
 }
 
+static bool needsSizeCalculation(RecordDecl *R)
+{
+   return R->getSize() == 0;
+}
+
 bool SemaPass::visitDelayedDeclsAfterParsing()
 {
    while (!TopLevelMacros.empty()) {
@@ -384,7 +391,8 @@ bool SemaPass::visitDelayedDeclsAfterParsing()
    if (encounteredError())
       return true;
 
-   llvm::SmallVector<Decl*, 8> OtherDecls;
+   SmallVector<Decl*, 8> OtherDecls;
+   SmallVector<RecordDecl*, 8> RecordDecls;
    unsigned i = 0;
 
    while (i != DelayedDecls.size()) {
@@ -407,6 +415,10 @@ bool SemaPass::visitDelayedDeclsAfterParsing()
 
          for (auto &P : ND->getTemplateParams())
             (void)declareStmt(ND, P);
+
+         if (auto *R = dyn_cast<RecordDecl>(Ctx)) {
+            RecordDecls.push_back(R);
+         }
       }
       else {
          OtherDecls.push_back(decl);
@@ -424,10 +436,109 @@ bool SemaPass::visitDelayedDeclsAfterParsing()
       }
    }
 
+   calculateRecordSizes(RecordDecls);
+
    if (!DelayedDecls.empty())
       return visitDelayedDeclsAfterParsing();
 
    return EncounteredError;
+}
+
+static void diagnoseCircularDependency(SemaPass &SP,
+                                       DependencyGraph<NamedDecl*> &Dep) {
+   auto pair = Dep.getOffendingPair();
+
+   // this pair should contain one RecordDecl and either a FieldDecl or an
+   // EnumCaseDecl
+   RecordDecl *R = nullptr;
+   NamedDecl *FieldOrCase = nullptr;
+
+   if (isa<RecordDecl>(pair.first)) {
+      R = cast<RecordDecl>(pair.first);
+   }
+   else if (isa<EnumCaseDecl>(pair.first)) {
+      FieldOrCase = cast<EnumCaseDecl>(pair.first);
+   }
+   else {
+      FieldOrCase = cast<FieldDecl>(pair.first);
+   }
+
+   if (isa<RecordDecl>(pair.second)) {
+      R = cast<RecordDecl>(pair.second);
+   }
+   else if (isa<EnumCaseDecl>(pair.second)) {
+      FieldOrCase = cast<EnumCaseDecl>(pair.second);
+   }
+   else {
+      FieldOrCase = cast<FieldDecl>(pair.second);
+   }
+
+   assert(R && FieldOrCase && "bad dependency pair!");
+
+   SP.diagnose(R, err_circular_data_members, R->getDeclName(),
+               FieldOrCase->getRecord()->getDeclName(), R->getSourceLoc());
+
+   SP.diagnose(note_other_field_here, FieldOrCase->getSourceLoc());
+}
+
+LLVM_ATTRIBUTE_UNUSED
+static void diagnoseCircularConformance(SemaPass &SP,
+                                        DependencyGraph<ProtocolDecl*> &Dep) {
+   auto Pair = Dep.getOffendingPair();
+   SP.diagnose(Pair.first, err_circular_conformance, Pair.first->getSourceLoc(),
+               Pair.first->getDeclName(), Pair.second->getDeclName());
+}
+
+bool SemaPass::calculateRecordSizes(ArrayRef<RecordDecl*> Decls)
+{
+   DependencyGraph<NamedDecl*> LayoutDependency;
+   for (auto *D : Decls) {
+      declareImmediateDecls(D, LayoutDependency);
+   }
+
+   if (encounteredError()) {
+      return true;
+   }
+
+   if (LayoutDependency.empty()) {
+      // No dependencies among any records.
+      for (auto *Rec : Decls)
+         calculateRecordSize(Rec, false);
+
+      return false;
+   }
+
+//   auto ConformanceOrder = ConformanceDependency.constructOrderedList();
+//   if (!ConformanceOrder.second)
+//      return diagnoseCircularConformance(*this, ConformanceDependency);
+
+   auto Order = LayoutDependency.constructOrderedList();
+   if (!Order.second) {
+      diagnoseCircularDependency(*this, LayoutDependency);
+      return true;
+   }
+
+   for (auto &R : Order.first) {
+      assert(!R->isInvalid() && "finalizing invalid record");
+
+      auto *Rec = dyn_cast<RecordDecl>(R);
+      if (!Rec)
+         continue;
+
+      // Don't instantiate anything in a template or a protocol.
+      if (R->isTemplateOrInTemplate()) {
+         continue;
+      }
+
+      if (isa<ProtocolDecl>(
+         R->getNonTransparentDeclContext()->lookThroughExtension())) {
+         continue;
+      }
+
+      calculateRecordSize(Rec, false);
+   }
+
+   return false;
 }
 
 NamedDecl* SemaPass::getCurrentDecl() const
@@ -631,11 +742,11 @@ void SemaPass::ActOnDecl(DeclContext *Ctx, Decl *D, bool Global)
       LLVM_FALLTHROUGH;
    case Decl::GlobalVarDeclID:
    case Decl::AssociatedTypeDeclID:
-   case Decl::SubscriptDeclID:
    case Decl::PropDeclID:
    case Decl::NamespaceDeclID:
    case Decl::ModuleDeclID:
    case Decl::MacroDeclID:
+   case Decl::SubscriptDeclID:
       addDeclToContext(*Ctx, cast<NamedDecl>(D));
       checkDefaultAccessibility(cast<NamedDecl>(D));
       break;
@@ -676,8 +787,9 @@ void SemaPass::ActOnRecordDecl(RecordDecl *R)
    for (auto &P : R->getTemplateParams())
       ActOnTemplateParamDecl(*R, P);
 
-   if (R->isTemplate())
+   if (stage == Stage::Parsing) {
       DelayedDecls.push_back(R);
+   }
 
    // register this record in the dependency graph
    (void)LayoutDependency.getOrAddVertex(R);
@@ -922,6 +1034,42 @@ void SemaPass::ActOnUsingDecl(UsingDecl *D, bool Global)
    checkDefaultAccessibility(D);
 }
 
+DeclResult SemaPass::declare(Decl *decl, bool)
+{
+   if (decl->wasDeclared() && !isa<LocalVarDecl>(decl)) {
+      if (decl->isInvalid())
+         return DeclError();
+
+      return decl;
+   }
+
+   decl->setDeclared(true);
+   checkDeclAttrs(decl, Attr::BeforeDeclaration);
+
+   if (decl->isIgnored())
+      return decl;
+
+   DeclPrettyStackTraceEntry STE(decl);
+
+   DeclResult Result;
+   switch (decl->getKind()) {
+#  define CDOT_DECL(Name)                                \
+   case Decl::Name##ID:                                  \
+      Result = declare##Name(static_cast<Name*>(decl)); break;
+#  include "AST/Decl.def"
+   default:
+      llvm_unreachable("can't declare statement");
+   }
+
+   if (!Result)
+      return Result;
+
+   Result.get()->setDeclared(true);
+   checkDeclAttrs(decl, Attr::AfterDeclaration);
+
+   return Result;
+}
+
 void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
 {
    auto AS = ND->getAccess();
@@ -998,6 +1146,249 @@ void SemaPass::pushDeclContext(DeclContext *Ctx)
 void SemaPass::popDeclContext()
 {
    DeclCtx = DeclCtx->getParentCtx();
+}
+
+static void checkBaseClass(SemaPass &SP, DeclContext *Ctx,
+                           DependencyGraph<NamedDecl*> &LayoutDependency) {
+   auto *C = dyn_cast<ClassDecl>(Ctx);
+   if (!C)
+      return;
+
+   // Already checked the base class, we still need to add the dependency here.
+   if (auto *Base = C->getParentClass()) {
+      // Base class size needs to be calculated before sub classes
+      auto &Vert = LayoutDependency.getOrAddVertex(C);
+      auto &BaseVert = LayoutDependency.getOrAddVertex(Base);
+
+      BaseVert.addOutgoing(&Vert);
+      return;
+   }
+
+   auto parent = C->getParentType();
+   if (!parent)
+      return;
+
+   auto res = SP.visitSourceType(C, parent);
+   if (!res)
+      return;
+
+   auto parentTy = parent.getResolvedType();
+   if (parentTy->isDependentType())
+      return;
+
+   if (!parentTy->isRecordType()) {
+      SP.diagnose(parent.getTypeExpr(), err_generic_error,
+                  "cannot extend non-class " + parentTy.toString());
+
+      return;
+   }
+
+   auto ParentClass = parentTy->getRecord();
+   if (ParentClass->isTemplate()) {
+      return;
+   }
+
+   if (!isa<ClassDecl>(ParentClass)) {
+      SP.diagnose(parent.getTypeExpr(), err_generic_error,
+                  "cannot extend non-class " + ParentClass->getName());
+   }
+   else {
+      auto *Base = cast<ClassDecl>(ParentClass);
+
+      C->inherit(Base);
+      C->getStoredFields().insert(C->getStoredFields().begin(),
+                                  Base->getStoredFields().begin(),
+                                  Base->getStoredFields().end());
+
+      // base class size needs to be calculated before sub classes
+      auto &Vert = LayoutDependency.getOrAddVertex(C);
+      auto &BaseVert = LayoutDependency.getOrAddVertex(ParentClass);
+
+      BaseVert.addOutgoing(&Vert);
+   }
+}
+
+static void checkEnumCasesLayoutOnly(EnumDecl *E,
+                                DependencyGraph<NamedDecl*> &LayoutDependency) {
+   auto &EnumVert = LayoutDependency.getOrAddVertex(E);
+   for (const auto &Case : E->getCases()) {
+      // Every enum is dependent on its cases.
+      auto &CaseVert = LayoutDependency.getOrAddVertex(Case);
+      CaseVert.addOutgoing(&EnumVert);
+   }
+}
+
+static void checkEnumCases(SemaPass &SP, DeclContext *DC,
+                           DependencyGraph<NamedDecl*> &LayoutDependency) {
+   auto *E = dyn_cast<EnumDecl>(DC);
+   if (!E)
+      return;
+
+   if (E->getRawType().isResolved())
+      return checkEnumCasesLayoutOnly(E, LayoutDependency);
+
+   auto &Context = SP.getContext();
+
+   QualType CaseValTy;
+   if (auto &Ty = E->getRawType()) {
+      auto res = SP.visitSourceType(E, E->getRawType());
+      if (!res)
+         return;
+
+      CaseValTy = res.get();
+   }
+   else {
+      CaseValTy = Context.getIntTy();
+   }
+
+   long long NextCaseVal = 0ll;
+   llvm::DenseMap<long long, EnumCaseDecl *> caseVals;
+
+   auto &EnumVert = LayoutDependency.getOrAddVertex(E);
+   for (const auto &Case : E->getCases()) {
+      if (auto expr = Case->getRawValExpr()) {
+         expr->setContextualType(CaseValTy);
+
+         (void) SP.getAsOrCast(E, expr, CaseValTy);
+         if (expr->isInvalid())
+            continue;
+
+         auto res = SP.evalStaticExpr(E, expr);
+         if (!res)
+            continue;
+
+         Case->setILValue(res.getValue());
+         Case->setRawValue(cast<il::ConstantInt>(res.getValue())
+                              ->getSExtValue());
+
+         NextCaseVal = Case->getRawValue();
+      }
+      else {
+         Case->setRawValue(NextCaseVal);
+      }
+
+      auto it = caseVals.find(Case->getRawValue());
+      if (it != caseVals.end()) {
+         SP.diagnose(Case, err_generic_error,
+                     "duplicate case value " + std::to_string(NextCaseVal),
+                     Case->getSourceLoc());
+         SP.diagnose(note_duplicate_case, 0, it->getSecond()->getSourceLoc());
+      }
+
+      caseVals.try_emplace(NextCaseVal, Case);
+      ++NextCaseVal;
+
+      // Every enum is dependent on its cases.
+      auto &CaseVert = LayoutDependency.getOrAddVertex(Case);
+      CaseVert.addOutgoing(&EnumVert);
+   }
+
+   bool SetRawValue = true;
+   if (!E->getRawType() || E->getRawType()->isErrorType()) {
+      // Get the smallest integer type that can represent all case values.
+      QualType RawTy;
+      if (NextCaseVal <= INT8_MAX) {
+         RawTy = Context.getInt8Ty();
+      }
+      else if (NextCaseVal <= INT16_MAX) {
+         RawTy = Context.getInt16Ty();
+      }
+      else if (NextCaseVal <= INT32_MAX) {
+         RawTy = Context.getInt32Ty();
+      }
+      else {
+         RawTy = Context.getInt64Ty();
+      }
+
+      E->getRawType().setResolvedType(RawTy);
+   }
+   else if (E->getRawType()->isDependentType()) {
+      SetRawValue = false;
+   }
+
+   auto &ILGen = SP.getILGen();
+   for (const auto &Case : E->getCases()) {
+      if (SetRawValue) {
+         if (!Case->getILValue()) {
+            Case->setILValue(ILGen.Builder.GetConstantInt(
+               E->getRawType(), Case->getRawValue()));
+         }
+         else {
+            auto *CI = cast<il::ConstantInt>(Case->getILValue());
+            if (CI->getType() != E->getRawType()) {
+               Case->setILValue(ILGen.Builder.GetConstantInt(
+                  E->getRawType(), CI->getZExtValue()));
+            }
+         }
+      }
+   }
+}
+
+
+void SemaPass::declareImmediateDecls(
+                              RecordDecl *Ctx,
+                              DependencyGraph<NamedDecl*> &LayoutDependency) {
+   if (!needsSizeCalculation(Ctx))
+      return;
+
+   DeclScopeRAII DSR(*this, Ctx);
+
+   StmtOrDecl D = Ctx;
+   checkBaseClass(*this, Ctx, LayoutDependency);
+   checkEnumCases(*this, Ctx, LayoutDependency);
+
+   if (auto *Any = getAnyDecl()) {
+      addDependency(Ctx, Any);
+   }
+
+   registerExplicitConformances(Ctx);
+   registerImplicitAndInheritedConformances(Ctx);
+
+   // resolve static conditions line because they might contain decls that
+   // are needed by others
+   for (auto &decl : Ctx->getDecls()) {
+      switch (decl->getKind()) {
+      case Decl::StaticIfDeclID:
+      case Decl::StaticForDeclID: {
+         (void)declareStmt(D, decl);
+         break;
+      }
+      default:
+         break;
+      }
+   }
+
+   // associated types and aliases must be visited line because their types
+   // might be used in fields / method signatures / etc.
+   for (auto &decl : Ctx->getDecls()) {
+      switch (decl->getKind()) {
+      case Decl::AssociatedTypeDeclID:
+      case Decl::AliasDeclID:
+      case Decl::UsingDeclID:
+      case Decl::ImportDeclID:
+      case Decl::ModuleDeclID: {
+         (void)declareStmt(D, decl);
+         break;
+      }
+      default:
+         break;
+      }
+   }
+
+   for (auto &decl : Ctx->getDecls()) {
+      switch (decl->getKind()) {
+      case Decl::FieldDeclID: {
+         declareFieldDeclImmediate(cast<FieldDecl>(decl), &LayoutDependency);
+         break;
+      }
+      case Decl::EnumCaseDeclID: {
+         declareEnumCaseDeclImmediate(cast<EnumCaseDecl>(decl), LayoutDependency);
+         break;
+      }
+      default:
+         break;
+      }
+   }
 }
 
 bool SemaPass::declareDeclContext(DeclContext *Ctx)
@@ -1405,8 +1796,9 @@ DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
       (void) declareStmt(F, TP);
 
    for (const auto &arg : F->getArgs()) {
-      if (!declareStmt(F, arg))
+      if (!declareStmt(F, arg)) {
          return DeclError();
+      }
    }
 
    if (auto &Ret = F->getReturnType()) {
@@ -1656,7 +2048,8 @@ int SemaPass::signaturesCompatible(CallableDecl *C1, CallableDecl *C2)
       return 1; // incompatible return type
 
    unsigned i = 0;
-   if (isa<MethodDecl>(C1)) {
+   if ((C1->isNonStaticMethod() && C2->isNonStaticMethod())
+         || (C1->isBaseInitializer() && C2->isBaseInitializer())) {
       ++i;
    }
 
@@ -1780,8 +2173,9 @@ DeclResult SemaPass::declareFuncArgDecl(FuncArgDecl *Decl)
    }
 
    auto res = visitSourceType(Decl, Decl->getType());
-   if (!res)
+   if (!res || res.get()->isErrorType()) {
       return DeclError();
+   }
 
    auto &declaredType = Decl->getType();
    if (declaredType->isVoidType()) {
@@ -1936,7 +2330,7 @@ void SemaPass::registerExplicitConformances(RecordDecl *Rec,
                                        AddedConformances);
 }
 
-static void addSingleConformance(RecordDecl *Rec,
+static void addSingleConformance(SemaPass &SP, RecordDecl *Rec,
                                  ProtocolDecl *Conf,
                                  ASTContext &Context,
                                  ConformanceTable &ConfTable,
@@ -1948,7 +2342,7 @@ static void addSingleConformance(RecordDecl *Rec,
    }
 
    for (auto PConf : ConfTable.getAllConformances(Conf)) {
-      addSingleConformance(Rec, PConf->getProto(), Context, ConfTable,
+      addSingleConformance(SP, Rec, PConf->getProto(), Context, ConfTable,
                            AddedConformances);
    }
 }
@@ -1973,7 +2367,7 @@ void SemaPass::registerImplicitAndInheritedConformances(
 
       auto PD = cast<ProtocolDecl>(Proto);
       for (auto PConf : ConfTable.getAllConformances(PD)) {
-         addSingleConformance(Rec, PConf->getProto(), Context, ConfTable,
+         addSingleConformance(*this, Rec, PConf->getProto(), Context, ConfTable,
                               AddedConformances);
       }
    }
@@ -1987,7 +2381,7 @@ void SemaPass::registerImplicitAndInheritedConformances(
 
    for (auto Conf : ExplicitConformances) {
       for (auto PConf : ConfTable.getAllConformances(Conf)) {
-         addSingleConformance(Rec, PConf->getProto(), Context, ConfTable,
+         addSingleConformance(*this, Rec, PConf->getProto(), Context, ConfTable,
                               AddedConformances);
       }
    }
@@ -2007,17 +2401,12 @@ void SemaPass::registerImplicitAndInheritedConformances(
 
 DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 {
-   DeclPrettyStackTraceEntry STE(Rec);
+   if (!Rec->getSize()) {
+       calculateRecordSizes(Rec);
+   }
 
    Rec->setType(Context.getRecordType(Rec));
    Rec->setOpaque(Rec->hasAttribute<OpaqueAttr>());
-
-   if (auto *Any = getAnyDecl()) {
-      addDependency(Rec, Any);
-   }
-
-   registerExplicitConformances(Rec);
-   registerImplicitAndInheritedConformances(Rec);
 
    for (auto &C : Rec->getConstraints())
       visitStaticExpr(C);
@@ -2027,12 +2416,13 @@ DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 
    for (auto *Ext : Rec->getExtensions()) {
       ensureDeclared(Ext);
+      Rec->copyStatusFlags(Ext);
    }
 
    auto *Ty = Context.getRecordType(Rec);
    Ty->setDependent(Ty->isDependentType() || Rec->isTemplateOrInTemplate());
 
-   if (!Rec->isTemplateOrInTemplate()) {
+   if (!Rec->isTemplateOrInTemplate() && !Rec->isInvalid()) {
       checkProtocolConformance(Rec);
    }
 
@@ -2057,40 +2447,14 @@ DeclResult SemaPass::declareStructDecl(StructDecl *S)
    if (!S->getDeinitializer())
       declareDefaultDeinitializer(S);
 
+   finalizeRecordInstantiation(S);
    return S;
 }
 
 DeclResult SemaPass::declareClassDecl(ClassDecl *C)
 {
-   auto parent = C->getParentType();
-   if (parent) {
-      auto res = visitSourceType(C, parent);
-      if (!res)
-         return DeclError();
-
-      auto parentTy = parent.getResolvedType();
-      auto ParentClass = parentTy->getRecord();
-      if (!ParentClass->isTemplate()) {
-         if (!isa<ClassDecl>(ParentClass)) {
-            diagnose(parent.getTypeExpr(), err_generic_error,
-                     "cannot extend non-class " + ParentClass->getName());
-         }
-         else {
-            auto *Base = cast<ClassDecl>(ParentClass);
-            ensureDeclared(Base);
-
-            C->inherit(Base);
-            C->getStoredFields().insert(C->getStoredFields().begin(),
-                                        Base->getStoredFields().begin(),
-                                        Base->getStoredFields().end());
-
-            // base class size needs to be calculated before sub classes
-            auto &Vert = LayoutDependency.getOrAddVertex(C);
-            auto &BaseVert = LayoutDependency.getOrAddVertex(ParentClass);
-
-            BaseVert.addOutgoing(&Vert);
-         }
-      }
+   if (auto *Base = C->getParentClass()) {
+      ensureDeclared(Base);
    }
 
    return declareStructDecl(C);
@@ -2210,6 +2574,7 @@ DeclResult SemaPass::declareProtocolDecl(ProtocolDecl *P)
    if (P == getAnyDecl())
       P->setIsAny(true);
 
+   finalizeRecordInstantiation(P);
    return P;
 }
 
@@ -2229,12 +2594,13 @@ DeclResult SemaPass::declareExtensionDecl(ExtensionDecl *Ext)
    return Ext;
 }
 
-static void addDependencies(QualType FieldType,
+static void addDependencies(SemaPass &SP,
+                            QualType FieldType,
                             DependencyGraph<NamedDecl*> &Dep,
                             DependencyGraph<NamedDecl*>::Vertex &FieldVert) {
    if (FieldType->isTupleType() || FieldType->isArrayType()) {
       for (auto &Cont : FieldType->children()) {
-         addDependencies(Cont, Dep, FieldVert);
+         addDependencies(SP, Cont, Dep, FieldVert);
       }
    }
    else if (FieldType->isRecordType()) {
@@ -2242,6 +2608,8 @@ static void addDependencies(QualType FieldType,
       if (!isa<ClassDecl>(R)) {
          auto &RecVert = Dep.getOrAddVertex(R);
          FieldVert.addIncoming(&RecVert);
+
+         SP.declareImmediateDecls(R, Dep);
       }
    }
 }
@@ -2265,162 +2633,24 @@ DeclResult SemaPass::declareEnumDecl(EnumDecl *E)
 {
    DeclContextRAII declContextRAII(*this, E);
 
-   QualType CaseValTy;
-   if (auto &Ty = E->getRawType()) {
-      auto res = visitSourceType(E, E->getRawType());
-      if (!res)
-         return DeclError();
-
-      CaseValTy = res.get();
-   }
-   else {
-      CaseValTy = Context.getIntTy();
-   }
-
-   long long NextCaseVal = 0ll;
-   llvm::DenseMap<long long, EnumCaseDecl *> caseVals;
-
-   for (const auto &Case : E->getCases()) {
-      if (auto expr = Case->getRawValExpr()) {
-         expr->setContextualType(CaseValTy);
-
-         (void) getAsOrCast(E, expr, CaseValTy);
-         if (expr->isInvalid())
-            continue;
-
-         auto res = evalStaticExpr(E, expr);
-         if (!res)
-            continue;
-
-         Case->setILValue(res.getValue());
-         Case->setRawValue(cast<il::ConstantInt>(res.getValue())
-                              ->getSExtValue());
-
-         NextCaseVal = Case->getRawValue();
-      }
-      else {
-         Case->setRawValue(NextCaseVal);
-      }
-
-      auto it = caseVals.find(Case->getRawValue());
-      if (it != caseVals.end()) {
-         diagnose(Case, err_generic_error,
-                  "duplicate case value " + std::to_string(NextCaseVal),
-                  Case->getSourceLoc());
-         diagnose(note_duplicate_case, 0, it->getSecond()->getSourceLoc());
-      }
-
-      caseVals.try_emplace(NextCaseVal, Case);
-      ++NextCaseVal;
-   }
-
-   if (!E->getRawType()) {
-      // Get the smallest integer type that can represent all case values.
-      QualType RawTy;
-      if (NextCaseVal <= INT8_MAX) {
-         RawTy = Context.getInt8Ty();
-      }
-      else if (NextCaseVal <= INT16_MAX) {
-         RawTy = Context.getInt16Ty();
-      }
-      else if (NextCaseVal <= INT32_MAX) {
-         RawTy = Context.getInt32Ty();
-      }
-      else {
-         RawTy = Context.getInt64Ty();
-      }
-
-      E->getRawType().setResolvedType(RawTy);
-   }
-
-   bool NoAssociatedValues = true;
-   for (const auto &Case : E->getCases()) {
-      if (!Case->getILValue()) {
-         Case->setILValue(ILGen->Builder.GetConstantInt(
-            E->getRawType(), Case->getRawValue()));
-      }
-      else {
-         auto *CI = cast<il::ConstantInt>(Case->getILValue());
-         if (CI->getType() != E->getRawType()) {
-            Case->setILValue(ILGen->Builder.GetConstantInt(
-               E->getRawType(), CI->getZExtValue()));
-         }
-      }
-
-      auto &EnumVert = LayoutDependency.getOrAddVertex(E);
-      auto &CaseVert = LayoutDependency.getOrAddVertex(Case);
-
-      // every enum is dependent on its cases
-      EnumVert.addIncoming(&CaseVert);
-
-      bool AllEquatable = true;
-      bool AllCopyable  = true;
-
-      for (const auto &assoc : Case->getArgs()) {
-         auto res = declareStmt(Case, assoc);
-         if (!res)
-            return E;
-
-         // check if this case is indirect, i.e. it contains a value of this
-         // enum in some way
-         if (!Case->isIndirect() && checkIndirectCase(Case, assoc->getType())) {
-            Case->setIndirect(true);
-         }
-
-         if (!Case->isIndirect()) {
-            addDependencies(assoc->getType(), LayoutDependency, CaseVert);
-         }
-
-         AllEquatable &= IsEquatableType(assoc->getType());
-         AllCopyable &= IsCopyableType(assoc->getType());
-
-         NoAssociatedValues = false;
-      }
-
-      if (AllEquatable) {
-         if (auto Equatable = getEquatableDecl()) {
-            Context.getConformanceTable()
-                   .addExplicitConformance(Context, E, Equatable);
-
-            addDependency(E, Equatable);
-         }
-      }
-
-      if (AllCopyable) {
-         if (auto Copyable = getCopyableDecl()) {
-            Context.getConformanceTable()
-                   .addExplicitConformance(Context, E, Copyable);
-
-            addDependency(E, Copyable);
-         }
-      }
-
-      (void)declareStmt(E, Case);
-   }
-
-   if (NoAssociatedValues) {
-      if (auto P = getImplicitlyCopyableDecl()) {
-         Context.getConformanceTable().addExplicitConformance(Context, E, P);
-      }
-   }
-
    if (!declareRecordDecl(E))
       return DeclError();
 
    if (!E->getDeinitializer() && !E->isRawEnum())
       declareDefaultDeinitializer(E);
 
+   finalizeRecordInstantiation(E);
    return E;
 }
 
 DeclResult SemaPass::declareUnionDecl(UnionDecl *U)
 {
-   DeclContextRAII declContextRAII(*this, U);
-   return declareRecordDecl(U);
+   llvm_unreachable("no can do baby doll");
 }
 
-DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
-{
+DeclResult SemaPass::declareFieldDeclImmediate(
+                              FieldDecl *F,
+                              DependencyGraph<NamedDecl*> *LayoutDependency) {
    auto R = F->getRecord();
 
    if (!F->isStatic()) {
@@ -2447,29 +2677,9 @@ DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
    if (!res)
       return DeclError();
 
-   if (auto defaultVal = F->getDefaultVal()) {
-      defaultVal->setContextualType(fieldType);
-
-      ExprResult typeRes;
-      if (F->getType()->isAutoType()) {
-         typeRes = visitExpr(F, defaultVal, fieldType);
-      }
-      else {
-         typeRes = getAsOrCast(F, defaultVal, fieldType);
-      }
-
-      if (typeRes) {
-         F->setValue(typeRes.get());
-
-         auto givenType = typeRes.get()->getExprType();
-         if (fieldType->isAutoType()) {
-            fieldType.setResolvedType(givenType);
-
-            F->getType().setResolvedType(givenType);
-            R->getField(F->getDeclName())
-             ->getType().setResolvedType(fieldType);
-         }
-      }
+   if (fieldType->isAutoType()) {
+      // We need to visit the default value expression now.
+      ensureDeclared(F);
    }
 
    if (F->isVariadic()) {
@@ -2501,13 +2711,30 @@ DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
       return F;
    }
 
-   auto &RecVert = LayoutDependency.getOrAddVertex(F->getRecord());
-   auto &FieldVert = LayoutDependency.getOrAddVertex(F);
+   assert(LayoutDependency && "non-static field without layout!");
+
+   auto &RecVert = LayoutDependency->getOrAddVertex(F->getRecord());
+   auto &FieldVert = LayoutDependency->getOrAddVertex(F);
 
    // every struct is dependent on its fields
    RecVert.addIncoming(&FieldVert);
+   addDependencies(*this, F->getType(), *LayoutDependency, FieldVert);
 
-   addDependencies(F->getType(), LayoutDependency, FieldVert);
+   return F;
+}
+
+DeclResult SemaPass::declareFieldDecl(FieldDecl *F)
+{
+   if (!F->getType().isResolved()) {
+      assert(F->isStatic() && "unresolved non-static field!");
+      declareFieldDeclImmediate(F, nullptr);
+   }
+
+   auto &fieldType = F->getType();
+   if (fieldType->isAutoType()) {
+      // We need to check the default value now to know the type.
+      return visitDecl(F);
+   }
 
    return F;
 }
@@ -2520,19 +2747,7 @@ DeclResult SemaPass::declarePropDecl(PropDecl *Decl)
    if (!res)
       return Decl;
 
-   auto propType = Decl->getType().getResolvedType();
-   if (Decl->hasGetter()) {
-      DeclarationName DN =
-         Context.getDeclNameTable().getAccessorName(*Decl->getIdentifierInfo(),
-                                                    DeclarationName::Getter);
-
-      auto ty = SourceType(propType);
-      auto Getter = MethodDecl::Create(Context, Decl->getGetterAccess(),
-                                       Decl->getSourceLoc(), DN, ty,
-                                       { MakeSelfArg(Decl->getSourceLoc()) },
-                                       {}, Decl->getGetterBody(),
-                                       Decl->isStatic());
-
+   if (auto *Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
       Getter->setProperty(true);
 
@@ -2548,28 +2763,7 @@ DeclResult SemaPass::declarePropDecl(PropDecl *Decl)
       (void)declareStmt(Getter);
    }
 
-   if (Decl->hasSetter()) {
-      auto argType = SourceType(propType);
-      auto arg = FuncArgDecl::Create(Context, Decl->getSourceLoc(),
-                                     Decl->getSourceLoc(),
-                                     Decl->getNewValNameInfo(), nullptr,
-                                     ArgumentConvention::Owned,
-                                     argType, nullptr, false);
-
-      arg->setSynthesized(true);
-
-      DeclarationName DN =
-         Context.getDeclNameTable().getAccessorName(*Decl->getIdentifierInfo(),
-                                                    DeclarationName::Setter);
-
-      auto retTy = SourceType(Context.getVoidType());
-
-      FuncArgDecl *Args[]{ MakeSelfArg(Decl->getSourceLoc()), arg};
-      auto Setter = MethodDecl::Create(Context, Decl->getSetterAccess(),
-                                       Decl->getSourceLoc(), DN, retTy,
-                                       Args, {}, Decl->getSetterBody(),
-                                       Decl->isStatic());
-
+   if (auto *Setter = Decl->getSetterMethod()) {
       Setter->setSynthesized(true);
       Setter->setProperty(true);
 
@@ -2599,25 +2793,7 @@ DeclResult SemaPass::declareSubscriptDecl(SubscriptDecl *Decl)
    if (!res)
       return Decl;
 
-   llvm::SmallVector<FuncArgDecl*, 8> Args;
-   Args.resize(Decl->getArgs().size() + 1);
-
-   std::copy(Decl->getArgs().begin(), Decl->getArgs().end(), Args.begin() + 1);
-
-   auto propType = Decl->getType().getResolvedType();
-   if (Decl->hasGetter()) {
-      DeclarationName DN =
-         Context.getDeclNameTable().getSubscriptName(
-            DeclarationName::SubscriptKind::Getter);
-
-      Args[0] = MakeSelfArg(Decl->getSourceLoc());
-
-      auto ty = SourceType(propType);
-      auto Getter = MethodDecl::Create(Context, Decl->getGetterAccess(),
-                                       Decl->getSourceLoc(), DN, ty,
-                                       Args, {}, Decl->getGetterBody(),
-                                       Decl->isStatic());
-
+   if (auto *Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
       Getter->setSubscript(true);
 
@@ -2633,33 +2809,8 @@ DeclResult SemaPass::declareSubscriptDecl(SubscriptDecl *Decl)
       (void)declareStmt(Getter);
    }
 
-   if (Decl->hasSetter()) {
-      auto argType = SourceType(propType);
-
-      // the argument needs a dummy default value for overload resolution
-      auto DefVal = BuiltinExpr::Create(Context, argType);
-      auto arg = FuncArgDecl::Create(Context, Decl->getSourceLoc(),
-                                     Decl->getSourceLoc(),
-                                     Decl->getNewValNameInfo(), nullptr,
-                                     ArgumentConvention::Owned,
-                                     argType, DefVal, false);
-
-      arg->setSynthesized(true);
-
-      DeclarationName DN =
-         Context.getDeclNameTable().getSubscriptName(
-            DeclarationName::SubscriptKind::Setter);
-
-
-      auto retTy = SourceType(Context.getVoidType());
-
-      Args[0] = MakeSelfArg(Decl->getSourceLoc());
-      Args.push_back(arg);
-
-      auto Setter = MethodDecl::Create(Context, Decl->getSetterAccess(),
-                                       Decl->getSourceLoc(), DN, retTy,
-                                       Args, {}, Decl->getSetterBody(),
-                                       Decl->isStatic());
+   if (auto *Setter = Decl->getSetterMethod()) {
+      Setter->getArgs().back()->getDefaultVal()->setExprType(res.get());
 
       Setter->setSynthesized(true);
       Setter->setSubscript(true);
@@ -2730,13 +2881,14 @@ DeclResult SemaPass::declareMethodDecl(MethodDecl *M)
    }
 
    // check virtual and override methods after all signatures (most
-   // importantly those of base classes) are available
-   if (stage <= Stage::Declaration) {
-      DelayedDecls.push_back(M);
-   }
-   else {
-      checkVirtualOrOverrideMethod(M);
-   }
+   // importantly those of base classes) are available.
+   checkVirtualOrOverrideMethod(M);
+//   if (stage <= Stage::Declaration) {
+//      DelayedDecls.push_back(M);
+//   }
+//   else {
+//
+//   }
 
    return M;
 }
@@ -2802,6 +2954,8 @@ DeclResult SemaPass::declareInitDecl(InitDecl *Init)
    if (Init->isMemberwise()) {
       if (auto Str = dyn_cast<StructDecl>(R)) {
          declareMemberwiseInitializer(Str, Init);
+         Str->getMemberwiseInitializer()->setSynthesized(false);
+
          return DeclError();
       }
 
@@ -2923,9 +3077,6 @@ DeclResult SemaPass::declareTypedefDecl(TypedefDecl *Decl)
 {
    if (!visitSourceType(Decl, Decl->getOriginTy()))
       return DeclError();
-
-   // update the TypedefType associated with this declaration
-   Context.getTypedefType(Decl)->setCanonicalType(Decl->getOriginTy());
 
    return Decl;
 }
@@ -3494,6 +3645,30 @@ DeclResult SemaPass::declareStaticForDecl(StaticForDecl *Stmt)
    return Stmt;
 }
 
+DeclResult SemaPass::declareEnumCaseDeclImmediate(
+                              EnumCaseDecl *Case,
+                              DependencyGraph<NamedDecl*> &LayoutDependency) {
+   auto &CaseVert = LayoutDependency.getOrAddVertex(Case);
+   for (const auto &assoc : Case->getArgs()) {
+      auto res = declareStmt(Case, assoc);
+      if (!res)
+         return Case;
+
+      // check if this case is indirect, i.e. it contains a value of this
+      // enum in some way
+      if (!Case->isIndirect() && checkIndirectCase(Case, assoc->getType())) {
+         Case->setIndirect(true);
+      }
+
+      if (!Case->isIndirect()) {
+         addDependencies(*this, assoc->getType(), LayoutDependency,
+                         CaseVert);
+      }
+   }
+
+   return Case;
+}
+
 DeclResult SemaPass::declareEnumCaseDecl(EnumCaseDecl *Case)
 {
    Case->createFunctionType(*this);
@@ -3746,6 +3921,19 @@ Module* SemaPass::getAsyncModule()
    return AsyncModule;
 }
 
+Module* SemaPass::getTestModule()
+{
+   if (!TestModule) {
+      IdentifierInfo *Name[] = {
+         getIdentifier("std"), getIdentifier("test")
+      };
+
+      TestModule = getCompilationUnit().getModuleMgr().GetModule(Name);
+   }
+
+   return TestModule;
+}
+
 bool SemaPass::isInStdModule(Decl *D)
 {
    return D->getModule()->getModule() == getStdModule();
@@ -3775,15 +3963,15 @@ FunctionDecl* SemaPass::getPureVirtualDecl()
    return PureVirtual;
 }
 
-ClassDecl* SemaPass::getArrayDecl()
+StructDecl* SemaPass::getArrayDecl()
 {
    if (!ArrayDecl) {
       auto Prelude = getPreludeModule();
       if (!Prelude)
          return nullptr;
-      
+
       auto *II = &Context.getIdentifiers().get("Array");
-      ArrayDecl = LookupSingle<ClassDecl>(*Prelude->getDecl(), II);
+      ArrayDecl = LookupSingle<StructDecl>(*Prelude->getDecl(), II);
    }
 
    return ArrayDecl;
@@ -3983,6 +4171,20 @@ ProtocolDecl *SemaPass::getCopyableDecl()
    }
 
    return CopyableDecl;
+}
+
+ProtocolDecl *SemaPass::getMoveOnlyDecl()
+{
+   if (!MoveOnlyDecl) {
+      auto Prelude = getPreludeModule();
+      if (!Prelude)
+         return nullptr;
+
+      auto *II = &Context.getIdentifiers().get("MoveOnly");
+      MoveOnlyDecl = LookupSingle<ProtocolDecl>(*Prelude->getDecl(), II);
+   }
+
+   return MoveOnlyDecl;
 }
 
 ProtocolDecl *SemaPass::getImplicitlyCopyableDecl()

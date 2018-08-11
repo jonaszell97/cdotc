@@ -127,7 +127,7 @@ public:
                                            bool LocalLookup = true,
                                            bool LookInExtensions = true);
 
-   DeclContextLookupResult Lookup(DeclContext &Ctx,
+   SingleLevelLookupResult Lookup(DeclContext &Ctx,
                                   DeclarationName Name,
                                   bool ExternalLookup = true,
                                   bool LookInExtensions = true);
@@ -285,6 +285,9 @@ public:
    // Declaration pass
 
    bool declareDeclContext(DeclContext *Ctx);
+   void declareImmediateDecls(RecordDecl *Ctx,
+                              DependencyGraph<NamedDecl*> &LayoutDependency);
+
    void visitDeclContext(DeclContext *Ctx);
 
    void transferDecls(DeclContext *From, DeclContext *To);
@@ -326,10 +329,18 @@ public:
    DeclResult declareEnumDecl(EnumDecl *node);
 
    DeclResult declareFieldDecl(FieldDecl *F);
+   DeclResult declareFieldDeclImmediate(
+      FieldDecl *F,
+      DependencyGraph<NamedDecl*> *LayoutDependency = nullptr);
+
    DeclResult declarePropDecl(PropDecl *Decl);
    DeclResult declareSubscriptDecl(SubscriptDecl *Decl);
    DeclResult declareAssociatedTypeDecl(AssociatedTypeDecl *Decl);
+
    DeclResult declareEnumCaseDecl(EnumCaseDecl *node);
+   DeclResult declareEnumCaseDeclImmediate(
+      EnumCaseDecl *node,
+      DependencyGraph<NamedDecl*> &LayoutDependency);
 
    DeclResult declareMethodDecl(MethodDecl *M);
    DeclResult declareInitDecl(InitDecl *Init);
@@ -693,6 +704,7 @@ public:
    bool visitDelayedDeclsAfterDeclaration();
    bool visitDelayedInstantiations();
 
+   bool calculateRecordSizes(ArrayRef<RecordDecl*> Decls);
    void addImplicitConformance(RecordDecl *R, ImplicitConformanceKind kind);
 
    IdentifierRefExpr *wouldBeValidIdentifier(SourceLocation Loc,
@@ -705,18 +717,24 @@ public:
       return new (getContext()) T(std::forward<Args&&>(args)...);
    }
 
+   std::pair<DeclContext*, bool> getAsContext(QualType Ty);
+   NamedDecl *getTypeDecl(QualType Ty);
+
    QualType resolveDependencies(QualType Ty,
                                 const MultiLevelTemplateArgList& TAs,
-                                Statement *PointOfInstantiation);
+                                StmtOrDecl PointOfInstantiation);
 
    QualType resolveDependencies(QualType Ty,
                                 const sema::MultiLevelFinalTemplateArgList& TAs,
-                                Statement *PointOfInstantiation);
+                                StmtOrDecl PointOfInstantiation);
 
-   QualType resolveDependencies(QualType Ty,
-                                MultiLevelTemplateArgList const& TAs,
-                                Statement *PointOfInstantiation,
-                                size_t variadicIx);
+   QualType resolveNestedNameSpecToType(NestedNameSpecifierWithLoc *Name,
+                                        bool Diagnose = true,
+                                        StmtOrDecl SOD = {});
+
+   NamedDecl *resolveNestedNameSpecToDecl(NestedNameSpecifierWithLoc *Name,
+                                          bool Diagnose = true,
+                                          StmtOrDecl SOD = {});
 
    template<class ...Args>
    void diagnose(Statement *Stmt, diag::MessageKind msg, Args const&... args)
@@ -1139,6 +1157,7 @@ private:
    /// Instantiations that have been declared but not yet visited.
    SmallVector<std::pair<StmtOrDecl, NamedDecl*>, 0> DelayedInstantiations;
 
+public:
    /// Dependency graph that tracks struct / enum / tuple layouts and finds
    /// circular dependencies.
    DependencyGraph<NamedDecl*> LayoutDependency;
@@ -1147,6 +1166,7 @@ private:
    /// conformances.
    DependencyGraph<ProtocolDecl*> ConformanceDependency;
 
+private:
    struct UnresolvedPredecenceGroup {
       const IdentifierInfo *Name;
       ModuleDecl *InModule;
@@ -1191,7 +1211,7 @@ private:
 public:
    struct TypeMeta {
       llvm::Optional<bool> Persistable;
-      llvm::Optional<bool> Copyable;
+      llvm::Optional<bool> MoveOnly;
       llvm::Optional<bool> ImplicitlyCopyable;
       llvm::Optional<bool> SelfEquatable;
       llvm::Optional<bool> NeedsRetainOrRelease;
@@ -1358,9 +1378,6 @@ private:
    /// Global variable we're currently evaluating.
    GlobalVarDecl *EvaluatingGlobalVar = nullptr;
 
-   /// The unknown any type, here for convenience.
-   QualType UnknownAnyTy;
-
    /// Builtin declarations.
 
    Module *StdModule = nullptr;
@@ -1369,13 +1386,14 @@ private:
    Module *ReflectModule = nullptr;
    Module *SysModule     = nullptr;
    Module *AsyncModule   = nullptr;
+   Module *TestModule    = nullptr;
 
    FunctionDecl *PureVirtual = nullptr;
 
-   ClassDecl  *ArrayDecl      = nullptr;
+   StructDecl  *ArrayDecl     = nullptr;
    StructDecl *ArrayViewDecl  = nullptr;
    ClassDecl  *DictionaryDecl = nullptr;
-   StructDecl  *StringDecl     = nullptr;
+   StructDecl  *StringDecl    = nullptr;
    StructDecl *StringViewDecl = nullptr;
    EnumDecl   *OptionDecl     = nullptr;
    StructDecl *TypeInfoDecl   = nullptr;
@@ -1388,6 +1406,7 @@ private:
    ProtocolDecl *EquatableDecl           = nullptr;
    ProtocolDecl *HashableDecl            = nullptr;
    ProtocolDecl *CopyableDecl            = nullptr;
+   ProtocolDecl *MoveOnlyDecl            = nullptr;
    ProtocolDecl *ImplicitlyCopyableDecl  = nullptr;
    ProtocolDecl *StringRepresentableDecl = nullptr;
    ProtocolDecl *PersistableDecl         = nullptr;
@@ -1412,16 +1431,23 @@ private:
    llvm::DenseMap<NamedDecl*, NamedDecl*> InstScopeMap;
 
 public:
+   /// The unknown any type, here for convenience.
+   QualType UnknownAnyTy;
+
+   /// The error type, here for convenience.
+   QualType ErrorTy;
+
    Module *getStdModule();
    Module *getPreludeModule();
    Module *getBuiltinModule();
    Module *getReflectModule();
    Module *getSysModule();
    Module *getAsyncModule();
+   Module *getTestModule();
 
    FunctionDecl *getPureVirtualDecl();
 
-   ClassDecl *getArrayDecl();
+   StructDecl *getArrayDecl();
    StructDecl *getArrayViewDecl();
    ClassDecl *getDictionaryDecl();
    StructDecl *getStringDecl();
@@ -1437,6 +1463,7 @@ public:
    ProtocolDecl *getEquatableDecl();
    ProtocolDecl *getHashableDecl();
    ProtocolDecl *getCopyableDecl();
+   ProtocolDecl *getMoveOnlyDecl();
    ProtocolDecl *getImplicitlyCopyableDecl();
    ProtocolDecl *getStringRepresentableDecl();
    ProtocolDecl *getPersistableDecl();
@@ -1487,6 +1514,7 @@ public:
 
    bool IsEquatableType(QualType Ty);
    bool IsCopyableType(QualType Ty);
+   bool IsMoveOnlyType(QualType Ty);
    bool IsNoOpCopyableType(QualType Ty);
    bool IsImplicitlyCopyableType(QualType Ty);
    bool IsPersistableType(QualType Ty);
@@ -1509,6 +1537,7 @@ public:
    bool ensureSizeKnown(RecordDecl *R, SourceLocation loc);
 
    bool ensureDeclared(Decl *D);
+   bool ensureContextDeclared(DeclContext *DC);
    bool ensureVisited(Decl *D);
 
    bool ensureDeclared(Module *M);
@@ -1705,6 +1734,9 @@ public:
 
    void visitTypeDependentContextualExpr(Expression *E);
 
+   DeclResult doDestructure(DestructuringDecl *D,
+                            QualType DestructuredTy);
+
    void maybeInstantiate(CandidateSet &CandSet, Statement *Caller);
    bool maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                const TemplateArgList &templateArgs,
@@ -1773,7 +1805,7 @@ public:
    Expression *castToRValue(Expression *Expr);
    void toRValue(Expression *Expr);
 
-private:
+public:
    CallableDecl*checkFunctionReference(Expression *E,
                                        DeclarationName funcName,
                                        MultiLevelLookupResult &MultiLevelResult,
@@ -1842,13 +1874,14 @@ private:
 
    // checks whether the parent expression of the given expression refers to
    // a namespace rather than a value and adjusts the expression appropriately
-   ExprResult checkNamespaceRef(Expression *Expr);
+   NestedNameSpecifier *checkNamespaceRef(Expression *Expr);
+   bool refersToNamespace(Expression *E);
 
    ExprResult checkNamespaceRef(MacroExpansionExpr *Expr);
    StmtResult checkNamespaceRef(MacroExpansionStmt *Stmt);
    DeclResult checkNamespaceRef(MacroExpansionDecl *D);
 
-
+private:
    ExprResult HandleBuiltinTypeMember(IdentifierRefExpr *Expr, QualType Ty);
    ExprResult HandleStaticTypeMember(IdentifierRefExpr *Expr, QualType Ty);
 
@@ -1873,7 +1906,8 @@ private:
                                StmtOrDecl Subject,
                                DeclarationName memberName,
                                diag::MessageKind msg
-                                 = diag::err_undeclared_identifer);
+                                 = diag::err_member_not_found,
+                               SourceRange SR = SourceRange());
 
    bool isAccessible(NamedDecl *ND);
    void checkAccessibility(NamedDecl *ND, StmtOrDecl SOD);
@@ -1885,9 +1919,10 @@ private:
                                llvm::ArrayRef<lex::Token> Tokens,
                                unsigned Kind);
 
-   FuncArgDecl *MakeSelfArg(SourceLocation Loc);
 
 public:
+   FuncArgDecl *MakeSelfArg(SourceLocation Loc);
+
    void addDependency(Decl *ReferencedDecl);
    void addDependency(NamedDecl *DependentDecl, Decl *ReferencedDecl);
 

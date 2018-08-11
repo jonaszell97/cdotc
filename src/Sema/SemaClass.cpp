@@ -84,12 +84,34 @@ DeclResult SemaPass::visitRecordDecl(RecordDecl *R)
    return R;
 }
 
-DeclResult SemaPass::visitFieldDecl(FieldDecl *FD)
+DeclResult SemaPass::visitFieldDecl(FieldDecl *F)
 {
-   if (auto Acc = FD->getAccessor())
-      (void)visitStmt(FD, Acc);
+   auto &fieldType = F->getType();
+   if (auto defaultVal = F->getDefaultVal()) {
+      defaultVal->setContextualType(fieldType);
 
-   return FD;
+      ExprResult typeRes;
+      if (F->getType()->isAutoType()) {
+         typeRes = visitExpr(F, defaultVal, fieldType);
+      }
+      else {
+         typeRes = getAsOrCast(F, defaultVal, fieldType);
+      }
+
+      if (typeRes) {
+         F->setValue(typeRes.get());
+
+         auto givenType = typeRes.get()->getExprType();
+         if (fieldType->isAutoType()) {
+            fieldType.setResolvedType(givenType);
+         }
+      }
+   }
+
+   if (auto Acc = F->getAccessor())
+      (void)visitStmt(F, Acc);
+
+   return F;
 }
 
 DeclResult SemaPass::visitPropDecl(PropDecl *PD)
@@ -429,6 +451,57 @@ static bool diagnoseCircularConformance(SemaPass &SP,
    return true;
 }
 
+static void checkCopyableConformances(SemaPass &SP, RecordDecl *S,
+                                      bool AllCopyable,
+                                      bool AllImplicitlyCopyable) {
+   if (isa<ClassDecl>(S))
+      return;
+
+   // Types that conform to MoveOnly do not get a synthesized copy function.
+   auto &Context = SP.getContext();
+   auto &ConfTable = Context.getConformanceTable();
+
+   auto *MoveOnly = SP.getMoveOnlyDecl();
+   if (MoveOnly && ConfTable.conformsTo(S, MoveOnly)) {
+      return;
+   }
+
+   // If not all types are copyable, we can't synthesize a copy function.
+   // Instead synthesize a conformance to MoveOnly.
+   if (!AllCopyable) {
+      if (MoveOnly) {
+         ConfTable.addExplicitConformance(Context, S, MoveOnly);
+         SP.addDependency(S, MoveOnly);
+      }
+
+      return;
+   }
+   if (auto *Copyable = SP.getCopyableDecl()) {
+      auto NewConformance = ConfTable.addExplicitConformance(Context, S,
+                                                             Copyable);
+
+      if (NewConformance) {
+         SP.addDependency(S, Copyable);
+         sema::checkConformanceToProtocol(SP, S, Copyable);
+      }
+   }
+
+   // If all types are implicitly copyable, synthesize an ImplicitlyCopyable
+   // conformance.
+   if (!AllImplicitlyCopyable) {
+      return;
+   }
+   if (auto *ImpCopyable = SP.getImplicitlyCopyableDecl()) {
+      auto NewConformance = ConfTable.addExplicitConformance(Context, S,
+                                                             ImpCopyable);
+
+      if (NewConformance) {
+         SP.addDependency(S, ImpCopyable);
+         sema::checkConformanceToProtocol(SP, S, ImpCopyable);
+      }
+   }
+}
+
 void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
 {
    if (R->isInvalid() || R->getSize())
@@ -440,7 +513,8 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
             auto &Vert = LayoutDependency.getOrAddVertex(F);
             for (auto *DepVert : Vert.getIncoming()) {
                auto *Dep = DepVert->getPtr();
-               assert(!Dep->isInvalid() && "finalizing invalid record");
+               if (Dep->isInvalid())
+                  continue;
 
                auto *Rec = dyn_cast<RecordDecl>(Dep);
                if (!Rec)
@@ -464,7 +538,8 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
             auto &Vert = LayoutDependency.getOrAddVertex(C);
             for (auto *DepVert : Vert.getIncoming()) {
                auto *Dep = DepVert->getPtr();
-               assert(!Dep->isInvalid() && "finalizing invalid record");
+               if (Dep->isInvalid())
+                  continue;
 
                auto *Rec = dyn_cast<RecordDecl>(Dep);
                if (!Rec)
@@ -489,30 +564,17 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
 
    unsigned occupiedBytes = R->getSize();
    unsigned short alignment = R->getAlignment();
-   bool NeedsRetainOrRelease = isa<ClassDecl>(R);
 
    if (occupiedBytes)
       return;
 
-   bool trivialLayout = true;
+   bool TrivialLayout = true;
+   bool AllCopyable = true;
+   bool AllImplicitlyCopyable = true;
+   bool NeedsRetainOrRelease = isa<ClassDecl>(R);
 
    auto &TI = getContext().getTargetInfo();
-   if (auto U = dyn_cast<UnionDecl>(R)) {
-      for (auto f : U->getFields()) {
-         auto &ty = f->getType();
-
-         auto fieldSize = TI.getSizeOfType(ty);
-         if (fieldSize > occupiedBytes)
-            occupiedBytes = fieldSize;
-
-         auto fieldAlign = TI.getAlignOfType(ty);
-         if (fieldAlign > alignment)
-            alignment = fieldAlign;
-
-         trivialLayout &= TI.isTriviallyCopyable(ty);
-      }
-   }
-   else if (auto S = dyn_cast<StructDecl>(R)) {
+   if (auto S = dyn_cast<StructDecl>(R)) {
       for (auto F : S->getFields()) {
          auto FieldRes = visitStmt(R, F);
          if (!FieldRes)
@@ -532,7 +594,7 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
             occupiedBytes += 3 * TI.getPointerSizeInBytes();
          }
 
-         trivialLayout = false;
+         TrivialLayout = false;
       }
 
       ArrayRef<FieldDecl*> Fields = S->getStoredFields();
@@ -547,18 +609,24 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
             alignment = fieldAlign;
 
          NeedsRetainOrRelease |= this->NeedsRetainOrRelease(ty);
-         trivialLayout &= TI.isTriviallyCopyable(ty);
+         TrivialLayout &= TI.isTriviallyCopyable(ty);
+
+         AllCopyable &= IsCopyableType(ty);
+         AllImplicitlyCopyable &= IsImplicitlyCopyableType(ty);
       }
 
       if (!occupiedBytes) {
          occupiedBytes = TI.getPointerSizeInBytes();
          alignment = TI.getPointerAlignInBytes();
       }
+
+      checkCopyableConformances(*this, S, AllCopyable, AllImplicitlyCopyable);
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       unsigned maxSize = 0;
       unsigned short maxAlign = 1;
 
+      bool AllEquatable = true;
       for (auto C : E->getCases()) {
          unsigned caseSize = 0;
          unsigned short caseAlign = 1;
@@ -567,7 +635,7 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
             caseSize = TI.getPointerSizeInBytes();
             caseAlign = TI.getPointerAlignInBytes();
 
-            trivialLayout = false;
+            TrivialLayout = false;
          }
          else for (const auto &Val : C->getArgs()) {
             auto &ty = Val->getType();
@@ -578,7 +646,10 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
                caseAlign = valAlign;
 
             NeedsRetainOrRelease |= this->NeedsRetainOrRelease(ty);
-            trivialLayout &= TI.isTriviallyCopyable(ty);
+            TrivialLayout &= TI.isTriviallyCopyable(ty);
+            AllCopyable &= IsCopyableType(ty);
+            AllImplicitlyCopyable &= IsImplicitlyCopyableType(ty);
+            AllEquatable &= IsEquatableType(ty);
          }
 
          C->setSize(caseSize);
@@ -595,6 +666,17 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
       occupiedBytes += maxSize;
 
       alignment = std::max(TI.getAlignOfType(E->getRawType()), maxAlign);
+
+      if (AllEquatable) {
+         if (auto Equatable = getEquatableDecl()) {
+            Context.getConformanceTable()
+                   .addExplicitConformance(Context, E, Equatable);
+
+            addDependency(E, Equatable);
+         }
+      }
+
+      checkCopyableConformances(*this, E, AllCopyable, AllImplicitlyCopyable);
    }
 
    if (!occupiedBytes) {
@@ -604,12 +686,13 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
 
    R->setSize(occupiedBytes);
    R->setAlignment(alignment);
-   R->setTriviallyCopyable(trivialLayout);
+   R->setTriviallyCopyable(TrivialLayout);
    R->setNeedsRetainOrRelease(NeedsRetainOrRelease);
 }
 
 bool SemaPass::finalizeRecordDecls()
 {
+   return false;
    if (EncounteredError)
       return true;
 
@@ -754,7 +837,13 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
    }
 
    ActOnDecl(R, M);
-   declareAndVisit(M);
+
+   if (stage < Stage::Sema) {
+      ensureDeclared(M);
+   }
+   else {
+      ensureVisited(M);
+   }
 }
 
 } // namespace ast

@@ -269,6 +269,7 @@ def note_could_not_infer_template_arg : Note<"candidate not viable: could not in
 def note_inferred_template_arg_conflict : Note<"candidate not viable: conflicting ${ 0 | select(types,values) } $1 and $2 deduced for template argument $3">
 def note_template_arg_kind_mismatch : Note<"candidate not viable: expected ${ 0 | select(typename, value, variadic typename, variadic value) } but found ${ 1 | select(typename, value, variadic typename, variadic value) } for ${ 2 | ordinal } argument">
 def note_template_arg_type_mismatch : Note<"candidate not viable: expected $0 as ${ 1 | ordinal } argument but found $2">
+def note_template_arg_covariance : Note<"expected type ${ 0 | select(conforming to protocol, that is a subclass of) } '$1' for template parameter '$2', but got '$3'">
 def note_template_parameter_here : Note<"template parameter declared here">
 def note_too_many_template_args : Note<"candidate not viable: expected at most $0 ${ 0 | plural_s(template argument) }, $1 given">
 

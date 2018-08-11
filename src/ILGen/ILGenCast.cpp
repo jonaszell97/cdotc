@@ -71,6 +71,7 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
    case CastKind::BitCast:
    case CastKind::UpCast:
    case CastKind::NoThrowToThrows:
+   case CastKind::ThinToThick:
    case CastKind::MutRefToRef:
    case CastKind::MutPtrToPtr:
       return Builder.CreateBitCast(Step.getKind(), Val,
@@ -179,6 +180,19 @@ static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
       case CastKind::Forward:
          Val = ILGen.Forward(Val);
          break;
+      case CastKind::NoThrowToThrows:
+         Val = Builder.CreateBitCast(Step.getKind(), Val, Step.getResultType());
+         break;
+      case CastKind::ThinToThick: {
+         auto *Lambda = ILGen.wrapNonLambdaFunction(Val);
+
+         QualType FnTy = Lambda->getType();
+         auto *LambdaTy = ILGen.getSema().getContext()
+                               .getLambdaType(FnTy->asFunctionType());
+
+         Val = Builder.CreateLambdaInit(Lambda, LambdaTy, {});
+         break;
+      }
       default:
          llvm_unreachable("invalid function cast!");
       }

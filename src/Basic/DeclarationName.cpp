@@ -5,7 +5,10 @@
 #include "DeclarationName.h"
 
 #include "AST/ASTContext.h"
+#include "AST/Decl.h"
 #include "Message/Diagnostics.h"
+#include "Module/Module.h"
+#include "NestedNameSpecifier.h"
 #include "Sema/Template.h"
 
 #include <llvm/ADT/FoldingSet.h>
@@ -474,11 +477,13 @@ DeclarationName DeclarationName::getManglingName() const
 }
 
 using FoldingSetTy = llvm::FoldingSet<DeclarationNameInfo>;
+using NameSpecSetTy = llvm::FoldingSet<NestedNameSpecifier>;
 
 DeclarationNameTable::DeclarationNameTable(ast::ASTContext &Ctx)
    : FoldingSetPtr(new FoldingSetTy()),
      Ctx(Ctx),
-     ErrorName(getSpecialName(DeclarationName::ErrorName, 0, 0))
+     ErrorName(getSpecialName(DeclarationName::ErrorName, 0, 0)),
+     NestedNameSpecifiers(new NameSpecSetTy())
 {
 
 }
@@ -486,6 +491,7 @@ DeclarationNameTable::DeclarationNameTable(ast::ASTContext &Ctx)
 DeclarationNameTable::~DeclarationNameTable()
 {
    delete reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
+   delete reinterpret_cast<NameSpecSetTy*>(NestedNameSpecifiers);
 }
 
 DeclarationName

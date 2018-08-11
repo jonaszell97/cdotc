@@ -33,6 +33,8 @@ void SemaPass::initBuiltinIdents()
    BuiltinIdents[constructInPlace] = &Idents.get("constructInPlace");
    BuiltinIdents[copy] = &Idents.get("copy");
    BuiltinIdents[deinit] = &Idents.get("deinit");
+   BuiltinIdents[builtin::move] = &Idents.get("move");
+   BuiltinIdents[consume] = &Idents.get("consume");
    BuiltinIdents[retainValue] = &Idents.get("retainValue");
    BuiltinIdents[releaseValue] = &Idents.get("releaseValue");
    BuiltinIdents[printCTFEStacktrace] = &Idents.get("printCTFEStacktrace");

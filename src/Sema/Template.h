@@ -109,7 +109,8 @@ struct ResolvedTemplateArg {
 
    ast::TemplateParamDecl *getParam() const { return Param; }
 
-   ResolvedTemplateArg clone(bool Canonicalize = false) const;
+   ResolvedTemplateArg clone(bool Canonicalize = false,
+                             bool Freeze = false) const;
 
    bool isVariadic() const { return IsVariadic; }
    bool isType()     const { return IsType; }
@@ -155,6 +156,7 @@ enum TemplateArgListResultKind {
    TLR_TooManyTemplateArgs,
    TLR_IncompatibleArgKind,
    TLR_IncompatibleArgVal,
+   TLR_CovarianceError,
    TLR_Success,
 };
 
@@ -195,6 +197,13 @@ struct TemplateArgListResult {
    {
       ResultKind = TLR_ConflictingInferredArg;
       Data1 = reinterpret_cast<uintptr_t>(conflicting.getAsOpaquePtr());
+      Data2 = reinterpret_cast<uintptr_t>(P);
+   }
+
+   void setCovarianceError(QualType Given, const ast::TemplateParamDecl *P)
+   {
+      ResultKind = TLR_CovarianceError;
+      Data1 = reinterpret_cast<uintptr_t>(Given.getAsOpaquePtr());
       Data2 = reinterpret_cast<uintptr_t>(P);
    }
 

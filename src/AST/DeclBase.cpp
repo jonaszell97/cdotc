@@ -206,7 +206,6 @@ bool Decl::hasTrailingObjects() const
 {
    switch (getKind()) {
    case Decl::MacroExpansionDeclID:
-   case Decl::SubscriptDeclID:
    case Decl::AliasDeclID:
    case Decl::MacroDeclID:
    case Decl::ImportDeclID:

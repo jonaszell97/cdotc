@@ -2194,29 +2194,13 @@ class PropDecl: public NamedDecl, public DefaultImplementable<PropDecl> {
             DeclarationName Name,
             SourceType type,
             bool isStatic,
-            bool hasGetter,
-            bool hasSetter,
-            AccessSpecifier GetterAccess,
-            AccessSpecifier SetterAccess,
-            CompoundStmt* getter,
-            CompoundStmt* setter,
-            IdentifierInfo *newValName);
+            MethodDecl *GetterMethod,
+            MethodDecl *SetterMethod);
 
    PropDecl(EmptyShell Empty);
 
    SourceRange Loc;
    SourceType type;
-
-   AccessSpecifier GetterAccess;
-   AccessSpecifier SetterAccess;
-
-   CompoundStmt* getterBody = nullptr;
-   CompoundStmt* setterBody = nullptr;
-
-   bool HasGetter = false;
-   bool HasSetter = false;
-
-   IdentifierInfo *newValName;
 
    MethodDecl *getterMethod = nullptr;
    MethodDecl *setterMethod = nullptr;
@@ -2230,13 +2214,8 @@ public:
                            DeclarationName Name,
                            SourceType type,
                            bool isStatic,
-                           bool hasGetter,
-                           bool hasSetter,
-                           AccessSpecifier GetterAccess,
-                           AccessSpecifier SetterAccess,
-                           CompoundStmt* getter,
-                           CompoundStmt* setter,
-                           IdentifierInfo *newValName);
+                           MethodDecl *GetterMethod,
+                           MethodDecl *SetterMethod);
 
    static PropDecl *CreateEmpty(ASTContext &C);
 
@@ -2246,31 +2225,11 @@ public:
    SourceRange getSourceRange() const { return Loc; }
    const SourceType &getType() const { return type; }
 
-   bool hasGetter() const { return HasGetter; }
-   bool hasSetter() const { return HasSetter; }
-
-   AccessSpecifier getGetterAccess() const { return GetterAccess; }
-   AccessSpecifier getSetterAccess() const { return SetterAccess; }
-
-   CompoundStmt* getGetterBody() const { return getterBody; }
-   CompoundStmt* getSetterBody() const { return setterBody; }
-
-   void setGetterBody(CompoundStmt *B) { getterBody = B; }
-   void setSetterBody(CompoundStmt *B) { setterBody = B; }
-
-   IdentifierInfo *getNewValNameInfo() const { return newValName; }
-   llvm::StringRef getNewValName() const { return newValName->getIdentifier(); }
-
    void setLoc(const SourceRange &Loc) { PropDecl::Loc = Loc; }
    void setType(const SourceType &type) { PropDecl::type = type; }
 
-   void setGetterAccess(AccessSpecifier Acc) { GetterAccess = Acc; }
-   void setSetterAccess(AccessSpecifier Acc) { SetterAccess = Acc; }
-
-   void setHasGetter(bool HasGetter) { PropDecl::HasGetter = HasGetter; }
-   void setHasSetter(bool HasSetter) { PropDecl::HasSetter = HasSetter; }
-
-   void setNewValName(IdentifierInfo *N) { newValName = N; }
+   bool hasGetter() const { return getterMethod != nullptr; }
+   bool hasSetter() const { return setterMethod != nullptr; }
 
    MethodDecl *getGetterMethod() const { return getterMethod; }
    void setGetterMethod(MethodDecl *M) { getterMethod = M; }
@@ -2283,41 +2242,21 @@ public:
 };
 
 class SubscriptDecl final: public NamedDecl,
-                           llvm::TrailingObjects<SubscriptDecl, FuncArgDecl*>,
                            public DefaultImplementable<SubscriptDecl> {
    SubscriptDecl(AccessSpecifier access,
                  SourceRange Loc,
                  DeclarationName Name,
-                 llvm::ArrayRef<FuncArgDecl*> Args,
                  SourceType type,
-                 bool hasGetter,
-                 bool hasSetter,
-                 AccessSpecifier GetterAccess,
-                 AccessSpecifier SetterAccess,
-                 CompoundStmt* getter,
-                 CompoundStmt* setter,
-                 IdentifierInfo *newValName);
+                 MethodDecl *GetterMethod,
+                 MethodDecl *SetterMethod);
 
-   SubscriptDecl(EmptyShell, unsigned N);
+   SubscriptDecl(EmptyShell);
 
    SourceRange Loc;
    SourceType type;
 
-   AccessSpecifier GetterAccess;
-   AccessSpecifier SetterAccess;
-
-   CompoundStmt* getterBody = nullptr;
-   CompoundStmt* setterBody = nullptr;
-
-   bool HasGetter = false;
-   bool HasSetter = false;
-
-   IdentifierInfo *newValName;
-
    MethodDecl *getterMethod = nullptr;
    MethodDecl *setterMethod = nullptr;
-
-   unsigned NumArgs;
 
    SubscriptDecl *Template = nullptr;
 
@@ -2325,53 +2264,24 @@ public:
    static SubscriptDecl *Create(ASTContext &C,
                                 AccessSpecifier access,
                                 SourceRange Loc,
-                                llvm::ArrayRef<FuncArgDecl*> Args,
                                 SourceType type,
-                                bool hasGetter,
-                                bool hasSetter,
-                                AccessSpecifier GetterAccess,
-                                AccessSpecifier SetterAccess,
-                                CompoundStmt* getter,
-                                CompoundStmt* setter,
-                                IdentifierInfo *newValName);
+                                MethodDecl *GetterMethod,
+                                MethodDecl *SetterMethod);
 
-   static SubscriptDecl *CreateEmpty(ASTContext &C, unsigned N);
+   static SubscriptDecl *CreateEmpty(ASTContext &C);
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind) { return kind == SubscriptDeclID; }
-
-   using TrailingObjects::getTrailingObjects;
-   friend TrailingObjects;
 
    SourceRange getSourceRange() const { return Loc; }
 
    const SourceType &getType() const { return type; }
 
-   bool hasGetter() const { return HasGetter; }
-   bool hasSetter() const { return HasSetter; }
-
-   AccessSpecifier getGetterAccess() const { return GetterAccess; }
-   AccessSpecifier getSetterAccess() const { return SetterAccess; }
-
-   CompoundStmt* getGetterBody() const { return getterBody; }
-   CompoundStmt* getSetterBody() const { return setterBody; }
-
-   void setGetterBody(CompoundStmt *B) { getterBody = B; }
-   void setSetterBody(CompoundStmt *B) { setterBody = B; }
-
-   IdentifierInfo *getNewValNameInfo() const { return newValName; }
-   llvm::StringRef getNewValName() const { return newValName->getIdentifier(); }
-
    void setLoc(const SourceRange &Loc) { this->Loc = Loc; }
    void setType(const SourceType &type) { this->type = type; }
 
-   void setGetterAccess(AccessSpecifier Acc) { GetterAccess = Acc; }
-   void setSetterAccess(AccessSpecifier Acc) { SetterAccess = Acc; }
-
-   void setHasGetter(bool HasGetter) { this->HasGetter = HasGetter; }
-   void setHasSetter(bool HasSetter) { this->HasSetter = HasSetter; }
-
-   void setNewValName(IdentifierInfo *N) { newValName = N; }
+   bool hasGetter() const { return getterMethod != nullptr; }
+   bool hasSetter() const { return setterMethod != nullptr; }
 
    MethodDecl *getGetterMethod() const { return getterMethod; }
    void setGetterMethod(MethodDecl *M) { getterMethod = M; }
@@ -2381,11 +2291,6 @@ public:
 
    SubscriptDecl *getTemplate() const { return Template; }
    void setTemplate(SubscriptDecl *T) { Template = T; }
-
-   llvm::MutableArrayRef<FuncArgDecl*> getArgs()
-   {
-      return { getTrailingObjects<FuncArgDecl*>(), NumArgs };
-   }
 };
 
 class EnumCaseDecl: public CallableDecl {

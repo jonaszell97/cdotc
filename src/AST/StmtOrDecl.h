@@ -34,6 +34,14 @@ struct StmtOrDecl {
    bool isInvalid() const;
    void setIsInvalid(bool b) const;
 
+   bool isTypeDependent() const;
+   void setTypeDependent(bool b) const;
+
+   bool isValueDependent() const;
+   void setValueDependent(bool b) const;
+
+   bool isDependent() const { return isTypeDependent() || isValueDependent(); }
+
    void copyStatusFlags(StmtOrDecl Other) const;
 
    bool isNull() const { return Union.isNull(); }

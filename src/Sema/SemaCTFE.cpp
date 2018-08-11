@@ -27,6 +27,15 @@ bool SemaPass::ensureDeclared(Decl *D)
    return declareIfNotDeclared(*this, D);
 }
 
+bool SemaPass::ensureContextDeclared(DeclContext *DC)
+{
+   auto *D = support::dyn_cast<Decl>(DC);
+   if (!D)
+      return true;
+
+   return declareIfNotDeclared(*this, D);
+}
+
 bool SemaPass::ensureVisited(Decl *D)
 {
    if (isVisited(D))

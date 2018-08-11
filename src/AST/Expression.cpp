@@ -28,6 +28,14 @@ SourceRange Expression::getEllipsisRange() const
    return SourceRange(EllipsisLoc, SourceLocation(EllipsisLoc.getOffset() + 2));
 }
 
+Expression* Expression::ignoreTemplateArgs() const
+{
+   if (auto *TA = dyn_cast<TemplateArgListExpr>(this))
+      return TA->getParentExpr();
+
+   return const_cast<Expression*>(this);
+}
+
 Expression* Expression::getParentExpr() const
 {
    switch (typeID) {
@@ -66,6 +74,22 @@ void Expression::setParentExpr(Expression *E)
    }
 
    llvm_unreachable("cannot set parent expression!");
+}
+
+void Expression::setAllowNamespaceRef(bool V)
+{
+   if (auto *Ident = support::dyn_cast<IdentifierRefExpr>(this)) {
+      Ident->setAllowNamespaceRef(V);
+   }
+}
+
+bool Expression::allowNamespaceRef() const
+{
+   if (auto *Ident = support::dyn_cast<IdentifierRefExpr>(this)) {
+      return Ident->allowNamespaceRef();
+   }
+
+   return false;
 }
 
 bool Expression::isConst() const
@@ -1112,7 +1136,7 @@ LambdaExpr::LambdaExpr(SourceRange Parens,
                        Statement* body)
    : Expression(LambdaExprID),
      Parens(Parens), ArrowLoc(ArrowLoc), NumArgs((unsigned)args.size()),
-     returnType(returnType), body(body)
+     returnType(returnType), body(body), func(nullptr)
 {
    std::copy(args.begin(), args.end(), getTrailingObjects<FuncArgDecl*>());
 }
@@ -1130,7 +1154,7 @@ LambdaExpr* LambdaExpr::Create(ASTContext &C,
 }
 
 LambdaExpr::LambdaExpr(EmptyShell, unsigned N)
-   : Expression(LambdaExprID), NumArgs(N)
+   : Expression(LambdaExprID), NumArgs(N), func(nullptr)
 {}
 
 LambdaExpr *LambdaExpr::CreateEmpty(ASTContext &C, unsigned N)

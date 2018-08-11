@@ -54,6 +54,7 @@ Parser::Parser(ASTContext& Context,
      Ident_is(&Idents.get("is")),
      Ident_do(&Idents.get("do")),
      Ident_then(&Idents.get("then")),
+     Ident_where(&Idents.get("where")),
      Ident_default(&Idents.get("default")),
      Ident_deinit(&Idents.get("deinit")),
      Ident_typename(&Idents.get("typename")),
@@ -849,7 +850,7 @@ void
 Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
 {
    SmallVector<IdentifierInfo*, 2> NameQualifier;
-   while (currentTok().is(tok::kw_where)) {
+   while (currentTok().is(Ident_where)) {
       SourceLocation BeginLoc = consumeToken();
 
       if (!currentTok().is(tok::ident)) {
@@ -941,7 +942,7 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
 
       Constraints.push_back(DC);
 
-      if (!lookahead().is(tok::kw_where))
+      if (!lookahead().is(Ident_where))
          break;
 
       NameQualifier.clear();
@@ -1026,7 +1027,7 @@ ParseResult Parser::parseAlias()
    }
 
    std::vector<StaticExpr*> constraints;
-   while (lookahead().is(tok::kw_where)) {
+   while (lookahead().is(Ident_where)) {
       advance();
       advance();
 
@@ -1287,7 +1288,11 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
    // parent expression, otherwise it will be parsed as an operator.
    if (lookahead(false, true).is(tok::smaller)) {
       advance(false, true);
-      return parseTemplateArgListExpr(ParentExpr, parsingType);
+      auto TAs = parseTemplateArgListExpr(ParentExpr, parsingType);
+      if (!TAs)
+         return ParseError();
+
+      return maybeParseSubExpr(TAs.getExpr(), parsingType);
    }
 
    auto Next = lookahead(false);
@@ -2594,6 +2599,11 @@ ParseResult Parser::parseExprSequence(int Flags)
             done = true;
             break;
          }
+         if (currentTok().is(Ident_where)) {
+            lexer->backtrack();
+            done = true;
+            break;
+         }
 
          auto expr = parseUnaryExpr();
          if (!expr)
@@ -2659,7 +2669,7 @@ ParseResult Parser::parseExprSequence(int Flags)
       case tok::kw_enum: case tok::kw_protocol: case tok::kw_extend:
       case tok::kw_public: case tok::kw_private:
       case tok::kw_protected: case tok::kw_static: case tok::kw_abstract:
-      case tok::kw_prop: case tok::kw_where:
+      case tok::kw_prop:
       case tok::kw_continue: case tok::kw_init:
       case tok::kw_associatedType: case tok::kw_break:
       case tok::kw_infix: case tok::kw_prefix: case tok::kw_postfix:
@@ -3000,7 +3010,7 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
    return L;
 }
 
-ParseResult Parser::parseDestructuringDecl(bool isLet)
+ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
 {
    assert(currentTok().is(tok::open_paren) && "should not be called otherwise");
 
@@ -3045,7 +3055,7 @@ ParseResult Parser::parseDestructuringDecl(bool isLet)
    SourceType type;
    Expression *value = nullptr;
 
-   if (lookahead().is(tok::colon)) {
+   if (lookahead().is(tok::colon) && !isForIn) {
       advance();
       advance();
 
@@ -3059,7 +3069,7 @@ ParseResult Parser::parseDestructuringDecl(bool isLet)
    if (!type)
       type = SourceType(Context.getAutoType());
 
-   if (lookahead().is(tok::equals)) {
+   if (lookahead().is(tok::equals) && !isForIn) {
       advance();
       advance();
 
@@ -3069,20 +3079,25 @@ ParseResult Parser::parseDestructuringDecl(bool isLet)
    SourceRange SR(VarOrLetLoc, currentTok().getSourceLoc());
    auto *D = DestructuringDecl::Create(Context, SR, decls, type, value);
 
+   if (isForIn) {
+      D->setLexicalContext(&SP.getDeclContext());
+      return D;
+   }
+
    return ActOnDecl(D);
 }
 
 
-std::vector<FuncArgDecl*> Parser::parseFuncArgs(SourceLocation &varargLoc,
-                                                bool ImplicitUnderscores) {
-   std::vector<FuncArgDecl*> args;
+SmallVector<FuncArgDecl*, 2> Parser::parseFuncArgs(SourceLocation &varargLoc,
+                                                   bool ImplicitUnderscores) {
+   SmallVector<FuncArgDecl*, 2> args;
    parseFuncArgs(varargLoc, args, ImplicitUnderscores);
 
    return args;
 }
 
 void Parser::parseFuncArgs(SourceLocation &varargLoc,
-                           std::vector<FuncArgDecl*> &args,
+                           SmallVectorImpl<FuncArgDecl*> &args,
                            bool ImplicitUnderscores) {
    if (!currentTok().is(tok::open_paren)) {
       lexer->backtrack();
@@ -3326,7 +3341,7 @@ ParseResult Parser::parseFunctionDecl()
    }
 
    std::vector<StaticExpr*> constraints;
-   while (lookahead().is(tok::kw_where)) {
+   while (lookahead().is(Ident_where)) {
       advance();
       advance();
 
@@ -3758,6 +3773,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
 
 void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
                                tok::TokenType StopAt) {
+   bool expectNewline = StopAt == tok::newline;
    while (!currentTok().is(StopAt)) {
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
          auto *VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
@@ -3787,9 +3803,9 @@ void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
             parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
       }
 
-      advance();
+      advance(!expectNewline);
       if (currentTok().is(tok::comma)) {
-         advance();
+         advance(!expectNewline);
          continue;
       }
 
@@ -4283,7 +4299,7 @@ ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
       advance();
       advance();
 
-      parseIfConditions(Conditions, tok::semicolon);
+      parseIfConditions(Conditions, tok::newline);
    }
 
    return WhileStmt::Create(Context, WhileLoc, Conditions, body, Label,
@@ -4295,10 +4311,12 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
    auto ForLoc = currentTok().getSourceLoc();
    advance();
 
+   SourceLocation UnderscoreLoc;
    Statement* init = nullptr;
    class Decl *initDecl = nullptr;
 
    if (!currentTok().is(tok::semicolon)) {
+      // for i in 0..5 {}
       if (currentTok().is(tok::ident) && lookahead().is(Ident_in)) {
          auto Loc = currentTok().getSourceLoc();
          auto *II = currentTok().getIdentifierInfo();
@@ -4307,6 +4325,15 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
                                          nullptr);
 
          initDecl->setLexicalContext(&SP.getDeclContext());
+      }
+      // for _ in 0..5 {}
+      else if (currentTok().is(tok::underscore) && lookahead().is(Ident_in)) {
+         initDecl = nullptr;
+         UnderscoreLoc = currentTok().getSourceLoc();
+      }
+      // for (key, value) in [:] {}
+      else if (currentTok().is(tok::open_paren)) {
+         initDecl = parseDestructuringDecl(true, true).tryGetDecl();
       }
       else {
          auto initResult = parseNextStmt();
@@ -4337,14 +4364,7 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
       }
 
       auto body = parseNextStmt().tryGetStatement();
-      LocalVarDecl *InitDecl = dyn_cast<LocalVarDecl>(initDecl);
-
-      if (!initDecl) {
-         SP.diagnose(err_generic_error, "expected declaration",
-                     initDecl->getSourceLoc());
-      }
-
-      return ForInStmt::Create(Context, ForLoc, InitDecl, range, body, Label);
+      return ForInStmt::Create(Context, ForLoc, initDecl, range, body, Label);
    }
 
    if (initDecl) {
@@ -5354,7 +5374,7 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
       advance();
 
       Expression *Cond = nullptr;
-      if (currentTok().is(tok::kw_where)) {
+      if (currentTok().is(Ident_where)) {
          advance();
          Cond = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
             .tryGetExpr();

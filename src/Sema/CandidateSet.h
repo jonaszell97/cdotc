@@ -51,6 +51,7 @@ struct CandidateSet {
       TooManyTemplateArgs,
       IncompatibleTemplateArgKind,
       IncompatibleTemplateArgVal,
+      TemplateArgCovarianceError,
 
       FailedConstraint,
       MustBeStatic,

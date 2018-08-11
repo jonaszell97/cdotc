@@ -24,6 +24,8 @@ enum {
 
 class Type;
 class QualType;
+class NestedNameSpecifier;
+class NestedNameSpecifierWithLoc;
 
 } // namespace cdot
 
@@ -199,6 +201,7 @@ public:
    ast::RecordDecl *getRecord() const;
 
    std::string toString() const;
+   std::string toDiagString() const;
 
    QualType getPointeeType() const;
    QualType getReferencedType() const;
@@ -206,6 +209,7 @@ public:
    QualType getBoxedType() const;
 
    QualType stripReference() const;
+   QualType stripMetaType() const;
 
    unsigned short getAlignment() const;
    size_t getSize() const;
@@ -433,6 +437,7 @@ public:
    }
 
    std::string toString() const;
+   std::string toDiagString() const;
 
    bool isCanonical() const
    {
@@ -895,6 +900,8 @@ public:
       ArgumentConvention getConvention() const { return Conv; }
 
       void Profile(llvm::FoldingSetNodeID &ID) const;
+      bool operator==(const ParamInfo &I) const;
+      bool operator!=(const ParamInfo &I) const { return !(*this == I); }
 
    private:
       ArgumentConvention Conv : 4;
@@ -1358,7 +1365,7 @@ public:
       Profile(ID, getTypedef());
    }
 
-   static void Profile(llvm::FoldingSetNodeID &ID, ast::TypedefDecl *TD)
+   static void Profile(llvm::FoldingSetNodeID &ID, ast::AliasDecl *TD)
    {
       ID.AddPointer(TD);
    }
@@ -1373,15 +1380,42 @@ public:
    child_iterator child_begin() const { return child_iterator{}; }
    child_iterator child_end() const { return child_iterator{}; }
 
-   ast::TypedefDecl *getTypedef() const { return td; }
+   ast::AliasDecl *getTypedef() const { return td; }
 
    QualType getAliasedType() const;
    llvm::StringRef getAliasName() const;
 
 private:
-   explicit TypedefType(ast::TypedefDecl *td);
+   explicit TypedefType(ast::AliasDecl *td);
 
-   ast::TypedefDecl *td;
+   ast::AliasDecl *td;
+};
+
+class DependentNameType: public Type, public llvm::FoldingSetNode {
+   explicit DependentNameType(NestedNameSpecifierWithLoc *NameSpec);
+
+   /// The dependent nested name specifier. Since the same name specifier can
+   /// refer to different declarations in different places, these can't be
+   /// reasonably uniqued without a source location.
+   NestedNameSpecifierWithLoc *NameSpec;
+
+public:
+   friend class ast::ASTContext;
+
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::DependentNameTypeID;
+   }
+
+   void Profile(llvm::FoldingSetNodeID &ID);
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       NestedNameSpecifierWithLoc *Name);
+
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end() const { return child_iterator{}; }
+
+   NestedNameSpecifierWithLoc *getNameSpecWithLoc() const { return NameSpec; }
+   NestedNameSpecifier *getNameSpec() const;
 };
 
 template<class T> const T* Type::getAs() const

@@ -593,13 +593,13 @@ public:
 
 class ForInStmt: public Statement {
    ForInStmt(SourceLocation ForLoc,
-             LocalVarDecl* decl,
+             Decl* decl,
              Expression* range,
              Statement* body,
              IdentifierInfo *Label);
 
    SourceLocation ForLoc;
-   LocalVarDecl* decl;
+   Decl* decl;
    Expression* rangeExpr;
    Statement* body;
 
@@ -613,7 +613,7 @@ public:
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
 
    static ForInStmt *Create(ASTContext &C,
-                            SourceLocation ForLoc, LocalVarDecl* decl,
+                            SourceLocation ForLoc, Decl* decl,
                             Expression* range, Statement* body,
                             IdentifierInfo *Label);
 
@@ -626,11 +626,11 @@ public:
 
    void setForLoc(SourceLocation L) { ForLoc = L; }
 
-   LocalVarDecl* getDecl() const { return decl; }
+   Decl* getDecl() const { return decl; }
    Expression* getRangeExpr() const { return rangeExpr; }
    Statement* getBody() const { return body; }
 
-   void setDecl(LocalVarDecl *D) { decl = D; }
+   void setDecl(Decl *D) { decl = D; }
    void setRangeExpr(Expression *E) { rangeExpr = E; }
    void setBody(Statement *B) { body = B; }
 

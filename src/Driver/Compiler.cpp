@@ -322,6 +322,7 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    }
 
    if (!options.textOutputOnly()
+       && !options.runUnitTests()
        && !options.hasOutputKind(OutputKind::Executable)
        && !options.emitModules()) {
       options.addOutput("./a.out");
@@ -436,8 +437,10 @@ int CompilerInstance::setupJobs()
       addJob<IRGenJob>(*Mod->getILModule());
       IRGenJobs.push_back(Jobs.back());
 
-      if (RunUnitTests)
-         addJob<UnittestJob>();
+      if (RunUnitTests) {
+         addJob<UnittestJob>(Jobs.back());
+         return 0;
+      }
 
       addEmitJobs(IRGenJobs);
       addJob<EmitModuleJob>(*Mod);
@@ -451,8 +454,10 @@ int CompilerInstance::setupJobs()
 
       auto *IRLinkJob = addJob<LinkIRJob>(IRGenJobs);
 
-      if (RunUnitTests)
-         addJob<UnittestJob>();
+      if (RunUnitTests) {
+         addJob<UnittestJob>(Jobs.back());
+         return 0;
+      }
 
       // Only emit assembly files.
       if (options.textOutputOnly()) {

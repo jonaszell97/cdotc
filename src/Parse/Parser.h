@@ -380,6 +380,7 @@ private:
    IdentifierInfo *Ident_is;
    IdentifierInfo *Ident_do;
    IdentifierInfo *Ident_then;
+   IdentifierInfo *Ident_where;
    IdentifierInfo *Ident_default;
    IdentifierInfo *Ident_deinit;
    IdentifierInfo *Ident_typename;
@@ -651,7 +652,7 @@ private:
    ParseResult parseVarDecl(bool allowTrailingClosure = true,
                             bool skipKeywords = false);
 
-   ParseResult parseDestructuringDecl(bool isLet);
+   ParseResult parseDestructuringDecl(bool isLet, bool isForIn = false);
 
    ParseResult parseKeyword();
 
@@ -664,10 +665,10 @@ private:
    ParseResult parseArrayPattern(SourceLocation LSquareLoc,
                                  ArrayRef<Expression*> ExprsSoFar);
 
-   std::vector<FuncArgDecl*> parseFuncArgs(SourceLocation &varargLoc,
-                                           bool ImplicitUnderscores = false);
+   SmallVector<FuncArgDecl*, 2> parseFuncArgs(SourceLocation &varargLoc,
+                                              bool ImplicitUnderscores = false);
    void parseFuncArgs(SourceLocation &varargLoc,
-                      std::vector<FuncArgDecl*> &Vec,
+                      SmallVectorImpl<FuncArgDecl*> &Vec,
                       bool ImplicitUnderscores = false);
 
    ParseResult parseLambdaExpr();
@@ -738,17 +739,14 @@ private:
    ParseResult parseDestrDecl();
 
    struct AccessorInfo {
-      bool HasGetter = false;
-      AccessSpecifier GetterAccess = AccessSpecifier::Default;
-      ParseResult GetterBody;
-
-      bool HasSetter = false;
-      AccessSpecifier SetterAccess = AccessSpecifier::Default;
-      ParseResult SetterBody;
-      IdentifierInfo *NewValName = nullptr;
+      MethodDecl *GetterMethod = nullptr;
+      MethodDecl *SetterMethod = nullptr;
    };
 
-   void parseAccessor(AccessorInfo &Info, bool IsProperty);
+   void parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
+                      SourceType Type, bool IsStatic,
+                      SmallVectorImpl<FuncArgDecl*> &Args,
+                      AccessorInfo &Info, bool IsProperty);
 
    ParseResult parsePropDecl();
    ParseResult parseFieldDecl();

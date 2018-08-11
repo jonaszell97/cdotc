@@ -171,6 +171,25 @@ public:
    {}
 };
 
+class EscapingAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::Escaping; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   EscapingAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit EscapingAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::Escaping, SR)
+   {}
+};
+
 class TestableAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -300,14 +319,15 @@ public:
    Attr::VisitationPoint Attr::getVisitationPoint() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::Opaque:
+         case AttrKind::Align:
+      return AfterSema;
+   case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
+   case AttrKind::Escaping:
    case AttrKind::Testable:
    case AttrKind::CompileTime:
       return Never;
-   case AttrKind::Align:
-      return AfterSema;
    case AttrKind::Inline:
    case AttrKind::Implicit:
       return AfterDeclaration;
@@ -318,6 +338,41 @@ public:
    case AttrKind::VersionDecl:
    case AttrKind::VersionStmt:
       return BeforeDeclaration;
+
+      }
+   }
+
+   bool Attr::isInherited() const {
+      switch (kind) {
+      default: llvm_unreachable("bad attr kind!");
+         case AttrKind::CompileTime:
+      return true;
+   case AttrKind::Testable:
+      return false;
+   case AttrKind::_Builtin:
+      return false;
+   case AttrKind::AutoClosure:
+      return false;
+   case AttrKind::VersionDecl:
+      return false;
+   case AttrKind::DiscardableResult:
+      return true;
+   case AttrKind::Align:
+      return false;
+   case AttrKind::Inline:
+      return true;
+   case AttrKind::Opaque:
+      return false;
+   case AttrKind::Thin:
+      return false;
+   case AttrKind::Implicit:
+      return false;
+   case AttrKind::Escaping:
+      return false;
+   case AttrKind::VersionStmt:
+      return false;
+   case AttrKind::Extern:
+      return false;
 
       }
    }
@@ -431,6 +486,18 @@ AutoClosureAttr *AutoClosureAttr::clone(ast::ASTContext &Ctx) const {
 
 
 
+void EscapingAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+EscapingAttr *EscapingAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) EscapingAttr(SourceLoc);
+}
+
+
+
 void TestableAttr::printPretty(llvm::raw_ostream &out) const {
 
    out << "@" << getSpelling();
@@ -520,6 +587,7 @@ _BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
 void SemaPass::checkOpaqueAttr(Decl*, OpaqueAttr*) {}
 void SemaPass::checkDiscardableResultAttr(Decl*, DiscardableResultAttr*) {}
 void SemaPass::checkAutoClosureAttr(Decl*, AutoClosureAttr*) {}
+void SemaPass::checkEscapingAttr(Decl*, EscapingAttr*) {}
 void SemaPass::checkTestableAttr(Decl*, TestableAttr*) {}
 void SemaPass::checkCompileTimeAttr(Decl*, CompileTimeAttr*) {}
 

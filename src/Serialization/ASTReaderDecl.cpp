@@ -60,6 +60,8 @@ class ASTDeclReader: public ASTVisitor<ASTDeclReader> {
    InstantiationInfo<T> *ReadInstInfo(Decl *D, ASTRecordReader &Record,
                                       ASTContext &C);
 
+   DeclConstraint *ReadDeclConstraint();
+
 public:
    ASTDeclReader(ASTReader &Reader, ASTRecordReader &Record,
                  unsigned thisDeclID, SourceLocation ThisDeclLoc)
@@ -153,6 +155,27 @@ void ASTDeclReader::visitDecl(Decl *D)
    D->setFlags(Record.readInt());
 }
 
+DeclConstraint* ASTDeclReader::ReadDeclConstraint()
+{
+   auto Kind = Record.readEnum<DeclConstraint::Kind>();
+   auto SR = Record.readSourceRange();
+
+   auto NameQualSize = Record.readInt();
+   SmallVector<IdentifierInfo*, 2> NameQual;
+   NameQual.reserve(NameQualSize);
+
+   while (NameQualSize--)
+      NameQual.push_back(Record.getIdentifierInfo());
+
+   if (Kind == DeclConstraint::Concept) {
+      auto *E = cast<IdentifierRefExpr>(Record.readExpr());
+      return DeclConstraint::Create(Reader.getContext(), SR, NameQual, E);
+   }
+
+   auto Ty = Record.readSourceType();
+   return DeclConstraint::Create(Reader.getContext(), Kind, SR, NameQual, Ty);
+}
+
 void ASTDeclReader::visitNamedDecl(NamedDecl *ND)
 {
    visitDecl(ND);
@@ -161,7 +184,7 @@ void ASTDeclReader::visitNamedDecl(NamedDecl *ND)
    ND->setAccessLoc(ReadSourceLocation());
    ND->setName(Record.readDeclarationName());
 
-   llvm::SmallVector<StaticExpr*, 4> Constraints;
+   SmallVector<StaticExpr*, 4> Constraints;
    auto NumConstraints = Record.readInt();
 
    while (NumConstraints--)
@@ -169,6 +192,10 @@ void ASTDeclReader::visitNamedDecl(NamedDecl *ND)
 
    if (!Constraints.empty())
       Reader.getContext().setConstraints(ND, Constraints);
+
+   auto NumDeclConstraints = Record.readInt();
+   while (NumDeclConstraints--)
+      Reader.getContext().addConstraint(ND, ReadDeclConstraint());
 
    SmallVector<Attr*, 4> Attrs;
    bool FoundInterestingAttr;
@@ -302,6 +329,11 @@ void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
       Reader.getContext().getAssociatedType(D)
             ->setCanonicalType(D->getActualType());
    }
+
+   auto CovSize = Record.readInt();
+   while (CovSize--) {
+      Reader.getContext().addCovariance(D, Record.readDeclAs<RecordDecl>());
+   }
 }
 
 void ASTDeclReader::visitPropDecl(PropDecl *D)
@@ -310,16 +342,6 @@ void ASTDeclReader::visitPropDecl(PropDecl *D)
 
    D->setLoc(ReadSourceRange());
    D->setType(Record.readSourceType());
-
-   D->setHasGetter(Record.readBool());
-   D->setHasSetter(Record.readBool());
-   D->setGetterAccess(Record.readEnum<AccessSpecifier>());
-   D->setSetterAccess(Record.readEnum<AccessSpecifier>());
-
-   D->setGetterBody(cast_or_null<CompoundStmt>(Record.readStmt()));
-   D->setSetterBody(cast_or_null<CompoundStmt>(Record.readStmt()));
-
-   D->setNewValName(Record.getIdentifierInfo());
 
    unsigned GetterMethodID = Record.readDeclID();
    unsigned SetterMethodID = Record.readDeclID();
@@ -340,22 +362,8 @@ void ASTDeclReader::visitSubscriptDecl(SubscriptDecl *D)
 {
    visitNamedDecl(D);
 
-   auto *Ptr = D->getTrailingObjects<FuncArgDecl*>();
-   while (NumTrailingObjects--)
-      *Ptr++ = ReadDeclAs<FuncArgDecl>();
-
    D->setLoc(ReadSourceRange());
    D->setType(Record.readSourceType());
-
-   D->setHasGetter(Record.readBool());
-   D->setHasSetter(Record.readBool());
-   D->setGetterAccess(Record.readEnum<AccessSpecifier>());
-   D->setSetterAccess(Record.readEnum<AccessSpecifier>());
-
-   D->setGetterBody(cast_or_null<CompoundStmt>(Record.readStmt()));
-   D->setSetterBody(cast_or_null<CompoundStmt>(Record.readStmt()));
-
-   D->setNewValName(Record.getIdentifierInfo());
 
    unsigned GetterMethodID = Record.readDeclID();
    unsigned SetterMethodID = Record.readDeclID();
@@ -1177,72 +1185,8 @@ Attr *ASTAttrReader::readAttr()
    }
 }
 
-_BuiltinAttr *ASTAttrReader::read_BuiltinAttr(SourceRange SR)
-{
-   return new(C) _BuiltinAttr(Record.getIdentifierInfo()->getIdentifier(), SR);
-}
-
-AlignAttr *ASTAttrReader::readAlignAttr(SourceRange SR)
-{
-   return new(C) AlignAttr(cast<StaticExpr>(Record.readExpr()), SR);
-}
-
-AutoClosureAttr *ASTAttrReader::readAutoClosureAttr(SourceRange SR)
-{
-   return new(C) AutoClosureAttr(SR);
-}
-
-CompileTimeAttr *ASTAttrReader::readCompileTimeAttr(SourceRange SR)
-{
-   return new(C) CompileTimeAttr(SR);
-}
-
-TestableAttr *ASTAttrReader::readTestableAttr(SourceRange SR)
-{
-   return new(C) TestableAttr(SR);
-}
-
-DiscardableResultAttr *ASTAttrReader::readDiscardableResultAttr(SourceRange SR)
-{
-   return new(C) DiscardableResultAttr(SR);
-}
-
-ExternAttr *ASTAttrReader::readExternAttr(SourceRange SR)
-{
-   return new(C) ExternAttr(Record.readEnum<ExternAttr::LangKind>(), SR);
-}
-
-InlineAttr *ASTAttrReader::readInlineAttr(SourceRange SR)
-{
-   return new(C) InlineAttr(Record.readEnum<InlineAttr::LevelKind>(), SR);
-}
-
-ImplicitAttr *ASTAttrReader::readImplicitAttr(SourceRange SR)
-{
-   return new(C) ImplicitAttr(SR);
-}
-
-OpaqueAttr *ASTAttrReader::readOpaqueAttr(SourceRange SR)
-{
-   return new(C) OpaqueAttr(SR);
-}
-
-ThinAttr *ASTAttrReader::readThinAttr(SourceRange SR)
-{
-   return new(C) ThinAttr(SR);
-}
-
-VersionStmtAttr* ASTAttrReader::readVersionStmtAttr(SourceRange SR)
-{
-   return new(C) VersionStmtAttr(
-      Record.readEnum<VersionStmtAttr::VersionKind>(), SR);
-}
-
-VersionDeclAttr* ASTAttrReader::readVersionDeclAttr(SourceRange SR)
-{
-   return new(C) VersionDeclAttr(
-      Record.readEnum<VersionDeclAttr::VersionKind>(), SR);
-}
+#define CDOT_ATTR_DESERIALIZE
+#include "SerializeAttr.inc"
 
 void ASTReader::ReadAttributes(ASTRecordReader &Record,
                                SmallVectorImpl<Attr *> &Attrs,
@@ -1409,7 +1353,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
       D = PropDecl::CreateEmpty(C);
       break;
    case DECL_SubscriptDecl:
-      D = SubscriptDecl::CreateEmpty(C, Record[0]);
+      D = SubscriptDecl::CreateEmpty(C);
       break;
    case DECL_TypedefDecl:
       D = TypedefDecl::CreateEmpty(C);
@@ -1569,11 +1513,14 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
    }
 
    if (auto Fn = dyn_cast<CallableDecl>(D)) {
-      auto BodyOffset = getDeclsCursor();
-      auto *Inf = new(getContext()) LazyFunctionInfo(this->Reader, BodyOffset);
+      if (Record.readBool()) {
+         auto BodyOffset = getDeclsCursor();
+         auto *Inf = new(getContext()) LazyFunctionInfo(this->Reader,
+                                                        BodyOffset);
 
-      addLazyFnInfo(Fn, Inf);
-      Fn->setLazyFnInfo(Inf);
+         addLazyFnInfo(Fn, Inf);
+         Fn->setLazyFnInfo(Inf);
+      }
    }
 
    if (isa<GlobalVarDecl>(D) || isa<CallableDecl>(D)) {
@@ -1614,7 +1561,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
       break;
    }
 
-   if (DoDeclUpdates) {
+   while (DoDeclUpdates) {
       while (!DeclUpdates.empty()) {
          ASTDeclUpdateVisitor V(*this, move(DeclUpdates.front()));
          DeclUpdates.pop();
@@ -1624,6 +1571,9 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
 
       if (!this->Reader.IncMgr)
          finalizeUnfinishedDecls();
+
+      if (DeclUpdates.empty())
+         break;
    }
 
    ReadingDecl = PrevReadingDecl;

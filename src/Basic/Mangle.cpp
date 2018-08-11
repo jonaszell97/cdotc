@@ -68,10 +68,6 @@ class ItaniumLikeMangler {
 
    void mangleSourceName(const IdentifierInfo *II);
 
-   void mangleBareFunctionType(const CallableDecl *D);
-   void mangleBareFunctionType(const FunctionType *FT, bool MangleReturnType,
-                               const CallableDecl *C = nullptr);
-
    void mangleInitType(const InitDecl *D);
    void mangleDeinitType(const DeinitDecl *D);
 
@@ -113,6 +109,14 @@ public:
    void manglePrefix(const DeclContext *DC, bool NoFunction = false);
    void manglePrefix(const DeclContext *DC,
                      const FinalTemplateArgumentList &TemplateArgs);
+
+   void mangleBareFunctionType(const CallableDecl *D);
+   void mangleBareFunctionType(const FunctionType *FT, bool MangleReturnType,
+                               const CallableDecl *C = nullptr);
+
+   void mangleBareFunctionType(SemaPass &SP, FunctionType *FT,
+                               bool MangleReturnType, const CallableDecl *C,
+                               const FinalTemplateArgumentList &TemplateArgs);
 };
 
 } // anonymous namespace
@@ -822,6 +826,18 @@ void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
       OS << 'z';
 }
 
+void ItaniumLikeMangler::mangleBareFunctionType(SemaPass &SP,
+                                                FunctionType *FT,
+                                                bool MangleReturnType,
+                                                const CallableDecl *C,
+                                                const FinalTemplateArgumentList &TemplateArgs) {
+   MultiLevelFinalTemplateArgList Args(TemplateArgs);
+   auto *Ty = cast<FunctionType>(
+      SP.resolveDependencies(FT, Args, const_cast<CallableDecl*>(C)));
+
+   return mangleBareFunctionType(Ty, MangleReturnType, C);
+}
+
 void ItaniumLikeMangler::mangleType(const RecordType *T)
 {
    mangleName(T->getRecord());
@@ -856,6 +872,17 @@ void ItaniumLikeMangler::mangleType(const InferredSizeArrayType *T)
 {
    OS << "A_";
    mangleType(T->getElementType());
+}
+
+void ItaniumLikeMangler::mangleType(const DependentNameType *T)
+{
+   std::string str;
+   {
+      llvm::raw_string_ostream OS(str);
+      OS << T->getNameSpec();
+   }
+
+   this->OS << "Dt" << str.size() << str;
 }
 
 void ItaniumLikeMangler::mangleType(const PointerType *T)
@@ -899,7 +926,7 @@ void ItaniumLikeMangler::mangleType(const BoxType *T)
    mangleType(T->getBoxedType());
 }
 
-void ItaniumLikeMangler::mangleType(const TokenType *T)
+void ItaniumLikeMangler::mangleType(const TokenType*)
 {
    OS << "To";
 }
@@ -1135,12 +1162,12 @@ void SymbolMangler::manglePrefix(const DeclContext *DC,
       return;
    }
 
+   auto *ND = cast<NamedDecl>(const_cast<DeclContext*>(DC));
    std::string str;
    {
       llvm::raw_string_ostream SS(str);
-
-      ItaniumLikeMangler Mangler(SS);
-      Mangler.manglePrefix(DC, false);
+      manglePrefix(cast<DeclContext>(ND->getSpecializedTemplate()),
+                   ND->getTemplateArgs(), SS);
    }
 
    OS << str;
@@ -1152,10 +1179,16 @@ void SymbolMangler::manglePrefix(const DeclContext *DC,
                                  llvm::raw_ostream &OS) const {
    ItaniumLikeMangler Mangler(OS);
    Mangler.manglePrefix(DC, TemplateArgs);
+
+   if (auto *CD = dyn_cast<CallableDecl>(DC)) {
+      Mangler.mangleBareFunctionType(CD);
+   }
 }
 
 llvm::StringRef SymbolMangler::getPrefix(const DeclContext *DC) const
 {
+   assert(isa<NamedDecl>(DC) && cast<NamedDecl>(DC)->isInstantiation());
+
    auto It = PrefixCache.find(DC);
    if (It != PrefixCache.end())
       return It->getSecond();

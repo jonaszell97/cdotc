@@ -35,6 +35,8 @@ class ASTDeclWriter: public ASTVisitor<ASTDeclWriter> {
                                const InstantiationInfo<T> &II,
                                NamedDecl *Inst);
 
+   void WriteDeclConstraint(const DeclConstraint &C);
+
 public:
    ASTDeclWriter(ASTContext &Context, ASTWriter &Writer,
                 ASTWriter::RecordData &Record)
@@ -118,9 +120,15 @@ void ASTDeclWriter::visit(Decl *D)
       visitDeclContext(Ctx);
 
    bool ExternallyVisibleFunction = false;
-   if (auto Fn = EmitFunctionBody(D)) {
-      ExternallyVisibleFunction = true;
-      Record.AddStmt(Fn->getBody());
+   if (auto *Fn = dyn_cast<CallableDecl>(D)) {
+      ExternallyVisibleFunction = EmitFunctionBody(D);
+      if (ExternallyVisibleFunction && Fn->getBody()) {
+         Record.push_back(true);
+         Record.AddStmt(Fn->getBody());
+      }
+      else {
+         Record.push_back(false);
+      }
    }
 
    if (isa<GlobalVarDecl>(D) || isa<CallableDecl>(D)) {
@@ -184,6 +192,25 @@ void ASTDeclWriter::visitDecl(Decl *D)
    }
 }
 
+void ASTDeclWriter::WriteDeclConstraint(const DeclConstraint &C)
+{
+   Record.push_back(C.getKind());
+   Record.AddSourceRange(C.getSourceRange());
+
+   auto NameQual = C.getNameQualifier();
+   Record.push_back(NameQual.size());
+
+   for (auto *II : NameQual)
+      Record.AddIdentifierRef(II);
+
+   if (C.getKind() == DeclConstraint::Concept) {
+      Record.AddStmt(C.getConceptRefExpr());
+   }
+   else {
+      Record.AddTypeRef(C.getType());
+   }
+}
+
 void ASTDeclWriter::visitNamedDecl(NamedDecl *D)
 {
    visitDecl(D);
@@ -197,6 +224,12 @@ void ASTDeclWriter::visitNamedDecl(NamedDecl *D)
 
    for (auto C : Constraints)
       Record.AddStmt(C);
+
+   auto DeclConstraints = Context.getExtConstraints(D);
+   Record.push_back(DeclConstraints.size());
+
+   for (auto &C : DeclConstraints)
+      WriteDeclConstraint(*C);
 
    auto Attrs = D->getAttributes();
    Record.AddAttributes(Attrs);
@@ -303,6 +336,13 @@ void ASTDeclWriter::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    Record.push_back(D->isImplementation());
 
    Record.AddDeclRef(D->getProtocolDefaultImpl());
+
+   auto Cov = Context.getCovariance(D);
+   Record.push_back(Cov.size());
+
+   for (auto *R : Cov) {
+      Record.AddDeclRef(R);
+   }
 }
 
 void ASTDeclWriter::visitPropDecl(PropDecl *D)
@@ -311,16 +351,6 @@ void ASTDeclWriter::visitPropDecl(PropDecl *D)
 
    Record.AddSourceRange(D->getSourceRange());
    Record.AddTypeRef(D->getType());
-
-   Record.push_back(D->hasGetter());
-   Record.push_back(D->hasSetter());
-   Record.push_back(static_cast<uintptr_t>(D->getGetterAccess()));
-   Record.push_back(static_cast<uintptr_t>(D->getSetterAccess()));
-
-   Record.AddStmt(D->getGetterBody());
-   Record.AddStmt(D->getSetterBody());
-
-   Record.AddIdentifierRef(D->getNewValNameInfo());
 
    Record.AddDeclRef(D->getGetterMethod());
    Record.AddDeclRef(D->getSetterMethod());
@@ -332,24 +362,8 @@ void ASTDeclWriter::visitSubscriptDecl(SubscriptDecl *D)
 {
    visitNamedDecl(D);
 
-   auto Args = D->getArgs();
-   Record[0] = Args.size();
-
-   for (auto Arg : Args)
-      Record.AddDeclRef(Arg);
-
    Record.AddSourceRange(D->getSourceRange());
    Record.AddTypeRef(D->getType());
-
-   Record.push_back(D->hasGetter());
-   Record.push_back(D->hasSetter());
-   Record.push_back(static_cast<uintptr_t>(D->getGetterAccess()));
-   Record.push_back(static_cast<uintptr_t>(D->getSetterAccess()));
-
-   Record.AddStmt(D->getGetterBody());
-   Record.AddStmt(D->getSetterBody());
-
-   Record.AddIdentifierRef(D->getNewValNameInfo());
 
    Record.AddDeclRef(D->getGetterMethod());
    Record.AddDeclRef(D->getSetterMethod());
@@ -864,8 +878,9 @@ void ASTDeclWriter::visitCallableDecl(CallableDecl *D)
    auto Args = D->getArgs();
    Record[0] = Args.size();
 
-   for (auto Arg : Args)
+   for (auto Arg : Args) {
       Record.AddDeclRef(Arg);
+   }
 
    Record.AddTemplateParameterList(D->getTemplateParams());
 
