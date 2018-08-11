@@ -1,0 +1,745 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true" buildAllGenerated="true">
+    <generated />
+  </component>
+  <component name="CMakeSettings">
+    <configurations>
+      <configuration PROFILE_NAME="Debug" CONFIG_NAME="Debug" />
+      <configuration PROFILE_NAME="Release" CONFIG_NAME="Release" />
+    </configurations>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e6611568-d3ee-47e2-8a0e-7b8c8972dc44" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/CDot.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/codeStyleConfig.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FUSProjectUsageTrigger">
+    <session id="-953699968">
+      <usages-collector id="statistics.lifecycle.project">
+        <counts>
+          <entry key="project.closed" value="1" />
+        </counts>
+      </usages-collector>
+    </session>
+  </component>
+  <component name="FileEditorManager">
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Sema/SemaPass.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="144">
+              <caret line="192" selection-start-line="192" selection-end-line="192" />
+              <folding>
+                <element signature="e#45#66#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="284">
+              <caret line="789" column="68" selection-start-line="789" selection-start-column="68" selection-end-line="789" selection-end-column="68" />
+              <folding>
+                <element signature="e#45#73#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="347">
+              <caret line="644" column="23" selection-start-line="644" selection-start-column="23" selection-end-line="644" selection-end-column="23" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="-1343">
+              <caret line="787" column="47" lean-forward="true" selection-start-line="787" selection-start-column="47" selection-end-line="787" selection-end-column="47" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="152">
+              <caret line="974" selection-start-line="974" selection-end-line="974" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenClass.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="144">
+              <caret line="1031" selection-start-line="1031" selection-end-line="1031" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Sema/SemaTemplate.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="152">
+              <caret line="66" selection-start-line="66" selection-end-line="66" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Basic/Mangle.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="144">
+              <caret line="173" selection-start-line="173" selection-end-line="173" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Types.def">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="152">
+              <caret line="13" selection-start-line="13" selection-end-line="13" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenPass.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="144">
+              <caret line="221" selection-start-line="221" selection-end-line="221" />
+              <folding>
+                <element signature="e#45#67#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="JsBuildToolGruntFileManager" detection-done="true" sorting="DEFINITION_ORDER" />
+  <component name="JsBuildToolPackageJson" detection-done="true" sorting="DEFINITION_ORDER" />
+  <component name="JsGulpfileManager">
+    <detection-done>true</detection-done>
+    <sorting>DEFINITION_ORDER</sorting>
+  </component>
+  <component name="OCFindUsagesOptions" text="false" ivars="false" properties="false" derivedClasses="false" />
+  <component name="ProjectFrameBounds" fullScreen="true">
+    <option name="width" value="1280" />
+    <option name="height" value="800" />
+  </component>
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectView">
+    <navigator proportions="" version="1">
+      <foldersAlwaysOnTop value="true" />
+    </navigator>
+    <panes>
+      <pane id="ProjectPane">
+        <subPane>
+          <expand>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="AST" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Basic" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="ClangImporter" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Driver" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="IRGen" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Message" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Message" type="462c0819:PsiDirectoryNode" />
+              <item name="def" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Module" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Parse" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Sema" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Serialization" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="src" type="462c0819:PsiDirectoryNode" />
+              <item name="Support" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="StdLib" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="test" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="CDot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="CDot" type="462c0819:PsiDirectoryNode" />
+              <item name="utils" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
+        </subPane>
+      </pane>
+      <pane id="Scope" />
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="WebServerToolWindowFactoryState" value="false" />
+  </component>
+  <component name="RunDashboard">
+    <option name="ruleStates">
+      <list>
+        <RuleState>
+          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
+        </RuleState>
+        <RuleState>
+          <option name="name" value="StatusDashboardGroupingRule" />
+        </RuleState>
+      </list>
+    </option>
+  </component>
+  <component name="RunManager" selected="Application.cdot-tblgen">
+    <configuration name="cdot-tblgen" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="cdot-tblgen" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="cdot-tblgen">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="cdotc-tblgens" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="cdotc-tblgens" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="cdotc" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="cdotc" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="cdotc">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="cdotc_asan" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="cdotc_asan" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="cdotc_asan">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="cdotc_ubsan" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="cdotc_ubsan" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="CDot" RUN_TARGET_NAME="cdotc_ubsan">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="cdotrt" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="cdotrt" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="clang-tablegen-targets" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="clang-tablegen-targets" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="intrinsics_gen" type="CMakeRunConfiguration" factoryName="Application" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CDot" TARGET_NAME="intrinsics_gen" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="Application.cdot-tblgen" />
+      <item itemvalue="Application.cdotc" />
+      <item itemvalue="Application.cdotc-tblgens" />
+      <item itemvalue="Application.cdotc_asan" />
+      <item itemvalue="Application.cdotc_ubsan" />
+      <item itemvalue="Application.cdotrt" />
+      <item itemvalue="Application.clang-tablegen-targets" />
+      <item itemvalue="Application.intrinsics_gen" />
+    </list>
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="aad26536-412b-4c49-9f69-684b62c48a55" name="Default" comment="" />
+      <created>1510834729613</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1510834729613</updated>
+      <workItem from="1510834731366" duration="4843000" />
+      <workItem from="1510839965352" duration="798000" />
+      <workItem from="1510840843515" duration="10678000" />
+      <workItem from="1510866421048" duration="1779000" />
+      <workItem from="1510868318281" duration="454000" />
+      <workItem from="1510868851572" duration="916000" />
+      <workItem from="1510870515380" duration="2311000" />
+      <workItem from="1510872889080" duration="29451000" />
+      <workItem from="1510945650947" duration="654000" />
+      <workItem from="1510946587133" duration="148604000" />
+      <workItem from="1511343548245" duration="65465000" />
+      <workItem from="1511536549292" duration="17000" />
+      <workItem from="1511550108911" duration="190630000" />
+      <workItem from="1512116966151" duration="37000" />
+      <workItem from="1512117187695" duration="5320000" />
+      <workItem from="1512310236467" duration="68775000" />
+      <workItem from="1512501038677" duration="316652000" />
+      <workItem from="1513450401902" duration="19000" />
+      <workItem from="1513450478771" duration="150399000" />
+      <workItem from="1513922371279" duration="530909000" />
+      <workItem from="1515593426972" duration="28094000" />
+      <workItem from="1515700298752" duration="130738000" />
+      <workItem from="1516116403373" duration="1750000" />
+      <workItem from="1516118761911" duration="12859000" />
+      <workItem from="1516135962751" duration="47333000" />
+      <workItem from="1516288900300" duration="114232000" />
+      <workItem from="1516876168181" duration="10783000" />
+      <workItem from="1516889081882" duration="38137000" />
+      <workItem from="1516990966729" duration="219809000" />
+      <workItem from="1517859701415" duration="15372000" />
+      <workItem from="1518016330654" duration="158000" />
+      <workItem from="1518017748350" duration="28000" />
+      <workItem from="1518024910631" duration="16006000" />
+      <workItem from="1518197508800" duration="507000" />
+      <workItem from="1518198161165" duration="20000" />
+      <workItem from="1518198205030" duration="152000" />
+      <workItem from="1518198842367" duration="1062000" />
+      <workItem from="1518200272973" duration="42465000" />
+      <workItem from="1518461357787" duration="43000" />
+      <workItem from="1518461553304" duration="43900000" />
+      <workItem from="1518681132194" duration="48542000" />
+      <workItem from="1518875985623" duration="9154000" />
+      <workItem from="1518887215114" duration="595000" />
+      <workItem from="1518887886891" duration="100000" />
+      <workItem from="1518888593583" duration="29000" />
+      <workItem from="1518888645925" duration="309000" />
+      <workItem from="1518889447438" duration="106597000" />
+      <workItem from="1519500658019" duration="48000" />
+      <workItem from="1519500746031" duration="92000" />
+      <workItem from="1519501097809" duration="39561000" />
+      <workItem from="1519851204191" duration="259475000" />
+      <workItem from="1520848711499" duration="14764000" />
+      <workItem from="1520867643560" duration="48660000" />
+      <workItem from="1521030776615" duration="16000" />
+      <workItem from="1521032660812" duration="20042000" />
+      <workItem from="1521101721757" duration="212049000" />
+      <workItem from="1521960333871" duration="23676000" />
+      <workItem from="1522065747308" duration="55785000" />
+      <workItem from="1522304117589" duration="34725000" />
+      <workItem from="1522394405149" duration="706000" />
+      <workItem from="1522395139036" duration="155000" />
+      <workItem from="1522395315434" duration="25407000" />
+      <workItem from="1522485911810" duration="14226000" />
+      <workItem from="1522568414929" duration="85423000" />
+      <workItem from="1522869262557" duration="17994000" />
+      <workItem from="1523044723727" duration="32078000" />
+      <workItem from="1523170071707" duration="347635000" />
+      <workItem from="1524135913352" duration="204900000" />
+      <workItem from="1525022530691" duration="57156000" />
+      <workItem from="1525446571144" duration="43893000" />
+      <workItem from="1526124138282" duration="18899000" />
+      <workItem from="1526216949374" duration="42986000" />
+      <workItem from="1526486094801" duration="19999000" />
+      <workItem from="1526562155781" duration="4678000" />
+      <workItem from="1526624917678" duration="51356000" />
+      <workItem from="1526896647615" duration="51000" />
+      <workItem from="1526896741665" duration="921000" />
+      <workItem from="1526968523839" duration="73178000" />
+      <workItem from="1527251732765" duration="30000" />
+      <workItem from="1527251827876" duration="98811000" />
+      <workItem from="1527693987386" duration="12866000" />
+      <workItem from="1527755547467" duration="16058000" />
+      <workItem from="1527862400357" duration="29624000" />
+      <workItem from="1527959684239" duration="32606000" />
+      <workItem from="1528116643410" duration="3559000" />
+      <workItem from="1528121754280" duration="434000" />
+      <workItem from="1528125434744" duration="12364000" />
+      <workItem from="1528141187230" duration="8724000" />
+      <workItem from="1528207783513" duration="28137000" />
+      <workItem from="1528293066427" duration="5240000" />
+      <workItem from="1528355476675" duration="3178000" />
+      <workItem from="1528381566036" duration="9302000" />
+      <workItem from="1528700558440" duration="2514000" />
+      <workItem from="1528785602565" duration="4840000" />
+      <workItem from="1528813881068" duration="14070000" />
+      <workItem from="1528893753326" duration="23589000" />
+      <workItem from="1528974907298" duration="1891000" />
+      <workItem from="1528988694865" duration="3661000" />
+      <workItem from="1529045431193" duration="34614000" />
+      <workItem from="1529265965901" duration="2981000" />
+      <workItem from="1529325762146" duration="20293000" />
+      <workItem from="1529415446963" duration="43384000" />
+      <workItem from="1529591185203" duration="19129000" />
+      <workItem from="1529687228705" duration="13324000" />
+      <workItem from="1529750225665" duration="3097000" />
+      <workItem from="1529759778659" duration="1723000" />
+      <workItem from="1529764890526" duration="112017000" />
+      <workItem from="1530200003797" duration="12302000" />
+      <workItem from="1530251766950" duration="19039000" />
+      <workItem from="1530433142417" duration="4352000" />
+      <workItem from="1530449042689" duration="47719000" />
+      <workItem from="1530618316631" duration="903000" />
+      <workItem from="1530631705484" duration="4534000" />
+      <workItem from="1530645894206" duration="3986000" />
+      <workItem from="1530652149859" duration="43189000" />
+      <workItem from="1530855840718" duration="47581000" />
+      <workItem from="1531070838356" duration="10397000" />
+      <workItem from="1531145710723" duration="14614000" />
+      <workItem from="1531203168630" duration="4595000" />
+      <workItem from="1531239131364" duration="32291000" />
+      <workItem from="1531336444787" duration="14426000" />
+      <workItem from="1531462119495" duration="23657000" />
+      <workItem from="1531578860859" duration="13549000" />
+      <workItem from="1531638920202" duration="4801000" />
+      <workItem from="1531661051881" duration="5086000" />
+      <workItem from="1531752547213" duration="16650000" />
+      <workItem from="1531920554552" duration="96000" />
+      <workItem from="1531936862504" duration="5951000" />
+      <workItem from="1531987429678" duration="309000" />
+      <workItem from="1531987923434" duration="1985000" />
+      <workItem from="1532069156675" duration="24319000" />
+      <workItem from="1532183948579" duration="18920000" />
+      <workItem from="1532263572152" duration="22257000" />
+      <workItem from="1532341034239" duration="3038000" />
+      <workItem from="1532352551095" duration="352000" />
+      <workItem from="1532352980348" duration="9000" />
+      <workItem from="1532353026053" duration="13074000" />
+      <workItem from="1532435794331" duration="84041000" />
+      <workItem from="1532696038617" duration="89905000" />
+      <workItem from="1532956251087" duration="100018000" />
+      <workItem from="1533211858698" duration="90004000" />
+      <workItem from="1533562782752" duration="41741000" />
+      <workItem from="1533743814489" duration="27024000" />
+      <workItem from="1533907337681" duration="30805000" />
+    </task>
+    <task id="LOCAL-00001" summary="- reworked AST to use llvm-style RTTI&#10;- reworked Passes to not rely on virtual inheritance">
+      <created>1511341652198</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1511341652198</updated>
+    </task>
+    <task id="LOCAL-00002" summary="- added Use class&#10;- added Operand and Use iteration for IL Values">
+      <created>1511359165563</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1511359165563</updated>
+    </task>
+    <task id="LOCAL-00003" summary="- aliases&#10;- ctfe&#10;- ast pretty print">
+      <created>1515527653419</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1515527653420</updated>
+    </task>
+    <task id="LOCAL-00004" summary="- added TblGen&#10;- reworked CTFE&#10;- added ASTContext&#10;- added AST PrettyPrinter and Dumper&#10;- added AST Traverse / Transform&#10;- replaced Record with RecordDecl&#10;- replaced shared_ptr's with raw pointers allocated in BumpPtrAllocator&#10;- added NamedDecl, DeclContext">
+      <created>1518641634073</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1518641634073</updated>
+    </task>
+    <task id="LOCAL-00005" summary="- AST rework&#10;- Mixins, Static If, Static Else, improved CTFE&#10;- Parse Error Recovery&#10;- DiagnosticEngine&#10;- Driver improvements&#10;- Attribute TblGen">
+      <created>1521406741820</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1521406741821</updated>
+    </task>
+    <task id="LOCAL-00006" summary="- exponent suffix on numeric literals&#10;- make TupleType &amp; FunctionType use trailing objects&#10;- lldb synt providers for TupleType, FunctionType&#10;- added discardableResult attribute&#10;- added DeclarationName&#10;- added array types with inferred size">
+      <created>1522077911239</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1522077911239</updated>
+    </task>
+    <task id="LOCAL-00007" summary="lldb synth providers for QualType &amp; DeclarationName">
+      <created>1522176743556</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1522176743556</updated>
+    </task>
+    <task id="LOCAL-00008" summary="- removed ReturnVerifierPass, PrimitivePromoterPass&#10;- restructured files">
+      <created>1522178300775</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1522178300775</updated>
+    </task>
+    <task id="LOCAL-00009" summary="- restructured IL directory layout&#10;- rewrote parts of ExprResolver::ParseExpression&#10;- typed aliases&#10;- created TypeBuilder class&#10;- fixed conformance checking and diagnostics&#10;- added 'Compiler' namespace for static reflection&#10;- lldb data formatters for ExprSequence, CompoundStmt, DeclContextUnion&#10;- fixed extensions">
+      <created>1523473699566</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1523473699567</updated>
+    </task>
+    <task id="LOCAL-00010" summary="- restructured IL directory layout&#10;- rewrote parts of ExprResolver::ParseExpression&#10;- typed aliases&#10;- created TypeBuilder class&#10;- fixed conformance checking and diagnostics&#10;- added 'Compiler' namespace for static reflection&#10;- lldb data formatters for ExprSequence, CompoundStmt, DeclContextUnion&#10;- fixed extensions">
+      <created>1523473734130</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1523473734130</updated>
+    </task>
+    <task id="LOCAL-00011" summary="- introduced OperatorDecls and precedence groups&#10;- restructured expression parsing&#10;- added ConformanceTable&#10;- StaticIf handling with continuation points&#10;- CTFE enhancements&#10;- added ConstantOperator IL values&#10;- added rust-like macros">
+      <created>1524728803071</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1524728803071</updated>
+    </task>
+    <task id="LOCAL-00012" summary="- introduced Job abstraction in Driver&#10;- reworked module system&#10;- implemented async / await&#10;- reworked name lookup">
+      <created>1531582341989</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1531582341990</updated>
+    </task>
+    <task id="LOCAL-00013" summary="- renamed CompilationUnit to CompilerInstance&#10;- reworked incremental compilation&#10;- implemented argument labels&#10;- reworked overload resolution&#10;- added compilation phase timing">
+      <created>1532879306085</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1532879306086</updated>
+    </task>
+    <task id="LOCAL-00014" summary="- reordered declaration pipeline: protocol conformances are checked immediately after declaration, nested instantiations are not declared immediately&#10;- added clang importer for structs, functions, enums, typedefs and macros">
+      <created>1533042200143</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1533042200143</updated>
+    </task>
+    <task id="LOCAL-00015" summary="- Fixed macro pattern compilation&#10;- added compiletime attribute&#10;- restricted function bodies that are written to modules">
+      <created>1533060222743</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1533060222743</updated>
+    </task>
+    <task id="LOCAL-00016" summary="- removed goto&#10;- removed MemberRefExpr&#10;- implemented loop labels for 'if', 'for', 'while', 'do' and 'match'">
+      <created>1533063611671</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1533063611672</updated>
+    </task>
+    <task id="LOCAL-00017" summary="- remove IfLetStmt and IfCaseStmt&#10;- generalized IfCondition (expression, binding or pattern)&#10;- allow multiple mixed conditions in if and while statements">
+      <created>1533118784951</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1533118784951</updated>
+    </task>
+    <task id="LOCAL-00018" summary="- fix importing multiple source files from clang&#10;- ability to import unions from clang&#10;- ability to import complex types from clang&#10;- implemented nested pattern matching">
+      <created>1533385444999</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1533385444999</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TimeTrackingManager">
+    <option name="totallyTimeSpent" value="60000" />
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="0" y="0" width="1280" height="800" extended-state="0" />
+    <layout>
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.8485477" visible="true" weight="0.3101777" />
+      <window_info id="Structure" order="1" sideWeight="0.15145229" side_tool="true" weight="0.30613893" />
+      <window_info id="Favorites" order="2" side_tool="true" />
+      <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Find" order="1" sideWeight="0.4940429" weight="0.31917807" />
+      <window_info anchor="bottom" id="Messages" order="2" sideWeight="0.49086577" weight="0.3260274" />
+      <window_info anchor="bottom" id="Run" order="3" sideWeight="0.48768863" weight="0.3260274" />
+      <window_info anchor="bottom" id="Debug" order="4" sideWeight="0.48626816" weight="0.33972603" />
+      <window_info anchor="bottom" id="Cvs" order="5" weight="0.25" />
+      <window_info anchor="bottom" id="Inspection" order="6" weight="0.4" />
+      <window_info anchor="bottom" id="TODO" order="7" weight="0.3260274" />
+      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.51373184" weight="0.30136988" />
+      <window_info anchor="bottom" id="Version Control" order="9" weight="0.32739726" />
+      <window_info anchor="bottom" id="Terminal" order="10" />
+      <window_info anchor="bottom" id="Inspection Results" order="11" weight="0.3260274" />
+      <window_info anchor="bottom" id="CMake" order="12" weight="0.32328767" />
+      <window_info anchor="bottom" id="Database Changes" order="13" show_stripe_button="false" />
+      <window_info anchor="right" id="Commander" order="0" weight="0.4" />
+      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
+      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
+      <window_info anchor="right" id="Data View" order="3" />
+      <window_info anchor="right" id="Database" order="4" />
+    </layout>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <option name="CHECK_CODE_CLEANUP_BEFORE_PROJECT_COMMIT" value="true" />
+    <option name="CHECK_NEW_TODO" value="false" />
+    <MESSAGE value="- reworked AST to use llvm-style RTTI&#10;- reworked Passes to not rely on virtual inheritance" />
+    <MESSAGE value="- added Use class&#10;- added Operand and Use iteration for IL Values" />
+    <MESSAGE value="- aliases&#10;- ctfe&#10;- ast pretty print" />
+    <MESSAGE value="- added TblGen&#10;- reworked CTFE&#10;- added ASTContext&#10;- added AST PrettyPrinter and Dumper&#10;- added AST Traverse / Transform&#10;- replaced Record with RecordDecl&#10;- replaced shared_ptr's with raw pointers allocated in BumpPtrAllocator&#10;- added NamedDecl, DeclContext" />
+    <MESSAGE value="- AST rework&#10;- Mixins, Static If, Static Else, improved CTFE&#10;- Parse Error Recovery&#10;- DiagnosticEngine&#10;- Driver improvements&#10;- Attribute TblGen" />
+    <MESSAGE value="- exponent suffix on numeric literals&#10;- make TupleType &amp; FunctionType use trailing objects&#10;- lldb synt providers for TupleType, FunctionType&#10;- added discardableResult attribute&#10;- added DeclarationName&#10;- added array types with inferred size" />
+    <MESSAGE value="lldb synth providers for QualType &amp; DeclarationName" />
+    <MESSAGE value="- removed ReturnVerifierPass, PrimitivePromoterPass&#10;- restructured files" />
+    <MESSAGE value="- restructured IL directory layout&#10;- rewrote parts of ExprResolver::ParseExpression&#10;- typed aliases&#10;- created TypeBuilder class&#10;- fixed conformance checking and diagnostics&#10;- added 'Compiler' namespace for static reflection&#10;- lldb data formatters for ExprSequence, CompoundStmt, DeclContextUnion&#10;- fixed extensions" />
+    <MESSAGE value="- introduced OperatorDecls and precedence groups&#10;- restructured expression parsing&#10;- added ConformanceTable&#10;- StaticIf handling with continuation points&#10;- CTFE enhancements&#10;- added ConstantOperator IL values&#10;- added rust-like macros" />
+    <MESSAGE value="- introduced Job abstraction in Driver&#10;- reworked module system&#10;- implemented async / await&#10;- reworked name lookup" />
+    <MESSAGE value="- renamed CompilationUnit to CompilerInstance&#10;- reworked incremental compilation&#10;- implemented argument labels&#10;- reworked overload resolution&#10;- added compilation phase timing" />
+    <MESSAGE value="- reordered declaration pipeline: protocol conformances are checked immediately after declaration, nested instantiations are not declared immediately&#10;- added clang importer for structs, functions, enums, typedefs and macros" />
+    <MESSAGE value="- Fixed macro pattern compilation&#10;- added compiletime attribute&#10;- restricted function bodies that are written to modules" />
+    <MESSAGE value="- removed goto&#10;- removed MemberRefExpr&#10;- implemented loop labels for 'if', 'for', 'while', 'do' and 'match'" />
+    <MESSAGE value="- remove IfLetStmt and IfCaseStmt&#10;- generalized IfCondition (expression, binding or pattern)&#10;- allow multiple mixed conditions in if and while statements" />
+    <MESSAGE value="- fix importing multiple source files from clang&#10;- ability to import unions from clang&#10;- ability to import complex types from clang&#10;- implemented nested pattern matching" />
+    <option name="LAST_COMMIT_MESSAGE" value="- fix importing multiple source files from clang&#10;- ability to import unions from clang&#10;- ability to import complex types from clang&#10;- implemented nested pattern matching" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/TableGen/Parser.cpp</url>
+          <line>23</line>
+          <option name="timeStamp" value="5107" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
+          <line>2139</line>
+          <option name="timeStamp" value="5612" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp</url>
+          <line>644</line>
+          <option name="timeStamp" value="6384" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Driver/main.cpp</url>
+          <line>127</line>
+          <option name="timeStamp" value="6421" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/SemaPass.cpp</url>
+          <line>4164</line>
+          <option name="timeStamp" value="6527" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
+          <line>2976</line>
+          <option name="timeStamp" value="6540" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
+          <line>2149</line>
+          <option name="timeStamp" value="6732" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Parse/Parser.cpp</url>
+          <line>4811</line>
+          <option name="timeStamp" value="6735" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Parse/ParseRecord.cpp</url>
+          <line>287</line>
+          <option name="timeStamp" value="6737" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/SemaPass.cpp</url>
+          <line>4173</line>
+          <option name="timeStamp" value="6752" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/ILGen/ILGenPass.cpp</url>
+          <line>5481</line>
+          <option name="timeStamp" value="6758" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp</url>
+          <line>1479</line>
+          <option name="timeStamp" value="6786" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Message/Diagnostics.cpp</url>
+          <line>79</line>
+          <option name="timeStamp" value="7396" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
+          <line>3233</line>
+          <option name="timeStamp" value="7403" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>
