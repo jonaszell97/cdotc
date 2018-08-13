@@ -4,34 +4,34 @@ module std.mem
 
 @inline(hint)
 public def allocate(_ size: UInt, alignTo alignment: UInt = 1) -> UnsafeMutableRawPtr {
-    return _cdot_Malloc(size)
+    return rt._cdot_Malloc(size)
 }
 
 @inline(hint)
 public def allocate<T>(_ amount: UInt = 1,
                        alignTo alignment: UInt = reflect.alignOf<T>) -> UnsafeMutablePtr<T> {
-    return _cdot_Malloc(reflect.sizeOf<T> * amount) as! UnsafeMutablePtr<T>
+    return rt._cdot_Malloc(reflect.sizeOf<T> * amount) as! UnsafeMutablePtr<T>
 }
 
 @inline(hint)
-public def reallocate(pointer ptr: UnsafeMutableRawPtr, newSize: UInt) -> UnsafeMutableRawPtr {
-    return _cdot_Realloc(ptr, newSize)
+public def reallocate(pointer ptr: UnsafeMutableRawPtr, newAmount: UInt) -> UnsafeMutableRawPtr {
+    return rt._cdot_Realloc(ptr, newAmount)
 }
 
 @inline(hint)
 public def reallocate<T>(pointer ptr: UnsafeMutablePtr<T>, newAmount: UInt) -> UnsafeMutablePtr<T> {
-    return _cdot_Realloc(ptr as! UnsafeMutableRawPtr,
-                         reflect.sizeOf<T> * newAmount) as! UnsafeMutablePtr<T>
+    return rt._cdot_Realloc(ptr as! UnsafeMutableRawPtr,
+                            reflect.sizeOf<T> * newAmount) as! UnsafeMutablePtr<T>
 }
 
 @inline(hint)
 public def deallocate(_ ptr: UnsafeMutableRawPtr) {
-    _cdot_Free(ptr)
+    rt._cdot_Free(ptr)
 }
 
 @inline(hint)
 public def deallocate<T>(_ ptr: UnsafeMutablePtr<T>) {
-    _cdot_Free(ptr as! UnsafeMutableRawPtr)
+    rt._cdot_Free(ptr as! UnsafeMutableRawPtr)
 }
 
 @inline(hint)
@@ -89,7 +89,7 @@ public def move<T>(to dst: UnsafeMutablePtr<T>, from src: UnsafePtr<T>, _ n: UIn
                      n * reflect.sizeOf<T>)
 }
 
-public def copy(to dst: UnsafeMutableRawPtr, from src: UnsafeMutableRawPtr, _ n: UInt) {
+public def copy(to dst: UnsafeMutableRawPtr, from src: UnsafeRawPtr, _ n: UInt) {
     libc.memcpy(dst, src, n)
 }
 

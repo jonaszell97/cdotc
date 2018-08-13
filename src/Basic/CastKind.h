@@ -15,6 +15,8 @@ enum class CastKind : unsigned char {
    DynCast, UpCast, ConversionOp,
    BitCast, ProtoWrap, ProtoUnwrap,
 
+   ExistentialCast, ExistentialCastFallible, ExistentialUnwrap,
+
    NoThrowToThrows, ThinToThick,
 
    Forward, Move, Copy,

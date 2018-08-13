@@ -153,9 +153,6 @@ private:
    llvm::FoldingSet<ConstantGEPInst> GEPConstants;
    llvm::FoldingSet<ConstantLoadInst> LoadConstants;
 
-   llvm::DenseMap<QualType, TypeInfo*> TypeInfoMap;
-   llvm::DenseMap<void*, VTable*> VTableMap;
-
    ConstantTokenNone *TokNone = nullptr;
    ConstantInt *TrueVal  = nullptr;
    ConstantInt *FalseVal = nullptr;

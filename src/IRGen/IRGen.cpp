@@ -53,31 +53,10 @@ IRGen::IRGen(CompilerInstance &CI,
    Int1Ty = llvm::IntegerType::get(Ctx, 1);
    VoidTy = llvm::Type::getVoidTy(Ctx);
 
-   TypeInfoTy = llvm::StructType::create(Ctx, "cdot.TypeInfo");
    DeinitializerTy = llvm::FunctionType::get(VoidTy, { Int8PtrTy }, false);
 
    EmptyTupleTy = llvm::StructType::get(Ctx, {});
    EmptyTuple = llvm::UndefValue::get(EmptyTupleTy->getPointerTo());
-
-   llvm::Type *typeInfoContainedTypes[] = {
-      Int8PtrTy,        // parent class
-      EmptyArrayPtrTy,  // vtable
-      EmptyArrayPtrTy,  // ptable
-      Int8PtrTy,        // type name
-      Int8PtrTy,        // deinitializer
-      EmptyArrayPtrTy,  // conformances
-   };
-
-   TypeInfoTy->setBody(typeInfoContainedTypes);
-   assert(TypeInfoTy->getNumContainedTypes() == MetaType::MemberCount);
-
-   llvm::Type *protocolContainedTypes[] = {
-      Int8PtrTy,                 // ptable ptr
-      WordTy, WordTy, WordTy     // 3 word inline storage
-   };
-
-   ProtocolTy = llvm::StructType::create(Ctx, protocolContainedTypes,
-                                         "cdot.Protocol");
 
    llvm::Type *errorContainedTypes[] = {
       Int8PtrTy,                 // typeinfo ptr
@@ -163,6 +142,19 @@ void IRGen::visitModule(Module& ILMod)
    CleanupExceptionFn = nullptr;
    ExitFn = nullptr;
 
+   InitializeExistentialFn = nullptr;
+   DeinitializeExistentialFn = nullptr;
+   CopyExistentialFn = nullptr;
+   CastExistentialFn = nullptr;
+   CastExistentialFallibleFn = nullptr;
+   UnwrapExistentialFn = nullptr;
+   CopyClassFn = nullptr;
+
+   DynamicDownCastFn = nullptr;
+
+   auto *TypeInfoDecl = CI.getSema().getTypeInfoDecl();
+   auto *ECDecl = CI.getSema().getExistentialContainerDecl();
+
    for (auto Ty : ILMod.getRecords()) {
       if (StructTypeMap.find(Ty) != StructTypeMap.end())
          continue;
@@ -170,6 +162,13 @@ void IRGen::visitModule(Module& ILMod)
       // forward declare all types, they might be referenced when defining
       // others
       ForwardDeclareType(Ty);
+
+      if (Ty == TypeInfoDecl) {
+         TypeInfoTy = getStructTy(Ty);
+      }
+      else if (Ty == ECDecl) {
+         ExistentialContainerTy = getStructTy(Ty);
+      }
    }
 
    for (auto Ty : ILMod.getRecords()) {
@@ -460,6 +459,131 @@ llvm::Constant* IRGen::getMemCmpFn()
    return MemCmpFn;
 }
 
+llvm::Constant *IRGen::getInitializeExistentialFn()
+{
+   if (!InitializeExistentialFn) {
+      InitializeExistentialFn =
+         M->getOrInsertFunction("_cdot_InitializeExistential",
+            llvm::FunctionType::get(VoidTy,
+                                    {
+                                       Int8PtrTy,
+                                       Int8PtrTy,
+                                       Int8PtrTy,
+                                       Int8PtrTy
+                                    }, false));
+   }
+
+   return InitializeExistentialFn;
+}
+
+llvm::Constant *IRGen::getDeinitializeExistentialFn()
+{
+   if (!DeinitializeExistentialFn) {
+      DeinitializeExistentialFn =
+         M->getOrInsertFunction("_cdot_DeinitializeExistential",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return DeinitializeExistentialFn;
+}
+
+llvm::Constant *IRGen::getCopyExistentialFn()
+{
+   if (!CopyExistentialFn) {
+      CopyExistentialFn =
+         M->getOrInsertFunction("_cdot_CopyExistential",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return CopyExistentialFn;
+}
+
+llvm::Constant *IRGen::getCastExistentialFn()
+{
+   if (!CastExistentialFn) {
+      CastExistentialFn =
+         M->getOrInsertFunction("_cdot_ExistentialCast",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return CastExistentialFn;
+}
+
+llvm::Constant *IRGen::getCastExistentialFallibleFn()
+{
+   if (!CastExistentialFallibleFn) {
+      CastExistentialFallibleFn =
+         M->getOrInsertFunction("_cdot_ExistentialCastFallible",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return CastExistentialFallibleFn;
+}
+
+llvm::Constant *IRGen::getUnwrapExistentialFn()
+{
+   if (!UnwrapExistentialFn) {
+      UnwrapExistentialFn =
+         M->getOrInsertFunction("_cdot_ExistentialUnwrap",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return UnwrapExistentialFn;
+}
+
+llvm::Constant* IRGen::getCopyClassFn()
+{
+   if (!CopyClassFn) {
+      CopyClassFn =
+         M->getOrInsertFunction("_cdot_CopyClass",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return CopyClassFn;
+}
+
+llvm::Constant* IRGen::getDynamicDownCastFn()
+{
+   if (!DynamicDownCastFn) {
+      DynamicDownCastFn =
+         M->getOrInsertFunction("_cdot_DynamicDownCast",
+                                llvm::FunctionType::get(VoidTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return DynamicDownCastFn;
+}
+
 llvm::Constant* IRGen::getIntPowFn(QualType IntTy)
 {
    auto llvmTy = getStorageType(IntTy);
@@ -542,7 +666,7 @@ llvm::StructType* IRGen::getStructTy(QualType Ty)
 llvm::StructType* IRGen::getStructTy(RecordDecl *R)
 {
    if (isa<ProtocolDecl>(R))
-      return ProtocolTy;
+      return ExistentialContainerTy;
 
    auto Ty = StructTypeMap[R];
    if (Ty)
@@ -607,24 +731,31 @@ llvm::Type* IRGen::getLlvmTypeImpl(QualType Ty)
       return LambdaTy->getPointerTo();
    case Type::FunctionTypeID: {
       FunctionType *FuncTy = Ty->asFunctionType();
-      llvm::Type *RetTy;
-      if (FuncTy->getReturnType()->isEmptyTupleType()) {
-         RetTy = VoidTy;
+
+      QualType RetType = FuncTy->getReturnType();
+      bool sret = NeedsStructReturn(RetType);
+
+      llvm::Type *LLVMRetTy;
+      if (RetType->isEmptyTupleType() || sret) {
+         LLVMRetTy = VoidTy;
       }
       else {
-         RetTy = getStorageType(*FuncTy->getReturnType());
+         LLVMRetTy = getStorageType(RetType);
       }
 
       SmallVector<llvm::Type*, 4> argTypes;
       if (FuncTy->throws()) {
          argTypes.push_back(Int8PtrTy->getPointerTo());
       }
+      if (sret) {
+         argTypes.push_back(getParameterType(RetType));
+      }
 
       for (const auto &arg : FuncTy->getParamTypes())
          argTypes.push_back(getParameterType(arg));
 
-      auto *FnTy = llvm::FunctionType::get(RetTy, argTypes,
-                                         FuncTy->isCStyleVararg());
+      auto *FnTy = llvm::FunctionType::get(LLVMRetTy, argTypes,
+                                           FuncTy->isCStyleVararg());
 
       return FnTy->getPointerTo();
    }
@@ -1687,70 +1818,6 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
          getParameterType(G->getType()));
    }
 
-   if (auto VT = dyn_cast<VTable>(C)) {
-      auto it = ValueMap.find(VT);
-      if (it != ValueMap.end())
-         return cast<llvm::ConstantArray>(it->getSecond());
-
-      auto ArrTy = llvm::ArrayType::get(Int8PtrTy, VT->getNumFunctions());
-      llvm::SmallVector<llvm::Constant*, 8> Fns;
-
-      for (auto &fn : VT->getFunctions())
-         Fns.push_back(toInt8Ptr(getFunction(fn)));
-
-      auto V = llvm::ConstantArray::get(ArrTy, Fns);
-      addMappedValue(VT, V);
-
-      return V;
-   }
-
-   if (auto TI = dyn_cast<TypeInfo>(C)) {
-      auto it = ValueMap.find(TI);
-      if (it != ValueMap.end())
-         return cast<llvm::ConstantStruct>(it->getSecond());
-
-      size_t i = 0;
-      llvm::Constant *Values[MetaType::MemberCount];
-
-      for (auto &Val : TI->getValues()) {
-         switch (i) {
-         case MetaType::Conformances:
-            break;
-         case MetaType::VTable:
-         case MetaType::PTable:
-            Values[i] = llvm::ConstantExpr::getBitCast(getConstantVal(Val),
-                                                       EmptyArrayPtrTy);
-            break;
-         default:
-            Values[i] = toInt8Ptr(getConstantVal(Val));
-            break;
-         }
-
-         ++i;
-      }
-
-      llvm::Constant *ConformanceArray;
-      if (cast<ConstantArray>(TI->getConformances())->getNumElements() != 0) {
-         auto Conformances = getConstantVal(TI->getConformances());
-         ConformanceArray =
-            new llvm::GlobalVariable(*M, Conformances->getType(), true,
-                                     llvm::GlobalVariable::PrivateLinkage,
-                                     Conformances);
-
-         ConformanceArray = llvm::ConstantExpr::getBitCast(ConformanceArray,
-                                                           EmptyArrayPtrTy);
-      }
-      else {
-         ConformanceArray = llvm::ConstantPointerNull::get(EmptyArrayPtrTy);
-      }
-
-      Values[MetaType::Conformances] = ConformanceArray;
-      auto V = llvm::ConstantStruct::get(TypeInfoTy, Values);
-
-      addMappedValue(TI, V);
-      return V;
-   }
-
    if (auto Magic = dyn_cast<MagicConstant>(C)) {
       switch (Magic->getMagicConstantKind()) {
       case MagicConstant::__ctfe:
@@ -2498,54 +2565,15 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
    llvm::SmallVector<llvm::Value*, 8> args{ ErrAlloc };
    PrepareCallArgs(args, I.getArgs(), isa<Method>(I.getCalledFunction()));
 
-   llvm::Value *Call;
-   if (I.isVirtual()) {
-      auto Self = args[1];
-      auto SelfTy = cast<ClassDecl>(I.getCalledMethod()->getRecordType());
+   auto *Call = Builder.CreateCall(getFunction(I.getCalledFunction()), args);
+   Call->addParamAttr(0, llvm::Attribute::SwiftError);
 
-      llvm::Value *VTableRef = Builder.CreateLoad(getVTable(Self));
-
-      auto VTableTy = llvm::ArrayType::get(Int8PtrTy, SelfTy->getNumVirtualFns());
-      auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
-
-      size_t Offset = I.getCalledMethod()->getVtableOffset();
-      auto FuncPtr = Builder.CreateInBoundsGEP(
-         VTable, { Builder.getInt32(0), Builder.getInt32((unsigned)Offset) });
-
-      auto TypedFnPtr = Builder.CreateBitCast(
-         Builder.CreateLoad(FuncPtr),
-         getStorageType(I.getCalledMethod()->getType()));
-
-      auto *CallInst = Builder.CreateCall(TypedFnPtr, args);
-      CallInst->addParamAttr(0, llvm::Attribute::SwiftError);
-
-      Call = CallInst;
-   }
-   else if (I.isProtocolCall()) {
-      auto Self = args[1];
-      auto PTablePtr = Builder.CreateLoad(Builder.CreateStructGEP(ProtocolTy,
-                                                                  Self, 1));
-
-      auto GEP = Builder.CreateInBoundsGEP(
-         PTablePtr, Builder.getInt64(I.getCalledMethod()->getPtableOffset()));
-
-      auto funcPtr = Builder.CreateBitCast(
-         GEP, getStorageType(I.getCalledMethod()->getType()));
-
-      auto ObjPtr = Builder.CreateLoad(Builder.CreateStructGEP(ProtocolTy,
-                                                               Self, 0));
-
-      auto Obj = Builder.CreateBitCast(
-         ObjPtr, getStorageType(I.getCalledMethod()->getReturnType()));
-
-      args[1] = Obj;
-      auto *CallInst = Builder.CreateCall(funcPtr, args);
-      CallInst->addParamAttr(0, llvm::Attribute::SwiftError);
-
-      Call = CallInst;
+   llvm::Value *RetVal;
+   if (I.getCalledFunction()->hasStructReturn()) {
+      RetVal = Call->getArgOperand(1);
    }
    else {
-      Call = CreateCall(I.getCalledFunction(), args);
+      RetVal = Call;
    }
 
    auto ErrLd = Builder.CreateLoad(ErrAlloc);
@@ -2554,7 +2582,7 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
    llvm::BasicBlock *NormalBB = getBasicBlock(I.getNormalContinuation());
    llvm::BasicBlock *LPadBB = getBasicBlock(I.getLandingPad());
 
-   if (!Call->getType()->isVoidTy()) {
+   if (!RetVal->getType()->isVoidTy()) {
       auto *ResultPhi = cast<llvm::PHINode>(&NormalBB->getInstList().front());
       ResultPhi->addIncoming(Call, Builder.GetInsertBlock());
    }
@@ -2563,7 +2591,80 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
    ErrPhi->addIncoming(ErrLd, Builder.GetInsertBlock());
 
    Builder.CreateCondBr(IsNull, NormalBB, LPadBB);
-   return PrepareReturnedValue(&I, Call);
+   return PrepareReturnedValue(&I, RetVal);
+}
+
+llvm::Value *IRGen::visitVirtualInvokeInst(const VirtualInvokeInst &I)
+{
+   auto ErrAlloc = Builder.CreateAlloca(Int8PtrTy);
+   ErrAlloc->setSwiftError(true);
+
+   Builder.CreateStore(llvm::ConstantPointerNull::get(Int8PtrTy), ErrAlloc);
+
+   llvm::SmallVector<llvm::Value*, 8> args{ ErrAlloc, nullptr };
+   PrepareCallArgs(args, I.getArgs(), true);
+
+   auto *Callee = getLlvmValue(I.getCallee());
+
+   llvm::Value *VTableRef;
+   if (I.getCallee()->getType()->isClass()) {
+      args[1] = Callee;
+      VTableRef = Builder.CreateLoad(getVTable(Callee));
+   }
+   else {
+      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
+      Val = Builder.CreateBitCast(
+         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
+            ->getPointerTo());
+
+      args[1] = Builder.CreateLoad(Val);
+
+      auto *Conformance = Builder.CreateLoad(
+         Builder.CreateStructGEP(ExistentialContainerTy, Callee, 2));
+
+      VTableRef = Builder.CreateLoad(
+         Builder.CreateStructGEP(
+            Conformance->getType()->getPointerElementType(),
+            Conformance, 1));
+   }
+
+   auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
+   auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
+
+   auto FuncPtr = Builder.CreateInBoundsGEP(
+      VTable, { Builder.getInt32(0), Builder.getInt32(I.getOffset()) });
+
+   auto TypedFnPtr = Builder.CreateBitCast(
+      Builder.CreateLoad(FuncPtr),
+      getStorageType(I.getFunctionType()));
+
+   auto *Call = Builder.CreateCall(TypedFnPtr, args);
+   Call->addParamAttr(0, llvm::Attribute::SwiftError);
+
+   llvm::Value *RetVal;
+   if (NeedsStructReturn(I.getFunctionType()->getReturnType())) {
+      RetVal = Call->getArgOperand(1);
+   }
+   else {
+      RetVal = Call;
+   }
+
+   auto ErrLd = Builder.CreateLoad(ErrAlloc);
+   auto IsNull = Builder.CreateIsNull(ErrLd);
+
+   llvm::BasicBlock *NormalBB = getBasicBlock(I.getNormalContinuation());
+   llvm::BasicBlock *LPadBB = getBasicBlock(I.getLandingPad());
+
+   if (!RetVal->getType()->isVoidTy()) {
+      auto *ResultPhi = cast<llvm::PHINode>(&NormalBB->getInstList().front());
+      ResultPhi->addIncoming(Call, Builder.GetInsertBlock());
+   }
+
+   auto *ErrPhi = cast<llvm::PHINode>(&LPadBB->getInstList().front());
+   ErrPhi->addIncoming(ErrLd, Builder.GetInsertBlock());
+
+   Builder.CreateCondBr(IsNull, NormalBB, LPadBB);
+   return PrepareReturnedValue(&I, RetVal);
 }
 
 llvm::Value* IRGen::visitLandingPadInst(LandingPadInst const& I)
@@ -2708,6 +2809,11 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::cleanup_exception:
       return Builder.CreateCall(getCleanupExceptionFn(),
                                 toInt8Ptr(getLlvmValue(I.getArgs()[0])));
+
+   case Intrinsic::deinit_existential: {
+      return Builder.CreateCall(getDeinitializeExistentialFn(),
+                                toInt8Ptr(getLlvmValue(I.getArgs()[0])));
+   }
    case Intrinsic::terminate:
       return Builder.CreateCall(getExitFn(), Builder.getInt32(1));
    case Intrinsic::print_runtime_error: {
@@ -2923,60 +3029,27 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
    }
 
    SmallVector<llvm::Value*, 8> args;
-   PrepareCallArgs(args, I.getArgs(), isa<Method>(I.getCalledFunction()));
+   PrepareCallArgs(args, I.getArgs(), isa<Method>(I.getCallee()));
 
-   if (I.isVirtual()) {
-      auto Self = args.front();
-      auto SelfTy = cast<ClassDecl>(I.getCalledMethod()->getRecordType());
-
-      llvm::Value *VTableRef = Builder.CreateLoad(getVTable(Self));
-
-      auto VTableTy = llvm::ArrayType::get(Int8PtrTy, SelfTy->getNumVirtualFns());
-      auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
-
-      size_t Offset = I.getCalledMethod()->getVtableOffset();
-      auto FuncPtr = Builder.CreateInBoundsGEP(
-         VTable, { Builder.getInt32(0), Builder.getInt32((unsigned)Offset) });
-
-      auto TypedFnPtr = Builder.CreateBitCast(
-         Builder.CreateLoad(FuncPtr),
-         getStorageType(I.getCalledMethod()->getType()));
-
-      return PrepareReturnedValue(&I, Builder.CreateCall(TypedFnPtr, args));
+   llvm::Value *Call;
+   if (auto *Fn = I.getCalledFunction()) {
+      Call = CreateCall(Fn, args);
+   }
+   else {
+      Call = Builder.CreateCall(getLlvmValue(I.getCallee()), args);
    }
 
-   if (I.isProtocolCall()) {
-      auto Self = args.front();
-      auto PTablePtr = Builder.CreateLoad(Builder.CreateStructGEP(ProtocolTy,
-                                                                  Self, 1));
-
-      auto GEP = Builder.CreateInBoundsGEP(
-         PTablePtr, Builder.getInt64(I.getCalledMethod()->getPtableOffset()));
-
-      auto funcPtr = Builder.CreateBitCast(
-         GEP, getStorageType(I.getCalledMethod()->getType()));
-
-      auto ObjPtr = Builder.CreateLoad(Builder.CreateStructGEP(ProtocolTy,
-                                                               Self, 0));
-
-      auto Obj = Builder.CreateBitCast(
-         ObjPtr, getStorageType(I.getCalledMethod()->getReturnType()));
-
-      args[0] = Obj;
-      return PrepareReturnedValue(&I, Builder.CreateCall(funcPtr, args));
-   }
-
-   auto Call = CreateCall(I.getCalledFunction(), args);
    if (MergeBB) {
       Builder.CreateBr(MergeBB);
       Builder.SetInsertPoint(MergeBB);
    }
 
-   if (I.getCalledFunction()->isAsync()) {
+   auto *FnTy = I.getCallee()->getType()->asFunctionType();
+   if (FnTy->isAsync()) {
       auto *CoroPromise = llvm::Intrinsic::getDeclaration(
          M, llvm::Intrinsic::coro_promise);
 
-      QualType RetTy = I.getCalledFunction()->getReturnType();
+      QualType RetTy = FnTy->getReturnType();
       auto *Align = Builder.getInt32(TI.getAllocAlignOfType(RetTy));
 
       auto *Promise = Builder.CreateCall(CoroPromise,
@@ -2992,14 +3065,80 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
    return PrepareReturnedValue(&I, Call);
 }
 
-llvm::Value *IRGen::visitIndirectCallInst(IndirectCallInst const& I)
+llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
 {
-   auto Fun = getLlvmValue(I.getCalledFunction());
+   unsigned i = 0;
+   SmallVector<llvm::Value*, 8> args{ nullptr };
 
-   SmallVector<llvm::Value*, 8> args;
-   PrepareCallArgs(args, I.getArgs());
+   QualType RetTy = I.getFunctionType()->getReturnType();
+   bool sret = NeedsStructReturn(RetTy);
+   if (sret) {
+      args[i++] = Builder.CreateAlloca(getStorageType(RetTy));
+      args.push_back(nullptr);
+   }
 
-   return Builder.CreateCall(Fun, args);
+   PrepareCallArgs(args, I.getArgs(), true);
+
+   auto *Callee = getLlvmValue(I.getCallee());
+
+   llvm::Value *VTableRef;
+   if (I.getCallee()->getType()->isClass()) {
+      args[i] = Callee;
+      VTableRef = Builder.CreateLoad(getVTable(Callee));
+   }
+   else {
+      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
+      Val = Builder.CreateBitCast(
+         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
+                 ->getPointerTo());
+
+      args[i] = Builder.CreateLoad(Val);
+
+      auto *Conformance = Builder.CreateLoad(
+         Builder.CreateStructGEP(ExistentialContainerTy, Callee, 2));
+
+      VTableRef = Builder.CreateLoad(
+         Builder.CreateStructGEP(
+            Conformance->getType()->getPointerElementType(),
+            Conformance, 1));
+   }
+
+   auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
+   auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
+
+   auto FuncPtr = Builder.CreateInBoundsGEP(
+      VTable, { Builder.getInt32(0), Builder.getInt32(I.getOffset()) });
+
+   auto TypedFnPtr = Builder.CreateBitCast(
+      Builder.CreateLoad(FuncPtr),
+      getStorageType(I.getFunctionType()));
+
+   auto *RetVal = PrepareReturnedValue(&I, Builder.CreateCall(TypedFnPtr,
+                                                              args));
+
+   if (I.getFunctionType()->isAsync()) {
+      auto *CoroPromise = llvm::Intrinsic::getDeclaration(
+         M, llvm::Intrinsic::coro_promise);
+
+      QualType RetTy = I.getCalledFunction()->getReturnType();
+      auto *Align = Builder.getInt32(TI.getAllocAlignOfType(RetTy));
+
+      auto *Promise = Builder.CreateCall(CoroPromise,
+                                         {RetVal, Align, Builder.getFalse()});
+
+      RetVal = Builder.CreateBitCast(
+         Promise, getStorageType(RetTy)->getPointerTo());
+
+      if (!RetTy->needsStructReturn())
+         RetVal = Builder.CreateLoad(RetVal);
+   }
+
+   RetVal = PrepareReturnedValue(&I, RetVal);
+   if (sret) {
+      return args[0];
+   }
+
+   return RetVal;
 }
 
 llvm::FunctionType* IRGen::getLambdaType(FunctionType *FTy)
@@ -3507,21 +3646,24 @@ llvm::Value* IRGen::visitUnionCastInst(UnionCastInst const& I)
    return Builder.CreateBitCast(U, toTy);
 }
 
-llvm::Value* IRGen::visitProtoCastInst(ProtoCastInst const& I)
+llvm::Value* IRGen::visitExistentialInitInst(ExistentialInitInst const& I)
 {
    auto val = getLlvmValue(I.getOperand(0));
 
-   if (I.isWrap()) {
-      auto alloca = CreateAlloca(ProtocolTy, 1, TI.getPointerAlignInBytes());
-      auto gep = Builder.CreateStructGEP(ProtocolTy, alloca, 0);
-      Builder.CreateStore(toInt8Ptr(val), gep);
+   // Get the type info.
+   auto *valueTypeInfo = getLlvmValue(I.getValueTypeInfo());
 
-      return alloca;
-   }
-   else {
-      auto gep = Builder.CreateStructGEP(ProtocolTy, val, 0);
-      return Builder.CreateLoad(gep);
-   }
+   // Get the protocol type info.
+   auto *protoTypeInfo = getConstantVal(I.getProtocolTypeInfo());
+
+   // Initialize the existential container.
+   auto alloca = CreateAlloca(ExistentialContainerTy);
+   Builder.CreateCall(
+      getInitializeExistentialFn(),
+      { toInt8Ptr(val), toInt8Ptr(valueTypeInfo),
+         toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca) });
+
+   return alloca;
 }
 
 llvm::Value* IRGen::visitExceptionCastInst(ExceptionCastInst const& I)
@@ -3534,49 +3676,43 @@ llvm::Value* IRGen::visitExceptionCastInst(ExceptionCastInst const& I)
 
 llvm::Value* IRGen::visitDynamicCastInst(const DynamicCastInst &I)
 {
-   auto Val = getLlvmValue(I.getOperand(0));
-   assert(I.getOperand(0)->getType()->isClass() && "invalid dyn_cast type!");
+   auto *ResultAlloc = CreateAlloca(I.getType());
+   auto *TypeInfo = getLlvmValue(I.getTargetTypeInfo());
+   auto *Val = getLlvmValue(I.getOperand(0));
 
-   auto TargetTI = getLlvmValue(ILMod->getTypeInfo(I.getTargetType()));
-   auto GivenTI = Builder.CreateLoad(getTypeInfo(Val));
+   Builder.CreateCall(getDynamicDownCastFn(), {Val, TypeInfo, ResultAlloc});
+   return ResultAlloc;
+}
 
-   auto Alloc = CreateAlloca(getStorageType(I.getType()));
+llvm::Value *IRGen::visitExistentialCastInst(const il::ExistentialCastInst &I)
+{
+   auto *Val = getLlvmValue(I.getOperand(0));
+   auto *TargetTI = getLlvmValue(I.getTargetTypeInfo());
 
-   auto SuccBB = llvm::BasicBlock::Create(
-      Ctx, "dyn_cast.success", Builder.GetInsertBlock()->getParent());
+   llvm::Constant *Fn;
+   switch (I.getKind()) {
+   case CastKind::ExistentialCast: {
+      Fn = getCastExistentialFn();
+      break;
+   }
+   case CastKind::ExistentialCastFallible: {
+      Fn = getCastExistentialFallibleFn();
+      break;
+   }
+   case CastKind::ExistentialUnwrap: {
+      Fn = getUnwrapExistentialFn();
+      break;
+   }
+   default:
+      llvm_unreachable("not an existential cast!");
+   }
 
-   auto FailBB = llvm::BasicBlock::Create(
-      Ctx, "dyn_cast.fail", Builder.GetInsertBlock()->getParent());
+   auto *ResultAlloc = Builder.CreateAlloca(getStorageType(I.getType()));
+   Builder.CreateCall(
+      Fn,
+      { toInt8Ptr(Val), toInt8Ptr(TargetTI), toInt8Ptr(ResultAlloc)});
 
-   auto MergeBB = llvm::BasicBlock::Create(
-      Ctx, "dyn_cast.merge", Builder.GetInsertBlock()->getParent());
-
-   auto Cmp = Builder.CreateICmpEQ(toInt8Ptr(TargetTI), toInt8Ptr(GivenTI));
-   Builder.CreateCondBr(Cmp, SuccBB, FailBB);
-
-   Builder.SetInsertPoint(SuccBB);
-   Builder.CreateStore(Builder.getInt64(1),
-                       Builder.CreateStructGEP(Alloc->getAllocatedType(),
-                                               Alloc, 0));
-
-   auto BC = Builder.CreateBitCast(Val, Int8PtrTy);
-   auto Dst = Builder.CreateBitCast(
-      Builder.CreateStructGEP(Alloc->getAllocatedType(), Alloc, 1),
-      Int8PtrTy->getPointerTo());
-
-   Builder.CreateStore(BC, Dst);
-
-   Builder.CreateBr(MergeBB);
-
-   Builder.SetInsertPoint(FailBB);
-   Builder.CreateStore(Builder.getInt64(0),
-                       Builder.CreateStructGEP(Alloc->getAllocatedType(),
-                                               Alloc, 0));
-
-   Builder.CreateBr(MergeBB);
-
-   Builder.SetInsertPoint(MergeBB);
-   return Alloc;
+   return ResultAlloc;
 }
 
 } // namespace il

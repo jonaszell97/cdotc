@@ -52,6 +52,11 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
       if (Obj->isRawEnum())
          return;
 
+      if (Obj->isProtocol()) {
+         Builder.CreateIntrinsicCall(Intrinsic::deinit_existential, Val);
+         return;
+      }
+
       auto deinit = ty->getRecord()->getDeinitializer();
       assert(deinit && "trivially deinitializable type!");
 

@@ -297,13 +297,14 @@ static bool checkProtocolDefaultDecl(SemaPass &SP, ProtocolDecl *P, Decl *D)
       auto Conformances = SP.getContext().getConformanceTable()
                             .getAllConformances(P);
 
+      bool Result = false;
       for (auto &Conf : Conformances) {
          if (checkProtocolDefaultDecl(SP, Conf->getProto(), D)) {
-            return true;
+            Result = true;
          }
       }
 
-      return false;
+      return Result;
    }
 
    D->setIsProtocolDefaultImpl(true);
@@ -754,6 +755,31 @@ void SemaPass::ActOnDecl(DeclContext *Ctx, Decl *D, bool Global)
       addDeclToContext(*Ctx, D);
       break;
    }
+}
+
+static void addImplicitSelf(SemaPass &Sema, RecordDecl *R)
+{
+   auto *SelfII = Sema.getIdentifier("Self");
+   if (R->lookupSingle<AssociatedTypeDecl>(SelfII))
+      return;
+
+   SourceType ActualType;
+   if (!isa<ProtocolDecl>(R)) {
+      ActualType = Sema.getContext().getRecordType(R);
+   }
+
+   auto &Context = Sema.getContext();
+   auto *Self = AssociatedTypeDecl::Create(Context, R->getSourceLoc(),
+                                           nullptr, SelfII,
+                                           ActualType, !isa<ProtocolDecl>(R));
+
+   if (!Self->isImplementation()) {
+      Context.addCovariance(Self, R);
+      Context.getAssociatedType(Self)
+             ->setCanonicalType(Context.getRecordType(R));
+   }
+
+   Sema.ActOnDecl(R, Self);
 }
 
 void SemaPass::ActOnRecordDecl(RecordDecl *R)
@@ -1245,6 +1271,12 @@ static void checkEnumCases(SemaPass &SP, DeclContext *DC,
    llvm::DenseMap<long long, EnumCaseDecl *> caseVals;
 
    auto &EnumVert = LayoutDependency.getOrAddVertex(E);
+
+   // Add a dependency on the existential container decl.
+   auto *Ex = SP.getExistentialContainerDecl();
+   EnumVert.addIncoming(&LayoutDependency.getOrAddVertex(Ex));
+   SP.declareImmediateDecls(Ex, LayoutDependency);
+
    for (const auto &Case : E->getCases()) {
       if (auto expr = Case->getRawValExpr()) {
          expr->setContextualType(CaseValTy);
@@ -1332,6 +1364,7 @@ void SemaPass::declareImmediateDecls(
       return;
 
    DeclScopeRAII DSR(*this, Ctx);
+   addImplicitSelf(*this, Ctx);
 
    StmtOrDecl D = Ctx;
    checkBaseClass(*this, Ctx, LayoutDependency);
@@ -1799,6 +1832,14 @@ DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
       if (!declareStmt(F, arg)) {
          return DeclError();
       }
+
+      if (F->isProtocolRequirement() && !F->isProtocolDefaultImpl()) {
+         QualType Type = arg->getType();
+         if (ContainsAssociatedTypeConstraint(Type)) {
+            cast<ProtocolDecl>(getCurrentRecordCtx()->lookThroughExtension())
+               ->setHasAssociatedTypeConstraint(true);
+         }
+      }
    }
 
    if (auto &Ret = F->getReturnType()) {
@@ -1811,7 +1852,15 @@ DeclResult SemaPass::declareCallableDecl(CallableDecl *F)
          Ret.setResolvedType(Context.getEmptyTupleType());
       }
 
+      checkIfTypeUsableAsDecl(Ret, F);
       F->setIsNoReturn(retTy->isUnpopulatedType());
+
+      if (F->isProtocolRequirement() && !F->isProtocolDefaultImpl()) {
+         if (ContainsAssociatedTypeConstraint(retTy)) {
+            cast<ProtocolDecl>(getCurrentRecordCtx()->lookThroughExtension())
+               ->setHasAssociatedTypeConstraint(true);
+         }
+      }
    }
 
    // Transform the return type into a Future<T>.
@@ -2190,6 +2239,8 @@ DeclResult SemaPass::declareFuncArgDecl(FuncArgDecl *Decl)
       diagnose(Decl, err_generic_error, "function arguments may not be of "
                                         "type 'void'", Loc);
    }
+
+   checkIfTypeUsableAsDecl(declaredType, Decl);
 
    if (auto defaultVal = Decl->getDefaultVal()) {
       DefaultArgumentValueRAII defaultArgumentValueRAII(*this);
@@ -2747,6 +2798,14 @@ DeclResult SemaPass::declarePropDecl(PropDecl *Decl)
    if (!res)
       return Decl;
 
+   if (Decl->isProtocolRequirement() && !Decl->isProtocolDefaultImpl()) {
+      QualType Type = Decl->getType();
+      if (ContainsAssociatedTypeConstraint(Type)) {
+         cast<ProtocolDecl>(getCurrentRecordCtx()->lookThroughExtension())
+            ->setHasAssociatedTypeConstraint(true);
+      }
+   }
+
    if (auto *Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
       Getter->setProperty(true);
@@ -2792,6 +2851,14 @@ DeclResult SemaPass::declareSubscriptDecl(SubscriptDecl *Decl)
    auto res = visitSourceType(Decl, Decl->getType());
    if (!res)
       return Decl;
+
+   if (Decl->isProtocolRequirement() && !Decl->isProtocolDefaultImpl()) {
+      QualType Type = Decl->getType();
+      if (ContainsAssociatedTypeConstraint(Type)) {
+         cast<ProtocolDecl>(getCurrentRecordCtx()->lookThroughExtension())
+            ->setHasAssociatedTypeConstraint(true);
+      }
+   }
 
    if (auto *Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
@@ -3580,10 +3647,10 @@ DeclResult SemaPass::declareStaticIfDecl(StaticIfDecl *Stmt)
       currentScope->setHasUnresolvedStaticCond(true);
 
       IgnoreDiagsRAII IDR(*this);
-      (void) visitDecl(Stmt->getIfDecl());
+      (void) visitStmt(Stmt, Stmt->getIfDecl());
 
       if (auto *Else = Stmt->getElseDecl()) {
-         (void) visitDecl(Else);
+         (void) visitStmt(Stmt, Else);
       }
 
       return Stmt;
@@ -3595,6 +3662,11 @@ DeclResult SemaPass::declareStaticIfDecl(StaticIfDecl *Stmt)
 
    bool CondIsTrue = cast<il::ConstantInt>(res.getValue())->getBoolValue();
    if (auto Template = Stmt->getTemplate()) {
+      if (Template->isInvalid()) {
+         Stmt->setIsInvalid(true);
+         return DeclError();
+      }
+
       // collect the template arguments at the point of instantiation
       MultiLevelFinalTemplateArgList TemplateArgs;
       for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
@@ -3869,6 +3941,19 @@ Module* SemaPass::getPreludeModule()
    return PreludeModule;
 }
 
+Module* SemaPass::getRuntimeModule()
+{
+   if (!RuntimeModule) {
+      IdentifierInfo *Name[] = {
+         getIdentifier("std"), getIdentifier("rt")
+      };
+
+      RuntimeModule = getCompilationUnit().getModuleMgr().GetModule(Name);
+   }
+
+   return RuntimeModule;
+}
+
 Module* SemaPass::getBuiltinModule()
 {
    if (!BuiltinModule) {
@@ -4050,26 +4135,68 @@ StructDecl* SemaPass::getStringViewDecl()
 StructDecl* SemaPass::getTypeInfoDecl()
 {
    if (!TypeInfoDecl) {
-      auto Prelude = getPreludeModule();
-      if (!Prelude)
+      auto Rt = getRuntimeModule();
+      if (!Rt)
          return nullptr;
       
       auto *II = &Context.getIdentifiers().get("TypeInfo");
-      TypeInfoDecl = LookupSingle<StructDecl>(*Prelude->getDecl(), II);
+      TypeInfoDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
    }
 
    return TypeInfoDecl;
 }
 
+StructDecl* SemaPass::getValueWitnessTableDecl()
+{
+   if (!ValueWitnessTableDecl) {
+      auto Rt = getRuntimeModule();
+      if (!Rt)
+         return nullptr;
+
+      auto *II = &Context.getIdentifiers().get("ValueWitnessTable");
+      ValueWitnessTableDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
+   }
+
+   return ValueWitnessTableDecl;
+}
+
+StructDecl* SemaPass::getProtocolConformanceDecl()
+{
+   if (!ProtocolConformanceDecl) {
+      auto Rt = getRuntimeModule();
+      if (!Rt)
+         return nullptr;
+
+      auto *II = &Context.getIdentifiers().get("ProtocolConformance");
+      ProtocolConformanceDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
+   }
+
+   return ProtocolConformanceDecl;
+}
+
+StructDecl* SemaPass::getExistentialContainerDecl()
+{
+   if (!ExistentialContainerDecl) {
+      auto Rt = getRuntimeModule();
+      if (!Rt)
+         return nullptr;
+
+      auto *II = &Context.getIdentifiers().get("ExistentialContainer");
+      ExistentialContainerDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
+   }
+
+   return ExistentialContainerDecl;
+}
+
 StructDecl* SemaPass::getBoxDecl()
 {
    if (!BoxDecl) {
-      auto Prelude = getPreludeModule();
-      if (!Prelude)
+      auto Rt = getRuntimeModule();
+      if (!Rt)
          return nullptr;
       
       auto *II = &Context.getIdentifiers().get("Box");
-      BoxDecl = LookupSingle<StructDecl>(*Prelude->getDecl(), II);
+      BoxDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
    }
 
    return BoxDecl;

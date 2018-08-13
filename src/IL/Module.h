@@ -28,9 +28,6 @@ class CompilerInstance;
 
 namespace il {
 
-class VTable;
-class PTable;
-class TypeInfo;
 class ConstantString;
 class Context;
 
@@ -45,14 +42,6 @@ public:
    using glob_const_iterator  = GlobalList::const_iterator;
 
    using RecordList           = llvm::DenseSet<ast::RecordDecl*>;
-   using TypeInfoMap          = llvm::DenseMap<ast::RecordDecl*,
-                                               GlobalVariable*>;
-
-   using VTableMap            = llvm::DenseMap<ast::RecordDecl*,
-                                               GlobalVariable*>;
-
-   using PTableMap            = llvm::DenseMap<ast::RecordDecl*,
-                                               GlobalVariable*>;
 
    explicit Module(Context &Ctx,
                    size_t fileID = 0,
@@ -76,13 +65,8 @@ public:
    void addRecord(ast::RecordDecl *R);
    const RecordList &getRecords() const { return Records; }
 
-   GlobalVariable *getTypeInfo(ast::RecordDecl *R) const;
    GlobalVariable *getVTable(ast::RecordDecl *R) const;
-   GlobalVariable *getPTable(ast::RecordDecl *R) const;
-
-   void addTypeInfo(ast::RecordDecl *R, GlobalVariable *TI);
    void addVTable(ast::RecordDecl *R, GlobalVariable *VT);
-   void addPTable(ast::RecordDecl *R, GlobalVariable *PT);
 
    ValueSymbolTable* getFunSymTab() const
    { return Functions.getSymTab().get(); }
@@ -154,10 +138,6 @@ protected:
    FunctionList Functions;
    GlobalList GlobalVariables;
    RecordList Records;
-
-   TypeInfoMap TIMap;
-   VTableMap   VTMap;
-   PTableMap   PTMap;
 
    Context &Ctx;
 

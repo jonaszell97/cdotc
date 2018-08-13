@@ -275,7 +275,7 @@ void ILVerifyJob::run()
       ILGen.VerifyFunction(&Fn);
    }
 
-   if (!VP.isValid()||true) {
+   if (!VP.isValid()) {
       std::error_code EC;
       llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/out/_error.cdotil",
                               EC, llvm::sys::fs::F_RW);

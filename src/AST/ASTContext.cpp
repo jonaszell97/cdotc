@@ -184,6 +184,32 @@ ASTContext::getProtocolDefaultImpls(const ProtocolDecl *P)
    return &It->getSecond();
 }
 
+void ASTContext::addProtocolImpl(const RecordDecl *R,
+                                 const NamedDecl *Req,
+                                 NamedDecl *Impl) {
+   ProtocolImplMap[R][Req] = Impl;
+}
+
+NamedDecl*
+ASTContext::getProtocolImpl(const RecordDecl *R, const NamedDecl *Req)
+{
+   auto It = ProtocolImplMap.find(R);
+   if (It == ProtocolImplMap.end())
+      return nullptr;
+
+   return It->getSecond()[Req];
+}
+
+const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+ASTContext::getProtocolImpls(const RecordDecl *R)
+{
+   auto It = ProtocolImplMap.find(R);
+   if (It == ProtocolImplMap.end())
+      return nullptr;
+
+   return &It->getSecond();
+}
+
 PointerType* ASTContext::getPointerType(QualType pointeeType) const
 {
    llvm::FoldingSetNodeID ID;
@@ -361,12 +387,12 @@ FunctionType* ASTContext::getFunctionType(QualType returnType,
    if (FunctionType *Ptr = FunctionTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   bool Dependent = returnType->isDependentType();
+   TypeProperties Props = returnType->properties();
    bool Canonical = returnType.isCanonical();
 
    for (auto &arg : argTypes) {
       Canonical &= arg.isCanonical();
-      Dependent |= arg->isDependentType();
+      Props |= arg->properties();
    }
 
    Type *CanonicalType = nullptr;
@@ -392,7 +418,7 @@ FunctionType* ASTContext::getFunctionType(QualType returnType,
    void *Mem = Allocate(SizeToAlloc, TypeAlignment);
    auto FnTy = new(Mem) FunctionType(returnType, argTypes, paramInfo,
                                      (FunctionType::ExtFlags)flags,
-                                     CanonicalType, Dependent);
+                                     CanonicalType, Props);
 
    FunctionTypes.InsertNode(FnTy, insertPos);
    return FnTy;
@@ -425,12 +451,12 @@ LambdaType* ASTContext::getLambdaType(QualType returnType,
    if (LambdaType *Ptr = LambdaTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   bool Dependent = returnType->isDependentType();
+   TypeProperties Props = returnType->properties();
    bool Canonical = returnType.isCanonical();
 
    for (auto &arg : argTypes) {
       Canonical &= arg.isCanonical();
-      Dependent |= arg->isDependentType();
+      Props |= arg->properties();
    }
 
    Type *CanonicalType = nullptr;
@@ -455,7 +481,7 @@ LambdaType* ASTContext::getLambdaType(QualType returnType,
    void *Mem = Allocate(SizeToAlloc, TypeAlignment);
    auto New = new(Mem) LambdaType(returnType, argTypes, paramInfo,
                                   (FunctionType::ExtFlags)flags,
-                                  CanonicalType, Dependent);
+                                  CanonicalType, Props);
 
    LambdaTypes.InsertNode(New, insertPos);
    return New;
@@ -546,12 +572,12 @@ ASTContext::getTupleType(ArrayRef<QualType> containedTypes) const
    if (TupleType *Ptr = TupleTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   bool Dependent = false;
+   TypeProperties Props;
    bool Canonical = true;
 
    for (auto &arg : containedTypes) {
       Canonical &= arg.isCanonical();
-      Dependent |= arg->isDependentType();
+      Props |= arg->properties();
    }
 
    Type *CanonicalType = nullptr;
@@ -573,32 +599,10 @@ ASTContext::getTupleType(ArrayRef<QualType> containedTypes) const
 
    void *Mem = Allocate(SizeToAlloc, TypeAlignment);
    auto TupTy = new(Mem) TupleType(containedTypes, CanonicalType,
-                                   Dependent);
+                                   Props);
 
    TupleTypes.InsertNode(TupTy, insertPos);
    return TupTy;
-}
-
-static void addArg(const sema::ResolvedTemplateArg &arg,
-                   std::vector<QualType> &vec) {
-   if (arg.isVariadic()) {
-      for (auto &VA : arg.getVariadicArgs())
-         addArg(VA, vec);
-   }
-   else if (arg.isType()) {
-      vec.push_back(arg.getType());
-   }
-}
-
-static std::vector<QualType> getTypeTemplateParams(
-   const sema::FinalTemplateArgumentList &list)
-{
-   std::vector<QualType> vec;
-   for (auto &arg : list) {
-      addArg(arg, vec);
-   }
-
-   return vec;
 }
 
 RecordType* ASTContext::getRecordType(RecordDecl *R) const
@@ -610,7 +614,7 @@ RecordType* ASTContext::getRecordType(RecordDecl *R) const
    if (auto *Ptr = RecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   RecordType *New = new(*this, TypeAlignment) RecordType(R, {});
+   RecordType *New = new(*this, TypeAlignment) RecordType(R);
    RecordTypes.InsertNode(New, insertPos);
 
    return New;
@@ -626,12 +630,7 @@ ASTContext::getDependentRecordType(RecordDecl *R,
    if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto typeParams = getTypeTemplateParams(*args);
-   void *Mem = Allocate(sizeof(DependentRecordType)
-                        + typeParams.size() * sizeof(QualType),
-                        TypeAlignment);
-
-   auto New = new(Mem) DependentRecordType(R, args, typeParams);
+   auto New = new(*this, TypeAlignment) DependentRecordType(R, args);
 
    DependentRecordTypes.InsertNode(New, insertPos);
    return New;

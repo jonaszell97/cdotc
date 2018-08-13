@@ -53,9 +53,11 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
       TypeToCheck = lhs->stripReference();
    }
 
+   Pred->getRHS()->setSemanticallyChecked(true);
+
    switch (PredExpr->getKind()) {
    case ConstraintExpr::Type: {
-      auto RhsResult = visitSourceType(Pred,
+      auto RhsResult = visitSourceType(Pred->getRHS(),
                                        Pred->getRHS()->getTypeConstraint());
 
       if (!RhsResult)
@@ -136,7 +138,6 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
       break;
    }
 
-   Pred->getRHS()->setSemanticallyChecked(true);
    Pred->setIsCompileTimeCheck(CompileTimeCheck);
    Pred->setResult(Pred->isNegated() ? !result : result);
 
@@ -399,7 +400,7 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 
    Cast->setExprType(to);
 
-   // instantiate Option if a failable cast is used
+   // instantiate Option if a fallible cast is used
    if (Cast->getStrength() == CastStrength::Fallible) {
       auto Opt = getOptionDecl();
       if (!Opt) {
@@ -420,14 +421,17 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
       }
 
       for (auto &Step : ConvSeq.getSteps()) {
-         if (Step.getKind() == CastKind::DynCast) {
+         switch (Step.getKind()) {
+         case CastKind::DynCast:
+         case CastKind::ExistentialCastFallible:
+         case CastKind::ExistentialUnwrap:
             Step.setResultType(Cast->getExprType());
             break;
-         }
-         else {
-            assert((Step.getKind() == CastKind::NoOp
-                    || Step.getKind() == CastKind::LValueToRValue) &&
-                   "invalid failible conversion sequence!");
+         case CastKind::NoOp:
+         case CastKind::LValueToRValue:
+            break;
+         default:
+            llvm_unreachable("invalid failible conversion sequence!");
          }
       }
    }

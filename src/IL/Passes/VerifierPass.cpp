@@ -453,6 +453,7 @@ bool compatibleArgCount(BasicBlock::ArgList const &Needed,
    return givenCnt == neededCnt;
 }
 
+LLVM_ATTRIBUTE_UNUSED
 bool compatibleArgCount(FunctionType const* FuncTy,
                         llvm::ArrayRef<il::Value *> Given) {
    bool vararg = FuncTy->isCStyleVararg();
@@ -480,6 +481,9 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
       "function", I);
 
    auto F = I.getCalledFunction();
+   if (!F)
+      return;
+
    errorIf(F->getParent() != I.getParent()->getParent()->getParent(),
            "referencing function in a different module", I, *F);
 
@@ -495,6 +499,21 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    for (const auto &needed : NeededArgs) {
       auto &given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
+              "invalid argument type for argument " + std::to_string(i), I);
+
+      ++i;
+   }
+}
+
+void VerifierPass::visitVirtualInvokeInst(const il::VirtualInvokeInst &I)
+{
+   auto NeededArgs = I.getFunctionType()->getParamTypes().drop_front(1);
+   auto GivenArgs = I.getArgs();
+
+   size_t i = 0;
+   for (const auto &needed : NeededArgs) {
+      auto &given = GivenArgs[i];
+      errorIf(!typesCompatible(needed, given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
 
       ++i;
@@ -519,6 +538,9 @@ void VerifierPass::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
 void VerifierPass::visitCallInst(CallInst const& I)
 {
    auto F = I.getCalledFunction();
+   if (!F)
+      return;
+
    errorIf(F->getParent() != I.getParent()->getParent()->getParent(),
            "referencing function in a different module", I, *F);
 
@@ -540,19 +562,10 @@ void VerifierPass::visitCallInst(CallInst const& I)
    }
 }
 
-void  VerifierPass::visitIndirectCallInst(IndirectCallInst const& I)
+void  VerifierPass::visitVirtualCallInst(VirtualCallInst const& I)
 {
-   auto F = I.getCalledFunction();
-   errorIf(!(F->getType()->isFunctionType()), "called value is not a "
-      "function", I);
-
-   auto NeededArgs = F->getType()->asFunctionType()->getParamTypes();
+   auto NeededArgs = I.getFunctionType()->getParamTypes().drop_front(1);
    auto GivenArgs = I.getArgs();
-
-   if (!compatibleArgCount(F->getType()->asFunctionType(), GivenArgs)) {
-      errorIf(true, "invalid number of arguments for call", I);
-      return;
-   }
 
    size_t i = 0;
    for (const auto &needed : NeededArgs) {
@@ -781,7 +794,7 @@ void VerifierPass::visitUnionCastInst(UnionCastInst const& I)
 
 }
 
-void VerifierPass::visitProtoCastInst(ProtoCastInst const& I)
+void VerifierPass::visitExistentialInitInst(ExistentialInitInst const& I)
 {
 
 }
@@ -794,6 +807,19 @@ void VerifierPass::visitExceptionCastInst(ExceptionCastInst const& I)
 void  VerifierPass::visitDynamicCastInst(const DynamicCastInst &I)
 {
 
+}
+
+void VerifierPass::visitExistentialCastInst(const ExistentialCastInst &I)
+{
+   switch (I.getKind()) {
+   case CastKind::ExistentialCast:
+   case CastKind::ExistentialCastFallible:
+   case CastKind::ExistentialUnwrap:
+      return;
+   default:
+      errorIf(true, "not an existential cast kind!", I);
+      break;
+   }
 }
 
 void VerifierPass::visitDebugLocInst(const DebugLocInst &I)

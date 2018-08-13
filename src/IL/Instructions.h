@@ -413,10 +413,11 @@ class ImmutableCallSite;
 
 class CallInst: public Instruction, public MultiOperandInst {
 public:
-   CallInst(Function *func,
-            llvm::ArrayRef<Value*> args,
-            BasicBlock *parent);
+   CallInst(Value *Callee,
+            llvm::ArrayRef<Value*> Args,
+            BasicBlock *Parent);
 
+   Value *getCallee() const;
    Function *getCalledFunction() const;
    Method *getCalledMethod() const;
 
@@ -434,28 +435,23 @@ public:
    CallSite getAsCallSite();
    ImmutableCallSite getAsImmutableCallSite() const;
 
-   bool isVirtual() const { return CallBits.IsVirtual; }
-   void setVirtual(bool V) { CallBits.IsVirtual = V; }
-
-   bool isProtocolCall() const { return CallBits.IsProtocolCall; }
-   void setProtocolCall(bool P) { CallBits.IsProtocolCall = P; }
-
    bool isTaggedDeinit() const;
 
 protected:
    CallInst(TypeID id,
             Context &Ctx,
-            llvm::ArrayRef<Value*> args,
+            ArrayRef<Value*> args,
             BasicBlock *parent);
 
    CallInst(TypeID id,
             Function *func,
-            llvm::ArrayRef<Value*> args,
+            ArrayRef<Value*> args,
             BasicBlock *parent);
 
    CallInst(TypeID id,
             Value *func,
-            llvm::ArrayRef<Value*> args,
+            FunctionType *FuncTy,
+            ArrayRef<Value*> args,
             BasicBlock *parent);
 
 public:
@@ -466,27 +462,33 @@ public:
    }
 };
 
-class IndirectCallInst: public CallInst {
-public:
-   IndirectCallInst(Value *Func,
-                    llvm::ArrayRef<Value*> args,
-                    BasicBlock *parent);
+class VirtualCallInst: public CallInst {
+   FunctionType *FnTy;
+   unsigned Offset;
 
-   Value const *getCalledFunction() const { return Operands[numOperands - 1]; }
+public:
+   VirtualCallInst(Value *VTableOwner,
+                   FunctionType *FnTy,
+                   unsigned Offset,
+                   ArrayRef<Value*> args,
+                   BasicBlock *parent);
+
+   FunctionType *getFunctionType() const { return FnTy; }
+   unsigned getOffset() const { return Offset; }
 
    static bool classof(Value const *T)
    {
-      return T->getTypeID() == IndirectCallInstID;
+      return T->getTypeID() == VirtualCallInstID;
    }
 };
 
 class LambdaCallInst: public CallInst {
 public:
    LambdaCallInst(Value *lambda,
-                  llvm::ArrayRef<Value*> args,
+                  ArrayRef<Value*> args,
                   BasicBlock *parent);
 
-   Value const* getLambda() const { return Operands[numOperands - 1]; }
+   Value *getLambda() const { return Operands[numOperands - 1]; }
 
    static bool classof(Value const *T)
    {
@@ -496,8 +498,8 @@ public:
 
 class InvokeInst: public TerminatorInst, public MultiOperandInst {
 public:
-   InvokeInst(Function *func,
-              llvm::ArrayRef<Value*> args,
+   InvokeInst(Value *Callee,
+              ArrayRef<Value*> args,
               BasicBlock *NormalContinuation,
               BasicBlock *LandingPad,
               BasicBlock *parent);
@@ -505,6 +507,7 @@ public:
    BasicBlock *getNormalContinuation() const { return NormalContinuation; }
    BasicBlock *getLandingPad() const { return LandingPad; }
 
+   Value *getCallee() const;
    Function *getCalledFunction() const;
    Method *getCalledMethod() const;
 
@@ -521,12 +524,6 @@ public:
 
    CallSite getAsCallSite();
    ImmutableCallSite getAsImmutableCallSite() const;
-
-   bool isVirtual() const { return InvokeBits.IsVirtual; }
-   void setVirtual(bool V) { InvokeBits.IsVirtual = V; }
-
-   bool isProtocolCall() const { return InvokeBits.IsProtocolCall; }
-   void setProtocolCall(bool P) { InvokeBits.IsProtocolCall = P; }
 
    BasicBlock *getSuccessorAtImpl(size_t idx) const
    {
@@ -541,7 +538,7 @@ public:
 
 protected:
    InvokeInst(TypeID id,
-              Function *F,
+              Value *F,
               llvm::ArrayRef<Value*> args,
               BasicBlock *NormalContinuation,
               BasicBlock *LandingPad,
@@ -553,7 +550,30 @@ protected:
 public:
    static bool classof(Value const* T)
    {
-      return T->getTypeID() == InvokeInstID;
+      return T->getTypeID() == InvokeInstID
+         || T->getTypeID() == VirtualInvokeInstID;
+   }
+};
+
+class VirtualInvokeInst: public InvokeInst {
+   FunctionType *FnTy;
+   unsigned Offset;
+
+public:
+   VirtualInvokeInst(Value *VTableOwner,
+                     FunctionType *FnTy,
+                     unsigned Offset,
+                     ArrayRef<Value*> args,
+                     BasicBlock *NormalContinuation,
+                     BasicBlock *LandingPad,
+                     BasicBlock *parent);
+
+   FunctionType *getFunctionType() const { return FnTy; }
+   unsigned getOffset() const { return Offset; }
+
+   static bool classof(Value const *T)
+   {
+      return T->getTypeID() == VirtualInvokeInstID;
    }
 };
 
@@ -1267,17 +1287,25 @@ public:
    }
 };
 
-class ProtoCastInst: public CastInst {
+class ExistentialInitInst: public Instruction, public MultiOperandInst {
 public:
-   ProtoCastInst(Value *target,
-                 QualType toType,
-                 BasicBlock *parent);
+   ExistentialInitInst(Value *target,
+                       QualType toType,
+                       il::Value *ValueTypeInfo,
+                       il::GlobalVariable *ProtocolTypeInfo,
+                       BasicBlock *parent);
 
-   bool isWrap() const;
+   Value *getTarget() const { return Operands[0]; }
+   Value *getValueTypeInfo() const;
+   GlobalVariable *getProtocolTypeInfo() const;
+
+   op_iterator op_begin_impl() { return &Operands[0]; }
+   op_const_iterator op_begin_impl() const { return &Operands[0]; }
+   unsigned getNumOperandsImpl() const { return numOperands; }
 
    static bool classof(Value const* T)
    {
-      return T->getTypeID() == ProtoCastInstID;
+      return T->getTypeID() == ExistentialInitInstID;
    }
 };
 
@@ -1313,19 +1341,40 @@ public:
 };
 
 class DynamicCastInst: public CastInst {
-   ast::ClassDecl *TargetTy;
+   il::Value *TargetTypeInfo;
 
 public:
    DynamicCastInst(Value *target,
-                   ast::ClassDecl *TargetTy,
+                   il::Value *TargetTypeInfo,
                    QualType Type,
                    BasicBlock *parent);
 
-   ast::ClassDecl *getTargetType() const { return TargetTy; }
+   il::Value *getTargetTypeInfo() const { return TargetTypeInfo; }
+   unsigned getNumOperandsImpl() const { return 2; }
 
    static bool classof(Value const* T)
    {
       return T->getTypeID() == DynamicCastInstID;
+   }
+};
+
+class ExistentialCastInst: public CastInst {
+   il::Value *TargetTypeInfo;
+   CastKind Kind;
+
+public:
+   ExistentialCastInst(Value *Target,
+                       il::Value *TargetTypeInfo,
+                       CastKind Kind,
+                       QualType TargetType,
+                       BasicBlock *parent);
+
+   Value *getTargetTypeInfo() const { return TargetTypeInfo; }
+   CastKind getKind() const { return Kind; }
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == ExistentialCastInstID;
    }
 };
 

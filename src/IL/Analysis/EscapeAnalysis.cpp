@@ -117,7 +117,7 @@ bool EscapeAnalysis::visit(il::Value &V, Value *ValToCheck)
       return false;
    }
    case Value::EnumInitInstID:
-   case Value::IndirectCallInstID: {
+   case Value::VirtualCallInstID: {
       for (auto &arg : cast<Instruction>(V).getOperands()) {
          if (arg == ValToCheck)
             return true;

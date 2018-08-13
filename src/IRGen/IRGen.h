@@ -181,6 +181,16 @@ private:
    llvm::Constant *getCleanupExceptionFn();
    llvm::Constant *getExitFn();
 
+   llvm::Constant *getInitializeExistentialFn();
+   llvm::Constant *getDeinitializeExistentialFn();
+   llvm::Constant *getCopyExistentialFn();
+   llvm::Constant *getCastExistentialFn();
+   llvm::Constant *getCastExistentialFallibleFn();
+   llvm::Constant *getUnwrapExistentialFn();
+   llvm::Constant *getCopyClassFn();
+
+   llvm::Constant *getDynamicDownCastFn();
+
    llvm::Constant *getPrintfFn();
    llvm::Constant *getMemCmpFn();
    llvm::Constant *getIntPowFn(QualType IntTy);
@@ -247,9 +257,9 @@ private:
    llvm::PointerType *EmptyArrayPtrTy;
    llvm::Type *VoidTy;
 
-   llvm::StructType *ProtocolTy;
+   llvm::StructType *ExistentialContainerTy = nullptr;
+   llvm::StructType *TypeInfoTy = nullptr;
    llvm::StructType *ErrorTy;
-   llvm::StructType *TypeInfoTy;
    llvm::StructType *BoxTy;
    llvm::StructType *LambdaTy;
    llvm::Type *EmptyTupleTy;
@@ -272,6 +282,16 @@ private:
    llvm::Constant *PrintExceptionFn;
    llvm::Constant *CleanupExceptionFn;
    llvm::Constant *ExitFn;
+
+   llvm::Constant *InitializeExistentialFn;
+   llvm::Constant *DeinitializeExistentialFn;
+   llvm::Constant *CopyExistentialFn;
+   llvm::Constant *CopyClassFn;
+   llvm::Constant *CastExistentialFn;
+   llvm::Constant *CastExistentialFallibleFn;
+   llvm::Constant *UnwrapExistentialFn;
+
+   llvm::Constant *DynamicDownCastFn;
 
    llvm::Constant *WordOne;
    llvm::Constant *WordZero;

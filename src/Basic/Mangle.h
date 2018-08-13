@@ -42,6 +42,9 @@ public:
                      llvm::raw_ostream &OS) const;
 
    void mangleVTable(const ast::RecordDecl *R, llvm::raw_ostream &OS) const;
+   void manglePTable(const ast::RecordDecl *R, const ast::ProtocolDecl *P,
+                     llvm::raw_ostream &OS) const;
+
    void mangleTypeInfo(const QualType &T, llvm::raw_ostream &OS) const;
    void mangleTypeName(const QualType &T, llvm::raw_ostream &OS) const;
 

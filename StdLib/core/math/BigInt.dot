@@ -547,7 +547,11 @@ extend BigInt with Hashable {
 }
 
 extend BigInt with StringRepresentable {
-    def toString<let Base = 10>() -> String {
+    def toString() -> String {
+        return toString<10>()
+    }
+
+    def toString<let Base>() -> String {
         var s = ""
         if sign == .negative {
             s += "-"

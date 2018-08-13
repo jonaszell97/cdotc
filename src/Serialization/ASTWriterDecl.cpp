@@ -153,7 +153,10 @@ void ASTDeclWriter::visit(Decl *D)
       auto *TI =Sema.getILGen().GetTypeInfo(Sema.getContext().getRecordType(R));
       Record.AddILConstant(TI);
 
-      auto *VT = CI.getCompilationModule()->getILModule()->getVTable(R);
+      il::Constant *VT = nullptr;
+      if (auto *C = dyn_cast<ClassDecl>(R))
+         VT = CI.getILGen().GetVTable(C);
+
       Record.AddILConstant(VT);
 
       if (auto *P = dyn_cast<ProtocolDecl>(D)) {
@@ -847,7 +850,7 @@ void ASTDeclWriter::visitUnionDecl(UnionDecl *D)
 void ASTDeclWriter::visitProtocolDecl(ProtocolDecl *D)
 {
    visitRecordDecl(D);
-   Record.push_back(D->isAny());
+   Record.push_back(D->isAny() | (D->hasAssociatedTypeConstraint() << 1));
 }
 
 void ASTDeclWriter::visitExtensionDecl(ExtensionDecl *D)
@@ -927,6 +930,9 @@ void ASTDeclWriter::visitMethodDecl(MethodDecl *D)
    Record.push_back(D->getMethodID());
 
    Record.AddSourceLocation(D->getBodyInstantiationLoc());
+
+   auto &ILGen = Writer.getWriter().getCompilerInstance().getILGen();
+   Record.push_back(ILGen.getProtocolMethodOffset(D));
 }
 
 void ASTDeclWriter::visitInitDecl(InitDecl *D)

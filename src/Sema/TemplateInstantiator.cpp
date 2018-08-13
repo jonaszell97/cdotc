@@ -1622,11 +1622,18 @@ MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
 AssociatedTypeDecl*
 InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
 {
+   SourceType ActualType;
+   if (node->getDeclName().isStr("Self") && node->isImplementation()) {
+      ActualType = Context.getRecordType(InstantiatingRecord);
+   }
+   else {
+      ActualType = visit(node->getActualType());
+   }
+
    auto Inst = AssociatedTypeDecl::Create(Context, node->getSourceLoc(),
                                           node->getProtoSpecInfo(),
                                           node->getDeclName(),
-                                          visit(node->getActualType()),
-                                          node->isImplementation());
+                                          ActualType, node->isImplementation());
 
    Context.setConstraints(Inst, cloneVector(node->getConstraints()));
    ActOnDecl(Inst);
@@ -2451,31 +2458,31 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
    call->setIsPointerAccess(node->isPointerAccess());
    call->setLeadingDot(node->hasLeadingDot());
 
-   if (!node->isTypeDependent()) {
-      assert(node->isValueDependent() && "instantiating non-dependent "
-                                         "expression!");
-
-      call->setKind(node->getKind());
-      call->setExprType(node->getExprType());
-
-      switch (node->getKind()) {
-      case CallKind::Builtin:
-         call->setBuiltinKind(node->getBuiltinKind());
-         break;
-      case CallKind::NamedFunctionCall:
-      case CallKind::MethodCall:
-      case CallKind::StaticMethodCall:
-      case CallKind::InitializerCall:
-      case CallKind::CallOperator:
-         call->setFunc(node->getFunc());
-         break;
-      case CallKind::UnionInitializer:
-         call->setUnion(node->getUnion());
-         break;
-      default:
-         break;
-      }
-   }
+//   if (!node->isTypeDependent()) {
+//      assert(node->isValueDependent() && "instantiating non-dependent "
+//                                         "expression!");
+//
+//      call->setKind(node->getKind());
+//      call->setExprType(node->getExprType());
+//
+//      switch (node->getKind()) {
+//      case CallKind::Builtin:
+//         call->setBuiltinKind(node->getBuiltinKind());
+//         break;
+//      case CallKind::NamedFunctionCall:
+//      case CallKind::MethodCall:
+//      case CallKind::StaticMethodCall:
+//      case CallKind::InitializerCall:
+//      case CallKind::CallOperator:
+//         call->setFunc(node->getFunc());
+//         break;
+//      case CallKind::UnionInitializer:
+//         call->setUnion(node->getUnion());
+//         break;
+//      default:
+//         break;
+//      }
+//   }
 
    return call;
 }
@@ -3229,10 +3236,6 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
 
    Instantiator.ActOnDecl(Inst);
    SP.registerDelayedInstantiation(Inst, POI);
-
-   if (Inst->getFullName()=="std.prelude.ReverseIterator<RandomAccessCollection>") {
-       int i=3; //CBP
-   }
 
    // Enqueue the instantiation for declaration and sema checking.
    PendingInstantiations.push(Inst);

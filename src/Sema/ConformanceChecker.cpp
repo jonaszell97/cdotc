@@ -158,9 +158,9 @@ private:
    bool checkTypeCompatibility(QualType given, SourceType &needed,
                                NamedDecl *LookupDecl);
 
-   bool checkIfImplicitConformance(RecordDecl *Rec,
-                                   ProtocolDecl *Proto,
-                                   MethodDecl& M);
+   MethodDecl *checkIfImplicitConformance(RecordDecl *Rec,
+                                          ProtocolDecl *Proto,
+                                          MethodDecl& M);
 
    NamedDecl *getDefaultImpl(NamedDecl *ND, ProtocolDecl *Proto);
 
@@ -171,6 +171,7 @@ private:
    NamedDecl *checkIfProtocolDefaultImpl(RecordDecl *Rec, ProtocolDecl *Proto,
                                          NamedDecl *D);
 
+   void addProtocolImpl(RecordDecl *R, NamedDecl *Req, NamedDecl *Impl);
    void genericError(RecordDecl *Rec, ProtocolDecl *P);
 };
 
@@ -222,11 +223,11 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
    if (maybeInstantiateType(needed, LookupDecl))
       return true;
 
-   if (needed->isDependentType()) {
+   if (needed->isDependentType() || needed->properties().containsAssociatedType()) {
       TypeSubstVisitor.setLookupDecl(LookupDecl);
       needed = TypeSubstVisitor.visit(needed);
    }
-   if (given->isDependentType()) {
+   if (given->isDependentType() || !given->properties().containsAssociatedType()) {
       TypeSubstVisitor.setLookupDecl(LookupDecl);
       given = TypeSubstVisitor.visit(given);
    }
@@ -451,11 +452,11 @@ void ConformanceCheckerImpl::checkSingleConformance(RecordDecl *Rec,
    checkConformance(Rec, AllConformances);
 }
 
-bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
-                                                        ProtocolDecl *Proto,
-                                                        MethodDecl &M) {
+MethodDecl *ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
+                                                           ProtocolDecl *Proto,
+                                                           MethodDecl &M) {
    if (!Proto->isGlobalDecl())
-      return false;
+      return nullptr;
 
    if (Proto == SP.getEquatableDecl()) {
       IdentifierInfo &II = SP.getContext().getIdentifiers().get("==");
@@ -474,26 +475,26 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
                            /*Equatable*/ 0, F->getDeclName(),
                            F->getSourceLoc());
 
-               return false;
+               return nullptr;
             }
          }
 
          // Don't actually instantiate if we're checking a protocol.
          if (isa<ProtocolDecl>(Rec))
-            return true;
+            return &M;
 
-         SP.addImplicitConformance(Rec, ImplicitConformanceKind::Equatable);
-         return true;
+         return SP.addImplicitConformance(Rec,
+                                          ImplicitConformanceKind::Equatable);
       }
    }
    else if (Proto == SP.getHashableDecl()) {
       if (M.getDeclName().isStr("hashValue") && M.getArgs().size() == 1) {
          // Don't actually instantiate if we're checking a protocol.
          if (isa<ProtocolDecl>(Rec))
-            return true;
+            return &M;
 
-         SP.addImplicitConformance(Rec, ImplicitConformanceKind::Hashable);
-         return true;
+         return SP.addImplicitConformance(Rec,
+                                          ImplicitConformanceKind::Hashable);
       }
    }
    else if (Proto == SP.getStringRepresentableDecl()) {
@@ -504,12 +505,10 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
       if (M.getDeclName() == DN) {
          // Don't actually instantiate if we're checking a protocol.
          if (isa<ProtocolDecl>(Rec))
-            return true;
+            return &M;
 
-         SP.addImplicitConformance(
+         return SP.addImplicitConformance(
             Rec, ImplicitConformanceKind::StringRepresentable);
-
-         return true;
       }
    }
    else if (Proto == SP.getCopyableDecl()) {
@@ -524,20 +523,20 @@ bool ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
                            3 /*Copyable*/, F->getDeclName(),
                            F->getSourceLoc());
 
-               return false;
+               return nullptr;
             }
          }
 
          // Don't actually instantiate if we're checking a protocol.
          if (isa<ProtocolDecl>(Rec))
-            return true;
+            return &M;
 
-         SP.addImplicitConformance(Rec, ImplicitConformanceKind::Copyable);
-         return true;
+         return SP.addImplicitConformance(Rec,
+                                          ImplicitConformanceKind::Copyable);
       }
    }
 
-   return false;
+   return nullptr;
 }
 
 NamedDecl* ConformanceCheckerImpl::getDefaultImpl(NamedDecl *ND,
@@ -591,6 +590,9 @@ NamedDecl *ConformanceCheckerImpl::checkIfProtocolDefaultImpl(RecordDecl *Rec,
    DefaultImpls.insert(Inst.get());
    FoundChanges = true;
 
+   addProtocolImpl(Rec, &M, Inst.get());
+   addProtocolImpl(Rec, Impl, Inst.get());
+
    return Inst.get();
 }
 
@@ -598,6 +600,7 @@ NamedDecl*
 ConformanceCheckerImpl::checkIfProtocolDefaultImpl(RecordDecl *Rec,
                                                    ProtocolDecl *Proto,
                                                    NamedDecl *D) {
+   // FIXME this also finds constrained implementations!
    NamedDecl *Impl = getDefaultImpl(D, Proto);
    if (!Impl)
       return nullptr;
@@ -621,6 +624,9 @@ ConformanceCheckerImpl::checkIfProtocolDefaultImpl(RecordDecl *Rec,
 
    FoundChanges = true;
    DefaultImpls.insert(decl);
+
+   addProtocolImpl(Rec, D, decl);
+   addProtocolImpl(Rec, Impl, decl);
 
    return decl;
 }
@@ -1001,6 +1007,38 @@ void ConformanceCheckerImpl::inheritAttributes(NamedDecl *Req, NamedDecl *Impl)
    }
 }
 
+void ConformanceCheckerImpl::addProtocolImpl(RecordDecl *R, NamedDecl *Req,
+                                             NamedDecl *Impl) {
+   SP.getContext().addProtocolImpl(Rec, Req, Impl);
+
+   if (auto *Prop = dyn_cast<PropDecl>(Req)) {
+      auto *FoundProp = cast<PropDecl>(Impl);
+      if (auto *M = FoundProp->getGetterMethod()) {
+         SP.getContext().addProtocolImpl(Rec,
+                                         Prop->getGetterMethod(),
+                                         M);
+      }
+      if (auto *M = FoundProp->getSetterMethod()) {
+         SP.getContext().addProtocolImpl(Rec,
+                                         Prop->getSetterMethod(),
+                                         M);
+      }
+   }
+   else if (auto *S = dyn_cast<SubscriptDecl>(Req)) {
+      auto *FoundSub = cast<SubscriptDecl>(Impl);
+      if (auto *M = FoundSub->getGetterMethod()) {
+         SP.getContext().addProtocolImpl(Rec,
+                                         S->getGetterMethod(),
+                                         M);
+      }
+      if (auto *M = FoundSub->getSetterMethod()) {
+         SP.getContext().addProtocolImpl(Rec,
+                                         S->getSetterMethod(),
+                                         M);
+      }
+   }
+}
+
 bool ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
                                              ProtocolDecl *Proto,
                                              NamedDecl *Req) {
@@ -1012,6 +1050,8 @@ bool ConformanceCheckerImpl::checkSingleDecl(RecordDecl *Rec,
       return true;
 
    inheritAttributes(Req, Impl);
+   addProtocolImpl(Rec, Req, Impl);
+
    return true;
 }
 
@@ -1393,8 +1433,8 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
          if (auto *Impl = checkIfProtocolDefaultImpl(Rec, Proto, *Method)) {
             return Impl;
          }
-         if (checkIfImplicitConformance(Rec, Proto, *Method)) {
-            return Method;
+         if (auto *Impl = checkIfImplicitConformance(Rec, Proto, *Method)) {
+            return Impl;
          }
 
          if (FoundChanges) {

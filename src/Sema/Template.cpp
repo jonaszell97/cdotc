@@ -914,26 +914,90 @@ bool TemplateArgListImpl::inferTemplateArg(QualType given, QualType needed)
       if (given->hasTemplateArgs() && needed->hasTemplateArgs()) {
          auto &givenConcrete = given->getTemplateArgs();
          auto &neededConcrete = needed->getTemplateArgs();
+         auto &Context = SP.getContext();
 
-         if (givenConcrete.size() != neededConcrete.size()) {
-            return false;
+         unsigned i = 0;
+         for (auto &NeededArg : neededConcrete) {
+            if (NeededArg.isValue()) {
+               if (NeededArg.isVariadic())
+                  break;
+
+               ++i;
+               continue;
+            }
+
+            QualType NeededTy =
+               Context.getTemplateArgType(NeededArg.getParam());
+
+            bool IsVariadic = NeededArg.isVariadic();
+            if (IsVariadic) {
+               while (i < givenConcrete.size()) {
+                  auto &ConcreteArg = givenConcrete[i++];
+                  if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
+                     return false;
+
+                  if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
+                     return false;
+               }
+
+               auto *Arg = getArgForParam(NeededTy->asGenericType()->getParam());
+               Arg->freeze();
+
+               return true;
+            }
+
+            auto &ConcreteArg = givenConcrete[i++];
+            if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
+               return false;
+
+            if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
+               return false;
          }
 
-         auto given_it = givenConcrete.begin();
-         auto needed_it = neededConcrete.begin();
-         auto given_end = givenConcrete.end();
+         return true;
+      }
 
-         for (;given_it != given_end; ++given_it, ++needed_it) {
-            auto &TA = *given_it;
-            auto &TA2 = *needed_it;
+      // Otherwise, try to infer from unconstrained template parameters.
+      if (given->hasTemplateArgs() && needed->getRecord()->isTemplate()) {
+         auto &givenConcrete = given->getTemplateArgs();
+         auto &neededParams = needed->getRecord()->getTemplateParams();
+         auto &Context = SP.getContext();
 
-            if (!TA.isType() || !TA2.isType())
+         unsigned i = 0;
+         for (auto *NeededArg : neededParams) {
+            if (!NeededArg->isTypeName()) {
+               if (NeededArg->isVariadic())
+                  break;
+
+               ++i;
                continue;
+            }
 
-            if (TA.isVariadic() || TA2.isVariadic())
-               continue;
+            QualType NeededTy =
+               Context.getTemplateArgType(NeededArg);
 
-            if (!inferTemplateArg(TA.getType(), TA2.getType()))
+            bool IsVariadic = NeededArg->isVariadic();
+            if (IsVariadic) {
+               while (i < givenConcrete.size()) {
+                  auto &ConcreteArg = givenConcrete[i++];
+                  if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
+                     return false;
+
+                  if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
+                     return false;
+               }
+
+               auto *Arg = getArgForParam(NeededArg);
+               Arg->freeze();
+
+               return true;
+            }
+
+            auto &ConcreteArg = givenConcrete[i++];
+            if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
+               return false;
+
+            if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
                return false;
          }
 

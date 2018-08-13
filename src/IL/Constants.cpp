@@ -464,69 +464,6 @@ void ConstantEnum::Profile(llvm::FoldingSetNodeID &ID,
       ID.AddPointer(V);
 }
 
-VTable::VTable(il::Context &Ctx,
-               llvm::ArrayRef<il::Function *> Entries,
-               ast::ClassDecl *C)
-   : Constant(VTableID, ValueType(Ctx, QualType())),
-     NumFunctions((unsigned)Entries.size()), C(C)
-{
-   auto &ASTCtx = Ctx.getASTCtx();
-   QualType Ty = ASTCtx.getArrayType(ASTCtx.getInt8PtrTy(), Entries.size());
-   type = ValueType(Ctx, Ty);
-
-   auto Ptr = reinterpret_cast<Function**>(this + 1);
-   for (auto &Val : Entries) {
-      Val->addUse(this);
-      *Ptr = Val;
-      ++Ptr;
-   }
-}
-
-VTable* VTable::Create(il::Context &Ctx,
-                       llvm::ArrayRef<il::Function *> Entries,
-                       ast::ClassDecl *C) {
-   auto It = Ctx.VTableMap.find(C);
-   if (It != Ctx.VTableMap.end()) {
-      return It->getSecond();
-   }
-
-   void *Mem = new char[sizeof(VTable) + Entries.size() * sizeof(Function*)];
-   auto *VT = new(Mem) VTable(Ctx, Entries, C);
-
-   Ctx.VTableMap[C] = VT;
-   return VT;
-}
-
-TypeInfo::TypeInfo(Module *M, QualType forType,
-                   llvm::ArrayRef<il::Constant*> Vals)
-   : Constant(TypeInfoID, ValueType(M->getContext(), M->getContext()
-                                                      .getASTCtx()
-                                                      .getMetaType(forType))),
-     forType(forType)
-{
-   assert(Vals.size() == MetaType::MemberCount);
-
-   auto Ptr = (Constant**)this->Vals;
-   for (auto &Val : Vals) {
-      Val->addUse(this);
-      *Ptr = Val;
-      ++Ptr;
-   }
-}
-
-TypeInfo* TypeInfo::get(Module *M, QualType forType,
-                        llvm::ArrayRef<il::Constant*> Vals) {
-   auto &Map = M->getContext().TypeInfoMap;
-   auto It = Map.find(forType);
-   if (It != Map.end())
-      return It->getSecond();
-
-   auto *TI = new TypeInfo(M, forType, Vals);
-   Map.try_emplace(forType, TI);
-
-   return TI;
-}
-
 ConstantPointer::ConstantPointer(ValueType ty)
    : Constant(ConstantPointerID, ty)
 {

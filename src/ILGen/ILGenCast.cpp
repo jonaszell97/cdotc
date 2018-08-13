@@ -60,12 +60,53 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
       auto WrappedTy = Option->getTemplateArgs().front().getType();
 
       return Builder.CreateDynamicCast(
-         Val, cast<ClassDecl>(WrappedTy->getRecord()),
+         Val, ILGen.GetOrCreateTypeInfo(WrappedTy),
          ILGen.getContext().getASTCtx().getRecordType(Option));
    }
-   case CastKind::ProtoWrap:
-   case CastKind::ProtoUnwrap:
-      return Builder.CreateProtoCast(Val, Step.getResultType());
+   case CastKind::ProtoWrap: {
+      Builder.getModule()->addRecord(
+         ILGen.getSema().getExistentialContainerDecl());
+
+      auto *ValueTI = ILGen.GetDynamicTypeInfo(Val);
+      auto *ProtoTI = ILGen.GetOrCreateTypeInfo(Step.getResultType());
+
+      auto *Init = Builder.CreateExistentialInit(Val, Step.getResultType(),
+                                                 ValueTI, ProtoTI);
+
+      ILGen.pushDefaultCleanup(Init);
+      return Init;
+   }
+   case CastKind::ExistentialCast: {
+      auto *DstTI = ILGen.GetOrCreateTypeInfo(Step.getResultType());
+      auto *Cast = Builder.CreateExistentialCast(Val, DstTI, Step.getKind(),
+                                                 Step.getResultType());
+
+      ILGen.pushDefaultCleanup(Cast);
+      return Cast;
+   }
+   case CastKind::ExistentialCastFallible:
+   case CastKind::ExistentialUnwrap: {
+      auto Option = cast<EnumDecl>(Step.getResultType()->getRecord());
+      auto WrappedTy = Option->getTemplateArgs().front().getType();
+
+      auto *DstTI = ILGen.GetOrCreateTypeInfo(WrappedTy);
+      auto *Opt = Builder.CreateExistentialCast(Val, DstTI, Step.getKind(),
+                                                Step.getResultType());
+
+      Value *Val;
+      if (forced) {
+         Val = Builder.CreateEnumExtract(Opt, Option->getSomeCase(), 0);
+      }
+      else {
+         Val = Opt;
+      }
+
+      ILGen.pushDefaultCleanup(Val);
+      return Val;
+   }
+   case CastKind::ProtoUnwrap: {
+      llvm_unreachable("not yet");
+   }
    case CastKind::IntToEnum:
       return Builder.CreateIntToEnum(Val, Step.getResultType());
    case CastKind::BitCast:

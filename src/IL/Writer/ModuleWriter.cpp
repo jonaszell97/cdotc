@@ -344,23 +344,6 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
    case Value::GlobalVariableID:
       WriteName(C->getName(), ValPrefix::Constant);
       break;
-   case Value::VTableID: {
-      auto &VT = *cast<VTable>(C);
-
-      out << "vtable ";
-      WriteRecordType(VT.getClassDecl());
-      out << " [\n";
-
-      size_t i = 0;
-      for (auto &fn : VT.getFunctions()) {
-         if (i++ != 0) out << ",\n";
-         ApplyTab();
-         WriteConstant(fn);
-      }
-
-      out << "\n]";
-      break;
-   }
    case Value::ConstantIntID: {
       auto Int = cast<ConstantInt>(C);
       if (Int->getType()->getBitwidth() == 1) {
@@ -464,23 +447,6 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       WriteList(Enum->getCaseValues(), &ModuleWriterImpl::WriteConstant,
                 " { ", ", ", " }");
 
-      break;
-   }
-   case Value::TypeInfoID: {
-      auto &TI = *cast<TypeInfo>(C);
-
-      out << "typeinfo ";
-      WriteQualType(TI.getForType());
-      out << " {\n";
-
-      size_t i = 0;
-      for (auto &fn : TI.getValues()) {
-         if (i++ != 0) out << ",\n";
-         ApplyTab();
-         WriteConstant(fn);
-      }
-
-      out << "\n}";
       break;
    }
    case Value::ConstantPointerID: {
@@ -942,29 +908,28 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
    }
 
    if (auto Call = dyn_cast<CallInst>(I)) {
-      out << "call ";
-
-      if (Call->isProtocolCall())
-         out << "proto_method ";
-      else if (Call->isVirtual())
+      if (isa<VirtualCallInst>(Call))
          out << "virtual ";
+
+      out << "call ";
 
       if (Call->isTaggedDeinit())
          out << "[tagged] ";
 
-      if (auto LambdaCall = dyn_cast<LambdaCallInst>(Call)) {
-         WriteValue(LambdaCall->getLambda());
-      }
-      else if (auto IndirectCall = dyn_cast<IndirectCallInst>(Call)) {
-         WriteValue(IndirectCall->getCalledFunction());
+      if (auto *Fn = Call->getCalledFunction()) {
+         WriteQualType(Fn->getReturnType());
+         out << ' ';
+         WriteName(Fn->getName(), ValPrefix::Constant);
       }
       else {
-         WriteQualType(Call->getCalledFunction()->getReturnType());
-         out << ' ';
-         WriteName(Call->getCalledFunction()->getName(), ValPrefix::Constant);
+         WriteValue(Call->getCallee());
       }
 
       WriteList(Call->getArgs(), &ModuleWriterImpl::WriteValue);
+
+      if (auto *Virt = dyn_cast<VirtualCallInst>(Call)) {
+         out << ", " << Virt->getOffset();
+      }
 
       return;
    }
@@ -990,20 +955,27 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
    }
 
    if (auto Invoke = dyn_cast<InvokeInst>(I)) {
-      out << "invoke ";
-
-      if (Invoke->isProtocolCall())
-         out << "proto_method ";
-      else if (Invoke->isVirtual())
+      if (isa<VirtualInvokeInst>(Invoke))
          out << "virtual ";
 
-      WriteQualType(Invoke->getCalledFunction()->getReturnType());
-      out << ' ';
-      WriteName(Invoke->getCalledFunction()->getName(),
-                ValPrefix::Constant);
+      out << "invoke ";
+
+      if (auto *Fn = Invoke->getCalledFunction()) {
+         WriteQualType(Fn->getReturnType());
+         out << ' ';
+         WriteName(Fn->getName(),
+                   ValPrefix::Constant);
+      }
+      else {
+         WriteValue(Invoke->getCallee());
+      }
 
       WriteList(Invoke->getArgs().drop_back(0),
                 &ModuleWriterImpl::WriteValue);
+
+      if (auto *Virt = dyn_cast<VirtualInvokeInst>(Invoke)) {
+         out << ", " << Virt->getOffset();
+      }
 
       auto Guard = makeTabGuard();
 
@@ -1166,6 +1138,17 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
       return;
    }
 
+   if (auto Init = dyn_cast<ExistentialInitInst>(I)) {
+      out << "init_existential ";
+      WriteValue(Init->getTarget());
+      out << ", ";
+      WriteValue(Init->getValueTypeInfo());
+      out << ", ";
+      WriteValue(Init->getProtocolTypeInfo());
+
+      return;
+   }
+
    if (auto Cast = dyn_cast<CastInst>(I)) {
       if (auto IntCast = dyn_cast<IntegerCastInst>(Cast)) {
          out << cdot::CastNames[(unsigned char)IntCast->getKind()];
@@ -1176,9 +1159,11 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
       else if (auto BC = dyn_cast<BitCastInst>(Cast)) {
          out << cdot::CastNames[(unsigned char)BC->getKind()];
       }
-      else if (auto ProtoCast = dyn_cast<ProtoCastInst>(Cast)) {
-         out << (ProtoCast->isWrap()
-                 ? "proto_wrap" : "proto_unwrap");
+      else if (isa<DynamicCastInst>(Cast)) {
+         out << "dynamic_cast ";
+      }
+      else if (isa<ExistentialCastInst>(Cast)) {
+         out << "existential_cast ";
       }
       else {
          out << il::CastNames[(unsigned short)Cast->getTypeID() - FirstCast];
@@ -1384,8 +1369,7 @@ void ModuleWriterImpl::Write(Module const* M)
 
       WriteGlobal(&G);
 
-      if (G.getInitializer() && (isa<VTable>(G.getInitializer())
-                                       || isa<TypeInfo>(G.getInitializer()))) {
+      if (G.getInitializer()) {
          if (i != Globals.size() - 1)
             NewLine();
       }

@@ -210,8 +210,8 @@ public:
 protected:
    il::Value *Self;
 
-   unsigned vtableOffset = 0;
-   unsigned ptableOffset = 0;
+   unsigned vtableOffset = -1;
+   unsigned ptableOffset = -1;
 
    Method(const Method &other, Module &M);
 

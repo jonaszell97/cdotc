@@ -59,12 +59,6 @@ Context::~Context()
    destroyFoldingSet(LoadConstants);
    destroyFoldingSet(OperatorConstants);
    destroyFoldingSet(GEPConstants);
-
-   for (auto &Pair : TypeInfoMap)
-      delete Pair.second;
-
-   for (auto &Pair : VTableMap)
-      delete Pair.second;
 }
 
 void Context::registerModule(Module *M) { Modules.insert(M); }

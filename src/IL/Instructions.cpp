@@ -374,18 +374,21 @@ UnreachableInst::UnreachableInst(Context &Ctx, BasicBlock *parent)
 
 }
 
-CallInst::CallInst(Function *func, llvm::ArrayRef<Value *> args,
+CallInst::CallInst(Value *Callee,
+                   ArrayRef<Value*> args,
                    BasicBlock *parent)
-   : Instruction(CallInstID, ValueType(func->getCtx(), func->getReturnType()),
+   : Instruction(CallInstID,
+                 ValueType(Callee->getCtx(),
+                           Callee->getType()->asFunctionType()->getReturnType()),
                  parent),
      MultiOperandInst(args, args.size() + 1)
 {
-   func->addUse(this);
+   Callee->addUse(this);
    for (const auto &arg : args) {
       arg->addUse(this);
    }
 
-   Operands[numOperands - 1] = func;
+   Operands[numOperands - 1] = Callee;
 }
 
 CallInst::CallInst(TypeID id, Context &Ctx,
@@ -406,25 +409,31 @@ CallInst::CallInst(TypeID id, Function *func, llvm::ArrayRef<Value *> args,
    this->id = id;
 }
 
-CallInst::CallInst(TypeID id, Value *func, llvm::ArrayRef<Value *> args,
+CallInst::CallInst(TypeID id,
+                   Value *func,
+                   FunctionType *FuncTy,
+                   ArrayRef<Value *> args,
                    BasicBlock *parent)
-   : Instruction(id, ValueType(func->getCtx(),
-                               func->getType()->asFunctionType()
-                                   ->getReturnType()),
+   : Instruction(id, ValueType(func->getCtx(), FuncTy->getReturnType()),
                  parent),
      MultiOperandInst(args, args.size() + 1)
 {
    Operands[numOperands - 1] = func;
 }
 
+Value* CallInst::getCallee() const
+{
+   return Operands[numOperands - 1];
+}
+
 Function *CallInst::getCalledFunction() const
 {
-   return support::dyn_cast<Function>(Operands[numOperands - 1]);
+   return support::dyn_cast<Function>(getCallee());
 }
 
 Method *CallInst::getCalledMethod() const
 {
-   return support::dyn_cast_or_null<Method>(getCalledFunction());
+   return support::dyn_cast_or_null<Method>(getCallee());
 }
 
 bool CallInst::isTaggedDeinit() const
@@ -444,9 +453,13 @@ llvm::ArrayRef<Value*> CallInst::getArgs() const
    return { Operands, numOperands - 1 };
 }
 
-IndirectCallInst::IndirectCallInst(Value *Func, llvm::ArrayRef<Value *> args,
-                                   BasicBlock *parent)
-   : CallInst(IndirectCallInstID, Func, args, parent)
+VirtualCallInst::VirtualCallInst(Value *VTableOwner,
+                                 FunctionType *FnTy,
+                                 unsigned Offset,
+                                 ArrayRef<Value *> args,
+                                 BasicBlock *parent)
+   : CallInst(VirtualCallInstID, VTableOwner, FnTy, args, parent),
+     FnTy(FnTy), Offset(Offset)
 {
 
 }
@@ -454,15 +467,18 @@ IndirectCallInst::IndirectCallInst(Value *Func, llvm::ArrayRef<Value *> args,
 LambdaCallInst::LambdaCallInst(Value *lambda,
                                llvm::ArrayRef<Value *> args,
                                BasicBlock *parent)
-   : CallInst(LambdaCallInstID, lambda, args, parent)
+   : CallInst(LambdaCallInstID, lambda, lambda->getType()->asFunctionType(),
+              args, parent)
 {
 
 }
 
-InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
-                       BasicBlock *NormalContinuation, BasicBlock *LandingPad,
+InvokeInst::InvokeInst(Value *Callee,
+                       ArrayRef<Value *> args,
+                       BasicBlock *NormalContinuation,
+                       BasicBlock *LandingPad,
                        BasicBlock *parent)
-   : TerminatorInst(InvokeInstID, func->getCtx(), parent),
+   : TerminatorInst(InvokeInstID, Callee->getCtx(), parent),
      MultiOperandInst(args, args.size() + 1),
      NormalContinuation(NormalContinuation),
      LandingPad(LandingPad)
@@ -470,16 +486,16 @@ InvokeInst::InvokeInst(Function *func, llvm::ArrayRef<Value *> args,
    NormalContinuation->addUse(this);
    LandingPad->addUse(this);
 
-   func->addUse(this);
+   Callee->addUse(this);
    for (const auto &arg : args) {
       arg->addUse(this);
    }
 
-   Operands[numOperands - 1] = func;
+   Operands[numOperands - 1] = Callee;
 }
 
 InvokeInst::InvokeInst(TypeID id,
-                       Function *F,
+                       Value *F,
                        llvm::ArrayRef<Value *> args,
                        BasicBlock *NormalContinuation,
                        BasicBlock *LandingPad,
@@ -487,6 +503,11 @@ InvokeInst::InvokeInst(TypeID id,
    : InvokeInst(F, args, NormalContinuation, LandingPad, parent)
 {
    this->id = id;
+}
+
+Value* InvokeInst::getCallee() const
+{
+   return Operands[numOperands - 1];
 }
 
 Function *InvokeInst::getCalledFunction() const
@@ -502,6 +523,19 @@ Method *InvokeInst::getCalledMethod() const
 llvm::ArrayRef<Value*> InvokeInst::getArgs() const
 {
    return { Operands, numOperands - 1 };
+}
+
+VirtualInvokeInst::VirtualInvokeInst(il::Value *VTableOwner,
+                                     FunctionType *FnTy, unsigned Offset,
+                                     ArrayRef<il::Value *> args,
+                                     il::BasicBlock *NormalContinuation,
+                                     il::BasicBlock *LandingPad,
+                                     il::BasicBlock *parent)
+   : InvokeInst(VirtualInvokeInstID, VTableOwner, args, NormalContinuation,
+                LandingPad, parent),
+     FnTy(FnTy), Offset(Offset)
+{
+
 }
 
 IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,
@@ -734,15 +768,26 @@ UnionCastInst::UnionCastInst(Value *target, ast::UnionDecl *UnionTy,
    type.makeReference();
 }
 
-ProtoCastInst::ProtoCastInst(Value *target, QualType toType, BasicBlock *parent)
-   : CastInst(ProtoCastInstID, target, toType, parent)
+ExistentialInitInst::ExistentialInitInst(Value *target,
+                                         QualType toType,
+                                         il::Value *ValueTypeInfo,
+                                         il::GlobalVariable *ProtocolTypeInfo,
+                                         BasicBlock *parent)
+   : Instruction(ExistentialInitInstID, ValueType(target->getCtx(), toType),
+                 parent),
+     MultiOperandInst({ target, ValueTypeInfo, ProtocolTypeInfo })
 {
 
 }
 
-bool ProtoCastInst::isWrap() const
+Value* ExistentialInitInst::getValueTypeInfo() const
 {
-   return type->isProtocol();
+   return Operands[1];
+}
+
+GlobalVariable* ExistentialInitInst::getProtocolTypeInfo() const
+{
+   return cast<GlobalVariable>(Operands[2]);
 }
 
 ExceptionCastInst::ExceptionCastInst(Value *target, QualType toType,
@@ -760,13 +805,24 @@ BitCastInst::BitCastInst(CastKind kind, Value *target, QualType toType,
 }
 
 DynamicCastInst::DynamicCastInst(Value *target,
-                                 ast::ClassDecl *TargetTy,
+                                 il::Value *TargetTypeInfo,
                                  QualType Type,
                                  BasicBlock *parent)
    : CastInst(DynamicCastInstID, target, Type, parent),
-     TargetTy(TargetTy)
+     TargetTypeInfo(TargetTypeInfo)
 {
    setIsLvalue(true);
+}
+
+ExistentialCastInst::ExistentialCastInst(il::Value *Target,
+                                         il::Value *TargetTypeInfo,
+                                         CastKind Kind,
+                                         QualType TargetType,
+                                         il::BasicBlock *parent)
+   : CastInst(ExistentialCastInstID, Target, TargetType, parent),
+     TargetTypeInfo(TargetTypeInfo), Kind(Kind)
+{
+
 }
 
 StructInitInst::StructInitInst(StructDecl *InitializedType,

@@ -117,7 +117,7 @@ public class Dictionary<K, V> {
 
     /// Grow the capacity of the bucket array.
     private def reallocate() {
-        buckets = _cdot_Malloc(capacity * reflect.sizeOf<Entry>) as! UnsafeMutablePtr<Entry>
+        buckets = mem.reallocate(pointer: buckets, newAmount: capacity)
 
         // mark all buckets as unoccupied
         for var i = 0u; i < capacity; ++i {
@@ -129,7 +129,7 @@ public class Dictionary<K, V> {
 
     /// Free our bucket array.
     private def freeBuffer(_ buckets: UnsafeMutablePtr<Entry>) {
-        _cdot_Free(buckets as! UnsafeMutableRawPtr)
+        mem.deallocate(buckets)
     }
 
     /// Increase the capacity by a factor of two.

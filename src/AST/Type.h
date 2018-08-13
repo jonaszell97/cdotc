@@ -111,6 +111,62 @@ class Name;
 #define CDOT_BASE_TYPE(Name) CDOT_TYPE(Name, "")
 #include "Types.def"
 
+struct TypeProperties {
+public:
+   enum Property {
+      /// This type contains an unconstrained generic type.
+      ContainsUnboundGeneric = 0x1,
+
+      /// This type contains a generic type.
+      ContainsGenericType = 0x2,
+
+      /// This type containts an associated type or Self constraint.
+      ContainsAssociatedType = 0x4,
+
+      /// This type contains an unexpanded parameter pack.
+      ContainsUnexpandedParameterPack = 0x8,
+
+      /// This type contains a dependent name type.
+      ContainsDependentNameType = 0x10,
+
+      /// This type contains a dependently sized array type.
+      ContainsDependentSizeArrayType = 0x20,
+
+      /// This type contains an unpopulated type, i.e. Never.
+      ContainsUnpopulatedType = 0x30,
+
+      /// This type contains an UnknownAny type.
+      ContainsUnknownAny = 0x40,
+   };
+
+private:
+   uint8_t Props;
+
+public:
+   /*implicit*/ TypeProperties(uint8_t Props = 0) : Props(Props)
+   {}
+
+   uint8_t getRawProperties() const { return Props; }
+
+   bool operator&(Property P) { return (Props & P) != 0; }
+
+   TypeProperties operator|(Property P) { return TypeProperties(Props | P); }
+   TypeProperties &operator|=(Property P) { Props |= P; return *this; }
+
+   TypeProperties operator|(TypeProperties P)
+   { return TypeProperties(Props | P.Props); }
+
+   TypeProperties &operator|=(TypeProperties P)
+   { Props |= P.Props; return *this; }
+
+   TypeProperties operator-(Property P) { return TypeProperties(Props & ~P); }
+
+   bool isDependent() const;
+   bool containsAssociatedType() const;
+   bool containsUnexpandedParameterPack() const;
+   bool isUnpopulated() const;
+};
+
 class Type {
 public:
    enum TypeID : unsigned char {
@@ -192,7 +248,7 @@ public:
       return isIntegerType() || isFPType() || isRawEnum();
    }
 
-   bool isDependentType() const { return Bits.Dependent; }
+   bool isDependentType() const { return properties().isDependent(); }
    bool isUnpopulatedType() const;
 
    sema::FinalTemplateArgumentList& getTemplateArgs() const;
@@ -298,6 +354,8 @@ public:
 
    bool needsMemCpy() const;
 
+   TypeProperties properties() const { return Bits.Props; }
+
    operator QualType();
 
    using child_iterator       = const QualType*;
@@ -308,19 +366,19 @@ public:
    child_iterator_range children() const;
 
 protected:
-   Type(TypeID id, Type *CanonicalType, bool Dependent = false)
+   Type(TypeID id, Type *CanonicalType)
       : CanonicalType(CanonicalType ? CanonicalType : this)
    {
       Bits.id = id;
-      Bits.Dependent = Dependent;
+      Bits.Props = TypeProperties();
    }
 
    struct TypeBits {
-      TypeID id      : 8;
-      bool Dependent : 1;
+      TypeID id : 8;
+      TypeProperties Props;
    };
 
-   enum { TypeUsedBits = 9 };
+   enum { TypeUsedBits = 16 };
 
    struct BuiltinTypeBits {
       unsigned : TypeUsedBits;
@@ -383,12 +441,7 @@ public:
    friend class ast::ASTContext;
 
 private:
-   explicit BuiltinType(BuiltinKind kind)
-      : Type(TypeID::BuiltinTypeID, this,
-             kind == UnknownAny || kind == Self)
-   {
-      BuiltinBits.kind = kind;
-   }
+   explicit BuiltinType(BuiltinKind kind);
 };
 
 class QualType {
@@ -570,16 +623,10 @@ namespace cdot {
 
 class PointerType: public Type, public llvm::FoldingSetNode {
 private:
-   PointerType(QualType pointee, Type *CanonicalType)
-      : Type(TypeID::PointerTypeID, CanonicalType, pointee->isDependentType()),
-        pointeeType(pointee)
-   {}
+   PointerType(QualType pointee, Type *CanonicalType);
 
 protected:
-   PointerType(TypeID typeID, QualType pointee, Type *CanonicalType)
-      : Type(typeID, CanonicalType, pointee->isDependentType()),
-        pointeeType(pointee)
-   {}
+   PointerType(TypeID typeID, QualType pointee, Type *CanonicalType);
 
 public:
    QualType getPointeeType() const { return pointeeType; }
@@ -638,17 +685,10 @@ public:
 
 class ReferenceType: public Type, public llvm::FoldingSetNode {
 private:
-   ReferenceType(QualType referencedType, Type *CanonicalType)
-      : Type(TypeID::ReferenceTypeID, CanonicalType,
-             referencedType->isDependentType()),
-        referencedType(referencedType)
-   {}
+   ReferenceType(QualType referencedType, Type *CanonicalType);
 
 protected:
-   ReferenceType(TypeID typeID, QualType referencedType, Type *CanonicalType)
-      : Type(typeID, CanonicalType, referencedType->isDependentType()),
-        referencedType(referencedType)
-   {}
+   ReferenceType(TypeID typeID, QualType referencedType, Type *CanonicalType);
 
 public:
    QualType getReferencedType() const { return referencedType; }
@@ -748,7 +788,7 @@ public:
 };
 
 class TokenType: public Type {
-   TokenType() : Type(TokenTypeID, this) {}
+   TokenType();
 
 public:
    child_iterator child_begin() const { return nullptr; }
@@ -799,16 +839,8 @@ public:
    }
 
 protected:
-   ArrayType(QualType elementType, unsigned numElements, Type *CanonicalType)
-      : Type(TypeID::ArrayTypeID, CanonicalType,
-             elementType->isDependentType()),
-        elementType(elementType), numElements(numElements)
-   {}
-
-   ArrayType(TypeID typeID, QualType elementType, Type *CanonicalType)
-      : Type(typeID, CanonicalType, elementType->isDependentType()),
-        elementType(elementType), numElements(0)
-   {}
+   ArrayType(QualType elementType, unsigned numElements, Type *CanonicalType);
+   ArrayType(TypeID typeID, QualType elementType, Type *CanonicalType);
 
    QualType elementType;
    unsigned numElements;
@@ -845,22 +877,13 @@ public:
 
 private:
    DependentSizeArrayType(QualType elementType, ast::StaticExpr *DependentExpr,
-                          Type *CanonicalType)
-      : ArrayType(TypeID::DependentSizeArrayTypeID, elementType, CanonicalType),
-        DependentExpr(DependentExpr)
-   {
-      Bits.Dependent = true;
-   }
+                          Type *CanonicalType);
 
    ast::StaticExpr *DependentExpr;
 };
 
 class InferredSizeArrayType: public ArrayType {
-   InferredSizeArrayType(QualType elementTy, Type *CanonicalTy)
-      : ArrayType(TypeID::InferredSizeArrayTypeID, elementTy, CanonicalTy)
-   {
-
-   }
+   InferredSizeArrayType(QualType elementTy, Type *CanonicalTy);
 
 public:
    static bool classof(Type const* T)
@@ -922,7 +945,7 @@ private:
                 llvm::ArrayRef<ParamInfo> paramInfo,
                 ExtFlags flags,
                 Type *CanonicalType,
-                bool Dependent);
+                TypeProperties Props);
 
 protected:
    FunctionType(TypeID typeID,
@@ -931,7 +954,7 @@ protected:
                 llvm::ArrayRef<ParamInfo> paramInfo,
                 ExtFlags flags,
                 Type *CanonicalType,
-                bool Dependent);
+                TypeProperties Props);
 
    unsigned NumParams;
    QualType returnType; // must come last for 'children' to work!
@@ -1036,12 +1059,7 @@ class LambdaType: public FunctionType {
               llvm::ArrayRef<ParamInfo> paramInfo,
               ExtFlags flags,
               Type *CanonicalType,
-              bool Dependent)
-      : FunctionType(TypeID::LambdaTypeID, returnType, argTypes, paramInfo,
-                     flags, CanonicalType, Dependent)
-   {
-
-   }
+              TypeProperties Props);
 
 public:
    static bool classof(Type const* T)
@@ -1058,7 +1076,7 @@ static_assert(sizeof(LambdaType) == sizeof(FunctionType),
 class TupleType final: public Type, public llvm::FoldingSetNode {
    TupleType(llvm::ArrayRef<QualType> containedTypes,
              Type *CanonicalType,
-             bool Dependent);
+             TypeProperties Props);
 
    unsigned NumTys;
 
@@ -1130,15 +1148,12 @@ class RecordDecl;
 
 class RecordType: public Type, public llvm::FoldingSetNode {
 protected:
-   explicit RecordType(ast::RecordDecl *record,
-                       llvm::ArrayRef<QualType> TypeTemplateArgs);
-
+   explicit RecordType(ast::RecordDecl *record);
    RecordType(TypeID typeID,
               ast::RecordDecl *record,
               bool Dependent);
 
    ast::RecordDecl *Rec;
-   unsigned NumTypeTemplateArgs;
 
 public:
    bool isRawEnum() const;
@@ -1148,16 +1163,13 @@ public:
 
    ast::RecordDecl *getRecord() const { return Rec; }
 
-   void setDependent(bool dep) { Bits.Dependent = dep; }
+   void setDependent(bool dep);
 
    unsigned short getAlignment() const;
    size_t getSize() const;
 
-   child_iterator child_begin() const;
-   child_iterator child_end() const
-   {
-      return child_begin() + NumTypeTemplateArgs;
-   }
+   child_iterator child_begin() const { return child_iterator(); }
+   child_iterator child_end() const { return child_iterator(); }
 
    void Profile(llvm::FoldingSetNodeID &ID)
    {
@@ -1189,8 +1201,7 @@ public:
 class DependentRecordType: public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl *record,
-                       sema::FinalTemplateArgumentList *templateArgs,
-                       llvm::ArrayRef<QualType> TypeTemplateArgs);
+                       sema::FinalTemplateArgumentList *templateArgs);
 
    mutable sema::FinalTemplateArgumentList *templateArgs;
 
@@ -1344,10 +1355,7 @@ public:
    { llvm_unreachable("should never be a member"); }
 
 protected:
-   explicit MetaType(QualType forType, Type *CanonicalType)
-      : Type(TypeID::MetaTypeID, CanonicalType, forType->isDependentType()),
-        forType(forType)
-   {}
+   explicit MetaType(QualType forType, Type *CanonicalType);
 
    QualType forType;
 };

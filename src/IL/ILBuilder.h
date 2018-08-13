@@ -261,10 +261,7 @@ public:
                                         SourceLocation loc = {},
                                         bool OverridePrevious = false);
 
-   VTable *CreateVTable(llvm::ArrayRef<il::Function*> Entries,
-                        ast::ClassDecl *ClassTy);
-
-   CallInst *CreateCall(Function *F,
+   CallInst *CreateCall(Value *Callee,
                         llvm::ArrayRef<Value*> args,
                         llvm::StringRef name = "");
 
@@ -291,19 +288,29 @@ public:
    Instruction *CreateLifetimeBegin(Value *V, llvm::StringRef name = "");
    Instruction *CreateLifetimeEnd(Value *V, llvm::StringRef name = "");
 
-   IndirectCallInst *CreateIndirectCall(Value *Func,
-                                        llvm::ArrayRef<Value*> args,
-                                        llvm::StringRef name = "");
+   VirtualCallInst *CreateVirtualCall(Value *VTableOwner,
+                                      FunctionType *FnTy,
+                                      unsigned Offset,
+                                      ArrayRef<Value *> args,
+                                      StringRef name = "");
 
    LambdaCallInst *CreateLambdaCall(Value *Func,
                                     llvm::ArrayRef<Value*> args,
                                     llvm::StringRef name = "");
 
-   InvokeInst *CreateInvoke(Function *F,
-                            llvm::ArrayRef<Value*> args,
+   InvokeInst *CreateInvoke(Value *Callee,
+                            ArrayRef<Value*> args,
                             BasicBlock *NormalCont,
                             BasicBlock *LandingPad,
                             llvm::StringRef name = "");
+
+   VirtualInvokeInst *CreateVirtualInvoke(Value *VTableOwner,
+                                          FunctionType *FnTy,
+                                          unsigned Offset,
+                                          ArrayRef<Value*> args,
+                                          BasicBlock *NormalCont,
+                                          BasicBlock *LandingPad,
+                                          StringRef name = "");
 
 
    AllocaInst *CreateAlloca(QualType ofType,
@@ -526,12 +533,6 @@ public:
 
 #  include "Instructions.def"
 
-#define CDOT_BUILDER_CAST(Name) \
-   Name##Inst *Create##Name(Value *val, Type *toType, \
-                            llvm::StringRef name = "");
-
-   CDOT_BUILDER_CAST(ProtoCast)
-
 #undef CDOT_BUILDER_CAST
 
    IntegerCastInst *CreateIntegerCast(CastKind kind, Value *val,
@@ -577,9 +578,21 @@ public:
                               llvm::StringRef name = "");
 
    DynamicCastInst* CreateDynamicCast(il::Value *val,
-                                      ast::ClassDecl *TargetTy,
+                                      il::Value *TargetTypeInfo,
                                       QualType Type,
                                       llvm::StringRef name = "");
+
+   ExistentialCastInst *CreateExistentialCast(Value *Target,
+                                              il::Value *TargetTypeInfo,
+                                              CastKind Kind,
+                                              QualType TargetType,
+                                              StringRef name = "");
+
+   ExistentialInitInst *CreateExistentialInit(Value *target,
+                                              QualType toType,
+                                              il::Value *ValueTypeInfo,
+                                              il::GlobalVariable *ProtocolTypeInfo,
+                                              StringRef name = "");
 
    Value *CreateIsX(Value *V, uint64_t val);
    Value *CreateIsZero(Value *V);

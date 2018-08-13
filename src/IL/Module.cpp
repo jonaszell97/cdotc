@@ -133,48 +133,6 @@ void Module::addRecord(ast::RecordDecl *R)
    Records.insert(R);
 }
 
-void Module::addTypeInfo(ast::RecordDecl *R, il::GlobalVariable *TI)
-{
-   TIMap[R] = TI;
-}
-
-GlobalVariable *Module::getTypeInfo(ast::RecordDecl *R) const
-{
-   auto it = TIMap.find(R);
-   if (it == TIMap.end())
-      return nullptr;
-
-   return it->getSecond();
-}
-
-void Module::addVTable(ast::RecordDecl *R, il::GlobalVariable *VT)
-{
-   VTMap[R] = VT;
-}
-
-GlobalVariable *Module::getVTable(ast::RecordDecl *R) const
-{
-   auto it = VTMap.find(R);
-   if (it == VTMap.end())
-      return nullptr;
-
-   return it->getSecond();
-}
-
-void Module::addPTable(ast::RecordDecl *R, il::GlobalVariable *PT)
-{
-   PTMap[R] = PT;
-}
-
-GlobalVariable *Module::getPTable(ast::RecordDecl *R) const
-{
-   auto it = PTMap.find(R);
-   if (it == PTMap.end())
-      return nullptr;
-
-   return it->getSecond();
-}
-
 Context &Module::getContext() const
 {
    return Ctx;

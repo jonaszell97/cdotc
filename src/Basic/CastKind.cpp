@@ -13,6 +13,7 @@ const char* CastNames[] = {
    "fpext", "fptrunc",
    "dyn_cast", "upcast", "<conv_op>",
    "bitcast", "proto_wrap", "proto_unwrap",
+   "existential_cast", "try_existential_cast", "try_existential_unwrap",
    "nothrow_to_throw", "thin_to_thick",
    "<forward>", "<move>", "<copy>",
    "mut_ref_to_ref", "mut_ptr_to_ptr",

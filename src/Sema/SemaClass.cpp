@@ -146,6 +146,9 @@ DeclResult SemaPass::visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl)
 
    ensureDeclared(Rec);
 
+   if (ATDecl->getDeclName().isStr("Self"))
+      return ATDecl;
+
    if (ATDecl->isImplementation()) {
       AssociatedTypeDecl* AT = nullptr;
       ProtocolDecl* Proto = nullptr;
@@ -678,6 +681,11 @@ void SemaPass::calculateRecordSize(RecordDecl *R, bool CheckDependencies)
 
       checkCopyableConformances(*this, E, AllCopyable, AllImplicitlyCopyable);
    }
+   else if (isa<ProtocolDecl>(R)) {
+      auto *Ex = getExistentialContainerDecl();
+      occupiedBytes = Ex->getSize();
+      alignment = Ex->getAlignment();
+   }
 
    if (!occupiedBytes) {
       occupiedBytes = 1;
@@ -745,16 +753,16 @@ bool SemaPass::finalizeRecordDecls()
    return EncounteredError;
 }
 
-void SemaPass::addImplicitConformance(RecordDecl *R,
-                                      ImplicitConformanceKind kind) {
+MethodDecl *SemaPass::addImplicitConformance(RecordDecl *R,
+                                             ImplicitConformanceKind kind) {
    MethodDecl *M;
    switch (kind) {
    case ImplicitConformanceKind::StringRepresentable: {
       auto String = getStringDecl();
       assert(String && "StringRepresentable without String!");
 
-      if (R->getToStringFn())
-         return;
+      if (auto *Fn = R->getToStringFn())
+         return Fn;
 
       auto retTy = SourceType(Context.getRecordType(String));
       DeclarationName DN = Context.getIdentifiers().get("toString");
@@ -770,8 +778,8 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
       break;
    }
    case ImplicitConformanceKind::Equatable: {
-      if (R->getOperatorEquals())
-         return;
+      if (auto *Fn = R->getOperatorEquals())
+         return Fn;
 
       auto retTy = SourceType(Context.getBoolTy());
       auto argTy = SourceType(Context.getRecordType(R));
@@ -803,8 +811,8 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
       break;
    }
    case ImplicitConformanceKind::Hashable: {
-      if (R->getHashCodeFn())
-         return;
+      if (auto *Fn = R->getHashCodeFn())
+         return Fn;
 
       auto retTy = SourceType(Context.getUInt64Ty());
       auto *Name = &Context.getIdentifiers().get("hashCode");
@@ -819,8 +827,8 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
       break;
    }
    case ImplicitConformanceKind::Copyable: {
-      if (R->getCopyFn())
-         return;
+      if (auto *Fn = R->getCopyFn())
+         return Fn;
 
       SourceType RetTy(Context.getRecordType(R));
       auto *Name = &Context.getIdentifiers().get("copy");
@@ -844,6 +852,8 @@ void SemaPass::addImplicitConformance(RecordDecl *R,
    else {
       ensureVisited(M);
    }
+
+   return M;
 }
 
 } // namespace ast

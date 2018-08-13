@@ -36,25 +36,30 @@ namespace cdot {
 namespace ast {
 
 ILGenPass::ILGenPass(il::Context &Ctx, SemaPass &SP)
-   : SP(SP),
-     VoidTy(SP.getContext().getVoidType()),
-     Int8PtrTy(SP.getContext().getInt8PtrTy()),
-     UInt8PtrTy(SP.getContext().getPointerType(SP.getContext().getUInt8Ty())),
-     BoolTy(SP.getContext().getBoolTy()),
-     DeinitializerTy(SP.getContext().getFunctionType(VoidTy, { Int8PtrTy })),
-     WordTy(SP.getContext().getIntTy()),
-     USizeTy(SP.getContext().getUIntTy()),
+   : SP(SP), Context(SP.getContext()),
+     VoidTy(Context.getVoidType()),
+     RawPtrTy(Context.getPointerType(VoidTy)),
+     MutableRawPtrTy(Context.getMutablePointerType(VoidTy)),
+     Int8PtrTy(Context.getInt8PtrTy()),
+     UInt8PtrTy(Context.getPointerType(Context.getUInt8Ty())),
+     BoolTy(Context.getBoolTy()),
+     CopyFnTy(nullptr), DeinitializerTy(nullptr),
+     WordTy(Context.getIntTy()),
+     USizeTy(Context.getUIntTy()),
      Cleanups(*this),
      emitDI(SP.getCompilationUnit().getOptions().emitDebugInfo()),
      MandatoryPassManager(),
-     Builder(SP.getContext(), Ctx, SP.getCompilationUnit().getFileMgr(),
+     Builder(Context, Ctx, SP.getCompilationUnit().getFileMgr(),
              emitDI)
 {
-   WordZero = Builder.GetConstantInt(SP.getContext().getIntTy(), 0);
-   WordOne = Builder.GetConstantInt(SP.getContext().getIntTy(), 1);
+   WordZero = Builder.GetConstantInt(Context.getIntTy(), 0);
+   WordOne = Builder.GetConstantInt(Context.getIntTy(), 1);
 
-   UWordZero = Builder.GetConstantInt(SP.getContext().getUIntTy(), 0);
-   UWordOne = Builder.GetConstantInt(SP.getContext().getUIntTy(), 1);
+   UWordZero = Builder.GetConstantInt(Context.getUIntTy(), 0);
+   UWordOne = Builder.GetConstantInt(Context.getUIntTy(), 1);
+
+   DeinitializerTy = Context.getFunctionType(VoidTy, {MutableRawPtrTy});
+   CopyFnTy = Context.getFunctionType(VoidTy, {MutableRawPtrTy, RawPtrTy});
 
    SelfII = &SP.getContext().getIdentifiers().get("self");;
 }
@@ -215,13 +220,15 @@ void ILGenPass::GenerateTypeInfo(RecordDecl *R, bool)
    ForwardDeclareRecord(R);
    DeclareRecord(R);
 
-   GeneratePTable(R);
    if (auto C = dyn_cast<ClassDecl>(R))
-      GenerateVTable(C);
+      GetOrCreateVTable(C);
 
-   auto TI = GetOrCreateTypeInfo(SP.getContext().getRecordType(R));
-   getModule()->addTypeInfo(R, TI);
+   if (!isa<ProtocolDecl>(R)) {
+      for (auto *Conf : Context.getConformanceTable().getAllConformances(R))
+         GetOrCreatePTable(R, Conf->getProto());
+   }
 
+   GetOrCreateTypeInfo(SP.getContext().getRecordType(R));
    if (auto S = R->asNonUnionStruct())
       DefineDefaultInitializer(S);
 }
@@ -231,6 +238,9 @@ bool ILGenPass::run()
    VisitPotentiallyLazyGlobals();
 
    visitDeclContext(&SP.getCompilationUnit().getGlobalDeclCtx());
+
+   if (SP.encounteredError())
+      return true;
 
    VisitTemplateInstantiations();
    VisitImportedInstantiations();
@@ -1394,20 +1404,11 @@ private:
 } // anonymous namespace
 
 il::Value* ILGenPass::CreateCall(CallableDecl *C,
-                                 llvm::ArrayRef<il::Value *> args,
+                                 ArrayRef<il::Value *> args,
                                  Expression *Caller,
                                  bool DirectCall) {
 
-   auto F = getFunc(C);
    if (!registerCalledFunction(C, Caller)) {
-      return Builder.GetUndefValue(C->getReturnType());
-   }
-
-   F = getFunc(C);
-
-   if (!F) {
-      // Some kind of error must have occured, return a dummy value.
-      assert(SP.encounteredError() && "undeclared function without error?");
       return Builder.GetUndefValue(C->getReturnType());
    }
 
@@ -1421,12 +1422,22 @@ il::Value* ILGenPass::CreateCall(CallableDecl *C,
       isProtocolMethod = isa<ProtocolDecl>(method->getRecord());
    }
 
-   if (!F->mightThrow()) {
-      il::CallInst *V = Builder.CreateCall(F, args);
-      V->setVirtual(isVirtual);
-      V->setProtocolCall(isProtocolMethod);
+   if (!C->throws()) {
+      if (isVirtual || isProtocolMethod) {
+         unsigned Offset;
+         if (isVirtual) {
+            Offset = cast<Method>(getFunc(C))->getVtableOffset();
+         }
+         else {
+            Offset = getProtocolMethodOffset(cast<MethodDecl>(C));
+         }
 
-      return V;
+         return Builder.CreateVirtualCall(args.front(), C->getFunctionType(),
+                                          Offset, args.drop_front(1));
+      }
+
+      auto *F = getFunc(C);
+      return Builder.CreateCall(F, args);
    }
 
    il::BasicBlock *lpad = Builder.CreateBasicBlock("invoke.lpad");
@@ -1434,8 +1445,11 @@ il::Value* ILGenPass::CreateCall(CallableDecl *C,
 
    il::BasicBlock *ContBB = Builder.CreateBasicBlock("invoke.cont");
 
-   if (!F->getReturnType()->isVoidType())
-      ContBB->addBlockArg(F->getReturnType(), "retval");
+   bool HasReturnVal = !C->getReturnType()->isVoidType()
+      && !C->getReturnType()->isEmptyTupleType();
+
+   if (HasReturnVal)
+      ContBB->addBlockArg(C->getReturnType(), "retval");
 
    auto IP = Builder.saveIP();
    Builder.SetInsertPoint(lpad);
@@ -1464,13 +1478,28 @@ il::Value* ILGenPass::CreateCall(CallableDecl *C,
 
    Builder.restoreIP(IP);
 
-   auto *Invoke = Builder.CreateInvoke(F, args, ContBB, lpad);
-   Invoke->setVirtual(isVirtual);
-   Invoke->setProtocolCall(isProtocolMethod);
+   Instruction *Invoke;
+   if (isVirtual || isProtocolMethod) {
+      unsigned Offset;
+      if (isVirtual) {
+         Offset = cast<Method>(getFunc(C))->getVtableOffset();
+      }
+      else {
+         Offset = getProtocolMethodOffset(cast<MethodDecl>(C));
+      }
+
+      Invoke = Builder.CreateVirtualInvoke(args.front(), C->getFunctionType(),
+                                           Offset, args.drop_front(1),
+                                           ContBB, lpad);
+   }
+   else {
+      auto *F = getFunc(C);
+      Invoke = Builder.CreateInvoke(F, args, ContBB, lpad);
+   }
 
    Builder.SetInsertPoint(ContBB);
 
-   if (!F->getReturnType()->isVoidType())
+   if (HasReturnVal)
       return ContBB->getBlockArg(0);
 
    return Invoke;
@@ -2649,16 +2678,9 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
       break;
    }
    case IdentifierKind::Type:
-      V = GetOrCreateTypeInfo(Expr->getMetaType());
-      break;
-   case IdentifierKind::TypeOf: {
+   case IdentifierKind::TypeOf:
       V = GetOrCreateTypeInfo(Expr->getMetaType()->getUnderlyingType());
-      V = Builder.CreateBitCast(CastKind::BitCast,
-                                Builder.CreateLoad(V),
-                                Expr->getExprType());
-
       break;
-   }
    case IdentifierKind::Field: {
       auto ParentVal = visit(Expr->getParentExpr());
       V = Builder.CreateFieldRef(ParentVal, Expr->getDeclName(),
@@ -2734,7 +2756,7 @@ il::Function* ILGenPass::wrapNonLambdaFunction(il::Value *F)
    while (begin_it != end_it)
       givenArgs.push_back(&*begin_it++);
 
-   Builder.CreateRet(Builder.CreateIndirectCall(F, givenArgs));
+   Builder.CreateRet(Builder.CreateCall(F, givenArgs));
    Builder.restoreIP(IP);
 
    return wrappedFn;
@@ -3088,7 +3110,7 @@ il::Value* ILGenPass::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
    il::Value *func = visit(Expr->getParentExpr());
 
    if (funcTy->isThinFunctionTy()) {
-      return Builder.CreateIndirectCall(func, args);
+      return Builder.CreateCall(func, args);
    }
 
    return Builder.CreateLambdaCall(func, args);
@@ -3540,13 +3562,13 @@ void ILGenPass::visitForInStmt(ForInStmt *Stmt)
    // begin a mutable borrow of the range
    auto RangeVal = LookThroughLoad(Range);
    if (RangeVal->isLvalue()) {
-      SourceLocation EndLoc = Stmt->getSourceRange().getEnd();
-      auto RangeBorrow = Builder.CreateBeginBorrow(RangeVal,
-                                                   Stmt->getSourceLoc(), EndLoc,
-                                                   false);
-
-      // queue the end of the range borrow
-      Cleanups.pushCleanup<BorrowCleanup>(RangeBorrow, EndLoc);
+//      SourceLocation EndLoc = Stmt->getSourceRange().getEnd();
+//      auto RangeBorrow = Builder.CreateBeginBorrow(RangeVal,
+//                                                   Stmt->getSourceLoc(), EndLoc,
+//                                                   false);
+//
+//      // queue the end of the range borrow
+//      Cleanups.pushCleanup<BorrowCleanup>(RangeBorrow, EndLoc);
    }
 
    il::Value *ItAlloc = Builder.CreateAlloca(Iterator->getType(), 0, false);
@@ -4738,6 +4760,15 @@ il::Value *ILGenPass::visitTupleLiteral(TupleLiteral *node)
    return Tup;
 }
 
+il::Value* ILGenPass::GetDynamicTypeInfo(il::Value *Val)
+{
+   if (Val->getType()->isClass()) {
+      return Builder.GetTypeInfo(Val);
+   }
+
+   return GetOrCreateTypeInfo(Val->getType());
+}
+
 il::Value *ILGenPass::visitUnaryOperator(UnaryOperator *UnOp)
 {
    Builder.SetDebugLoc(UnOp->getTarget()->getSourceLoc());
@@ -4854,17 +4885,7 @@ il::Value *ILGenPass::visitUnaryOperator(UnaryOperator *UnOp)
       break;
    }
    case op::TypeOf: {
-      if (val->getType()->isClass()) {
-         Res = Builder.GetTypeInfo(val);
-      }
-      else {
-         Res = GetOrCreateTypeInfo(UnOp->getTarget()->getExprType());
-      }
-
-      Res = Builder.CreateBitCast(CastKind::BitCast,
-                                  Builder.CreateLoad(Res),
-                                  UnOp->getExprType());
-
+      Res = GetDynamicTypeInfo(val);
       break;
    }
    default:

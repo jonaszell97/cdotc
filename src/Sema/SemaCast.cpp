@@ -267,8 +267,9 @@ static void FromRecord(SemaPass &SP, QualType from, QualType to,
    auto ToRec = to->getRecord();
    if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
       auto &ConfTable = SP.getContext().getConformanceTable();
-      if (ConfTable.conformsTo(FromRec, cast<ProtocolDecl>(P)))
+      if (ConfTable.conformsTo(FromRec, cast<ProtocolDecl>(P))) {
          return Seq.addStep(CastKind::ProtoWrap, to, CastStrength::Implicit);
+      }
 
       return Seq.invalidate();
    }
@@ -288,6 +289,32 @@ static void FromRecord(SemaPass &SP, QualType from, QualType to,
    }
 
    Seq.invalidate();
+}
+
+static void FromProtocol(SemaPass &SP, QualType from, QualType to,
+                         ConversionSequenceBuilder &Seq) {
+   auto FromRec = cast<ProtocolDecl>(from->getRecord());
+   SP.ensureDeclared(FromRec);
+
+   if (!to->isRecordType()) {
+      return Seq.invalidate();
+   }
+
+   auto ToRec = to->getRecord();
+   if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
+      auto &ConfTable = SP.getContext().getConformanceTable();
+      if (ConfTable.conformsTo(FromRec, cast<ProtocolDecl>(P))) {
+         return Seq.addStep(CastKind::ExistentialCast, to,
+                            CastStrength::Implicit);
+      }
+
+      // FIXME conditional conformance
+      return Seq.addStep(CastKind::ExistentialCastFallible, to,
+                         CastStrength::Fallible);
+   }
+
+   return Seq.addStep(CastKind::ExistentialUnwrap, to,
+                      CastStrength::Fallible);
 }
 
 static void FromTuple(SemaPass &SP,
@@ -437,7 +464,13 @@ static void getConversionSequence(SemaPass &SP,
       FromReference(SP, from, to, Seq);
       break;
    case Type::RecordTypeID:
-      FromRecord(SP, from, to, Seq);
+      if (from->isProtocol()) {
+         FromProtocol(SP, from, to, Seq);
+      }
+      else {
+         FromRecord(SP, from, to, Seq);
+      }
+
       break;
    case Type::TupleTypeID:
       FromTuple(SP, from->uncheckedAsTupleType(), to, Seq);

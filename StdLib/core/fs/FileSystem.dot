@@ -53,7 +53,7 @@ enum AccessMode {
 
 /// Returns the timestamp (in milliseconds) when this file was last modified.
 internal def getLastModifiedTime(of fileName: libc.CString) -> libc.long_long {
-    return _cdot_GetLastModifiedTime(fileName)
+    return rt._cdot_GetLastModifiedTime(fileName)
 }
 
 /// Attempt to delete the file with the given name.

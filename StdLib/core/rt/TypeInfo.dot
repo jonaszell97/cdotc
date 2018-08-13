@@ -1,11 +1,12 @@
 
 module std.rt
 
-public struct ValueWitnessTable {
+public struct ValueWitnessTable with MoveOnly {
     /// Function that copies an existential value.
-    let copy: @thin (UnsafeRawPtr, UnsafeMutableRawPtr) -> Void
+    let copy: @thin (UnsafeMutableRawPtr, UnsafeRawPtr) -> Void
 
     /// Function that deinitializes an existential value.
+    /// For classes, this is a reference to _cdot_Release, not the actual deinitializer.
     let deinit: @thin (UnsafeMutableRawPtr) -> Void
 }
 
@@ -29,6 +30,9 @@ public struct TypeInfo {
     /// Pointer to the vtable in case of a class or protocol.
     let vtable: UnsafePtr<UnsafeRawPtr>
 
+    /// Pointer to the deinitializer of this type.
+    let deinit: @thin (UnsafeMutableRawPtr) -> Void
+
     /// NUL-terminated cstring containing the type name.
     let name: UnsafePtr<Byte>
 
@@ -50,25 +54,26 @@ public struct TypeInfo {
     /// \return the vtable for a particular protocol.
     def getConformance(_ proto: UnsafePtr<TypeInfo>) -> UnsafePtr<ProtocolConformance> {
         if !conformances {
-            sys.reportFatalError("type does not conform to protocol!")
+            return __nullptr
         }
 
-        var i = 0
-        var conf = &conformances[i++]
+        var i = 0u
+        var conformances = conformances
+        var conf = conformances + i++
 
         while conf {
-            if conf.typeInfo == proto {
-                return builtin.addressOf(conf)
+            if conf->typeInfo == proto {
+                return conf
             }
 
-            conf = &conformances[i++]
+            conf = conformances + i++
         }
 
-        sys.reportFatalError("type does not conform to protocol!")
+        return __nullptr
     }
 }
 
-struct ClassHeader {
+public struct ClassHeader {
     /// Strong reference count of this class.
     var strongRefcount: u64
 
@@ -102,41 +107,58 @@ struct ClassHeader {
     }
 
     var i = 0u
-    curr = lhs->conformances[i++]
+    curr = lhs->conformances[i++].typeInfo
 
     while curr {
-        if curr->typeInfo == rhs {
+        if curr == rhs {
             return true
         }
 
-        curr = lhs->conformances[i++]
+        curr = lhs->conformances[i++].typeInfo
     }
 
     return false
 }
 
-struct AnyOption {
+struct AnyOption<T> {
     var discriminator: Int8
-    var objectRef: UnsafePtr<ClassHeader>
+    var object: T
 }
 
 /// Perform a dynamic downcast from a base class to a child.
 /// \return `none` if the cast failed, `.Some(value)` otherwise.
 @extern(C) public def _cdot_DynamicDownCast(_ object: UnsafePtr<ClassHeader>,
-                                            _ rhs: UnsafePtr<TypeInfo>) -> AnyOption {
+                                            _ rhs: UnsafePtr<TypeInfo>,
+                                            _ result: mut ref AnyOption<UnsafeRawPtr>) {
     var curr = object->typeInfo
     while curr {
         if curr == rhs {
-            return AnyOption(discriminator: 1, objectRef: object)
+            result = AnyOption<UnsafeRawPtr>(discriminator: 1, object: object)
+            return
         }
 
         curr = curr->baseClass
     }
 
-    return AnyOption(discriminator: 0, objectRef: __nullptr)
+    result = AnyOption<UnsafeRawPtr>(discriminator: 0, object: __nullptr)
 }
 
-struct ExistentialContainer {
+/// Copy function for classes.
+@_builtin @extern(C)
+def _cdot_CopyClass(_ result: UnsafeMutableRawPtr, _ value: UnsafeRawPtr) {
+    // Get the class reference.
+    var classRef = builtin.unsafeConstCast(
+        builtin.reinterpretCast<AtomicRefcounted>(value))
+
+    // Retain the value.
+    _cdot_AtomicRetain(classRef)
+
+    // Set the new value to point to the retained class.
+    var resultRef = builtin.reinterpretCast<UnsafeRawPtr>(result)
+    builtin.storeToPointer(value, to: resultRef)
+}
+
+public struct ExistentialContainer {
     /// Pointer to the heap allocated memory where the value resides.
     var value: UnsafeMutableRawPtr
 
@@ -145,6 +167,16 @@ struct ExistentialContainer {
 
     /// Pointer to the currently active protocol conformance.
     var conformance: UnsafePtr<ProtocolConformance>
+
+    // Default C'tor.
+    init {
+        self.value = __nullptr
+        self.typeInfo = __nullptr
+        self.conformance = __nullptr
+    }
+
+    // Memberwise C'tor.
+    memberwise init
 }
 
 /// Initialize an existential container for a protocol value.
@@ -155,7 +187,8 @@ public def _cdot_InitializeExistential(_ value: UnsafeRawPtr,
                                        _ protocolTypeInfo: UnsafePtr<TypeInfo>,
                                        _ result: mut ref ExistentialContainer) {
     // Heap-allocate space for the existential value.
-    var alloc = mem.allocate(valueTypeInfo->stride, valueTypeInfo->alignment)
+    var alloc = mem.allocate(valueTypeInfo->stride,
+                             alignTo: valueTypeInfo->alignment)
 
     // Do a shallow copy of the value.
     mem.copy(to: alloc, from: value, valueTypeInfo->size)
@@ -178,18 +211,74 @@ public def _cdot_DeinitializeExistential(_ container: mut ref ExistentialContain
 }
 
 /// Copy an existential container for a protocol value.
-@extern(C)
+@_builtin @extern(C)
 public def _cdot_CopyExistential(_ container: mut ref ExistentialContainer,
                                  _ result: mut ref ExistentialContainer) {
     // Heap-allocate space for the existential value.
     var alloc = mem.allocate(container.typeInfo->stride,
-                             container.typeInfo->alignment)
+                             alignTo: container.typeInfo->alignment)
 
     // Call the witness copy function to create a copy of the value.
-    container.typeInfo->valueWitnessTable->copy(value, alloc)
+    container.typeInfo->valueWitnessTable->copy(alloc, container.value)
 
     // Initialize the existential container with the copied value.
     result = ExistentialContainer(value: alloc,
                                   typeInfo: container.typeInfo,
                                   conformance: container.conformance)
+}
+
+@_builtin @extern(C)
+public def _cdot_ExistentialCast(_ container: mut ref ExistentialContainer,
+                                 _ destinationProtocolTypeInfo: UnsafePtr<TypeInfo>,
+                                 _ result: mut ref ExistentialContainer) {
+    // Find the conformance.
+    var conformance = container.typeInfo->getConformance(destinationProtocolTypeInfo)
+    if !conformance {
+        sys.reportFatalError("cast from value of type ${container.typeInfo->name} to type ${destinationProtocolTypeInfo->name} failed")
+    }
+
+    // Copy the container.
+    _cdot_CopyExistential(&container, &result)
+
+    // Update the conformance.
+    result.conformance = conformance
+}
+
+@_builtin @extern(C)
+public def _cdot_ExistentialCastFallible(_ container: mut ref ExistentialContainer,
+                                         _ destinationProtocolTypeInfo: UnsafePtr<TypeInfo>,
+                                         _ result: mut ref AnyOption<ExistentialContainer>) {
+    // Find the conformance.
+    var conformance = container.typeInfo->getConformance(destinationProtocolTypeInfo)
+
+    // Return none if the conformance was not found.
+    if !conformance {
+        result.discriminator = 0
+        return
+    }
+
+    // Copy the container.
+    _cdot_CopyExistential(&container, &result.object)
+
+    // Update the conformance.
+    result.object.conformance = conformance
+    result.discriminator = 1
+}
+
+@_builtin @extern(C)
+public def _cdot_ExistentialUnwrap(_ container: mut ref ExistentialContainer,
+                                   _ destinationTypeInfo: UnsafePtr<TypeInfo>,
+                                   _ result: mut ref AnyOption<UnsafeMutableRawPtr>) {
+    // Check if the two types are compatible.
+    var cmp = _cdot_TypeInfoCmp(container.typeInfo, destinationTypeInfo)
+
+    // Not compatible.
+    if !cmp {
+        result.discriminator = 0
+        return
+    }
+
+    // Call the witness copy function to create a copy of the value.
+    container.typeInfo->valueWitnessTable->copy(result.object, container.value)
+    result.discriminator = 1
 }

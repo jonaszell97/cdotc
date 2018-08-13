@@ -50,7 +50,7 @@ public def _cdot_Release(_ target: owned UnsafeMutablePtr<Refcounted>) {
                target, target->typeInfo->name, target->strongRefcount)
 
     if target->strongRefcount == 0 {
-        target->typeInfo->deinitializer(target as! UnsafeMutableRawPtr)
+        target->typeInfo->deinit(target as! UnsafeMutableRawPtr)
 
         if target->weakRefcount == 0 {
             _cdot_Free(target as! UnsafeMutableRawPtr)
@@ -82,7 +82,7 @@ struct AtomicRefcounted {
     let typeInfo: UnsafePtr<TypeInfo>
 }
 
-@inline(always) @extern(C)
+@_builtin @extern(C) @inline(always)
 public def _cdot_AtomicRetain(_ target: UnsafeMutablePtr<AtomicRefcounted>) {
     assert!(target->strongRefcount != 0u, "[1;35mretaining freed object $target![0m\n")
 
@@ -100,7 +100,7 @@ public def _cdot_AtomicWeakRetain(_ target: UnsafeMutablePtr<AtomicRefcounted>) 
                 target, target->typeInfo->name, target->weakRefcount.load())
 }
 
-@inline(always) @extern(C)
+@_builtin @extern(C) @inline(always)
 public def _cdot_AtomicRelease(_ target: owned UnsafeMutablePtr<AtomicRefcounted>) {
     if !target {
         return
@@ -115,7 +115,7 @@ public def _cdot_AtomicRelease(_ target: owned UnsafeMutablePtr<AtomicRefcounted
                 target, target->typeInfo->name, target->strongRefcount.load())
 
     if target->strongRefcount == 0u {
-        target->typeInfo->deinitializer(target as! UnsafeMutableRawPtr)
+        target->typeInfo->deinit(target as! UnsafeMutableRawPtr)
 
         if target->weakRefcount == 0u {
             _cdot_Free(target as! UnsafeMutableRawPtr)

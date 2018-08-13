@@ -1324,7 +1324,7 @@ ProtocolDecl::ProtocolDecl(AccessSpecifier access,
                            ASTVector<TemplateParamDecl*> &&templateParams)
    : RecordDecl(ProtocolDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams)),
-     IsAny(false)
+     HasAssociatedTypeConstraint(false), IsAny(false)
 {}
 
 ProtocolDecl* ProtocolDecl::Create(ASTContext &C,
@@ -1339,7 +1339,8 @@ ProtocolDecl* ProtocolDecl::Create(ASTContext &C,
 }
 
 ProtocolDecl::ProtocolDecl(EmptyShell Empty)
-   : RecordDecl(Empty, ProtocolDeclID)
+   : RecordDecl(Empty, ProtocolDeclID),
+     HasAssociatedTypeConstraint(false), IsAny(false)
 {}
 
 ProtocolDecl *ProtocolDecl::CreateEmpty(ASTContext &C)
@@ -1618,7 +1619,7 @@ AssociatedTypeDecl::AssociatedTypeDecl(SourceLocation Loc,
                                        bool Implementation)
    : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Public, Name),
      Loc(Loc), protocolSpecifier(ProtoSpec), actualType(actualType),
-     Implementation(Implementation)
+     Implementation(Implementation), Self(Name.isStr("Self"))
 {
 
 }
@@ -1636,7 +1637,7 @@ AssociatedTypeDecl* AssociatedTypeDecl::Create(ASTContext &C,
 AssociatedTypeDecl::AssociatedTypeDecl(EmptyShell)
    : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Default,
                DeclarationName()),
-     protocolSpecifier(nullptr), Implementation(false)
+     protocolSpecifier(nullptr), Implementation(false), Self(false)
 {}
 
 AssociatedTypeDecl *AssociatedTypeDecl::CreateEmpty(ASTContext &C)

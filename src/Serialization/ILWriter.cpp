@@ -509,30 +509,6 @@ void ILWriter::writeConstant(const il::Constant &C)
    case Value::MagicConstantID:
       Record.push_back(cast<MagicConstant>(C).getMagicConstantKind());
       break;
-   case Value::VTableID: {
-      auto &VT = cast<VTable>(C);
-      Writer.AddDeclRef(VT.getClassDecl());
-
-      auto Vals = VT.getFunctions();
-      Writer.push_back(Vals.size());
-
-      for (auto V : Vals)
-         Writer.AddValue(V);
-
-      break;
-   }
-   case Value::TypeInfoID: {
-      auto &TI = cast<TypeInfo>(C);
-      Writer.AddTypeRef(TI.getForType());
-
-      auto Vals = TI.getValues();
-      Writer.push_back(Vals.size());
-
-      for (auto V : Vals)
-         Writer.AddValue(V);
-
-      break;
-   }
    case Value::ConstantBitCastInstID: {
       auto &BC = cast<ConstantBitCastInst>(C);
       Writer.AddValue(BC.getTarget());
@@ -731,8 +707,24 @@ void ILWriter::writeInstruction(const il::Instruction &I)
 
       break;
    }
+   case Value::VirtualCallInstID: {
+      auto &Call = cast<VirtualCallInst>(I);
+      Writer.AddTypeRef(Call.getFunctionType());
+      Writer.push_back(Call.getOffset());
+
+      break;
+   }
    case Value::InvokeInstID: {
       auto &Inv = cast<InvokeInst>(I);
+      Writer.AddValue(Inv.getNormalContinuation());
+      Writer.AddValue(Inv.getLandingPad());
+
+      break;
+   }
+   case Value::VirtualInvokeInstID: {
+      auto &Inv = cast<VirtualInvokeInst>(I);
+      Writer.AddTypeRef(Inv.getFunctionType());
+      Writer.push_back(Inv.getOffset());
       Writer.AddValue(Inv.getNormalContinuation());
       Writer.AddValue(Inv.getLandingPad());
 
@@ -806,7 +798,7 @@ void ILWriter::writeInstruction(const il::Instruction &I)
       Writer.push_back((uint64_t)cast<BitCastInst>(I).getKind());
       break;
    case Value::DynamicCastInstID:
-      Writer.AddDeclRef(cast<DynamicCastInst>(I).getTargetType());
+      Writer.AddValue(cast<DynamicCastInst>(I).getTargetTypeInfo());
       break;
    case Value::StructInitInstID:
       Writer.AddDeclRef(cast<StructInitInst>(I).getInitializedType());

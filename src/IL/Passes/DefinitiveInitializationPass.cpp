@@ -780,7 +780,7 @@ static il::Value *LookThroughLoad(il::Value *V)
 void DefinitiveInitializationPass::checkDeinitilization(il::CallInst &I,
                                                        BitVector &MustGen,
                                                        BitVector &MayGen) {
-   if (isa<IndirectCallInst>(I))
+   if (isa<VirtualCallInst>(I))
       return;
 
    auto Fn = ILGen.getDeclForValue(I.getCalledFunction());

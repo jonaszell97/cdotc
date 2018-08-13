@@ -699,13 +699,17 @@ public:
                      il::Constant *V,
                      bool &Val);
 
+   void checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl);
+
    bool resolvePrecedenceGroups();
    bool visitDelayedDeclsAfterParsing();
    bool visitDelayedDeclsAfterDeclaration();
+   bool visitProtocolImplementations();
    bool visitDelayedInstantiations();
 
    bool calculateRecordSizes(ArrayRef<RecordDecl*> Decls);
-   void addImplicitConformance(RecordDecl *R, ImplicitConformanceKind kind);
+   MethodDecl *addImplicitConformance(RecordDecl *R,
+                                      ImplicitConformanceKind kind);
 
    IdentifierRefExpr *wouldBeValidIdentifier(SourceLocation Loc,
                                              IdentifierInfo *maybeIdent,
@@ -1157,6 +1161,9 @@ private:
    /// Instantiations that have been declared but not yet visited.
    SmallVector<std::pair<StmtOrDecl, NamedDecl*>, 0> DelayedInstantiations;
 
+   /// Set of method declarations that fulfill protocol requirements.
+   llvm::SmallVector<MethodDecl*, 4> ProtocolImplementations;
+
 public:
    /// Dependency graph that tracks struct / enum / tuple layouts and finds
    /// circular dependencies.
@@ -1217,6 +1224,7 @@ public:
       llvm::Optional<bool> NeedsRetainOrRelease;
       llvm::Optional<bool> NeedsDeinitilization;
       llvm::Optional<bool> NeedsStructReturn;
+      llvm::Optional<bool> ContainsAssociatedTypeConstraint;
    };
 
    struct TryScopeRAII {
@@ -1380,11 +1388,12 @@ private:
 
    /// Builtin declarations.
 
-   Module *StdModule = nullptr;
+   Module *StdModule     = nullptr;
    Module *PreludeModule = nullptr;
    Module *BuiltinModule = nullptr;
    Module *ReflectModule = nullptr;
    Module *SysModule     = nullptr;
+   Module *RuntimeModule = nullptr;
    Module *AsyncModule   = nullptr;
    Module *TestModule    = nullptr;
 
@@ -1396,11 +1405,15 @@ private:
    StructDecl  *StringDecl    = nullptr;
    StructDecl *StringViewDecl = nullptr;
    EnumDecl   *OptionDecl     = nullptr;
-   StructDecl *TypeInfoDecl   = nullptr;
    StructDecl *BoxDecl        = nullptr;
    ClassDecl *PromiseDecl     = nullptr;
    ClassDecl *FutureDecl      = nullptr;
    StructDecl *CoroHandleDecl = nullptr;
+
+   StructDecl *TypeInfoDecl             = nullptr;
+   StructDecl *ValueWitnessTableDecl    = nullptr;
+   StructDecl *ProtocolConformanceDecl  = nullptr;
+   StructDecl *ExistentialContainerDecl = nullptr;
 
    ProtocolDecl *AnyDecl                 = nullptr;
    ProtocolDecl *EquatableDecl           = nullptr;
@@ -1442,6 +1455,7 @@ public:
    Module *getBuiltinModule();
    Module *getReflectModule();
    Module *getSysModule();
+   Module *getRuntimeModule();
    Module *getAsyncModule();
    Module *getTestModule();
 
@@ -1453,11 +1467,15 @@ public:
    StructDecl *getStringDecl();
    StructDecl *getStringViewDecl();
    EnumDecl *getOptionDecl();
-   StructDecl *getTypeInfoDecl();
    StructDecl *getBoxDecl();
    ClassDecl *getPromiseDecl();
    ClassDecl *getFutureDecl();
    StructDecl *getCoroutineHandleDecl();
+
+   StructDecl *getTypeInfoDecl();
+   StructDecl *getValueWitnessTableDecl();
+   StructDecl *getProtocolConformanceDecl();
+   StructDecl *getExistentialContainerDecl();
 
    ProtocolDecl *getAnyDecl();
    ProtocolDecl *getEquatableDecl();
@@ -1522,6 +1540,8 @@ public:
    bool NeedsDeinitilization(QualType Ty);
    bool NeedsStructReturn(QualType Ty);
 
+   bool ContainsAssociatedTypeConstraint(QualType Ty);
+
    int inferLambdaArgumentTypes(LambdaExpr *LE, QualType fromTy);
 
    NamedDecl *getCurrentDecl() const;
@@ -1549,6 +1569,11 @@ public:
 
    void registerExtension(ExtensionDecl *D);
    void makeExtensionVisible(ExtensionDecl *D);
+
+   void addProtocolImplementation(MethodDecl *Impl)
+   {
+      ProtocolImplementations.push_back(Impl);
+   }
 
 private:
    template<class T, class ...Args>

@@ -29,10 +29,10 @@ public struct ReverseIterator<Base : RandomAccessCollection> {
     /// C'tor.
     init (_ base: Base) {
         self.base = base
-        self.index = base.endIndex
+        self.index = self.base.endIndex
 
         if !base.empty {
-            self.index = base.index(before: self.index)
+            self.index = self.base.index(before: self.index)
         }
     }
 }
@@ -112,7 +112,7 @@ extend EnumeratedSequence with Iterable {
 
     /// \inherit
     public def getIterator() -> It {
-        return EnumeratedIterator(base)
+        return EnumeratedIterator(base.copy())
     }
 
     /// \inherit
@@ -120,7 +120,7 @@ extend EnumeratedSequence with Iterable {
 
     /// \inherit
     public def enumerated() -> Enumeration {
-        return EnumeratedSequence(base)
+        return EnumeratedSequence(base: base.copy())
     }
 }
 
@@ -389,8 +389,14 @@ extend Collection {
     }
 }
 
+alias IsEquatable<T> = T is Equatable || IsIntegral<T> || IsFloating<T>
+alias IsStringRepresentable<T> = T is StringRepresentable || IsIntegral<T> || IsFloating<T>
+alias IsComparable<T> = T is Comparable || IsIntegral<T> || IsFloating<T>
+
 // FIXME primitive-types
-extend Collection with StringRepresentable /* where Element is StringRepresentable */ {
+extend Collection with StringRepresentable
+        where IsStringRepresentable<Element>
+        /* where Element is StringRepresentable */ {
     /// \inherit
     def toString() -> String {
         var s = "["
@@ -410,7 +416,7 @@ extend Collection with StringRepresentable /* where Element is StringRepresentab
 }
 
 // FIXME primitive-types
-extend Collection with Equatable /* where Element is Equatable */ {
+extend Collection with Equatable where IsEquatable<Element> /*where Element is Equatable*/ {
     /// \inherit
     def infix ==(rhs: Self) -> Bool {
         var size = self.size
@@ -432,7 +438,9 @@ extend Collection with Equatable /* where Element is Equatable */ {
 }
 
 // FIXME primitive-types
-extend Collection with Comparable /* where Element is Comparable */ {
+extend Collection with Comparable
+        where IsComparable<Element>
+        /* where Element is Comparable */ {
     /// \inherit
     def infix <=>(rhs: Self) -> Int {
         var size = self.size
@@ -576,7 +584,7 @@ extend RandomAccessCollection where Self.Element is Equatable {
     /// \return the index of the first occurence of this value.
     def firstIndex(of: Element) -> Index {
         var idx = startIndex
-        for let el in self {
+        for el in self {
             if el == of {
                 return idx
             }
@@ -604,7 +612,21 @@ extend RandomAccessCollection where Self.Element is Equatable {
 
         return endIndex
     }
+}
 
+extend RandomAccessCollection where Element !is Equatable {
+    /// \return the index of the first occurence of this value.
+    def firstIndex(of: Element) -> Index {
+        return endIndex
+    }
+
+    /// \return the index of the last occurence of this value.
+    def lastIndex(of: Element) -> Index {
+        return endIndex
+    }
+}
+
+extend RandomAccessCollection {
     /// \return the index of the first element that satisfied the predicate \param predicate.
     def firstIndex(where predicate: (Element) -> Bool) -> Index {
         var index = startIndex
@@ -679,7 +701,7 @@ extend RandomAccessCollection {
     associatedType It = IndexedIterator<Self>
 
     /// \return an iterator over the values of this collection.
-    def getIterator() -> It { return It(self) }
+    def getIterator() -> It { return It(self.copy()) }
 }
 
 public protocol MutableCollection with RandomAccessCollection {
@@ -810,7 +832,7 @@ extend MutableCollection {
     def mutating removeAll(_ el: Element) {
         var idx = firstIndex(of: el)
         while idx != endIndex {
-            remove(idx)
+            remove(at: idx)
             idx = firstIndex(of: el)
         }
     }
@@ -838,30 +860,6 @@ extend MutableCollection {
         _checkRange(0..count)
         for i in 0..count {
             self.remove(at: self.startIndex)
-        }
-    }
-
-    /// Replace all occurences of \param value with \param replacement.
-    def mutating replace(_ value: Element, with replacement: Element) {
-        var index = self.startIndex
-        while index != self.endIndex {
-            if self[index] == value {
-                self[index] = replacement
-            }
-
-            index = index(after: index)
-        }
-    }
-
-    /// Replace all occurences of \param value with \param replacement.
-    def mutating replace(_ value: Element, withGeneratedValue replacement: () -> Element) {
-        var index = self.startIndex
-        while index != self.endIndex {
-            if self[index] == value {
-                self[index] = replacement()
-            }
-
-            index = index(after: index)
         }
     }
 
@@ -897,6 +895,42 @@ extend MutableCollection {
         }
 
         return i
+    }
+}
+
+extend MutableCollection where Element is Equatable {
+    /// Replace all occurences of \param value with \param replacement.
+    def mutating replace(_ value: Element, with replacement: Element) {
+        var index = self.startIndex
+        while index != self.endIndex {
+            if self[index] == value {
+                self[index] = replacement
+            }
+
+            index = self.index(after: index)
+        }
+    }
+
+    /// Replace all occurences of \param value with \param replacement.
+    def mutating replace(_ value: Element, withGeneratedValue replacement: () -> Element) {
+        var index = self.startIndex
+        while index != self.endIndex {
+            if self[index] == value {
+                self[index] = replacement()
+            }
+
+            index = self.index(after: index)
+        }
+    }
+}
+
+extend MutableCollection where Element !is Equatable {
+    /// Replace all occurences of \param value with \param replacement.
+    def mutating replace(_ value: Element, with replacement: Element) {
+    }
+
+    /// Replace all occurences of \param value with \param replacement.
+    def mutating replace(_ value: Element, withGeneratedValue replacement: () -> Element) {
     }
 }
 

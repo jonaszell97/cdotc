@@ -983,7 +983,10 @@ void ASTDeclUpdateVisitor::visitUnionDecl(UnionDecl *D)
 void ASTDeclReader::visitProtocolDecl(ProtocolDecl *D)
 {
    visitRecordDecl(D);
-   D->setIsAny(Record.readBool());
+
+   uint64_t Flags = Record.readInt();
+   D->setIsAny((Flags & 1) != 0);
+   D->setHasAssociatedTypeConstraint((Flags & 2) != 0);
 }
 
 void ASTDeclUpdateVisitor::visitProtocolDecl(ProtocolDecl *D)
@@ -1084,6 +1087,10 @@ void ASTDeclReader::visitMethodDecl(MethodDecl *D)
    D->setMethodID(Record.readInt());
 
    D->setBodyInstantiationLoc(ReadSourceLocation());
+
+   auto Offset = Record.readInt();
+   Reader.getReader().getCompilerInstance().getILGen()
+         .setProtocolMethodOffset(D, (unsigned)Offset);
 }
 
 void ASTDeclUpdateVisitor::visitMethodDecl(MethodDecl *D)
@@ -1631,8 +1638,8 @@ void ASTReader::finalizeUnfinishedDecls()
          // VTable
          auto *VT = Reader.ILReader.GetValue(Record[Idx++]);
          if (VT) {
-            Reader.ILReader.getModule()->addVTable(R,
-                                                  cast<il::GlobalVariable>(VT));
+            Sema.getILGen().SetVTable(cast<ClassDecl>(R),
+                                      cast<il::GlobalVariable>(VT));
          }
 
          if (auto *P = dyn_cast<ProtocolDecl>(D)) {

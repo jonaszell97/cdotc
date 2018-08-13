@@ -443,30 +443,6 @@ il::Constant* ILReader::readConstant(ILRecordReader &Record, unsigned Code)
    case Value::MagicConstantID:
       C = Builder.GetMagicConstant(Record.readEnum<MagicConstant::Kind>());
       break;
-   case Value::VTableID: {
-      auto CD = Record.readDeclAs<ast::ClassDecl>();
-
-      SmallVector<Function*, 4> Values;
-      auto NumValues = Record.readInt();
-
-      while (NumValues--)
-         Values.push_back(Record.readValueAs<Function>());
-
-      C = VTable::Create(ILCtx, Values, CD);
-      break;
-   }
-   case Value::TypeInfoID: {
-      auto ForTy = Record.readType();
-
-      SmallVector<Constant*, 4> Values;
-      auto NumValues = Record.readInt();
-
-      while (NumValues--)
-         Values.push_back(Record.readValueAs<Constant>());
-
-      C = TypeInfo::get(ILMod, ForTy, Values);
-      break;
-   }
    case Value::ConstantBitCastInstID:
       C = ConstantExpr::getBitCast(Record.readValueAs<Constant>(), Type);
       break;
@@ -837,10 +813,14 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
                              llvm::ArrayRef<Value*>(Operands).drop_back(1));
       break;
    }
-   case Value::IndirectCallInstID: {
-      I = Builder.CreateIndirectCall(
-         Operands.back(),
-         llvm::ArrayRef<Value*>(Operands).drop_back(1));
+   case Value::VirtualCallInstID: {
+      auto FnTy = cast<FunctionType>(Record.readType().getBuiltinTy());
+      auto Offset = (unsigned)Record.readInt();
+
+      I = Builder.CreateVirtualCall(cast<Function>(Operands.back()),
+                                    FnTy, Offset,
+                                    ArrayRef<Value*>(Operands).drop_back(1));
+
       break;
    }
    case Value::LambdaCallInstID: {
@@ -856,6 +836,19 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       I = Builder.CreateInvoke(cast<Function>(Operands.back()),
                                llvm::ArrayRef<Value*>(Operands).drop_back(1),
                                NormalDst, LPad);
+      break;
+   }
+   case Value::VirtualInvokeInstID: {
+      auto FnTy = cast<FunctionType>(Record.readType().getBuiltinTy());
+      auto Offset = (unsigned)Record.readInt();
+      auto NormalDst = Record.readValueAs<BasicBlock>();
+      auto LPad = Record.readValueAs<BasicBlock>();
+
+      I = Builder.CreateVirtualInvoke(cast<Function>(Operands.back()),
+                                      FnTy, Offset,
+                                      ArrayRef<Value*>(Operands).drop_back(1),
+                                      NormalDst, LPad);
+
       break;
    }
    case Value::IntrinsicCallInstID:
@@ -953,8 +946,14 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       break;
    }
    case Value::DynamicCastInstID: {
-      auto CD = Record.readDeclAs<ast::ClassDecl>();
-      I = Builder.CreateDynamicCast(Operands[0], CD, Type);
+      auto *TI = Record.readValue();
+      I = Builder.CreateDynamicCast(Operands[0], TI, Type);
+      break;
+   }
+   case Value::ExistentialInitInstID: {
+      I = Builder.CreateExistentialInit(Operands[0], Type,
+                                        Operands[1],
+                                        cast<GlobalVariable>(Operands[2]));
       break;
    }
    case Value::StructInitInstID: {

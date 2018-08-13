@@ -1160,7 +1160,12 @@ extend BigUInt with Hashable {
 
 extend BigUInt with StringRepresentable {
     static let digits: [u8; 36] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    def toString<let Base = 10>() -> String {
+
+    def toString() -> String {
+        return toString<10>()
+    }
+
+    def toString<let Base>() -> String {
         var s = ""
         var val = copy()
 

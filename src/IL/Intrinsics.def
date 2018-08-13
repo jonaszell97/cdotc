@@ -29,6 +29,7 @@
    CDOT_INTRINSIC(print_exception, "")
    CDOT_INTRINSIC(print_runtime_error, "")
    CDOT_INTRINSIC(cleanup_exception, "")
+   CDOT_INTRINSIC(deinit_existential, "")
    CDOT_INTRINSIC(terminate, "")
 
    // Atomic intrinsics

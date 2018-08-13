@@ -1211,6 +1211,16 @@ void SymbolMangler::mangleVTable(const RecordDecl *R,
    Mangler.mangleName(R);
 }
 
+void SymbolMangler::manglePTable(const RecordDecl *R,
+                                 const ProtocolDecl *P,
+                                 llvm::raw_ostream &OS) const {
+   // <special-name> ::= TP <type> <protocol>  # protocol virtual table
+   ItaniumLikeMangler Mangler(OS);
+   OS << "_CTP";
+   Mangler.mangleName(R);
+   Mangler.mangleName(P);
+}
+
 void SymbolMangler::mangleTypeInfo(const QualType &T,
                                    llvm::raw_ostream &OS) const {
    // <special-name> ::= TI <type>  # typeinfo structure

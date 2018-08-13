@@ -544,26 +544,6 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
       return getEnum(E->getType(), Case, fields);
    }
 
-   if (auto VT = dyn_cast<VTable>(C)) {
-      llvm::SmallVector<ctfe::Value, 8> Fns;
-      for (auto &Fn : VT->getFunctions())
-         Fns.push_back(getConstantVal(Fn));
-
-      return getArray(VT->getType(), Fns);
-   }
-
-   if (auto TI = dyn_cast<TypeInfo>(C)) {
-      size_t i = 0;
-      ctfe::Value Vals[MetaType::MemberCount];
-
-      for (auto &Fn : TI->getValues()) {
-         Vals[i++] = getConstantVal(Fn);
-      }
-
-      auto Ty = SP.getContext().getRecordType(SP.getTypeInfoDecl());
-      return getStruct(Ty, Vals);
-   }
-
    if (auto F = dyn_cast<il::Function>(C)) {
       return Value::getFunc(F);
    }
@@ -2498,6 +2478,11 @@ ctfe::Value EngineImpl::visitInvokeInst(InvokeInst const& I)
    llvm_unreachable("not yet");
 }
 
+Value EngineImpl::visitVirtualInvokeInst(const VirtualInvokeInst &I)
+{
+   llvm_unreachable("not yet");
+}
+
 ctfe::Value EngineImpl::visitLandingPadInst(LandingPadInst const& I)
 {
    llvm_unreachable("NOT YET");
@@ -2537,6 +2522,7 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::lifetime_end:
    case Intrinsic::begin_unsafe:
    case Intrinsic::end_unsafe:
+   case Intrinsic::deinit_existential:
       return {};
    case Intrinsic::__ctfe_stacktrace:
       printStackTrace();
@@ -2725,13 +2711,6 @@ ctfe::Value EngineImpl::visitCallInst(CallInst const& I)
    for (auto &arg : I.getArgs())
       args.push_back(getCtfeValue(arg));
 
-   if (I.isVirtual()) {
-      llvm_unreachable("unimplemented");
-   }
-   else if (I.isProtocolCall()) {
-      llvm_unreachable("unimplemented");
-   }
-
    auto fn = getFunctionDefinition(*I.getCalledFunction());
    if (!fn) {
       auto B = checkBuiltinCall(*I.getCalledFunction(), args,
@@ -2745,7 +2724,7 @@ ctfe::Value EngineImpl::visitCallInst(CallInst const& I)
    return visitFunction(*fn, args, I.getSourceLoc());
 }
 
-ctfe::Value EngineImpl::visitIndirectCallInst(IndirectCallInst const& I)
+ctfe::Value EngineImpl::visitVirtualCallInst(VirtualCallInst const& I)
 {
    auto val = getCtfeValue(I.getCalledFunction());
    auto fn = val.getFuncPtr();
@@ -3676,7 +3655,7 @@ ctfe::Value EngineImpl::visitUnionCastInst(UnionCastInst const& I)
    return Value::getPreallocated(getCtfeValue(I.getOperand(0)).getBuffer());
 }
 
-ctfe::Value EngineImpl::visitProtoCastInst(ProtoCastInst const& I)
+ctfe::Value EngineImpl::visitExistentialInitInst(ExistentialInitInst const& I)
 {
    llvm_unreachable("not yet");
 }
@@ -3687,6 +3666,11 @@ ctfe::Value EngineImpl::visitExceptionCastInst(ExceptionCastInst const& I)
 }
 
 ctfe::Value EngineImpl::visitDynamicCastInst(const DynamicCastInst &I)
+{
+   llvm_unreachable("not yet");
+}
+
+Value EngineImpl::visitExistentialCastInst(const ExistentialCastInst &I)
 {
    llvm_unreachable("not yet");
 }

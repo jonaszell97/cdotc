@@ -337,6 +337,7 @@ public:
 
 protected:
    SemaPass &SP;
+   ASTContext &Context;
 
    il::ValueType makeValueType(QualType ty);
 
@@ -410,8 +411,14 @@ public:
    void retainIfNecessary(il::Value *V);
    void releaseIfNecessary(il::Value *V);
 
-   void GenerateVTable(ClassDecl *C);
-   void GeneratePTable(RecordDecl *R);
+   il::GlobalVariable *GenerateVTable(ClassDecl *C);
+   il::GlobalVariable *GeneratePTable(RecordDecl *R, ProtocolDecl *P);
+
+   il::GlobalVariable *GetOrCreateVTable(ClassDecl *C);
+   il::GlobalVariable *GetVTable(ClassDecl *C);
+
+   il::GlobalVariable *GetOrCreatePTable(RecordDecl *R, ProtocolDecl *P);
+   il::GlobalVariable *GetPTable(RecordDecl *R, ProtocolDecl *P);
 
    il::Value *stringify(il::Value *Val);
    il::Value *getString(const llvm::Twine &str);
@@ -452,11 +459,25 @@ public:
 
    il::Function *getBuiltin(llvm::StringRef name);
 
-   il::TypeInfo *CreateTypeInfo(QualType ty);
+   il::ConstantStruct *CreateBuiltinTypeInfo(QualType ty);
+   il::ConstantStruct *CreateRecordTypeInfo(RecordDecl *R);
+   il::Constant *CreateValueWitnessTable(RecordDecl *R);
+
+   il::Constant *CreateProtocolConformances(RecordDecl *R);
+   il::ConstantStruct *CreateProtocolConformance(RecordDecl *R,
+                                                 ProtocolDecl *P);
 
    void SetTypeInfo(QualType Ty, il::GlobalVariable *GV);
+   void SetVTable(ClassDecl *C, il::GlobalVariable *GV);
+   void SetPTable(RecordDecl *R, ProtocolDecl *P, il::GlobalVariable *GV);
+
    il::GlobalVariable *GetOrCreateTypeInfo(QualType ty);
    il::GlobalVariable *GetTypeInfo(QualType ty);
+
+   il::Value *GetDynamicTypeInfo(il::Value *Val);
+
+   unsigned getProtocolMethodOffset(MethodDecl *ProtoMethod);
+   void setProtocolMethodOffset(MethodDecl *ProtoMethod, unsigned Offset);
 
    il::Instruction *CreateStore(il::Value *src, il::Value *dst,
                                 bool IsInitialization = false);
@@ -472,16 +493,23 @@ public:
    il::Function *CreateUnittestFun();
 
 private:
-   llvm::SmallDenseMap<QualType, il::GlobalVariable*> TypeInfoMap;
-   llvm::SmallDenseMap<il::Value*, std::pair<il::Value*, size_t>> CaptureMap;
+   llvm::DenseMap<QualType, il::GlobalVariable*> TypeInfoMap;
+   llvm::DenseMap<ClassDecl*, il::GlobalVariable*> VTableMap;
+   llvm::DenseMap<RecordDecl*,
+                  llvm::DenseMap<ProtocolDecl*, il::GlobalVariable*>> PTableMap;
 
-   Type *VoidTy;
-   PointerType *Int8PtrTy;
-   PointerType *UInt8PtrTy;
-   Type *BoolTy;
-   Type *DeinitializerTy;
-   Type *WordTy;
-   Type *USizeTy;
+   llvm::DenseMap<ast::MethodDecl*, unsigned> ProtocolMethodOffsets;
+
+   QualType VoidTy;
+   QualType RawPtrTy;
+   QualType MutableRawPtrTy;
+   QualType Int8PtrTy;
+   QualType UInt8PtrTy;
+   QualType BoolTy;
+   QualType CopyFnTy;
+   QualType DeinitializerTy;
+   QualType WordTy;
+   QualType USizeTy;
 
    il::Constant *UWordZero;
    il::Constant *UWordOne;
@@ -699,6 +727,7 @@ private:
       ILGenPass &ILGen;
    };
 
+public:
    bool eraseTemporaryCleanup(il::Value *Tmp)
    {
       assert(LastCleanupScope && "no cleanup scope!");
@@ -710,6 +739,7 @@ private:
       Cleanups.pushCleanup<DefaultCleanup>(Val);
    }
 
+private:
    std::vector<CtfeScope> CtfeScopeStack;
 
    bool PushToCtfeQueue = false;

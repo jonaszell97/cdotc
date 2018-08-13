@@ -705,64 +705,12 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto P = dyn_cast<ProtocolDecl>(Ty)) {
-//      auto vtbl = DI->createMemberType(
-//         forwardDecl,
-//         "vtbl",
-//         File,
-//         (unsigned)loc->getLine(),
-//         sizeof(void*) * CHAR_BIT,
-//         alignof(void*) * CHAR_BIT,
-//         0,
-//         flags,
-//         getTypeDI(IntegerType::getCharTy()->getPointerTo())
-//      );
-//
-//      auto obj = DI->createMemberType(
-//         forwardDecl,
-//         "obj",
-//         File,
-//         (unsigned)loc->getLine(),
-//         sizeof(void*) * CHAR_BIT,
-//         alignof(void*) * CHAR_BIT,
-//         0,
-//         flags,
-//         getTypeDI(IntegerType::getCharTy()->getPointerTo())
-//      );
-//
-//      auto size = DI->createMemberType(
-//         forwardDecl,
-//         "size",
-//         File,
-//         (unsigned)loc->getLine(),
-//         sizeof(uint64_t) * CHAR_BIT,
-//         alignof(uint64_t) * CHAR_BIT,
-//         0,
-//         flags,
-//         getTypeDI(IntegerType::getUnsigned())
-//      );
-
-//      containedTypes.push_back(vtbl);
-//      containedTypes.push_back(obj);
-//      containedTypes.push_back(size);
-
       auto contained = DI->getOrCreateArray(containedTypes);
-      auto MD = DI->createClassType(
-         ScopeStack.top(),
-         "cdot.Protocol",
-         File,
-         LineAndCol.line,
-         ty->getSize() * 8,
-         ty->getAlignment() * (unsigned short)8,
-         0,
-         flags,
-         nullptr,
-         contained,
-         nullptr,
-         nullptr,
-         "cdot.Protocol"
-      );
+      DI->replaceArrays(forwardDecl, contained);
 
-      (void)MD;
+      if (forwardDecl->isForwardDecl())
+         llvm::MDNode::replaceWithPermanent(
+            llvm::TempDICompositeType(forwardDecl));
    }
    else {
       llvm_unreachable("unknown record type");

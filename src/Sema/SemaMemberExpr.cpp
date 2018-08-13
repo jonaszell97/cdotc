@@ -50,7 +50,7 @@ static void checkCapture(SemaPass &SP, Expression *Expr)
 {
    if (!SP.getBoxDecl()) {
       SP.diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
-                  /*Box*/ 10);
+                  /*Box*/ 13);
    }
 }
 
@@ -1077,11 +1077,6 @@ ExprResult SemaPass::visitSuperExpr(SuperExpr *Expr)
    return Expr;
 }
 
-static ResolvedTemplateArg makeDummyTemplateArg(ASTContext &C,
-                                                TemplateParamDecl *P) {
-   return ResolvedTemplateArg(P, C.getTemplateArgType(P), P->getSourceLoc());
-}
-
 ExprResult SemaPass::visitSelfExpr(SelfExpr *Expr)
 {
    if (Expr->isUppercase()) {
@@ -1091,30 +1086,12 @@ ExprResult SemaPass::visitSelfExpr(SelfExpr *Expr)
          return ExprError();
       }
 
-      if (isa<ProtocolDecl>(R)) {
-         Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getMetaType(Context.getSelfTy()));
+      auto *SelfDecl = R->lookupSingle<AssociatedTypeDecl>(
+         getIdentifier("Self"));
 
-         return Expr;
-      }
-
-      if (R->isTemplate()) {
-         SmallVector<ResolvedTemplateArg, 2> TemplateArgs;
-         for (auto *Param : R->getTemplateParams()) {
-            TemplateArgs.emplace_back(makeDummyTemplateArg(Context, Param));
-         }
-
-         auto *ArgList = FinalTemplateArgumentList::Create(Context,
-                                                           TemplateArgs,
-                                                           false);
-
-
-         Expr->setExprType(Context.getMetaType(
-            Context.getDependentRecordType(R, ArgList)));
-      }
-      else {
-         Expr->setExprType(Context.getMetaType(Context.getRecordType(R)));
-      }
+      assert(SelfDecl && "no Self associated type!");
+      Expr->setExprType(
+         Context.getMetaType(Context.getAssociatedType(SelfDecl)));
 
       return Expr;
    }

@@ -1784,6 +1784,9 @@ public:
    bool isAny() const { return IsAny; }
    void setIsAny(bool IsAny) { ProtocolDecl::IsAny = IsAny; }
 
+   bool hasAssociatedTypeConstraint() const { return HasAssociatedTypeConstraint; }
+   void setHasAssociatedTypeConstraint(bool V) { HasAssociatedTypeConstraint = V; }
+
 private:
    ProtocolDecl(AccessSpecifier access,
                 SourceLocation KeywordLoc,
@@ -1793,7 +1796,8 @@ private:
 
    ProtocolDecl(EmptyShell Empty);
 
-   bool IsAny : 1;
+   bool HasAssociatedTypeConstraint : 1;
+   bool IsAny                       : 1;
 };
 
 class ExtensionDecl final: public NamedDecl,
@@ -2166,6 +2170,9 @@ public:
    bool isImplementation() const { return Implementation; }
    void setImplementation(bool V) { Implementation = V; }
 
+   bool isSelf() const { return Self; }
+   void setSelf(bool V) { Self = V; }
+
    ProtocolDecl *getProto() const { return Proto; }
    void setProto(ProtocolDecl *P) { Proto = P; }
 
@@ -2185,7 +2192,9 @@ private:
    IdentifierInfo *protocolSpecifier;
    SourceType actualType;
    ProtocolDecl *Proto = nullptr;
-   bool Implementation;
+
+   bool Implementation : 4;
+   bool Self           : 4;
 };
 
 class PropDecl: public NamedDecl, public DefaultImplementable<PropDecl> {

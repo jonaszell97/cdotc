@@ -218,14 +218,10 @@ protected:
 
    struct CallInstBits {
       ValueBits InstBits;
-      bool IsVirtual      : 1;
-      bool IsProtocolCall : 1;
    };
 
    struct InvokeInstBits {
       ValueBits InstBits;
-      bool IsVirtual      : 1;
-      bool IsProtocolCall : 1;
    };
 
    struct ArgumentBits {

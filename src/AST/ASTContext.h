@@ -95,6 +95,10 @@ private:
                           llvm::DenseMap<const NamedDecl*, NamedDecl*>>
                               ProtocolDefaultImplMap;
 
+   mutable llvm::DenseMap<const RecordDecl*,
+                          llvm::DenseMap<const NamedDecl*, NamedDecl*>>
+                              ProtocolImplMap;
+
    mutable llvm::DenseMap<const IdentifierInfo*,
                           PrecedenceGroupDecl*> InfixOperators;
    mutable llvm::DenseSet<const IdentifierInfo*> PrefixOperators;
@@ -199,6 +203,15 @@ public:
 
    const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
    getProtocolDefaultImpls(const ProtocolDecl *P);
+
+   void addProtocolImpl(const RecordDecl *R, const NamedDecl *Req,
+                        NamedDecl *Impl);
+
+   NamedDecl *getProtocolImpl(const RecordDecl *R,
+                              const NamedDecl *Req);
+
+   const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+   getProtocolImpls(const RecordDecl *R);
 
    void registerDecl(unsigned SourceID, Decl *D)
    {

@@ -156,7 +156,7 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S)
       auto weakRefcnt = Builder.GetWeakRefcount(Self);
       Builder.CreateStore(UWordZero, weakRefcnt);
 
-      if (il::Constant *TI = getModule()->getTypeInfo(C)) {
+      if (il::Constant *TI = GetOrCreateTypeInfo(C->getType())) {
          TI = ConstantExpr::getAddrOf(TI);
          TI = ConstantExpr::getBitCast(TI, Int8PtrTy);
 
@@ -405,10 +405,10 @@ void ILGenPass::visitStructDecl(StructDecl *S)
    visitRecordCommon(S);
 }
 
-void ILGenPass::GenerateVTable(ClassDecl *C)
+il::GlobalVariable *ILGenPass::GenerateVTable(ClassDecl *C)
 {
-   llvm::SmallVector<MethodDecl*, 4> VirtualMethods;
-   llvm::SmallVector<ClassDecl*, 4> ClassHierarchy;
+   SmallVector<MethodDecl*, 4> VirtualMethods;
+   SmallVector<ClassDecl*, 4> ClassHierarchy;
    llvm::DenseMap<MethodDecl*, unsigned> OffsetMap;
 
    ClassDecl *Curr = C;
@@ -441,7 +441,7 @@ void ILGenPass::GenerateVTable(ClassDecl *C)
    }
 
    if (VirtualMethods.empty())
-      return;
+      return nullptr;
 
    C->setNumVirtualFns((unsigned)VirtualMethods.size());
 
@@ -451,23 +451,132 @@ void ILGenPass::GenerateVTable(ClassDecl *C)
       SP.getMangler().mangleVTable(C, OS);
    }
 
-   SmallVector<il::Function*, 8> Impls;
+   SmallVector<il::Constant*, 8> Impls;
    for (auto *M : VirtualMethods) {
       auto *Fn = getFunc(M);
       Fn->setVtableOffset((unsigned)Impls.size());
 
-      Impls.push_back(Fn);
+      Impls.push_back(ConstantExpr::getBitCast(Fn, RawPtrTy));
    }
 
-   auto VT = Builder.CreateVTable(Impls, C);
-   auto Glob = Builder.CreateGlobalVariable(VT, true, s, C->getSourceLoc());
-
-   getModule()->addVTable(C, Glob);
+   auto VT = Builder.GetConstantArray(Impls);
+   return Builder.CreateGlobalVariable(VT, true, s, C->getSourceLoc());
 }
 
-void ILGenPass::GeneratePTable(RecordDecl *R)
+il::GlobalVariable *ILGenPass::GeneratePTable(RecordDecl *R, ProtocolDecl *P)
 {
+   SmallVector<il::Constant*, 8> Impls;
 
+   unsigned i = 0;
+   for (auto *D : P->getDecls()) {
+      if (!D->isProtocolRequirement() || D->getDeclContext() != P)
+         continue;
+
+      auto *M = dyn_cast<MethodDecl>(D);
+      if (!M || M->isBaseInitializer())
+         continue;
+
+      auto *Impl = Context.getProtocolImpl(R, M);
+      if (!Impl) {
+         auto *C = cast<ClassDecl>(R)->getParentClass();
+         while (C) {
+            Impl = Context.getProtocolImpl(C, M);
+            if (Impl)
+               break;
+
+            C = C->getParentClass();
+         }
+      }
+
+      assert(Impl && "incorrect protocol conformance!");
+
+      auto Offset = getProtocolMethodOffset(M);
+      if (Offset == -1) {
+         Offset = i;
+         setProtocolMethodOffset(M, Offset);
+      }
+
+      auto *MethodImpl = cast<MethodDecl>(Impl);
+      auto *ILFn = getFunc(MethodImpl);
+      ILFn->setPtableOffset(Offset);
+
+      SP.addProtocolImplementation(MethodImpl);
+      Impls.push_back(ConstantExpr::getBitCast(ILFn, RawPtrTy));
+
+      ++i;
+   }
+
+   std::string name;
+   {
+      llvm::raw_string_ostream OS(name);
+      SP.getMangler().manglePTable(R, P, OS);
+   }
+
+   Constant *VT;
+   if (Impls.empty()) {
+      VT = Builder.GetConstantArray(Context.getArrayType(RawPtrTy, 0), {});
+   }
+   else {
+      VT = Builder.GetConstantArray(Impls);
+   }
+
+   return Builder.CreateGlobalVariable(VT, true, name, R->getSourceLoc());
+}
+
+il::GlobalVariable* ILGenPass::GetOrCreateVTable(ClassDecl *C)
+{
+   auto It = VTableMap.find(C);
+   if (It != VTableMap.end()) {
+      return It->getSecond();
+   }
+
+   auto *VT = GenerateVTable(C);
+   VTableMap[C] = VT;
+
+   return VT;
+}
+
+il::GlobalVariable* ILGenPass::GetVTable(ClassDecl *C)
+{
+   auto It = VTableMap.find(C);
+   if (It != VTableMap.end()) {
+      return It->getSecond();
+   }
+
+   return nullptr;
+}
+
+il::GlobalVariable* ILGenPass::GetOrCreatePTable(RecordDecl *R,
+                                                 ProtocolDecl *P) {
+   if (isa<ProtocolDecl>(R))
+      return nullptr;
+
+   auto It1 = PTableMap.find(R);
+   if (It1 != PTableMap.end()) {
+      auto It2 = It1->getSecond().find(P);
+      if (It2 != It1->getSecond().end())
+         return It2->getSecond();
+   }
+
+   auto *PT = GeneratePTable(R, P);
+   PTableMap[R][P] = PT;
+
+   return PT;
+}
+
+il::GlobalVariable* ILGenPass::GetPTable(RecordDecl *R, ProtocolDecl *P)
+{
+   if (isa<ProtocolDecl>(R))
+      return nullptr;
+
+   auto It1 = PTableMap.find(R);
+   if (It1 != PTableMap.end()) {
+      auto It2 = It1->getSecond().find(P);
+      if (It2 != It1->getSecond().end())
+         return It2->getSecond();
+   }
+
+   return nullptr;
 }
 
 void ILGenPass::visitMethodDecl(MethodDecl *node)
@@ -750,6 +859,11 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R)
       unsigned numFields = S->getNumNonStaticFields();
       unsigned i = 0;
 
+      if (!numFields) {
+         Builder.CreateRet(Builder.GetTrue());
+         return;
+      }
+
       llvm::SmallVector<BasicBlock*, 8> CompBlocks;
       while (i < numFields) {
          CompBlocks.push_back(Builder.CreateBasicBlock("tuplecmp"));
@@ -999,6 +1113,30 @@ void ILGenPass::SetTypeInfo(QualType Ty, il::GlobalVariable *GV)
    TypeInfoMap[Ty] = GV;
 }
 
+void ILGenPass::SetVTable(ClassDecl *C, il::GlobalVariable *GV)
+{
+   VTableMap[C] = GV;
+}
+
+void ILGenPass::SetPTable(RecordDecl *R, ProtocolDecl *P,
+                          il::GlobalVariable *GV) {
+   PTableMap[R][P] = GV;
+}
+
+unsigned ILGenPass::getProtocolMethodOffset(MethodDecl *ProtoMethod)
+{
+   auto It = ProtocolMethodOffsets.find(ProtoMethod);
+   if (It == ProtocolMethodOffsets.end())
+      return -1;
+
+   return It->getSecond();
+}
+
+void ILGenPass::setProtocolMethodOffset(MethodDecl *ProtoMethod,
+                                        unsigned Offset) {
+   ProtocolMethodOffsets[ProtoMethod] = Offset;
+}
+
 il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
 {
    auto it = TypeInfoMap.find(ty);
@@ -1024,7 +1162,14 @@ il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
    }
 
    ModuleRAII MR(*this, Mod);
-   auto TI = CreateTypeInfo(ty);
+   ConstantStruct *TI;
+
+   if (ty->isRecordType()) {
+      TI = CreateRecordTypeInfo(ty->getRecord());
+   }
+   else {
+      TI = CreateBuiltinTypeInfo(ty);
+   }
 
    std::string s;
    {
@@ -1032,96 +1177,204 @@ il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
       SP.getMangler().mangleTypeInfo(ty, OS);
    }
 
-   auto GV = Builder.CreateGlobalVariable(SP.getContext().getMetaType(ty),
-                                          true, TI, s, Loc);
+   auto GV = Builder.CreateGlobalVariable(TI, true, s, Loc);
 
    TypeInfoMap[ty] = GV;
-   if (ty->isRecordType())
-      getModule()->addTypeInfo(ty->getRecord(), GV);
-
    if (!ty->isRecordType())
       GV->setLinkage(GlobalVariable::InternalLinkage);
 
    return GV;
 }
 
-il::TypeInfo *ILGenPass::CreateTypeInfo(QualType ty)
+il::ConstantStruct *ILGenPass::CreateRecordTypeInfo(RecordDecl *R)
 {
-   il::Constant *Data[MetaType::MemberCount]{ nullptr };
+   QualType ty = R->getType();
+   auto &Context = SP.getContext();
+   auto &TI = Context.getTargetInfo();
 
-   if (auto Obj = ty->asRecordType()) {
-      auto R = Obj->getRecord();
-      if (R->isImportedFromModule() || R->isInvalid())
-         return nullptr;
-
-      if (auto C = dyn_cast<ClassDecl>(R)) {
-         if (auto P = C->getParentClass()) {
-            auto TI = GetOrCreateTypeInfo(SP.getContext().getRecordType(P));
-            Data[MetaType::BaseClass] = ConstantExpr::getAddrOf(TI);
-         }
-         if (auto VT = getModule()->getVTable(C)) {
-            Data[MetaType::VTable] = ConstantExpr::getBitCast(VT, Int8PtrTy);
-         }
+   // Base class pointer.
+   Constant *baseClass = nullptr;
+   if (auto *C = dyn_cast<ClassDecl>(R)) {
+      if (auto *Base = C->getParentClass()) {
+         auto *BaseTypeInfo = GetOrCreateTypeInfo(Base->getType());
+         baseClass = ConstantExpr::getAddrOf(BaseTypeInfo);
       }
+   }
 
-      if (!Data[MetaType::BaseClass])
-         Data[MetaType::BaseClass] = Builder.GetConstantNull(Int8PtrTy);
+   if (!baseClass)
+      baseClass = Builder.GetConstantNull(Context.getPointerType(
+         Context.getRecordType(SP.getTypeInfoDecl())));
 
-      if (!Data[MetaType::VTable])
-         Data[MetaType::VTable] = Builder.GetConstantNull(Int8PtrTy);
-
-      std::string PrettyName = R->getFullName();
-      Data[MetaType::Name] = ConstantString::get(Builder.getContext(),
-                                                 PrettyName);
-
-      if (auto Deinit = R->getDeinitializer()) {
-         Data[MetaType::Deinitializer]
-            = ConstantExpr::getBitCast(getFunc(Deinit), Int8PtrTy);
+   // Vtable pointer.
+   Constant *vtable = nullptr;
+   if (auto *C = dyn_cast<ClassDecl>(R)) {
+      auto *VT = GetOrCreateVTable(C);
+      if (VT) {
+         vtable = ConstantExpr::getAddrOf(VT);
       }
-      else {
-         Data[MetaType::Deinitializer] = Builder.GetConstantNull(Int8PtrTy);
-      }
+   }
 
-      llvm::SmallVector<il::Constant*, 4> Conformances;
-      if (auto Any = SP.getAnyDecl()) {
-         QualType AnyTy = SP.getContext().getRecordType(Any);
-         if (AnyTy != ty) {
-            auto AnyTI = GetOrCreateTypeInfo(AnyTy);
-            auto BC = ConstantExpr::getBitCast(AnyTI, Int8PtrTy);
+   if (!vtable)
+      vtable = Builder.GetConstantNull(VoidTy->getPointerTo(Context)
+                                             ->getPointerTo(Context));
 
-            Conformances.push_back(BC);
-         }
-      }
-
-      for (const auto &Conf : SP.getContext().getConformanceTable()
-                                .getAllConformances(R)) {
-         auto TI = GetOrCreateTypeInfo(
-            SP.getContext().getRecordType(Conf->getProto()));
-         auto BC = ConstantExpr::getBitCast(TI, Int8PtrTy);
-
-         Conformances.push_back(BC);
-      }
-
-      if (!Conformances.empty())
-         Conformances.push_back(Builder.GetConstantNull(Int8PtrTy));
-      
-      ArrayType *ArrTy = SP.getContext().getArrayType(Int8PtrTy,
-                                                      Conformances.size());
-
-      Data[MetaType::Conformances]
-         = Builder.GetConstantArray(ArrTy, Conformances);
+   // Deinitializer.
+   Constant *deinit;
+   if (auto *DeinitFn = R->getDeinitializer()) {
+     deinit = ConstantExpr::getBitCast(getFunc(DeinitFn), DeinitializerTy);
    }
    else {
-      Data[MetaType::BaseClass] = Builder.GetConstantNull(Int8PtrTy);
-      Data[MetaType::VTable] = Builder.GetConstantNull(Int8PtrTy);
-      Data[MetaType::Name] = Builder.GetConstantString(ty->toString());
-      Data[MetaType::Deinitializer] = Builder.GetConstantNull(Int8PtrTy);
-      Data[MetaType::Conformances] = Builder.GetConstantArray(Int8PtrTy, 0);
+      deinit = Builder.GetConstantNull(DeinitializerTy);
    }
 
-   Data[MetaType::PTable] = Builder.GetConstantNull(Int8PtrTy);
+   // Type name.
+   auto name = Builder.GetConstantString(R->getFullName());
 
-   return TypeInfo::get(getModule(), ty, Data);
+   // Value witness table.
+   auto valueWitnessTable = CreateValueWitnessTable(R);
+
+   // Protocol conformances.
+   auto conformances = CreateProtocolConformances(R);
+
+   // Type size.
+   auto size = Builder.GetConstantInt(USizeTy, TI.getSizeOfType(ty));
+
+   // Type alignment.
+   auto alignment = Builder.GetConstantInt(USizeTy, TI.getAlignOfType(ty));
+
+   // Type stride.
+   auto stride = Builder.GetConstantInt(USizeTy, TI.getAllocSizeOfType(ty));
+
+   return Builder.GetConstantStruct(SP.getTypeInfoDecl(), {
+      baseClass, vtable, deinit, name, valueWitnessTable, conformances, size,
+      alignment, stride
+   });
+}
+
+il::ConstantStruct* ILGenPass::CreateBuiltinTypeInfo(QualType ty)
+{
+   auto &TI = Context.getTargetInfo();
+
+   // Base class pointer.
+   auto baseClass = Builder.GetConstantNull(SP.getTypeInfoDecl()->getType());
+
+   // Vtable pointer.
+   auto vtable = Builder.GetConstantNull(VoidTy->getPointerTo(Context)
+                                               ->getPointerTo(Context));
+
+   // Deinitializer
+   auto deinit = Builder.GetConstantNull(DeinitializerTy);
+
+   // Type name.
+   auto name = Builder.GetConstantString(ty.toString());
+
+   // Value witness table.
+   auto valueWitnessTable = Builder.GetConstantNull(Context.getPointerType(
+      Context.getRecordType(SP.getValueWitnessTableDecl())));
+
+   // Protocol conformances.
+   auto conformances = Builder.GetConstantNull(Context.getPointerType(
+      Context.getRecordType(SP.getProtocolConformanceDecl())));
+
+   // Type size.
+   auto size = Builder.GetConstantInt(USizeTy, TI.getSizeOfType(ty));
+
+   // Type alignment.
+   auto alignment = Builder.GetConstantInt(USizeTy, TI.getAlignOfType(ty));
+
+   // Type stride.
+   auto stride = Builder.GetConstantInt(USizeTy, TI.getAllocSizeOfType(ty));
+
+   return Builder.GetConstantStruct(SP.getTypeInfoDecl(), {
+      baseClass, vtable, deinit, name, valueWitnessTable, conformances, size,
+      alignment, stride
+   });
+}
+
+il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl *R)
+{
+   if (isa<ProtocolDecl>(R)) {
+      auto Ty = Context.getRecordType(SP.getValueWitnessTableDecl());
+      return Builder.GetConstantNull(Context.getPointerType(Ty));
+   }
+
+   // Copy function.
+   il::Constant *CopyFn = nullptr;
+   if (isa<ClassDecl>(R)) {
+      auto *Decl = SP.getBuiltinDecl<FunctionDecl>("_cdot_CopyClass");
+      SP.ensureDeclared(Decl);
+
+      CopyFn = getFunc(Decl);
+   }
+   else if (auto *Copy = R->getCopyFn()) {
+      CopyFn = getFunc(Copy);
+   }
+   else {
+      CopyFn = Builder.GetConstantNull(CopyFnTy);
+   }
+
+   CopyFn = ConstantExpr::getBitCast(CopyFn, CopyFnTy);
+
+   // Deinitializer function.
+   il::Constant *DeinitFn = nullptr;
+   if (isa<ClassDecl>(R)) {
+      auto *Decl = SP.getBuiltinDecl<FunctionDecl>("_cdot_AtomicRelease");
+      SP.ensureDeclared(Decl);
+
+      DeinitFn = getFunc(Decl);
+   }
+   else if (auto *Deinit = R->getDeinitializer()) {
+      DeinitFn = getFunc(Deinit);
+   }
+   else {
+      DeinitFn = Builder.GetConstantNull(DeinitializerTy);
+   }
+
+   DeinitFn = ConstantExpr::getBitCast(DeinitFn, DeinitializerTy);
+
+   auto *S = Builder.GetConstantStruct(SP.getValueWitnessTableDecl(),
+                                       {CopyFn, DeinitFn});
+
+   auto *GV = Builder.CreateGlobalVariable(S, true);
+   return ConstantExpr::getAddrOf(GV);
+}
+
+il::Constant* ILGenPass::CreateProtocolConformances(RecordDecl *R)
+{
+   if (isa<ProtocolDecl>(R)) {
+      return Builder.GetConstantNull(
+         Context.getPointerType(Context.getRecordType(
+            SP.getProtocolConformanceDecl())));
+   }
+
+   SmallVector<Constant*, 4> Conformances;
+   for (auto *Conf : Context.getConformanceTable().getAllConformances(R)) {
+      Conformances.push_back(CreateProtocolConformance(R, Conf->getProto()));
+   }
+
+   if (Conformances.empty()) {
+      return Builder.GetConstantNull(
+         Context.getPointerType(Context.getRecordType(
+            SP.getProtocolConformanceDecl())));
+   }
+
+   auto *Arr = Builder.GetConstantArray(Conformances);
+   auto *GV = Builder.CreateGlobalVariable(Arr, true);
+
+   return ConstantExpr::getAddrOf(GV);
+}
+
+il::ConstantStruct* ILGenPass::CreateProtocolConformance(RecordDecl *R,
+                                                         ProtocolDecl *P) {
+   // Type info reference.
+   auto *TI = GetOrCreateTypeInfo(P->getType());
+
+   // VTable.
+   auto *VTable = GetOrCreatePTable(R, P);
+
+   return Builder.GetConstantStruct(SP.getProtocolConformanceDecl(), {
+      ConstantExpr::getAddrOf(TI), VTable
+   });
 }
 
 } // namespace ast

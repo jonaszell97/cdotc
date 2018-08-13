@@ -247,17 +247,17 @@ public:
 
 class ConstantStruct final: public Constant, public llvm::FoldingSetNode {
    ConstantStruct(ValueType Ty,
-                  llvm::ArrayRef<Constant*> vec);
+                  ArrayRef<Constant*> vec);
 
    ConstantStruct(TypeID id,
                   ValueType Ty,
-                  llvm::ArrayRef<Constant*> vec);
+                  ArrayRef<Constant*> vec);
 
    unsigned NumElements;
 
 public:
    static ConstantStruct *get(ValueType Ty,
-                              llvm::ArrayRef<Constant*> vec);
+                              ArrayRef<Constant*> vec);
 
    static ConstantStruct *getAllZeros(ValueType ty);
 
@@ -413,67 +413,6 @@ public:
    static bool classof(Value const* T)
    {
       return T->getTypeID() == ConstantEnumID;
-   }
-};
-
-class VTable: public Constant {
-   VTable(il::Context &Ctx,
-          llvm::ArrayRef<il::Function*> Entries,
-          ast::ClassDecl *C);
-
-   unsigned NumFunctions;
-   ast::ClassDecl *C;
-
-public:
-   static VTable *Create(il::Context &Ctx,
-                         llvm::ArrayRef<il::Function*> Entries,
-                         ast::ClassDecl *C);
-
-   ast::ClassDecl *getClassDecl() const { return C; }
-   unsigned getNumFunctions() const { return NumFunctions; }
-
-   llvm::ArrayRef<Function*> getFunctions() const
-   {
-      return { reinterpret_cast<Function *const*>(this + 1), NumFunctions };
-   }
-
-   op_iterator op_begin_impl(){ return reinterpret_cast<Constant**>(this + 1); }
-   unsigned getNumOperandsImpl() const { return NumFunctions; }
-
-   static inline bool classof(Value const* T)
-   {
-      return T->getTypeID() == VTableID;
-   }
-};
-
-class TypeInfo: public Constant {
-   TypeInfo(Module *M, QualType forType,
-            llvm::ArrayRef<il::Constant*> Vals);
-
-   QualType forType;
-   il::Constant *Vals[MetaType::MemberCount];
-
-public:
-   static TypeInfo *get(Module *M, QualType forType,
-                        llvm::ArrayRef<il::Constant*> Vals);
-
-   llvm::ArrayRef<Constant*> getValues() const { return Vals; }
-
-   il::Constant* getParentClass() const { return Vals[MetaType::BaseClass]; }
-   il::Constant* getVTable() const { return Vals[MetaType::VTable]; }
-   il::Constant* getPTable() const { return Vals[MetaType::PTable]; }
-   il::Constant* getTypeName() const { return Vals[MetaType::Name]; }
-   il::Constant* getDeinitializer()const {return Vals[MetaType::Deinitializer];}
-   il::Constant* getConformances() const {return Vals[MetaType::Conformances];}
-
-   QualType getForType() const { return forType; }
-
-   op_iterator op_begin_impl(){ return Vals; }
-   unsigned getNumOperandsImpl() const { return MetaType::MemberCount; }
-
-   static inline bool classof(Value const* T)
-   {
-      return T->getTypeID() == TypeInfoID;
    }
 };
 

@@ -216,8 +216,11 @@ bool SemaPass::doSema()
       return true;
 
    stage = Stage::Sema;
-
    visitDeclContext(&getCompilationUnit().getGlobalDeclCtx());
+
+   if (visitProtocolImplementations())
+      return true;
+
    return visitDelayedInstantiations();
 }
 
@@ -398,6 +401,17 @@ NamedDecl* SemaPass::getInstantiationScope(NamedDecl *Inst)
    }
 
    return nullptr;
+}
+
+bool SemaPass::visitProtocolImplementations()
+{
+   unsigned i = 0;
+   while (i < ProtocolImplementations.size()) {
+      auto *Impl = ProtocolImplementations[i++];
+      maybeInstantiateMemberFunction(Impl, Impl);
+   }
+
+   return false;
 }
 
 bool SemaPass::visitDelayedInstantiations()
@@ -976,6 +990,37 @@ public:
       if (R->isInstantiation()) {
          return this->visitRecordTypeCommon(T, R, R->getTemplateArgs());
       }
+      if (R->isTemplate()) {
+         SmallVector<sema::ResolvedTemplateArg, 0> Args;
+
+         bool Dependent = false;
+         for (auto *Param : R->getTemplateParams()) {
+            const ResolvedTemplateArg *Arg = templateArgs.getArgForParam(Param);
+            if (!Arg) {
+               Dependent = true;
+               Args.emplace_back(Param, this->Ctx.getTemplateArgType(Param),
+                                 Param->getSourceLoc());
+
+               continue;
+            }
+
+            Args.emplace_back(this->VisitTemplateArg(*Arg));
+            Dependent |= Args.back().isStillDependent();
+         }
+
+         auto FinalList = sema::FinalTemplateArgumentList::Create(
+            this->SP.getContext(), Args, !Dependent);
+
+         if (Dependent)
+            return this->Ctx.getDependentRecordType(R, FinalList);
+
+         auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
+         auto Inst = this->SP.getInstantiator().InstantiateRecord(
+            this->SOD, Template, FinalList);
+
+         if (Inst)
+            return this->Ctx.getRecordType(Inst.getValue());
+      }
 
       return T;
    }
@@ -986,6 +1031,14 @@ public:
       auto &TemplateArgs = T->getTemplateArgs();
 
       return this->visitRecordTypeCommon(T, R, TemplateArgs);
+   }
+
+   QualType visitAssociatedType(AssociatedType *T)
+   {
+      if (T->getDecl()->isImplementation())
+         return this->visit(T->getActualType());
+
+      return T;
    }
 };
 
@@ -1376,7 +1429,7 @@ bool CheckNeedsDeinitilization(QualType Ty)
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID: {
       auto R = Ty->getRecord();
-      if (isa<ClassDecl>(R))
+      if (isa<ClassDecl>(R) || isa<ProtocolDecl>(R))
          return true;
 
       if (R->getDeinitializer() && !R->getDeinitializer()->isSynthesized())
@@ -1547,6 +1600,48 @@ bool SemaPass::NeedsDeinitilization(QualType Ty)
    It.NeedsDeinitilization = Result;
 
    return Result;
+}
+
+namespace {
+
+struct AssociatedTypeFinder: public RecursiveTypeVisitor<AssociatedTypeFinder> {
+private:
+   RecordDecl *R;
+
+public:
+   explicit AssociatedTypeFinder(RecordDecl *R) : R(R)
+   {
+
+   }
+
+   bool FoundAssociatedType = false;
+
+   bool visitAssociatedType(const AssociatedType *T)
+   {
+      if (T->getDecl()->isImplementation())
+         return true;
+
+      if (T->getDecl()->getRecord() != R)
+         return true;
+
+      FoundAssociatedType = true;
+      return false;
+   }
+};
+
+} // anonymous namespace
+
+bool SemaPass::ContainsAssociatedTypeConstraint(QualType Ty)
+{
+   auto &It = TypeMetaMap[Ty];
+   if (It.ContainsAssociatedTypeConstraint.hasValue())
+      return It.ContainsAssociatedTypeConstraint.getValue();
+
+   AssociatedTypeFinder Finder(getCurrentRecordCtx());
+   Finder.visit(Ty);
+
+   It.ContainsAssociatedTypeConstraint = Finder.FoundAssociatedType;
+   return Finder.FoundAssociatedType;
 }
 
 Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
@@ -1848,6 +1943,26 @@ DeclResult SemaPass::visitCompoundDecl(CompoundDecl *D)
    return D;
 }
 
+void SemaPass::checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl)
+{
+   // Use 'isa' here to avoid getting the canonical type.
+   if (isa<RecordType>(*Ty.getResolvedType())) {
+      auto *Proto = dyn_cast<ProtocolDecl>(Ty->getRecord());
+      if (Proto && Proto->hasAssociatedTypeConstraint()) {
+         SourceRange SR;
+         if (auto E = Ty.getTypeExpr()) {
+            SR = E->getSourceRange();
+         }
+         else {
+            SR = DependentDecl.getSourceLoc();
+         }
+
+         diagnose(DependentDecl, err_protocol_cannot_be_used_as_type,
+                  Proto->getDeclName(), SR);
+      }
+   }
+}
+
 static void checkDeclaredVsGivenType(SemaPass &SP,
                                      Decl *DependentDecl,
                                      Expression *&val,
@@ -1875,13 +1990,6 @@ static void checkDeclaredVsGivenType(SemaPass &SP,
                      EqualsLoc, false);
       }
    }
-
-   // if not otherwise specified, default to an rvalue type
-//   if (val->isLValue() && !DeclaredType->isAutoType()
-//       && !DeclaredType->isReferenceType()) {
-//      val = SP.castToRValue(val);
-//      givenType = val->getExprType();
-//   }
 
    QualType OrigTy = GivenType;
    GivenType = GivenType->stripReference();
@@ -1930,16 +2038,9 @@ static void checkDeclaredVsGivenType(SemaPass &SP,
          ST.setResolvedType(SP.UnknownAnyTy);
       }
    }
-   else if (OrigTy->isReferenceType()) {
-      if (OrigTy->getReferencedType() != DeclaredType) {
-         SourceRange SR;
-         if (auto E = ST.getTypeExpr())
-            SR = E->getSourceRange();
-
-         SP.diagnose(DependentDecl, err_type_mismatch,
-                     SR, val->getSourceRange(),
-                     EqualsLoc, OrigTy->getReferencedType(), DeclaredType);
-      }
+   else if (OrigTy->isReferenceType()
+         && (GivenType == DeclaredType || DeclaredType->isAutoType())) {
+      // Don't make a copy, move instead.
    }
    else {
       SourceRange SR;
@@ -1950,6 +2051,8 @@ static void checkDeclaredVsGivenType(SemaPass &SP,
                                        diag::err_type_mismatch,
                                        EqualsLoc, SR);
    }
+
+   SP.checkIfTypeUsableAsDecl(ST, DependentDecl);
 }
 
 bool SemaPass::visitVarDecl(VarDecl *Decl)
@@ -4627,6 +4730,11 @@ void SemaPass::visitConstraints(NamedDecl *ConstrainedDecl)
                && C->getKind() == DeclConstraint::TypePredicate
                && refersToSelf(C->getNameQualifier(), AT)) {
             Context.addCovariance(AT, Result.get()->getRecord());
+
+            auto *ATTy = Context.getAssociatedType(AT);
+            if (ATTy->isCanonical()) {
+               ATTy->setCanonicalType(Result.get());
+            }
          }
 
          if (!ReferencedATs.empty()) {
@@ -4842,6 +4950,7 @@ bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
 
    switch (C->getKind()) {
    case DeclConstraint::Concept: {
+      henlo:
       IdentifierRefExpr *ConceptRef = C->getConceptRefExpr();
       AliasDecl *Concept = ConceptRef->getAlias();
 
@@ -4862,7 +4971,10 @@ bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
 
       if (Inst.get()->getAliasExpr()->getExprType() != Context.getBoolTy()) {
          diagnose(ConstrainedDecl, err_concept_must_be_bool,
+                  Concept->getDeclName(),
                   Inst.get()->getSourceRange());
+
+         goto henlo;
 
          return true;
       }
@@ -5048,10 +5160,10 @@ StmtResult SemaPass::visitStaticIfStmt(StaticIfStmt *Stmt)
    if (Stmt->getCondition()->isDependent()) {
       currentScope->setHasUnresolvedStaticCond(true);
 
-      (void) visitStmt(Stmt->getIfBranch());
+      (void) visitStmt(Stmt, Stmt->getIfBranch());
 
       if (auto *Else = Stmt->getElseBranch()) {
-         (void) visitStmt(Else);
+         (void) visitStmt(Stmt, Else);
       }
 
       return Stmt;
@@ -5068,6 +5180,11 @@ StmtResult SemaPass::visitStaticIfStmt(StaticIfStmt *Stmt)
 
    bool CondIsTrue = cast<il::ConstantInt>(BoolRes.getValue())->getBoolValue();
    if (auto Template = Stmt->getTemplate()) {
+      if (Template->isInvalid()) {
+         Stmt->setIsInvalid(true);
+         return StmtError();
+      }
+
       // collect the template arguments at the point of instantiation
       MultiLevelFinalTemplateArgList TemplateArgs;
       for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {

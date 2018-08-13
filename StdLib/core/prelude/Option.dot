@@ -24,7 +24,7 @@ public enum Option<T> {
     public def unwrap() -> T {
         match self {
         case .Some(let t):
-            return t.copy()
+            return builtin.copy(t)
         case .None:
             sys.reportFatalError("unwrapping a none value!")
         }
@@ -35,7 +35,7 @@ public enum Option<T> {
     public def unwrap(orReport msg: String) -> T {
         match self {
         case .Some(let t):
-            return t.copy()
+            return builtin.copy(t)
         case .None:
             sys.reportFatalError(msg)
         }

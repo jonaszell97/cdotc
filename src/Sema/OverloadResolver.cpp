@@ -56,6 +56,7 @@ static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
          penalty += 1;
          break;
       case CastKind::ProtoWrap:
+      case CastKind::ExistentialCast:
          penalty += 2;
          break;
       case CastKind::UpCast:
@@ -102,6 +103,10 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
                                  CandidateSet &CandSet,
                                  ConvSeqVec &Conversions,
                                  bool IsSelf, unsigned ArgNo) {
+   if (GivenTy->isErrorType()) {
+      return false;
+   }
+
    if (NeededTy->isUnknownAnyType()) {
       assert((SP.isInDependentContext() || Cand.isBuiltinCandidate())
              && "argument of UnknownAny type in non-dependent context!");
@@ -764,7 +769,7 @@ public:
 
 } // anonymous namespace
 
-static void applyConversions(SemaPass &SP,
+static bool applyConversions(SemaPass &SP,
                              CandidateSet &CandSet,
                              SmallVectorImpl<StmtOrDecl> &ArgExprs,
                              SmallVectorImpl<ConversionSequenceBuilder>
@@ -774,7 +779,7 @@ static void applyConversions(SemaPass &SP,
    ArrayRef<FuncArgDecl*> ArgDecls;
    if (!Cand.isBuiltinCandidate()) {
       if (Cand.Func->isInvalid())
-         return;
+         return true;
 
       ArgDecls = Cand.Func->getArgs();
    }
@@ -849,6 +854,8 @@ static void applyConversions(SemaPass &SP,
       SOD = E;
       ++i;
    }
+
+   return false;
 }
 
 void OverloadResolver::resolve(CandidateSet &CandSet)
@@ -921,6 +928,7 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
             && Cand.getNumConstraints() >= MaxConstraints;
 
          if (foundMatch
+                && BestMatchDistance == Cand.Distance
                 && CandSet.BestConversionPenalty == Cand.ConversionPenalty
                 && Cand.getNumConstraints() == MaxConstraints) {
             // dependent candidates might not actually be valid at
@@ -936,14 +944,15 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
          }
          else if (IsBetterMatch) {
             BestMatch = i;
+            BestMatchDistance = Cand.Distance;
             BestMatchConversions = move(Conversions);
             BestMatchArgExprs = move(ArgExprs);
             MaxConstraints = Cand.getNumConstraints();
+
+            CandSet.maybeUpdateBestConversionPenalty(Cand.ConversionPenalty);
          }
 
          foundMatch = true;
-         BestMatchDistance = Cand.Distance;
-         CandSet.maybeUpdateBestConversionPenalty(Cand.ConversionPenalty);
       }
    }
 
@@ -961,8 +970,10 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
 
       SP.maybeInstantiate(CandSet, Caller);
 
-      applyConversions(SP, CandSet, BestMatchArgExprs, BestMatchConversions,
-                       Caller);
+      if (applyConversions(SP, CandSet, BestMatchArgExprs, BestMatchConversions,
+                           Caller)) {
+         return;
+      }
 
       for (auto &Arg : BestMatchArgExprs)
          CandSet.ResolvedArgs.push_back(cast<Expression>(Arg.getStatement()));
@@ -996,6 +1007,9 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
                          || Cand.Func->isCaseOfTemplatedEnum());
 
    if (IsTemplate) {
+      // Penalize templates over non-templates.
+      ++Cand.ConversionPenalty;
+
       SourceLocation listLoc = givenTemplateArgs.empty()
                                ? Caller->getSourceLoc()
                                : givenTemplateArgs.front()->getSourceLoc();

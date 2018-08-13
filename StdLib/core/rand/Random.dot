@@ -33,7 +33,7 @@ class MersenneTwister {
     
     init (usingSeed seed: i32) {
         self.index = N
-        self.mt = _cdot_Malloc((N as u64) * reflect.sizeOf<u32>) as! UnsafePtr<u32>
+        self.mt = mem.allocate<u32>(N as UInt)
         
         mt[0] = seed as u32
 
@@ -43,7 +43,7 @@ class MersenneTwister {
     }
 
     deinit {
-        _cdot_Free(mt as! UnsafeMutableRawPtr)
+        mem.deallocate(mt)
     }
 
     private def twist() {

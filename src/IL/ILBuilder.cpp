@@ -593,15 +593,10 @@ GlobalVariable* ILBuilder::CreateGlobalVariable(Constant *initializer,
    return G;
 }
 
-VTable *ILBuilder::CreateVTable(llvm::ArrayRef<il::Function *> Entries,
-                                ast::ClassDecl *ClassTy) {
-   return VTable::Create(Ctx, Entries, ClassTy);
-}
-
-CallInst* ILBuilder::CreateCall(Function *F,
+CallInst* ILBuilder::CreateCall(Value *Callee,
                                 llvm::ArrayRef<Value *> args,
                                 llvm::StringRef name) {
-   CallInst *inst = new CallInst(F, args, getInsertBlock());
+   CallInst *inst = new CallInst(Callee, args, getInsertBlock());
    insertInstruction(inst, name);
 
    return inst;
@@ -672,6 +667,10 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
    case Intrinsic::excn_typeinfo_ref:
    case Intrinsic::print_exception:
    case Intrinsic::cleanup_exception:
+      assert(args.size() == 1);
+      assert(isPointerLike(args[0]));
+      break;
+   case Intrinsic::deinit_existential:
       assert(args.size() == 1);
       assert(isPointerLike(args[0]));
       break;
@@ -754,6 +753,7 @@ QualType getIntrinsicReturnType(ast::ASTContext &Ctx,
    case Intrinsic::terminate:
    case Intrinsic::begin_unsafe:
    case Intrinsic::end_unsafe:
+   case Intrinsic::deinit_existential:
       return Ctx.getVoidType();
    case Intrinsic::memcmp:
       return Ctx.getInt32Ty();
@@ -894,12 +894,16 @@ Instruction* ILBuilder::CreateLifetimeEnd(il::Value *V,
    return CreateIntrinsicCall(Intrinsic::lifetime_end, V, name);
 }
 
-IndirectCallInst* ILBuilder::CreateIndirectCall(Value *Func,
-                                                llvm::ArrayRef<Value *> args,
-                                                llvm::StringRef name) {
-   auto inst = new IndirectCallInst(Func, args, getInsertBlock());
-   insertInstruction(inst, name);
+VirtualCallInst* ILBuilder::CreateVirtualCall(Value *VTableOwner,
+                                              FunctionType *FnTy,
+                                              unsigned Offset,
+                                              ArrayRef<Value *> args,
+                                              StringRef name) {
+   auto inst = new VirtualCallInst(VTableOwner,
+                                   FnTy->getCanonicalType()->asFunctionType(),
+                                   Offset, args, getInsertBlock());
 
+   insertInstruction(inst, name);
    return inst;
 }
 
@@ -912,13 +916,29 @@ LambdaCallInst* ILBuilder::CreateLambdaCall(Value *Func,
    return inst;
 }
 
-InvokeInst* ILBuilder::CreateInvoke(Function *F, llvm::ArrayRef<Value *> args,
+InvokeInst* ILBuilder::CreateInvoke(Value *Callee, llvm::ArrayRef<Value *> args,
                                     BasicBlock *NormalCont,
                                     BasicBlock *LandingPad, llvm::StringRef name) {
-   auto inst = new InvokeInst(F, args, NormalCont, LandingPad,
+   auto inst = new InvokeInst(Callee, args, NormalCont, LandingPad,
                               getInsertBlock());
    insertInstruction(inst, name);
 
+   return inst;
+}
+
+VirtualInvokeInst* ILBuilder::CreateVirtualInvoke(Value *VTableOwner,
+                                                  FunctionType *FnTy,
+                                                  unsigned Offset,
+                                                  ArrayRef<Value *> args,
+                                                  BasicBlock *NormalCont,
+                                                  BasicBlock *LandingPad,
+                                                  StringRef name) {
+   auto inst = new VirtualInvokeInst(VTableOwner,
+                                     FnTy->getCanonicalType()->asFunctionType(),
+                                     Offset, args, NormalCont, LandingPad,
+                                     getInsertBlock());
+
+   insertInstruction(inst, name);
    return inst;
 }
 
@@ -1437,17 +1457,6 @@ CompInst* ILBuilder::CreateComp(unsigned char OpCode,
 
 #include "Instructions.def"
 
-#define CDOT_BUILDER_CAST(Name)                                               \
-   Name##Inst * ILBuilder::Create##Name(Value *val, Type *toType,             \
-                                        llvm::StringRef name) {               \
-      auto inst = new Name##Inst(val, toType, getInsertBlock());              \
-      insertInstruction(inst, name);                                          \
-                                                                              \
-      return inst;                                                            \
-   }
-
-CDOT_BUILDER_CAST(ProtoCast)
-
 #undef CDOT_BUILDER_CAST
 
 IntegerCastInst* ILBuilder::CreateIntegerCast(CastKind kind, Value *val,
@@ -1478,12 +1487,36 @@ BitCastInst* ILBuilder::CreateBitCast(CastKind kind, Value *val,
 }
 
 DynamicCastInst* ILBuilder::CreateDynamicCast(il::Value *val,
-                                              ast::ClassDecl *TargetTy,
+                                              il::Value *TargetTypeInfo,
                                               QualType Type,
                                               llvm::StringRef name) {
-   auto inst = new DynamicCastInst(val, TargetTy, Type, getInsertBlock());
+   auto inst = new DynamicCastInst(val, TargetTypeInfo, Type, getInsertBlock());
    insertInstruction(inst, name);
 
+   return inst;
+}
+
+ExistentialCastInst* ILBuilder::CreateExistentialCast(il::Value *Target,
+                                                      il::Value *TargetTypeInfo,
+                                                      CastKind Kind,
+                                                      QualType TargetType,
+                                                      StringRef name) {
+   auto inst = new ExistentialCastInst(Target, TargetTypeInfo, Kind,
+                                       TargetType, getInsertBlock());
+
+   insertInstruction(inst, name);
+   return inst;
+}
+
+ExistentialInitInst* ILBuilder::CreateExistentialInit(il::Value *target,
+                                                      QualType toType,
+                                                      il::Value *ValueTypeInfo,
+                                                      il::GlobalVariable *ProtocolTypeInfo,
+                                                      StringRef name) {
+   auto *inst = new ExistentialInitInst(target, toType, ValueTypeInfo,
+                                  ProtocolTypeInfo, getInsertBlock());
+
+   insertInstruction(inst, name);
    return inst;
 }
 

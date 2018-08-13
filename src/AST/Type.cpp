@@ -22,6 +22,31 @@ using namespace cdot::ast;
 
 namespace cdot {
 
+bool TypeProperties::isDependent() const
+{
+   static constexpr uint8_t DependentMask =
+      ContainsGenericType | ContainsDependentNameType
+      | ContainsDependentSizeArrayType | ContainsUnboundGeneric
+      | ContainsUnknownAny | ContainsAssociatedType;
+
+   return (Props & DependentMask) != 0;
+}
+
+bool TypeProperties::containsAssociatedType() const
+{
+   return (Props & ContainsAssociatedType) != 0;
+}
+
+bool TypeProperties::containsUnexpandedParameterPack() const
+{
+   return (Props & ContainsUnexpandedParameterPack) != 0;
+}
+
+bool TypeProperties::isUnpopulated() const
+{
+   return (Props & ContainsUnpopulatedType) != 0;
+}
+
 Type::~Type()
 {
 
@@ -1007,6 +1032,30 @@ std::string QualType::toDiagString() const
    return OS.str();
 }
 
+BuiltinType::BuiltinType(BuiltinKind kind)
+   : Type(TypeID::BuiltinTypeID, this)
+{
+   BuiltinBits.kind = kind;
+
+   if (kind == UnknownAny) {
+      Bits.Props |= TypeProperties::ContainsUnknownAny;
+   }
+}
+
+PointerType::PointerType(QualType pointee, Type *CanonicalType)
+   : Type(TypeID::PointerTypeID, CanonicalType),
+     pointeeType(pointee)
+{
+   Bits.Props |= pointee->properties();
+}
+
+PointerType::PointerType(TypeID typeID, QualType pointee, Type *CanonicalType)
+   : Type(typeID, CanonicalType),
+     pointeeType(pointee)
+{
+   Bits.Props |= pointee->properties();
+}
+
 MutablePointerType::MutablePointerType(QualType pointeeType,
                                        Type *CanonicalType)
    : PointerType(MutablePointerTypeID, pointeeType, CanonicalType)
@@ -1036,52 +1085,56 @@ MutableBorrowType::MutableBorrowType(QualType borrowedType,
 
 }
 
-BoxType::BoxType(QualType BoxedTy, Type *CanonicalTy)
-   : Type(BoxTypeID, CanonicalTy, BoxedTy->isDependentType()),
-     BoxedTy(BoxedTy)
+ReferenceType::ReferenceType(QualType referencedType, Type *CanonicalType)
+   : Type(TypeID::ReferenceTypeID, CanonicalType),
+     referencedType(referencedType)
 {
-
+   Bits.Props |= referencedType->properties();
 }
 
-RecordType::RecordType(RecordDecl *record,
-                       llvm::ArrayRef<QualType> TypeTemplateArgs)
-   : Type(TypeID::RecordTypeID, nullptr,
-          record->isTemplateOrInTemplate()),
-     Rec(record), NumTypeTemplateArgs((unsigned)TypeTemplateArgs.size())
+ReferenceType::ReferenceType(TypeID typeID, QualType referencedType,
+                             Type *CanonicalType)
+   : Type(typeID, CanonicalType),
+     referencedType(referencedType)
 {
-   std::copy(TypeTemplateArgs.begin(), TypeTemplateArgs.end(),
-             const_cast<QualType*>(child_begin()));
+   Bits.Props |= referencedType->properties();
+}
+
+BoxType::BoxType(QualType BoxedTy, Type *CanonicalTy)
+   : Type(BoxTypeID, CanonicalTy),
+     BoxedTy(BoxedTy)
+{
+   Bits.Props |= BoxedTy->properties();
+}
+
+TokenType::TokenType() : Type(TokenTypeID, this) {}
+
+RecordType::RecordType(RecordDecl *record)
+   : Type(TypeID::RecordTypeID, nullptr),
+     Rec(record)
+{
+   if (record->isTemplateOrInTemplate()) {
+      Bits.Props |= TypeProperties::ContainsGenericType;
+   }
 }
 
 RecordType::RecordType(TypeID typeID,
                        ast::RecordDecl *record,
                        bool Dependent)
-   : Type(typeID, nullptr, Dependent),
-     Rec(record), NumTypeTemplateArgs(0)
+   : Type(typeID, nullptr),
+     Rec(record)
 {
-
-}
-
-Type::child_iterator RecordType::child_begin() const
-{
-   if (auto Dep = asDependentRecordType()) {
-      return reinterpret_cast<const QualType*>(Dep + 1);
+   if (Dependent) {
+      Bits.Props |= TypeProperties::ContainsGenericType;
    }
-
-   return reinterpret_cast<const QualType*>(this + 1);
 }
 
 DependentRecordType::DependentRecordType(RecordDecl *record,
                                          sema::FinalTemplateArgumentList
-                                                                  *templateArgs,
-                                         llvm::ArrayRef<QualType>
-                                                               TypeTemplateArgs)
+                                                                  *templateArgs)
    : RecordType(TypeID::DependentRecordTypeID, record, true),
      templateArgs(templateArgs)
 {
-   NumTypeTemplateArgs = (unsigned)TypeTemplateArgs.size();
-   std::copy(TypeTemplateArgs.begin(), TypeTemplateArgs.end(),
-             reinterpret_cast<QualType*>(this + 1));
 }
 
 sema::FinalTemplateArgumentList& RecordType::getTemplateArgs() const
@@ -1110,6 +1163,13 @@ size_t RecordType::getSize() const
    return Rec->getSize();
 }
 
+void RecordType::setDependent(bool dep)
+{
+   if (dep) {
+      Bits.Props |= TypeProperties::ContainsGenericType;
+   }
+}
+
 void DependentRecordType::Profile(llvm::FoldingSetNodeID &ID,
                                   ast::RecordDecl *R,
                                   sema::FinalTemplateArgumentList
@@ -1118,14 +1178,44 @@ void DependentRecordType::Profile(llvm::FoldingSetNodeID &ID,
    templateArgs->Profile(ID);
 }
 
+ArrayType::ArrayType(QualType elementType, unsigned numElements, Type *CanonicalType)
+   : Type(TypeID::ArrayTypeID, CanonicalType),
+     elementType(elementType), numElements(numElements)
+{
+   Bits.Props |= elementType->properties();
+}
+
+ArrayType::ArrayType(TypeID typeID, QualType elementType, Type *CanonicalType)
+   : Type(typeID, CanonicalType),
+     elementType(elementType), numElements(0)
+{
+   Bits.Props |= elementType->properties();
+}
+
+DependentSizeArrayType::DependentSizeArrayType(QualType elementType,
+                                               ast::StaticExpr *DependentExpr,
+                                               Type *CanonicalType)
+   : ArrayType(TypeID::DependentSizeArrayTypeID, elementType, CanonicalType),
+     DependentExpr(DependentExpr)
+{
+   Bits.Props |= TypeProperties::ContainsDependentSizeArrayType;
+}
+
+InferredSizeArrayType::InferredSizeArrayType(QualType elementTy,
+                                             Type *CanonicalTy)
+   : ArrayType(TypeID::InferredSizeArrayTypeID, elementTy, CanonicalTy)
+{
+
+}
+
 FunctionType::FunctionType(TypeID typeID,
                            QualType returnType,
                            llvm::ArrayRef<QualType> argTypes,
                            llvm::ArrayRef<ParamInfo> paramInfo,
                            ExtFlags flags,
                            Type *CanonicalType,
-                           bool Dependent)
-   : Type(typeID, CanonicalType, Dependent),
+                           TypeProperties Props)
+   : Type(typeID, CanonicalType),
      NumParams((unsigned)argTypes.size()), returnType(returnType)
 {
    assert(argTypes.size() == paramInfo.size() && "didn't provide parameter "
@@ -1141,6 +1231,8 @@ FunctionType::FunctionType(TypeID typeID,
    std::copy(paramInfo.begin(), paramInfo.end(),
              reinterpret_cast<ParamInfo*>(
                 reinterpret_cast<QualType*>(this + 1) + NumParams));
+
+   Bits.Props = Props;
 }
 
 FunctionType::FunctionType(QualType returnType,
@@ -1148,8 +1240,8 @@ FunctionType::FunctionType(QualType returnType,
                            llvm::ArrayRef<ParamInfo> paramInfo,
                            ExtFlags flags,
                            Type *CanonicalType,
-                           bool Dependent)
-   : Type(TypeID::FunctionTypeID, CanonicalType, Dependent),
+                           TypeProperties Props)
+   : Type(TypeID::FunctionTypeID, CanonicalType),
      NumParams((unsigned)argTypes.size()), returnType(returnType)
 {
    assert(argTypes.size() == paramInfo.size() && "didn't provide parameter "
@@ -1165,6 +1257,8 @@ FunctionType::FunctionType(QualType returnType,
    std::copy(paramInfo.begin(), paramInfo.end(),
              reinterpret_cast<ParamInfo*>(
                 reinterpret_cast<QualType*>(this + 1) + NumParams));
+
+   Bits.Props = Props;
 }
 
 FunctionType::ParamInfo::ParamInfo()
@@ -1183,20 +1277,38 @@ bool FunctionType::ParamInfo::operator==(const ParamInfo &I) const
    return Conv == I.Conv;
 }
 
+LambdaType::LambdaType(QualType returnType,
+                       llvm::ArrayRef<QualType> argTypes,
+                       llvm::ArrayRef<ParamInfo> paramInfo,
+                       ExtFlags flags,
+                       Type *CanonicalType,
+                       TypeProperties Props)
+   : FunctionType(TypeID::LambdaTypeID, returnType, argTypes, paramInfo,
+                  flags, CanonicalType, Props)
+{
+
+}
+
 TupleType::TupleType(llvm::ArrayRef<QualType> containedTypes,
-                     Type *CanonicalType, bool Dependent)
-   : Type(TupleTypeID, CanonicalType, Dependent),
+                     Type *CanonicalType, TypeProperties Props)
+   : Type(TupleTypeID, CanonicalType),
      NumTys((unsigned)containedTypes.size())
 {
    std::copy(containedTypes.begin(), containedTypes.end(),
              reinterpret_cast<QualType*>(this + 1));
+
+   Bits.Props = Props;
 }
 
 GenericType::GenericType(TemplateParamDecl *Param)
-   : Type(GenericTypeID, nullptr, true),
+   : Type(GenericTypeID, nullptr),
      P(Param)
 {
+   Bits.Props |= TypeProperties::ContainsGenericType;
 
+   if (Param->isVariadic()) {
+      Bits.Props |= TypeProperties::ContainsUnexpandedParameterPack;
+   }
 }
 
 void GenericType::setCanonicalType(QualType CanonicalType)
@@ -1230,19 +1342,22 @@ bool GenericType::isVariadic() const
 }
 
 AssociatedType::AssociatedType(AssociatedTypeDecl *AT)
-   : Type(AssociatedTypeID, nullptr, !AT->isImplementation()),
+   : Type(AssociatedTypeID, nullptr),
      AT(AT)
 {
-   if (AT->isImplementation() && AT->getActualType().isResolved()) {
-      Bits.Dependent = AT->getActualType()->isDependentType();
-      this->CanonicalType = AT->getActualType().operator QualType();
+   if (!AT->isImplementation()) {
+      Bits.Props |= TypeProperties::ContainsAssociatedType;
+   }
+   else if (AT->isImplementation() && AT->getActualType().isResolved()) {
+      this->CanonicalType = AT->getActualType()->getCanonicalType();
+      Bits.Props |= CanonicalType->properties();
    }
 }
 
 void AssociatedType::setCanonicalType(QualType CanonicalType)
 {
    this->CanonicalType = CanonicalType->getCanonicalType();
-   Bits.Dependent = CanonicalType->isDependentType();
+   Bits.Props |= CanonicalType->properties();
 }
 
 QualType AssociatedType::getActualType() const
@@ -1253,18 +1368,25 @@ QualType AssociatedType::getActualType() const
    return AT->getActualType();
 }
 
+MetaType::MetaType(QualType forType, Type *CanonicalType)
+   : Type(TypeID::MetaTypeID, CanonicalType),
+     forType(forType)
+{
+   Bits.Props |= forType->properties();
+}
+
 TypedefType::TypedefType(AliasDecl *td)
-   : Type(TypedefTypeID, nullptr, false),
+   : Type(TypedefTypeID, nullptr),
      td(td)
 {
    CanonicalType = td->getType()->asMetaType()->getUnderlyingType();
-   Bits.Dependent = CanonicalType->isDependentType();
+   Bits.Props |= CanonicalType->properties();
 }
 
 void TypedefType::setCanonicalType(QualType CanonicalType)
 {
    this->CanonicalType = CanonicalType;
-   Bits.Dependent = CanonicalType->isDependentType();
+   Bits.Props |= CanonicalType->properties();
 }
 
 QualType TypedefType::getAliasedType() const
@@ -1278,9 +1400,9 @@ StringRef TypedefType::getAliasName() const
 }
 
 DependentNameType::DependentNameType(NestedNameSpecifierWithLoc *NameSpec)
-   : Type(DependentNameTypeID, nullptr, true), NameSpec(NameSpec)
+   : Type(DependentNameTypeID, nullptr), NameSpec(NameSpec)
 {
-
+   Bits.Props |= TypeProperties::ContainsDependentNameType;
 }
 
 NestedNameSpecifier* DependentNameType::getNameSpec() const
