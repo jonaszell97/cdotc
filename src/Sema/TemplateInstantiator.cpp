@@ -1243,7 +1243,8 @@ InstantiatorImpl::visitTemplateParamDecl(TemplateParamDecl *P)
                                        copyOrNull(P->getDefaultValue()),
                                        P->getIndex(),
                                        P->getTypeNameOrValueLoc(),
-                                       P->getNameLoc(), P->getEllipsisLoc());
+                                       P->getNameLoc(), P->getEllipsisLoc(),
+                                       P->isUnbounded());
    }
    else {
       Inst = TemplateParamDecl::Create(Context, P->getDeclName(),
@@ -1251,7 +1252,8 @@ InstantiatorImpl::visitTemplateParamDecl(TemplateParamDecl *P)
                                        copyOrNull(P->getDefaultValue()),
                                        P->getIndex(),
                                        P->getTypeNameOrValueLoc(),
-                                       P->getNameLoc(), P->getEllipsisLoc());
+                                       P->getNameLoc(), P->getEllipsisLoc(),
+                                       P->isUnbounded());
    }
 
    return Inst;
@@ -3351,7 +3353,7 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
                                         const sema::TemplateArgList
                                                                &templateArgs,
                                         bool *isNew) {
-   if (templateArgs.isStillDependent() || Template->getRecord()->isTemplate())
+   if (templateArgs.isStillDependent() || Template->getRecord()->isUnboundedTemplate())
       return MethodInstResult();
 
    return InstantiateMethod(POI, Template, MakeList(SP, templateArgs), isNew);
@@ -3362,7 +3364,7 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
                                         MethodDecl *Template,
                                         TemplateArgs *templateArgs,
                                         bool *isNew) {
-   if (templateArgs->isStillDependent() || Template->getRecord()->isTemplate())
+   if (templateArgs->isStillDependent() || Template->getRecord()->isUnboundedTemplate())
       return MethodInstResult();
 
    if (Template->isInvalid()) {

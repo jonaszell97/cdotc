@@ -645,7 +645,7 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
       assert(args.size() == 1 && args.front()->getType()->isClass());
       break;
    case Intrinsic::virtual_method:
-      assert(args.size() == 2 && args.front()->getType()->isClass());
+      assert(args.size() == 2 && isPointerLike(args.front()));
       assert(args[1]->getType()->isIntegerType());
       break;
    case Intrinsic::indirect_case_ref:

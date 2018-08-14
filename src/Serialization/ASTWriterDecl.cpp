@@ -741,7 +741,7 @@ void ASTDeclWriter::visitTemplateParamDecl(TemplateParamDecl *D)
 {
    visitNamedDecl(D);
 
-   Record.push_back(D->isTypeName());
+   Record.push_back(D->isTypeName() | (D->isUnbounded() << 1));
    Record.push_back(D->getIndex());
 
    Record.AddSourceLocation(D->getTypeNameOrValueLoc());

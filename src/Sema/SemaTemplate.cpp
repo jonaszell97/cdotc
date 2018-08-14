@@ -25,6 +25,18 @@ bool SemaPass::inTemplate()
    return false;
 }
 
+bool SemaPass::inUnboundedTemplate()
+{
+   for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
+      if (auto ND = dyn_cast<NamedDecl>(Ctx->lookThroughExtension())) {
+         if (ND->isUnboundedTemplate())
+            return true;
+      }
+   }
+
+   return false;
+}
+
 bool SemaPass::isInDependentContext()
 {
    for (auto Ctx = &getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
@@ -40,7 +52,7 @@ bool SemaPass::isInDependentContext()
 void SemaPass::finalizeRecordInstantiation(RecordDecl *R)
 {
    R->setFinalized(true);
-   if (R->isTemplateOrInTemplate() || encounteredError()) {
+   if (R->isInUnboundedTemplate() || encounteredError()) {
       return;
    }
 
@@ -95,7 +107,7 @@ void SemaPass::visitFunctionInstantiation(StmtOrDecl DependentStmt,
    }
    else {
       auto M = cast<MethodDecl>(Inst);
-      if (!M->isTemplate())
+      if (!M->isUnboundedTemplate())
          ILGen->DeclareFunction(M);
 
       (void)visitStmt(DependentStmt, M);

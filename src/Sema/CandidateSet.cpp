@@ -604,8 +604,8 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          unsigned select2    = (diagSelect >> 2u) & 0x3u;
 
          auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
-         SP.diagnose(Caller, note_template_arg_kind_mismatch, select1,
-                     select2, 0,
+         SP.diagnose(Caller, note_template_arg_kind_mismatch, select2,
+                     select1, Param->getIndex() + 1,
                      Cand.InnerTemplateArgs.getArgForParam(Param)->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,
@@ -620,7 +620,7 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
 
          auto neededTy = P->getValueType();
          SP.diagnose(Caller, note_template_arg_type_mismatch,
-                     neededTy, 0, givenTy,
+                     neededTy, P->getIndex() + 1, givenTy,
                      templateArgs[0]->getSourceRange());
 
          SP.diagnose(Caller, note_template_parameter_here,

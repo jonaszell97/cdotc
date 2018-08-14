@@ -94,6 +94,7 @@ struct CandidateSet {
       };
 
       sema::TemplateArgList InnerTemplateArgs;
+      sema::FinalTemplateArgumentList *OuterTemplateArgs = nullptr;
 
       struct {
          FunctionType *FuncTy = nullptr;

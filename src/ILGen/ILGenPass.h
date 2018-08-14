@@ -209,7 +209,7 @@ public:
 
    il::Function* DeclareFunction(CallableDecl *C);
 
-   void VerifyFunction(il::Function *F);
+   bool VerifyFunction(il::Function *F);
    void CanonicalizeFunction(il::Function *F);
    void OptimizeFunction(il::PassManager &PM, il::Function *F);
 
@@ -330,6 +330,7 @@ public:
 
    il::Function *getFunc(CallableDecl *C);
    il::Method *getFunc(MethodDecl *M);
+   il::Value *getMethod(il::Value *Self, MethodDecl *M);
 
    SemaPass &getSema() const { return SP; }
 
@@ -375,6 +376,7 @@ public:
    il::Function *wrapNonLambdaFunction(il::Function *F);
    il::Function *wrapNonLambdaFunction(il::Value *F);
    il::Function *getPartiallyAppliedLambda(il::Method *M, il::Value *Self);
+   il::Function *getPartiallyAppliedLambda(il::Value *F, il::Value *Self);
 
    il::Value *getDefaultValue(QualType Ty);
    il::Value *getTuple(TupleType *Ty, llvm::ArrayRef<il::Value*> Vals);

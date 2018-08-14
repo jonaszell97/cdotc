@@ -223,7 +223,8 @@ public:
                                     unsigned Index,
                                     SourceLocation TypeNameOrValueLoc,
                                     SourceLocation NameLoc,
-                                    SourceLocation EllipsisLoc);
+                                    SourceLocation EllipsisLoc,
+                                    bool Unbounded);
 
    static TemplateParamDecl *Create(ASTContext &C,
                                     DeclarationName Name,
@@ -232,7 +233,8 @@ public:
                                     unsigned Index,
                                     SourceLocation TypeNameOrValueLoc,
                                     SourceLocation NameLoc,
-                                    SourceLocation EllipsisLoc);
+                                    SourceLocation EllipsisLoc,
+                                    bool Unbounded);
 
    static TemplateParamDecl *CreateEmpty(ASTContext &C);
 
@@ -247,7 +249,8 @@ private:
                      unsigned Index,
                      SourceLocation TypeNameOrValueLoc,
                      SourceLocation NameLoc,
-                     SourceLocation EllipsisLoc);
+                     SourceLocation EllipsisLoc,
+                     bool Unbounded);
 
    TemplateParamDecl(DeclarationName Name,
                      SourceType valueType,
@@ -255,7 +258,8 @@ private:
                      unsigned Index,
                      SourceLocation TypeNameOrValueLoc,
                      SourceLocation NameLoc,
-                     SourceLocation EllipsisLoc);
+                     SourceLocation EllipsisLoc,
+                     bool Unbounded);
 
    TemplateParamDecl(EmptyShell Empty);
 
@@ -263,6 +267,8 @@ private:
    SourceType contravariance;
 
    bool typeName : 1;
+   bool Unbounded : 1;
+
    Expression *defaultValue;
    unsigned Index;
 
@@ -296,6 +302,9 @@ public:
    void setTypeNameOrValueLoc(SourceLocation Loc) { TypeNameOrValueLoc = Loc; }
    void setNameLoc(SourceLocation Loc) { NameLoc = Loc; }
    void setEllipsisLoc(SourceLocation Loc) { EllipsisLoc = Loc; }
+
+   bool isUnbounded() const { return Unbounded; }
+   void setUnbounded(bool V) { Unbounded = V; }
 };
 
 class VarDecl: public NamedDecl {

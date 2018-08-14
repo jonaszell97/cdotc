@@ -25,11 +25,18 @@ namespace cdot {
 bool TypeProperties::isDependent() const
 {
    static constexpr uint8_t DependentMask =
-      ContainsGenericType | ContainsDependentNameType
-      | ContainsDependentSizeArrayType | ContainsUnboundGeneric
-      | ContainsUnknownAny | ContainsAssociatedType;
+      ContainsDependentNameType
+      | ContainsDependentSizeArrayType
+      | ContainsUnboundGeneric
+      | ContainsUnknownAny
+      | ContainsAssociatedType;
 
    return (Props & DependentMask) != 0;
+}
+
+bool TypeProperties::containsGenericType() const
+{
+   return (Props & ContainsGenericType) != 0;
 }
 
 bool TypeProperties::containsAssociatedType() const
@@ -1113,8 +1120,8 @@ RecordType::RecordType(RecordDecl *record)
    : Type(TypeID::RecordTypeID, nullptr),
      Rec(record)
 {
-   if (record->isTemplateOrInTemplate()) {
-      Bits.Props |= TypeProperties::ContainsGenericType;
+   if (record->isInUnboundedTemplate()) {
+      Bits.Props |= TypeProperties::ContainsUnboundGeneric;
    }
 }
 
@@ -1125,14 +1132,15 @@ RecordType::RecordType(TypeID typeID,
      Rec(record)
 {
    if (Dependent) {
-      Bits.Props |= TypeProperties::ContainsGenericType;
+      Bits.Props |= TypeProperties::ContainsUnboundGeneric;
    }
 }
 
 DependentRecordType::DependentRecordType(RecordDecl *record,
                                          sema::FinalTemplateArgumentList
                                                                   *templateArgs)
-   : RecordType(TypeID::DependentRecordTypeID, record, true),
+   : RecordType(TypeID::DependentRecordTypeID, record,
+                templateArgs->isStillDependent()),
      templateArgs(templateArgs)
 {
 }
@@ -1308,6 +1316,9 @@ GenericType::GenericType(TemplateParamDecl *Param)
 
    if (Param->isVariadic()) {
       Bits.Props |= TypeProperties::ContainsUnexpandedParameterPack;
+   }
+   if (Param->isUnbounded()) {
+      Bits.Props |= TypeProperties::ContainsUnboundGeneric;
    }
 }
 

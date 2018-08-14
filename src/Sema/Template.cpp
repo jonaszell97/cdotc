@@ -32,10 +32,10 @@ ResolvedTemplateArg::ResolvedTemplateArg(ast::TemplateParamDecl *Param,
       Type = type;
    }
    // FIXME protocol-dependence
-   else if (type->isProtocol()) {
-      Dependent = true;
-      Type = type;
-   }
+//   else if (type->isProtocol()) {
+//      Dependent = true;
+//      Type = type;
+//   }
    else {
       Type = type->getCanonicalType();
    }
@@ -392,12 +392,13 @@ public:
       if (isa<TypeExpr>(res.get()) || ty->isUnknownAnyType()) {
          if (!P->isTypeName()) {
             Res.setHasIncompatibleKind(0, P);
+            Out = ResolvedTemplateArg(P, nullptr, TA->getSourceLoc());
             return false;
          }
 
          // FIXME protocol-dependence
-         if (ty->isProtocol())
-            StillDependent = true;
+//         if (ty->isProtocol())
+//            StillDependent = true;
 
          checkCovariance(P, ty);
          Out = ResolvedTemplateArg(P, ty, TA->getSourceLoc());
@@ -405,6 +406,7 @@ public:
       else if (ty->isMetaType()) {
          if (!P->isTypeName()) {
             Res.setHasIncompatibleKind(0, P);
+            Out = ResolvedTemplateArg(P, nullptr, TA->getSourceLoc());
             return false;
          }
 
@@ -417,7 +419,9 @@ public:
       }
       else {
          if (P->isTypeName()) {
-            Res.setHasIncompatibleKind(0, P);
+            Res.setHasIncompatibleKind(1, P);
+            Out = ResolvedTemplateArg(P, SP.getContext().getErrorTy(),
+               TA->getSourceLoc());
             return false;
          }
 
@@ -426,6 +430,7 @@ public:
 
          if (!SemaResult) {
             HadError = true;
+            Out = ResolvedTemplateArg(P, nullptr, TA->getSourceLoc());
             return false;
          }
 
@@ -434,6 +439,7 @@ public:
          }
          else if (StatExp->getExprType() != P->getValueType()) {
             Res.setHasIncompatibleType(StatExp->getExprType(), P);
+            Out = ResolvedTemplateArg(P, nullptr, TA->getSourceLoc());
             return false;
          }
 

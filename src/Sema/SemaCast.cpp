@@ -291,6 +291,15 @@ static void FromRecord(SemaPass &SP, QualType from, QualType to,
    Seq.invalidate();
 }
 
+static void FromGenericRecord(SemaPass &SP, QualType from, QualType to,
+                              ConversionSequenceBuilder &Seq) {
+   if (from->getRecord() == to->getRecord()) {
+      return Seq.addStep(CastKind::NoOp, to);
+   }
+
+   return FromRecord(SP, from, to, Seq);
+}
+
 static void FromProtocol(SemaPass &SP, QualType from, QualType to,
                          ConversionSequenceBuilder &Seq) {
    auto FromRec = cast<ProtocolDecl>(from->getRecord());
@@ -462,6 +471,9 @@ static void getConversionSequence(SemaPass &SP,
    case Type::MutableReferenceTypeID:
    case Type::MutableBorrowTypeID:
       FromReference(SP, from, to, Seq);
+      break;
+   case Type::DependentRecordTypeID:
+      FromGenericRecord(SP, from, to, Seq);
       break;
    case Type::RecordTypeID:
       if (from->isProtocol()) {

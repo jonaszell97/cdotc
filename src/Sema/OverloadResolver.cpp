@@ -316,7 +316,18 @@ static bool resolveContextDependentArgs(SemaPass &SP,
    FuncArgDecl *VariadicArgDecl = nullptr;
 
    bool CStyleVararg = CD->isCstyleVararg();
+   bool UnboundedTemplate = false;
    unsigned NumGivenArgs = (unsigned)UnorderedArgs.size();
+
+   if (CD->isUnboundedTemplate()) {
+      UnboundedTemplate = true;
+   }
+   else if (auto *Init = dyn_cast<InitDecl>(CD)) {
+      UnboundedTemplate = Init->getRecord()->isUnboundedTemplate();
+   }
+   else if (auto *Case = dyn_cast<EnumCaseDecl>(CD)) {
+      UnboundedTemplate = Case->getRecord()->isUnboundedTemplate();
+   }
 
    unsigned i = 0;
    unsigned LabelNo = 0;
@@ -436,7 +447,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 
       for (Expression *ArgVal : DeclArgMap[ArgDecl]) {
          QualType NeededTy = ArgDecl->getType();
-         if (TemplateArgs) {
+         if (TemplateArgs && UnboundedTemplate) {
             NeededTy = SP.resolveDependencies(NeededTy, *TemplateArgs,
                                               Caller);
          }
@@ -492,12 +503,12 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             }
 
             QualType ArgValType;
-            if (NeededTy->isDependentType()) {
+            if (NeededTy->containsGenericType()) {
                // we can't infer a context dependent expression from a
                // dependent type
                auto DefaultType = SP.GetDefaultExprType(ArgVal);
                if (DefaultType) {
-                  if (TemplateArgs && NeededTy->isDependentType()) {
+                  if (TemplateArgs && NeededTy->containsGenericType()) {
                      if (!TemplateArgs->inferFromType(DefaultType,
                                                       NeededTy, false)) {
                         Cand.setHasIncompatibleArgument(i, DefaultType);
@@ -516,7 +527,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 
                   ArgValType = DefaultType;
                }
-               else if (NeededTy->isDependentType()) {
+               else if (NeededTy->containsGenericType()) {
                   ArgValType = NeededTy;
                }
                else {
@@ -548,7 +559,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
          }
          else {
             auto ArgValType = ArgVal->getExprType();
-            if (TemplateArgs && NeededTy->isDependentType()) {
+            if (TemplateArgs && NeededTy->containsGenericType()) {
                if (!TemplateArgs->inferFromType(ArgValType, NeededTy,
                                                 false)) {
 
@@ -560,7 +571,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                   // Never infer reference types for template arguments.
                   NeededTy = ArgValType->stripReference();
                }
-               else {
+               else if (UnboundedTemplate) {
                   NeededTy = SP.resolveDependencies(NeededTy,
                                                     *TemplateArgs,
                                                     Caller);
@@ -1063,8 +1074,9 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
          }
 
          auto comp = Cand.InnerTemplateArgs.checkCompatibility();
-         if (!comp)
+         if (!comp) {
             return Cand.setTemplateArgListFailure(comp);
+         }
 
          return;
       }
@@ -1076,9 +1088,18 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
          return Cand.setIsDependent();
       }
 
-      auto comp = TemplateArgs.checkCompatibility();
-      if (!comp)
+      if (NeedOuterTemplateParams) {
+         auto comp = OuterTemplateArgs.checkCompatibility();
+         if (!comp) {
+            Cand.InnerTemplateArgs = move(OuterTemplateArgs);
+            return Cand.setTemplateArgListFailure(comp);
+         }
+      }
+
+      auto comp = Cand.InnerTemplateArgs.checkCompatibility();
+      if (!comp) {
          return Cand.setTemplateArgListFailure(comp);
+      }
 
       // Instantiate the record if this is a template initializer.
       if (NeedOuterTemplateParams) {

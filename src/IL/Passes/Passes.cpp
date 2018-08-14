@@ -57,18 +57,10 @@ StackPromotion *createStackPromotion(PassManager &PM)
 
 void addMandatoryPasses(PassManager &PM)
 {
-#ifndef NDEBUG
-   PM.addPass(PassKind::VerifierPassID);
-#endif
-
    PM.addPass(PassKind::DefinitiveInitializationPassID);
    PM.addPass(PassKind::BorrowCheckPassID);
    PM.addPass(PassKind::ReorderBasicBlockPassID);
    PM.addPass(PassKind::FinalizeFunctionPassID);
-
-#ifndef NDEBUG
-   PM.addPass(PassKind::VerifierPassID);
-#endif
 
    PM.addAnalysis(AnalysisKind::DominanceAnalysisID);
    PM.addAnalysis(AnalysisKind::UnsafeAnalysisID);

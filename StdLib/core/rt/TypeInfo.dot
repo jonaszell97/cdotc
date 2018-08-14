@@ -282,3 +282,64 @@ public def _cdot_ExistentialUnwrap(_ container: mut ref ExistentialContainer,
     container.typeInfo->valueWitnessTable->copy(result.object, container.value)
     result.discriminator = 1
 }
+
+public enum GenericArgumentValue {
+    /// A generic type argument.
+    case Type(UnsafePtr<TypeInfo>)
+
+    /// A generic constant value argument.
+    case Value()
+
+    /// A variadic argument.
+    case Variadic(Bool, UnsafePtr<GenericArgumentValue>)
+
+    /// \return true iff this variadic argument is a type argument or a variadic type argument.
+    prop isType: Bool {
+        match self {
+        case .Type(_):
+            return true
+        case .Value():
+            return false
+        case .Variadic(let type, _):
+            return type
+        }
+    }
+}
+
+public struct GenericArgument {
+    /// The name of the generic parameter.
+    let name: CString
+
+    /// The parameter value, depending on the argument kind.
+    let value: GenericArgumentValue
+}
+
+public struct GenericEnvironment {
+    /// Pointer to the enclosing generic environment, or null if none exists.
+    let enclosingEnvironment: UnsafePtr<GenericEnvironment>
+
+    /// null-terminated array of runtime template arguments.
+    let genericArguments: UnsafePtr<GenericArgument>
+
+    /// \return a generic argument with the name \param name, or `__nullptr` if it doesn't exist.
+    def getGenericArgument(withName name: CString) -> UnsafePtr<GenericArgument> {
+        var ptr = genericArguments
+        if !ptr {
+            return __nullptr
+        }
+
+        while ptr->name {
+            if libc.strcmp(ptr->name, name) == 0 {
+                return ptr
+            }
+
+            ptr += 1
+        }
+
+        if enclosingEnvironment {
+            return enclosingEnvironment->getGenericArgument(withName: name)
+        }
+
+        return __nullptr
+    }
+}

@@ -67,8 +67,8 @@ static cl::opt<bool> EmitDebugInfo("g",  cl::desc("emit debug info"));
 static cl::opt<bool> RunUnitTests("test",  cl::desc("run unit tests"));
 
 /// If given, IL will be emitted without debug info even if it is created.
-static cl::opt<bool> NoDebugIL("fno-debug-il", cl::desc("emit IL without "
-                                                        "debug info"));
+static cl::opt<bool> DebugIL("fdebug-il", cl::desc("emit IL with "
+                                                   "debug info"));
 
 /// If given, debug info will be emitted.
 static cl::opt<bool> StaticModuleLib("static-module-lib",
@@ -247,7 +247,7 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
       Sema->getILGen().setEmitDebugInfo(true);
    }
 
-   if (NoDebugIL) {
+   if (!DebugIL) {
       options.setFlag(CompilerOptions::F_NoDebugIL, true);
    }
 

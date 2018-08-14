@@ -473,7 +473,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
       // If this expression is type dependent, new declarations might be
       // visible at instantiation time, so don't report an error for now.
-      if (Ident->isTypeDependent() || inTemplate()) {
+      if (Ident->isTypeDependent() || inUnboundedTemplate()) {
          Ident->setIsTypeDependent(true);
          Ident->setExprType(UnknownAnyTy);
 
@@ -656,6 +656,10 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
             }
             else if (auto *IE = dyn_cast<IdentifierRefExpr>(PE)) {
                IE->getVarDecl()->setCaptured(true);
+            }
+            else if (auto *SE = dyn_cast<SelfExpr>(PE)) {
+               SE->setCaptureIndex(0);
+               getCurrentFun()->getArgs().front()->setCaptured(true);
             }
 
             // Function does not take 'self' argument
@@ -898,11 +902,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
    else if (auto Param = dyn_cast<TemplateParamDecl>(FoundDecl)) {
       if (Param->isTypeName()) {
          ResultType = Context.getMetaType(Context.getTemplateArgType(Param));
-         Ident->setIsTypeDependent(true);
       }
       else {
          ResultType = Param->getValueType();
-         Ident->setIsValueDependent(true);
       }
 
       if (Param->isVariadic()) {
@@ -914,6 +916,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
       Ident->setTemplateParam(Param);
       Ident->setKind(IdentifierKind::TemplateParam);
+      Ident->setIsTypeDependent(ResultType->isDependentType());
    }
    else {
       llvm_unreachable("unhandled named decl kind");
@@ -1016,7 +1019,7 @@ static ExprResult checkIfSelfCapture(SemaPass &SP, ExprTy *E)
          }
 
          auto R = Fn->getRecord();
-         if (R->isTemplateOrInTemplate() || isa<ProtocolDecl>(R)) {
+         if (R->isInUnboundedTemplate()) {
             E->setIsTypeDependent(true);
          }
 
@@ -1822,7 +1825,7 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
       }
    }
 
-   if (E->isTemplate()) {
+   if (E->isUnboundedTemplate()) {
       Expr->setIsTypeDependent(true);
       Expr->setExprType(Context.getRecordType(E));
 

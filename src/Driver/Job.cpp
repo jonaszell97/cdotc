@@ -268,14 +268,18 @@ void ILVerifyJob::run()
    auto *Mod = CI.getCompilationModule();
    auto &ILGen = CI.getILGen();
 
+   bool Invalid = false;
+
    il::VerifierPass VP;
    VP.visitGlobals(*Mod->getILModule());
 
+   Invalid |= !VP.isValid();
+
    for (auto &Fn : Mod->getILModule()->getFuncList()) {
-      ILGen.VerifyFunction(&Fn);
+      Invalid |= ILGen.VerifyFunction(&Fn);
    }
 
-   if (!VP.isValid()) {
+   if (Invalid) {
       std::error_code EC;
       llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/out/_error.cdotil",
                               EC, llvm::sys::fs::F_RW);
@@ -284,7 +288,7 @@ void ILVerifyJob::run()
       fd.flush();
    }
 
-   HadError = !VP.isValid();
+   HadError = Invalid;
 }
 
 ILCanonicalizeJob::ILCanonicalizeJob(cdot::CompilerInstance &CI)

@@ -162,12 +162,27 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
       WriteName(S, ValPrefix::Type);
    }
    else if (ty->isPointerType()) {
-      WriteQualType(ty->asPointerType()->getPointeeType());
+      QualType Pointee = ty->getPointeeType();
+      if (Pointee->isVoidType()) {
+         if (isa<MutablePointerType>(ty)) {
+            out << "UnsafeMutableRawPtr";
+         }
+         else {
+            out << "UnsafeRawPtr";
+         }
 
-      if (isa<MutablePointerType>(ty))
-         out << " *mut";
-      else
-         out << '*';
+         return;
+      }
+
+      if (isa<MutablePointerType>(ty)) {
+         out << "UnsafeMutablePtr<";
+      }
+      else {
+         out << "UnsafePtr<";
+      }
+
+      WriteQualType(ty->asPointerType()->getPointeeType());
+      out << ">";
    }
    else if (ty->isFunctionType() ) {
       if (ty->isLambdaType())
@@ -189,14 +204,14 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
       out << "]";
    }
    else if (ty->isMetaType()) {
-      out << "Meta[";
+      out << "MetaType<";
       WriteQualType(ty->asMetaType()->getUnderlyingType());
-      out << "]";
+      out << ">";
    }
    else if (ty->isBoxType()) {
-      out << "Box[";
+      out << "Box<";
       WriteQualType(ty->getBoxedType());
-      out << "]";
+      out << ">";
    }
    else {
       llvm_unreachable("bad type kind");
@@ -935,7 +950,7 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
    }
 
    if (auto ICall = dyn_cast<IntrinsicCallInst>(I)) {
-      out << "intrinsic ";
+      out << "call intrinsic ";
 
       WriteQualType(ICall->getType());
       out << " \"" << ICall->getIntrinsicName() << "\" ";
@@ -945,7 +960,7 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
    }
 
    if (auto LLVMCall = dyn_cast<LLVMIntrinsicCallInst>(I)) {
-      out << "llvm_intrinsic ";
+      out << "call llvm intrinsic ";
 
       WriteQualType(LLVMCall->getType());
       out << " \"" << LLVMCall->getIntrinsicName()->getIdentifier() << "\" ";
@@ -1160,10 +1175,10 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
          out << cdot::CastNames[(unsigned char)BC->getKind()];
       }
       else if (isa<DynamicCastInst>(Cast)) {
-         out << "dynamic_cast ";
+         out << "dynamic_cast";
       }
       else if (isa<ExistentialCastInst>(Cast)) {
-         out << "existential_cast ";
+         out << "existential_cast";
       }
       else {
          out << il::CastNames[(unsigned short)Cast->getTypeID() - FirstCast];

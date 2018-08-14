@@ -312,7 +312,8 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
 
       break;
    }
-   case Type::RecordTypeID: {
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
       MD = getRecordDI(ty);
       break;
    }

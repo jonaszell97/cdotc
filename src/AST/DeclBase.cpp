@@ -512,12 +512,12 @@ bool NamedDecl::isTemplate() const
 
 bool NamedDecl::inDependentContext() const
 {
-   if (isTemplate() || isa<ExtensionDecl>(this) || isa<ProtocolDecl>(this))
+   if (isUnboundedTemplate())
       return true;
 
    for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
       if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
-         if (ND->isTemplate() || isa<ExtensionDecl>(ND) || isa<ProtocolDecl>(ND))
+         if (ND->isUnboundedTemplate())
             return true;
       }
    }
@@ -537,6 +537,25 @@ bool NamedDecl::isTemplateOrInTemplate() const
 
          if (auto Ext = dyn_cast<ExtensionDecl>(ND))
             if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
+               return true;
+      }
+   }
+
+   return false;
+}
+
+bool NamedDecl::isInUnboundedTemplate() const
+{
+   if (isUnboundedTemplate())
+      return true;
+
+   for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
+      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+         if (ND->isUnboundedTemplate())
+            return true;
+
+         if (auto Ext = dyn_cast<ExtensionDecl>(ND))
+            if (Ext->getExtendedRecord()->isInUnboundedTemplate())
                return true;
       }
    }

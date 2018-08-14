@@ -583,7 +583,7 @@ il::ConstantClass* ReflectionBuilder::BuildFunctionBase(CallableDecl *F,
 
 il::ConstantClass* ReflectionBuilder::BuildMethodMirror(MethodDecl *M)
 {
-   if (M->isTemplate())
+   if (M->isUnboundedTemplate())
       return nullptr;
 
    if (auto Val = getCachedValue(M))

@@ -193,10 +193,12 @@ TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
                                      unsigned Index,
                                      SourceLocation TypeNameOrValueLoc,
                                      SourceLocation NameLoc,
-                                     SourceLocation EllipsisLoc)
+                                     SourceLocation EllipsisLoc,
+                                     bool Unbounded)
    : NamedDecl(TemplateParamDeclID, (AccessSpecifier)0, Name),
      covariance(covariance), contravariance(contravariance),
-     typeName(true), defaultValue(defaultValue), Index(Index),
+     typeName(true), Unbounded(Unbounded),
+     defaultValue(defaultValue), Index(Index),
      TypeNameOrValueLoc(TypeNameOrValueLoc), NameLoc(NameLoc),
      EllipsisLoc(EllipsisLoc)
 {}
@@ -207,10 +209,12 @@ TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
                                      unsigned Index,
                                      SourceLocation TypeNameOrValueLoc,
                                      SourceLocation NameLoc,
-                                     SourceLocation EllipsisLoc)
+                                     SourceLocation EllipsisLoc,
+                                     bool Unbounded)
    : NamedDecl(TemplateParamDeclID, (AccessSpecifier)0, Name),
      covariance(valueType), contravariance(nullptr),
-     typeName(false), defaultValue(defaultValue), Index(Index),
+     typeName(false), Unbounded(Unbounded),
+     defaultValue(defaultValue), Index(Index),
      TypeNameOrValueLoc(TypeNameOrValueLoc), NameLoc(NameLoc),
      EllipsisLoc(EllipsisLoc)
 {}
@@ -223,10 +227,12 @@ TemplateParamDecl* TemplateParamDecl::Create(ASTContext &C,
                                              unsigned Index,
                                              SourceLocation TypeNameOrValueLoc,
                                              SourceLocation NameLoc,
-                                             SourceLocation EllipsisLoc) {
+                                             SourceLocation EllipsisLoc,
+                                             bool Unbounded) {
    return new(C) TemplateParamDecl(Name, covariance, contravariance,
                                    defaultValue, Index,
-                                   TypeNameOrValueLoc, NameLoc, EllipsisLoc);
+                                   TypeNameOrValueLoc, NameLoc, EllipsisLoc,
+                                   Unbounded);
 }
 
 TemplateParamDecl* TemplateParamDecl::Create(ASTContext &C,
@@ -236,9 +242,11 @@ TemplateParamDecl* TemplateParamDecl::Create(ASTContext &C,
                                              unsigned Index,
                                              SourceLocation TypeNameOrValueLoc,
                                              SourceLocation NameLoc,
-                                             SourceLocation EllipsisLoc) {
+                                             SourceLocation EllipsisLoc,
+                                             bool Unbounded) {
    return new(C) TemplateParamDecl(Name, valueType, defaultValue, Index,
-                                   TypeNameOrValueLoc, NameLoc, EllipsisLoc);
+                                   TypeNameOrValueLoc, NameLoc, EllipsisLoc,
+                                   Unbounded);
 }
 
 TemplateParamDecl::TemplateParamDecl(EmptyShell)

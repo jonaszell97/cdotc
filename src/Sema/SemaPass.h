@@ -285,7 +285,7 @@ public:
    // Declaration pass
 
    bool declareDeclContext(DeclContext *Ctx);
-   void declareImmediateDecls(RecordDecl *Ctx,
+   void declareImmediateDecls(RecordDecl *R,
                               DependencyGraph<NamedDecl*> &LayoutDependency);
 
    void visitDeclContext(DeclContext *Ctx);
@@ -1510,6 +1510,7 @@ public:
 
    RecordDecl *getCurrentRecordCtx();
    bool inTemplate();
+   bool inUnboundedTemplate();
    bool isInDependentContext();
 
    void pushInstantiationContext(NamedDecl *Decl)

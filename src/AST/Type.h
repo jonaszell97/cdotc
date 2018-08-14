@@ -162,6 +162,7 @@ public:
    TypeProperties operator-(Property P) { return TypeProperties(Props & ~P); }
 
    bool isDependent() const;
+   bool containsGenericType() const;
    bool containsAssociatedType() const;
    bool containsUnexpandedParameterPack() const;
    bool isUnpopulated() const;
@@ -249,6 +250,9 @@ public:
    }
 
    bool isDependentType() const { return properties().isDependent(); }
+   bool containsGenericType() const { return properties().containsGenericType(); }
+   bool containsAssociatedType() const { return properties().containsAssociatedType(); }
+
    bool isUnpopulatedType() const;
 
    sema::FinalTemplateArgumentList& getTemplateArgs() const;

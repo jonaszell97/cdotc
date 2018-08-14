@@ -247,7 +247,7 @@ static void checkIfCalledFromTemplate(SemaPass &SP, CallableDecl *C)
       return;
 
    // Check if the function was called from a template.
-   if (cast<NamedDecl>(SP.getDeclContext()).isTemplateOrInTemplate()) {
+   if (cast<NamedDecl>(SP.getDeclContext()).isInUnboundedTemplate()) {
       C->setCalledFromTemplate(true);
       SP.getILGen().notifyFunctionCalledInTemplate(C);
    }
@@ -335,14 +335,16 @@ bool SemaPass::maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                       const TemplateArgList &templateArgs,
                                       Statement *Caller) {
    auto F = Cand.Func;
+   Cand.OuterTemplateArgs = sema::FinalTemplateArgumentList::Create(
+      Context, templateArgs);
 
    if (auto Case = dyn_cast<EnumCaseDecl>(F)) {
-      if (!Case->getRecord()->isTemplate())
+      if (!Case->getRecord()->isUnboundedTemplate())
          return true;
 
       auto Inst =
          Instantiator.InstantiateRecord(Caller, Case->getRecord(),
-                                        templateArgs);
+                                        Cand.OuterTemplateArgs);
 
       if (!Inst)
          return false;
@@ -355,11 +357,11 @@ bool SemaPass::maybeInstantiateRecord(CandidateSet::Candidate &Cand,
    }
 
    auto Init = dyn_cast<InitDecl>(F);
-   if (!Init || !Init->getRecord()->isTemplate())
+   if (!Init || !Init->getRecord()->isUnboundedTemplate())
       return true;
 
    auto Inst = Instantiator.InstantiateRecord(Caller, Init->getRecord(),
-                                              templateArgs);
+                                              Cand.OuterTemplateArgs);
 
    if (Inst.hasValue()) {
       Cand.Func = getEquivalentMethod(*this, Context, Init, Inst.getValue());
@@ -387,11 +389,11 @@ void SemaPass::maybeInstantiate(CandidateSet &CandSet,
    // IL definition
    if (auto Info = F->getLazyFnInfo()) {
       // if the function is a template, we also need it's body
-      if (F->isTemplate())
+      if (F->isUnboundedTemplate())
          Info->loadBody(F);
    }
 
-   if (!F->isTemplate()) {
+   if (!F->isUnboundedTemplate()) {
       if (auto M = dyn_cast<MethodDecl>(F)) {
          Cand.Func = maybeInstantiateMemberFunction(M, Caller);
       }
@@ -851,7 +853,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
    if (CandSet.Candidates.empty()) {
       // If this expression is type dependent, new overloads might be visible
       // at instantiation time via UFCS, so don't report an error for now.
-      if (CandSet.isDependent() || inTemplate()) {
+      if (CandSet.isDependent() || inUnboundedTemplate()) {
          visitContextDependentArgs(*this, Call);
          Call->setIsTypeDependent(true);
          Call->setExprType(UnknownAnyTy);
@@ -893,7 +895,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
    Call->setExprType(func->getReturnType());
    Call->setKind(CallKind::NamedFunctionCall);
 
-   if (func->isTemplateOrInTemplate()) {
+   if (func->isInUnboundedTemplate()) {
       visitContextDependentArgs(*this, Call);
 
       Call->setIsTypeDependent(true);
@@ -1129,10 +1131,11 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
       return ExprError();
    }
 
-   auto method = cast<InitDecl>(CandSet.getBestMatch().Func);
+   auto &Cand = CandSet.getBestMatch();
+   auto method = cast<InitDecl>(Cand.Func);
    checkAccessibility(method, Call);
 
-   if (method->isTemplateOrInTemplate()) {
+   if (method->isInUnboundedTemplate()) {
       visitContextDependentArgs(*this, Call);
       Call->setIsTypeDependent(true);
       Call->setExprType(UnknownAnyTy);
@@ -1163,6 +1166,10 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
    }
    else if (method->isFallibleInit()) {
       Call->setExprType(cast<InitDecl>(method)->getOptionTy());
+   }
+   else if (R->isTemplate()) {
+      Call->setExprType(Context.getDependentRecordType(R,
+                                                       Cand.OuterTemplateArgs));
    }
    else {
       Call->setExprType(Context.getRecordType(R));

@@ -26,7 +26,7 @@ namespace ast {
 
 void ILGenPass::ForwardDeclareRecord(RecordDecl *R)
 {
-   if (R->isTemplateOrInTemplate())
+   if (R->isInUnboundedTemplate())
       return;
 
    Builder.getModule()->addRecord(R);
@@ -54,7 +54,7 @@ void ILGenPass::DeclareProtocol(ProtocolDecl *P)
 
 void ILGenPass::DeclareRecord(RecordDecl *R)
 {
-   if (R->isTemplate())
+   if (R->isInUnboundedTemplate())
       return;
 
    if (auto S = dyn_cast<StructDecl>(R)) {
@@ -71,7 +71,7 @@ void ILGenPass::DeclareRecord(RecordDecl *R)
    }
 
    for (auto *Ext : R->getExtensions()) {
-      if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
+      if (Ext->getExtendedRecord()->isInUnboundedTemplate())
          return;
 
       if (isa<ProtocolDecl>(Ext->getExtendedRecord()))
@@ -110,7 +110,7 @@ void ILGenPass::DeclareDeclContext(DeclContext *Ctx)
 
 void ILGenPass::declareRecordInstantiation(RecordDecl *Inst)
 {
-   if (Inst->isTemplate())
+   if (Inst->isUnboundedTemplate())
       return;
 
    ForwardDeclareRecord(Inst);
@@ -346,7 +346,7 @@ void ILGenPass::visitRecordDecl(RecordDecl *node)
    if (alreadyVisited(node))
       return;
 
-   if (node->isTemplate())
+   if (node->isUnboundedTemplate())
       return;
 
    if (auto C = dyn_cast<ClassDecl>(node)) {
@@ -391,7 +391,7 @@ void ILGenPass::visitRecordCommon(RecordDecl *R)
 
 void ILGenPass::visitClassDecl(ClassDecl *C)
 {
-   if (C->isTemplateOrInTemplate())
+   if (C->isInUnboundedTemplate())
       return;
 
    visitRecordCommon(C);
@@ -399,7 +399,7 @@ void ILGenPass::visitClassDecl(ClassDecl *C)
 
 void ILGenPass::visitStructDecl(StructDecl *S)
 {
-   if (S->isTemplateOrInTemplate())
+   if (S->isInUnboundedTemplate())
       return;
 
    visitRecordCommon(S);
@@ -514,7 +514,7 @@ il::GlobalVariable *ILGenPass::GeneratePTable(RecordDecl *R, ProtocolDecl *P)
 
    Constant *VT;
    if (Impls.empty()) {
-      VT = Builder.GetConstantArray(Context.getArrayType(RawPtrTy, 0), {});
+      VT = Builder.GetConstantArray(RawPtrTy, {});
    }
    else {
       VT = Builder.GetConstantArray(Impls);
@@ -700,7 +700,7 @@ void ILGenPass::visitPropDecl(PropDecl*)
 
 void ILGenPass::visitExtensionDecl(ExtensionDecl *Ext)
 {
-   if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
+   if (Ext->getExtendedRecord()->isInUnboundedTemplate())
       return;
 
    for (auto &decl : Ext->getDecls()) {
@@ -724,7 +724,7 @@ void ILGenPass::visitProtocolDecl(ProtocolDecl *P)
 
 void ILGenPass::visitEnumDecl(EnumDecl *E)
 {
-   if (E->isTemplateOrInTemplate())
+   if (E->isInUnboundedTemplate())
       return;
 
    visitRecordCommon(E);
@@ -732,7 +732,7 @@ void ILGenPass::visitEnumDecl(EnumDecl *E)
 
 void ILGenPass::visitUnionDecl(UnionDecl *U)
 {
-   if (U->isTemplateOrInTemplate())
+   if (U->isInUnboundedTemplate())
       return;
 
    visitRecordCommon(U);

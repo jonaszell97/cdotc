@@ -130,7 +130,8 @@ unsigned TargetInfo::calculateSizeOfType(QualType Ty) const
 
       return size;
    }
-   case Type::RecordTypeID: {
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
       if (Ty->getRecord()->isInvalid())
          return 1;
 
@@ -175,7 +176,8 @@ unsigned short TargetInfo::calculateAlignOfType(QualType Ty) const
 
       return align;
    }
-   case Type::RecordTypeID: {
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
       if (Ty->getRecord()->isInvalid())
          return 1;
 
@@ -226,7 +228,8 @@ bool TargetInfo::calculateIsTriviallyCopyable(QualType Ty) const
 
       return trivial;
    }
-   case Type::RecordTypeID: {
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
       if (support::isa<ast::ClassDecl>(Ty->getRecord()))
          return false;
 
@@ -283,7 +286,8 @@ unsigned TargetInfo::calculateNestedNumberOfFields(QualType Ty) const
 
       return Cnt;
    }
-   case Type::RecordTypeID: {
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
       unsigned Cnt = 0;
       Ty->getRecord()->visitStoredTypes([&](QualType Ty) {
          Cnt += getNestedNumberOfFields(Ty);

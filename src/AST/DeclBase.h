@@ -53,36 +53,98 @@ public:
 
    enum DeclFlags : uint32_t {
       DF_None                = 0u,
+
+      /// This declaration is dependent on an unbounded template parameter.
       DF_TypeDependent       = 1u,
+
+      /// This declaration is dependent on a value template parameter.
       DF_ValueDependent      = DF_TypeDependent << 1u,
+
+      /// This declaration contained an error.
       DF_IsInvalid           = DF_ValueDependent << 1u,
+
+      /// This declaration has been semantically checked.
       DF_SemanticallyChecked = DF_IsInvalid << 1u,
+
+      /// This declaration is marked 'static'.
       DF_Static              = DF_SemanticallyChecked << 1u,
+
+      /// This declaration is marked 'let'.
       DF_Const               = DF_Static << 1u,
+
+      /// This declaration is defined, i.e. has a body.
       DF_HasDefinition       = DF_Const << 1u,
+
+      /// This declaration is externally imported.
       DF_External            = DF_HasDefinition << 1u,
+
+      /// This declaration has been declared.
       DF_WasDeclared         = DF_External << 1u,
+
+      /// This declaration was synthesized by the compiler.
       DF_Synthesized         = DF_WasDeclared << 1u,
+
+      /// This declarations attributes were semantically checked.
       DF_CheckedAttrs        = DF_Synthesized << 1u,
+
+      /// This declaration is marked @extern(C)
       DF_ExternC             = DF_CheckedAttrs << 1u,
+
+      /// This declaration is marked @extern(CXX)
       DF_ExternCXX           = DF_ExternC << 1u,
+
+      /// This declaration is a template instantiation.
       DF_Instantiation       = DF_ExternCXX << 1u,
+
+      /// This declaration is a compiler builtin.
       DF_Builtin             = DF_Instantiation << 1u,
+
+      /// This declaration is an indirect enum case.
       DF_IndirectCase        = DF_Builtin << 1u,
+
+      /// This declaration is trivially copyable.
       DF_TriviallyCopyable   = DF_IndirectCase << 1u,
+
+      /// This declaration is imported from a CDot module.
       DF_ImportedFromModule  = DF_TriviallyCopyable << 1u,
+
+      /// This declaration is an instantiation that was imported from a module.
       DF_ImportedInstantiation = DF_ImportedFromModule << 1u,
+
+      /// This declaration is currently being evaluated.
       DF_BeingEvaluated      = DF_ImportedInstantiation << 1u,
+
+      /// This declaration was loaded from a cache file.
       DF_LoadedFromCache     = DF_BeingEvaluated << 1u,
+
+      /// This declaration is marked 'abstract'.
       DF_Abstract            = DF_LoadedFromCache << 1u,
+
+      /// This declaration is ignored, e.g. because of a version attribute.
       DF_Ignored             = DF_Abstract << 1u,
+
+      /// This declaration is a protocol default implementation.
       DF_ProtoDefaultImpl    = DF_Ignored << 1u,
+
+      /// This declaration is a protocol requirement.
       DF_ProtoRequirement    = DF_ProtoDefaultImpl << 1u,
+
+      /// This declaration has been finalized, i.e. its conformance has been
+      /// checked and its size calculated.
       DF_Finalized           = DF_ProtoRequirement << 1u,
+
+      /// This declaration is an instantiation of a protocol default
+      /// implementation.
       DF_InstantiatedFromProtoImpl = DF_Finalized << 1u,
+
+      /// This declaration was imported from Clang.
       DF_ImportedFromClang   = DF_InstantiatedFromProtoImpl << 1u,
 
-      DF_Last                = DF_ImportedFromClang,
+      /// This declaration is a template that needs to be fully instantiated
+      /// instead of specialized.
+      DF_UnboundedTemplate   = DF_ImportedFromClang << 1u,
+
+      DF_Last                = DF_UnboundedTemplate,
       StatusFlags            = DF_TypeDependent | DF_ValueDependent |
                                DF_IsInvalid,
    };
@@ -173,6 +235,9 @@ public:
 
    bool isFinalized() const { return declFlagSet(DF_Finalized); }
    void setFinalized(bool b) { setDeclFlag(DF_Finalized, b); }
+
+   bool isUnboundedTemplate() const { return declFlagSet(DF_UnboundedTemplate); }
+   void setUnboundedTemplate(bool V) { setDeclFlag(DF_UnboundedTemplate, V); }
 
    bool isProtocolDefaultImpl() const
    { return declFlagSet(DF_ProtoDefaultImpl); }
@@ -346,6 +411,7 @@ public:
    bool isTemplate() const;
    bool inDependentContext() const;
    bool isTemplateOrInTemplate() const;
+   bool isInUnboundedTemplate() const;
 
    llvm::ArrayRef<TemplateParamDecl*> getTemplateParams() const;
 

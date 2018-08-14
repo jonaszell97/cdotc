@@ -154,6 +154,8 @@ void IRGen::visitModule(Module& ILMod)
 
    auto *TypeInfoDecl = CI.getSema().getTypeInfoDecl();
    auto *ECDecl = CI.getSema().getExistentialContainerDecl();
+   ILMod.addRecord(TypeInfoDecl);
+   ILMod.addRecord(ECDecl);
 
    for (auto Ty : ILMod.getRecords()) {
       if (StructTypeMap.find(Ty) != StructTypeMap.end())
@@ -170,6 +172,9 @@ void IRGen::visitModule(Module& ILMod)
          ExistentialContainerTy = getStructTy(Ty);
       }
    }
+
+   TypeInfoTy = getStructTy(TypeInfoDecl);
+   ExistentialContainerTy = getStructTy(ECDecl);
 
    for (auto Ty : ILMod.getRecords()) {
       DeclareType(Ty);
@@ -770,8 +775,9 @@ llvm::Type* IRGen::getLlvmTypeImpl(QualType Ty)
 
       return llvm::StructType::get(Ctx, argTypes);
    }
-   case Type::RecordTypeID: {
-      if (Ty->isRefcounted())
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
+      if (Ty->isClass())
          return getStructTy(Ty)->getPointerTo();
 
       if (Ty->isRawEnum())
@@ -791,6 +797,10 @@ llvm::Type* IRGen::getStorageType(QualType Ty)
    auto it = TypeMap.find(Ty);
    if (it != TypeMap.end())
       return it->getSecond();
+
+   if (Ty->isRecordType()&&Ty->getRecord()->getDeclName().isStr("Mammal")) {
+       int i=3; //CBP
+   }
 
    auto llvmTy = getLlvmTypeImpl(Ty);
    TypeMap[Ty] = llvmTy;

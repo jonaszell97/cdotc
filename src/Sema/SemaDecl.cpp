@@ -355,7 +355,7 @@ void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
       }
 
       auto Proto = protoTy->getRecord();
-      if (Proto->isTemplate())
+      if (Proto->isUnboundedTemplate())
          break;
 
       if (!isa<ProtocolDecl>(Proto)) {
@@ -527,7 +527,7 @@ bool SemaPass::calculateRecordSizes(ArrayRef<RecordDecl*> Decls)
          continue;
 
       // Don't instantiate anything in a template or a protocol.
-      if (R->isTemplateOrInTemplate()) {
+      if (R->isInUnboundedTemplate()) {
          continue;
       }
 
@@ -1358,28 +1358,29 @@ static void checkEnumCases(SemaPass &SP, DeclContext *DC,
 
 
 void SemaPass::declareImmediateDecls(
-                              RecordDecl *Ctx,
+                              RecordDecl *R,
                               DependencyGraph<NamedDecl*> &LayoutDependency) {
-   if (!needsSizeCalculation(Ctx))
+   if (!needsSizeCalculation(R))
       return;
 
-   DeclScopeRAII DSR(*this, Ctx);
-   addImplicitSelf(*this, Ctx);
+   DeclScopeRAII DSR(*this, R);
+   addImplicitSelf(*this, R);
 
-   StmtOrDecl D = Ctx;
-   checkBaseClass(*this, Ctx, LayoutDependency);
-   checkEnumCases(*this, Ctx, LayoutDependency);
+   StmtOrDecl D = R;
+   checkBaseClass(*this, R, LayoutDependency);
+   checkEnumCases(*this, R, LayoutDependency);
 
    if (auto *Any = getAnyDecl()) {
-      addDependency(Ctx, Any);
+      addDependency(R, Any);
+      Context.getConformanceTable().addExplicitConformance(Context, R, Any);
    }
 
-   registerExplicitConformances(Ctx);
-   registerImplicitAndInheritedConformances(Ctx);
+   registerExplicitConformances(R);
+   registerImplicitAndInheritedConformances(R);
 
    // resolve static conditions line because they might contain decls that
    // are needed by others
-   for (auto &decl : Ctx->getDecls()) {
+   for (auto &decl : R->getDecls()) {
       switch (decl->getKind()) {
       case Decl::StaticIfDeclID:
       case Decl::StaticForDeclID: {
@@ -1393,7 +1394,7 @@ void SemaPass::declareImmediateDecls(
 
    // associated types and aliases must be visited line because their types
    // might be used in fields / method signatures / etc.
-   for (auto &decl : Ctx->getDecls()) {
+   for (auto &decl : R->getDecls()) {
       switch (decl->getKind()) {
       case Decl::AssociatedTypeDeclID:
       case Decl::AliasDeclID:
@@ -1408,7 +1409,7 @@ void SemaPass::declareImmediateDecls(
       }
    }
 
-   for (auto &decl : Ctx->getDecls()) {
+   for (auto &decl : R->getDecls()) {
       switch (decl->getKind()) {
       case Decl::FieldDeclID: {
          declareFieldDeclImmediate(cast<FieldDecl>(decl), &LayoutDependency);
@@ -1984,7 +1985,7 @@ DeclResult SemaPass::declareFunctionDecl(FunctionDecl *F)
    if (!declareCallableDecl(F))
       return DeclError();
 
-   if (!F->isTemplate() && !F->isInvalid())
+   if (!F->isUnboundedTemplate() && !F->isInvalid())
       ILGen->DeclareFunction(F);
 
    return F;
@@ -2291,16 +2292,32 @@ DeclResult SemaPass::declareTemplateParamDecl(TemplateParamDecl *P)
 
    if (P->getCovariance()->isAutoType()) {
       if (P->isTypeName()) {
-         P->getValueType().setResolvedType(UnknownAnyTy);
+         // Make no assumptions about unbounded generics.
+         if (P->isUnbounded()) {
+            P->getValueType().setResolvedType(UnknownAnyTy);
+            cast<Decl>(P->getDeclContext())->setUnboundedTemplate(true);
+         }
+         // Otherwhise use 'Any' as an upper bound.
+         else {
+            P->getValueType().setResolvedType(
+               Context.getRecordType(getAnyDecl()));
+         }
       }
       else {
+         // Value arguments default to 'Int'.
          P->getValueType().setResolvedType(Context.getIntTy());
       }
+   }
+
+   if (P->isVariadic()) {
+      // Variadic templates need a full instantiation.
+      cast<Decl>(P->getDeclContext())->setUnboundedTemplate(true);
    }
 
    // update the TemplateParamType associated with this declaration
    Context.getTemplateArgType(P)->setCanonicalType(P->getCovariance());
 
+   // FIXME move this check to the point where it's first needed.
    if (auto Def = P->getDefaultValue()) {
       (void)visitExpr(P, Def);
    }
@@ -2452,6 +2469,9 @@ void SemaPass::registerImplicitAndInheritedConformances(
 
 DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
 {
+   for (auto &TP : Rec->getTemplateParams())
+      (void) declareStmt(Rec, TP);
+
    if (!Rec->getSize()) {
        calculateRecordSizes(Rec);
    }
@@ -2471,9 +2491,9 @@ DeclResult SemaPass::declareRecordDecl(RecordDecl *Rec)
    }
 
    auto *Ty = Context.getRecordType(Rec);
-   Ty->setDependent(Ty->isDependentType() || Rec->isTemplateOrInTemplate());
+   Ty->setDependent(Ty->isDependentType() || Rec->isInUnboundedTemplate());
 
-   if (!Rec->isTemplateOrInTemplate() && !Rec->isInvalid()) {
+   if (!Rec->isInUnboundedTemplate() && !Rec->isInvalid()) {
       checkProtocolConformance(Rec);
    }
 

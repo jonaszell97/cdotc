@@ -410,6 +410,26 @@ il::Method* ILGenPass::getFunc(MethodDecl *M)
    return cast_or_null<il::Method>(getFunc((CallableDecl*)M));
 }
 
+il::Value* ILGenPass::getMethod(il::Value *Self, MethodDecl *M)
+{
+   unsigned Offset = 0;
+   if (M->isVirtual()) {
+      Offset = getFunc(M)->getVtableOffset();
+   }
+   else if (M->isProtocolRequirement()) {
+      Offset = getProtocolMethodOffset(M);
+   }
+   else {
+      return getFunc(M);
+   }
+
+   il::Value *OffsetVal = Builder.GetConstantInt(WordTy, Offset);
+   auto *Ref = Builder.CreateIntrinsicCall(Intrinsic::virtual_method,
+                                           { Self, OffsetVal });
+
+   return Builder.CreateBitCast(CastKind::BitCast, Ref, M->getFunctionType());
+}
+
 void ILGenPass::addDeclValuePair(NamedDecl *Decl, il::Value *Val)
 {
    if (isa<LocalVarDecl>(Decl) || isa<FuncArgDecl>(Decl)) {
@@ -789,7 +809,7 @@ void ILGenPass::notifyFunctionCalledInTemplate(CallableDecl *C)
 
 il::Function* ILGenPass::DeclareFunction(CallableDecl *C)
 {
-   if (C->isTemplate() || C->isNative())
+   if (C->isUnboundedTemplate() || C->isNative())
       return nullptr;
 
    ModuleRAII MR(*this, getModuleFor(C));
@@ -1051,6 +1071,14 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
                Call->setSynthesized(true);
             }
          }
+         else if ((*func_arg_it)->isCaptured()) {
+            retainIfNecessary(&val);
+
+            auto BoxAlloc = CreateAllocBox(val.getType());
+            pushDefaultCleanup(BoxAlloc);
+
+            SelfVal = BoxAlloc;
+         }
          else if (!val.isLvalue()) {
             auto alloca = Builder.CreateAlloca(val.getType(), 0, false,
                                                !CD->hasMutableSelf());
@@ -1189,16 +1217,18 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    getMandatoryPassManager().runPassesOnFunction(*func);
 }
 
-void ILGenPass::VerifyFunction(il::Function *F)
+bool ILGenPass::VerifyFunction(il::Function *F)
 {
    if (F->isVerified() || F->isDeclared() || F->isInvalid())
-      return;
+      return F->isInvalid();
 
    F->setVerified(true);
 
    VerifierPass VP;
    VP.setFunction(F);
    VP.run();
+
+   return !VP.isValid();
 }
 
 void ILGenPass::CanonicalizeFunction(il::Function *F)
@@ -1799,7 +1829,7 @@ ILGenPass::EnterCtfeScope::~EnterCtfeScope()
 
 bool ILGenPass::prepareFunctionForCtfe(CallableDecl *C, StmtOrDecl Caller,
                                        bool NeedsCompileTimeAttr) {
-   assert(!C->isTemplate() && "attempting to evaluate template!");
+   assert(!C->isUnboundedTemplate() && "attempting to evaluate template!");
 
    EnterCtfeScope CtfeScope(*this, C);
 
@@ -2522,7 +2552,7 @@ void ILGenPass::visitCallableDecl(CallableDecl *node)
    if (alreadyVisited(node))
       return;
 
-   if (node->isNative() || node->isTemplate())
+   if (node->isNative() || node->isUnboundedTemplate())
       return;
 
    for (auto *D : node->getDecls()) {
@@ -2620,7 +2650,14 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
       break;
    case IdentifierKind::Function: {
       auto *C = Expr->getCallable();
-      auto Fun = getFunc(C);
+
+      il::Value *Fun;
+      if (auto *M = dyn_cast<MethodDecl>(C)) {
+         Fun = getMethod(visit(Expr->getParentExpr()), M);
+      }
+      else {
+         Fun = getFunc(C);
+      }
 
       if (!Expr->getExprType()->isThinFunctionTy()) {
          V = Builder.CreateLambdaInit(wrapNonLambdaFunction(Fun),
@@ -2628,25 +2665,26 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
       }
       else {
          /// method referenced with 'Self', load from VTable if necessary
-         auto *Ident = dyn_cast_or_null<IdentifierRefExpr>(
-            Expr->getParentExpr());
+//         auto *Ident = dyn_cast_or_null<IdentifierRefExpr>(
+//            Expr->getParentExpr());
 
-         if (Ident && Ident->isSelf() && isa<Method>(Fun)
-               && cast<MethodDecl>(C)->isVirtualOrOverride()) {
-            auto *Offset = Builder.GetConstantInt(
-               WordTy, cast<Method>(Fun)->getVtableOffset());
-            auto *Self = cast<Method>(getCurrentFn())->getSelf();
-            if (Self->isLvalue())
-               Self = Builder.CreateLoad(Self);
-
-            V = Builder.CreateIntrinsicCall(Intrinsic::virtual_method,
-                                            { Self, Offset });
-            V = Builder.CreateBitCast(CastKind::BitCast, V,
-                                      Ident->getExprType());
-         }
-         else {
-            V = Fun;
-         }
+//         if (Ident && Ident->isSelf() && isa<Method>(Fun)
+//               && cast<MethodDecl>(C)->isVirtualOrOverride()) {
+//            auto *Offset = Builder.GetConstantInt(
+//               WordTy, cast<Method>(Fun)->getVtableOffset());
+//            auto *Self = cast<Method>(getCurrentFn())->getSelf();
+//            if (Self->isLvalue())
+//               Self = Builder.CreateLoad(Self);
+//
+//            V = Builder.CreateIntrinsicCall(Intrinsic::virtual_method,
+//                                            { Self, Offset });
+//            V = Builder.CreateBitCast(CastKind::BitCast, V,
+//                                      Ident->getExprType());
+//         }
+//         else {
+//            V = Fun;
+//         }
+         V = Fun;
       }
 
       break;
@@ -2704,14 +2742,14 @@ il::Value *ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr *Expr)
    case IdentifierKind::PartiallyAppliedMethod: {
       il::Value *Self;
       if (auto *Ident = dyn_cast<IdentifierRefExpr>(Expr->getParentExpr())) {
-         Self = Builder.CreateLoad(getValueForDecl(Ident->getNamedDecl()));
+         Self = Builder.CreateLoad(visit(Ident));
       }
       else {
          Self = Builder.CreateLoad(cast<Method>(getCurrentFn())->getSelf());
       }
 
       auto fn = getPartiallyAppliedLambda(
-         getFunc(Expr->getPartiallyAppliedMethod()), Self);
+         getMethod(Self, Expr->getPartiallyAppliedMethod()), Self);
 
       auto lambdaTy = SP.getContext().getLambdaType(fn->getType()
                                                       ->asFunctionType());
@@ -2810,6 +2848,53 @@ il::Function* ILGenPass::getPartiallyAppliedLambda(il::Method *M,
 
    auto wrappedFn = Builder.CreateLambda(M->getReturnType(), args,
                                          M->mightThrow());
+
+   wrappedFn->addDefinition();
+   wrappedFn->addCapture(Self->getType());
+
+   InsertPointRAII insertPointRAII(*this, wrappedFn->getEntryBlock());
+   Builder.CreateDebugLoc(Self->getSourceLoc());
+
+   SmallVector<il::Value*, 8> givenArgs;
+   givenArgs.push_back(Builder.CreateIntrinsicCall(
+      Intrinsic::unbox,
+      Builder.CreateCaptureExtract(0)));
+
+   auto begin_it = wrappedFn->getEntryBlock()->arg_begin();
+   auto end_it = wrappedFn->getEntryBlock()->arg_end();
+   while (begin_it != end_it)
+      givenArgs.push_back(&*begin_it++);
+
+   Builder.CreateRet(Builder.CreateCall(M, givenArgs));
+   return wrappedFn;
+}
+
+il::Function* ILGenPass::getPartiallyAppliedLambda(il::Value *M,
+                                                   il::Value *Self) {
+   // retain the box for this capture
+   retainIfNecessary(Self);
+
+   auto *FnTy = M->getType()->asFunctionType();
+
+   SmallVector<il::Argument*, 8> args;
+   unsigned i = 0;
+
+   auto Info = FnTy->getParamInfo();
+   for (QualType Ty : FnTy->getParamTypes()) {
+      if (i == 0) {
+         ++i;
+         continue;
+      }
+
+      args.push_back(Builder.CreateArgument(Ty, Info[i].getConvention(),
+                                            nullptr, "",
+                                            M->getSourceLoc()));
+
+      ++i;
+   }
+
+   auto wrappedFn = Builder.CreateLambda(FnTy->getReturnType(), args,
+                                         FnTy->throws());
 
    wrappedFn->addDefinition();
    wrappedFn->addCapture(Self->getType());

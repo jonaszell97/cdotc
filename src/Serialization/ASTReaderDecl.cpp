@@ -823,7 +823,10 @@ void ASTDeclReader::visitTemplateParamDecl(TemplateParamDecl *D)
 {
    visitNamedDecl(D);
 
-   D->setTypeName(Record.readBool());
+   uint64_t Flags = Record.readInt();
+   D->setTypeName((Flags & 0x1) != 0);
+   D->setUnbounded((Flags & 0x2) != 0);
+
    D->setIndex(Record.readInt());
 
    D->setTypeNameOrValueLoc(ReadSourceLocation());
@@ -1560,7 +1563,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
    case Decl::ProtocolDeclID: {
       auto *R = cast<RecordDecl>(D);
       auto *Ty = Context.getRecordType(R);
-      Ty->setDependent(Ty->isDependentType() || R->isTemplateOrInTemplate());
+      Ty->setDependent(Ty->isDependentType() || R->isInUnboundedTemplate());
 
       break;
    }

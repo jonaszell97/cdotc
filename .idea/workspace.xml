@@ -5,14 +5,14 @@
   </component>
   <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true" buildAllGenerated="true">
     <generated>
-      <config projectName="CDot" targetName="intrinsics_gen" />
       <config projectName="CDot" targetName="cdotc_ubsan" />
       <config projectName="CDot" targetName="clang-tablegen-targets" />
-      <config projectName="CDot" targetName="cdotc" />
       <config projectName="CDot" targetName="cdotc-tblgens" />
+      <config projectName="CDot" targetName="intrinsics_gen" />
+      <config projectName="CDot" targetName="cdotc" />
       <config projectName="CDot" targetName="cdotrt" />
-      <config projectName="CDot" targetName="cdot-tblgen" />
       <config projectName="CDot" targetName="cdotc_asan" />
+      <config projectName="CDot" targetName="cdot-tblgen" />
     </generated>
   </component>
   <component name="CMakeSettings">
@@ -23,82 +23,41 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e6611568-d3ee-47e2-8a0e-7b8c8972dc44" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/CDot.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/codeStyles/codeStyleConfig.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/atomic/Atomic.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/atomic/Atomic.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/fs/FileSystem.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/fs/FileSystem.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/math/BigInt.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/math/BigInt.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/math/BigUInt.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/math/BigUInt.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/mem/Memory.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/mem/Memory.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/prelude/Collection.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/prelude/Collection.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/prelude/Dictionary.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/prelude/Dictionary.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/prelude/Option.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/prelude/Option.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/prelude/Runtime.dot" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/rand/Random.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/rand/Random.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/rt/RC.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/rt/RC.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/StdLib/core/rt/TypeInfo.dot" beforeDir="false" afterPath="$PROJECT_DIR$/StdLib/core/rt/TypeInfo.dot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/ASTContext.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/ASTContext.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/AST/ASTContext.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/ASTContext.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/ConformanceTable.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/ConformanceTable.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Decl.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Decl.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Decl.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Decl.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/DeclBase.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/DeclBase.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/AST/DeclBase.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/DeclBase.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Type.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Type.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/AST/Type.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/AST/Type.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/CastKind.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/CastKind.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/CastKind.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/CastKind.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Mangle.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Mangle.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Basic/Mangle.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/Mangle.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Driver/Compiler.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Driver/Compiler.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Driver/Job.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Driver/Job.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Analysis/EscapeAnalysis.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Analysis/EscapeAnalysis.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Constants.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Constants.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Constants.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Constants.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Context.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Context.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Context.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Context.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Function.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Function.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/ILBuilder.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/ILBuilder.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/ILBuilder.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/ILBuilder.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Instructions.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Instructions.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Instructions.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Instructions.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Instructions.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Instructions.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Intrinsics.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Intrinsics.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Module.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Module.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Module.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Module.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/DefinitiveInitializationPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/DefinitiveInitializationPass.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IL/Value.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Value.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/IL/Passes/Passes.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Passes/Passes.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ILGen/Cleanup.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/ILGen/Cleanup.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ILGen/ILGenCast.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/ILGen/ILGenCast.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ILGen/ILGenClass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/ILGen/ILGenClass.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ILGen/ILGenPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/ILGen/ILGenPass.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ILGen/ILGenPass.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/ILGen/ILGenPass.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IRGen/DIGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IRGen/DIGen.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/IRGen/IRGen.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/IRGen/IRGen.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/IRGen/IRGen.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/IRGen/IRGen.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Message/def/Diagnostics.def" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/Diagnostics.def" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Message/def/Diagnostics.tg" beforeDir="false" afterPath="$PROJECT_DIR$/src/Message/def/Diagnostics.tg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Sema/ConformanceChecker.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/ConformanceChecker.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Parse/Parser.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Parse/Parser.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Sema/CandidateSet.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/CandidateSet.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Sema/CandidateSet.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/CandidateSet.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/OverloadResolver.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/OverloadResolver.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Sema/SemaCall.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaCall.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/SemaCast.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaCast.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Sema/SemaClass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaClass.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/SemaDecl.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaDecl.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/SemaMemberExpr.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaMemberExpr.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Sema/SemaOperator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaOperator.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/SemaPass.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaPass.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/SemaPass.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaPass.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Sema/SemaReflect.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaReflect.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Sema/SemaTemplate.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/SemaTemplate.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/Template.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/Template.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Serialization/ASTReaderDecl.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Serialization/ASTReaderDecl.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Serialization/ASTWriterDecl.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Serialization/ASTWriterDecl.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Serialization/ILReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Serialization/ILReader.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Serialization/ILWriter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Serialization/ILWriter.cpp" afterDir="false" />
     </list>
     <ignored path="$PROJECT_DIR$/cmake-build-debug/" />
     <ignored path="$PROJECT_DIR$/cmake-build-release/" />
@@ -113,41 +72,42 @@
     <session id="-953699968">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="2" />
+          <entry key="project.closed" value="4" />
           <entry key="project.open.time.12" value="1" />
+          <entry key="project.open.time.2" value="2" />
           <entry key="project.open.time.9" value="1" />
-          <entry key="project.opened" value="2" />
+          <entry key="project.opened" value="4" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
         <counts>
-          <entry key="cpp" value="205" />
-          <entry key="def" value="20" />
+          <entry key="cpp" value="258" />
+          <entry key="def" value="25" />
           <entry key="dot" value="27" />
-          <entry key="h" value="115" />
+          <entry key="h" value="141" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.open">
         <counts>
           <entry key="C•" value="27" />
-          <entry key="ObjectiveC" value="340" />
+          <entry key="ObjectiveC" value="424" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="LLDB" value="1911" />
-          <entry key="cpp" value="22508" />
+          <entry key="LLDB" value="2201" />
+          <entry key="cpp" value="26251" />
           <entry key="def" value="83" />
           <entry key="dot" value="622" />
-          <entry key="h" value="5206" />
+          <entry key="h" value="6859" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
           <entry key="C•" value="622" />
-          <entry key="Doxygen file" value="8" />
-          <entry key="LLDBCommands" value="1911" />
-          <entry key="ObjectiveC" value="27789" />
+          <entry key="Doxygen file" value="9" />
+          <entry key="LLDBCommands" value="2201" />
+          <entry key="ObjectiveC" value="33184" />
         </counts>
       </usages-collector>
     </session>
@@ -155,40 +115,10 @@
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenClass.cpp">
+        <entry file="file://$PROJECT_DIR$/src/AST/Type.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-6">
-              <caret line="478" column="49" lean-forward="true" selection-start-line="478" selection-start-column="49" selection-end-line="478" selection-end-column="49" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="292">
-              <caret line="1853" lean-forward="true" selection-start-line="1853" selection-end-line="1853" />
-              <folding>
-                <element signature="e#45#73#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Serialization/ASTWriterDecl.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="396">
-              <caret line="934" column="54" selection-start-line="934" selection-start-column="54" selection-end-line="934" selection-end-column="54" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/Serialization/ASTReaderDecl.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="336">
-              <caret line="1087" lean-forward="true" selection-start-line="1087" selection-end-line="1087" />
+            <state relative-caret-position="130">
+              <caret line="457" selection-start-line="457" selection-end-line="457" />
             </state>
           </provider>
         </entry>
@@ -196,8 +126,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/Sema/SemaPass.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="246">
-              <caret line="1382" column="18" selection-start-line="1382" selection-start-column="15" selection-end-line="1382" selection-end-column="18" />
+            <state relative-caret-position="144">
+              <caret line="4269" selection-start-line="4269" selection-end-line="4269" />
               <folding>
                 <element signature="e#45#66#0" expanded="true" />
               </folding>
@@ -206,19 +136,10 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
+        <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.h">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="174">
-              <caret line="372" column="36" selection-start-line="372" selection-start-column="36" selection-end-line="372" selection-end-column="36" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.cpp">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="164">
-              <caret line="618" lean-forward="true" selection-start-line="618" selection-end-line="618" />
+            <state relative-caret-position="291">
+              <caret line="413" column="38" lean-forward="true" selection-start-line="413" selection-start-column="38" selection-end-line="413" selection-end-column="38" />
             </state>
           </provider>
         </entry>
@@ -226,28 +147,67 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/IRGen/IRGen.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="268">
-              <caret line="3135" column="25" lean-forward="true" selection-start-line="3135" selection-start-column="25" selection-end-line="3135" selection-end-column="25" />
+            <state relative-caret-position="181">
+              <caret line="157" column="16" lean-forward="true" selection-start-line="157" selection-start-column="16" selection-end-line="157" selection-end-column="16" />
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/IL/ILBuilder.cpp">
+        <entry file="file://$PROJECT_DIR$/src/IL/Module.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="396">
-              <caret line="937" column="45" selection-start-line="937" selection-start-column="45" selection-end-line="937" selection-end-column="45" />
+            <state relative-caret-position="235">
+              <caret line="130" column="13" selection-start-line="130" selection-start-column="13" selection-end-line="130" selection-end-column="13" />
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Sema/SemaCast.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="155">
+              <caret line="476" column="12" selection-start-line="476" selection-start-column="12" selection-end-line="476" selection-end-column="12" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Sema/SemaCall.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="195">
+              <caret line="1170" selection-start-line="1170" selection-end-line="1170" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenPass.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="116">
-              <caret line="2953" selection-start-line="2953" selection-end-line="2953" />
+            <state relative-caret-position="-2071">
+              <caret line="3008" column="35" selection-start-line="3008" selection-start-column="22" selection-end-line="3008" selection-end-column="35" />
               <folding>
                 <element signature="e#45#67#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="404">
+              <caret line="508" selection-start-line="508" selection-end-line="508" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="37395">
+              <caret line="2493" selection-start-line="2493" selection-end-line="2493" />
+              <folding>
+                <element signature="e#45#73#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -257,36 +217,36 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>Associ</find>
-      <find>getFunctionType</find>
-      <find>g</find>
-      <find>makeDecl</find>
-      <find>visitAlias</find>
-      <find>checkDeclConstr</find>
-      <find>&quot;UI</find>
-      <find>visitAli</find>
-      <find>visitAs</find>
-      <find>declareAss</find>
-      <find>visit</find>
-      <find>checkDeclCon</find>
-      <find>visitE</find>
-      <find>TemplateArgList</find>
-      <find>declareAssoc</find>
-      <find>checkDeclCons</find>
-      <find>AliasTem</find>
-      <find>RecordDecl</find>
-      <find>VirtualCall</find>
-      <find>VirtualInv</find>
-      <find>getStor</find>
-      <find>DeclareType</find>
-      <find>ProtocolDecl</find>
-      <find>NeedsStr</find>
-      <find>get</find>
-      <find>getL</find>
-      <find>visitVirtualCall</find>
-      <find>GeneratePT</find>
-      <find>visitMethod</find>
-      <find>declareCallabl</find>
+      <find>maybeInstani</find>
+      <find>needsSizeCalculation</find>
+      <find>declareImmediateDecls</find>
+      <find>ActOnRec</find>
+      <find>calculateRecordS</find>
+      <find>finaliz</find>
+      <find>visitCal</find>
+      <find>isTemplateOrInTemplate</find>
+      <find>maybeIns</find>
+      <find>getAny</find>
+      <find>isAny</find>
+      <find>v</find>
+      <find>visitSelfEx</find>
+      <find>isTemplate[^O]</find>
+      <find>visitIdentf</find>
+      <find>isDirect</find>
+      <find>virtual_</find>
+      <find>getFunc</find>
+      <find>virtual_method</find>
+      <find>Partially</find>
+      <find>virtual_m</find>
+      <find>DefineFun</find>
+      <find>visitLocal</find>
+      <find>DependentRec</find>
+      <find>visitSe</find>
+      <find>setDependen</find>
+      <find>IsIm</find>
+      <find>getLlvmTy</find>
+      <find>isTemplate</find>
+      <find>visitCallExpr</find>
     </findStrings>
     <replaceStrings>
       <replace>ValueWitnessTable</replace>
@@ -300,6 +260,7 @@
       <replace>Copy</replace>
       <replace>Invoke</replace>
       <replace>ExistentialFallible</replace>
+      <replace>isUnboundedTemplate</replace>
     </replaceStrings>
   </component>
   <component name="Git.Settings">
@@ -308,57 +269,57 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/StdLib/core/prelude/Dictionary.dot" />
-        <option value="$PROJECT_DIR$/src/Sema/SemaCall.cpp" />
-        <option value="$PROJECT_DIR$/src/Driver/Job.cpp" />
-        <option value="$PROJECT_DIR$/StdLib/core/atomic/Atomic.dot" />
-        <option value="$PROJECT_DIR$/StdLib/core/prelude/Option.dot" />
-        <option value="$PROJECT_DIR$/StdLib/core/prelude/Collection.dot" />
-        <option value="$PROJECT_DIR$/src/IRGen/DIGen.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Function.h" />
-        <option value="$PROJECT_DIR$/src/Sema/Template.cpp" />
-        <option value="$PROJECT_DIR$/src/Basic/Mangle.cpp" />
-        <option value="$PROJECT_DIR$/src/ILGen/ILGenPass.cpp" />
-        <option value="$PROJECT_DIR$/src/Basic/CastKind.h" />
-        <option value="$PROJECT_DIR$/src/Basic/CastKind.cpp" />
-        <option value="$PROJECT_DIR$/src/Sema/SemaCast.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Instructions.def" />
         <option value="$PROJECT_DIR$/src/IL/Value.h" />
         <option value="$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" />
         <option value="$PROJECT_DIR$/src/IL/Instructions.cpp" />
         <option value="$PROJECT_DIR$/src/IL/ILBuilder.h" />
         <option value="$PROJECT_DIR$/src/Serialization/ILWriter.cpp" />
         <option value="$PROJECT_DIR$/src/Serialization/ILReader.cpp" />
-        <option value="$PROJECT_DIR$/src/Sema/OverloadResolver.cpp" />
         <option value="$PROJECT_DIR$/src/IRGen/IRGen.h" />
         <option value="$PROJECT_DIR$/src/IL/Intrinsics.def" />
         <option value="$PROJECT_DIR$/src/IL/Instructions.h" />
         <option value="$PROJECT_DIR$/src/ILGen/Cleanup.cpp" />
         <option value="$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp" />
         <option value="$PROJECT_DIR$/StdLib/core/rt/TypeInfo.dot" />
-        <option value="$PROJECT_DIR$/src/ILGen/ILGenPass.h" />
         <option value="$PROJECT_DIR$/src/ILGen/ILGenCast.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Decl.h" />
-        <option value="$PROJECT_DIR$/src/AST/Decl.cpp" />
         <option value="$PROJECT_DIR$/src/Message/Diagnostics.h" />
-        <option value="$PROJECT_DIR$/src/Sema/SemaPass.h" />
-        <option value="$PROJECT_DIR$/src/AST/DeclBase.cpp" />
-        <option value="$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp" />
         <option value="$PROJECT_DIR$/src/Sema/SemaOperator.cpp" />
         <option value="$PROJECT_DIR$/src/Sema/ConformanceChecker.cpp" />
         <option value="$PROJECT_DIR$/src/Sema/SemaClass.cpp" />
-        <option value="$PROJECT_DIR$/src/Sema/SemaMemberExpr.cpp" />
-        <option value="$PROJECT_DIR$/src/Sema/SemaPass.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Type.cpp" />
-        <option value="$PROJECT_DIR$/src/AST/Type.h" />
         <option value="$PROJECT_DIR$/src/AST/ASTContext.cpp" />
-        <option value="$PROJECT_DIR$/src/IL/ILBuilder.cpp" />
-        <option value="$PROJECT_DIR$/src/IRGen/IRGen.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Decl.h" />
+        <option value="$PROJECT_DIR$/src/AST/Decl.cpp" />
+        <option value="$PROJECT_DIR$/src/Parse/Parser.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp" />
         <option value="$PROJECT_DIR$/src/Serialization/ASTWriterDecl.cpp" />
         <option value="$PROJECT_DIR$/src/Serialization/ASTReaderDecl.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/SemaPass.h" />
+        <option value="$PROJECT_DIR$/src/AST/Type.h" />
+        <option value="$PROJECT_DIR$/src/IL/Passes/Passes.cpp" />
+        <option value="$PROJECT_DIR$/src/Driver/Job.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/DeclBase.cpp" />
+        <option value="$PROJECT_DIR$/src/Driver/Compiler.cpp" />
+        <option value="$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/CandidateSet.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/Template.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/SemaTemplate.cpp" />
         <option value="$PROJECT_DIR$/src/ILGen/ILGenClass.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/OverloadResolver.cpp" />
         <option value="$PROJECT_DIR$/src/Sema/SemaDecl.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/ConformanceTable.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/SemaPass.cpp" />
+        <option value="$PROJECT_DIR$/src/ILGen/ILGenPass.h" />
+        <option value="$PROJECT_DIR$/src/IL/ILBuilder.cpp" />
+        <option value="$PROJECT_DIR$/src/ILGen/ILGenPass.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/SemaMemberExpr.cpp" />
+        <option value="$PROJECT_DIR$/src/Sema/CandidateSet.h" />
+        <option value="$PROJECT_DIR$/src/Sema/SemaCall.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/Type.cpp" />
+        <option value="$PROJECT_DIR$/src/Basic/TargetInfo.cpp" />
+        <option value="$PROJECT_DIR$/src/IRGen/DIGen.cpp" />
+        <option value="$PROJECT_DIR$/src/IRGen/IRGen.cpp" />
+        <option value="$PROJECT_DIR$/src/AST/DeclBase.h" />
+        <option value="$PROJECT_DIR$/src/Sema/SemaCast.cpp" />
       </list>
     </option>
   </component>
@@ -496,6 +457,7 @@
   <component name="PropertiesComponent">
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
+    <property name="settings.editor.selected.configurable" value="preferences.lookFeel" />
   </component>
   <component name="RunDashboard">
     <option name="ruleStates">
@@ -728,7 +690,9 @@
       <workItem from="1533743814489" duration="27024000" />
       <workItem from="1533907337681" duration="30805000" />
       <workItem from="1533999466781" duration="6836000" />
-      <workItem from="1534007803815" duration="41800000" />
+      <workItem from="1534007803815" duration="44615000" />
+      <workItem from="1534172637170" duration="8718000" />
+      <workItem from="1534256385532" duration="661000" />
     </task>
     <task id="LOCAL-00001" summary="- reworked AST to use llvm-style RTTI&#10;- reworked Passes to not rely on virtual inheritance">
       <created>1511341652198</created>
@@ -859,14 +823,14 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="48696000" />
+    <option name="totallyTimeSpent" value="60890000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="0" width="1280" height="800" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.8465753" visible="true" weight="0.31987077" />
-      <window_info id="Structure" order="1" sideWeight="0.15342465" side_tool="true" visible="true" weight="0.31987077" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.8438356" visible="true" weight="0.32956383" />
+      <window_info id="Structure" order="1" sideWeight="0.15616438" side_tool="true" visible="true" weight="0.32956383" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" sideWeight="0.4940429" weight="0.31917807" />
@@ -928,7 +892,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
-          <line>2146</line>
+          <line>2148</line>
           <option name="timeStamp" value="5612" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
@@ -943,22 +907,22 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/SemaPass.cpp</url>
-          <line>4267</line>
+          <line>4269</line>
           <option name="timeStamp" value="6527" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
-          <line>2983</line>
+          <line>2985</line>
           <option name="timeStamp" value="6540" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp</url>
-          <line>2156</line>
+          <line>2158</line>
           <option name="timeStamp" value="6732" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Parse/Parser.cpp</url>
-          <line>4811</line>
+          <line>4816</line>
           <option name="timeStamp" value="6735" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
@@ -968,325 +932,33 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/SemaPass.cpp</url>
-          <line>4276</line>
+          <line>4278</line>
           <option name="timeStamp" value="6752" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/ILGen/ILGenPass.cpp</url>
-          <line>5502</line>
+          <line>5587</line>
           <option name="timeStamp" value="6758" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp</url>
-          <line>1512</line>
+          <line>1513</line>
           <option name="timeStamp" value="6786" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/Sema/SemaPass.cpp</url>
-          <line>4976</line>
+          <line>4978</line>
           <option name="timeStamp" value="7459" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/src/ILGen/ILGenClass.cpp</url>
-          <line>469</line>
-          <option name="timeStamp" value="7462" />
+          <url>file://$PROJECT_DIR$/src/IRGen/IRGen.cpp</url>
+          <line>801</line>
+          <option name="timeStamp" value="7460" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/StdLib/core/rt/TypeInfo.dot">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="329">
-          <caret line="260" column="39" selection-start-line="260" selection-start-column="39" selection-end-line="260" selection-end-column="39" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenPass.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="330">
-          <caret line="741" column="8" selection-start-line="741" selection-start-column="8" selection-end-line="741" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/Instructions.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="291">
-          <caret line="582" column="25" selection-start-line="582" selection-start-column="25" selection-end-line="582" selection-end-column="25" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/ILGen/Cleanup.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="283">
-          <caret line="37" column="26" lean-forward="true" selection-start-line="37" selection-start-column="26" selection-end-line="37" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/CTFE/CTFEEngine.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="353">
-          <caret line="2524" column="38" selection-start-line="2524" selection-start-column="38" selection-end-line="2524" selection-end-column="38" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/IL/BasicBlock.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="132" selection-start-line="132" selection-end-line="132" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/local/Cellar/llvm/6.0.0/include/llvm/ADT/ArrayRef.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="188" selection-start-line="188" selection-end-line="188" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaCall.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="275" selection-start-line="275" selection-end-line="275" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/OverloadResolver.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="159">
-          <caret line="570" selection-start-line="570" selection-end-line="570" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Message/Diagnostics.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-2">
-          <caret line="38" column="2" selection-start-line="38" selection-start-column="2" selection-end-line="38" selection-end-column="2" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/TypeVisitor.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="222">
-          <caret line="42" column="26" selection-start-line="42" selection-start-column="6" selection-end-line="42" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/StdLib/core/prelude/Collection.dot">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="155">
-          <caret line="29" column="19" selection-start-line="29" selection-start-column="19" selection-end-line="29" selection-end-column="19" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenCast.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="239">
-          <caret line="76" selection-start-line="76" selection-end-line="76" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Decl.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="264">
-          <caret line="1011" selection-start-line="1011" selection-end-line="1011" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/TypeBuilder.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="227">
-          <caret line="35" selection-start-line="35" selection-end-line="35" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="53">
-          <caret line="715" column="25" selection-start-line="715" selection-start-column="25" selection-end-line="715" selection-end-column="25" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Types.def">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="17" selection-start-line="17" selection-end-line="17" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Basic/Mangle.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="1180" selection-start-line="1180" selection-end-line="1180" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/Template.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-5025" />
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="680" selection-start-line="680" selection-end-line="680" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="21">
-          <caret line="45" column="9" selection-start-line="45" selection-start-column="9" selection-end-line="45" selection-end-column="9" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Statement.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="111" selection-start-line="111" selection-end-line="111" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaCast.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="29" selection-start-line="29" selection-end-line="29" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaClass.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="89">
-          <caret line="139" column="1" selection-start-line="139" selection-start-column="1" selection-end-line="139" selection-end-column="1" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/ExpressionResolver.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="299">
-          <caret line="338" selection-start-line="338" selection-end-line="338" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/ConformanceChecker.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="619">
-          <caret line="990" selection-start-line="990" selection-end-line="990" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/SourceType.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="53" selection-start-line="53" selection-end-line="53" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaMemberExpr.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="234">
-          <caret line="360" selection-start-line="360" selection-end-line="360" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Basic/TargetInfo.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="144" selection-start-line="144" selection-end-line="144" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/ActionResult.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="93" selection-start-line="93" selection-end-line="93" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaCTFE.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="264">
-          <caret line="52" selection-start-line="52" selection-end-line="52" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Decl.def">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="34" selection-start-line="34" selection-end-line="34" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Decl.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="227">
-          <caret line="1176" selection-start-line="1176" selection-end-line="1176" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaPass.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="174">
-          <caret line="196" selection-start-line="196" selection-end-line="196" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/AstNode.def">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="97" selection-start-line="97" selection-end-line="97" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/StmtOrDecl.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="129">
-          <caret line="16" selection-start-line="16" selection-end-line="16" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Expression.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="2395" selection-start-line="2395" selection-end-line="2395" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="328" selection-start-line="328" selection-end-line="328" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaOperator.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="294">
-          <caret line="67" selection-start-line="67" selection-end-line="67" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="163">
-          <caret line="435" selection-start-line="435" selection-end-line="435" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Type.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="302">
-          <caret line="1112" selection-start-line="1112" selection-end-line="1112" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="174">
-          <caret line="372" column="36" selection-start-line="372" selection-start-column="36" selection-end-line="372" selection-end-column="36" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/AST/ASTContext.cpp">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="164">
@@ -1294,67 +966,361 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Decl.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-362">
+          <caret line="199" column="42" selection-start-line="199" selection-start-column="42" selection-end-line="199" selection-end-column="42" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Parse/Parser.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="300">
+          <caret line="3753" selection-start-line="3753" selection-end-line="3753" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/TemplateInstantiator.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="506">
+          <caret line="1255" column="39" selection-start-line="1255" selection-start-column="39" selection-end-line="1255" selection-end-column="39" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Serialization/ASTWriterDecl.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="291">
+          <caret line="742" selection-start-line="742" selection-end-line="742" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Serialization/ASTReaderDecl.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="192">
+          <caret line="818" column="40" selection-start-line="818" selection-start-column="40" selection-end-line="818" selection-end-column="40" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Decl.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="3210">
+          <caret line="226" column="50" selection-start-line="226" selection-start-column="50" selection-end-line="226" selection-end-column="50" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/VerifierPass.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="270">
+          <caret line="18" selection-start-line="18" selection-end-line="18" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Driver/Job.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="4335">
+          <caret line="289" selection-start-line="289" selection-end-line="289" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/PassManager.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2475">
+          <caret line="165" selection-start-line="165" selection-end-line="165" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Passes/Passes.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="930">
+          <caret line="62" column="36" selection-start-line="62" selection-start-column="36" selection-end-line="62" selection-end-column="36" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="431">
+          <caret line="555" selection-start-line="555" selection-end-line="555" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Function.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="152">
+          <caret line="58" selection-start-line="58" selection-end-line="58" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Decl.def">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="152">
+          <caret line="47" selection-start-line="47" selection-end-line="47" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Driver/Compiler.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="151">
+          <caret line="248" lean-forward="true" selection-start-line="248" selection-end-line="248" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/Template.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="144">
+          <caret line="404" column="8" selection-start-line="404" selection-start-column="8" selection-end-line="404" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/6.0.0/include/llvm/ADT/SmallVector.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="152">
+          <caret line="148" selection-start-line="148" selection-end-line="148" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Writer/ModuleWriter.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="91">
+          <caret line="1174" column="54" selection-start-line="1174" selection-start-column="54" selection-end-line="1174" selection-end-column="54" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaTemplate.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="522">
+          <caret line="78" column="22" selection-start-line="78" selection-start-column="22" selection-end-line="78" selection-end-column="22" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/6.0.0/include/llvm/Support/Casting.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="152">
+          <caret line="254" selection-start-line="254" selection-end-line="254" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/Template.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="144">
+          <caret line="350" selection-start-line="350" selection-end-line="350" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/CandidateSet.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="134">
+          <caret line="604" lean-forward="true" selection-start-line="604" selection-end-line="604" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenClass.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="166">
+          <caret line="106" column="25" lean-forward="true" selection-start-line="106" selection-start-column="25" selection-end-line="106" selection-end-column="25" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaClass.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="246">
+          <caret line="607" selection-start-line="607" selection-end-line="607" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/ILGen/Cleanup.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="368">
+          <caret line="37" column="25" selection-start-line="37" selection-start-column="25" selection-end-line="37" selection-end-column="25" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/ConformanceTable.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="21">
+          <caret line="118" lean-forward="true" selection-start-line="118" selection-end-line="118" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenPass.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="227">
+          <caret line="377" column="32" selection-start-line="377" selection-start-column="32" selection-end-line="377" selection-end-column="32" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaPass.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="144">
+          <caret line="153" selection-start-line="153" selection-end-line="153" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Value.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="144">
+          <caret line="345" selection-start-line="345" selection-end-line="345" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Instructions.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="144">
+          <caret line="927" selection-start-line="927" selection-end-line="927" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Expression.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="41">
+          <caret line="1874" column="8" selection-start-line="1874" selection-start-column="8" selection-end-line="1874" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/IL/ILBuilder.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="396">
-          <caret line="937" column="45" selection-start-line="937" selection-start-column="45" selection-end-line="937" selection-end-column="45" />
+        <state relative-caret-position="144">
+          <caret line="659" selection-start-line="659" selection-end-line="659" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/CandidateSet.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="250">
+          <caret line="96" column="67" selection-start-line="96" selection-start-column="67" selection-end-line="96" selection-end-column="67" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/6.0.0/include/llvm/ADT/ArrayRef.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="135">
+          <caret line="152" selection-start-line="152" selection-end-line="152" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/StmtOrDecl.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="144">
+          <caret line="16" selection-start-line="16" selection-end-line="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/OverloadResolver.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="189">
+          <caret line="991" selection-start-line="991" selection-end-line="991" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaMemberExpr.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="16575">
+          <caret line="1105" selection-start-line="1105" selection-end-line="1105" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/AstNode.def">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1155">
+          <caret line="77" selection-start-line="77" selection-end-line="77" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Basic/TargetInfo.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="4335">
+          <caret line="289" column="36" selection-start-line="289" selection-start-column="36" selection-end-line="289" selection-end-column="36" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IRGen/DIGen.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="4725">
+          <caret line="315" column="36" selection-start-line="315" selection-start-column="36" selection-end-line="315" selection-end-column="36" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="37395">
+          <caret line="2493" selection-start-line="2493" selection-end-line="2493" />
+          <folding>
+            <element signature="e#45#73#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/Cellar/llvm/6.0.0/include/llvm/IR/Type.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="152">
+          <caret line="137" selection-start-line="137" selection-end-line="137" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Type.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="404">
+          <caret line="508" selection-start-line="508" selection-end-line="508" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IRGen/IRGen.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="181">
+          <caret line="157" column="16" lean-forward="true" selection-start-line="157" selection-start-column="16" selection-end-line="157" selection-end-column="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/IL/Module.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="235">
+          <caret line="130" column="13" selection-start-line="130" selection-start-column="13" selection-end-line="130" selection-end-column="13" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/Type.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="130">
+          <caret line="457" selection-start-line="457" selection-end-line="457" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/AST/DeclBase.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="291">
+          <caret line="413" column="38" lean-forward="true" selection-start-line="413" selection-start-column="38" selection-end-line="413" selection-end-column="38" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/Sema/SemaPass.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="246">
-          <caret line="1382" column="18" selection-start-line="1382" selection-start-column="15" selection-end-line="1382" selection-end-column="18" />
+        <state relative-caret-position="144">
+          <caret line="4269" selection-start-line="4269" selection-end-line="4269" />
           <folding>
             <element signature="e#45#66#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/IRGen/IRGen.cpp">
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaCast.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="268">
-          <caret line="3135" column="25" lean-forward="true" selection-start-line="3135" selection-start-column="25" selection-end-line="3135" selection-end-column="25" />
+        <state relative-caret-position="155">
+          <caret line="476" column="12" selection-start-line="476" selection-start-column="12" selection-end-line="476" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/Sema/SemaCall.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="195">
+          <caret line="1170" selection-start-line="1170" selection-end-line="1170" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenPass.cpp">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="116">
-          <caret line="2953" selection-start-line="2953" selection-end-line="2953" />
+        <state relative-caret-position="-2071">
+          <caret line="3008" column="35" selection-start-line="3008" selection-start-column="22" selection-end-line="3008" selection-end-column="35" />
           <folding>
             <element signature="e#45#67#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Serialization/ASTWriterDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="396">
-          <caret line="934" column="54" selection-start-line="934" selection-start-column="54" selection-end-line="934" selection-end-column="54" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Serialization/ASTReaderDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="336">
-          <caret line="1087" lean-forward="true" selection-start-line="1087" selection-end-line="1087" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/ILGen/ILGenClass.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-6">
-          <caret line="478" column="49" lean-forward="true" selection-start-line="478" selection-start-column="49" selection-end-line="478" selection-end-column="49" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/Sema/SemaDecl.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="292">
-          <caret line="1853" lean-forward="true" selection-start-line="1853" selection-end-line="1853" />
-          <folding>
-            <element signature="e#45#73#0" expanded="true" />
           </folding>
         </state>
       </provider>

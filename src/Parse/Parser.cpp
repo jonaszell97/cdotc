@@ -3638,6 +3638,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
       SourceLocation NameLoc = currentTok().getSourceLoc();
       auto Name = currentTok().getIdentifierInfo();
 
+      bool Unbounded = false;
       SourceType covariance;
       SourceType contravariance;
 
@@ -3645,7 +3646,10 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
          advance();
          advance();
 
-         if (isTypeName) {
+         if (currentTok().is(tok::question)) {
+            Unbounded = true;
+         }
+         else if (isTypeName) {
             bool covarSet = false;
             bool contravarSet = false;
 
@@ -3754,13 +3758,14 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
             TemplateParamDecl::Create(Context, Name, covariance,
                                       contravariance, defaultValue, idx,
                                       TypeNameOrValueLoc, NameLoc,
-                                      EllipsisLoc), Context);
+                                      EllipsisLoc, Unbounded), Context);
       }
       else {
          params.push_back(
             TemplateParamDecl::Create(Context, Name, covariance,
                                       defaultValue, idx, TypeNameOrValueLoc,
-                                      NameLoc, EllipsisLoc), Context);
+                                      NameLoc, EllipsisLoc,
+                                      Unbounded), Context);
       }
 
       if (currentTok().is(tok::comma)) {

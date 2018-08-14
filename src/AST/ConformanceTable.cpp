@@ -23,9 +23,6 @@ ConformanceTable::~ConformanceTable()
 bool ConformanceTable::registerConformance(ast::ASTContext &C,
                                            RecordDecl *Rec,
                                            ProtocolDecl *P) {
-   if (P->isAny())
-      return false;
-
    auto It = TestMap.find(Rec);
 
    // if there are no conformances (other than any) for this record, add a
@@ -115,9 +112,6 @@ ConformanceKind ConformanceTable::lookupConformance(RecordDecl *Decl,
 
 bool ConformanceTable::conformsTo(RecordDecl *Decl, ProtocolDecl *P) const
 {
-   if (P->isAny())
-      return true;
-
    auto It = TestMap.find(Decl);
    if (It == TestMap.end()) {
       return false;

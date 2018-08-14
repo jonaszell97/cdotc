@@ -523,7 +523,7 @@ ExprResult SemaPass::visit(Expression *Expr, bool)
    assert(Expr->getExprType() && "didn't set exprType on valid expression!");
 
    if (Expr->isVariadicArgPackExpansion()) {
-      if (!inTemplate()) {
+      if (!inUnboundedTemplate()) {
          diagnose(Expr, err_pack_expansion_cannot_appear,
                   Expr->getEllipsisRange());
       }
@@ -1410,6 +1410,8 @@ bool CheckNeedsStructReturn(SemaPass &SP, QualType Ty)
 
 bool CheckNeedsDeinitilization(QualType Ty)
 {
+   Ty = Ty->getCanonicalType();
+
    switch (Ty->getTypeID()) {
    default:
       return false;
