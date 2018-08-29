@@ -243,7 +243,7 @@ def err_ambiguous_destructure : Error<"reference to destructuring operator is am
 /* FUNCTION / METHOD CALL ERRORS */
 def err_func_not_found : Error<"${ 0 | select(function, method) } '$1' not found">
 def err_no_matching_call : Error<"no matching call ${ 0 | if(for ${ 1 | select(function,method,alias) } '$2') } found">
-def err_no_matching_initializer : Error<"no ${ 0 | select(matching , accessible ) }initializer for ${ 1 | select(class,struct,enum,union) } '$2' found">
+def err_no_matching_initializer : Error<"no ${ 0 | select(matching , accessible ) }initializer for ${ 1 | select(class,struct,enum,union,protocol) } '$2' found">
 
 def err_cannot_call : Error<"cannot call ${ 0 | select(typedef,namespace) }">
 def err_cannot_call_method_on : Error<"cannot call method on value of type $0">
@@ -418,7 +418,7 @@ def note_incorrect_protocol_impl_method_signature : Note<"candidate has incomapt
 def note_incorrect_protocol_impl_method_return_type : Note<"candidate has incomaptible return type ('$0' expected, found '$1')">
 def note_incorrect_protocol_impl_method_label : Note<"expected label '$0' for ${ 1 | ordinal } argument, ${ 2 | select(none, '$3') } given">
 def note_incorrect_protocol_impl_method_no_label : Note<"expected no label for ${ 0 | ordinal } argument, '$1' given">
-def note_incorrect_protocol_impl_attr : Note<"${ 0 | select(throwing, unsafe, async, mutating) } function cannot satisfy non-${ 0 | select(throwing, unsafe, async, mutating) } protocol requirement">
+def note_incorrect_protocol_impl_attr : Note<"${ 0 | select(throwing, unsafe, async, mutating, non-static, static) } function cannot satisfy ${ 0 | select(non-throwing, non-unsafe, non-async, non-mutating, static, non-static) } protocol requirement">
 def note_incorrect_protocol_impl_fallible : Note<"candidate is fallible, non-fallible init required">
 
 def err_circular_conformance : Error<"circular protocol conformance between '$0' and '$1'">

@@ -79,6 +79,11 @@ def CompileTime : DeclAttr<"compiletime", [Decl]> {
     Inherited = true
 }
 
+// def Template : DeclAttr<"template", [CallableDecl, RecordDecl, AliasDecl]> {
+//     Visit = BeforeDeclaration
+//     Inherited = true
+// }
+
 def VersionDecl : DeclAttr<"version", [Decl]> {
     Visit = BeforeDeclaration
     Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]

@@ -110,8 +110,9 @@ public:
       switch (V.getTypeID()) {
 #     define CDOT_INSTRUCTION(Name)                                   \
          case Value::Name##ID:                                        \
-            return static_cast<SubClass*>(this)                       \
-                      ->visit##Name(static_cast<Name&>(V));
+            static_cast<SubClass*>(this)                              \
+                      ->visit##Name(static_cast<Name&>(V));           \
+         break;
 
 #     include "IL/Instructions.def"
       case Value::ArgumentID:
@@ -135,8 +136,9 @@ public:
       switch (V.getTypeID()) {
 #     define CDOT_INSTRUCTION(Name)                                   \
          case Value::Name##ID:                                        \
-            return static_cast<SubClass*>(this)                       \
-                      ->visit##Name(static_cast<Name const&>(V));
+            static_cast<SubClass*>(this)                              \
+                 ->visit##Name(static_cast<Name const&>(V));          \
+        break;
 
 #     include "IL/Instructions.def"
       case Value::ArgumentID:

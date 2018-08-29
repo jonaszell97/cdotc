@@ -88,6 +88,8 @@ llvm::DIFile* IRGen::getFileDI(SourceLocation loc)
 
 llvm::DIType* IRGen::getTypeDI(QualType ty)
 {
+   ty = ty->getCanonicalType();
+
    auto it = DITypeMap.find(ty);
    if (it != DITypeMap.end())
       return it->second;

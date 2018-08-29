@@ -2,9 +2,9 @@
 @compiletime
 module std.prelude
 
-alias IsUnsigned<T> = __traits(is_unsigned, T)
-alias IsSigned<T>   = !__traits(is_unsigned, T)
-alias IsIntegral<I> = __traits(is_integer, I)
+alias IsUnsigned<T: ?> = __traits(is_unsigned, T)
+alias IsSigned<T: ?>   = !__traits(is_unsigned, T)
+alias IsIntegral<I: ?> = __traits(is_integer, I)
 
 // namespace experimental {
 

@@ -14,6 +14,7 @@
 #include "Sema/SemaPass.h"
 #include "Serialization/ModuleFile.h"
 #include "Support/StringSwitch.h"
+#include "Tools/IRDebug/IRDebugAnnotatePass.h"
 
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 #include <llvm/IR/IRBuilder.h>
@@ -21,6 +22,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
@@ -34,10 +36,21 @@
 #include <sstream>
 
 using namespace cdot::diag;
+namespace cl = llvm::cl;
+
 using std::string;
 
 namespace cdot {
 namespace il {
+
+/// If given, debug info will be emitted for the LLVM IR module.
+static cl::opt<std::string> EmitIRDebugInfo("debug-ir",
+                                            cl::desc("emit LLVM-IR debug info"),
+                                            cl::init("-"));
+
+static cl::opt<std::string> ClangSanitizers("fsanitize",
+                                            cl::desc("Clang sanitizers"),
+                                            cl::init(""));
 
 void IRGen::finalize(const CompilerInstance &CU)
 {
@@ -47,7 +60,7 @@ void IRGen::finalize(const CompilerInstance &CU)
    auto &llvmOut = llvm::outs();
    auto isInvalid = llvm::verifyModule(*M, &llvmOut);
 
-   if (isInvalid) {
+   if (isInvalid||true) {
       std::error_code EC;
       llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error.ll",
                               EC, llvm::sys::fs::F_RW);
@@ -57,7 +70,8 @@ void IRGen::finalize(const CompilerInstance &CU)
       M->print(fd, &AAW);
       fd.flush();
 
-      llvm::report_fatal_error("invalid LLVM module");
+      if (isInvalid)
+         llvm::report_fatal_error("invalid LLVM module");
    }
 }
 
@@ -136,6 +150,16 @@ void IRGen::prepareModuleForEmission(llvm::Module *Module)
    Module->setTargetTriple(TargetTriple.str());
 
    runMandatoryPasses(Module);
+
+   if (EmitIRDebugInfo != "-") {
+      if (EmitIRDebugInfo.empty()) {
+         auto TmpFileName = fs::getTmpFileName("ll");
+         addIRDebugInfo(*Module, TmpFileName);
+      }
+      else {
+         addIRDebugInfo(*Module, EmitIRDebugInfo);
+      }
+   }
 }
 
 void IRGen::emitObjectFile(llvm::StringRef OutFile,
@@ -282,15 +306,26 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
    auto &options = CI.getOptions();
    std::error_code EC;
 
-   string TmpObjFile = fs::getTmpFileName("o");
+   string TmpFile;
+   if (ClangSanitizers.empty()) {
+      TmpFile = fs::getTmpFileName("o");
 
-   {
-      llvm::raw_fd_ostream TmpObjOS(TmpObjFile, EC, llvm::sys::fs::F_RW);
+      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC, llvm::sys::fs::F_RW);
       if (EC) {
          llvm::report_fatal_error(EC.message());
       }
 
       emitObjectFile(TmpObjOS, Module);
+   }
+   else {
+      TmpFile = fs::getTmpFileName("ll");
+
+      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC, llvm::sys::fs::F_RW);
+      if (EC) {
+         llvm::report_fatal_error(EC.message());
+      }
+
+      Module->print(TmpObjOS, nullptr);
    }
 
    auto clangPathOrError = llvm::sys::findProgramByName("clang");
@@ -301,7 +336,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
    SmallString<128> ScratchBuf;
    SmallVector<string, 8> args{
       clangPathOrError.get(),
-      TmpObjFile
+      TmpFile
    };
 
    for (auto &file : options.getInputFiles(InputKind::LinkerInput)) {
@@ -312,6 +347,16 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
    }
    for (auto &file : AdditionalFilesToLink) {
       args.push_back(file);
+   }
+   for (auto &ClangOpt : options.getClangOptions()) {
+      args.push_back(ClangOpt);
+   }
+
+   if (!ClangSanitizers.empty()) {
+      std::string San = move(ClangSanitizers.getValue());
+      San.insert(0, "-fsanitize=");
+
+      args.emplace_back(move(San));
    }
 
    addICULib(args);

@@ -44,6 +44,19 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
    bool IsDirectType = true;
    bool CompileTimeCheck = true;
 
+   if (lhs->containsGenericType() || lhs->isDependentType()) {
+      if (PredExpr->getKind() == ConstraintExpr::Type) {
+         (void) visitSourceType(Pred->getRHS(),
+                                Pred->getRHS()->getTypeConstraint());
+
+         Pred->copyStatusFlags(Pred->getRHS());
+      }
+
+      Pred->getRHS()->setSemanticallyChecked(true);
+      Pred->setIsTypeDependent(true);
+      return Pred;
+   }
+
    QualType TypeToCheck;
    if (auto Meta = dyn_cast<cdot::MetaType>(lhs)) {
       TypeToCheck = Meta->getUnderlyingType();
@@ -64,7 +77,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          return ExprError();
 
       auto rhs = RhsResult.get();
-      if (rhs->isDependentType()) {
+      if (rhs->containsGenericType() || rhs->isDependentType()) {
          Pred->setIsTypeDependent(true);
          return Pred;
       }
@@ -225,7 +238,7 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
 
    if (lhs->getExprType()->isPointerType()) {
       ensureSizeKnown(lhs->getExprType()->getPointeeType(),
-                      BinOp->getSourceLoc());
+                      BinOp);
    }
 
    BinOp->setExprType(BinOp->getFunctionType()->getReturnType());
@@ -392,10 +405,16 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
       if (auto E = Cast->getTargetType().getTypeExpr())
          RHSRange = E->getSourceRange();
 
-      diagnose(Cast, err_cast_requires_op, diag::opt::show_constness,
-               Cast->getAsLoc(), LHSRange, RHSRange,
-               from->stripReference(), to->stripReference(),
-               (int)ConvSeq.getStrength() - 1);
+      if (ConvSeq.isImplicit()) {
+         diagnose(Cast, err_generic_error, "conversion is implicit",
+                  Cast->getAsLoc(), LHSRange, RHSRange);
+      }
+      else {
+         diagnose(Cast, err_cast_requires_op,
+                  Cast->getAsLoc(), LHSRange, RHSRange,
+                  from->stripReference(), to->stripReference(),
+                  (int)ConvSeq.getStrength() - 1);
+      }
    }
 
    Cast->setExprType(to);
@@ -408,23 +427,23 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
                   Cast->getAsLoc());
       }
       else {
-         ResolvedTemplateArg Arg(Opt->getTemplateParams().front(),
+         TemplateArgument Arg(Opt->getTemplateParams().front(),
                                  Cast->getExprType(), Cast->getSourceLoc());
 
          auto TemplateArgs = FinalTemplateArgumentList::Create(Context,
                                                                { Arg });
 
-         auto Inst = Instantiator.InstantiateRecord(Cast, Opt, TemplateArgs);
+         auto Inst = InstantiateRecord(Cast->getSourceLoc(), Opt, TemplateArgs);
 
-         // instantiation of Optional should never fail
-         Cast->setExprType(Context.getRecordType(Inst.getValue()));
+         // Instantiation of Optional should never fail
+         Cast->setExprType(Context.getRecordType(Inst));
       }
 
       for (auto &Step : ConvSeq.getSteps()) {
          switch (Step.getKind()) {
          case CastKind::DynCast:
          case CastKind::ExistentialCastFallible:
-         case CastKind::ExistentialUnwrap:
+         case CastKind::ExistentialUnwrapFallible:
             Step.setResultType(Cast->getExprType());
             break;
          case CastKind::NoOp:

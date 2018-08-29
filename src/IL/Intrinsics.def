@@ -13,6 +13,14 @@
    CDOT_INTRINSIC(get_lambda_env, "__get_lambda_env")
    CDOT_INTRINSIC(get_lambda_funcptr, "__get_lambda_funcptr")
 
+   CDOT_INTRINSIC(generic_value, "")
+   CDOT_INTRINSIC(generic_environment, "")
+
+   CDOT_INTRINSIC(generic_argument_ref, "")
+   CDOT_INTRINSIC(generic_type_value, "")
+
+   CDOT_INTRINSIC(existential_ref, "")
+
    CDOT_INTRINSIC(unbox, "__unbox")
 
    CDOT_INTRINSIC(strong_refcount, "__get_strong_refcount")

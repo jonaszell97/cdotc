@@ -16,6 +16,7 @@ namespace llvm {
 
    class APInt;
    class raw_ostream;
+   class FoldingSetNodeID;
 } // namespace llvm
 
 namespace cdot {
@@ -90,6 +91,8 @@ struct Token {
    Token(Variant *V, SourceLocation loc)
       : kind(tok::preprocessor_value), loc(loc), Data(0), Ptr(V)
    {}
+
+   void Profile(llvm::FoldingSetNodeID &ID) const;
 
    bool isIdentifier(llvm::StringRef str) const;
    bool isIdentifierStartingWith(llvm::StringRef str) const;

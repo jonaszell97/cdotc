@@ -1,5 +1,5 @@
 
-module std.rt
+// module std.rt
 
 public struct ValueWitnessTable with MoveOnly {
     /// Function that copies an existential value.
@@ -87,6 +87,12 @@ public struct ClassHeader {
 /// \return pointer to the type-info object of a class.
 @extern(C) public def _cdot_GetTypeInfo(_ ptr: UnsafePtr<ClassHeader>) -> UnsafePtr<TypeInfo> {
     return ptr->typeInfo
+}
+
+@extern(C) public def _cdot_GetConformance(_ typeInfo: UnsafePtr<TypeInfo>,
+                                           _ protocolTypeInfo: UnsafePtr<TypeInfo>)
+                                                -> UnsafePtr<ProtocolConformance> {
+    return typeInfo->getConformance(protocolTypeInfo)
 }
 
 /// Compare two type-info objects for compatibility.
@@ -179,6 +185,11 @@ public struct ExistentialContainer {
     memberwise init
 }
 
+public def _isClass(_ typeInfo: UnsafePtr<TypeInfo>) -> Bool {
+    return (typeInfo->valueWitnessTable->copy as! UnsafeRawPtr
+        == _cdot_CopyClass as! UnsafeRawPtr)
+}
+
 /// Initialize an existential container for a protocol value.
 /// This function takes ownership of \param value without making a copy.
 @extern(C)
@@ -186,12 +197,19 @@ public def _cdot_InitializeExistential(_ value: UnsafeRawPtr,
                                        _ valueTypeInfo: UnsafePtr<TypeInfo>, 
                                        _ protocolTypeInfo: UnsafePtr<TypeInfo>,
                                        _ result: mut ref ExistentialContainer) {
-    // Heap-allocate space for the existential value.
-    var alloc = mem.allocate(valueTypeInfo->stride,
+    var alloc: UnsafeMutableRawPtr
+    if _isClass(valueTypeInfo) {
+        _cdot_AtomicRetain(value as! UnsafeMutablePtr<AtomicRefcounted>)
+        alloc = builtin.unsafeConstCast(value)
+    }
+    else {
+        // Heap-allocate space for the existential value.
+        alloc = mem.allocate(valueTypeInfo->stride,
                              alignTo: valueTypeInfo->alignment)
 
-    // Do a shallow copy of the value.
-    mem.copy(to: alloc, from: value, valueTypeInfo->size)
+        // Do a shallow copy of the value.
+        mem.copy<builtin.CVoid>(to: alloc, from: value, valueTypeInfo->size)
+    }
 
     // Get the protocol conformance.
     var conformance = valueTypeInfo->getConformance(protocolTypeInfo)
@@ -200,26 +218,49 @@ public def _cdot_InitializeExistential(_ value: UnsafeRawPtr,
     result = ExistentialContainer(value: alloc, typeInfo: valueTypeInfo, conformance)
 }
 
+/// Initialize an existential container for a protocol value.
+/// This function takes ownership of \param value without making a copy.
+@extern(C)
+public def _cdot_InitializeExistentialPreallocated(_ value: UnsafeRawPtr,
+                                                   _ valueTypeInfo: UnsafePtr<TypeInfo>, 
+                                                   _ protocolTypeInfo: UnsafePtr<TypeInfo>,
+                                                   _ result: mut ref ExistentialContainer) {
+    // Get the protocol conformance.
+    var conformance = valueTypeInfo->getConformance(protocolTypeInfo)
+
+    // Initialize the existential container.
+    result = ExistentialContainer(value: value, typeInfo: valueTypeInfo, conformance)
+}
+
 /// Deinitialize an existential container for a protocol value.
 @extern(C)
 public def _cdot_DeinitializeExistential(_ container: mut ref ExistentialContainer) {
     // Call the deinitializer of the existential value.
-    container.typeInfo->deinit(container.value)
+    container.typeInfo->valueWitnessTable->deinit(container.value)
 
     // Free the memory allocated for the value.
-    mem.deallocate(container.value)
+    if !_isClass(container.typeInfo) {
+        mem.deallocate<builtin.CVoid>(container.value)
+    }
 }
 
 /// Copy an existential container for a protocol value.
 @_builtin @extern(C)
 public def _cdot_CopyExistential(_ container: mut ref ExistentialContainer,
                                  _ result: mut ref ExistentialContainer) {
-    // Heap-allocate space for the existential value.
-    var alloc = mem.allocate(container.typeInfo->stride,
-                             alignTo: container.typeInfo->alignment)
+    var alloc: UnsafeMutableRawPtr
+    if _isClass(container.typeInfo) {
+        _cdot_AtomicRetain(container.value as! UnsafeMutablePtr<AtomicRefcounted>)
+        alloc = builtin.unsafeConstCast(container.value)
+    }
+    else {
+        // Heap-allocate space for the existential value.
+        alloc = mem.allocate(container.typeInfo->stride,
+                                alignTo: container.typeInfo->alignment)
 
-    // Call the witness copy function to create a copy of the value.
-    container.typeInfo->valueWitnessTable->copy(alloc, container.value)
+        // Call the witness copy function to create a copy of the value.
+        container.typeInfo->valueWitnessTable->copy(alloc, container.value)
+    }
 
     // Initialize the existential container with the copied value.
     result = ExistentialContainer(value: alloc,
@@ -268,7 +309,24 @@ public def _cdot_ExistentialCastFallible(_ container: mut ref ExistentialContain
 @_builtin @extern(C)
 public def _cdot_ExistentialUnwrap(_ container: mut ref ExistentialContainer,
                                    _ destinationTypeInfo: UnsafePtr<TypeInfo>,
-                                   _ result: mut ref AnyOption<UnsafeMutableRawPtr>) {
+                                   _ result: UnsafeMutableRawPtr) {
+    // Check if the two types are compatible.
+    var cmp = _cdot_TypeInfoCmp(container.typeInfo, destinationTypeInfo)
+
+    // Not compatible.
+    if !cmp {
+        sys.reportFatalError("unwrapping ${container.typeInfo->name} to ${destinationTypeInfo->name} failed unexpectedly")
+        return
+    }
+
+    // Call the witness copy function to create a copy of the value.
+    container.typeInfo->valueWitnessTable->copy(result, container.value)
+}
+
+@_builtin @extern(C)
+public def _cdot_ExistentialUnwrapFallible(_ container: mut ref ExistentialContainer,
+                                           _ destinationTypeInfo: UnsafePtr<TypeInfo>,
+                                           _ result: mut ref AnyOption<UnsafeMutableRawPtr>) {
     // Check if the two types are compatible.
     var cmp = _cdot_TypeInfoCmp(container.typeInfo, destinationTypeInfo)
 
@@ -296,11 +354,11 @@ public enum GenericArgumentValue {
     /// \return true iff this variadic argument is a type argument or a variadic type argument.
     prop isType: Bool {
         match self {
-        case .Type(_):
+        case .Type(var FIXME):
             return true
         case .Value():
             return false
-        case .Variadic(let type, _):
+        case .Variadic(let type, var FIXME):
             return type
         }
     }
@@ -308,7 +366,7 @@ public enum GenericArgumentValue {
 
 public struct GenericArgument {
     /// The name of the generic parameter.
-    let name: CString
+    let name: libc.CString
 
     /// The parameter value, depending on the argument kind.
     let value: GenericArgumentValue
@@ -322,7 +380,7 @@ public struct GenericEnvironment {
     let genericArguments: UnsafePtr<GenericArgument>
 
     /// \return a generic argument with the name \param name, or `__nullptr` if it doesn't exist.
-    def getGenericArgument(withName name: CString) -> UnsafePtr<GenericArgument> {
+    def getGenericArgument(withName name: libc.CString) -> UnsafePtr<GenericArgument> {
         var ptr = genericArguments
         if !ptr {
             return __nullptr
@@ -333,7 +391,7 @@ public struct GenericEnvironment {
                 return ptr
             }
 
-            ptr += 1
+            ptr += 1u
         }
 
         if enclosingEnvironment {
@@ -342,4 +400,26 @@ public struct GenericEnvironment {
 
         return __nullptr
     }
+}
+
+@_builtin @extern(C)
+public def _cdot_GetGenericArgument(_ environment: UnsafePtr<GenericEnvironment>,
+                                    _ depth: Int,
+                                    _ index: Int) -> UnsafePtr<GenericArgument> {
+    var environment = environment
+    var depth = depth
+    var index = index
+
+    while depth > 0 {
+        environment = environment->enclosingEnvironment
+        depth -= 1
+    }
+
+    var ptr = environment->genericArguments
+    while index > 0 {
+        ptr += 1
+        index -= 1
+    }
+
+    return ptr
 }

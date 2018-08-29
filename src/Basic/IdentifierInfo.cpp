@@ -33,6 +33,7 @@ void IdentifierTable::addTblGenKeywords()
    addKeyword(tok::kw_namespace, "namespace");
    addKeyword(tok::tblgen_foreach, "foreach");
    addKeyword(tok::tblgen_print,   "print");
+   addKeyword(tok::tblgen_if,      "if");
 
 #  define CDOT_POUND_KEYWORD(Name)           \
    addKeyword(tok::pound_##Name, "#" #Name);

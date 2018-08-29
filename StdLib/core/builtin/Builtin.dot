@@ -193,7 +193,7 @@ public def popcnt_i64(_ val: i64) -> i64 {
     return llvm_intrinsic("llvm.ctpop.i64", val)
 }
 
-public def popcnt<T>(_ val: T) -> T where IsIntegral<T> {
+public def popcnt<T: ?>(_ val: T) -> T where IsIntegral<T> {
     return popcnt_i64(val as i64) as T
 }
 

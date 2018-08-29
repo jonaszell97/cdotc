@@ -309,24 +309,25 @@ void ModuleManager::ImportModule(ImportDecl *I)
 {
    auto &Sema = CI.getSema();
    auto *Mod = LookupModule(I->getSourceRange(),
-                            CI.getFileMgr().createModuleImportLoc(I),
-                            I->getQualifiedImportName().front());
+                            CI.getFileMgr()
+                              .createModuleImportLoc(I->getSourceLoc()),
+                            I->getQualifiedImportName().front()
+                             .getIdentifierInfo());
 
    if (!Mod) {
       Sema.diagnose(diag::err_module_not_found,
                     I->getSourceRange(),
-                    I->getQualifiedImportName().front()
-                     ->getIdentifier());
+                    I->getQualifiedImportName().front());
 
       return;
    }
 
    for (auto Ident : I->getQualifiedImportName().drop_front(1)) {
-      auto SubMod = Mod->getSubModule(Ident);
+      auto SubMod = Mod->getSubModule(Ident.getIdentifierInfo());
       if (!SubMod) {
          Sema.diagnose(diag::err_submodule_not_found,
                        I->getSourceRange(),
-                       Mod->getName(), Ident->getIdentifier());
+                       Mod->getName(), Ident);
 
          return;
       }

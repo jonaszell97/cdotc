@@ -237,7 +237,7 @@ void ASTDeclReader::visitDebugDecl(DebugDecl *D)
    D->setLoc(ReadSourceLocation());
 }
 
-void ASTDeclReader::visitStaticAssertStmt(StaticAssertStmt *D)
+void ASTDeclReader::visitStaticAssertDecl(StaticAssertDecl *D)
 {
    visitDecl(D);
 
@@ -252,7 +252,7 @@ void ASTDeclReader::visitStaticAssertStmt(StaticAssertStmt *D)
    D->setMessage(StringRef(Alloc, msg.size()));
 }
 
-void ASTDeclReader::visitStaticPrintStmt(StaticPrintStmt *D)
+void ASTDeclReader::visitStaticPrintDecl(StaticPrintDecl *D)
 {
    visitDecl(D);
 
@@ -320,6 +320,9 @@ void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    D->setSourceLoc(ReadSourceLocation());
    D->setProtocolSpecifier(Record.getIdentifierInfo());
    D->setActualType(Record.readSourceType());
+
+   // FIXME
+//   D->setCovariance(Record.readSourceType());
    D->setProto(Record.readDeclAs<ProtocolDecl>());
    D->setImplementation(Record.readBool());
 
@@ -722,9 +725,9 @@ void ASTDeclReader::visitImportDecl(ImportDecl *D)
    D->setNumNameQuals(NumNameQuals);
    D->setNumNamedImports(NumTrailingObjects - NumNameQuals);
 
-   auto *Ptr = D->getTrailingObjects<IdentifierInfo*>();
+   auto *Ptr = D->getTrailingObjects<DeclarationName>();
    while (NumTrailingObjects--)
-      *Ptr++ = Record.getIdentifierInfo();
+      *Ptr++ = Record.readDeclarationName();
 }
 
 void ASTDeclReader::visitUsingDecl(UsingDecl *D)
@@ -734,9 +737,9 @@ void ASTDeclReader::visitUsingDecl(UsingDecl *D)
    D->setSourceRange(ReadSourceRange());
    D->setWildcardImport(Record.readBool());
 
-   auto *Ptr = D->getTrailingObjects<IdentifierInfo*>();
+   auto *Ptr = D->getTrailingObjects<DeclarationName>();
    while (NumTrailingObjects--)
-      *Ptr++ = Record.getIdentifierInfo();
+      *Ptr++ = Record.readDeclarationName();
 }
 
 void ASTDeclReader::visitVarDecl(VarDecl *D)
@@ -871,7 +874,7 @@ void ASTDeclReader::visitRecordDecl(RecordDecl *D)
 
    auto NumExtensions = Record.readInt();
    while (NumExtensions--)
-      Reader.getContext().addExtension(D, Record.readDeclAs<ExtensionDecl>());
+      D->addExtension(Record.readDeclAs<ExtensionDecl>());
 
    D->setLastMethodID(Record.readInt());
    D->setSize(Record.readInt());
@@ -1332,11 +1335,11 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
       ReadingDecl = PrevReadingDecl;
       return D;
    }
-   case DECL_StaticAssertStmt:
-      D = StaticAssertStmt::CreateEmpty(C);
+   case DECL_StaticAssertDecl:
+      D = StaticAssertDecl::CreateEmpty(C);
       break;
-   case DECL_StaticPrintStmt:
-      D = StaticPrintStmt::CreateEmpty(C);
+   case DECL_StaticPrintDecl:
+      D = StaticPrintDecl::CreateEmpty(C);
       break;
    case DECL_StaticIfDecl:
       D = StaticIfDecl::CreateEmpty(C);

@@ -66,10 +66,7 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
          }
       }
 
-      auto fn = ILGen.getFunc(deinit);
-      assert(fn && "deinitializer not declared");
-
-      Builder.CreateCall(fn, { Val });
+      ILGen.CreateCall(deinit, { Val });
       return;
    }
 

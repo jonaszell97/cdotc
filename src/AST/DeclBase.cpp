@@ -52,7 +52,6 @@ void Decl::printFlags(llvm::raw_ostream &OS) const
    OS << "IsInvalid = " << (isInvalid() ? "true" : "false") << "\n";
    OS << "SemaChecked = "<<(isSemanticallyChecked() ? "true" : "false") << "\n";
    OS << "Static = " << (isStatic() ? "true" : "false") << "\n";
-   OS << "Const = " << (isConst() ? "true" : "false") << "\n";
    OS << "HasDefinition = " << (hasDefinition() ? "true" : "false") << "\n";
    OS << "External = " << (isExternal() ? "true" : "false") << "\n";
    OS << "WasDeclared = " << (wasDeclared() ? "true" : "false") << "\n";
@@ -245,6 +244,12 @@ void Decl::addAttribute(Attr *A) const
 
 void Decl::copyStatusFlags(Statement *D)
 {
+   // FIXME
+   if (D->containsGenericParam())
+      flags |= DF_ContainsGenericParam;
+   if (D->containsAssociatedType())
+      flags |= DF_ContainsAssociatedType;
+
    flags |= (D->getSubclassData() & StatusFlags);
 }
 
@@ -337,6 +342,14 @@ void Decl::dumpName() const
    llvm::outs() << "<unnamed decl>" << "\n";
 }
 
+std::string Decl::getNameAsString() const
+{
+   if (auto ND = dyn_cast<NamedDecl>(this))
+      return ND->getFullName();
+
+   return "<unnamed decl>";
+}
+
 NamedDecl::NamedDecl(DeclKind typeID,
                      AccessSpecifier access,
                      DeclarationName DN)
@@ -370,7 +383,7 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
       OS << join;
    }
 
-   if (auto *E = dyn_cast<ExtensionDecl>(this)) {
+   if (auto *E = dyn_cast<ExtensionDecl>(this); E && E->getExtendedRecord()) {
       joinedName += "extension ";
       OS << E->getExtendedRecord()->getDeclName();
    }
@@ -378,7 +391,6 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
       OS << "<import>";
    }
    else {
-      assert(Name && "invalid declaration name");
       OS << Name;
    }
 
@@ -609,6 +621,14 @@ sema::FinalTemplateArgumentList& NamedDecl::getTemplateArgs() const
    }
 }
 
+bool NamedDecl::isShallowInstantiation() const
+{
+   if (!isInstantiation())
+      return false;
+
+   return !getSpecializedTemplate()->isInUnboundedTemplate();
+}
+
 NamedDecl* NamedDecl::getSpecializedTemplate() const
 {
    switch (kind) {
@@ -656,6 +676,23 @@ SourceLocation NamedDecl::getInstantiatedFrom() const
 void NamedDecl::dumpName() const
 {
    llvm::outs() << getFullName() << "\n";
+}
+
+void DeclList::appendDecl(NamedDecl *Decl)
+{
+   if (auto Single = getAsDecl()) {
+      auto Vec = new VecTy{ Single, Decl };
+      Data = DataTy(Vec);
+   }
+   else {
+      getAsVec()->push_back(Decl);
+   }
+}
+
+void DeclList::removeDecl(NamedDecl *Decl)
+{
+   auto &Vec = *getAsVec();
+   Vec.erase(std::find(Vec.begin(), Vec.end(), Decl));
 }
 
 bool DeclContext::hasExternalStorage() const
@@ -870,6 +907,21 @@ ASTContext& DeclContext::getDeclASTContext() const
    return cast<GlobalDeclContext>(ctx)->getCompilerInstance().getContext();
 }
 
+void DeclContext::removeVisibleDecl(NamedDecl *D)
+{
+   auto DeclIt = primaryCtx->namedDecls.find(D->getDeclName());
+   if (DeclIt == primaryCtx->namedDecls.end())
+      return;
+
+   DeclList &Decls = DeclIt->getSecond();
+   if (Decls.getAsDecl()) {
+      primaryCtx->namedDecls.erase(DeclIt);
+   }
+   else {
+      Decls.removeDecl(D);
+   }
+}
+
 void DeclContext::replaceDecl(Decl *Orig, Decl *Rep)
 {
    if (Orig == Rep)
@@ -948,4 +1000,12 @@ void DeclContext::dumpName() const
       return ND->dumpName();
 
    llvm::outs() << "<unnamed decl>" << "\n";
+}
+
+std::string DeclContext::getNameAsString() const
+{
+   if (auto ND = dyn_cast<NamedDecl>(this))
+      return ND->getFullName();
+
+   return "<unnamed decl context>";
 }

@@ -24,54 +24,22 @@ static bool declareIfNotDeclared(SemaPass &Sema, Decl *Decl)
 
 bool SemaPass::ensureDeclared(Decl *D)
 {
-   return declareIfNotDeclared(*this, D);
-}
-
-bool SemaPass::ensureContextDeclared(DeclContext *DC)
-{
-   auto *D = support::dyn_cast<Decl>(DC);
-   if (!D)
-      return true;
-
-   return declareIfNotDeclared(*this, D);
+   llvm_unreachable("don't call me, bitch");
 }
 
 bool SemaPass::ensureVisited(Decl *D)
 {
-   if (isVisited(D))
-      return true;
-
-   DeclScopeRAII declContextRAII(*this, D->getDeclContext());
-   ScopeResetRAII scopeResetRAII(*this);
-
-   if (!D->wasDeclared()) {
-      (void) declareStmt(D);
-      if (D->isInvalid())
-         return false;
-   }
-
-   (void) visitDecl(D);
-   return !D->isInvalid();
+   llvm_unreachable("don't call me, bitch");
 }
 
 bool SemaPass::ensureDeclared(class Module *M)
 {
-   for (auto *D : M->getDecls()) {
-      if (!ensureDeclared(D))
-         return false;
-   }
-
-   return true;
+   llvm_unreachable("don't call me, bitch");
 }
 
 bool SemaPass::ensureVisited(class Module *M)
 {
-   for (auto *D : M->getDecls()) {
-      if (!ensureVisited(D))
-         return false;
-   }
-
-   return true;
+   llvm_unreachable("don't call me, bitch");
 }
 
 bool SemaPass::prepareGlobalForCtfe(VarDecl *Decl)
@@ -117,18 +85,18 @@ DeclResult SemaPass::declareAndVisit(Decl *D)
    return D;
 }
 
-bool SemaPass::ensureSizeKnown(QualType Ty,
-                               SourceLocation loc) {
+bool SemaPass::ensureSizeKnown(QualType Ty, StmtOrDecl SOD)
+{
    if (Ty->isRecordType())
-      return ensureSizeKnown(Ty->getRecord(), loc);
+      return ensureSizeKnown(Ty->getRecord(), SOD);
 
    return true;
 }
 
-bool SemaPass::ensureSizeKnown(RecordDecl *R, SourceLocation loc)
+bool SemaPass::ensureSizeKnown(RecordDecl *R, StmtOrDecl SOD)
 {
    if (R->getSize() == 0) {
-      diagnose(diag::err_size_not_known, loc,
+      diagnose(SOD, diag::err_size_not_known, SOD.getSourceLoc(),
                R->getSpecifierForDiagnostic(), R->getName());
 
       return false;

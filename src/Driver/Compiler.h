@@ -28,6 +28,7 @@ using std::move;
 
 class ClangImporter;
 class Module;
+class QueryContext;
 
 namespace ast {
    class SemaPass;
@@ -116,7 +117,9 @@ private:
    std::vector<std::string> clangOptions;
 
    std::unordered_map<InputKind, std::vector<std::string>> inFiles;
-   std::unordered_map<OutputKind, std::string> outFiles;
+
+   OutputKind Output = OutputKind::Executable;
+   StringRef OutFile;
 
    unsigned Flags = 0;
 
@@ -124,14 +127,8 @@ public:
    OptimizationLevel optimizationLevel = OptimizationLevel::O2;
    unsigned maxMacroRecursionDepth = 256;
 
-   bool hasInputKind(InputKind kind) const
-   {
-      return inFiles.find(kind) != inFiles.end();
-   }
-
    void addInput(std::string &&file);
-   void addOutput(std::string &&file);
-   void setFlag(llvm::StringRef opt);
+   void setOutput(StringRef file);
 
    ArrayRef<std::string> getLinkerInput() const { return linkerInput; }
 
@@ -146,15 +143,11 @@ public:
 
    bool hasOutputKind(OutputKind kind) const
    {
-      return outFiles.find(kind) != outFiles.end();
+      return Output == kind;
    }
 
-   llvm::StringRef getOutFile(OutputKind kind) const
-   {
-      auto it = outFiles.find(kind);
-      return it == outFiles.end() ? llvm::StringRef()
-                                  : llvm::StringRef(it->second);
-   }
+   StringRef getOutFile() const { return OutFile; }
+   OutputKind output() const { return Output; }
 
    ArrayRef<std::string> getIncludeDirs() const { return includePaths; }
    ArrayRef<std::string> getClangOptions() const { return clangOptions; }
@@ -234,6 +227,8 @@ public:
    fs::FileManager &getFileMgr() const { return *FileMgr; }
    module::ModuleManager &getModuleMgr() { return *ModuleManager; }
 
+   QueryContext &getQueryContext() const { return *QC; }
+
    ClangImporter &getClangImporter();
 
    bool doIncrementalCompilation() const { return IncMgr != nullptr; }
@@ -287,6 +282,9 @@ private:
 
    /// The compilation's AST context
    std::unique_ptr<ast::ASTContext> Context;
+
+   /// The query context.
+   std::unique_ptr<QueryContext> QC;
 
    /// The compilation's global declaration context
    ast::GlobalDeclContext* GlobalDeclCtx;

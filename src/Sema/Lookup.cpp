@@ -202,8 +202,8 @@ static void LookupInRecord(MultiLevelLookupResult &Result,
                             .getAllConformances(R);
 
       for (auto *Conf : Conformances) {
-         Name = adaptName(SP.getContext(), *R, *Conf->getProto(), Name);
-         MultiLevelLookupImpl(Result, SP, *Conf->getProto(), Name,
+         auto NewName = adaptName(SP.getContext(), *R, *Conf->getProto(), Name);
+         MultiLevelLookupImpl(Result, SP, *Conf->getProto(), NewName,
                               true, false, FindFirst, true);
 
          if (!Result.empty() && FindFirst) {

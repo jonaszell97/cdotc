@@ -25,6 +25,12 @@ struct SourceType {
       : TypeExpr(TypeExpr), ResolvedType(ResolvedType)
    { }
 
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      ResolvedType.Profile(ID);
+      ID.AddPointer(TypeExpr);
+   }
+
    bool isValid() const
    {
       return TypeExpr != nullptr || !ResolvedType.isNull();
@@ -59,6 +65,17 @@ struct SourceType {
 
    bool operator==(QualType Q) const { return ResolvedType == Q; }
    bool operator!=(QualType Q) const { return !(*this == Q); }
+
+   bool operator==(const SourceType &T) const
+   {
+      if (isResolved() && T.isResolved()) {
+         return ResolvedType == T.ResolvedType;
+      }
+
+      return TypeExpr == T.TypeExpr;
+   }
+
+   bool operator!=(const SourceType &T) const { return !(*this == T); }
 
    const SourceType &operator=(QualType Ty) const
    {

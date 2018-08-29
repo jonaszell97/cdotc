@@ -125,7 +125,7 @@ void ParseJob::run()
    bool ParseMainFile = false;
    if (!CI.getMainFileLoc()) {
       CI.setMainFileLoc(SourceLocation(File.BaseOffset));
-      ParseMainFile = CI.getOptions().hasOutputKind(OutputKind::Executable);
+      ParseMainFile = CI.getOptions().output() == OutputKind::Executable;
    }
 
    bool NeedsRecompilation = true;

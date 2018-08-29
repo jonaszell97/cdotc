@@ -16,6 +16,7 @@
 #include "Message/Diagnostics.h"
 #include "Module/ModuleManager.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
 #include "Serialization/IncrementalCompilation.h"
 #include "Support/StringSwitch.h"
@@ -147,7 +148,6 @@ static cl::opt<bool> PrintPhases("print-phases",
                                 cl::desc("print duration of compilation "
                                          "phases"));
 
-
 /// Clang Options
 
 static cl::OptionCategory ClangCat("Clang Importer Options",
@@ -161,7 +161,8 @@ static cl::list<string> ClangInput("Xclang", cl::ZeroOrMore, cl::cat(ClangCat),
 CompilerInstance::CompilerInstance(CompilerOptions &&options)
    : options(std::move(options)),
      FileMgr(std::make_unique<fs::FileManager>()),
-     Context(std::make_unique<ASTContext>()),
+     Context(std::make_unique<ASTContext>(*this)),
+     QC(std::make_unique<QueryContext>(*this)),
      GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
      ModuleManager(std::make_unique<module::ModuleManager>(*this)),
      IRGen(nullptr),
@@ -174,7 +175,8 @@ CompilerInstance::CompilerInstance(CompilerOptions &&options)
 
 CompilerInstance::CompilerInstance(int argc, char **argv)
    : FileMgr(std::make_unique<fs::FileManager>()),
-     Context(std::make_unique<ASTContext>()),
+     Context(std::make_unique<ASTContext>(*this)),
+     QC(std::make_unique<QueryContext>(*this)),
      GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
      ModuleManager(std::make_unique<module::ModuleManager>(*this)),
      IRGen(nullptr),
@@ -221,7 +223,7 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    /* Output File */
 
    if (!OutputFilename.empty())
-      options.addOutput(move(OutputFilename));
+      options.setOutput(OutputFilename);
 
    /* Include Paths */
 
@@ -306,14 +308,6 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
       Sema->diagnose(err_no_source_file);
    }
 
-   for (auto &output : options.outFiles) {
-      auto &file = output.second;
-      if (file.front() != PathSeperator)
-         file = "./" + file;
-
-      createDirectories(getPath(file));
-   }
-
    for (auto &inputs : options.inFiles) {
       for (auto &file : inputs.second) {
          if (file.front() != PathSeperator)
@@ -325,7 +319,10 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
        && !options.runUnitTests()
        && !options.hasOutputKind(OutputKind::Executable)
        && !options.emitModules()) {
-      options.addOutput("./a.out");
+      options.OutFile = "./a.out";
+   }
+   else if (!options.OutFile.empty()) {
+      createDirectories(getPath(options.OutFile));
    }
 }
 
@@ -334,7 +331,7 @@ CompilerInstance::~CompilerInstance()
    for (auto *Job : Jobs)
       delete Job;
 
-   Context->cleanup(*this);
+   Context->cleanup();
 }
 
 void CompilerOptions::addInput(std::string &&file)
@@ -354,7 +351,7 @@ void CompilerOptions::addInput(std::string &&file)
    inFiles[kind].emplace_back(std::move(file));
 }
 
-void CompilerOptions::addOutput(std::string &&fileName)
+void CompilerOptions::setOutput(StringRef fileName)
 {
    auto ext = getExtension(fileName);
    auto kind = StringSwitch<OutputKind>(ext)
@@ -372,18 +369,144 @@ void CompilerOptions::addOutput(std::string &&fileName)
       .Case("cdotast", OutputKind::SerializedAST)
       .Default(OutputKind::Executable);
 
-   outFiles.emplace(kind, std::move(fileName));
+   OutFile = fileName;
+   Output = kind;
 }
+
+namespace {
+
+class QueryStackTraceEntry: public llvm::PrettyStackTraceEntry {
+   /// Reference to the compiler instance.
+   CompilerInstance &CI;
+
+public:
+   QueryStackTraceEntry(CompilerInstance &CI)
+      : CI(CI)
+   { }
+
+   void print(llvm::raw_ostream &OS) const override
+   {
+      OS << "\n";
+      for (auto *Qs : CI.getQueryContext().QueryStack) {
+         OS << "  " << Qs->summary()
+            << "\n";
+      }
+   }
+};
+
+} // anonymous namespace
 
 int CompilerInstance::compile()
 {
    support::Timer Timer(*this, "Compilation", PrintPhases);
    llvm::CrashRecoveryContextCleanupRegistrar<SemaPass> CleanupSema(Sema.get());
 
-   if (auto EC = setupJobs())
-      return EC;
+   QueryStackTraceEntry StackTrace(*this);
 
-   return runJobs();
+   SmallVector<StringRef, 4> SourceFiles;
+   for (auto &File : options.getInputFiles(InputKind::SourceFile)) {
+      SourceFiles.emplace_back(File);
+   }
+
+   switch (options.output()) {
+   case OutputKind::Module:
+      if (QC->CompileModule()) {
+         return 1;
+      }
+
+      break;
+   case OutputKind::Executable:
+      if (QC->CreateExecutable(SourceFiles, options.getOutFile())) {
+         return 1;
+      }
+
+      break;
+   case OutputKind::ObjectFile: {
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(options.getOutFile(), EC, llvm::sys::fs::F_RW);
+
+      if (EC) {
+         Sema->diagnose(err_generic_error, EC.message());
+         return 1;
+      }
+
+      if (QC->CreateObject(SourceFiles, OS)) {
+         return 1;
+      }
+
+      break;
+   }
+   case OutputKind::StaticLib:
+      if (QC->CreateStaticLib(SourceFiles, options.getOutFile())) {
+         return 1;
+      }
+
+      break;
+   case OutputKind::SharedLib:
+      if (QC->CreateDynamicLib(SourceFiles, options.getOutFile())) {
+         return 1;
+      }
+
+      break;
+   default:
+      llvm_unreachable("unhandled output kind");
+   }
+
+   if (options.emitIL()) {
+      SmallString<128> Dir;
+      if (!EmitIL.empty()) {
+         Dir = EmitIL;
+      }
+      else {
+         Dir = "./IL/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += getCompilationModule()->getName()->getIdentifier();
+      Dir += ".cdotil";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
+
+      if (EC) {
+         Sema->diagnose(err_generic_error, EC.message());
+         return 1;
+      }
+
+      if (QC->EmitIL(SourceFiles, OS)) {
+         return 1;
+      }
+   }
+
+   if (options.emitIR()) {
+      SmallString<128> Dir;
+      if (!EmitIR.empty()) {
+         Dir = EmitIR;
+      }
+      else {
+         Dir = "./IR/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += getCompilationModule()->getName()->getIdentifier();
+      Dir += ".ll";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
+
+      if (EC) {
+         Sema->diagnose(err_generic_error, EC.message());
+         return 1;
+      }
+
+      if (QC->EmitIR(SourceFiles, OS)) {
+         return 1;
+      }
+   }
+
+   return 0;
 }
 
 int CompilerInstance::setupJobs()
@@ -477,7 +600,7 @@ int CompilerInstance::setupJobs()
       }
       // Else link a complete binary
       else {
-         auto ExecFile = options.getOutFile(OutputKind::Executable);
+         auto ExecFile = options.getOutFile();
          addJob<EmitExecutableJob>(ExecFile, IRLinkJob);
       }
    }

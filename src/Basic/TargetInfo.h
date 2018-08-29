@@ -6,14 +6,18 @@
 #define CDOT_TARGETINFO_H
 
 #include "AST/Type.h"
+
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/Triple.h>
 
 namespace cdot {
 
+class CompilerInstance;
+
 class TargetInfo {
 public:
-   TargetInfo(const ast::ASTContext &Ctx, const llvm::Triple &T);
+   TargetInfo(CompilerInstance &CI,
+              const llvm::Triple &T);
 
    unsigned getPointerSizeInBytes() const { return PointerSizeInBytes; }
    unsigned short getPointerAlignInBytes() const
@@ -29,8 +33,6 @@ public:
 
    bool isTriviallyCopyable(QualType Ty) const;
 
-   unsigned getNestedNumberOfFields(QualType Ty) const;
-
    const llvm::Triple &getTriple() const { return T; }
    Type *getDefaultIntType() const { return DefaultIntType; }
 
@@ -42,11 +44,7 @@ public:
    friend class ast::ASTContext; // populates these
 
 private:
-   unsigned calculateSizeOfType(QualType Ty) const;
-   unsigned short calculateAlignOfType(QualType Ty) const;
-   bool calculateIsTriviallyCopyable(QualType Ty) const;
-   unsigned calculateNestedNumberOfFields(QualType Ty) const;
-
+   CompilerInstance &CI;
    llvm::Triple T;
 
    unsigned PointerSizeInBytes;
@@ -54,15 +52,6 @@ private:
    Type *DefaultIntType;
 
    unsigned DirectStructPassingFieldThreshold;
-
-   struct TypeInfo {
-      llvm::Optional<unsigned> SizeInBytes;
-      llvm::Optional<unsigned short> AlignInBytes;
-      llvm::Optional<bool> TriviallyCopyable;
-      llvm::Optional<unsigned> NestedFieldCount;
-   };
-
-   mutable llvm::DenseMap<Type*, TypeInfo> TypeInfoMap;
 
    bool HasFP128  : 1;
    bool BigEndian : 1;

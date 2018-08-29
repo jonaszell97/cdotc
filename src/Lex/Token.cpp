@@ -8,8 +8,8 @@
 #include "Basic/IdentifierInfo.h"
 #include "Support/Format.h"
 
-#include <iostream>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/FoldingSet.h>
 #include <llvm/Support/raw_ostream.h>
 
 using cdot::lex::tok::TokenType;
@@ -53,6 +53,14 @@ template <unsigned StrLen>
 static constexpr unsigned strLen(const char (&Str)[StrLen])
 {
    return StrLen;
+}
+
+void Token::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   ID.AddInteger(kind);
+   ID.AddPointer(Ptr);
+   ID.AddInteger(Data);
+   ID.AddInteger(loc.getOffset());
 }
 
 SourceLocation Token::getEndLoc() const
@@ -143,6 +151,7 @@ void Token::print(llvm::raw_ostream &OS) const
    case tok::Name: OS << (Spelling); return;
 #  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                             \
    case tok::Name: support::unescape_char((Spelling), OS); return;
+#  define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling) CDOT_KEYWORD_TOKEN(Name, Spelling)
    case tok::sentinel: OS << "<sentinel>"; return;
    case tok::eof: OS << "<eof>"; return;
    case tok::expr_begin: OS << "#{"; return;
@@ -294,6 +303,7 @@ bool Token::is_keyword() const
       case tok::Name:
 #  define CDOT_MODULE_KEYWORD_TOKEN(Name, Spelling) \
       case tok::Name:
+#  define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling) CDOT_KEYWORD_TOKEN(Name, Spelling)
 #  include "Tokens.def"
          return true;
       default:

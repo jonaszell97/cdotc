@@ -379,7 +379,7 @@ public:
    void AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc *Name);
 
    /// Emit a template argument.
-   void AddTemplateArgument(const sema::ResolvedTemplateArg &Arg);
+   void AddTemplateArgument(const sema::TemplateArgument &Arg);
 
    /// Emit a template parameter list.
    void AddTemplateParameterList(

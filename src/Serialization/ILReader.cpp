@@ -376,7 +376,9 @@ il::Constant* ILReader::readConstant(ILRecordReader &Record, unsigned Code)
       while (NumValues--)
          Values.push_back(Record.readValueAs<Constant>());
 
-      C = Builder.GetConstantArray(Type, Values);
+      C = Builder.GetConstantArray(Type->asArrayType()->getElementType(),
+                                   Values);
+
       break;
    }
    case Value::ConstantTupleID: {
@@ -954,6 +956,10 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       I = Builder.CreateExistentialInit(Operands[0], Type,
                                         Operands[1],
                                         cast<GlobalVariable>(Operands[2]));
+      break;
+   }
+   case Value::GenericInitInstID: {
+      I = Builder.CreateGenericInit(Operands[0], Operands[1], Type);
       break;
    }
    case Value::StructInitInstID: {

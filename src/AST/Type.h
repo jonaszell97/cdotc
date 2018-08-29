@@ -113,42 +113,50 @@ class Name;
 
 struct TypeProperties {
 public:
-   enum Property {
+   enum Property : uint16_t {
       /// This type contains an unconstrained generic type.
-      ContainsUnboundGeneric = 0x1,
+      ContainsUnboundGeneric              = 0x1,
 
       /// This type contains a generic type.
-      ContainsGenericType = 0x2,
+      ContainsGenericType                 = 0x2,
 
       /// This type containts an associated type or Self constraint.
-      ContainsAssociatedType = 0x4,
+      ContainsAssociatedType              = 0x4,
 
       /// This type contains an unexpanded parameter pack.
-      ContainsUnexpandedParameterPack = 0x8,
+      ContainsUnexpandedParameterPack     = 0x8,
 
       /// This type contains a dependent name type.
-      ContainsDependentNameType = 0x10,
+      ContainsDependentNameType           = 0x10,
 
       /// This type contains a dependently sized array type.
-      ContainsDependentSizeArrayType = 0x20,
+      ContainsDependentSizeArrayType      = 0x20,
 
       /// This type contains an unpopulated type, i.e. Never.
-      ContainsUnpopulatedType = 0x30,
+      ContainsUnpopulatedType             = 0x40,
 
       /// This type contains an UnknownAny type.
-      ContainsUnknownAny = 0x40,
+      ContainsUnknownAny                  = 0x80,
+
+      /// This type contains a runtime generic parameter.
+      ContainsRuntimeGenericParam         = 0x100,
+
+      _lastProp = ContainsRuntimeGenericParam
    };
 
+   static_assert(_lastProp <= (1 << 15), "too many type properties!");
+
 private:
-   uint8_t Props;
+   uint16_t Props;
 
 public:
-   /*implicit*/ TypeProperties(uint8_t Props = 0) : Props(Props)
+   /*implicit*/ TypeProperties(uint16_t Props = 0) : Props(Props)
    {}
 
-   uint8_t getRawProperties() const { return Props; }
+   uint16_t getRawProperties() const { return Props; }
 
    bool operator&(Property P) { return (Props & P) != 0; }
+   bool operator&(TypeProperties P) { return (Props & P.Props) != 0; }
 
    TypeProperties operator|(Property P) { return TypeProperties(Props | P); }
    TypeProperties &operator|=(Property P) { Props |= P; return *this; }
@@ -165,6 +173,7 @@ public:
    bool containsGenericType() const;
    bool containsAssociatedType() const;
    bool containsUnexpandedParameterPack() const;
+   bool containsRuntimeGenericParam() const;
    bool isUnpopulated() const;
 };
 
@@ -250,8 +259,14 @@ public:
    }
 
    bool isDependentType() const { return properties().isDependent(); }
-   bool containsGenericType() const { return properties().containsGenericType(); }
-   bool containsAssociatedType() const { return properties().containsAssociatedType(); }
+   bool containsGenericType() const
+   { return properties().containsGenericType(); }
+
+   bool containsAssociatedType() const
+   { return properties().containsAssociatedType(); }
+
+   bool containsRuntimeGenericParam() const
+   { return properties().containsRuntimeGenericParam(); }
 
    bool isUnpopulatedType() const;
 
@@ -378,36 +393,29 @@ protected:
    }
 
    struct TypeBits {
-      TypeID id : 8;
       TypeProperties Props;
+      TypeID id : 8;
+
+      // Make sure no padding is inserted between id and Props.
+      unsigned : 8;
    };
 
-   enum { TypeUsedBits = 16 };
+   enum { TypeUsedBits = 24 };
 
    struct BuiltinTypeBits {
       unsigned : TypeUsedBits;
       BuiltinKind kind : 8;
    };
 
-   struct ArrayTypeBits {
-      unsigned : TypeUsedBits;
-   };
-
    struct FunctionTypeBits {
       unsigned : TypeUsedBits;
-      unsigned flags : 16;
-   };
-
-   struct RecordTypeBits {
-      unsigned : TypeUsedBits;
+      unsigned flags : 8;
    };
 
    union {
       TypeBits Bits;
       BuiltinTypeBits BuiltinBits;
-      ArrayTypeBits ArrayBits;
       FunctionTypeBits FuncBits;
-      RecordTypeBits RecordBits;
    };
 
    Type *CanonicalType;
@@ -1205,19 +1213,22 @@ public:
 class DependentRecordType: public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl *record,
-                       sema::FinalTemplateArgumentList *templateArgs);
+                       sema::FinalTemplateArgumentList *templateArgs,
+                       QualType Parent);
 
+   QualType Parent;
    mutable sema::FinalTemplateArgumentList *templateArgs;
 
 public:
    void Profile(llvm::FoldingSetNodeID &ID)
    {
-      Profile(ID, getRecord(), templateArgs);
+      Profile(ID, getRecord(), templateArgs, Parent);
    }
 
    static void Profile(llvm::FoldingSetNodeID &ID,
                        ast::RecordDecl *R,
-                       sema::FinalTemplateArgumentList* templateArgs);
+                       sema::FinalTemplateArgumentList* templateArgs,
+                       QualType Parent);
 
    static bool classof (Type const* T)
    {
@@ -1226,15 +1237,9 @@ public:
 
    friend class ast::ASTContext;
 
-   sema::FinalTemplateArgumentList& getTemplateArgs() const
-   {
-      return *templateArgs;
-   }
-
-   bool hasTemplateArgs() const
-   {
-      return true;
-   }
+   QualType getParent() const { return Parent; }
+   sema::FinalTemplateArgumentList& getTemplateArgs() const { return *templateArgs; }
+   bool hasTemplateArgs() const { return true; }
 };
 
 class GenericType: public Type, public llvm::FoldingSetNode {

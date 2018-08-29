@@ -133,8 +133,10 @@ ConstantArray::ConstantArray(ValueType ty,
    assert(ty->isArrayType() && "ConstantArray must have array type!");
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
 
-   for (auto *C : vec)
+   for (auto *C : vec) {
       C->addUse(this);
+      ConstBits.ContainsConstantEnum |= C->containsConstantEnum();
+   }
 }
 
 ConstantArray *ConstantArray::get(ValueType ty,
@@ -186,8 +188,10 @@ ConstantTuple::ConstantTuple(ValueType ty,
    assert(ty->isTupleType() && "ConstantTuple must have tuple type!");
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
 
-   for (auto *C : vec)
+   for (auto *C : vec) {
       C->addUse(this);
+      ConstBits.ContainsConstantEnum |= C->containsConstantEnum();
+   }
 }
 
 ConstantTuple* ConstantTuple::get(ValueType ty,
@@ -258,8 +262,10 @@ ConstantStruct::ConstantStruct(TypeID id, ValueType Ty,
      NumElements((unsigned)vec.size())
 {
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
-   for (auto *C : vec)
+   for (auto *C : vec) {
       C->addUse(this);
+      ConstBits.ContainsConstantEnum |= C->containsConstantEnum();
+   }
 }
 
 ConstantStruct* ConstantStruct::get(ValueType Ty,
@@ -428,8 +434,10 @@ ConstantEnum::ConstantEnum(Context &Ctx,
 {
    std::copy(vec.begin(), vec.end(), reinterpret_cast<Constant**>(this + 1));
 
-   for (auto *C : vec)
+   ConstBits.ContainsConstantEnum = true;
+   for (auto *C : vec) {
       C->addUse(this);
+   }
 }
 
 ConstantEnum *ConstantEnum::get(Context &Ctx,
@@ -549,7 +557,9 @@ ConstantAddrOfInst::ConstantAddrOfInst(Constant *Val, ValueType PtrTy)
 {
    assert(Val->getType()->getReferencedType() == PtrTy->getPointeeType());
    assert(Val->isLvalue());
+
    Val->addUse(this);
+   ConstBits.ContainsConstantEnum |= Val->containsConstantEnum();
 }
 
 void ConstantAddrOfInst::Profile(llvm::FoldingSetNodeID &ID,
@@ -562,6 +572,7 @@ ConstantBitCastInst::ConstantBitCastInst(Constant *Val, ValueType toType)
      target(Val)
 {
    Val->addUse(this);
+   ConstBits.ContainsConstantEnum |= Val->containsConstantEnum();
 }
 
 void ConstantBitCastInst::Profile(llvm::FoldingSetNodeID &ID,
@@ -656,6 +667,7 @@ ConstantIntCastInst::ConstantIntCastInst(CastKind kind,
      Target(Target), Kind(kind)
 {
    Target->addUse(this);
+   ConstBits.ContainsConstantEnum |= Target->containsConstantEnum();
 }
 
 void ConstantIntCastInst::Profile(llvm::FoldingSetNodeID &ID,
@@ -675,6 +687,9 @@ ConstantOperatorInst::ConstantOperatorInst(OpCode OPC,
 {
    LHS->addUse(this);
    RHS->addUse(this);
+
+   ConstBits.ContainsConstantEnum |= LHS->containsConstantEnum();
+   ConstBits.ContainsConstantEnum |= RHS->containsConstantEnum();
 }
 
 void ConstantOperatorInst::Profile(llvm::FoldingSetNodeID &ID,
@@ -692,6 +707,7 @@ ConstantGEPInst::ConstantGEPInst(Constant *Target,
      Target(Target), Idx(Idx)
 {
    Target->addUse(this);
+   ConstBits.ContainsConstantEnum |= Target->containsConstantEnum();
 
    QualType valTy = Target->getType()->stripReference();
 
@@ -773,6 +789,7 @@ ConstantLoadInst::ConstantLoadInst(Constant *Target)
      Target(Target)
 {
    Target->addUse(this);
+   ConstBits.ContainsConstantEnum |= Target->containsConstantEnum();
 
    if (Target->getType()->isReferenceType()) {
       type = Target->getType()->getReferencedType();

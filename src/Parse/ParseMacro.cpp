@@ -1527,9 +1527,10 @@ public:
       auto &FileMgr = SP.getCompilationUnit().getFileMgr();
       BaseOffset = Pat->getSourceLoc().getOffset();
       ExpansionOffset = FileMgr
-                     .createMacroExpansion(ExpandedFrom, Pat->getSourceLoc(),
-                                           Pat->getSourceLength() + 1,
-                                           this->M->getDeclName()).BaseOffset;
+                     .createMacroExpansion(
+                        ExpandedFrom, Pat->getSourceLoc(),
+                        Pat->getSourceLength() + 1,
+                        this->M->getDeclName().getMacroName()).BaseOffset;
    }
 
    ParseResult expand();
@@ -1787,22 +1788,30 @@ Parser::checkBuiltinMacro(SemaPass &SP,
       auto &FileMgr = *SP.getDiags().getFileMgr();
 
       auto FileName = Tokens.front().getText();
-      auto includeDirs = SP.getCompilationUnit().getOptions().getIncludeDirs()
-                           .vec();
+      std::string realFile;
 
-      includeDirs.push_back(
-         fs::getPath(FileMgr.getFileName(SOD.getSourceLoc()).str()));
+      if (!FileName.startswith(StringRef(&fs::PathSeperator, 1))) {
+         auto includeDirs = SP.getCompilationUnit().getOptions().getIncludeDirs()
+                              .vec();
 
-      auto Path = fs::getPath(FileName);
-      if (!Path.empty()) {
-         for (auto &Dir : includeDirs) {
-            fs::appendToPath(Dir, Path);
+         includeDirs.push_back(
+            fs::getPath(FileMgr.getFileName(SOD.getSourceLoc()).str()));
+
+         auto Path = fs::getPath(FileName);
+         if (!Path.empty()) {
+            for (auto &Dir : includeDirs) {
+               fs::appendToPath(Dir, Path);
+            }
+
+            FileName = fs::getFileNameAndExtension(FileName);
          }
 
-         FileName = fs::getFileNameAndExtension(FileName);
+         realFile = fs::findFileInDirectories(FileName, includeDirs);
+      }
+      else if (fs::fileExists(FileName)) {
+         realFile = FileName;
       }
 
-      auto realFile = fs::findFileInDirectories(FileName, includeDirs);
       if (realFile.empty()) {
          SP.diagnose(err_generic_error, "file " + FileName + " not found",
                      Tokens.front().getSourceLoc());

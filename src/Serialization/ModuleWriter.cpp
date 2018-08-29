@@ -328,7 +328,7 @@ void ModuleWriter::WriteFileManagerBlock()
          Record.push_back(Exp.Length);
          Record.AddSourceLocation(Exp.ExpandedFrom);
          Record.AddSourceLocation(Exp.PatternLoc);
-         Record.AddString(Exp.MacroName.getMacroName()->getIdentifier());
+         Record.AddString(Exp.MacroName->getIdentifier());
       }
 
       Record.Emit(MACRO_EXPANSIONS);

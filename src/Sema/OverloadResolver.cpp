@@ -4,6 +4,7 @@
 
 #include "OverloadResolver.h"
 
+#include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
 
 using namespace cdot::support;
@@ -43,6 +44,7 @@ static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
       case CastKind::ToMetaType:
       case CastKind::NoThrowToThrows:
       case CastKind::ThinToThick:
+      case CastKind::MetaTypeCast:
          break;
       case CastKind::Ext:
       case CastKind::FPExt:
@@ -55,7 +57,7 @@ static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
       case CastKind::BitCast:
          penalty += 1;
          break;
-      case CastKind::ProtoWrap:
+      case CastKind::ExistentialInit:
       case CastKind::ExistentialCast:
          penalty += 2;
          break;
@@ -96,6 +98,25 @@ static bool isMovable(Expression *Expr)
    }
 }
 
+static bool createsNewValue(ConversionSequenceBuilder &Seq)
+{
+   for (auto &S : Seq.getSteps()) {
+      switch (S.getKind()) {
+      case CastKind::ConversionOp:
+      case CastKind::ExistentialInit:
+      case CastKind::ExistentialCast:
+      case CastKind::ExistentialCastFallible:
+      case CastKind::ExistentialUnwrapFallible:
+      case CastKind::ToEmptyTuple:
+         return true;
+      default:
+         break;
+      }
+   }
+
+   return false;
+}
+
 static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
                                  QualType NeededTy, QualType GivenTy,
                                  FunctionType::ParamInfo NeededParamInfo,
@@ -128,6 +149,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
 
    ConversionSequenceBuilder ConvSeq;
    bool AddCopy = false;
+   bool AddForward = false;
 
    // Allow implicit conversion from mutable reference to mutable
    // borrow for self argument.
@@ -225,7 +247,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
          }
          else if (GivenTy->isMutableReferenceType() && isMovable(Expr)) {
             // Prefer moving a mutable reference where possible.
-            ConvSeq.addStep(CastKind::Forward, GivenTy);
+            AddForward = true;
          }
          else if (SP.IsImplicitlyCopyableType(Deref)) {
             AddCopy = true;
@@ -238,7 +260,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
       }
       // if it's an rvalue, forward it
       else {
-         ConvSeq.addStep(CastKind::Forward, GivenTy);
+         AddForward = true;
       }
 
       break;
@@ -258,9 +280,14 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
       return true;
    }
 
-   if (AddCopy)
+   if (AddForward) {
+      ConvSeq.addStep(CastKind::Forward, ConvSeq.getSteps().back()
+                                                .getResultType());
+   }
+   else if (AddCopy && !createsNewValue(ConvSeq)) {
       ConvSeq.addStep(CastKind::Copy, ConvSeq.getSteps().back()
                                              .getResultType());
+   }
 
    Cand.ConversionPenalty += castPenalty(ConvSeq);
    Conversions.emplace_back(move(ConvSeq));
@@ -316,18 +343,22 @@ static bool resolveContextDependentArgs(SemaPass &SP,
    FuncArgDecl *VariadicArgDecl = nullptr;
 
    bool CStyleVararg = CD->isCstyleVararg();
-   bool UnboundedTemplate = false;
+   bool SubstituteArgs = true;
    unsigned NumGivenArgs = (unsigned)UnorderedArgs.size();
 
-   if (CD->isUnboundedTemplate()) {
-      UnboundedTemplate = true;
-   }
-   else if (auto *Init = dyn_cast<InitDecl>(CD)) {
-      UnboundedTemplate = Init->getRecord()->isUnboundedTemplate();
-   }
-   else if (auto *Case = dyn_cast<EnumCaseDecl>(CD)) {
-      UnboundedTemplate = Case->getRecord()->isUnboundedTemplate();
-   }
+//   if (!canSpecialize(CD)) {
+//      SubstituteArgs = false;
+//
+//      if (CD->isUnboundedTemplate()) {
+//         SubstituteArgs = true;
+//      }
+//      else if (auto *Init = dyn_cast<InitDecl>(CD)) {
+//         SubstituteArgs = Init->getRecord()->isUnboundedTemplate();
+//      }
+//      else if (auto *Case = dyn_cast<EnumCaseDecl>(CD)) {
+//         SubstituteArgs = Case->getRecord()->isUnboundedTemplate();
+//      }
+//   }
 
    unsigned i = 0;
    unsigned LabelNo = 0;
@@ -404,8 +435,6 @@ static bool resolveContextDependentArgs(SemaPass &SP,
    // Now resolve types of context dependent arguments.
    i = 0;
    for (FuncArgDecl *ArgDecl : ArgDecls) {
-      assert(ArgDecl->wasDeclared());
-
       // If no argument is given, check if there is a default one.
       auto It = DeclArgMap.find(ArgDecl);
       if (It == DeclArgMap.end()) {
@@ -447,7 +476,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 
       for (Expression *ArgVal : DeclArgMap[ArgDecl]) {
          QualType NeededTy = ArgDecl->getType();
-         if (TemplateArgs && UnboundedTemplate) {
+         if (TemplateArgs && SubstituteArgs) {
             NeededTy = SP.resolveDependencies(NeededTy, *TemplateArgs,
                                               Caller);
          }
@@ -571,7 +600,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                   // Never infer reference types for template arguments.
                   NeededTy = ArgValType->stripReference();
                }
-               else if (UnboundedTemplate) {
+               else if (SubstituteArgs) {
                   NeededTy = SP.resolveDependencies(NeededTy,
                                                     *TemplateArgs,
                                                     Caller);
@@ -888,22 +917,26 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
    ArgVec.push_back(SelfArg);
    ArgVec.append(givenArgs.begin(), givenArgs.end());
 
+   RecordDecl *RecordInst = nullptr;
+   if (SelfArg) {
+      QualType SelfTy = SelfArg->getExprType()->stripReference();
+      if (SelfTy->isRecordType() && SelfTy->getRecord()->isInstantiation()) {
+         RecordInst = SelfTy->getRecord();
+      }
+   }
+
    ArrayRef<Expression*> ArgRef = ArgVec;
    for (unsigned i = 0; i < NumCandidates; ++i) {
       CandidateSet::Candidate &Cand = CandSet.Candidates[i];
-      if (Cand.Func) {
-         if (auto *M = dyn_cast<MethodDecl>(Cand.Func)) {
-            if (!SP.ensureDeclared(M->getRecord()) || M->isInvalid()) {
-               Cand.setIsInvalid();
-               CandSet.InvalidCand = true;
-               continue;
-            }
-         }
-         else if (!SP.ensureDeclared(Cand.Func) || Cand.Func->isInvalid()) {
-            Cand.setIsInvalid();
-            CandSet.InvalidCand = true;
-            continue;
-         }
+
+      if (RecordInst && Cand.Func) {
+         Cand.Func = SP.maybeInstantiateTemplateMember(RecordInst, Cand.Func);
+      }
+
+      if (Cand.Func && SP.QC.PrepareDeclInterface(Cand.Func)) {
+         Cand.setIsInvalid();
+         CandSet.InvalidCand = true;
+         continue;
       }
 
       assert(Cand.isBuiltinCandidate() || Cand.Func->isTemplate()
@@ -1103,8 +1136,9 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
 
       // Instantiate the record if this is a template initializer.
       if (NeedOuterTemplateParams) {
-         if (!SP.maybeInstantiateRecord(Cand, OuterTemplateArgs, Caller))
+         if (!SP.maybeInstantiateRecord(Cand, OuterTemplateArgs, Caller)) {
             return Cand.setIsInvalid();
+         }
       }
 
       // check the constraints here to take the resolved

@@ -421,12 +421,12 @@ bool DumperImpl::visitStaticForStmt(StaticForStmt* stmt)
    return true;
 }
 
-bool DumperImpl::visitStaticAssertStmt(StaticAssertStmt* stmt)
+bool DumperImpl::visitStaticAssertDecl(StaticAssertDecl* stmt)
 {
    return true;
 }
 
-bool DumperImpl::visitStaticPrintStmt(StaticPrintStmt* stmt)
+bool DumperImpl::visitStaticPrintDecl(StaticPrintDecl* stmt)
 {
    return true;
 }

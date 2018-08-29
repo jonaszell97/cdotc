@@ -1117,7 +1117,7 @@ ASTReader::ReadNestedNameSpecWithLoc(const RecordData &Record, unsigned &Idx)
                                              Name, Locs);
 }
 
-sema::ResolvedTemplateArg
+sema::TemplateArgument
 ASTReader::ReadTemplateArgument(const RecordData &Record, unsigned &Idx)
 {
    bool IsNull = Record[Idx++] != 0;
@@ -1129,40 +1129,40 @@ ASTReader::ReadTemplateArgument(const RecordData &Record, unsigned &Idx)
 
    if (IsNull) {
       if (IsVariadic) {
-         return sema::ResolvedTemplateArg(Param, IsType, {}, Loc);
+         return sema::TemplateArgument(Param, IsType, {}, Loc);
       }
       if (IsType) {
-         return sema::ResolvedTemplateArg(Param, QualType(), Loc);
+         return sema::TemplateArgument(Param, QualType(), Loc);
       }
 
-      return sema::ResolvedTemplateArg(Param, (StaticExpr*)nullptr, Loc);
+      return sema::TemplateArgument(Param, (StaticExpr*)nullptr, Loc);
    }
 
    if (IsVariadic) {
       auto NumArgs = Record[Idx++];
-      std::vector<sema::ResolvedTemplateArg> Vec;
+      std::vector<sema::TemplateArgument> Vec;
       Vec.reserve(NumArgs);
 
       for (unsigned i = 0; i < NumArgs; ++i) {
          Vec.push_back(ReadTemplateArgument(Record, Idx));
       }
 
-      return sema::ResolvedTemplateArg(Param, IsType, move(Vec), Loc);
+      return sema::TemplateArgument(Param, IsType, move(Vec), Loc);
    }
 
    if (IsType) {
       auto Ty = getLocalType(Record[Idx++]);
-      return sema::ResolvedTemplateArg(Param, Ty, Loc);
+      return sema::TemplateArgument(Param, Ty, Loc);
    }
 
    auto *SE = cast_or_null<StaticExpr>(ReadExpr());
-   return sema::ResolvedTemplateArg(Param, SE, Loc);
+   return sema::TemplateArgument(Param, SE, Loc);
 }
 
 sema::FinalTemplateArgumentList*
 ASTReader::ReadTemplateArgumentList(const RecordData &Record, unsigned &Idx)
 {
-   llvm::SmallVector<sema::ResolvedTemplateArg, 0> Args;
+   llvm::SmallVector<sema::TemplateArgument, 0> Args;
    auto NumArgs = Record[Idx++];
 
    for (unsigned i = 0; i < NumArgs; ++i) {

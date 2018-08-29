@@ -457,7 +457,7 @@ public:
                                                          unsigned &Idx);
 
    /// Read a template argument.
-   sema::ResolvedTemplateArg ReadTemplateArgument(const RecordData &Record,
+   sema::TemplateArgument ReadTemplateArgument(const RecordData &Record,
                                                   unsigned &Idx);
 
    /// Read a template argument array.
@@ -672,7 +672,7 @@ public:
    }
 
    /// Read a template argument, advancing Idx.
-   sema::ResolvedTemplateArg readTemplateArgument()
+   sema::TemplateArgument readTemplateArgument()
    {
       return Reader->ReadTemplateArgument(Record, Idx);
    }

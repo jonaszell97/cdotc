@@ -11,22 +11,21 @@
 #include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 #include "SemaPass.h"
 #include "Serialization/ModuleFile.h"
 #include "Template.h"
 
-#include <sstream>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/ErrorHandling.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/raw_ostream.h>
 
+using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::support;
 using namespace cdot::diag;
 using namespace cdot::sema;
 
-namespace cdot {
 namespace {
 
 class DependencyResolver: public TypeBuilder<DependencyResolver> {
@@ -142,6 +141,8 @@ public:
 
 } // anonymous namespace
 
+namespace cdot {
+
 class InstantiatorImpl: public ASTTypeVisitor<InstantiatorImpl> {
 public:
    InstantiatorImpl(SemaPass &SP, MultiLevelFinalTemplateArgList &&templateArgs,
@@ -167,11 +168,12 @@ public:
 
    InstantiatorImpl(SemaPass &SP,
                     MultiLevelFinalTemplateArgList &&templateArgs,
-                    NamedDecl* Template)
+                    NamedDecl* Template,
+                    QualType Self = QualType())
       : ASTTypeVisitor(false),
         SP(SP), Context(SP.getContext()),
         InstScope(SP, Template->getDeclContext()),
-        templateArgs(move(templateArgs)), Template(Template),
+        templateArgs(move(templateArgs)), Template(Template), Self(Self),
         TypeVisitor(SP, this->templateArgs, Template, nullptr)
    {
       SourceID = SP.getCompilationUnit().getFileMgr()
@@ -279,7 +281,13 @@ private:
       return false;
 #  endif
 
-      return !Stmt->isDependent();
+      static constexpr unsigned Mask =
+         Statement::ContainsGenericParam
+         | Statement::ContainsAssociatedType
+         | Statement::TypeDependent
+         | Statement::ValueDependent;
+
+      return (Stmt->getSubclassData() & Mask) == 0;
    }
 
    bool canElideInstantiation(Expression *E)
@@ -290,14 +298,35 @@ private:
       if (!E->getExprType() || E->getExprType()->isUnknownAnyType())
          return false;
 
-      if (auto Ident = dyn_cast<IdentifierRefExpr>(E)) {
-         if (Ident->getKind() != IdentifierKind::MetaType)
+      static constexpr unsigned Mask =
+         Statement::ContainsGenericParam
+         | Statement::ContainsAssociatedType
+         | Statement::TypeDependent
+         | Statement::ValueDependent;
+
+      if ((E->getSubclassData() & Mask) != 0)
+         return false;
+
+      switch (E->getTypeID()) {
+      case Expression::IdentifierRefExprID: {
+         auto Ident = cast<IdentifierRefExpr>(E);
+         if (Ident->getKind() != IdentifierKind::MetaType) {
             // property method arguments are always instantiated
-            if (auto D = Ident->getNamedDecl())
-               return !E->isDependent() && !D->isSynthesized();
+            if (auto D = Ident->getNamedDecl()) {
+               return !D->isSynthesized();
+            }
+         }
+
+         break;
+      }
+      case Expression::SelfExprID:
+      case Expression::SuperExprID:
+         return false;
+      default:
+         break;
       }
 
-      return !E->isDependent();
+      return true;
    }
 
    bool canElideInstantiation(Decl *D)
@@ -305,7 +334,9 @@ private:
       if (InUnevaluatedScope)
          return false;
 
-      if (D->isDependent())
+      if (D->containsGenericParam()
+            || D->containsAssociatedType()
+            || D->isDependent())
          return false;
 
       if (isa<NamedDecl>(D)) {
@@ -315,7 +346,9 @@ private:
          case Decl::MacroExpansionDeclID:
             return true;
          case Decl::FuncArgDeclID:
-            return !cast<FuncArgDecl>(D)->isSelf();
+            return !cast<FuncArgDecl>(D)->getType()->containsGenericType()
+               && !cast<FuncArgDecl>(D)->getType()->containsAssociatedType()
+               && !cast<FuncArgDecl>(D)->isSelf();
          default:
             return false;
          }
@@ -381,8 +414,6 @@ private:
       if (auto ND = dyn_cast<NamedDecl>(D))
          return visit(ND);
 
-      assert(D->wasDeclared() && "instantiating unchecked decl");
-
       if (canElideInstantiation(D))
          return D;
 
@@ -405,8 +436,6 @@ private:
 
    NamedDecl *visit(NamedDecl *D)
    {
-      assert(D->wasDeclared() && "instantiating unchecked decl");
-
       if (canElideInstantiation(D))
          return D;
 
@@ -459,16 +488,46 @@ public:
 
    SourceType visit(const SourceType &Ty)
    {
-      if (Ty.isResolved()) {
-         auto ResolvedTy = Ty.getResolvedType();
-         if (!ResolvedTy->isDependentType())
-            return SourceType(ResolvedTy);
+      static constexpr uint16_t GenericMask =
+         TypeProperties::ContainsDependentNameType
+         | TypeProperties::ContainsDependentSizeArrayType
+         | TypeProperties::ContainsUnboundGeneric
+         | TypeProperties::ContainsUnknownAny
+         | TypeProperties::ContainsGenericType;
 
-         if (!(isa<BuiltinType>(*ResolvedTy)
-               && ResolvedTy->isUnknownAnyType())) {
-            auto Inst = TypeVisitor.visit(Ty);
-            if (Inst && !Inst->isDependentType())
-               return SourceType(Inst);
+      static constexpr uint16_t DependentMask =
+         GenericMask
+         | TypeProperties::ContainsAssociatedType;
+
+      if (Ty.isResolved()) {
+         QualType ResolvedTy = Ty.getResolvedType();
+         uint16_t Props = ResolvedTy->properties().getRawProperties();
+
+         while ((Props & DependentMask) != 0) {
+            QualType Inst = ResolvedTy;
+
+            if (Inst->containsAssociatedType() && Self) {
+               if (SP.QC.SubstAssociatedTypes(Inst, Inst, Self)) {
+                  return Ty;
+               }
+            }
+            else if ((Props & GenericMask) != 0) {
+               if (SP.QC.SubstGenericTypes(Inst, Inst, templateArgs)) {
+                  return Ty;
+               }
+            }
+
+            // No more changes.
+            if (Inst == ResolvedTy) {
+               break;
+            }
+
+            ResolvedTy = Inst;
+            Props = ResolvedTy->properties().getRawProperties();
+         }
+
+         if ((ResolvedTy->properties() & DependentMask) == 0) {
+            return SourceType(ResolvedTy);
          }
       }
 
@@ -658,8 +717,8 @@ private:
 
    DeclStmt *visitDeclStmt(DeclStmt *Stmt);
 
-   StaticAssertStmt* visitStaticAssertStmt(StaticAssertStmt *node);
-   StaticPrintStmt* visitStaticPrintStmt(StaticPrintStmt *node);
+   StaticAssertDecl* visitStaticAssertDecl(StaticAssertDecl *node);
+   StaticPrintDecl* visitStaticPrintDecl(StaticPrintDecl *node);
    Decl* visitStaticIfDecl(StaticIfDecl *node);
    Decl* visitStaticForDecl(StaticForDecl *node);
 
@@ -715,6 +774,9 @@ private:
    /// The template we are instantiating.
    NamedDecl* Template = nullptr;
 
+   /// The 'Self' declaration to use for substituting associated types.
+   QualType Self;
+
    /// The record currently being instantiated.
    RecordDecl *InstantiatingRecord = nullptr;
 
@@ -725,7 +787,7 @@ private:
    SmallVector<Decl*, 4> DelayedTypeDecls;
    
    /// Map from template parameter names to variadic template arguments.
-   llvm::StringMap<ResolvedTemplateArg*> VariadicTemplateArgs;
+   llvm::StringMap<TemplateArgument*> VariadicTemplateArgs;
 
    /// True iff we're currently in an unevaluated scope.
    bool InUnevaluatedScope = false;
@@ -761,7 +823,7 @@ private:
       SubstContext(TemplateParamDecl *Param,
                    const IdentifierInfo *FuncArg,
                    DeclarationName IdentSubst,
-                   const ResolvedTemplateArg *ArgSubst)
+                   const TemplateArgument *ArgSubst)
          : Param(Param), FuncArg(FuncArg), IdentSubst(IdentSubst),
            ArgSubst(ArgSubst)
       { }
@@ -771,7 +833,7 @@ private:
       const IdentifierInfo *FuncArg;
       DeclarationName IdentSubst;
 
-      const ResolvedTemplateArg *ArgSubst;
+      const TemplateArgument *ArgSubst;
    };
 
    struct SubstContextRAII {
@@ -779,7 +841,7 @@ private:
                        TemplateParamDecl *Param,
                        const IdentifierInfo *FuncArg,
                        DeclarationName IdentSubst,
-                       const ResolvedTemplateArg *ArgSubst)
+                       const TemplateArgument *ArgSubst)
          : Inst(Inst)
       {
          Inst.SubstContexts.emplace_back(Param, FuncArg, IdentSubst, ArgSubst);
@@ -828,7 +890,7 @@ private:
       return nullptr;
    }
 
-   const ResolvedTemplateArg *getParameterSubst(DeclarationName name)
+   const TemplateArgument *getParameterSubst(DeclarationName name)
    {
       auto end_it = SubstContexts.rend();
       for (auto it = SubstContexts.rbegin(); it != end_it; ++it) {
@@ -843,7 +905,7 @@ private:
       return nullptr;
    }
 
-   const ResolvedTemplateArg *getParameterSubst(TemplateParamDecl *P)
+   const TemplateArgument *getParameterSubst(TemplateParamDecl *P)
    {
       auto end_it = SubstContexts.rend();
       for (auto it = SubstContexts.rbegin(); it != end_it; ++it) {
@@ -858,7 +920,7 @@ private:
       return nullptr;
    }
 
-   const ResolvedTemplateArg* hasTemplateArg(DeclarationName Name)
+   const TemplateArgument* hasTemplateArg(DeclarationName Name)
    {
       if (auto P = getParameterSubst(Name))
          return P;
@@ -866,7 +928,7 @@ private:
       return templateArgs.getNamedArg(Name);
    }
 
-   const ResolvedTemplateArg* hasTemplateArg(TemplateParamDecl *P)
+   const TemplateArgument* hasTemplateArg(TemplateParamDecl *P)
    {
       if (auto Arg = getParameterSubst(P))
          return Arg;
@@ -1232,6 +1294,8 @@ private:
    }
 };
 
+} // namespace cdot
+
 TemplateParamDecl*
 InstantiatorImpl::visitTemplateParamDecl(TemplateParamDecl *P)
 {
@@ -1264,7 +1328,7 @@ RecordDecl *InstantiatorImpl::instantiateRecordDecl(RecordDecl *Decl)
    AccessSpecifier access = Decl->getAccess();
    DeclarationName Name = Decl->getDeclName();
 
-   if (Decl == Template)
+   if (Decl->isTemplate() && Decl == Template)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Decl->getDeclName(),
                                           templateArgs.innermost());
@@ -1549,13 +1613,24 @@ SubscriptDecl* InstantiatorImpl::visitSubscriptDecl(SubscriptDecl *Decl)
    return SD;
 }
 
+static Statement *getFunctionBody(CallableDecl *C)
+{
+   if (auto *Body = C->getBody())
+      return Body;
+
+   if (auto *T = C->getBodyTemplate())
+      return T->getBody();
+
+   return nullptr;
+}
+
 MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
 {
    bool IsMainTemplate = M == Template;
-   bool SkipBody = !IsMainTemplate;
+   bool SkipBody = !IsMainTemplate || !M->isInUnboundedTemplate();
 
    DeclarationName Name = M->getDeclName();
-   if (IsMainTemplate)
+   if (M->isTemplate() && IsMainTemplate)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(M->getDeclName(),
                                           templateArgs.innermost());
@@ -1579,17 +1654,21 @@ MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
                                 move(templateParams), nullptr, M->isStatic());
    }
 
-   if (SkipBody) {
-      Inst->setBodyTemplate(M);
-   }
-   else {
-      Statement *Body = M->getBody() ? M->getBody()
-                                     : M->getBodyTemplate()->getBody();
+   if (auto *Body = getFunctionBody(M)) {
+      if (SkipBody) {
+         if (auto *OtherTemplate = M->getBodyTemplate()) {
+            Inst->setBodyTemplate(OtherTemplate);
+         }
+         else {
+            Inst->setBodyTemplate(M);
+         }
+      }
+      else {
+         SemaPass::DeclContextRAII declContext(SP, Inst,
+                                               SemaPass::SetParentContext);
 
-      SemaPass::DeclContextRAII declContext(SP, Inst,
-                                            SemaPass::SetParentContext);
-
-      Inst->setBody(copyOrNull(Body));
+         Inst->setBody(visit(Body));
+      }
    }
 
    Inst->setMethodID(M->getMethodID());
@@ -1635,7 +1714,9 @@ InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *node)
    auto Inst = AssociatedTypeDecl::Create(Context, node->getSourceLoc(),
                                           node->getProtoSpecInfo(),
                                           node->getDeclName(),
-                                          ActualType, node->isImplementation());
+                                          ActualType,
+                                          visit(node->getCovariance()),
+                                          node->isImplementation());
 
    Context.setConstraints(Inst, cloneVector(node->getConstraints()));
    ActOnDecl(Inst);
@@ -1667,8 +1748,9 @@ AliasDecl* InstantiatorImpl::visitAliasDecl(AliasDecl *Alias)
       return nullptr;
 
    bool IsMainTemplate = Alias == Template;
+
    DeclarationName Name = Alias->getDeclName();
-   if (IsMainTemplate)
+   if (Alias->isTemplate() && IsMainTemplate)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Alias->getDeclName(),
                                           templateArgs.innermost());
@@ -1690,7 +1772,8 @@ AliasDecl* InstantiatorImpl::visitAliasDecl(AliasDecl *Alias)
 FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *Decl)
 {
    // Make sure the default value was visited.
-   SP.ensureVisited(Decl);
+   if (SP.QC.TypecheckDecl(Decl))
+      return nullptr;
 
    DeclarationName DeclName = Decl->getDeclName();
    if (auto Subst = getVariadicArgumentSubst(Decl->getIdentifierInfo())) {
@@ -1707,7 +1790,15 @@ FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *Decl)
                                  Decl->getVarOrLetLoc(), Decl->getColonLoc(),
                                  DeclName, visit(Decl->getType()),
                                  Decl->isStatic(), Decl->isConst(),
-                                 copyOrNull(Decl->getDefaultVal()));
+                                 nullptr);
+
+   if (Decl->isInUnboundedTemplate() || !Decl->isStatic()) {
+      Inst->setValue(copyOrNull(Decl->getDefaultVal()));
+   }
+   else {
+      Inst->setValueTemplate(Decl);
+      Inst->setShouldBeSpecialized(true);
+   }
 
    if (auto Acc = Decl->getAccessor()) {
       PropDecl *AccInst = visitPropDecl(Acc, true);
@@ -1716,14 +1807,17 @@ FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *Decl)
       Inst->setAccessor(AccInst);
    }
 
-   ActOnDecl(Inst);
+   if (Decl != Template) {
+      ActOnDecl(Inst);
+   }
+
    return Inst;
 }
 
 InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
 {
    bool IsMainTemplate = Decl == Template;
-   bool SkipBody = !IsMainTemplate;
+   bool SkipBody = !IsMainTemplate || !Decl->isInUnboundedTemplate();
 
    RecordDecl *R = InstantiatingRecord;
    if (!R) {
@@ -1733,7 +1827,7 @@ InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
    DeclarationName Name = Context.getDeclNameTable()
                                  .getConstructorName(Context.getRecordType(R));
 
-   if (IsMainTemplate)
+   if (Decl->isTemplate() && IsMainTemplate)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Name, templateArgs.innermost());
 
@@ -1746,20 +1840,21 @@ InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
                                 move(templateParams), nullptr,
                                 Name, Decl->isFallible());
 
-   if (SkipBody) {
-      // An explicit memberwise initializer does not have a body.
-      if (Decl->getBody() || Decl->getLazyFnInfo()) {
-         Inst->setBodyTemplate(Decl);
+   if (auto *Body = getFunctionBody(Decl)) {
+      if (SkipBody) {
+         if (auto *OtherTemplate = Decl->getBodyTemplate()) {
+            Inst->setBodyTemplate(OtherTemplate);
+         }
+         else {
+            Inst->setBodyTemplate(Decl);
+         }
       }
-   }
-   else {
-      Statement *Body = Decl->getBody() ? Decl->getBody()
-                                        : Decl->getBodyTemplate()->getBody();
+      else {
+         SemaPass::DeclContextRAII declContext(SP, Inst,
+                                               SemaPass::SetParentContext);
 
-      SemaPass::DeclContextRAII declContext(SP, Inst,
-                                            SemaPass::SetParentContext);
-
-      Inst->setBody(copyOrNull(Body));
+         Inst->setBody(visit(Body));
+      }
    }
 
    Inst->setMethodID(Decl->getMethodID());
@@ -1796,20 +1891,24 @@ DeinitDecl* InstantiatorImpl::visitDeinitDecl(DeinitDecl *Decl)
    Inst->setBodyTemplate(Decl);
    Inst->setFunctionFlags(Decl->getFunctionFlags());
 
-   ActOnDecl(Inst);
+   if (Decl != Template) {
+      ActOnDecl(Inst);
+   }
+
    return Inst;
 }
 
 FunctionDecl* InstantiatorImpl::visitFunctionDecl(FunctionDecl *F)
 {
    bool IsMainTemplate = F == Template;
+   bool SkipBody = !IsMainTemplate || !F->isUnboundedTemplate();
 
    DeclarationName Name = F->getDeclName();
-   if (IsMainTemplate)
+   if (F->isTemplate() && IsMainTemplate)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Name, templateArgs.innermost());
 
-   llvm::SmallVector<FuncArgDecl*, 4> Args;
+   SmallVector<FuncArgDecl*, 4> Args;
    copyArgListAndFindVariadic(F, Args);
 
    auto templateParams = copyTemplateParameters(F);
@@ -1817,11 +1916,16 @@ FunctionDecl* InstantiatorImpl::visitFunctionDecl(FunctionDecl *F)
                                     Name, Args, visit(F->getReturnType()),
                                     nullptr, move(templateParams));
 
-   {
-      SemaPass::DeclContextRAII declContext(SP, Inst,
-                                            SemaPass::SetParentContext);
+   if (auto *Body = getFunctionBody(F)) {
+      if (SkipBody) {
+         Inst->setBodyTemplate(F);
+      }
+      else {
+         SemaPass::DeclContextRAII declContext(SP, Inst,
+                                               SemaPass::SetParentContext);
 
-      Inst->setBody(copyOrNull(F->getBody()));
+         Inst->setBody(visit(Body));
+      }
    }
 
    Inst->setFunctionFlags(F->getFunctionFlags());
@@ -2367,8 +2471,6 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
    }
 
    DeclarationName DeclName;
-   DeclContext *Ctx = Ident->getDeclCtx();
-
    if (Ident->getKind() == IdentifierKind::FunctionArg) {
       if (Ident->getFuncArg()->isVariadicArgPackExpansion()) {
          DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
@@ -2380,26 +2482,12 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
          DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
       }
    }
-   else if (Ident->getKind() == IdentifierKind::AssociatedType) {
-      auto *AT = cast<AssociatedTypeDecl>(Ident->getNamedDecl());
-      if (isa<ProtocolDecl>(AT->getDeclContext())) {
-         Ctx = nullptr;
-      }
-   }
 
    if (!DeclName)
       DeclName = Ident->getDeclName();
 
-   // only copy the context if it is not (in) a template, if it is it has to be
-   // re-evaluated
-   if (auto ND = dyn_cast_or_null<NamedDecl>(Ctx)) {
-      if (ND->inDependentContext()) {
-         Ctx = nullptr;
-      }
-   }
-
    auto Inst = new(Context) IdentifierRefExpr(Ident->getSourceLoc(), DeclName,
-                                              Ctx);
+                                              nullptr);
 
    Inst->setSelf(Ident->isSelf());
    Inst->setNameSpec(visitNestedNameSpecifier(Ident->getNameSpec()));
@@ -2447,11 +2535,41 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 
    copyArgumentList(node->getArgs(), node->getLabels(), ArgVec, Labels);
 
+   DeclarationName FuncName = node->getDeclName();
+   if (auto Arg = hasTemplateArg(FuncName)) {
+      if (Arg->isVariadic()) {
+         auto Subst = getParameterSubst(FuncName);
+         assert(Subst && "didn't diagnose unexpanded parameter pack!");
+
+         Arg = Subst;
+      }
+
+      if (!Arg->isType()) {
+         auto *SE = StaticExpr::Create(Context, Arg->getParam()->getValueType(),
+                                       node->getSourceRange(),
+                                       Arg->getValue());
+
+         return AnonymousCallExpr::Create(Context, node->getParenRange(), SE,
+                                          ArgVec, Labels);
+      }
+
+      QualType Ty = Arg->getType();
+      if (true||!Ty->isRecordType()) {
+         auto *IE = new(Context) IdentifierRefExpr(
+            node->getSourceRange(), IdentifierKind::MetaType, Ty);
+
+         return AnonymousCallExpr::Create(Context, node->getParenRange(), IE,
+                                          ArgVec, Labels);
+      }
+
+      FuncName = Context.getDeclNameTable().getConstructorName(Ty);
+   }
+
    auto call = CallExpr::Create(Context,
                                 node->getIdentLoc(), node->getParenRange(),
                                 copyOrNull(node->getParentExpr()),
                                 astvec(ArgVec), Labels,
-                                node->getDeclName(), node->isDotInit(),
+                                FuncName, node->isDotInit(),
                                 node->isDotDeinit());
 
    call->setContext(Ctx);
@@ -3020,9 +3138,9 @@ Statement* InstantiatorImpl::visitStaticForStmt(StaticForStmt *node)
                                 visit(node->getBody()));
 }
 
-StaticAssertStmt*InstantiatorImpl::visitStaticAssertStmt(StaticAssertStmt *node)
+StaticAssertDecl*InstantiatorImpl::visitStaticAssertDecl(StaticAssertDecl *node)
 {
-   auto Decl = StaticAssertStmt::Create(Context, node->getStaticAssertLoc(),
+   auto Decl = StaticAssertDecl::Create(Context, node->getStaticAssertLoc(),
                                         node->getParenRange(),
                                         visitStaticExpr(node->getExpr()),
                                         node->getMessage());
@@ -3031,9 +3149,9 @@ StaticAssertStmt*InstantiatorImpl::visitStaticAssertStmt(StaticAssertStmt *node)
    return Decl;
 }
 
-StaticPrintStmt* InstantiatorImpl::visitStaticPrintStmt(StaticPrintStmt *node)
+StaticPrintDecl* InstantiatorImpl::visitStaticPrintDecl(StaticPrintDecl *node)
 {
-   auto Decl = StaticPrintStmt::Create(Context, node->getStaticPrintLoc(),
+   auto Decl = StaticPrintDecl::Create(Context, node->getStaticPrintLoc(),
                                        node->getParenRange(),
                                        visit(node->getExpr()));
 
@@ -3183,6 +3301,7 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
    bool AlreadyInstantiating = InstantiationDepth > 0;
 
    InstantiationDepthRAII IDR(*this);
+   SemaPass::DeclScopeRAII DSR(SP, Template->getDeclContext());
 
    // Check if this instantiation exists within our current compilation.
    void *insertPos;
@@ -3255,6 +3374,136 @@ TemplateInstantiator::InstantiateRecord(StmtOrDecl POI,
    return Inst;
 }
 
+QueryResult InstantiateRecordQuery::run()
+{
+   auto &SP = sema();
+
+   // Check if this instantiation exists in an external module.
+   if (auto *MF = Template->getModFile())
+      MF->LoadAllDecls(*Template);
+
+   std::string MangledName;
+   {
+      llvm::raw_string_ostream OS(MangledName);
+      SP.getMangler().manglePrefix(Template, *TemplateArgs, OS);
+   }
+
+   if (auto Inst = lookupExternalInstantiation<RecordDecl>(MangledName, SP)) {
+      Inst->setImportedInstantiation(true);
+      return finish(Inst);
+   }
+
+   // Remember the scope in which this instantiation was requested.
+   auto *InstScope = SP.getCurrentDecl();
+   auto InstInfo = new (SP.getContext()) InstantiationInfo<RecordDecl> {
+      PointOfInstantiation, TemplateArgs, Template
+   };
+
+   // Instantiate the interface only for now.
+   InstantiatorImpl Instantiator(SP, *TemplateArgs, Template);
+   auto *Inst = Instantiator.instantiateRecordDecl(Template);
+
+   Inst->setInstantiationInfo(InstInfo);
+   Inst->setIsInstantiation(true);
+
+   SP.registerInstantiation(Inst, InstScope);
+   Instantiator.ActOnDecl(Inst);
+
+   SemaPass::DeclScopeRAII DSR(SP, Inst);
+
+   // Make all declarations visible without instantiating them.
+   for (auto *D : Template->getDecls<NamedDecl>()) {
+      if (D->isSynthesized())
+         continue;
+
+      // Don't copy over template parameters.
+      if (isa<TemplateParamDecl>(D))
+         continue;
+
+      SP.makeDeclAvailable(*Inst, D);
+   }
+
+   // Check which extensions apply, and make their declarations available too.
+   for (auto *Ext : Template->getExtensions()) {
+      bool Applies;
+      if (QC.CheckTemplateExtensionApplicability(Applies, Inst, Ext)) {
+         continue;
+      }
+
+      if (!Applies)
+         continue;
+
+      // Copy the extensions conformances.
+      auto Conformances = Ext->getConformanceTypes();
+      Inst->getConformanceTypes().append(SP.Context,
+                                         Conformances.begin(),
+                                         Conformances.end());
+
+      for (auto *D : Ext->getDecls<NamedDecl>()) {
+         if (D->isSynthesized())
+            continue;
+
+         SP.makeDeclAvailable(*Inst, D);
+      }
+   }
+
+   return finish(Inst);
+}
+
+QueryResult InstantiateTemplateMemberQuery::run()
+{
+   if (QC.PrepareDeclInterface(TemplateMember)) {
+      return fail();
+   }
+
+   InstantiatorImpl Instantiator(sema(), Inst->getTemplateArgs(),
+                                 TemplateMember);
+
+   auto *MemberInst = Instantiator.instantiateDecl(TemplateMember);
+   if (!MemberInst)
+      return fail();
+
+   Inst->removeVisibleDecl(TemplateMember);
+   sema().ActOnDecl(Inst, MemberInst);
+
+   if (TemplateMember->shouldBeSpecialized()) {
+      MemberInst->setShouldBeSpecialized(true);
+      cast<CallableDecl>(MemberInst)->setBodyTemplate(
+         cast<CallableDecl>(TemplateMember)->getBodyTemplate());
+   }
+
+   if (auto *M = dyn_cast<MethodDecl>(TemplateMember)) {
+      if (M->isMemberwiseInitializer()) {
+         cast<StructDecl>(Inst)->setMemberwiseInitializer(
+            cast<InitDecl>(MemberInst));
+      }
+      else if (isa<StructDecl>(Inst)
+            && M == cast<StructDecl>(Inst)->getDefaultInitializer()) {
+         cast<StructDecl>(Inst)->setDefaultInitializer(
+            cast<MethodDecl>(MemberInst));
+      }
+      else if (M == Inst->getCopyFn()) {
+         Inst->setCopyFn(cast<MethodDecl>(MemberInst));
+      }
+      else if (M == Inst->getToStringFn()) {
+         Inst->setToStringFn(cast<MethodDecl>(MemberInst));
+      }
+      else if (M == Inst->getOperatorEquals()) {
+         Inst->setOperatorEquals(cast<MethodDecl>(MemberInst));
+      }
+      else if (M == Inst->getHashCodeFn()) {
+         Inst->setHashCodeFn(cast<MethodDecl>(MemberInst));
+      }
+   }
+
+   return finish(cast<NamedDecl>(MemberInst));
+}
+
+QueryResult PrepareInstantiationForNameLookupQuery::run()
+{
+   llvm_unreachable("unimplemented");
+}
+
 void TemplateInstantiator::visitPendingInstantiations()
 {
    auto PendingInstantiations = move(this->PendingInstantiations);
@@ -3264,6 +3513,30 @@ void TemplateInstantiator::visitPendingInstantiations()
 
       SP.ensureDeclared(Next);
    }
+}
+
+CallableInstResult
+TemplateInstantiator::InstantiateCallable(StmtOrDecl POI,
+                                          CallableDecl *F,
+                                          TemplateArgs *templateArgs,
+                                          bool *isNew) {
+   SemaPass::DeclScopeRAII DSR(SP, F->getDeclContext());
+   if (auto *Fn = dyn_cast<FunctionDecl>(F)) {
+      auto Inst = InstantiateFunction(POI, Fn, templateArgs, isNew);
+      if (!Inst)
+         return CallableInstResult();
+
+      return Inst.get();
+   }
+   if (auto *M = dyn_cast<MethodDecl>(F)) {
+      auto Inst = InstantiateMethod(POI, M, templateArgs, isNew);
+      if (!Inst)
+         return CallableInstResult();
+
+      return Inst.get();
+   }
+
+   llvm_unreachable("not a callable!");
 }
 
 FunctionInstResult
@@ -3291,6 +3564,8 @@ TemplateInstantiator::InstantiateFunction(StmtOrDecl POI,
       POI.setIsInvalid(true);
       return FunctionInstResult();
    }
+
+   SemaPass::DeclScopeRAII DSR(SP, Template->getDeclContext());
 
    void *insertPos;
    if (auto F = SP.getContext().getFunctionTemplateInstantiation(Template,
@@ -3331,7 +3606,7 @@ TemplateInstantiator::InstantiateFunction(StmtOrDecl POI,
    Inst->setIsInstantiation(true);
    SP.registerInstantiation(Inst, InstScope);
 
-   SemaPass::DeclScopeRAII raii(SP, Inst->getDeclContext());
+   SemaPass::DeclScopeRAII raii(SP, Template->getDeclContext());
    SP.getContext().insertFunctionTemplateInstantiation(Inst, insertPos);
 
    Instantiator.ActOnDecl(Inst);
@@ -3371,6 +3646,8 @@ TemplateInstantiator::InstantiateMethod(StmtOrDecl POI,
       POI.setIsInvalid(true);
       return MethodInstResult();
    }
+
+   SemaPass::DeclScopeRAII DSR(SP, Template->getDeclContext());
 
    // Only instantiate the complete initializer, the base initializer will be
    // synthesized afterwards.
@@ -3643,6 +3920,8 @@ TemplateInstantiator::InstantiateAlias(AliasDecl *Template,
       return Inst;
    }
 
+   SemaPass::DeclScopeRAII DSR(SP, Template->getDeclContext());
+
    std::string MangledName;
    {
       llvm::raw_string_ostream OS(MangledName);
@@ -3680,5 +3959,3 @@ TemplateInstantiator::InstantiateAlias(AliasDecl *Template,
 
    return Inst;
 }
-
-} // namespace cdot

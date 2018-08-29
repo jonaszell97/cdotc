@@ -13,11 +13,13 @@ enum class CastKind : unsigned char {
 
    FPExt, FPTrunc,
    DynCast, UpCast, ConversionOp,
-   BitCast, ProtoWrap, ProtoUnwrap,
+   BitCast, ExistentialInit, ProtoUnwrap,
 
-   ExistentialCast, ExistentialCastFallible, ExistentialUnwrap,
+   ExistentialCast, ExistentialCastFallible,
+   ExistentialUnwrap, ExistentialUnwrapFallible, ExistentialRef,
 
    NoThrowToThrows, ThinToThick,
+   MetaTypeCast,
 
    Forward, Move, Copy,
    MutRefToRef, MutPtrToPtr, RValueToConstRef,

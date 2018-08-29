@@ -123,7 +123,8 @@ protected:
 
    struct ConstantBits {
       ValueBits InstBits;
-      bool AllZeros : 1;
+      bool AllZeros             : 1;
+      bool ContainsConstantEnum : 1;
    };
 
    struct FunctionBits {
@@ -224,9 +225,15 @@ protected:
       ValueBits InstBits;
    };
 
+   struct ExistentialInitInstBits {
+      ValueBits InstBits;
+      bool Preallocated : 1;
+   };
+
    struct ArgumentBits {
       ValueBits InstBits;
       bool IsSelf                   : 1;
+      bool GenericEnvironment       : 1;
       ArgumentConvention Convention : 2;
    };
 
@@ -249,6 +256,7 @@ protected:
       BorrowInstBits BorrowBits;
       CallInstBits CallBits;
       InvokeInstBits InvokeBits;
+      ExistentialInitInstBits ExistentialBits;
       ArgumentBits ArgBits;
    };
 

@@ -64,24 +64,24 @@ DeclConstraint* DeclConstraint::Create(ASTContext &C,
 UsingDecl::UsingDecl(SourceRange Loc,
                      AccessSpecifier Access,
                      DeclarationName Name,
-                     llvm::ArrayRef<IdentifierInfo*> NestedImportName,
+                     llvm::ArrayRef<DeclarationName> NestedImportName,
                      bool wildCardImport)
    : NamedDecl(UsingDeclID, Access, Name),
      Loc(Loc), NumSpecifierNames((unsigned)NestedImportName.size()),
      IsWildCard(wildCardImport)
 {
    std::copy(NestedImportName.begin(), NestedImportName.end(),
-             getTrailingObjects<IdentifierInfo*>());
+             getTrailingObjects<DeclarationName>());
 }
 
 UsingDecl* UsingDecl::Create(ASTContext &C,
                              SourceRange Loc,
                              AccessSpecifier Access,
                              DeclarationName Name,
-                             llvm::ArrayRef<IdentifierInfo*> NestedImportName,
+                             llvm::ArrayRef<DeclarationName> NestedImportName,
                              bool wildCardImport) {
    void *Mem = C.Allocate(
-      totalSizeToAlloc<IdentifierInfo*>(NestedImportName.size()),
+      totalSizeToAlloc<DeclarationName>(NestedImportName.size()),
       alignof(UsingDecl));
 
    return new(Mem) UsingDecl(Loc, Access, Name, NestedImportName,
@@ -95,15 +95,15 @@ UsingDecl::UsingDecl(EmptyShell, unsigned N)
 
 UsingDecl *UsingDecl::CreateEmpty(ASTContext &C, unsigned N)
 {
-    void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(N),
+    void *Mem = C.Allocate(totalSizeToAlloc<DeclarationName>(N),
                            alignof(UsingDecl));
     return new(Mem) UsingDecl(EmptyShell(), N);
 }
 
 ImportDecl::ImportDecl(SourceRange Loc,
                        AccessSpecifier Access,
-                       llvm::ArrayRef<IdentifierInfo*> moduleName,
-                       llvm::ArrayRef<IdentifierInfo*> namedImports,
+                       llvm::ArrayRef<DeclarationName> moduleName,
+                       llvm::ArrayRef<DeclarationName> namedImports,
                        bool IsWildcardImport)
    : NamedDecl(ImportDeclID, Access,
                !IsWildcardImport && namedImports.empty() ? moduleName.back()
@@ -114,19 +114,19 @@ ImportDecl::ImportDecl(SourceRange Loc,
      NumNamedImports((unsigned)namedImports.size())
 {
    std::copy(moduleName.begin(), moduleName.end(),
-             getTrailingObjects<IdentifierInfo*>());
+             getTrailingObjects<DeclarationName>());
 
    std::copy(namedImports.begin(), namedImports.end(),
-             getTrailingObjects<IdentifierInfo*>() + NumNameQuals);
+             getTrailingObjects<DeclarationName>() + NumNameQuals);
 }
 
 ImportDecl* ImportDecl::Create(ASTContext &C, SourceRange Loc,
                                AccessSpecifier Access,
-                               llvm::ArrayRef<IdentifierInfo*> moduleName,
-                               llvm::ArrayRef<IdentifierInfo*> namedImports,
+                               llvm::ArrayRef<DeclarationName> moduleName,
+                               llvm::ArrayRef<DeclarationName> namedImports,
                                bool IsWildcardImport) {
    void *Mem = C.Allocate(
-      totalSizeToAlloc<IdentifierInfo*>(moduleName.size()+namedImports.size()),
+      totalSizeToAlloc<DeclarationName>(moduleName.size()+namedImports.size()),
       alignof(ImportDecl));
 
    return new(Mem) ImportDecl(Loc, Access, moduleName, namedImports,
@@ -142,7 +142,7 @@ ImportDecl::ImportDecl(EmptyShell, unsigned N)
 
 ImportDecl *ImportDecl::CreateEmpty(ASTContext &C, unsigned N) {
     void *Mem = C.Allocate(
-       totalSizeToAlloc<IdentifierInfo*>(N),
+       totalSizeToAlloc<DeclarationName>(N),
        alignof(ImportDecl));
 
     return new(Mem) ImportDecl(EmptyShell(), N);
@@ -198,7 +198,7 @@ TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
    : NamedDecl(TemplateParamDeclID, (AccessSpecifier)0, Name),
      covariance(covariance), contravariance(contravariance),
      typeName(true), Unbounded(Unbounded),
-     defaultValue(defaultValue), Index(Index),
+     defaultValue(defaultValue), Index(Index),  Depth(0),
      TypeNameOrValueLoc(TypeNameOrValueLoc), NameLoc(NameLoc),
      EllipsisLoc(EllipsisLoc)
 {}
@@ -214,7 +214,7 @@ TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
    : NamedDecl(TemplateParamDeclID, (AccessSpecifier)0, Name),
      covariance(valueType), contravariance(nullptr),
      typeName(false), Unbounded(Unbounded),
-     defaultValue(defaultValue), Index(Index),
+     defaultValue(defaultValue), Index(Index), Depth(0),
      TypeNameOrValueLoc(TypeNameOrValueLoc), NameLoc(NameLoc),
      EllipsisLoc(EllipsisLoc)
 {}
@@ -295,18 +295,18 @@ VarDecl::VarDecl(DeclKind id,
                  Expression* value)
    : NamedDecl(id, access, Name),
      VarOrLetLoc(VarOrLetLoc), ColonLoc(ColonLoc),
-     type(type), value(value),
-     CanElideCopy(false), Variadic(false), Captured(false),
-     IsMovedFrom(false)
+     type(type), Value(value),
+     Const(isConst), CanElideCopy(false), Variadic(false), Captured(false),
+     IsMovedFrom(false), HasTemplate(false)
 {
-   setDeclFlag(DeclFlags::DF_Const, isConst);
+
 }
 
 SourceRange VarDecl::getSourceRange() const
 {
    SourceLocation End;
-   if (value) {
-      End = value->getSourceRange().getEnd();
+   if (Value) {
+      End = Value->getSourceRange().getEnd();
    }
    else if (type && type.getTypeExpr()) {
       End = type.getTypeExpr()->getSourceRange().getEnd();
@@ -316,6 +316,38 @@ SourceRange VarDecl::getSourceRange() const
    }
 
    return SourceRange(VarOrLetLoc, End);
+}
+
+Expression* VarDecl::getValue() const
+{
+   if (HasTemplate)
+      return nullptr;
+
+   return Value;
+}
+
+void VarDecl::setValue(Expression *V)
+{
+   if (V) {
+      HasTemplate = false;
+      Value = V;
+   }
+}
+
+VarDecl* VarDecl::getValueTemplate() const
+{
+   if (!HasTemplate)
+      return nullptr;
+
+   return ValueTemplate;
+}
+
+void VarDecl::setValueTemplate(VarDecl *V)
+{
+   if (V) {
+      HasTemplate = true;
+      ValueTemplate = V;
+   }
 }
 
 LocalVarDecl::LocalVarDecl(AccessSpecifier access,
@@ -422,6 +454,12 @@ DestructuringDecl* DestructuringDecl::CreateEmpty(ASTContext &C,
                           alignof(DestructuringDecl));
 
    return new(Mem) DestructuringDecl(EmptyShell(), N);
+}
+
+bool DestructuringDecl::isConst() const
+{
+   assert(getNumDecls());
+   return (*getTrailingObjects<VarDecl*>())->isConst();
 }
 
 FuncArgDecl::FuncArgDecl(SourceLocation OwnershipLoc,
@@ -956,7 +994,7 @@ RecordDecl::RecordDecl(DeclKind typeID,
      manualAlignment(false), opaque(false),
      implicitlyEquatable(false), implicitlyHashable(false),
      implicitlyCopyable(false), implicitlyStringRepresentable(false),
-     NeedsRetainOrRelease(false)
+     NeedsRetainOrRelease(false), ExplicitMemberwiseInit(false)
 {}
 
 RecordDecl::RecordDecl(EmptyShell E,
@@ -968,7 +1006,7 @@ RecordDecl::RecordDecl(EmptyShell E,
      manualAlignment(false), opaque(false),
      implicitlyEquatable(false), implicitlyHashable(false),
      implicitlyCopyable(false), implicitlyStringRepresentable(false),
-     NeedsRetainOrRelease(false)
+     NeedsRetainOrRelease(false), ExplicitMemberwiseInit(false)
 {
 
 }
@@ -1082,12 +1120,16 @@ MethodDecl* RecordDecl::getComparisonOperator(QualType withType)
 
 llvm::ArrayRef<ExtensionDecl*> RecordDecl::getExtensions() const
 {
-   return getASTCtx().getExtensions(this);
+   auto &Context = getASTCtx();
+   return Context.getExtensions(
+      Context.getRecordType(const_cast<RecordDecl*>(this)));
 }
 
 void RecordDecl::addExtension(ExtensionDecl *E) const
 {
-   getASTCtx().addExtension(this, E);
+   auto &Context = getASTCtx();
+   getASTCtx().addExtension(
+      Context.getRecordType(const_cast<RecordDecl*>(this)), E);
 }
 
 bool RecordDecl::hasMethodWithName(DeclarationName name) const
@@ -1624,9 +1666,11 @@ AssociatedTypeDecl::AssociatedTypeDecl(SourceLocation Loc,
                                        IdentifierInfo *ProtoSpec,
                                        DeclarationName Name,
                                        SourceType actualType,
+                                       SourceType covariance,
                                        bool Implementation)
    : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Public, Name),
      Loc(Loc), protocolSpecifier(ProtoSpec), actualType(actualType),
+     covariance(covariance),
      Implementation(Implementation), Self(Name.isStr("Self"))
 {
 
@@ -1637,9 +1681,10 @@ AssociatedTypeDecl* AssociatedTypeDecl::Create(ASTContext &C,
                                                IdentifierInfo *ProtoSpec,
                                                DeclarationName Name,
                                                SourceType actualType,
+                                               SourceType covariance,
                                                bool Implementation) {
    return new(C) AssociatedTypeDecl(Loc, ProtoSpec, Name, actualType,
-                                    Implementation);
+                                    covariance, Implementation);
 }
 
 AssociatedTypeDecl::AssociatedTypeDecl(EmptyShell)
@@ -1844,53 +1889,53 @@ StaticForDecl *StaticForDecl::CreateEmpty(ASTContext &C)
     return new(C) StaticForDecl(EmptyShell());
 }
 
-StaticAssertStmt::StaticAssertStmt(SourceLocation Loc,
+StaticAssertDecl::StaticAssertDecl(SourceLocation Loc,
                                    SourceRange Parens,
                                    StaticExpr* expr,
                                    StringRef message)
-   : Decl(StaticAssertStmtID),
+   : Decl(StaticAssertDeclID),
      Loc(Loc), Parens(Parens),
      expr(expr), message(message)
 {}
 
-StaticAssertStmt* StaticAssertStmt::Create(ASTContext &C,
+StaticAssertDecl* StaticAssertDecl::Create(ASTContext &C,
                                            SourceLocation Loc,
                                            SourceRange Parens,
                                            StaticExpr *expr,
                                            StringRef message) {
-   return new(C) StaticAssertStmt(Loc, Parens, expr, message);
+   return new(C) StaticAssertDecl(Loc, Parens, expr, message);
 }
 
-StaticAssertStmt::StaticAssertStmt(EmptyShell)
-   : Decl(StaticAssertStmtID)
+StaticAssertDecl::StaticAssertDecl(EmptyShell)
+   : Decl(StaticAssertDeclID)
 {}
 
-StaticAssertStmt *StaticAssertStmt::CreateEmpty(ASTContext &C)
+StaticAssertDecl *StaticAssertDecl::CreateEmpty(ASTContext &C)
 {
-    return new(C) StaticAssertStmt(EmptyShell());
+    return new(C) StaticAssertDecl(EmptyShell());
 }
 
-StaticPrintStmt::StaticPrintStmt(SourceLocation Loc,
+StaticPrintDecl::StaticPrintDecl(SourceLocation Loc,
                                  SourceRange Parens,
                                  Expression* expr)
-   : Decl(StaticPrintStmtID),
+   : Decl(StaticPrintDeclID),
      Loc(Loc), Parens(Parens), expr(expr)
 {}
 
-StaticPrintStmt* StaticPrintStmt::Create(ASTContext &C,
+StaticPrintDecl* StaticPrintDecl::Create(ASTContext &C,
                                          SourceLocation Loc,
                                          SourceRange Parens,
                                          Expression *E) {
-   return new(C) StaticPrintStmt(Loc, Parens, E);
+   return new(C) StaticPrintDecl(Loc, Parens, E);
 }
 
-StaticPrintStmt::StaticPrintStmt(EmptyShell)
-   : Decl(StaticPrintStmtID)
+StaticPrintDecl::StaticPrintDecl(EmptyShell)
+   : Decl(StaticPrintDeclID)
 {}
 
-StaticPrintStmt *StaticPrintStmt::CreateEmpty(ASTContext &C)
+StaticPrintDecl *StaticPrintDecl::CreateEmpty(ASTContext &C)
 {
-    return new(C) StaticPrintStmt(EmptyShell());
+    return new(C) StaticPrintDecl(EmptyShell());
 }
 
 MixinDecl::MixinDecl(SourceLocation Loc,

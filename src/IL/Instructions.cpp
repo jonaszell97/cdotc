@@ -772,12 +772,13 @@ ExistentialInitInst::ExistentialInitInst(Value *target,
                                          QualType toType,
                                          il::Value *ValueTypeInfo,
                                          il::GlobalVariable *ProtocolTypeInfo,
+                                         bool Preallocated,
                                          BasicBlock *parent)
    : Instruction(ExistentialInitInstID, ValueType(target->getCtx(), toType),
                  parent),
      MultiOperandInst({ target, ValueTypeInfo, ProtocolTypeInfo })
 {
-
+   ExistentialBits.Preallocated = Preallocated;
 }
 
 Value* ExistentialInitInst::getValueTypeInfo() const
@@ -788,6 +789,16 @@ Value* ExistentialInitInst::getValueTypeInfo() const
 GlobalVariable* ExistentialInitInst::getProtocolTypeInfo() const
 {
    return cast<GlobalVariable>(Operands[2]);
+}
+
+GenericInitInst::GenericInitInst(il::Value *Val,
+                                 il::Value *GenericEnvironment,
+                                 QualType GenericType,
+                                 il::BasicBlock *Parent)
+   : BinaryInstruction(GenericInitInstID, Val, GenericEnvironment, GenericType,
+                       Parent)
+{
+
 }
 
 ExceptionCastInst::ExceptionCastInst(Value *target, QualType toType,

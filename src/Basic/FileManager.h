@@ -18,10 +18,6 @@
 #include <vector>
 
 namespace cdot {
-namespace ast {
-   class ImportDecl;
-} // namespace ast
-
 namespace fs {
 
 struct LineColPair {
@@ -94,10 +90,10 @@ public:
 
    SourceLocation getAliasLoc(SourceID sourceId);
 
-   SourceLocation createModuleImportLoc(ast::ImportDecl *I);
+   SourceLocation createModuleImportLoc(SourceLocation Loc);
 
-   ast::ImportDecl *getImportForLoc(SourceLocation Loc);
-   ast::ImportDecl *getImportForID(SourceID ID);
+   SourceLocation getImportForLoc(SourceLocation Loc);
+   SourceLocation getImportForID(SourceID ID);
 
    void addFileInclude(SourceID IncludedFromID, SourceID IncludedFileID);
    bool wasIncludedFrom(SourceID CurrentFile, SourceID PossiblyIncludedFile);
@@ -132,7 +128,7 @@ public:
                         SourceOffset BaseOffset,
                         unsigned Length,
                         SourceID ID,
-                        DeclarationName MacroName)
+                        const IdentifierInfo *MacroName)
          : ExpandedFrom(ExpandedFrom), PatternLoc(PatternLoc),
            BaseOffset(BaseOffset), Length(Length), SourceID(ID),
            MacroName(MacroName)
@@ -154,13 +150,13 @@ public:
       SourceID SourceID;
 
       /// The name of the expanded macro.
-      DeclarationName MacroName;
+      const IdentifierInfo *MacroName;
    };
 
    MacroExpansionLoc createMacroExpansion(SourceLocation ExpansionLoc,
                                           SourceLocation PatternLoc,
                                           unsigned SourceLength,
-                                          DeclarationName MacroName);
+                                          const IdentifierInfo *MacroName);
 
    MacroExpansionLoc *getMacroExpansionLoc(SourceLocation Loc);
 
@@ -185,7 +181,7 @@ private:
    const std::vector<SourceOffset> &collectLineOffsetsForFile(SourceID sourceId,
                                                        llvm::MemoryBuffer *Buf);
 
-   llvm::DenseMap<SourceID, ast::ImportDecl*> Imports;
+   llvm::DenseMap<SourceID, SourceLocation> Imports;
 };
 
 using SourceFileRef = llvm::StringMapEntry<FileManager::CachedFile>*;

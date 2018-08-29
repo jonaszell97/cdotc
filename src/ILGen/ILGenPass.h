@@ -106,7 +106,8 @@ public:
    il::Value *visitParenExpr(ParenExpr *node);
 
    il::Value *visitSubscriptExpr(SubscriptExpr *node);
-   il::Value *visitCallExpr(CallExpr *Expr);
+   il::Value *visitCallExpr(CallExpr *Expr,
+                            il::Value *GenericArgs = nullptr);
    il::Value *visitAnonymousCallExpr(AnonymousCallExpr *Expr);
    il::Value *visitTupleMemberExpr(TupleMemberExpr *node);
    il::Value *visitEnumCaseExpr(EnumCaseExpr *node);
@@ -124,8 +125,6 @@ public:
    void visitMatchStmt(MatchStmt *node);
    void HandleEqualitySwitch(MatchStmt *Stmt);
    void HandleIntegralSwitch(MatchStmt *node);
-
-   void HandlePatternSwitch(MatchStmt *node);
 
    void visitCaseStmt(CaseStmt *node);
 
@@ -207,7 +206,8 @@ public:
    il::Value* visitStaticExpr(StaticExpr *node);
    il::Value *visitTraitsExpr(TraitsExpr *node);
 
-   il::Function* DeclareFunction(CallableDecl *C);
+   il::Function *DeclareFunction(CallableDecl *C);
+   il::GlobalVariable *DeclareGlobalVariable(VarDecl *decl);
 
    bool VerifyFunction(il::Function *F);
    void CanonicalizeFunction(il::Function *F);
@@ -218,8 +218,6 @@ public:
    void DeclareDeclContext(DeclContext *Ctx);
    void DeclareRecord(RecordDecl *R);
    void declareRecordInstantiation(RecordDecl *Inst);
-
-   void DeclareGlobalVariable(GlobalVarDecl *decl);
 
    struct StringInfo {
       /// The String type.
@@ -336,7 +334,7 @@ public:
 
    friend class SemaPass;
 
-protected:
+private:
    SemaPass &SP;
    ASTContext &Context;
 
@@ -352,7 +350,10 @@ protected:
    void DeclareProperty(PropDecl *P);
    void DefineProperty(PropDecl *P);
 
+public:
    void DefineFunction(CallableDecl* CD);
+   void SpecializeFunction(CallableDecl *Template,
+                           CallableDecl *Inst);
 
    void DefineLazyGlobal(il::GlobalVariable *G,
                          Expression *defaultVal);
@@ -362,10 +363,10 @@ protected:
    void VisitPotentiallyLazyGlobals();
    void VisitImportedInstantiations();
 
-public:
    il::Context &getContext();
    il::Module *getModule();
    il::Function *getCurrentFn();
+   il::Value *getCurrentGenericEnvironment();
 
    il::Function *getPrintf();
    il::Module *getCtfeModule();
@@ -391,15 +392,45 @@ public:
                          il::Value *Val,
                          bool forced = false);
 
+   il::Value *applySingleConversionStep(const ConversionStep &Step,
+                                        il::Value *Val,
+                                        bool forced = false);
+
+   il::Value *doFunctionCast(ArrayRef<ConversionStep> Steps,
+                             il::Value *Val,
+                             bool forced = false);
+
+   il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
+                             il::Value *Val,
+                             bool forced = false);
+
+   il::Value *doTupleCast(ArrayRef<ConversionStep> Steps,
+                          il::Value *Val,
+                          bool forced = false);
+
+   il::Value *doTupleCast(const ConversionSequence &ConvSeq,
+                          il::Value *Val,
+                          bool forced = false);
+
+   il::Value *Convert(il::Value *Val, QualType ToTy);
+
    il::Value *DoPointerArith(op::OperatorKind op,
                              il::Value *lhs, il::Value *rhs);
    il::Value *CreateLogicalAnd(il::Value *lhs, Expression *rhsNode);
    il::Value *CreateLogicalOr(il::Value *lhs, Expression *rhsNode);
 
+   CallableDecl *MaybeSpecialize(CallableDecl *C);
+   NamedDecl *MaybeSpecialize(NamedDecl *G);
+
    il::Value *CreateCall(CallableDecl *C,
                          llvm::ArrayRef<il::Value*> args,
                          Expression *Caller = nullptr,
-                         bool DirectCall = false);
+                         bool DirectCall = false,
+                         il::Value *GenericArgs = nullptr);
+
+   il::Value *GetCallArgument(Expression *ArgExpr,
+                              CallableDecl *Fn,
+                              unsigned ArgNo);
 
    il::Value *CreateCopy(il::Value *Val);
    il::Value *Forward(il::Value *Val);
@@ -461,10 +492,7 @@ public:
 
    il::Function *getBuiltin(llvm::StringRef name);
 
-   il::ConstantStruct *CreateBuiltinTypeInfo(QualType ty);
-   il::ConstantStruct *CreateRecordTypeInfo(RecordDecl *R);
    il::Constant *CreateValueWitnessTable(RecordDecl *R);
-
    il::Constant *CreateProtocolConformances(RecordDecl *R);
    il::ConstantStruct *CreateProtocolConformance(RecordDecl *R,
                                                  ProtocolDecl *P);
@@ -480,6 +508,24 @@ public:
 
    unsigned getProtocolMethodOffset(MethodDecl *ProtoMethod);
    void setProtocolMethodOffset(MethodDecl *ProtoMethod, unsigned Offset);
+
+   il::Constant *GetGenericArguments(sema::FinalTemplateArgumentList *Args);
+   il::Value *GetPotentiallyDynamicGenericArguments(
+      ArrayRef<Expression *> ArgExprs,
+      sema::FinalTemplateArgumentList *Args);
+
+   il::Value *GetGenericEnvironment(QualType ParentType,
+                                    sema::FinalTemplateArgumentList *Args);
+
+   il::Value *GetGenericEnvironment(QualType ParentType, il::Constant *Args);
+   il::Value *GetGenericEnvironment(QualType ParentType,
+                                    il::Value *Args);
+
+   il::Value *GetGenericEnvironment(il::Value *EnclosingEnv,
+                                    sema::FinalTemplateArgumentList *Args);
+
+   il::Value *GetGenericEnvironment(il::Value *EnclosingEnv,
+                                    il::Value *Args);
 
    il::Instruction *CreateStore(il::Value *src, il::Value *dst,
                                 bool IsInitialization = false);
@@ -502,6 +548,13 @@ private:
 
    llvm::DenseMap<ast::MethodDecl*, unsigned> ProtocolMethodOffsets;
 
+   using EnvPair = std::pair<QualType, sema::FinalTemplateArgumentList*>;
+   llvm::DenseMap<EnvPair, il::Constant*> GenericEnvironmentMap;
+
+   llvm::DenseMap<sema::FinalTemplateArgumentList*, il::Constant*>
+      GenericArgumentMap;
+
+public:
    QualType VoidTy;
    QualType RawPtrTy;
    QualType MutableRawPtrTy;
@@ -526,6 +579,7 @@ private:
 
    const IdentifierInfo *SelfII;
 
+private:
    llvm::StringMap<llvm::StringRef> BuiltinFns;
 
    struct BreakContinueScope {
@@ -569,9 +623,10 @@ private:
    CleanupStack Cleanups;
    bool emitDI;
 
+   llvm::SmallPtrSet<CallableDecl*, 4> LateSpecializations;
    llvm::SmallPtrSet<il::GlobalVariable*, 16> NonTrivialGlobals;
-   llvm::SmallPtrSet<ast::GlobalVarDecl*, 16> PotentiallyLazyGlobals;
    llvm::SmallPtrSet<MethodDecl*, 4> InstantiatedImportedMethods;
+   llvm::SmallPtrSet<VarDecl*, 16> PotentiallyLazyGlobals;
 
    struct CoroutineInfo {
       /// The Promise value (not the LLVM notion of promise!)
@@ -597,6 +652,26 @@ private:
    /// Map from unit test declarations to their respective function.
    SmallVector<UnittestDecl*, 0> Unittests;
 
+   struct SpecializationScope {
+      SpecializationScope(
+         sema::MultiLevelFinalTemplateArgList &&GenericArguments = {},
+         NamedDecl *Inst = nullptr);
+
+      /// The current generic argument substitutions.
+      sema::MultiLevelFinalTemplateArgList GenericArguments;
+
+      /// The instantiated declaration.
+      NamedDecl *Inst;
+
+      /// Map of decl specializations.
+      llvm::DenseMap<NamedDecl*, NamedDecl*> Specializations;
+   };
+
+   SpecializationScope CurrentSpecializationScope;
+
+   /// Generic environment of the current record or function.
+   il::Value *GenericEnv = nullptr;
+
 public:
    il::ILBuilder Builder;
 
@@ -608,6 +683,10 @@ public:
    }
 
    void CreateEndCleanupBlocks(CoroutineInfo &Info);
+
+   bool isSpecializing() const { return CurrentSpecializationScope.Inst; }
+   const sema::TemplateArgument *getSubstitution(TemplateParamDecl *P);
+   QualType getSubstitution(QualType Ty);
 
 private:
    struct EHScope {

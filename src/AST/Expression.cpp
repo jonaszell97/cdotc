@@ -1504,7 +1504,7 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    bool IsDotDeinit)
    : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
-     ident(Name), NumLabels((unsigned)Labels.size()),
+     FuncName(Name), NumLabels((unsigned)Labels.size()),
      args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(IsDotInit),
      IsDotDeinit(IsDotDeinit), IncludesSelf(false), DirectCall(false),
@@ -1537,7 +1537,7 @@ CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
                    bool IsDotDeinit)
    : Expression(CallExprID),
      IdentLoc(IdentLoc), ParenRange(ParenRange),
-     ident(Name),  NumLabels((unsigned)Labels.size()),
+     FuncName(Name),  NumLabels((unsigned)Labels.size()),
      ParentExpr(ParentExpr), args(std::move(args)),
      PointerAccess(false), IsUFCS(false), IsDotInit(IsDotInit),
      IsDotDeinit(IsDotDeinit), IncludesSelf(false), DirectCall(false),
@@ -1729,6 +1729,19 @@ TemplateArgListExpr::TemplateArgListExpr(EmptyShell, unsigned N)
 
 }
 
+TemplateArgListExpr::TemplateArgListExpr(SourceRange AngleRange,
+                                         Expression *ParentExpr,
+                                         sema::FinalTemplateArgumentList *Exprs)
+   : Expression(TemplateArgListExprID),
+     AngleRange(AngleRange), ParentExpr(ParentExpr),
+     TemplateArgs(Exprs),
+     NumTemplateArgs(0)
+{
+   setSemanticallyChecked(true);
+   copyStatusFlags(ParentExpr);
+   setExprType(ParentExpr->getExprType());
+}
+
 TemplateArgListExpr* TemplateArgListExpr::Create(ASTContext &C,
                                                  SourceRange AngleRange,
                                                  Expression *ParentExpr,
@@ -1736,6 +1749,13 @@ TemplateArgListExpr* TemplateArgListExpr::Create(ASTContext &C,
    void *Mem = C.Allocate(totalSizeToAlloc<Expression*>(Exprs.size()),
                           alignof(TemplateArgListExpr));
    return new(Mem) TemplateArgListExpr(AngleRange, ParentExpr, Exprs);
+}
+
+TemplateArgListExpr* TemplateArgListExpr::Create(ASTContext &C,
+                                                 SourceRange AngleRange,
+                                                 Expression *ParentExpr,
+                                                 sema::FinalTemplateArgumentList *Exprs) {
+   return new(C) TemplateArgListExpr(AngleRange, ParentExpr, Exprs);
 }
 
 TemplateArgListExpr* TemplateArgListExpr::CreateEmpty(ASTContext &C, unsigned N)

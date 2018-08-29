@@ -133,12 +133,19 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
 {
    assert(!ty->isAutoType());
 
-   if (ty->isReferenceType()) {
-      out << (unsigned char)ValPrefix::Lvalue;
+   if (auto *Gen = dyn_cast<GenericType>(ty)) {
+      out << (char)ValPrefix::Type
+          << "<" << Gen->getParam()->getDeclName() << " : ";
+      WriteQualType(Gen->getCovariance());
+      out << ">";
+   }
+   else if (ty->isReferenceType()) {
       if (isa<MutableReferenceType>(ty))
-         out << "mut ";
+         out << "Mut";
 
+      out << "Ref<";
       WriteQualType(ty->asReferenceType()->getReferencedType());
+      out << ">";
    }
    else if (ty->isVoidType()) {
       out << "void";
@@ -188,18 +195,17 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
       if (ty->isLambdaType())
          out << "[thick] ";
 
-      WriteQualType(ty->asFunctionType()->getReturnType());
-
       auto Args = ty->asFunctionType()->getParamTypes();
-      WriteList(Args, &ModuleWriterImpl::WriteQualType);
+      WriteList(Args, &ModuleWriterImpl::WriteQualType, "$(", ", ", " -> ");
+      WriteQualType(ty->asFunctionType()->getReturnType());
    }
    else if (ty->isTupleType()) {
       auto Cont = ty->asTupleType()->getContainedTypes();
-      WriteList(Cont, &ModuleWriterImpl::WriteQualType);
+      WriteList(Cont, &ModuleWriterImpl::WriteQualType, "$(");
    }
    else if (ty->isArrayType()) {
       auto ArrTy = ty->asArrayType();
-      out << "[" << ArrTy->getNumElements() << " x ";
+      out << "$[" << ArrTy->getNumElements() << " x ";
       WriteQualType(ArrTy->getElementType());
       out << "]";
    }
@@ -352,14 +358,16 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       return;
    }
 
-   WriteValueType(C->getType());
-   out << ' ';
-
    switch (C->getTypeID()) {
    case Value::GlobalVariableID:
       WriteName(C->getName(), ValPrefix::Constant);
+      out << ": ";
+      WriteValueType(C->getType());
       break;
    case Value::ConstantIntID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       auto Int = cast<ConstantInt>(C);
       if (Int->getType()->getBitwidth() == 1) {
          out << (Int->getBoolValue() ? "true" : "false");
@@ -379,6 +387,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantFloatID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       if (C->getType()->isFloatTy()) {
          WriteHex(cast<ConstantFloat>(C)->getFloatVal());
       }
@@ -389,11 +400,17 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantStringID:
+      WriteValueType(C->getType());
+      out << " ";
+
       out << '"';
       WriteEscapedString(cast<ConstantString>(C)->getValue());
       out << '"';
       break;
    case Value::ConstantArrayID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       auto *Arr = cast<ConstantArray>(C);
       if (Arr->isAllZerosValue()) {
          out << "zeroinitializer";
@@ -406,6 +423,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantTupleID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       auto *Tup = cast<ConstantTuple>(C);
       if (Tup->isAllZerosValue()) {
          out << "zeroinitializer";
@@ -424,9 +444,12 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
          break;
       }
 
+      out << "struct ";
+      WriteValueType(C->getType());
+
       auto Elements = Struct->getElements();
       WriteList(Elements, &ModuleWriterImpl::WriteConstant,
-                "struct { ", ", ", " }");
+                " { ", ", ", " }");
 
       break;
    }
@@ -434,7 +457,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       auto Class = cast<ConstantClass>(C);
       auto Elements = Class->getElements();
 
-      out << "class { ";
+      out << "class ";
+      WriteValueType(C->getType());
+
       if (auto Base = Class->getBase()) {
          WriteConstant(Base);
          if (!Elements.empty())
@@ -442,7 +467,8 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       }
 
       WriteList(Elements, &ModuleWriterImpl::WriteConstant,
-                "", ", ", " }");
+                " {", ", ", " }");
+
       break;
    }
    case Value::ConstantUnionID: {
@@ -458,6 +484,8 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       auto Enum = cast<ConstantEnum>(C);
 
       out << "enum ";
+      WriteValueType(C->getType());
+      out << "::";
       WriteName(Enum->getCase()->getDeclName(), ValPrefix::Value);
       WriteList(Enum->getCaseValues(), &ModuleWriterImpl::WriteConstant,
                 " { ", ", ", " }");
@@ -465,13 +493,18 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantPointerID: {
-      out << "null";
+      WriteValueType(C->getType());
+      out << " null";
       break;
    }
    case Value::ConstantTokenNoneID:
-      out << "none";
+      WriteValueType(C->getType());
+      out << " none";
       break;
    case Value::ConstantBitCastInstID:
+      WriteValueType(C->getType());
+      out << " ";
+
       out << "bitcast (";
       WriteConstant(cast<ConstantBitCastInst>(C)->getTarget());
 
@@ -480,12 +513,18 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
 
       break;
    case Value::ConstantAddrOfInstID:
+      WriteValueType(C->getType());
+      out << " ";
+
       out << "addr_of (";
       WriteConstant(cast<ConstantAddrOfInst>(C)->getTarget());
       out << ")";
 
       break;
    case Value::ConstantIntCastInstID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       auto Cast = cast<ConstantIntCastInst>(C);
       out << cdot::CastNames[(unsigned char) Cast->getKind()];
 
@@ -498,6 +537,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantOperatorInstID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       auto Op = cast<ConstantOperatorInst>(C);
       switch (Op->getOpCode()) {
 #     define CDOT_BINARY_OP(Name, Op)                                   \
@@ -514,6 +556,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantGEPInstID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       auto GEP = cast<ConstantGEPInst>(C);
       out << "gep (";
       WriteConstant(GEP->getIdx());
@@ -524,6 +569,9 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::ConstantLoadInstID: {
+      WriteValueType(C->getType());
+      out << " ";
+
       out << "load (";
       WriteConstant(cast<ConstantLoadInst>(C)->getTarget());
       out << ")";
@@ -531,7 +579,8 @@ void ModuleWriterImpl::WriteConstant(const il::Constant *C)
       break;
    }
    case Value::UndefValueID:
-      out << "undef";
+      WriteValueType(C->getType());
+      out << " undef";
       break;
    default:
       llvm_unreachable("bad constant kind");
@@ -544,9 +593,9 @@ void ModuleWriterImpl::WriteValue(const il::Value *V)
       WriteConstant(cast<il::Constant>(V));
    }
    else {
-      WriteValueType(V->getType());
-      out << ' ';
       WriteName(V->getName(), ValPrefix::Value);
+      out << ": ";
+      WriteValueType(V->getType());
    }
 }
 
@@ -1164,6 +1213,15 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
       return;
    }
 
+   if (auto Init = dyn_cast<GenericInitInst>(I)) {
+      out << "init_generic ";
+      WriteValue(Init->getValue());
+      out << ", ";
+      WriteValue(Init->getGenericEnvironment());
+
+      return;
+   }
+
    if (auto Cast = dyn_cast<CastInst>(I)) {
       if (auto IntCast = dyn_cast<IntegerCastInst>(Cast)) {
          out << cdot::CastNames[(unsigned char)IntCast->getKind()];
@@ -1383,12 +1441,6 @@ void ModuleWriterImpl::Write(Module const* M)
       }
 
       WriteGlobal(&G);
-
-      if (G.getInitializer()) {
-         if (i != Globals.size() - 1)
-            NewLine();
-      }
-
       ++i;
    }
 

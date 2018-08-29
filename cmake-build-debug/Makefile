@@ -2843,6 +2843,39 @@ src/ILGen/ILGenPass.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ILGen/ILGenPass.cpp.s
 .PHONY : src/ILGen/ILGenPass.cpp.s
 
+src/ILGen/ILGenSpecialize.o: src/ILGen/ILGenSpecialize.cpp.o
+
+.PHONY : src/ILGen/ILGenSpecialize.o
+
+# target to build an object file
+src/ILGen/ILGenSpecialize.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/ILGen/ILGenSpecialize.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/ILGen/ILGenSpecialize.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ILGen/ILGenSpecialize.cpp.o
+.PHONY : src/ILGen/ILGenSpecialize.cpp.o
+
+src/ILGen/ILGenSpecialize.i: src/ILGen/ILGenSpecialize.cpp.i
+
+.PHONY : src/ILGen/ILGenSpecialize.i
+
+# target to preprocess a source file
+src/ILGen/ILGenSpecialize.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/ILGen/ILGenSpecialize.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/ILGen/ILGenSpecialize.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ILGen/ILGenSpecialize.cpp.i
+.PHONY : src/ILGen/ILGenSpecialize.cpp.i
+
+src/ILGen/ILGenSpecialize.s: src/ILGen/ILGenSpecialize.cpp.s
+
+.PHONY : src/ILGen/ILGenSpecialize.s
+
+# target to generate assembly for a file
+src/ILGen/ILGenSpecialize.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/ILGen/ILGenSpecialize.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/ILGen/ILGenSpecialize.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/ILGen/ILGenSpecialize.cpp.s
+.PHONY : src/ILGen/ILGenSpecialize.cpp.s
+
 src/IRGen/DIGen.o: src/IRGen/DIGen.cpp.o
 
 .PHONY : src/IRGen/DIGen.o
@@ -3386,6 +3419,369 @@ src/Parse/Parser.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Parse/Parser.cpp.s
 .PHONY : src/Parse/Parser.cpp.s
 
+src/Query/BuiltinQueries.o: src/Query/BuiltinQueries.cpp.o
+
+.PHONY : src/Query/BuiltinQueries.o
+
+# target to build an object file
+src/Query/BuiltinQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/BuiltinQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/BuiltinQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/BuiltinQueries.cpp.o
+.PHONY : src/Query/BuiltinQueries.cpp.o
+
+src/Query/BuiltinQueries.i: src/Query/BuiltinQueries.cpp.i
+
+.PHONY : src/Query/BuiltinQueries.i
+
+# target to preprocess a source file
+src/Query/BuiltinQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/BuiltinQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/BuiltinQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/BuiltinQueries.cpp.i
+.PHONY : src/Query/BuiltinQueries.cpp.i
+
+src/Query/BuiltinQueries.s: src/Query/BuiltinQueries.cpp.s
+
+.PHONY : src/Query/BuiltinQueries.s
+
+# target to generate assembly for a file
+src/Query/BuiltinQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/BuiltinQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/BuiltinQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/BuiltinQueries.cpp.s
+.PHONY : src/Query/BuiltinQueries.cpp.s
+
+src/Query/CTFEQueries.o: src/Query/CTFEQueries.cpp.o
+
+.PHONY : src/Query/CTFEQueries.o
+
+# target to build an object file
+src/Query/CTFEQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/CTFEQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/CTFEQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/CTFEQueries.cpp.o
+.PHONY : src/Query/CTFEQueries.cpp.o
+
+src/Query/CTFEQueries.i: src/Query/CTFEQueries.cpp.i
+
+.PHONY : src/Query/CTFEQueries.i
+
+# target to preprocess a source file
+src/Query/CTFEQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/CTFEQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/CTFEQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/CTFEQueries.cpp.i
+.PHONY : src/Query/CTFEQueries.cpp.i
+
+src/Query/CTFEQueries.s: src/Query/CTFEQueries.cpp.s
+
+.PHONY : src/Query/CTFEQueries.s
+
+# target to generate assembly for a file
+src/Query/CTFEQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/CTFEQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/CTFEQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/CTFEQueries.cpp.s
+.PHONY : src/Query/CTFEQueries.cpp.s
+
+src/Query/DriverQueries.o: src/Query/DriverQueries.cpp.o
+
+.PHONY : src/Query/DriverQueries.o
+
+# target to build an object file
+src/Query/DriverQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/DriverQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/DriverQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/DriverQueries.cpp.o
+.PHONY : src/Query/DriverQueries.cpp.o
+
+src/Query/DriverQueries.i: src/Query/DriverQueries.cpp.i
+
+.PHONY : src/Query/DriverQueries.i
+
+# target to preprocess a source file
+src/Query/DriverQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/DriverQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/DriverQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/DriverQueries.cpp.i
+.PHONY : src/Query/DriverQueries.cpp.i
+
+src/Query/DriverQueries.s: src/Query/DriverQueries.cpp.s
+
+.PHONY : src/Query/DriverQueries.s
+
+# target to generate assembly for a file
+src/Query/DriverQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/DriverQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/DriverQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/DriverQueries.cpp.s
+.PHONY : src/Query/DriverQueries.cpp.s
+
+src/Query/ILGenQueries.o: src/Query/ILGenQueries.cpp.o
+
+.PHONY : src/Query/ILGenQueries.o
+
+# target to build an object file
+src/Query/ILGenQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/ILGenQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/ILGenQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/ILGenQueries.cpp.o
+.PHONY : src/Query/ILGenQueries.cpp.o
+
+src/Query/ILGenQueries.i: src/Query/ILGenQueries.cpp.i
+
+.PHONY : src/Query/ILGenQueries.i
+
+# target to preprocess a source file
+src/Query/ILGenQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/ILGenQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/ILGenQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/ILGenQueries.cpp.i
+.PHONY : src/Query/ILGenQueries.cpp.i
+
+src/Query/ILGenQueries.s: src/Query/ILGenQueries.cpp.s
+
+.PHONY : src/Query/ILGenQueries.s
+
+# target to generate assembly for a file
+src/Query/ILGenQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/ILGenQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/ILGenQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/ILGenQueries.cpp.s
+.PHONY : src/Query/ILGenQueries.cpp.s
+
+src/Query/InstantiationQueries.o: src/Query/InstantiationQueries.cpp.o
+
+.PHONY : src/Query/InstantiationQueries.o
+
+# target to build an object file
+src/Query/InstantiationQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/InstantiationQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/InstantiationQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/InstantiationQueries.cpp.o
+.PHONY : src/Query/InstantiationQueries.cpp.o
+
+src/Query/InstantiationQueries.i: src/Query/InstantiationQueries.cpp.i
+
+.PHONY : src/Query/InstantiationQueries.i
+
+# target to preprocess a source file
+src/Query/InstantiationQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/InstantiationQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/InstantiationQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/InstantiationQueries.cpp.i
+.PHONY : src/Query/InstantiationQueries.cpp.i
+
+src/Query/InstantiationQueries.s: src/Query/InstantiationQueries.cpp.s
+
+.PHONY : src/Query/InstantiationQueries.s
+
+# target to generate assembly for a file
+src/Query/InstantiationQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/InstantiationQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/InstantiationQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/InstantiationQueries.cpp.s
+.PHONY : src/Query/InstantiationQueries.cpp.s
+
+src/Query/LookupQueries.o: src/Query/LookupQueries.cpp.o
+
+.PHONY : src/Query/LookupQueries.o
+
+# target to build an object file
+src/Query/LookupQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/LookupQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/LookupQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/LookupQueries.cpp.o
+.PHONY : src/Query/LookupQueries.cpp.o
+
+src/Query/LookupQueries.i: src/Query/LookupQueries.cpp.i
+
+.PHONY : src/Query/LookupQueries.i
+
+# target to preprocess a source file
+src/Query/LookupQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/LookupQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/LookupQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/LookupQueries.cpp.i
+.PHONY : src/Query/LookupQueries.cpp.i
+
+src/Query/LookupQueries.s: src/Query/LookupQueries.cpp.s
+
+.PHONY : src/Query/LookupQueries.s
+
+# target to generate assembly for a file
+src/Query/LookupQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/LookupQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/LookupQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/LookupQueries.cpp.s
+.PHONY : src/Query/LookupQueries.cpp.s
+
+src/Query/Query.o: src/Query/Query.cpp.o
+
+.PHONY : src/Query/Query.o
+
+# target to build an object file
+src/Query/Query.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/Query.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/Query.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/Query.cpp.o
+.PHONY : src/Query/Query.cpp.o
+
+src/Query/Query.i: src/Query/Query.cpp.i
+
+.PHONY : src/Query/Query.i
+
+# target to preprocess a source file
+src/Query/Query.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/Query.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/Query.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/Query.cpp.i
+.PHONY : src/Query/Query.cpp.i
+
+src/Query/Query.s: src/Query/Query.cpp.s
+
+.PHONY : src/Query/Query.s
+
+# target to generate assembly for a file
+src/Query/Query.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/Query.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/Query.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/Query.cpp.s
+.PHONY : src/Query/Query.cpp.s
+
+src/Query/QueryContext.o: src/Query/QueryContext.cpp.o
+
+.PHONY : src/Query/QueryContext.o
+
+# target to build an object file
+src/Query/QueryContext.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/QueryContext.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/QueryContext.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/QueryContext.cpp.o
+.PHONY : src/Query/QueryContext.cpp.o
+
+src/Query/QueryContext.i: src/Query/QueryContext.cpp.i
+
+.PHONY : src/Query/QueryContext.i
+
+# target to preprocess a source file
+src/Query/QueryContext.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/QueryContext.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/QueryContext.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/QueryContext.cpp.i
+.PHONY : src/Query/QueryContext.cpp.i
+
+src/Query/QueryContext.s: src/Query/QueryContext.cpp.s
+
+.PHONY : src/Query/QueryContext.s
+
+# target to generate assembly for a file
+src/Query/QueryContext.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/QueryContext.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/QueryContext.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/QueryContext.cpp.s
+.PHONY : src/Query/QueryContext.cpp.s
+
+src/Query/SemaQueries.o: src/Query/SemaQueries.cpp.o
+
+.PHONY : src/Query/SemaQueries.o
+
+# target to build an object file
+src/Query/SemaQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/SemaQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/SemaQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/SemaQueries.cpp.o
+.PHONY : src/Query/SemaQueries.cpp.o
+
+src/Query/SemaQueries.i: src/Query/SemaQueries.cpp.i
+
+.PHONY : src/Query/SemaQueries.i
+
+# target to preprocess a source file
+src/Query/SemaQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/SemaQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/SemaQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/SemaQueries.cpp.i
+.PHONY : src/Query/SemaQueries.cpp.i
+
+src/Query/SemaQueries.s: src/Query/SemaQueries.cpp.s
+
+.PHONY : src/Query/SemaQueries.s
+
+# target to generate assembly for a file
+src/Query/SemaQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/SemaQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/SemaQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/SemaQueries.cpp.s
+.PHONY : src/Query/SemaQueries.cpp.s
+
+src/Query/TypeQueries.o: src/Query/TypeQueries.cpp.o
+
+.PHONY : src/Query/TypeQueries.o
+
+# target to build an object file
+src/Query/TypeQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/TypeQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/TypeQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/TypeQueries.cpp.o
+.PHONY : src/Query/TypeQueries.cpp.o
+
+src/Query/TypeQueries.i: src/Query/TypeQueries.cpp.i
+
+.PHONY : src/Query/TypeQueries.i
+
+# target to preprocess a source file
+src/Query/TypeQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/TypeQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/TypeQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/TypeQueries.cpp.i
+.PHONY : src/Query/TypeQueries.cpp.i
+
+src/Query/TypeQueries.s: src/Query/TypeQueries.cpp.s
+
+.PHONY : src/Query/TypeQueries.s
+
+# target to generate assembly for a file
+src/Query/TypeQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/TypeQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/TypeQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/TypeQueries.cpp.s
+.PHONY : src/Query/TypeQueries.cpp.s
+
+src/Query/UtilQueries.o: src/Query/UtilQueries.cpp.o
+
+.PHONY : src/Query/UtilQueries.o
+
+# target to build an object file
+src/Query/UtilQueries.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/UtilQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/UtilQueries.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/UtilQueries.cpp.o
+.PHONY : src/Query/UtilQueries.cpp.o
+
+src/Query/UtilQueries.i: src/Query/UtilQueries.cpp.i
+
+.PHONY : src/Query/UtilQueries.i
+
+# target to preprocess a source file
+src/Query/UtilQueries.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/UtilQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/UtilQueries.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/UtilQueries.cpp.i
+.PHONY : src/Query/UtilQueries.cpp.i
+
+src/Query/UtilQueries.s: src/Query/UtilQueries.cpp.s
+
+.PHONY : src/Query/UtilQueries.s
+
+# target to generate assembly for a file
+src/Query/UtilQueries.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Query/UtilQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Query/UtilQueries.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Query/UtilQueries.cpp.s
+.PHONY : src/Query/UtilQueries.cpp.s
+
 src/Sema/BuiltinCandidateBuilder.o: src/Sema/BuiltinCandidateBuilder.cpp.o
 
 .PHONY : src/Sema/BuiltinCandidateBuilder.o
@@ -3583,6 +3979,39 @@ src/Sema/Lookup.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Sema/Lookup.cpp.s
 	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/Lookup.cpp.s
 .PHONY : src/Sema/Lookup.cpp.s
+
+src/Sema/NameBinding.o: src/Sema/NameBinding.cpp.o
+
+.PHONY : src/Sema/NameBinding.o
+
+# target to build an object file
+src/Sema/NameBinding.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Sema/NameBinding.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Sema/NameBinding.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/NameBinding.cpp.o
+.PHONY : src/Sema/NameBinding.cpp.o
+
+src/Sema/NameBinding.i: src/Sema/NameBinding.cpp.i
+
+.PHONY : src/Sema/NameBinding.i
+
+# target to preprocess a source file
+src/Sema/NameBinding.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Sema/NameBinding.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Sema/NameBinding.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/NameBinding.cpp.i
+.PHONY : src/Sema/NameBinding.cpp.i
+
+src/Sema/NameBinding.s: src/Sema/NameBinding.cpp.s
+
+.PHONY : src/Sema/NameBinding.s
+
+# target to generate assembly for a file
+src/Sema/NameBinding.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Sema/NameBinding.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Sema/NameBinding.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Sema/NameBinding.cpp.s
+.PHONY : src/Sema/NameBinding.cpp.s
 
 src/Sema/OverloadResolver.o: src/Sema/OverloadResolver.cpp.o
 
@@ -4892,6 +5321,39 @@ src/TableGen/main.cpp.s:
 	$(MAKE) -f CMakeFiles/cdot-tblgen.dir/build.make CMakeFiles/cdot-tblgen.dir/src/TableGen/main.cpp.s
 .PHONY : src/TableGen/main.cpp.s
 
+src/Tools/IRDebug/IRDebugAnnotatePass.o: src/Tools/IRDebug/IRDebugAnnotatePass.cpp.o
+
+.PHONY : src/Tools/IRDebug/IRDebugAnnotatePass.o
+
+# target to build an object file
+src/Tools/IRDebug/IRDebugAnnotatePass.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.o
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.o
+.PHONY : src/Tools/IRDebug/IRDebugAnnotatePass.cpp.o
+
+src/Tools/IRDebug/IRDebugAnnotatePass.i: src/Tools/IRDebug/IRDebugAnnotatePass.cpp.i
+
+.PHONY : src/Tools/IRDebug/IRDebugAnnotatePass.i
+
+# target to preprocess a source file
+src/Tools/IRDebug/IRDebugAnnotatePass.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.i
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.i
+.PHONY : src/Tools/IRDebug/IRDebugAnnotatePass.cpp.i
+
+src/Tools/IRDebug/IRDebugAnnotatePass.s: src/Tools/IRDebug/IRDebugAnnotatePass.cpp.s
+
+.PHONY : src/Tools/IRDebug/IRDebugAnnotatePass.s
+
+# target to generate assembly for a file
+src/Tools/IRDebug/IRDebugAnnotatePass.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc_asan.dir/build.make CMakeFiles/cdotc_asan.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc_ubsan.dir/build.make CMakeFiles/cdotc_ubsan.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.s
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Tools/IRDebug/IRDebugAnnotatePass.cpp.s
+.PHONY : src/Tools/IRDebug/IRDebugAnnotatePass.cpp.s
+
 src/Tools/TableGenBackends/AttributesBackend.o: src/Tools/TableGenBackends/AttributesBackend.cpp.o
 
 .PHONY : src/Tools/TableGenBackends/AttributesBackend.o
@@ -4999,6 +5461,33 @@ src/Tools/TableGenBackends/DiagnosticsBackend.s: src/Tools/TableGenBackends/Diag
 src/Tools/TableGenBackends/DiagnosticsBackend.cpp.s:
 	$(MAKE) -f CMakeFiles/cdotc-tblgens.dir/build.make CMakeFiles/cdotc-tblgens.dir/src/Tools/TableGenBackends/DiagnosticsBackend.cpp.s
 .PHONY : src/Tools/TableGenBackends/DiagnosticsBackend.cpp.s
+
+src/Tools/TableGenBackends/QueryBackend.o: src/Tools/TableGenBackends/QueryBackend.cpp.o
+
+.PHONY : src/Tools/TableGenBackends/QueryBackend.o
+
+# target to build an object file
+src/Tools/TableGenBackends/QueryBackend.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc-tblgens.dir/build.make CMakeFiles/cdotc-tblgens.dir/src/Tools/TableGenBackends/QueryBackend.cpp.o
+.PHONY : src/Tools/TableGenBackends/QueryBackend.cpp.o
+
+src/Tools/TableGenBackends/QueryBackend.i: src/Tools/TableGenBackends/QueryBackend.cpp.i
+
+.PHONY : src/Tools/TableGenBackends/QueryBackend.i
+
+# target to preprocess a source file
+src/Tools/TableGenBackends/QueryBackend.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc-tblgens.dir/build.make CMakeFiles/cdotc-tblgens.dir/src/Tools/TableGenBackends/QueryBackend.cpp.i
+.PHONY : src/Tools/TableGenBackends/QueryBackend.cpp.i
+
+src/Tools/TableGenBackends/QueryBackend.s: src/Tools/TableGenBackends/QueryBackend.cpp.s
+
+.PHONY : src/Tools/TableGenBackends/QueryBackend.s
+
+# target to generate assembly for a file
+src/Tools/TableGenBackends/QueryBackend.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc-tblgens.dir/build.make CMakeFiles/cdotc-tblgens.dir/src/Tools/TableGenBackends/QueryBackend.cpp.s
+.PHONY : src/Tools/TableGenBackends/QueryBackend.cpp.s
 
 # Help Target
 help:
@@ -5254,6 +5743,9 @@ help:
 	@echo "... src/ILGen/ILGenPass.o"
 	@echo "... src/ILGen/ILGenPass.i"
 	@echo "... src/ILGen/ILGenPass.s"
+	@echo "... src/ILGen/ILGenSpecialize.o"
+	@echo "... src/ILGen/ILGenSpecialize.i"
+	@echo "... src/ILGen/ILGenSpecialize.s"
 	@echo "... src/IRGen/DIGen.o"
 	@echo "... src/IRGen/DIGen.i"
 	@echo "... src/IRGen/DIGen.s"
@@ -5302,6 +5794,39 @@ help:
 	@echo "... src/Parse/Parser.o"
 	@echo "... src/Parse/Parser.i"
 	@echo "... src/Parse/Parser.s"
+	@echo "... src/Query/BuiltinQueries.o"
+	@echo "... src/Query/BuiltinQueries.i"
+	@echo "... src/Query/BuiltinQueries.s"
+	@echo "... src/Query/CTFEQueries.o"
+	@echo "... src/Query/CTFEQueries.i"
+	@echo "... src/Query/CTFEQueries.s"
+	@echo "... src/Query/DriverQueries.o"
+	@echo "... src/Query/DriverQueries.i"
+	@echo "... src/Query/DriverQueries.s"
+	@echo "... src/Query/ILGenQueries.o"
+	@echo "... src/Query/ILGenQueries.i"
+	@echo "... src/Query/ILGenQueries.s"
+	@echo "... src/Query/InstantiationQueries.o"
+	@echo "... src/Query/InstantiationQueries.i"
+	@echo "... src/Query/InstantiationQueries.s"
+	@echo "... src/Query/LookupQueries.o"
+	@echo "... src/Query/LookupQueries.i"
+	@echo "... src/Query/LookupQueries.s"
+	@echo "... src/Query/Query.o"
+	@echo "... src/Query/Query.i"
+	@echo "... src/Query/Query.s"
+	@echo "... src/Query/QueryContext.o"
+	@echo "... src/Query/QueryContext.i"
+	@echo "... src/Query/QueryContext.s"
+	@echo "... src/Query/SemaQueries.o"
+	@echo "... src/Query/SemaQueries.i"
+	@echo "... src/Query/SemaQueries.s"
+	@echo "... src/Query/TypeQueries.o"
+	@echo "... src/Query/TypeQueries.i"
+	@echo "... src/Query/TypeQueries.s"
+	@echo "... src/Query/UtilQueries.o"
+	@echo "... src/Query/UtilQueries.i"
+	@echo "... src/Query/UtilQueries.s"
 	@echo "... src/Sema/BuiltinCandidateBuilder.o"
 	@echo "... src/Sema/BuiltinCandidateBuilder.i"
 	@echo "... src/Sema/BuiltinCandidateBuilder.s"
@@ -5320,6 +5845,9 @@ help:
 	@echo "... src/Sema/Lookup.o"
 	@echo "... src/Sema/Lookup.i"
 	@echo "... src/Sema/Lookup.s"
+	@echo "... src/Sema/NameBinding.o"
+	@echo "... src/Sema/NameBinding.i"
+	@echo "... src/Sema/NameBinding.s"
 	@echo "... src/Sema/OverloadResolver.o"
 	@echo "... src/Sema/OverloadResolver.i"
 	@echo "... src/Sema/OverloadResolver.s"
@@ -5437,6 +5965,9 @@ help:
 	@echo "... src/TableGen/main.o"
 	@echo "... src/TableGen/main.i"
 	@echo "... src/TableGen/main.s"
+	@echo "... src/Tools/IRDebug/IRDebugAnnotatePass.o"
+	@echo "... src/Tools/IRDebug/IRDebugAnnotatePass.i"
+	@echo "... src/Tools/IRDebug/IRDebugAnnotatePass.s"
 	@echo "... src/Tools/TableGenBackends/AttributesBackend.o"
 	@echo "... src/Tools/TableGenBackends/AttributesBackend.i"
 	@echo "... src/Tools/TableGenBackends/AttributesBackend.s"
@@ -5449,6 +5980,9 @@ help:
 	@echo "... src/Tools/TableGenBackends/DiagnosticsBackend.o"
 	@echo "... src/Tools/TableGenBackends/DiagnosticsBackend.i"
 	@echo "... src/Tools/TableGenBackends/DiagnosticsBackend.s"
+	@echo "... src/Tools/TableGenBackends/QueryBackend.o"
+	@echo "... src/Tools/TableGenBackends/QueryBackend.i"
+	@echo "... src/Tools/TableGenBackends/QueryBackend.s"
 .PHONY : help
 
 

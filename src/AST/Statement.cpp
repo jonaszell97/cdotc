@@ -29,6 +29,14 @@ void Statement::printFlags(llvm::raw_ostream &OS) const
 
 void Statement::copyStatusFlags(Statement *Stmt)
 {
+   static unsigned StatusFlags =
+      TypeDependent
+      | ValueDependent
+      | HadError
+      | ContainsGenericParam
+      | ContainsAssociatedType
+      | ContainsUnexpandedPack;
+
    // if any sub statement is dependent or had an error, this stmt is also
    // dependent (or had an error)
    SubclassData |= (Stmt->SubclassData & StatusFlags);
@@ -36,6 +44,12 @@ void Statement::copyStatusFlags(Statement *Stmt)
 
 void Statement::copyStatusFlags(Decl *D)
 {
+   // FIXME
+   if (D->containsGenericParam())
+      SubclassData |= ContainsGenericParam;
+   if (D->containsAssociatedType())
+      SubclassData |= ContainsAssociatedType;
+
    static uint32_t mask = Decl::StatusFlags;
    SubclassData |= (D->getFlags() & mask);
 }

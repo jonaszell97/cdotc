@@ -5,13 +5,18 @@
 #ifndef CDOT_SOURCELOCATION_H
 #define CDOT_SOURCELOCATION_H
 
-#include <cstdint>
+#include "Support/Config.h"
+
 #include <cassert>
+#include <cstdint>
 
 namespace cdot {
 
 struct SourceLocation {
+   CDOT_LLDB_STEP_OVER
    SourceLocation() : offset(0)  {}
+
+   CDOT_LLDB_STEP_OVER
    explicit SourceLocation(uint32_t offset) : offset(offset)
    {
 
@@ -58,12 +63,15 @@ public:
 };
 
 struct SourceRange {
+   CDOT_LLDB_STEP_OVER
    SourceRange() = default;
 
+   CDOT_LLDB_STEP_OVER
    /*implicit*/ SourceRange(SourceLocation start)
       : start(start), end(SourceLocation())
    {}
 
+   CDOT_LLDB_STEP_OVER
    SourceRange(SourceLocation start, SourceLocation end)
       : start(start), end(end)
    {}

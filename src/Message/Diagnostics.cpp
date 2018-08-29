@@ -3,8 +3,8 @@
 //
 
 #include "Diagnostics.h"
-#include "DiagnosticsEngine.h"
 
+#include "DiagnosticsEngine.h"
 #include "Basic/IdentifierInfo.h"
 #include "Basic/FileManager.h"
 #include "Basic/FileUtils.h"
@@ -12,14 +12,14 @@
 #include "Lex/Lexer.h"
 #include "Support/Casting.h"
 #include "Support/Format.h"
-#include "Basic/Variant.h"
 
-#include <cstdlib>
-#include <cassert>
-#include <sstream>
-
-#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/ADT/APInt.h>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/MemoryBuffer.h>
+
+#include <cassert>
+#include <cstdlib>
+#include <sstream>
 
 #ifndef CDOT_SMALL_VARIANT
 #  include "AST/Expression.h"
@@ -336,7 +336,8 @@ void DiagnosticBuilder::finalize()
 
       return;
    }
-   DeclarationName MacroName;
+
+   const IdentifierInfo *MacroName = nullptr;
    SourceLocation ExpandedFromLoc;
 
    SourceLocation loc = Engine.SourceRanges[0].getStart();
@@ -344,7 +345,7 @@ void DiagnosticBuilder::finalize()
       loc = AliasLoc;
    }
    while (auto Import = Engine.FileMgr->getImportForLoc(loc)) {
-      loc = Import->getSourceLoc();
+      loc = Import;
    }
    while (auto Exp = Engine.FileMgr->getMacroExpansionLoc(loc)) {
       ExpandedFromLoc = Exp->ExpandedFrom;
@@ -418,7 +419,7 @@ void DiagnosticBuilder::finalize()
             End = SourceLocation(Start.getOffset() + Diff);
       }
       while (auto Import = Engine.FileMgr->getImportForLoc(Start)) {
-         Start = Import->getSourceLoc();
+         Start = Import;
 
          if (End)
             End = SourceLocation(Start.getOffset() + Diff);
@@ -483,7 +484,7 @@ void DiagnosticBuilder::finalize()
    if ((int)severity >= (int)SeverityLevel::Error && ExpandedFromLoc) {
       DiagnosticBuilder(Engine, diag::note_in_expansion)
          << ExpandedFromLoc
-         << MacroName;
+         << MacroName->getIdentifier();
    }
 }
 

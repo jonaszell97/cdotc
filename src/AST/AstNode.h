@@ -96,8 +96,8 @@ protected:
 #  endif
    ~AstNode();
 
-   NodeType typeID;
-   unsigned SubclassData : 8;
+   NodeType typeID : 8;
+   unsigned SubclassData : 24;
    QualType contextualType;
 
    void setFlag(unsigned flag, bool set)

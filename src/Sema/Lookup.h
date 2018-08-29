@@ -47,15 +47,19 @@ public:
    reference front() { return Vec.front(); }
    reference back() { return Vec.back(); }
 
-   struct all_decl_iterator {
+   reference operator[](unsigned Idx) { return Vec[Idx]; };
+   const_reference operator[](unsigned Idx) const { return Vec[Idx]; };
+
+   template<class ArrayTy, class ArrPtr, class ArrIt>
+   struct all_decl_iterator_t {
    private:
-      SingleLevelLookupResult *CurrArr;
-      SingleLevelLookupResult *ArrEnd;
-      SingleLevelLookupResult::iterator CurrDecl;
+      ArrPtr CurrArr;
+      ArrPtr ArrEnd;
+      ArrIt CurrDecl;
 
    public:
       // Begin iterator
-      all_decl_iterator(ArrayTy &Arr) : CurrDecl(nullptr)
+      all_decl_iterator_t(ArrayTy &Arr) : CurrDecl(nullptr)
       {
          CurrArr = Arr.begin();
          ArrEnd = Arr.end();
@@ -66,7 +70,7 @@ public:
       }
 
       // End iterator
-      all_decl_iterator(ArrayTy &Arr, bool) : CurrDecl(nullptr)
+      all_decl_iterator_t(ArrayTy &Arr, bool) : CurrDecl(nullptr)
       {
          CurrArr = Arr.end();
          ArrEnd = Arr.end();
@@ -76,11 +80,11 @@ public:
          }
       }
 
-      all_decl_iterator()
+      all_decl_iterator_t()
          : CurrArr(nullptr), ArrEnd(nullptr), CurrDecl(nullptr)
       {}
 
-      all_decl_iterator &operator++()
+      all_decl_iterator_t &operator++()
       {
          ++CurrDecl;
          if (CurrDecl == CurrArr->end()) {
@@ -93,7 +97,7 @@ public:
          return *this;
       }
 
-      all_decl_iterator operator++(int)
+      all_decl_iterator_t operator++(int)
       {
          auto cpy = *this;
 
@@ -111,18 +115,29 @@ public:
       ast::NamedDecl *operator*() const { return *CurrDecl; }
       ast::NamedDecl *operator->() const { return *CurrDecl; }
 
-      bool operator==(const all_decl_iterator &rhs)
+      bool operator==(const all_decl_iterator_t &rhs)
       {
          return CurrArr == rhs.CurrArr;
       }
 
-      bool operator!=(const all_decl_iterator &rhs)
+      bool operator!=(const all_decl_iterator_t &rhs)
       {
          return !(*this == rhs);
       }
    };
 
+   using all_decl_iterator = all_decl_iterator_t<
+      ArrayTy,
+      SingleLevelLookupResult*,
+      SingleLevelLookupResult::iterator>;
+
+   using const_all_decl_iterator = all_decl_iterator_t<
+      const ArrayTy,
+      const SingleLevelLookupResult*,
+      SingleLevelLookupResult::const_iterator>;
+
    using all_decl_range = llvm::iterator_range<all_decl_iterator>;
+   using const_all_decl_range = llvm::iterator_range<const_all_decl_iterator>;
 
    all_decl_range allDecls()
    {
@@ -139,6 +154,21 @@ public:
       return all_decl_iterator(Vec, bool());
    }
 
+   const_all_decl_range allDecls() const
+   {
+      return const_all_decl_range(all_decl_begin(), all_decl_end());
+   }
+
+   const_all_decl_iterator all_decl_begin() const
+   {
+      return const_all_decl_iterator(Vec);
+   }
+
+   const_all_decl_iterator all_decl_end() const
+   {
+      return const_all_decl_iterator(Vec, bool());
+   }
+
    /*implicit*/ operator bool() const { return !empty(); }
 
    void addResult(ast::DeclContextLookupResult Result,
@@ -150,6 +180,11 @@ public:
    {
       for (auto &Res : Result)
          Vec.emplace_back(Res);
+   }
+
+   void addResult(const SingleLevelLookupResult &Result)
+   {
+      Vec.push_back(Result);
    }
 };
 

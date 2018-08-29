@@ -162,6 +162,7 @@ private:
 
    llvm::Value *getVTable(llvm::Value *llvmVal);
    llvm::Value *getTypeInfo(llvm::Value *llvmVal);
+   llvm::Value *getVirtualMethod(il::Value *Callee, il::Value *Offset);
 
    llvm::FunctionType *getLambdaType(FunctionType *FTy);
 
@@ -188,6 +189,10 @@ private:
    llvm::Constant *getCastExistentialFallibleFn();
    llvm::Constant *getUnwrapExistentialFn();
    llvm::Constant *getCopyClassFn();
+   llvm::Constant *getGetConformanceFn();
+
+   llvm::Constant *getGetGenericArgumentFn();
+   llvm::Constant *getGetGenericTypeValueFn();
 
    llvm::Constant *getDynamicDownCastFn();
 
@@ -207,6 +212,10 @@ private:
                             std::forward<Args&&>(args)... });
    }
 
+   llvm::CallInst *CallRuntimeFunction(StringRef FuncName,
+                                       ArrayRef<llvm::Value*> Args,
+                                       llvm::Type *RetTy = nullptr);
+
    llvm::GlobalVariable *getOrCreateInitializedFlag(const il::Value *ForVal);
 
    CompilerInstance &CI;
@@ -225,6 +234,8 @@ private:
 
    llvm::DenseMap<ast::RecordDecl*, llvm::StructType*> StructTypeMap;
    llvm::DenseMap<QualType, llvm::Type*> TypeMap;
+
+   llvm::DenseMap<StringRef, llvm::Constant*> RuntimeFunctions;
 
    const il::DebugLocalInst *ElidedDebugLocalInst = nullptr;
 
@@ -258,6 +269,9 @@ private:
    llvm::Type *VoidTy;
 
    llvm::StructType *ExistentialContainerTy = nullptr;
+   llvm::StructType *GenericEnvironmentTy = nullptr;
+   llvm::StructType *ProtocolConformanceTy = nullptr;
+
    llvm::StructType *TypeInfoTy = nullptr;
    llvm::StructType *ErrorTy;
    llvm::StructType *BoxTy;
@@ -290,6 +304,10 @@ private:
    llvm::Constant *CastExistentialFn;
    llvm::Constant *CastExistentialFallibleFn;
    llvm::Constant *UnwrapExistentialFn;
+   llvm::Constant *GetConformanceFn;
+
+   llvm::Constant *GetGenericArgumentFn;
+   llvm::Constant *GetGenericTypeValueFn;
 
    llvm::Constant *DynamicDownCastFn;
 

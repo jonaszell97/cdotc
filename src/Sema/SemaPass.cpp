@@ -11,6 +11,7 @@
 #include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 #include "Sema/ConformanceChecker.h"
 #include "Sema/OverloadResolver.h"
 #include "Sema/TemplateInstantiator.h"
@@ -137,7 +138,7 @@ SemaPass::IgnoreDiagsRAII::~IgnoreDiagsRAII()
 }
 
 SemaPass::SemaPass(CompilerInstance &compilationUnit)
-   : compilationUnit(&compilationUnit),
+   : compilationUnit(&compilationUnit), QC(compilationUnit.getQueryContext()),
      DiagConsumer(std::make_unique<SemaDiagConsumer>(*this)),
      Diags(DiagConsumer.get(), &compilationUnit.getFileMgr()),
      Context(compilationUnit.getContext()), mangle(*this),
@@ -514,7 +515,7 @@ ExprResult SemaPass::visit(Expression *Expr, bool)
    }
 
    if (!Res) {
-      assert(Expr->isInvalid() && "returning ExprError without setting error");
+      Expr->setIsInvalid(true);
       Expr->setExprType(ErrorTy);
       return ExprError();
    }
@@ -930,7 +931,7 @@ public:
 
    QualType visitRecordTypeCommon(QualType T, RecordDecl *R,
                           const sema::FinalTemplateArgumentList &TemplateArgs) {
-      SmallVector<sema::ResolvedTemplateArg, 0> Args;
+      SmallVector<sema::TemplateArgument, 0> Args;
 
       bool Dependent = false;
       for (auto &Arg : TemplateArgs) {
@@ -975,11 +976,11 @@ public:
          return this->Ctx.getDependentRecordType(R, FinalList);
 
       auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
-      auto Inst = this->SP.getInstantiator().InstantiateRecord(
-         this->SOD, Template, FinalList);
+      auto Inst = this->SP.InstantiateRecord(
+         this->SOD.getSourceLoc(), Template, FinalList);
 
       if (Inst)
-         return this->Ctx.getRecordType(Inst.getValue());
+         return this->Ctx.getRecordType(Inst);
 
       return T;
    }
@@ -991,11 +992,11 @@ public:
          return this->visitRecordTypeCommon(T, R, R->getTemplateArgs());
       }
       if (R->isTemplate()) {
-         SmallVector<sema::ResolvedTemplateArg, 0> Args;
+         SmallVector<sema::TemplateArgument, 0> Args;
 
          bool Dependent = false;
          for (auto *Param : R->getTemplateParams()) {
-            const ResolvedTemplateArg *Arg = templateArgs.getArgForParam(Param);
+            const TemplateArgument *Arg = templateArgs.getArgForParam(Param);
             if (!Arg) {
                Dependent = true;
                Args.emplace_back(Param, this->Ctx.getTemplateArgType(Param),
@@ -1015,11 +1016,11 @@ public:
             return this->Ctx.getDependentRecordType(R, FinalList);
 
          auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
-         auto Inst = this->SP.getInstantiator().InstantiateRecord(
-            this->SOD, Template, FinalList);
+         auto Inst = this->SP.InstantiateRecord(
+            this->SOD.getSourceLoc(), Template, FinalList);
 
          if (Inst)
-            return this->Ctx.getRecordType(Inst.getValue());
+            return this->Ctx.getRecordType(Inst);
       }
 
       return T;
@@ -1383,8 +1384,7 @@ bool CheckNeedsStructReturn(SemaPass &SP, QualType Ty)
    switch (Ty->getTypeID()) {
    default:
       return false;
-   case Type::RecordTypeID:
-   case Type::DependentRecordTypeID: {
+   case Type::RecordTypeID: {
       auto rec = Ty->getRecord();
       switch (rec->getKind()) {
       case Decl::EnumDeclID:
@@ -1404,6 +1404,7 @@ bool CheckNeedsStructReturn(SemaPass &SP, QualType Ty)
    case Type::ArrayTypeID:
    case Type::MetaTypeID:
    case Type::BoxTypeID:
+   case Type::DependentRecordTypeID:
       return true;
    }
 }
@@ -1586,7 +1587,7 @@ bool SemaPass::NeedsStructReturn(QualType Ty)
    if (It.NeedsStructReturn.hasValue())
       return It.NeedsStructReturn.getValue();
 
-   bool Result = CheckNeedsStructReturn(*this, Ty);
+   bool Result = CheckNeedsStructReturn(*this, Ty->getCanonicalType());
    It.NeedsStructReturn = Result;
 
    return Result;
@@ -1661,9 +1662,13 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
 
    auto ConvSeq = getConversionSequence(originTy, destTy);
    if (!ConvSeq.isValid()) {
+      if (!destTy->isReferenceType())
+         originTy = originTy->stripReference();
+
       if (!ignoreError)
          diagnose(Expr, msg, Expr->getSourceRange(), DiagLoc, DiagRange,
-                  diag::opt::show_constness, originTy, destTy);
+                  diag::opt::show_constness,
+                  originTy, destTy);
 
       Expr->setExprType(destTy);
       return Expr;
@@ -1906,23 +1911,21 @@ ExprResult SemaPass::visitBuiltinExpr(BuiltinExpr *Expr)
 
 StmtResult SemaPass::visitDeclStmt(DeclStmt *Stmt)
 {
-   if (!Stmt->getDecl()->wasDeclared()) {
-      if (!declareStmt(Stmt, Stmt->getDecl()))
-         return StmtError();
+   if (QC.PrepareDeclInterface(Stmt->getDecl())) {
+      return StmtError();
    }
 
-   // remember that this scope contains a DeclStmt so we revisit it in
+   // Remember that this scope contains a DeclStmt so we revisit it in
    // instantiations.
    if (auto *BS = getBlockScope()) {
       if (auto *CS = BS->getCompoundStmt())
          CS->setContainsDeclStmt(true);
    }
 
-   auto Result = visitStmt(Stmt, Stmt->getDecl());
-   if (!Result)
+   if (QC.TypecheckDecl(Stmt->getDecl())) {
       return StmtError();
+   }
 
-   Stmt->setDecl(Result.get());
    return Stmt;
 }
 
@@ -2641,10 +2644,10 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral *Expr)
       valueTy = cast<cdot::MetaType>(valueTy)->getUnderlyingType();
    }
 
-   ResolvedTemplateArg Args[] = {
-      ResolvedTemplateArg(Dictionary->getTemplateParams().front(),
+   TemplateArgument Args[] = {
+      TemplateArgument(Dictionary->getTemplateParams().front(),
                           keyTy, Expr->getSourceLoc()),
-      ResolvedTemplateArg(Dictionary->getTemplateParams()[1],
+      TemplateArgument(Dictionary->getTemplateParams()[1],
                           valueTy, Expr->getSourceLoc())
    };
 
@@ -2660,16 +2663,14 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral *Expr)
    }
 
    auto TemplateArgs = FinalTemplateArgumentList::Create(Context, Args);
-   auto Inst = Instantiator.InstantiateRecord(Expr, Dictionary,
-                                              move(TemplateArgs));
+   auto Inst = InstantiateRecord(Expr->getSourceLoc(), Dictionary,TemplateArgs);
 
-   if (!Inst.hasValue()) {
+   if (!Inst) {
       Expr->setIsInvalid(true);
       return ExprError();
    }
 
-   auto DictInst = cast<StructDecl>(Inst.getValue());
-
+   auto DictInst = cast<StructDecl>(Inst);
    if (IsMetaType) {
       Expr->setExprType(Context.getMetaType(Context.getRecordType(DictInst)));
    }
@@ -2759,7 +2760,7 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
       elementTy = cast<MetaType>(elementTy)->getUnderlyingType();
    }
 
-   ResolvedTemplateArg Arg(Array->getTemplateParams().front(),
+   TemplateArgument Arg(Array->getTemplateParams().front(),
                            elementTy, Expr->getSourceLoc());
 
    auto TemplateArgs = FinalTemplateArgumentList::Create(Context,
@@ -2776,6 +2777,8 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
          Expr->setExprType(Ty);
    }
    else {
+      ensureDeclared(Array);
+
       // lookup the initializer first to make sure it gets instantiated
       auto DN = Context.getDeclNameTable().getConstructorName(
          Context.getRecordType(Array));
@@ -2787,13 +2790,14 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
          return ExprError();
       }
 
-      auto Inst = Instantiator.InstantiateRecord(Expr, Array, TemplateArgs);
-      if (!Inst.hasValue()) {
+      auto ArrInst = InstantiateRecord(Expr->getSourceLoc(), Array,
+                                       TemplateArgs);
+
+      if (!ArrInst) {
          Expr->setIsInvalid(true);
          return ExprError();
       }
 
-      auto ArrInst = Inst.getValue();
       if (isMetaType) {
          Expr->setExprType(Context.getMetaType(Context.getRecordType(ArrInst)));
       }
@@ -4472,15 +4476,15 @@ ExprResult SemaPass::visitTryExpr(TryExpr *Expr)
       }
 
       QualType ExprTy = Expr->getExpr()->getExprType();
-      sema::ResolvedTemplateArg Arg(Opt->getTemplateParams().front(),
+      sema::TemplateArgument Arg(Opt->getTemplateParams().front(),
                                     ExprTy, Expr->getSourceLoc());
 
       auto TemplateArgs = sema::FinalTemplateArgumentList::Create(Context, Arg);
-      auto Inst = Instantiator.InstantiateRecord(Expr, Opt, move(TemplateArgs));
+      auto Inst = InstantiateRecord(Expr->getSourceLoc(), Opt, TemplateArgs);
 
       QualType ResultTy;
-      if (Inst.hasValue())
-         ResultTy = Context.getRecordType(Inst.getValue());
+      if (Inst)
+         ResultTy = Context.getRecordType(Inst);
       else
          ResultTy = Context.getRecordType(Opt);
 
@@ -4728,6 +4732,7 @@ void SemaPass::visitConstraints(NamedDecl *ConstrainedDecl)
          auto Result = visitSourceType(ConstrainedDecl, C->getType());
          auto *AT = dyn_cast<AssociatedTypeDecl>(ConstrainedDecl);
          if (Result
+               && Result.get()->isRecordType()
                && AT
                && C->getKind() == DeclConstraint::TypePredicate
                && refersToSelf(C->getNameQualifier(), AT)) {
@@ -4952,11 +4957,10 @@ bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
 
    switch (C->getKind()) {
    case DeclConstraint::Concept: {
-      henlo:
       IdentifierRefExpr *ConceptRef = C->getConceptRefExpr();
       AliasDecl *Concept = ConceptRef->getAlias();
 
-      ResolvedTemplateArg Arg(Concept->getTemplateParams().front(),
+      TemplateArgument Arg(Concept->getTemplateParams().front(),
                               ConstrainedType,
                               C->getSourceRange().getStart());
 
@@ -4976,8 +4980,6 @@ bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
                   Concept->getDeclName(),
                   Inst.get()->getSourceRange());
 
-         goto henlo;
-
          return true;
       }
 
@@ -4988,27 +4990,11 @@ bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
    case DeclConstraint::TypeInequality:
    case DeclConstraint::TypePredicate:
    case DeclConstraint::TypePredicateNegated: {
-      auto &RHSSourceType = C->getType();
-
-      QualType RHSType;
-      if (!RHSSourceType.isResolved() || RHSSourceType->isDependentType()) {
-         auto Inst = Instantiator.InstantiateTypeExpr(cast<RecordDecl>(CurCtx),
-                                                      RHSSourceType.getTypeExpr());
-
-         if (!Inst) {
+      QualType RHSType = C->getType();
+      if (RHSType->containsAssociatedType()) {
+         if (QC.SubstAssociatedTypes(RHSType, RHSType, ConstrainedType)) {
             return true;
          }
-
-         SourceType InstTy(Inst.get());
-         auto Result = visitSourceType(ConstrainedDecl, InstTy);
-         if (!Result) {
-            return true;
-         }
-
-         RHSType = Result.get();
-      }
-      else {
-         RHSType = RHSSourceType.getResolvedType();
       }
 
       if (C->getKind() == DeclConstraint::TypeEquality) {
@@ -5032,8 +5018,11 @@ bool SemaPass::checkDeclConstraint(NamedDecl *ConstrainedDecl,
          auto Self = ConstrainedType->getRecord();
          auto Other = RHSType->getRecord();
 
-         ensureDeclared(Self);
-         ensureDeclared(Other);
+         if (QC.PrepareDeclInterface(Self))
+            return true;
+
+         if (QC.PrepareDeclInterface(Other))
+            return true;
 
          if (Self->isClass() && Other->isClass()) {
             auto SelfClass = cast<ClassDecl>(Self);
@@ -5127,7 +5116,7 @@ bool SemaPass::getBoolValue(Expression*,
    return true;
 }
 
-DeclResult SemaPass::visitStaticAssertStmt(StaticAssertStmt *Stmt)
+DeclResult SemaPass::visitStaticAssertDecl(StaticAssertDecl *Stmt)
 {
    // Don't evaluate a static_assert if we're in a static if branch that
    // might not be evaluated.
@@ -5331,7 +5320,7 @@ StmtResult SemaPass::visitStaticForStmt(StaticForStmt *Stmt)
    return visitStmt(Stmt, Compound);
 }
 
-DeclResult SemaPass::visitStaticPrintStmt(StaticPrintStmt *Stmt)
+DeclResult SemaPass::visitStaticPrintDecl(StaticPrintDecl *Stmt)
 {
    // Don't evaluate a static_print if we're in a static if branch that
    // might not be evaluated.

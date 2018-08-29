@@ -2046,6 +2046,7 @@ enum class CallKind: unsigned {
    MethodCall,
    UnionInitializer,
    InitializerCall,
+   GenericInitializerCall,
    StaticMethodCall,
    CallOperator,
    UnsafeTupleGet,
@@ -2080,7 +2081,7 @@ class CallExpr final: public Expression,
    SourceLocation IdentLoc;
    SourceRange ParenRange;
 
-   DeclarationName ident;
+   DeclarationName FuncName;
    unsigned NumLabels = 0;
 
    CallKind kind = CallKind::Unknown;
@@ -2099,11 +2100,6 @@ class CallExpr final: public Expression,
    unsigned BuiltinKind : 10;
 
    CallableDecl *func = nullptr;
-
-   union {
-      Type *builtinArgType = nullptr;
-      UnionDecl *U;
-   };
 
 public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
@@ -2158,10 +2154,8 @@ public:
       return { getTrailingObjects<IdentifierInfo*>(), NumLabels };
    }
 
-   DeclarationName getDeclName() const { return ident; }
-   void setIdent(DeclarationName ident) { this->ident = ident; }
-
-   bool isNamedCall() const { return ident.isSimpleIdentifier(); }
+   DeclarationName getDeclName() const { return FuncName; }
+   void setIdent(DeclarationName ident) { this->FuncName = ident; }
 
    Expression *getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression *E) { ParentExpr = E; }
@@ -2174,12 +2168,6 @@ public:
 
    CallableDecl *getFunc() const { return func; }
    void setFunc(CallableDecl *func) { this->func = func; }
-
-   Type *getBuiltinArgType() const { return builtinArgType; }
-   void setBuiltinArgType(Type *Ty) { builtinArgType = Ty; }
-
-   UnionDecl *getUnion() const { return U; }
-   void setUnion(UnionDecl *U) { CallExpr::U = U; }
 
    CallKind getKind() const { return kind; }
    void setKind(CallKind CK) { kind = CK; }
@@ -2327,10 +2315,15 @@ class TemplateArgListExpr final: public Expression,
    TemplateArgListExpr(SourceRange AngleRange, Expression *ParentExpr,
                        ArrayRef<Expression*> Exprs);
 
+   TemplateArgListExpr(SourceRange AngleRange,
+                       Expression *ParentExpr,
+                       sema::FinalTemplateArgumentList *Exprs);
+
    TemplateArgListExpr(EmptyShell, unsigned N);
 
    SourceRange AngleRange;
    Expression *ParentExpr;
+   sema::FinalTemplateArgumentList *TemplateArgs = nullptr;
    unsigned NumTemplateArgs;
 
 public:
@@ -2344,6 +2337,11 @@ public:
                                       Expression *ParentExpr,
                                       ArrayRef<Expression*> Exprs);
 
+   static TemplateArgListExpr *Create(ASTContext &C,
+                                      SourceRange AngleRange,
+                                      Expression *ParentExpr,
+                                      sema::FinalTemplateArgumentList *Exprs);
+
    static TemplateArgListExpr *CreateEmpty(ASTContext &C, unsigned N);
 
    SourceRange getSourceRange() const;
@@ -2353,6 +2351,9 @@ public:
 
    Expression* getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression* V) { ParentExpr = V; }
+
+   sema::FinalTemplateArgumentList* getTemplateArgs()const{return TemplateArgs;}
+   void setTemplateArgs(sema::FinalTemplateArgumentList* V){ TemplateArgs = V; }
 
    unsigned getNumTemplateArgs() const { return NumTemplateArgs; }
 

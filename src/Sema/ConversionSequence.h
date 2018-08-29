@@ -120,6 +120,15 @@ public:
       return true;
    }
 
+   bool isLValueToRValue() const
+   {
+      if (!isValid())
+         return false;
+
+      return Steps.size() == 1
+         && Steps.front().getKind() == CastKind::LValueToRValue;
+   }
+
    bool isImplicit() const
    {
       if (!isValid())

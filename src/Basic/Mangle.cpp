@@ -61,7 +61,7 @@ class ItaniumLikeMangler {
 
    void mangleTemplateArgs(const NamedDecl *D);
    void mangleTemplateArgs(const FinalTemplateArgumentList &list);
-   void mangleTemplateArg(const ResolvedTemplateArg &Arg);
+   void mangleTemplateArg(const TemplateArgument &Arg);
 
    void mangleModuleName(const ModuleDecl *M);
    void mangleModuleNamePrefix(llvm::StringRef Name);
@@ -1033,7 +1033,7 @@ void ItaniumLikeMangler::mangleTemplateArgs(const FinalTemplateArgumentList &lis
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleTemplateArg(const ResolvedTemplateArg &Arg)
+void ItaniumLikeMangler::mangleTemplateArg(const TemplateArgument &Arg)
 {
    // <template-arg> ::= <type>              # type or template
    //                ::= X <expression> E    # expression

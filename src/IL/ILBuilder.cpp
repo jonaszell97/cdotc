@@ -282,8 +282,9 @@ ConstantEnum *ILBuilder::GetConstantEnum(ast::EnumCaseDecl *Case,
    return ConstantEnum::get(Ctx, Case, CaseVals);
 }
 
-ConstantArray *ILBuilder::GetConstantArray(QualType ArrTy,
+ConstantArray *ILBuilder::GetConstantArray(QualType ElementTy,
                                            llvm::ArrayRef<il::Constant *> Arr) {
+   auto ArrTy = ASTCtx.getArrayType(ElementTy, Arr.size());
    return ConstantArray::get(ValueType(Ctx, ArrTy), Arr);
 }
 
@@ -609,7 +610,8 @@ namespace {
 bool isPointerLike(Value *V)
 {
    return V->getType()->isRecordType() || V->getType()->isPointerType()
-          || V->getType()->isReferenceType();
+          || V->getType()->isReferenceType()
+          || V->getType()->isMetaType();
 }
 
 void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
@@ -637,6 +639,18 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
    case Intrinsic::get_lambda_env:
    case Intrinsic::get_lambda_funcptr:
       assert(args.size() == 1 && args.front()->getType()->isLambdaType());
+      break;
+   case Intrinsic::generic_argument_ref: {
+      assert(args.size() == 3
+         && isPointerLike(args[0])
+         && args[1]->getType()->isIntegerType()
+         && args[2]->getType()->isIntegerType());
+      break;
+   }
+   case Intrinsic::generic_value:
+   case Intrinsic::generic_environment:
+      assert(args.size() == 1
+         && args.front()->getType()->isDependentRecordType());
       break;
    case Intrinsic::strong_refcount:
    case Intrinsic::weak_refcount:
@@ -667,6 +681,8 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
    case Intrinsic::excn_typeinfo_ref:
    case Intrinsic::print_exception:
    case Intrinsic::cleanup_exception:
+   case Intrinsic::generic_type_value:
+   case Intrinsic::existential_ref:
       assert(args.size() == 1);
       assert(isPointerLike(args[0]));
       break;
@@ -761,6 +777,15 @@ QualType getIntrinsicReturnType(ast::ASTContext &Ctx,
       return Ctx.getMutableReferenceType(Ctx.getInt8PtrTy()->getPointerTo(Ctx));
    case Intrinsic::get_lambda_funcptr:
       return Ctx.getPointerType(Ctx.getInt8PtrTy());
+   case Intrinsic::generic_value:
+      return Ctx.getReferenceType(
+         Ctx.getRecordType(args.front()->getType()->getRecord()));
+   case Intrinsic::generic_environment:
+      return Ctx.getReferenceType(Ctx.getInt8PtrTy());
+   case Intrinsic::generic_argument_ref:
+   case Intrinsic::generic_type_value:
+   case Intrinsic::existential_ref:
+      return Ctx.getReferenceType(Ctx.getInt8PtrTy());
    case Intrinsic::strong_refcount:
       return Ctx.getMutableReferenceType(Ctx.getUIntTy());
    case Intrinsic::weak_refcount:
@@ -1512,11 +1537,24 @@ ExistentialInitInst* ILBuilder::CreateExistentialInit(il::Value *target,
                                                       QualType toType,
                                                       il::Value *ValueTypeInfo,
                                                       il::GlobalVariable *ProtocolTypeInfo,
+                                                      bool Preallocated,
                                                       StringRef name) {
    auto *inst = new ExistentialInitInst(target, toType, ValueTypeInfo,
-                                  ProtocolTypeInfo, getInsertBlock());
+                                        ProtocolTypeInfo, Preallocated,
+                                        getInsertBlock());
 
    insertInstruction(inst, name);
+   return inst;
+}
+
+GenericInitInst* ILBuilder::CreateGenericInit(il::Value *Val,
+                                              il::Value *GenericEnvironment,
+                                              QualType GenericType,
+                                              StringRef Name) {
+   auto *inst = new GenericInitInst(Val, GenericEnvironment, GenericType,
+                                    getInsertBlock());
+
+   insertInstruction(inst, Name);
    return inst;
 }
 

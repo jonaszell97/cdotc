@@ -19,7 +19,7 @@ public protocol IteratorProtocol {
 // FIXME find some other way to avoid infinite recursion here.
 private protocol _ReverseIterator {}
 
-public struct ReverseIterator<Base : RandomAccessCollection> {
+public struct ReverseIterator<Base: RandomAccessCollection> {
     /// The sequence we are reverse iterating.
     var base: Base
 
@@ -68,7 +68,7 @@ extend ReverseIterator with _ReverseIterator {}
 // FIXME find some other way to avoid infinite recursion here.
 private protocol _EnumeratedSequence {}
 
-public struct EnumeratedSequence<Base> {
+public struct EnumeratedSequence<Base: Iterable> {
     /// The sequence we are enumerating.
     var base: Base
 
@@ -666,18 +666,18 @@ extend RandomAccessCollection {
 
 /// An iterator over an indexed collection.
 @compiletime
-public struct IndexedIterator<Collection> with IteratorProtocol {
+public struct IndexedIterator<Coll: Collection> with IteratorProtocol {
     /// The element type.
-    associatedType Element = Collection.Element
+    associatedType Element = Coll.Element
 
     /// The current index.
-    var idx: Collection.Index
+    var idx: Coll.Index
 
     /// The collection we're iterating over.
-    var coll: Collection
+    var coll: Coll
 
     /// C'tor.
-    init (_ coll: Collection) {
+    init (_ coll: Coll) {
         self.idx = coll.startIndex
         self.coll = coll
     }

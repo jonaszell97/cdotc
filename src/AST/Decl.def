@@ -12,8 +12,8 @@
 #endif
 
 #ifdef CDOT_DECL
-   CDOT_DECL(StaticAssertStmt)
-   CDOT_DECL(StaticPrintStmt)
+   CDOT_DECL(StaticAssertDecl)
+   CDOT_DECL(StaticPrintDecl)
    CDOT_DECL(StaticIfDecl)
    CDOT_DECL(StaticForDecl)
    CDOT_DECL(MixinDecl)

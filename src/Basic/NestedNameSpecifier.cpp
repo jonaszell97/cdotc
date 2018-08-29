@@ -236,7 +236,7 @@ bool NestedNameSpecifier::isDependent() const
       return AT->getActualType()->isDependentType();
    }
    case NestedNameSpecifier::TemplateParam:
-      return true;
+      return getParam()->isInUnboundedTemplate();
    }
 }
 

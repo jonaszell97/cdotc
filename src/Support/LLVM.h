@@ -5,6 +5,8 @@
 #ifndef CDOT_LLVM_H
 #define CDOT_LLVM_H
 
+#include "Config.h"
+
 namespace llvm {
    class StringRef;
    class Twine;
@@ -49,15 +51,5 @@ using llvm::APFloat;
 using llvm::raw_ostream;
 
 } // namespace cdot
-
-#ifdef __has_feature
-#  if __has_feature(address_sanitizer)
-#     define CDOT_NO_SANITIZE(KIND) __attribute__((no_sanitize(#KIND)))
-#  endif
-#endif
-
-#ifndef CDOT_NO_SANITIZE
-#  define CDOT_NO_SANITIZE(KIND)
-#endif
 
 #endif //CDOT_LLVM_H

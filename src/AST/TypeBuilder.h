@@ -116,28 +116,28 @@ public:
       return visitFunctionType(T);
    }
 
-   sema::ResolvedTemplateArg
-   VisitTemplateArg(const sema::ResolvedTemplateArg &Arg)
+   sema::TemplateArgument
+   VisitTemplateArg(const sema::TemplateArgument &Arg)
    {
       if (!Arg.isType())
          return Arg.clone();
 
       if (Arg.isVariadic()) {
-         std::vector<sema::ResolvedTemplateArg> Cloned;
+         std::vector<sema::TemplateArgument> Cloned;
          for (auto &VA : Arg.getVariadicArgs())
             Cloned.push_back(VisitTemplateArg(VA));
 
-         return sema::ResolvedTemplateArg(Arg.getParam(), true, move(Cloned),
+         return sema::TemplateArgument(Arg.getParam(), true, move(Cloned),
                                           Arg.getLoc());
       }
 
-      QualType Ty = visit(Arg.getType());
-      return sema::ResolvedTemplateArg(Arg.getParam(), Ty, Arg.getLoc());
+      QualType Ty = visit(Arg.getNonCanonicalType());
+      return sema::TemplateArgument(Arg.getParam(), Ty, Arg.getLoc());
    }
 
    QualType visitRecordTypeCommon(QualType T, ast::RecordDecl *R,
                           const sema::FinalTemplateArgumentList &TemplateArgs) {
-      SmallVector<sema::ResolvedTemplateArg, 0> Args;
+      SmallVector<sema::TemplateArgument, 0> Args;
 
       bool Dependent = false;
       for (auto &Arg : TemplateArgs) {
@@ -154,11 +154,10 @@ public:
          return Ctx.getDependentRecordType(R, FinalList);
 
       auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
-      auto Inst = SP.getInstantiator().InstantiateRecord(SOD, Template,
-                                                         FinalList);
+      auto Inst = SP.InstantiateRecord(SOD.getSourceLoc(), Template, FinalList);
 
       if (Inst)
-         return Ctx.getRecordType(Inst.getValue());
+         return Ctx.getRecordType(Inst);
 
       return T;
    }

@@ -172,11 +172,11 @@ private:
 };
 
 class UsingDecl final: public NamedDecl,
-                       llvm::TrailingObjects<UsingDecl, IdentifierInfo*> {
+                       llvm::TrailingObjects<UsingDecl, DeclarationName> {
    UsingDecl(SourceRange Loc,
              AccessSpecifier Access,
              DeclarationName Name,
-             llvm::ArrayRef<IdentifierInfo*> NestedImportName,
+             llvm::ArrayRef<DeclarationName> NestedImportName,
              bool wildCardImport);
 
    UsingDecl(EmptyShell, unsigned N);
@@ -193,7 +193,7 @@ public:
                             SourceRange Loc,
                             AccessSpecifier Access,
                             DeclarationName Name,
-                            llvm::ArrayRef<IdentifierInfo*> NestedImportName,
+                            llvm::ArrayRef<DeclarationName> NestedImportName,
                             bool wildCardImport);
 
    static UsingDecl *CreateEmpty(ASTContext &C, unsigned N);
@@ -204,9 +204,9 @@ public:
    SourceRange getSourceRange() const { return Loc; }
    void setSourceRange(SourceRange SR) { Loc = SR; }
 
-   llvm::ArrayRef<IdentifierInfo*> getNestedImportName() const
+   llvm::ArrayRef<DeclarationName> getNestedImportName() const
    {
-      return { getTrailingObjects<IdentifierInfo*>(), NumSpecifierNames };
+      return { getTrailingObjects<DeclarationName>(), NumSpecifierNames };
    }
 
    bool isWildcardImport() const { return IsWildCard; }
@@ -271,6 +271,7 @@ private:
 
    Expression *defaultValue;
    unsigned Index;
+   unsigned Depth;
 
    SourceLocation TypeNameOrValueLoc;
    SourceLocation NameLoc;
@@ -296,6 +297,9 @@ public:
    bool isTypeName() const { return typeName; }
    bool isVariadic() const { return EllipsisLoc.isValid(); }
    unsigned getIndex() const { return Index; }
+
+   unsigned getDepth() const { return Depth; }
+   void setDepth(unsigned D) { Depth = D; }
 
    void setTypeName(bool typeName) { TemplateParamDecl::typeName = typeName; }
    void setIndex(unsigned int Index) { TemplateParamDecl::Index = Index; }
@@ -329,12 +333,18 @@ protected:
    SourceLocation ColonLoc;
    SourceLocation EqualsLoc;
    SourceType type;
-   Expression* value = nullptr;
 
+   union {
+      Expression *Value = nullptr;
+      VarDecl *ValueTemplate;
+   };
+
+   bool Const        : 1;
    bool CanElideCopy : 1;
    bool Variadic     : 1;
    bool Captured     : 1;
    bool IsMovedFrom  : 1;
+   bool HasTemplate  : 1;
 
 public:
    SourceRange getSourceRange() const;
@@ -350,8 +360,14 @@ public:
    const SourceType &getType() const { return type; }
    void setType(SourceType ty) { type = ty; }
 
-   Expression* getValue() const { return value; }
-   void setValue(Expression *V) { value = V; }
+   Expression* getValue() const;
+   void setValue(Expression *V);
+
+   VarDecl* getValueTemplate() const;
+   void setValueTemplate(VarDecl* V);
+
+   bool isConst() const { return Const; }
+   void setConst(bool c) { Const = c; }
 
    bool isVariadic() const { return Variadic; }
    void setVariadic(bool V) { Variadic = V; }
@@ -395,7 +411,7 @@ public:
    bool isNRVOCandidate() const { return IsNRVOCand; }
    void setIsNRVOCandidate(bool NRVO) { IsNRVOCand = NRVO; }
 
-   bool isUninitialized() const { return value == nullptr; }
+   bool isUninitialized() const { return Value == nullptr; }
 
    bool isInitMove() const { return InitIsMove; }
    void setInitIsMove(bool IsMove) { InitIsMove = IsMove; }
@@ -490,6 +506,7 @@ public:
    Expression* getValue() const { return Val; }
    void setValue(Expression* V) { Val = V; }
 
+   bool isConst() const;
    unsigned getNumDecls() const { return NumDecls; }
 
    ArrayRef<VarDecl*> getDecls() const
@@ -539,8 +556,8 @@ public:
 
    static FuncArgDecl *CreateEmpty(ASTContext &C);
 
-   Expression* getDefaultVal() const { return value; }
-   void setDefaultVal(Expression *defaultVal) { value = defaultVal; }
+   Expression* getDefaultVal() const { return Value; }
+   void setDefaultVal(Expression *defaultVal) { Value = defaultVal; }
 
    bool isVariadicArgPackExpansion() const { return VariadicArgPackExpansion; }
    bool isVararg() const { return Vararg; }
@@ -637,11 +654,11 @@ public:
 
 class ImportDecl final: public NamedDecl,
                         public DeclContext,
-                        llvm::TrailingObjects<ImportDecl, IdentifierInfo*> {
+                        llvm::TrailingObjects<ImportDecl, DeclarationName> {
    ImportDecl(SourceRange Loc,
               AccessSpecifier Access,
-              llvm::ArrayRef<IdentifierInfo*> moduleName,
-              llvm::ArrayRef<IdentifierInfo*> namedImports,
+              llvm::ArrayRef<DeclarationName> moduleName,
+              llvm::ArrayRef<DeclarationName> namedImports,
               bool IsWildcardImport);
 
    ImportDecl(EmptyShell, unsigned N);
@@ -659,8 +676,8 @@ public:
    static ImportDecl *Create(ASTContext &C,
                              SourceRange Loc,
                              AccessSpecifier Access,
-                             llvm::ArrayRef<IdentifierInfo*> moduleName,
-                             llvm::ArrayRef<IdentifierInfo*> namedImports,
+                             llvm::ArrayRef<DeclarationName> moduleName,
+                             llvm::ArrayRef<DeclarationName> namedImports,
                              bool IsWildcardImport);
 
    static ImportDecl *CreateEmpty(ASTContext &C, unsigned N);
@@ -680,14 +697,14 @@ public:
    void setNumNameQuals(unsigned N) { NumNameQuals = N; }
    void setNumNamedImports(unsigned N) { NumNamedImports = N; }
 
-   llvm::ArrayRef<IdentifierInfo*> getQualifiedImportName() const
+   llvm::ArrayRef<DeclarationName> getQualifiedImportName() const
    {
-      return { getTrailingObjects<IdentifierInfo*>(), NumNameQuals };
+      return { getTrailingObjects<DeclarationName>(), NumNameQuals };
    }
 
-   llvm::ArrayRef<IdentifierInfo*> getNamedImports() const
+   llvm::ArrayRef<DeclarationName> getNamedImports() const
    {
-      return { getTrailingObjects<IdentifierInfo*>() + NumNameQuals,
+      return { getTrailingObjects<DeclarationName>() + NumNameQuals,
          NumNamedImports };
    }
 };
@@ -805,7 +822,7 @@ protected:
                 SourceLocation DefLoc,
                 DeclarationName Name,
                 SourceType returnType,
-                llvm::ArrayRef<FuncArgDecl*> args,
+                ArrayRef<FuncArgDecl*> args,
                 Statement* body,
                 ASTVector<TemplateParamDecl*> &&templateParams);
 
@@ -827,6 +844,9 @@ protected:
    KnownFunction knownFnKind = KnownFunction(0);
 
    PrecedenceGroupDecl *PrecedenceGroup = nullptr;
+
+   SourceLocation BodyInstantiationLoc;
+   CallableDecl *BodyTemplate = nullptr;
 
    enum Flag : uint32_t {
       // general flags
@@ -892,6 +912,9 @@ public:
    serial::LazyFunctionInfo* getLazyFnInfo() const { return LazyFnInfo; }
    void setLazyFnInfo(serial::LazyFunctionInfo* V) { LazyFnInfo = V; }
 
+   CallableDecl *getBodyTemplate() const { return BodyTemplate; }
+   void setBodyTemplate(CallableDecl *T) { BodyTemplate = T; }
+
    bool isKnownFunction();
    void checkKnownFnKind();
    KnownFunction getKnownFnKind();
@@ -955,12 +978,6 @@ public:
 
    bool isMain() const { return getFlag(Main); }
    void setIsMain(bool main) { setFlag(Main, main); }
-
-   bool isExternal() const { return getFlag(External); }
-   void setExternal(bool external) { setFlag(External, external); }
-
-   bool isNative() const { return getFlag(Native); }
-   void setNative(bool native) { setFlag(Native, native); }
 
    bool isVararg() const { return getFlag(Vararg); }
    void setVararg(bool vararg) { setFlag(Vararg, vararg); }
@@ -1325,6 +1342,7 @@ protected:
    bool implicitlyCopyable : 1;
    bool implicitlyStringRepresentable : 1;
    bool NeedsRetainOrRelease : 1;
+   bool ExplicitMemberwiseInit : 1;
 
    MethodDecl *operatorEquals = nullptr;
    MethodDecl *hashCodeFn = nullptr;
@@ -1458,6 +1476,9 @@ public:
 
    void setNeedsRetainOrRelease(bool N) { NeedsRetainOrRelease = N; }
    bool needsRetainOrRelease() const { return NeedsRetainOrRelease; }
+
+   bool hasExplicitMemberwiseInit() const { return ExplicitMemberwiseInit; }
+   void setExplicitMemberwiseInit(bool b) { ExplicitMemberwiseInit = b; }
 };
 
 class FieldDecl: public VarDecl {
@@ -1496,7 +1517,7 @@ public:
    PropDecl *getAccessor() const { return Accessor; }
    void setAccessor(PropDecl *Accessor) { FieldDecl::Accessor = Accessor; }
 
-   Expression* getDefaultVal() const { return value; }
+   Expression* getDefaultVal() const { return getValue(); }
    unsigned getOffset() const { return Offset; }
    void setOffset(unsigned OS) { Offset = OS; }
 
@@ -1990,9 +2011,6 @@ protected:
    QualType SelfType;
    unsigned methodID = 0;
 
-   SourceLocation BodyInstantiationLoc;
-   MethodDecl *BodyTemplate = nullptr;
-
    MethodDecl *OverridenMethod = nullptr;
 
 public:
@@ -2004,9 +2022,6 @@ public:
    {
       BodyInstantiationLoc = Loc;
    }
-
-   MethodDecl *getBodyTemplate() const { return BodyTemplate; }
-   void setBodyTemplate(MethodDecl *T) { BodyTemplate = T; }
 
    bool isVirtual() const { return getFlag(Virtual); }
    bool isOverride() const { return getFlag(Override); }
@@ -2156,6 +2171,7 @@ public:
                                      IdentifierInfo *ProtoSpec,
                                      DeclarationName Name,
                                      SourceType actualType,
+                                     SourceType covariance,
                                      bool Implementation);
 
    static AssociatedTypeDecl *CreateEmpty(ASTContext &C);
@@ -2167,6 +2183,9 @@ public:
 
    const SourceType &getActualType() const { return actualType; }
    void setActualType(SourceType ty) { actualType = ty; }
+
+   const SourceType &getCovariance() const { return covariance; }
+   void setCovariance(SourceType ty) { covariance = ty; }
 
    IdentifierInfo *getProtoSpecInfo() const { return protocolSpecifier; }
    llvm::StringRef getProtocolSpecifier() const
@@ -2193,6 +2212,7 @@ private:
                       IdentifierInfo *ProtoSpec,
                       DeclarationName Name,
                       SourceType actualType,
+                      SourceType covariance,
                       bool Implementation);
 
    AssociatedTypeDecl(EmptyShell Empty);
@@ -2200,6 +2220,7 @@ private:
    SourceLocation Loc;
    IdentifierInfo *protocolSpecifier;
    SourceType actualType;
+   SourceType covariance;
    ProtocolDecl *Proto = nullptr;
 
    bool Implementation : 4;
@@ -2495,13 +2516,13 @@ public:
    SourceLocation getRBRaceLoc() const { return RBRaceLoc; }
 };
 
-class StaticAssertStmt: public Decl {
-   StaticAssertStmt(SourceLocation Loc,
+class StaticAssertDecl: public Decl {
+   StaticAssertDecl(SourceLocation Loc,
                     SourceRange Parens,
                     StaticExpr* expr,
                     StringRef message);
 
-   StaticAssertStmt(EmptyShell Empty);
+   StaticAssertDecl(EmptyShell Empty);
 
    SourceLocation Loc;
    SourceRange Parens;
@@ -2509,15 +2530,15 @@ class StaticAssertStmt: public Decl {
    StringRef message;
 
 public:
-   static StaticAssertStmt *Create(ASTContext &C,
+   static StaticAssertDecl *Create(ASTContext &C,
                                    SourceLocation Loc,
                                    SourceRange Parens,
                                    StaticExpr* expr,
                                    StringRef message);
 
-   static StaticAssertStmt *CreateEmpty(ASTContext &C);
+   static StaticAssertDecl *CreateEmpty(ASTContext &C);
 
-   static bool classofKind(DeclKind kind) { return kind == StaticAssertStmtID; }
+   static bool classofKind(DeclKind kind) { return kind == StaticAssertDeclID; }
    static bool classof(Decl const *T) { return classofKind(T->getKind()); }
 
    SourceLocation getStaticAssertLoc() const { return Loc; }
@@ -2527,8 +2548,8 @@ public:
       return SourceRange(Loc, Parens.getEnd());
    }
 
-   void setLoc(SourceLocation Loc) { StaticAssertStmt::Loc = Loc; }
-   void setParens(SourceRange Parens) { StaticAssertStmt::Parens = Parens; }
+   void setLoc(SourceLocation Loc) { StaticAssertDecl::Loc = Loc; }
+   void setParens(SourceRange Parens) { StaticAssertDecl::Parens = Parens; }
    void setMessage(StringRef msg) { message = msg; }
 
    StaticExpr* getExpr() const { return expr; }
@@ -2536,26 +2557,26 @@ public:
    StringRef getMessage() const { return message; }
 };
 
-class StaticPrintStmt: public Decl {
-   StaticPrintStmt(SourceLocation Loc,
+class StaticPrintDecl: public Decl {
+   StaticPrintDecl(SourceLocation Loc,
                    SourceRange Parens,
                    Expression* expr);
 
-   StaticPrintStmt(EmptyShell Empty);
+   StaticPrintDecl(EmptyShell Empty);
 
    SourceLocation Loc;
    SourceRange Parens;
    Expression* expr;
 
 public:
-   static StaticPrintStmt *Create(ASTContext &C,
+   static StaticPrintDecl *Create(ASTContext &C,
                                   SourceLocation Loc,
                                   SourceRange Parens,
                                   Expression *E);
 
-   static StaticPrintStmt *CreateEmpty(ASTContext &C);
+   static StaticPrintDecl *CreateEmpty(ASTContext &C);
 
-   static bool classofKind(DeclKind kind) { return kind == StaticPrintStmtID; }
+   static bool classofKind(DeclKind kind) { return kind == StaticPrintDeclID; }
    static bool classof(Decl const *T) { return classofKind(T->getKind()); }
 
    SourceLocation getStaticPrintLoc() const { return Loc; }

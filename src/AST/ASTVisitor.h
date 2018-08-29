@@ -759,12 +759,12 @@ protected:
 
    }
 
-   void visitStaticAssertStmt(StaticAssertStmt *D)
+   void visitStaticAssertDecl(StaticAssertDecl *D)
    {
 
    }
 
-   void visitStaticPrintStmt(StaticPrintStmt *D)
+   void visitStaticPrintDecl(StaticPrintDecl *D)
    {
 
    }

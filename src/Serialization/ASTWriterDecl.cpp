@@ -257,7 +257,7 @@ void ASTDeclWriter::visitDebugDecl(DebugDecl *D)
    Record.AddSourceLocation(D->getSourceLoc());
 }
 
-void ASTDeclWriter::visitStaticAssertStmt(StaticAssertStmt *D)
+void ASTDeclWriter::visitStaticAssertDecl(StaticAssertDecl *D)
 {
    visitDecl(D);
 
@@ -267,7 +267,7 @@ void ASTDeclWriter::visitStaticAssertStmt(StaticAssertStmt *D)
    Record.AddString(D->getMessage());
 }
 
-void ASTDeclWriter::visitStaticPrintStmt(StaticPrintStmt *D)
+void ASTDeclWriter::visitStaticPrintDecl(StaticPrintDecl *D)
 {
    visitDecl(D);
 
@@ -335,6 +335,7 @@ void ASTDeclWriter::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    Record.AddSourceLocation(D->getSourceLoc());
    Record.AddIdentifierRef(D->getProtoSpecInfo());
    Record.AddTypeRef(D->getActualType());
+   Record.AddTypeRef(D->getCovariance());
    Record.AddDeclRef(D->getProto());
    Record.push_back(D->isImplementation());
 
@@ -645,10 +646,10 @@ void ASTDeclWriter::visitImportDecl(ImportDecl *D)
    Record[0] = Name.size() + ImportNames.size();
 
    for (auto I : Name)
-      Record.AddIdentifierRef(I);
+      Record.AddDeclarationName(I);
 
    for (auto I : ImportNames)
-      Record.AddIdentifierRef(I);
+      Record.AddDeclarationName(I);
 }
 
 void ASTDeclWriter::visitUsingDecl(UsingDecl *D)
@@ -662,7 +663,7 @@ void ASTDeclWriter::visitUsingDecl(UsingDecl *D)
    Record[0] = Name.size();
 
    for (auto I : Name)
-      Record.AddIdentifierRef(I);
+      Record.AddDeclarationName(I);
 }
 
 void ASTDeclWriter::visitVarDecl(VarDecl *D)

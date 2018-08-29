@@ -147,7 +147,7 @@ private:
       return visitFunctionTypeChildren(T);
    }
 
-   bool VisitTemplateArg(const sema::ResolvedTemplateArg &Arg)
+   bool VisitTemplateArg(const sema::TemplateArgument &Arg)
    {
       if (!Arg.isType())
          return true;

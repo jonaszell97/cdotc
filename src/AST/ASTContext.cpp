@@ -135,18 +135,18 @@ void ASTContext::addCovariance(const AssociatedTypeDecl *AT,
 }
 
 ArrayRef<ExtensionDecl*>
-ASTContext::getExtensions(const RecordDecl *R) const
+ASTContext::getExtensions(QualType T) const
 {
-   auto it = ExtensionMap.find(R);
+   auto it = ExtensionMap.find(T);
    if (it == ExtensionMap.end() || !it->getSecond())
       return {};
 
    return *it->getSecond();
 }
 
-void ASTContext::addExtension(const RecordDecl *R,
+void ASTContext::addExtension(QualType T,
                               ExtensionDecl *E) const {
-   auto it = ExtensionMap.find(R);
+   auto it = ExtensionMap.find(T);
    if (it != ExtensionMap.end()) {
       it->getSecond()->push_back(E);
    }
@@ -154,7 +154,7 @@ void ASTContext::addExtension(const RecordDecl *R,
       auto Vec = new(*this) ExtensionVec;
       Vec->push_back(E);
 
-      ExtensionMap[R] = Vec;
+      ExtensionMap[T] = Vec;
    }
 }
 
@@ -622,17 +622,18 @@ RecordType* ASTContext::getRecordType(RecordDecl *R) const
 
 DependentRecordType*
 ASTContext::getDependentRecordType(RecordDecl *R,
-                                   sema::FinalTemplateArgumentList *args)const{
+                                   sema::FinalTemplateArgumentList *args,
+                                   QualType Parent) const {
    llvm::FoldingSetNodeID ID;
-   DependentRecordType::Profile(ID, R, args);
+   DependentRecordType::Profile(ID, R, args, Parent);
 
    void *insertPos = nullptr;
    if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new(*this, TypeAlignment) DependentRecordType(R, args);
-
+   auto New = new(*this, TypeAlignment) DependentRecordType(R, args, Parent);
    DependentRecordTypes.InsertNode(New, insertPos);
+
    return New;
 }
 
@@ -727,7 +728,7 @@ TypedefType* ASTContext::getTypedefType(AliasDecl *TD) const
 
 CallableDecl*
 ASTContext::getFunctionTemplateInstantiation(CallableDecl *Template,
-                                             TemplateArgs &argList,
+                                             TemplateArgList &argList,
                                              void *&insertPos) {
    llvm::FoldingSetNodeID ID;
    CallableDecl::Profile(ID, Template, argList);
@@ -737,7 +738,7 @@ ASTContext::getFunctionTemplateInstantiation(CallableDecl *Template,
 
 RecordDecl*
 ASTContext::getRecordTemplateInstantiation(RecordDecl *Template,
-                                           TemplateArgs &argList,
+                                           TemplateArgList &argList,
                                            void *&insertPos) {
    llvm::FoldingSetNodeID ID;
    RecordDecl::Profile(ID, Template, argList);
@@ -747,7 +748,7 @@ ASTContext::getRecordTemplateInstantiation(RecordDecl *Template,
 
 AliasDecl*
 ASTContext::getAliasTemplateInstantiation(AliasDecl *Template,
-                                          TemplateArgs &argList,
+                                          TemplateArgList &argList,
                                           void *&insertPos) {
    llvm::FoldingSetNodeID ID;
    AliasDecl::Profile(ID, Template, argList);
@@ -756,7 +757,7 @@ ASTContext::getAliasTemplateInstantiation(AliasDecl *Template,
 }
 
 NamedDecl* ASTContext::getTemplateInstantiation(NamedDecl *Template,
-                                                TemplateArgs &argList,
+                                                TemplateArgList &argList,
                                                 void *&insertPos) {
    if (auto C = dyn_cast<CallableDecl>(Template)) {
       return getFunctionTemplateInstantiation(C, argList, insertPos);
@@ -871,7 +872,7 @@ void ASTContext::cleanupDecl(Decl *D)
    }
 }
 
-void ASTContext::cleanup(CompilerInstance &CI)
+void ASTContext::cleanup()
 {
    // Walk the AST deleting DeclContext maps.
    cleanupDeclContext(&CI.getGlobalDeclCtx());
@@ -887,9 +888,9 @@ void ASTContext::cleanup(CompilerInstance &CI)
    }
 }
 
-ASTContext::ASTContext()
-   : Allocator(), DeclNames(*this),
-     TI(*this, llvm::Triple(llvm::sys::getDefaultTargetTriple())),
+ASTContext::ASTContext(CompilerInstance &CI)
+   : CI(CI), Allocator(), DeclNames(*this),
+     TI(CI, llvm::Triple(llvm::sys::getDefaultTargetTriple())),
 #  define CDOT_BUILTIN_TYPE(Name)            \
      Name##Ty(BuiltinType::Name),
 #  include "Basic/BuiltinTypes.def"

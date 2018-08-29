@@ -3,6 +3,7 @@
 //
 
 #include "SemaPass.h"
+#include "Query/QueryContext.h"
 
 using namespace cdot::support;
 
@@ -196,6 +197,41 @@ static void FromThinFn(SemaPass &SP, QualType from, QualType to,
    Seq.invalidate();
 }
 
+static void FromMeta(SemaPass &SP, QualType from, QualType to,
+                     ConversionSequenceBuilder &Seq) {
+   if (!to->isMetaType())
+      return Seq.invalidate();
+
+   auto From = from->stripMetaType();
+   auto To = to->stripMetaType();
+
+   if (!From->isRecordType() || !To->isRecordType())
+      return Seq.invalidate();
+
+   auto FromRec = From->getRecord();
+   auto ToRec = To->getRecord();
+
+   if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
+      auto &ConfTable = SP.getContext().getConformanceTable();
+      if (ConfTable.conformsTo(FromRec, cast<ProtocolDecl>(P))) {
+         return Seq.addStep(CastKind::MetaTypeCast, to, CastStrength::Implicit);
+      }
+
+      return Seq.invalidate();
+   }
+
+   if (auto FromClass = dyn_cast<ClassDecl>(FromRec)) {
+      auto ToClass = dyn_cast<ClassDecl>(ToRec);
+      if (!ToClass)
+         return Seq.invalidate();
+
+      if (ToClass->isBaseClassOf(FromClass))
+         return Seq.addStep(CastKind::MetaTypeCast, to, CastStrength::Implicit);
+
+      return Seq.invalidate();
+   }
+}
+
 static void FromReference(SemaPass &SP,
                           QualType from, QualType to,
                           ConversionSequenceBuilder &Seq) {
@@ -231,7 +267,10 @@ static void FromReference(SemaPass &SP,
 static void FromRecord(SemaPass &SP, QualType from, QualType to,
                        ConversionSequenceBuilder &Seq) {
    auto FromRec = from->getRecord();
-   SP.ensureDeclared(FromRec);
+   if (SP.QC.PrepareDeclInterface(FromRec)) {
+      Seq.addStep(CastKind::NoOp, to);
+      return;
+   }
 
    auto OpName = SP.getContext().getDeclNameTable()
                    .getConversionOperatorName(to);
@@ -268,7 +307,7 @@ static void FromRecord(SemaPass &SP, QualType from, QualType to,
    if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
       auto &ConfTable = SP.getContext().getConformanceTable();
       if (ConfTable.conformsTo(FromRec, cast<ProtocolDecl>(P))) {
-         return Seq.addStep(CastKind::ProtoWrap, to, CastStrength::Implicit);
+         return Seq.addStep(CastKind::ExistentialInit, to, CastStrength::Implicit);
       }
 
       return Seq.invalidate();
@@ -294,7 +333,7 @@ static void FromRecord(SemaPass &SP, QualType from, QualType to,
 static void FromGenericRecord(SemaPass &SP, QualType from, QualType to,
                               ConversionSequenceBuilder &Seq) {
    if (from->getRecord() == to->getRecord()) {
-      return Seq.addStep(CastKind::NoOp, to);
+      return Seq.addStep(CastKind::NoOp, from);
    }
 
    return FromRecord(SP, from, to, Seq);
@@ -303,7 +342,10 @@ static void FromGenericRecord(SemaPass &SP, QualType from, QualType to,
 static void FromProtocol(SemaPass &SP, QualType from, QualType to,
                          ConversionSequenceBuilder &Seq) {
    auto FromRec = cast<ProtocolDecl>(from->getRecord());
-   SP.ensureDeclared(FromRec);
+   if (SP.QC.PrepareDeclInterface(FromRec)) {
+      Seq.addStep(CastKind::NoOp, to);
+      return;
+   }
 
    if (!to->isRecordType()) {
       return Seq.invalidate();
@@ -322,7 +364,7 @@ static void FromProtocol(SemaPass &SP, QualType from, QualType to,
                          CastStrength::Fallible);
    }
 
-   return Seq.addStep(CastKind::ExistentialUnwrap, to,
+   return Seq.addStep(CastKind::ExistentialUnwrapFallible, to,
                       CastStrength::Fallible);
 }
 
@@ -351,6 +393,8 @@ static void FromTuple(SemaPass &SP,
 
       Seq.addHalt();
    }
+
+   Seq.addStep(CastKind::NoOp, to);
 }
 
 static void FromArray(SemaPass &SP,
@@ -487,20 +531,14 @@ static void getConversionSequence(SemaPass &SP,
    case Type::TupleTypeID:
       FromTuple(SP, from->uncheckedAsTupleType(), to, Seq);
       break;
-   case Type::MetaTypeID:
-      if (from == to) {
-         Seq.addStep(CastKind::NoOp, to);
-      }
-      else {
-         Seq.invalidate();
-      }
-
-      break;
    case Type::ArrayTypeID:
       FromArray(SP, from->uncheckedAsArrayType(), to, Seq);
       break;
    case Type::FunctionTypeID:
       FromThinFn(SP, from, to, Seq);
+      break;
+   case Type::MetaTypeID:
+      FromMeta(SP, from, to, Seq);
       break;
    case Type::LambdaTypeID:
       Seq.invalidate();

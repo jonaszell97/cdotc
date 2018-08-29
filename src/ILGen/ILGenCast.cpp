@@ -18,11 +18,9 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-static il::Value *applySingleConversionStep(const ConversionStep &Step,
-                                            il::Value *Val,
-                                            ILGenPass &ILGen,
-                                            bool forced) {
-   auto &Builder = ILGen.Builder;
+il::Value *ILGenPass::applySingleConversionStep(const ConversionStep &Step,
+                                                il::Value *Val,
+                                                bool forced) {
    switch (Step.getKind()) {
    case CastKind::LValueToRValue:
       return Builder.CreateLoad(Val);
@@ -60,36 +58,54 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
       auto WrappedTy = Option->getTemplateArgs().front().getType();
 
       return Builder.CreateDynamicCast(
-         Val, ILGen.GetOrCreateTypeInfo(WrappedTy),
-         ILGen.getContext().getASTCtx().getRecordType(Option));
+         Val, GetOrCreateTypeInfo(WrappedTy),
+         getContext().getASTCtx().getRecordType(Option));
    }
-   case CastKind::ProtoWrap: {
+   case CastKind::ExistentialInit: {
       Builder.getModule()->addRecord(
-         ILGen.getSema().getExistentialContainerDecl());
+         getSema().getExistentialContainerDecl());
 
-      auto *ValueTI = ILGen.GetDynamicTypeInfo(Val);
-      auto *ProtoTI = ILGen.GetOrCreateTypeInfo(Step.getResultType());
+      auto *ValueTI = Builder.CreateLoad(GetDynamicTypeInfo(Val));
+      auto *ProtoTI = GetOrCreateTypeInfo(Step.getResultType());
 
       auto *Init = Builder.CreateExistentialInit(Val, Step.getResultType(),
                                                  ValueTI, ProtoTI);
 
-      ILGen.pushDefaultCleanup(Init);
+      pushDefaultCleanup(Init);
       return Init;
    }
    case CastKind::ExistentialCast: {
-      auto *DstTI = ILGen.GetOrCreateTypeInfo(Step.getResultType());
+      auto *DstTI = GetOrCreateTypeInfo(Step.getResultType());
       auto *Cast = Builder.CreateExistentialCast(Val, DstTI, Step.getKind(),
                                                  Step.getResultType());
 
-      ILGen.pushDefaultCleanup(Cast);
+      pushDefaultCleanup(Cast);
       return Cast;
    }
-   case CastKind::ExistentialCastFallible:
    case CastKind::ExistentialUnwrap: {
+      auto *DstTI = GetOrCreateTypeInfo(Step.getResultType());
+      auto *Res = Builder.CreateExistentialCast(Val, DstTI, Step.getKind(),
+                                                Step.getResultType());
+
+      pushDefaultCleanup(Res);
+      return Res;
+   }
+   case CastKind::ExistentialRef: {
+      Val = Builder.CreateLoad(Val);
+      Value *Ref = Builder.CreateIntrinsicCall(Intrinsic::existential_ref, Val);
+      if (getSema().NeedsStructReturn(
+            Step.getResultType()->stripReference())) {
+         Ref = Builder.CreateLoad(Ref);
+      }
+
+      return Builder.CreateBitCast(CastKind::BitCast, Ref, Step.getResultType());
+   }
+   case CastKind::ExistentialCastFallible:
+   case CastKind::ExistentialUnwrapFallible: {
       auto Option = cast<EnumDecl>(Step.getResultType()->getRecord());
       auto WrappedTy = Option->getTemplateArgs().front().getType();
 
-      auto *DstTI = ILGen.GetOrCreateTypeInfo(WrappedTy);
+      auto *DstTI = GetOrCreateTypeInfo(WrappedTy);
       auto *Opt = Builder.CreateExistentialCast(Val, DstTI, Step.getKind(),
                                                 Step.getResultType());
 
@@ -101,9 +117,12 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
          Val = Opt;
       }
 
-      ILGen.pushDefaultCleanup(Val);
+      pushDefaultCleanup(Val);
       return Val;
    }
+   case CastKind::MetaTypeCast:
+      return Builder.CreateBitCast(CastKind::BitCast, Val,
+                                   Step.getResultType());
    case CastKind::ProtoUnwrap: {
       llvm_unreachable("not yet");
    }
@@ -113,19 +132,25 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
    case CastKind::UpCast:
    case CastKind::NoThrowToThrows:
    case CastKind::ThinToThick:
-   case CastKind::MutRefToRef:
-   case CastKind::MutPtrToPtr:
       return Builder.CreateBitCast(Step.getKind(), Val,
                                    Step.getResultType());
+   case CastKind::MutRefToRef:
+      return Builder.CreateBitCast(
+         Step.getKind(), Val,
+         Context.getReferenceType(Val->getType()->getReferencedType()));
+   case CastKind::MutPtrToPtr:
+      return Builder.CreateBitCast(
+         Step.getKind(), Val,
+         Context.getPointerType(Val->getType()->getPointeeType()));
    case CastKind::Move:
-      if (ILGen.getSema().IsImplicitlyCopyableType(Val->getType()))
+      if (getSema().IsImplicitlyCopyableType(Val->getType()))
          return Val;
 
       return Builder.CreateMove(Val);
    case CastKind::Copy:
-      return ILGen.CreateCopy(Val);
+      return CreateCopy(Val);
    case CastKind::Forward:
-      return ILGen.Forward(Val);
+      return Forward(Val);
    case CastKind::ConversionOp: {
       auto *M = Step.getConversionOp();
       if (auto *I = dyn_cast<InitDecl>(M)) {
@@ -133,15 +158,15 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
             auto *Alloc = Builder.CreateLoad(Builder.CreateAlloca(
                I->getRecord()->getType()));
 
-            ILGen.CreateCall(I, { Alloc, Val });
+            CreateCall(I, { Alloc, Val });
             return Alloc;
          }
 
          return Builder.CreateStructInit(cast<StructDecl>(I->getRecord()),
-                                         ILGen.getFunc(I), Val);
+                                         getFunc(I), Val);
       }
 
-      return ILGen.CreateCall(Step.getConversionOp(), Val);
+      return CreateCall(Step.getConversionOp(), Val);
    }
    case CastKind::ToVoid:
       return nullptr;
@@ -154,21 +179,23 @@ static il::Value *applySingleConversionStep(const ConversionStep &Step,
    }
 }
 
-static il::Value *doTupleCast(const ConversionSequence &ConvSeq,
-                              il::Value *Val,
-                              ILGenPass &ILGen,
-                              bool forced) {
-   auto &Builder = ILGen.Builder;
-   auto Steps = ConvSeq.getSteps();
+il::Value *ILGenPass::doTupleCast(const ConversionSequence &ConvSeq,
+                                  il::Value *Val,
+                                  bool forced) {
+   return doTupleCast(ConvSeq.getSteps(), Val, forced);
+}
 
-   size_t i = 0;
+il::Value *ILGenPass::doTupleCast(ArrayRef<ConversionStep> Steps,
+                                  il::Value *Val,
+                                  bool forced) {
+   unsigned i = 0;
    for (auto &Step : Steps) {
       ++i;
 
       if (Step.isHalt())
          break;
 
-      Val = applySingleConversionStep(Step, Val, ILGen, forced);
+      Val = applySingleConversionStep(Step, Val, forced);
    }
 
    size_t NumSteps = Steps.size();
@@ -179,33 +206,41 @@ static il::Value *doTupleCast(const ConversionSequence &ConvSeq,
    assert(FinalTy->isTupleType());
 
    il::Value *Result = Builder.CreateAlloca(FinalTy);
-   Value *El = Builder.CreateTupleExtract(Val, 0);
-   size_t idx = 0;
+   Value *El = Builder.CreateLoad(Builder.CreateTupleExtract(Val, 0));
+
+   unsigned Arity = FinalTy->asTupleType()->getArity();
+   unsigned idx = 0;
 
    for (; i < NumSteps; ++i) {
       auto &Step = Steps[i];
       if (Step.isHalt()) {
-         auto GEP = Builder.CreateTupleExtract(Result, idx);
-         Builder.CreateStore(El, GEP);
+         auto GEP = Builder.CreateTupleExtract(Result, idx++);
+         Builder.CreateStore(Forward(El), GEP);
 
-         El = Builder.CreateTupleExtract(Val, ++idx);
+         if (idx >= Arity) {
+            break;
+         }
+
+         El = Builder.CreateLoad(Builder.CreateTupleExtract(Val, idx));
          continue;
       }
 
-      El = applySingleConversionStep(Step, El, ILGen, forced);
+      El = applySingleConversionStep(Step, El, forced);
    }
 
-   return Result;
+   return Builder.CreateLoad(Result);
 }
 
-static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
-                                 il::Value *Val,
-                                 ILGenPass &ILGen,
-                                 bool forced) {
-   auto &Builder = ILGen.Builder;
-   auto Steps = ConvSeq.getSteps();
+il::Value *ILGenPass::doFunctionCast(const ConversionSequence &ConvSeq,
+                                     il::Value *Val,
+                                     bool forced) {
+   return doFunctionCast(ConvSeq.getSteps(), Val, forced);
+}
 
-   size_t i = 0;
+il::Value *ILGenPass::doFunctionCast(ArrayRef<ConversionStep> Steps,
+                                     il::Value *Val,
+                                     bool forced) {
+   unsigned i = 0;
    for (auto &Step : Steps) {
       ++i;
 
@@ -219,17 +254,17 @@ static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
          Val = Builder.CreateLoad(Val);
          break;
       case CastKind::Forward:
-         Val = ILGen.Forward(Val);
+         Val = Forward(Val);
          break;
       case CastKind::NoThrowToThrows:
          Val = Builder.CreateBitCast(Step.getKind(), Val, Step.getResultType());
          break;
       case CastKind::ThinToThick: {
-         auto *Lambda = ILGen.wrapNonLambdaFunction(Val);
+         auto *Lambda = wrapNonLambdaFunction(Val);
 
          QualType FnTy = Lambda->getType();
-         auto *LambdaTy = ILGen.getSema().getContext()
-                               .getLambdaType(FnTy->asFunctionType());
+         auto *LambdaTy = getSema().getContext()
+                                   .getLambdaType(FnTy->asFunctionType());
 
          Val = Builder.CreateLambdaInit(Lambda, LambdaTy, {});
          break;
@@ -243,22 +278,44 @@ static il::Value *doFunctionCast(const ConversionSequence &ConvSeq,
    return Val;
 }
 
-static bool lastTypeIsFunctionType(const ConversionSequence &ConvSeq)
+static bool lastTypeIsFunctionType(ArrayRef<ConversionStep> Steps)
 {
-   return ConvSeq.getSteps().back().getResultType()->isFunctionType();
+   return Steps.back().getResultType()->isFunctionType();
 }
 
 il::Value* ILGenPass::HandleCast(const ConversionSequence &ConvSeq,
                                  il::Value *Val, bool forced) {
    if (Val->getType()->isTupleType()) {
-      Val = doTupleCast(ConvSeq, Val, *this, forced);
+      Val = doTupleCast(ConvSeq, Val, forced);
    }
    else if (Val->getType()->isFunctionType()
-            && lastTypeIsFunctionType(ConvSeq)) {
-      Val = doFunctionCast(ConvSeq, Val, *this, forced);
+            && lastTypeIsFunctionType(ConvSeq.getSteps())) {
+      Val = doFunctionCast(ConvSeq, Val, forced);
    }
    else for (auto &Step : ConvSeq.getSteps()) {
-      Val = applySingleConversionStep(Step, Val, *this, forced);
+      Val = applySingleConversionStep(Step, Val, forced);
+   }
+
+   return Val;
+}
+
+il::Value* ILGenPass::Convert(il::Value *Val, QualType ToTy)
+{
+   auto ConvSeq = SP.getConversionSequence(Val->getType(), ToTy);
+   assert(ConvSeq.isValid() && "invalid conversion!");
+
+   if (ConvSeq.isNoOp())
+      return Val;
+
+   if (Val->getType()->isTupleType()) {
+      Val = doTupleCast(ConvSeq.getSteps(), Val);
+   }
+   else if (Val->getType()->isFunctionType()
+            && lastTypeIsFunctionType(ConvSeq.getSteps())) {
+      Val = doFunctionCast(ConvSeq.getSteps(), Val);
+   }
+   else for (auto &Step : ConvSeq.getSteps()) {
+      Val = applySingleConversionStep(Step, Val);
    }
 
    return Val;

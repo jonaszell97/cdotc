@@ -310,6 +310,15 @@ public:
       return ret;
    }
 
+   enum ParseArtefactKind {
+      K_Statement,
+      K_Expr,
+      K_Decl,
+   };
+
+   ParseArtefactKind getNextArtefactKind();
+   bool moduleDeclFollows();
+
    enum ExprSeqFlags {
       F_None              = 0,
       F_StopAtThen        = 1,
@@ -424,18 +433,19 @@ private:
 
    struct DeclAttrs {
       DeclAttrs() : Access(AccessSpecifier::Default),
-                    Abstract(false),
-                    Sealed(false), Final(false)
+                    Abstract(false), Sealed(false),
+                    Final(false), Default(false)
       {}
 
       AccessSpecifier Access = AccessSpecifier::Default;
       SourceLocation AccessLoc;
-
+      SourceLocation DefaultLoc;
       SourceLocation StaticLoc;
 
       bool Abstract : 1;
       bool Sealed   : 1;
       bool Final    : 1;
+      bool Default  : 1;
    };
 
    DeclAttrs CurDeclAttrs;

@@ -288,10 +288,10 @@ ReflectionBuilder::BuildArrayView(QualType ElementTy,
       return nullptr;
    }
 
-   ResolvedTemplateArg Arg(AV->getTemplateParams().front(), ElementTy);
+   TemplateArgument Arg(AV->getTemplateParams().front(), ElementTy);
    auto *TemplateArgs = FinalTemplateArgumentList::Create(Context, { Arg });
 
-   auto Inst = SP.Instantiator.InstantiateRecord(Expr, AV, TemplateArgs);
+   auto Inst = SP.InstantiateRecord(Expr->getSourceLoc(), AV, TemplateArgs);
    if (!Inst)
       return nullptr;
 
@@ -303,8 +303,7 @@ ReflectionBuilder::BuildArrayView(QualType ElementTy,
    auto *FirstElPtr = il::ConstantExpr::getBitCast(
       GV, ElementTy->getPointerTo(Context));
 
-   return Builder.GetConstantStruct(
-      cast<StructDecl>(Inst.getValue()), { FirstElPtr, Size });
+   return Builder.GetConstantStruct(cast<StructDecl>(Inst), {FirstElPtr, Size});
 }
 
 il::Constant* ReflectionBuilder::BuildOption(QualType Ty, il::Constant *Val)
@@ -317,14 +316,14 @@ il::Constant* ReflectionBuilder::BuildOption(QualType Ty, il::Constant *Val)
       return nullptr;
    }
 
-   ResolvedTemplateArg Arg(Opt->getTemplateParams().front(), Ty);
+   TemplateArgument Arg(Opt->getTemplateParams().front(), Ty);
    auto *TemplateArgs = FinalTemplateArgumentList::Create(Context, { Arg });
 
-   auto Inst = SP.Instantiator.InstantiateRecord(Expr, Opt, TemplateArgs);
+   auto Inst = SP.InstantiateRecord(Expr->getSourceLoc(), Opt, TemplateArgs);
    if (!Inst)
       return nullptr;
 
-   auto InstVal = cast<EnumDecl>(Inst.getValue());
+   auto InstVal = cast<EnumDecl>(Inst);
    auto case_it = InstVal->decl_begin<EnumCaseDecl>();
 
    if (Val) {
@@ -955,7 +954,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       if (Ty->isRecordType()) {
-         if (!ensureSizeKnown(Ty->getRecord(), Expr->getSourceLoc()))
+         if (!ensureSizeKnown(Ty->getRecord(), Expr))
             return ExprError();
       }
 
@@ -984,7 +983,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       if (Ty->isRecordType()) {
-         if (!ensureSizeKnown(Ty->getRecord(), Expr->getSourceLoc()))
+         if (!ensureSizeKnown(Ty->getRecord(), Expr))
             return ExprError();
       }
 

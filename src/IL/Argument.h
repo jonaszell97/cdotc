@@ -32,6 +32,9 @@ public:
    bool isSelf() const { return ArgBits.IsSelf; }
    void setSelf(bool self) { ArgBits.IsSelf = self; }
 
+   bool isGenericEnvironment() const { return ArgBits.GenericEnvironment; }
+   void setGenericEnvironment(bool V) { ArgBits.GenericEnvironment = V; }
+
    SourceLocation getSourceLoc() const { return SourceLoc; }
    void setSourceLoc(SourceLocation Loc) { SourceLoc = Loc; }
 

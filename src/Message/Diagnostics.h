@@ -5,14 +5,14 @@
 #ifndef CDOT_DIAGNOSTICS_H
 #define CDOT_DIAGNOSTICS_H
 
-#include "Basic/Variant.h"
 #include "Lex/SourceLocation.h"
 
-#include <unordered_map>
-#include <string>
-#include <vector>
-#include <stack>
 #include <llvm/Support/raw_ostream.h>
+
+#include <stack>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace cdot {
 

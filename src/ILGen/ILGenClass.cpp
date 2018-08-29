@@ -12,21 +12,22 @@
 #include "IL/Instructions.h"
 #include "IL/Passes/DefinitiveInitializationPass.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
+#include "Support/SaveAndRestore.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
 
+using namespace cdot;
+using namespace cdot::ast;
 using namespace cdot::il;
 using namespace cdot::support;
 
-namespace cdot {
-namespace ast {
-
 void ILGenPass::ForwardDeclareRecord(RecordDecl *R)
 {
-   if (R->isInUnboundedTemplate())
+   if (R->isTemplateOrInTemplate())
       return;
 
    Builder.getModule()->addRecord(R);
@@ -54,7 +55,7 @@ void ILGenPass::DeclareProtocol(ProtocolDecl *P)
 
 void ILGenPass::DeclareRecord(RecordDecl *R)
 {
-   if (R->isInUnboundedTemplate())
+   if (R->isTemplateOrInTemplate())
       return;
 
    if (auto S = dyn_cast<StructDecl>(R)) {
@@ -71,7 +72,7 @@ void ILGenPass::DeclareRecord(RecordDecl *R)
    }
 
    for (auto *Ext : R->getExtensions()) {
-      if (Ext->getExtendedRecord()->isInUnboundedTemplate())
+      if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
          return;
 
       if (isa<ProtocolDecl>(Ext->getExtendedRecord()))
@@ -110,7 +111,7 @@ void ILGenPass::DeclareDeclContext(DeclContext *Ctx)
 
 void ILGenPass::declareRecordInstantiation(RecordDecl *Inst)
 {
-   if (Inst->isUnboundedTemplate())
+   if (Inst->isTemplateOrInTemplate())
       return;
 
    ForwardDeclareRecord(Inst);
@@ -126,7 +127,7 @@ void ILGenPass::DefineDefaultInitializer(StructDecl *S)
    if (S->isExternal())
       return;
 
-   auto fn = getFunc(S->getDefaultInitializer());
+   il::Function *fn = getFunc(S->getDefaultInitializer());
    if (!fn->isDeclared())
       return;
 
@@ -315,19 +316,7 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M)
 void ILGenPass::DeclareField(FieldDecl *field)
 {
    if (field->isStatic() && DeclMap.find(field) == DeclMap.end()) {
-      std::string linkageName;
-      {
-         llvm::raw_string_ostream OS(linkageName);
-         SP.getMangler().mangle(field, OS);
-      }
-
-      auto glob = Builder.CreateGlobalVariable(field->getType(),
-                                               field->isConst(), nullptr,
-                                               linkageName,
-                                               field->getSourceLoc());
-
-      DeclMap[field] = glob;
-      return;
+      DeclareGlobalVariable(field);
    }
 }
 
@@ -346,7 +335,7 @@ void ILGenPass::visitRecordDecl(RecordDecl *node)
    if (alreadyVisited(node))
       return;
 
-   if (node->isUnboundedTemplate())
+   if (node->isTemplateOrInTemplate())
       return;
 
    if (auto C = dyn_cast<ClassDecl>(node)) {
@@ -368,6 +357,13 @@ void ILGenPass::visitRecordDecl(RecordDecl *node)
 
 void ILGenPass::visitRecordCommon(RecordDecl *R)
 {
+//   il::Value *GenericEnv = nullptr;
+//   if (R->isInstantiation()) {
+//      GenericEnv = GetGenericEnvironment(QualType(), &R->getTemplateArgs());
+//   }
+//
+//   auto SAR = support::saveAndRestore(this->GenericEnv, GenericEnv);
+
    for (auto &decl : R->getDecls())
       visit(decl);
 
@@ -391,7 +387,7 @@ void ILGenPass::visitRecordCommon(RecordDecl *R)
 
 void ILGenPass::visitClassDecl(ClassDecl *C)
 {
-   if (C->isInUnboundedTemplate())
+   if (C->isTemplateOrInTemplate())
       return;
 
    visitRecordCommon(C);
@@ -399,7 +395,7 @@ void ILGenPass::visitClassDecl(ClassDecl *C)
 
 void ILGenPass::visitStructDecl(StructDecl *S)
 {
-   if (S->isInUnboundedTemplate())
+   if (S->isTemplateOrInTemplate())
       return;
 
    visitRecordCommon(S);
@@ -453,7 +449,7 @@ il::GlobalVariable *ILGenPass::GenerateVTable(ClassDecl *C)
 
    SmallVector<il::Constant*, 8> Impls;
    for (auto *M : VirtualMethods) {
-      auto *Fn = getFunc(M);
+      il::Method *Fn = getFunc(M);
       Fn->setVtableOffset((unsigned)Impls.size());
 
       Impls.push_back(ConstantExpr::getBitCast(Fn, RawPtrTy));
@@ -594,11 +590,39 @@ void ILGenPass::visitFieldDecl(FieldDecl *node)
    if (auto Acc = node->getAccessor())
       visitPropDecl(Acc);
 
-   if (!node->getDefaultVal() || !node->isStatic())
+   if (!node->isStatic())
       return;
 
+   if (!node->getValue() && !node->getValueTemplate())
+      return;
+
+   Expression *DefaultVal;
+   SpecializationScope Scope;
+   if (node->shouldBeSpecialized()) {
+      sema::MultiLevelFinalTemplateArgList Args;
+      DeclContext *Ctx = node->getRecord();
+
+      while (Ctx) {
+         if (isa<NamedDecl>(Ctx) && cast<NamedDecl>(Ctx)->isInstantiation()) {
+            Args.push_back(cast<NamedDecl>(Ctx)->getTemplateArgs());
+         }
+
+         Ctx = Ctx->getParentCtx();
+      }
+
+      Args.reverse();
+
+      DefaultVal = node->getValueTemplate()->getValue();
+      Scope = SpecializationScope(std::move(Args), node->getRecord());
+   }
+   else {
+      DefaultVal = node->getValue();
+   }
+
+   auto SAR = support::saveAndRestore(this->CurrentSpecializationScope, Scope);
+
    auto glob = cast<il::GlobalVariable>(DeclMap[node]);
-   DefineLazyGlobal(glob, node->getValue());
+   DefineLazyGlobal(glob, DefaultVal);
 }
 
 void ILGenPass::SynthesizeGetterAndSetter(FieldDecl *F)
@@ -700,7 +724,7 @@ void ILGenPass::visitPropDecl(PropDecl*)
 
 void ILGenPass::visitExtensionDecl(ExtensionDecl *Ext)
 {
-   if (Ext->getExtendedRecord()->isInUnboundedTemplate())
+   if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
       return;
 
    for (auto &decl : Ext->getDecls()) {
@@ -724,7 +748,7 @@ void ILGenPass::visitProtocolDecl(ProtocolDecl *P)
 
 void ILGenPass::visitEnumDecl(EnumDecl *E)
 {
-   if (E->isInUnboundedTemplate())
+   if (E->isTemplateOrInTemplate())
       return;
 
    visitRecordCommon(E);
@@ -732,7 +756,7 @@ void ILGenPass::visitEnumDecl(EnumDecl *E)
 
 void ILGenPass::visitUnionDecl(UnionDecl *U)
 {
-   if (U->isInUnboundedTemplate())
+   if (U->isTemplateOrInTemplate())
       return;
 
    visitRecordCommon(U);
@@ -783,23 +807,20 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, bool IsComplete)
       }
    }
 
-   size_t i = 0;
+   unsigned i = 0;
    for (auto F : S->getFields()) {
       if (F->getDefaultVal()) {
          continue;
       }
 
       assert(arg_it != EntryBB->arg_end());
-      auto arg = &*arg_it;
+      auto arg = &*arg_it++;
 
       // arguments are passed as 'owned', so we need to clean them up
       pushDefaultCleanup(arg);
 
-      auto gep = Builder.CreateStructGEP(Self, i);
+      auto gep = Builder.CreateStructGEP(Self, i++);
       CreateStore(Forward(arg), gep, true);
-
-      ++arg_it;
-      ++i;
    }
 
    Builder.CreateRetVoid();
@@ -1137,158 +1158,210 @@ void ILGenPass::setProtocolMethodOffset(MethodDecl *ProtoMethod,
    ProtocolMethodOffsets[ProtoMethod] = Offset;
 }
 
-il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
+QueryResult GetILTypeInfoQuery::run()
 {
-   auto it = TypeInfoMap.find(ty);
-   if (it != TypeInfoMap.end()) {
-      auto *GV = it->getSecond();
-      if (auto M = Builder.getModule())
-         return GV->getDeclarationIn(M);
-
-      return GV;
-   }
-
    il::Module *Mod;
    SourceLocation Loc;
 
-   if (ty->isRecordType()) {
-      Mod = getModuleFor(ty->getRecord());
-      Loc = ty->getRecord()->getSourceLoc();
+   if (T->isRecordType()) {
+      if (QC.GetILModuleForDecl(Mod, T->getRecord())) {
+         return fail();
+      }
+
+      Loc = T->getRecord()->getSourceLoc();
    }
    else {
-      auto *MainMod = SP.getCompilationUnit().getCompilationModule();
+      auto *MainMod = sema().getCompilationUnit().getCompilationModule();
       Mod = MainMod->getILModule();
       Loc = MainMod->getSourceLoc();
    }
 
-   ModuleRAII MR(*this, Mod);
-   ConstantStruct *TI;
+   auto &ILGen = sema().getILGen();
 
-   if (ty->isRecordType()) {
-      TI = CreateRecordTypeInfo(ty->getRecord());
+   ILGenPass::ModuleRAII MR(ILGen, Mod);
+   Constant *TI;
+
+   if (T->isRecordType()) {
+      if (QC.CreateILRecordTypeInfo(TI, T->getRecord())) {
+         return fail();
+      }
    }
    else {
-      TI = CreateBuiltinTypeInfo(ty);
+      if (QC.CreateILBasicTypeInfo(TI, T)) {
+         return fail();
+      }
    }
 
    std::string s;
    {
       llvm::raw_string_ostream OS(s);
-      SP.getMangler().mangleTypeInfo(ty, OS);
+      sema().getMangler().mangleTypeInfo(T, OS);
    }
 
-   auto GV = Builder.CreateGlobalVariable(TI, true, s, Loc);
-
-   TypeInfoMap[ty] = GV;
-   if (!ty->isRecordType())
+   auto GV = ILGen.Builder.CreateGlobalVariable(TI, true, s, Loc);
+   if (!T->isRecordType())
       GV->setLinkage(GlobalVariable::InternalLinkage);
+
+   return finish(GV);
+}
+
+il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
+{
+   il::GlobalVariable *GV;
+   if (SP.QC.GetILTypeInfo(GV, ty)) {
+      return nullptr;
+   }
+
+   if (auto M = Builder.getModule())
+      return GV->getDeclarationIn(M);
 
    return GV;
 }
 
-il::ConstantStruct *ILGenPass::CreateRecordTypeInfo(RecordDecl *R)
+QueryResult CreateILRecordTypeInfoQuery::run()
 {
-   QualType ty = R->getType();
-   auto &Context = SP.getContext();
+   auto &ILGen = sema().getILGen();
+   auto &Builder = ILGen.Builder;
+
+   auto &Context = sema().getContext();
    auto &TI = Context.getTargetInfo();
+
+   QualType T = Context.getRecordType(R);
 
    // Base class pointer.
    Constant *baseClass = nullptr;
    if (auto *C = dyn_cast<ClassDecl>(R)) {
       if (auto *Base = C->getParentClass()) {
-         auto *BaseTypeInfo = GetOrCreateTypeInfo(Base->getType());
+         il::GlobalVariable *BaseTypeInfo;
+         if (QC.GetILTypeInfo(BaseTypeInfo, Base->getType())) {
+            return fail();
+         }
+
          baseClass = ConstantExpr::getAddrOf(BaseTypeInfo);
       }
    }
 
-   if (!baseClass)
+   RecordDecl *TypeInfoDecl;
+   if (QC.GetBuiltinRecord(TypeInfoDecl, GetBuiltinRecordQuery::TypeInfo)) {
+      return fail();
+   }
+
+   if (!baseClass) {
       baseClass = Builder.GetConstantNull(Context.getPointerType(
-         Context.getRecordType(SP.getTypeInfoDecl())));
+         Context.getRecordType(TypeInfoDecl)));
+   }
 
    // Vtable pointer.
    Constant *vtable = nullptr;
    if (auto *C = dyn_cast<ClassDecl>(R)) {
-      auto *VT = GetOrCreateVTable(C);
+      auto *VT = ILGen.GetOrCreateVTable(C);
       if (VT) {
          vtable = ConstantExpr::getAddrOf(VT);
       }
    }
 
-   if (!vtable)
-      vtable = Builder.GetConstantNull(VoidTy->getPointerTo(Context)
-                                             ->getPointerTo(Context));
+   if (!vtable) {
+      vtable = Builder.GetConstantNull(ILGen.VoidTy->getPointerTo(Context)
+                                                   ->getPointerTo(Context));
+   }
 
    // Deinitializer.
    Constant *deinit;
    if (auto *DeinitFn = R->getDeinitializer()) {
-     deinit = ConstantExpr::getBitCast(getFunc(DeinitFn), DeinitializerTy);
+      il::Function *ILFn;
+      if (QC.GetILFunction(ILFn, DeinitFn)) {
+         return fail();
+      }
+
+      deinit = ConstantExpr::getBitCast(ILFn, ILGen.DeinitializerTy);
    }
    else {
-      deinit = Builder.GetConstantNull(DeinitializerTy);
+      deinit = Builder.GetConstantNull(ILGen.DeinitializerTy);
    }
 
    // Type name.
    auto name = Builder.GetConstantString(R->getFullName());
 
    // Value witness table.
-   auto valueWitnessTable = CreateValueWitnessTable(R);
+   auto valueWitnessTable = ILGen.CreateValueWitnessTable(R);
 
    // Protocol conformances.
-   auto conformances = CreateProtocolConformances(R);
+   auto conformances = ILGen.CreateProtocolConformances(R);
 
    // Type size.
-   auto size = Builder.GetConstantInt(USizeTy, TI.getSizeOfType(ty));
+   auto size = Builder.GetConstantInt(ILGen.USizeTy, TI.getSizeOfType(T));
 
    // Type alignment.
-   auto alignment = Builder.GetConstantInt(USizeTy, TI.getAlignOfType(ty));
+   auto alignment = Builder.GetConstantInt(ILGen.USizeTy, TI.getAlignOfType(T));
 
    // Type stride.
-   auto stride = Builder.GetConstantInt(USizeTy, TI.getAllocSizeOfType(ty));
+   auto stride = Builder.GetConstantInt(ILGen.USizeTy, TI.getAllocSizeOfType(T));
 
-   return Builder.GetConstantStruct(SP.getTypeInfoDecl(), {
+   return finish(Builder.GetConstantStruct(cast<StructDecl>(TypeInfoDecl), {
       baseClass, vtable, deinit, name, valueWitnessTable, conformances, size,
       alignment, stride
-   });
+   }));
 }
 
-il::ConstantStruct* ILGenPass::CreateBuiltinTypeInfo(QualType ty)
+QueryResult CreateILBasicTypeInfoQuery::run()
 {
+   auto &ILGen = sema().getILGen();
+   auto &Context = sema().Context;
+   auto &Builder = ILGen.Builder;
    auto &TI = Context.getTargetInfo();
 
+   RecordDecl *TypeInfoDecl;
+   if (QC.GetBuiltinRecord(TypeInfoDecl, GetBuiltinRecordQuery::TypeInfo)) {
+      return fail();
+   }
+
    // Base class pointer.
-   auto baseClass = Builder.GetConstantNull(SP.getTypeInfoDecl()->getType());
+   auto baseClass = Builder.GetConstantNull(
+      TypeInfoDecl->getType()->getPointerTo(Context));
 
    // Vtable pointer.
-   auto vtable = Builder.GetConstantNull(VoidTy->getPointerTo(Context)
-                                               ->getPointerTo(Context));
+   auto vtable = Builder.GetConstantNull(ILGen.VoidTy->getPointerTo(Context)
+                                                     ->getPointerTo(Context));
 
    // Deinitializer
-   auto deinit = Builder.GetConstantNull(DeinitializerTy);
+   auto deinit = Builder.GetConstantNull(ILGen.DeinitializerTy);
 
    // Type name.
-   auto name = Builder.GetConstantString(ty.toString());
+   auto name = Builder.GetConstantString(T.toString());
+
+   RecordDecl *ValueWitnessDecl;
+   if (QC.GetBuiltinRecord(ValueWitnessDecl,
+                           GetBuiltinRecordQuery::ValueWitnessTable)) {
+      return fail();
+   }
+
+   RecordDecl *ProtocolConformanceDecl;
+   if (QC.GetBuiltinRecord(ProtocolConformanceDecl,
+                           GetBuiltinRecordQuery::ProtocolConformance)) {
+      return fail();
+   }
 
    // Value witness table.
    auto valueWitnessTable = Builder.GetConstantNull(Context.getPointerType(
-      Context.getRecordType(SP.getValueWitnessTableDecl())));
+      Context.getRecordType(ValueWitnessDecl)));
 
    // Protocol conformances.
    auto conformances = Builder.GetConstantNull(Context.getPointerType(
-      Context.getRecordType(SP.getProtocolConformanceDecl())));
+      Context.getRecordType(ProtocolConformanceDecl)));
 
    // Type size.
-   auto size = Builder.GetConstantInt(USizeTy, TI.getSizeOfType(ty));
+   auto size = Builder.GetConstantInt(ILGen.USizeTy, TI.getSizeOfType(T));
 
    // Type alignment.
-   auto alignment = Builder.GetConstantInt(USizeTy, TI.getAlignOfType(ty));
+   auto alignment = Builder.GetConstantInt(ILGen.USizeTy, TI.getAlignOfType(T));
 
    // Type stride.
-   auto stride = Builder.GetConstantInt(USizeTy, TI.getAllocSizeOfType(ty));
+   auto stride = Builder.GetConstantInt(ILGen.USizeTy, TI.getAllocSizeOfType(T));
 
-   return Builder.GetConstantStruct(SP.getTypeInfoDecl(), {
+   return finish(Builder.GetConstantStruct(cast<StructDecl>(TypeInfoDecl), {
       baseClass, vtable, deinit, name, valueWitnessTable, conformances, size,
       alignment, stride
-   });
+   }));
 }
 
 il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl *R)
@@ -1301,15 +1374,18 @@ il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl *R)
    // Copy function.
    il::Constant *CopyFn = nullptr;
    if (isa<ClassDecl>(R)) {
-      auto *Decl = SP.getBuiltinDecl<FunctionDecl>("_cdot_CopyClass");
-      SP.ensureDeclared(Decl);
-
-      CopyFn = getFunc(Decl);
+      CallableDecl *CopyClass;
+      if (!SP.QC.GetBuiltinFunc(CopyClass, GetBuiltinFuncQuery::CopyClass)) {
+         SP.QC.GetILFunction(reinterpret_cast<il::Function*&>(CopyFn),
+                             CopyClass);
+      }
    }
    else if (auto *Copy = R->getCopyFn()) {
-      CopyFn = getFunc(Copy);
+      SP.QC.GetILFunction(reinterpret_cast<il::Function*&>(CopyFn),
+                          Copy);
    }
-   else {
+
+   if (!CopyFn) {
       CopyFn = Builder.GetConstantNull(CopyFnTy);
    }
 
@@ -1318,7 +1394,7 @@ il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl *R)
    // Deinitializer function.
    il::Constant *DeinitFn = nullptr;
    if (isa<ClassDecl>(R)) {
-      auto *Decl = SP.getBuiltinDecl<FunctionDecl>("_cdot_AtomicRelease");
+      auto *Decl = SP.getAtomicReleaseDecl();
       SP.ensureDeclared(Decl);
 
       DeinitFn = getFunc(Decl);
@@ -1361,21 +1437,20 @@ il::Constant* ILGenPass::CreateProtocolConformances(RecordDecl *R)
    auto *Arr = Builder.GetConstantArray(Conformances);
    auto *GV = Builder.CreateGlobalVariable(Arr, true);
 
-   return ConstantExpr::getAddrOf(GV);
+   return ConstantExpr::getBitCast(
+      GV, Arr->getElementType()->getPointerTo(Context));
 }
 
 il::ConstantStruct* ILGenPass::CreateProtocolConformance(RecordDecl *R,
                                                          ProtocolDecl *P) {
    // Type info reference.
-   auto *TI = GetOrCreateTypeInfo(P->getType());
+   auto *TI = GetOrCreateTypeInfo(Context.getRecordType(P));
 
    // VTable.
-   auto *VTable = GetOrCreatePTable(R, P);
+   auto *VTable = ConstantExpr::getBitCast(
+      GetOrCreatePTable(R, P), Int8PtrTy->getPointerTo(Context));
 
    return Builder.GetConstantStruct(SP.getProtocolConformanceDecl(), {
       ConstantExpr::getAddrOf(TI), VTable
    });
 }
-
-} // namespace ast
-} // namespace cdot

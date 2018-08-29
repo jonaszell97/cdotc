@@ -3,7 +3,7 @@ module std.prelude
 
 postfix !
 
-public enum Option<T> {
+public enum Option<T: ?> {
     /// `none` represents the absence of a value.
     case None
 

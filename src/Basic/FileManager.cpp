@@ -162,40 +162,40 @@ llvm::StringRef FileManager::getFileName(SourceID sourceId)
 }
 
 SourceLocation
-FileManager::createModuleImportLoc(ast::ImportDecl *I)
+FileManager::createModuleImportLoc(SourceLocation Loc)
 {
    auto previous = sourceIdOffsets.back();
    auto id = static_cast<SourceID>(sourceIdOffsets.size());
    auto offset = previous + 1;
 
    sourceIdOffsets.push_back(offset);
-   Imports[id] = I;
+   Imports[id] = Loc;
 
    return SourceLocation(previous);
 }
 
-ast::ImportDecl *FileManager::getImportForLoc(SourceLocation Loc)
+SourceLocation FileManager::getImportForLoc(SourceLocation Loc)
 {
    auto It = Imports.find(getSourceId(Loc));
    if (It != Imports.end())
       return It->getSecond();
 
-   return nullptr;
+   return SourceLocation();
 }
 
-ast::ImportDecl *FileManager::getImportForID(SourceID ID)
+SourceLocation FileManager::getImportForID(SourceID ID)
 {
    auto It = Imports.find(ID);
    if (It != Imports.end())
       return It->getSecond();
 
-   return nullptr;
+   return SourceLocation();
 }
 
 SourceLocation FileManager::getReplacementLocation(SourceLocation Loc)
 {
    if (auto Import = getImportForID(getSourceId(Loc))) {
-      return getReplacementLocation(Import->getSourceLoc());
+      return getReplacementLocation(Import);
    }
    if (auto *Exp = getMacroExpansionLoc(Loc)) {
       return getReplacementLocation(Exp->PatternLoc);
@@ -207,7 +207,7 @@ SourceLocation FileManager::getReplacementLocation(SourceLocation Loc)
 SourceID FileManager::getReplacementID(SourceID ID)
 {
    if (auto Import = getImportForID(ID)) {
-      return getReplacementID(getSourceId(Import->getSourceLoc()));
+      return getReplacementID(getSourceId(Import));
    }
 
    auto It = MacroExpansionLocs.find(ID);
@@ -262,7 +262,7 @@ FileManager::MacroExpansionLoc
 FileManager::createMacroExpansion(SourceLocation ExpansionLoc,
                                   SourceLocation PatternLoc,
                                   unsigned SourceLength,
-                                  DeclarationName MacroName) {
+                                  const IdentifierInfo *MacroName) {
    auto previous = sourceIdOffsets.back();
    SourceID id = sourceIdOffsets.size();
 
@@ -393,7 +393,7 @@ void FileManager::dumpSourceRange(SourceRange SR)
       loc = AliasLoc;
    }
    while (auto Import = getImportForLoc(loc)) {
-      loc = Import->getSourceLoc();
+      loc = Import;
    }
 
    while (auto Exp = getMacroExpansionLoc(loc)) {
@@ -461,7 +461,7 @@ void FileManager::dumpSourceRange(SourceRange SR)
             End = SourceLocation(Start.getOffset() + Diff);
       }
       while (auto Import = getImportForLoc(Start)) {
-         Start = Import->getSourceLoc();
+         Start = Import;
 
          if (End)
             End = SourceLocation(Start.getOffset() + Diff);

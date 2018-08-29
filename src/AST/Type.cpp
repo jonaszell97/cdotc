@@ -24,12 +24,12 @@ namespace cdot {
 
 bool TypeProperties::isDependent() const
 {
-   static constexpr uint8_t DependentMask =
+   static constexpr uint16_t DependentMask =
       ContainsDependentNameType
       | ContainsDependentSizeArrayType
       | ContainsUnboundGeneric
       | ContainsUnknownAny
-      | ContainsAssociatedType;
+      | ContainsGenericType;
 
    return (Props & DependentMask) != 0;
 }
@@ -47,6 +47,11 @@ bool TypeProperties::containsAssociatedType() const
 bool TypeProperties::containsUnexpandedParameterPack() const
 {
    return (Props & ContainsUnexpandedParameterPack) != 0;
+}
+
+bool TypeProperties::containsRuntimeGenericParam() const
+{
+   return (Props & ContainsRuntimeGenericParam) != 0;
 }
 
 bool TypeProperties::isUnpopulated() const
@@ -347,15 +352,15 @@ QualType Type::getBoxedType() const
 
 QualType Type::stripReference() const
 {
-   if (isReferenceType())
-      return getReferencedType();
+   if (auto *Ref = dyn_cast<ReferenceType>(this))
+      return Ref->getReferencedType();
 
    return const_cast<Type*>(this);
 }
 
 QualType Type::stripMetaType() const
 {
-   if (auto *Meta = asMetaType())
+   if (auto *Meta = dyn_cast<MetaType>(this))
       return Meta->getUnderlyingType();
 
    return const_cast<Type*>(this);
@@ -735,7 +740,7 @@ public:
       }
    }
 
-   void visitTemplateArg(const sema::ResolvedTemplateArg &Arg)
+   void visitTemplateArg(const sema::TemplateArgument &Arg)
    {
       if (Arg.isVariadic()) {
          OS << "(";
@@ -1007,7 +1012,13 @@ public:
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, QualType Ty)
 {
-   TypePrinter(OS).visit(Ty);
+   if (!Ty) {
+      OS << "<null>";
+   }
+   else {
+      TypePrinter(OS).visit(Ty);
+   }
+
    return OS;
 }
 
@@ -1021,7 +1032,13 @@ diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &Diag, QualType Ty)
    std::string str;
    llvm::raw_string_ostream OS(str);
 
-   DiagTypePrinter(OS).visit(Ty);
+   if (!Ty) {
+      OS << "<null>";
+   }
+   else {
+      DiagTypePrinter(OS).visit(Ty);
+   }
+
    return Diag << OS.str();
 }
 
@@ -1035,7 +1052,7 @@ std::string QualType::toDiagString() const
    std::string str;
    llvm::raw_string_ostream OS(str);
 
-   DiagTypePrinter(OS).visit(*this);
+   OS << *this;
    return OS.str();
 }
 
@@ -1120,7 +1137,7 @@ RecordType::RecordType(RecordDecl *record)
    : Type(TypeID::RecordTypeID, nullptr),
      Rec(record)
 {
-   if (record->isInUnboundedTemplate()) {
+   if (record->isTemplateOrInTemplate()) {
       Bits.Props |= TypeProperties::ContainsUnboundGeneric;
    }
 }
@@ -1136,13 +1153,36 @@ RecordType::RecordType(TypeID typeID,
    }
 }
 
-DependentRecordType::DependentRecordType(RecordDecl *record,
-                                         sema::FinalTemplateArgumentList
-                                                                  *templateArgs)
+static void copyTemplateArgProps(TypeProperties &Props,
+                                 const sema::TemplateArgument &Arg) {
+   if (!Arg.isType())
+      return;
+
+   if (Arg.isVariadic()) {
+      for (auto &VA : Arg.getVariadicArgs()) {
+         copyTemplateArgProps(Props, VA);
+      }
+
+      return;
+   }
+
+   Props |= Arg.getNonCanonicalType()->properties();
+}
+
+DependentRecordType::DependentRecordType(
+      RecordDecl *record,
+      sema::FinalTemplateArgumentList *templateArgs,
+      QualType Parent)
    : RecordType(TypeID::DependentRecordTypeID, record,
                 templateArgs->isStillDependent()),
-     templateArgs(templateArgs)
+     Parent(Parent), templateArgs(templateArgs)
 {
+   for (auto &Arg : *templateArgs) {
+      copyTemplateArgProps(Bits.Props, Arg);
+   }
+
+   if (Parent)
+      Bits.Props |= Parent->properties();
 }
 
 sema::FinalTemplateArgumentList& RecordType::getTemplateArgs() const
@@ -1180,9 +1220,10 @@ void RecordType::setDependent(bool dep)
 
 void DependentRecordType::Profile(llvm::FoldingSetNodeID &ID,
                                   ast::RecordDecl *R,
-                                  sema::FinalTemplateArgumentList
-                                                               *templateArgs) {
+                                  sema::FinalTemplateArgumentList *templateArgs,
+                                  QualType Parent) {
    ID.AddPointer(R);
+   ID.AddPointer(Parent.getAsOpaquePtr());
    templateArgs->Profile(ID);
 }
 
@@ -1317,8 +1358,12 @@ GenericType::GenericType(TemplateParamDecl *Param)
    if (Param->isVariadic()) {
       Bits.Props |= TypeProperties::ContainsUnexpandedParameterPack;
    }
+
    if (Param->isUnbounded()) {
       Bits.Props |= TypeProperties::ContainsUnboundGeneric;
+   }
+   else {
+      Bits.Props |= TypeProperties::ContainsRuntimeGenericParam;
    }
 }
 

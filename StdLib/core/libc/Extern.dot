@@ -43,6 +43,7 @@ declare C {
     public def memmove(UnsafeMutableRawPtr, UnsafeRawPtr, size_t) -> UnsafeMutableRawPtr
 
     public def memcmp(UnsafeRawPtr, UnsafeRawPtr, size_t) -> int
+    public def strcmp(CString, CString) -> int
 
     public def malloc(size_t) -> UnsafeMutableRawPtr 
     public def free(UnsafeMutableRawPtr)

@@ -4,6 +4,7 @@
 
 #include "ExpressionResolver.h"
 #include "CandidateSet.h"
+#include "Query/QueryContext.h"
 #include "SemaPass.h"
 #include "Support/Casting.h"
 #include "Support/StringSwitch.h"
@@ -562,13 +563,19 @@ ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
 
    auto OpStr = Next.asString();
    auto *II = &SP.getContext().getIdentifiers().get(OpStr);
-   auto OpName = SP.getContext().getDeclNameTable().getInfixOperatorName(*II);
 
-   auto Decl = SP.getContext().getInfixOperator(II);
-   if (!Decl)
+   auto &DeclNames = SP.getContext().getDeclNameTable();
+
+   auto OpName = DeclNames.getInfixOperatorName(*II);
+   auto OpDeclName = DeclNames.getOperatorDeclName(OpName);
+
+   OperatorDecl *Decl;
+   if (SP.QC.FindOperator(Decl, OpDeclName, &SP.getDeclContext(), false)
+         || !Decl) {
       return PrecedenceResult(OpName, Next.getLoc());
+   }
 
-   return PrecedenceResult(OpName, Next.getLoc(), Decl);
+   return PrecedenceResult(OpName, Next.getLoc(), Decl->getPrecedenceGroup());
 }
 
 Expression* ExprResolverImpl::checkAccesssor(PrecedenceResult &Res,

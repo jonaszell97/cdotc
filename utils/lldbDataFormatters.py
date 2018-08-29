@@ -561,7 +561,7 @@ class FinalTemplateArgumentListSynthProvider:
 
     def update(self):
         self.data_type = self.valobj.GetFrame().GetModule() \
-            .FindFirstType("cdot::sema::ResolvedTemplateArg")
+            .FindFirstType("cdot::sema::TemplateArgument")
         self.type_size = self.data_type.GetByteSize()
         self.child_count = self.valobj.GetChildMemberWithName("NumArgs") \
             .GetValueAsUnsigned(0)

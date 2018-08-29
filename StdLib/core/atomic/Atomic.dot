@@ -25,7 +25,7 @@ public enum MemoryOrder {
 extend MemoryOrder with StringRepresentable {}
 
 @compiletime @testable
-public struct Atomic<T> {
+public struct Atomic<T: ?> {
     /// The underlying value.
     private var value: T
 

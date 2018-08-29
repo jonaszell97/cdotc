@@ -442,8 +442,6 @@ ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
       }
       case MACRO_EXPANSIONS: {
          auto &Idents = CI.getContext().getIdentifiers();
-         auto &DeclNames = CI.getContext().getDeclNameTable();
-
          auto NumExpansions = Record.readInt();
          while (NumExpansions--) {
             auto ID = (unsigned)Record.readInt();
@@ -455,8 +453,7 @@ ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
 
             auto &II = Idents.get(MacroName);
             auto Loc = FileMgr.createMacroExpansion(ExpansionLoc, PatternLoc,
-                                                    Length,
-                                                    DeclNames.getMacroName(II));
+                                                    Length, &II);
 
             SourceIDSubstitutions[ID] = Loc.SourceID;
             SourceIDSubstitutionOffsets[ID] = Loc.BaseOffset - Offset;

@@ -449,12 +449,12 @@ void PrettyPrinterImpl::visitStaticForStmt(StaticForStmt* stmt)
 
 }
 
-void PrettyPrinterImpl::visitStaticAssertStmt(StaticAssertStmt* stmt)
+void PrettyPrinterImpl::visitStaticAssertDecl(StaticAssertDecl* stmt)
 {
 
 }
 
-void PrettyPrinterImpl::visitStaticPrintStmt(StaticPrintStmt* stmt)
+void PrettyPrinterImpl::visitStaticPrintDecl(StaticPrintDecl* stmt)
 {
 
 }
@@ -826,9 +826,10 @@ void PrettyPrinterImpl::visitConstraintExpr(ConstraintExpr* expr)
       case ConstraintExpr::Reference:
          out << "ref";
          break;
-      case ConstraintExpr::Type:
-         visit(expr->getTypeConstraint().getTypeExpr());
+      case ConstraintExpr::Type: {
+         out << expr->getTypeConstraint().getResolvedType();
          break;
+      }
    }
 }
 

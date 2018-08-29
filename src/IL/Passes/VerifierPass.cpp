@@ -74,8 +74,11 @@ void VerifierPass::visitGlobals(il::Module &M)
 
 namespace {
 
-bool typesCompatible(const QualType &lhs, const QualType &rhs)
+bool typesCompatible(QualType lhs, QualType rhs)
 {
+   lhs = lhs->getCanonicalType();
+   rhs = rhs->getCanonicalType();
+
    if (lhs->isMutableReferenceType() && rhs->isMutableReferenceType())
       return lhs->getReferencedType() == rhs->getReferencedType();
 
@@ -799,6 +802,11 @@ void VerifierPass::visitExistentialInitInst(ExistentialInitInst const& I)
 
 }
 
+void VerifierPass::visitGenericInitInst(const GenericInitInst &I)
+{
+   errorIf(!I.getType()->isDependentRecordType(), "not a generic type", I);
+}
+
 void VerifierPass::visitExceptionCastInst(ExceptionCastInst const& I)
 {
 
@@ -815,6 +823,7 @@ void VerifierPass::visitExistentialCastInst(const ExistentialCastInst &I)
    case CastKind::ExistentialCast:
    case CastKind::ExistentialCastFallible:
    case CastKind::ExistentialUnwrap:
+   case CastKind::ExistentialUnwrapFallible:
       return;
    default:
       errorIf(true, "not an existential cast kind!", I);

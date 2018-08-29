@@ -50,6 +50,10 @@ template<> struct IsLowBitAvailable<ast::RecordDecl*> {
    static constexpr bool value = true;
 };
 
+template<> struct IsLowBitAvailable<ast::CallableDecl*> {
+   static constexpr bool value = true;
+};
+
 template<> struct IsLowBitAvailable<ast::FunctionDecl*> {
    static constexpr bool value = true;
 };
@@ -63,6 +67,7 @@ template<> struct IsLowBitAvailable<ast::AliasDecl*> {
 };
 
 using RecordInstResult   = ActionResult<ast::RecordDecl*>;
+using CallableInstResult = ActionResult<ast::CallableDecl*>;
 using FunctionInstResult = ActionResult<ast::FunctionDecl*>;
 using MethodInstResult   = ActionResult<ast::MethodDecl*>;
 using AliasInstResult    = ActionResult<ast::AliasDecl*>;
@@ -88,6 +93,11 @@ public:
                                       ast::RecordDecl *rec,
                                       const sema::TemplateArgList &templateArgs,
                                       bool *isNew = nullptr);
+
+   CallableInstResult InstantiateCallable(StmtOrDecl POI,
+                                          ast::CallableDecl *F,
+                                          TemplateArgs *templateArgs,
+                                          bool *isNew = nullptr);
 
    FunctionInstResult InstantiateFunction(StmtOrDecl POI,
                                           ast::FunctionDecl *F,

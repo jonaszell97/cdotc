@@ -10,6 +10,7 @@
 #include "ConformanceTable.h"
 #include "DeclDenseMapInfo.h"
 #include "ParentMap.h"
+#include "Sema/Template.h"
 #include "Type.h"
 
 #include <llvm/Support/Allocator.h>
@@ -42,10 +43,10 @@ class PrecedenceGroupDecl;
 
 class ASTContext {
 public:
-   ASTContext();
+   ASTContext(CompilerInstance &CI);
    ~ASTContext() = default;
 
-   void cleanup(CompilerInstance &CI);
+   void cleanup();
 
    void *Allocate(size_t size, size_t alignment = 8) const
    {
@@ -74,8 +75,13 @@ public:
    using ExtensionVec  = SmallVector<ExtensionDecl*, 0>;
    using CovarianceVec = SmallVector<RecordDecl*, 0>;
 
+   friend sema::FinalTemplateArgumentList;
+
+   CompilerInstance &CI;
    mutable llvm::BumpPtrAllocator Allocator;
    mutable llvm::BumpPtrAllocator TmpAllocator;
+
+   mutable llvm::SmallPtrSet<ExtensionDecl*, 16> UnresolvedExtensions;
 
 private:
    mutable ParentMap parentMap;
@@ -87,7 +93,7 @@ private:
    mutable llvm::DenseMap<const Decl*, AttrVec*> AttributeMap;
    mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
    mutable llvm::DenseMap<const Decl*, ExtConstraintVec*> ExtConstraintMap;
-   mutable llvm::DenseMap<const RecordDecl*, ExtensionVec*> ExtensionMap;
+   mutable llvm::DenseMap<QualType, ExtensionVec*> ExtensionMap;
    mutable llvm::DenseMap<const AssociatedTypeDecl*,
                           CovarianceVec*> CovarianceMap;
 
@@ -129,6 +135,9 @@ private:
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
    mutable llvm::FoldingSet<DependentNameType> DependentNameTypes;
+
+   /// Uniqued template argument lists.
+   mutable llvm::FoldingSet<sema::FinalTemplateArgumentList> TemplateArgs;
 
    /// Map from source IDs to declarations within that file, used for
    /// incremental compilation.
@@ -357,7 +366,8 @@ public:
 
    DependentRecordType* getDependentRecordType(
                                  RecordDecl *R,
-                                 sema::FinalTemplateArgumentList *args) const;
+                                 sema::FinalTemplateArgumentList *args,
+                                 QualType Parent = QualType()) const;
 
    DependentNameType *getDependentNameType(NestedNameSpecifierWithLoc *Name) const;
 
@@ -375,22 +385,22 @@ public:
    mutable llvm::FoldingSet<RecordDecl>   RecordTemplateInstatiations;
    mutable llvm::FoldingSet<AliasDecl>    AliasTemplateInstatiations;
 
-   using TemplateArgs = sema::FinalTemplateArgumentList;
+   using TemplateArgList = sema::FinalTemplateArgumentList;
 
    CallableDecl *getFunctionTemplateInstantiation(CallableDecl *Template,
-                                                  TemplateArgs &argList,
+                                                  TemplateArgList &argList,
                                                   void *&insertPos);
 
    RecordDecl *getRecordTemplateInstantiation(RecordDecl *Template,
-                                              TemplateArgs &argList,
+                                              TemplateArgList &argList,
                                               void *&insertPos);
 
    AliasDecl *getAliasTemplateInstantiation(AliasDecl *Template,
-                                            TemplateArgs &argList,
+                                            TemplateArgList &argList,
                                             void *&insertPos);
 
    NamedDecl *getTemplateInstantiation(NamedDecl *Template,
-                                       TemplateArgs &argList,
+                                       TemplateArgList &argList,
                                        void *&insertPos);
 
    ArrayRef<NamedDecl*> getInstantiationsOf(NamedDecl *Template);
@@ -424,8 +434,8 @@ public:
    ArrayRef<RecordDecl*> getCovariance(const AssociatedTypeDecl *AT) const;
    void addCovariance(const AssociatedTypeDecl *AT, RecordDecl* Cov) const;
 
-   ArrayRef<ExtensionDecl*> getExtensions(const RecordDecl *R) const;
-   void addExtension(const RecordDecl *R, ExtensionDecl* E) const;
+   ArrayRef<ExtensionDecl*> getExtensions(QualType T) const;
+   void addExtension(QualType T, ExtensionDecl* E) const;
 };
 
 } // namespace ast

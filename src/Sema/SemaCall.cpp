@@ -7,6 +7,7 @@
 #include "Basic/NestedNameSpecifier.h"
 #include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
+#include "Query/QueryContext.h"
 #include "Sema/OverloadResolver.h"
 #include "Sema/Builtin.h"
 #include "Serialization/ModuleFile.h"
@@ -16,12 +17,13 @@
 #include <llvm/ADT/SmallString.h>
 
 using namespace cdot::diag;
+using namespace cdot::sema;
 using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
-static void addCandidates(MultiLevelLookupResult &lookupRes,
+static void addCandidates(const MultiLevelLookupResult &lookupRes,
                           CandidateSet &CandSet) {
    // add candidates found via normal lookup
    unsigned Distance = 0;
@@ -50,8 +52,12 @@ static void addCandidates(SemaPass &Sema,
                           DeclarationName name,
                           CandidateSet &CandSet,
                           bool IsLocalLookup) {
-   auto lookupRes = Sema.MultiLevelLookup(*Ctx, name, true, IsLocalLookup);
-   addCandidates(lookupRes, CandSet);
+   const MultiLevelLookupResult *LookupRes;
+   if (Sema.QC.MultiLevelLookup(LookupRes, Ctx, name, IsLocalLookup)) {
+      return;
+   }
+
+   addCandidates(*LookupRes, CandSet);
 }
 
 std::pair<DeclContext*, bool> SemaPass::getAsContext(QualType Ty)
@@ -86,10 +92,14 @@ static void addUFCSCandidates(SemaPass &Sema,
                               DeclContext *Ctx,
                               DeclarationName name,
                               CandidateSet &CandSet) {
-   auto lookupRes = Sema.MultiLevelLookup(*Ctx, name);
+   const MultiLevelLookupResult *LookupRes;
+   if (Sema.QC.MultiLevelLookup(LookupRes, Ctx, name, false)) {
+      return;
+   }
+
    // add candidates found via normal lookup
    unsigned Distance = 0;
-   for (auto &Lookup : lookupRes) {
+   for (auto &Lookup : *LookupRes) {
       for (auto &D : Lookup) {
          if (auto CD = dyn_cast<CallableDecl>(D)) {
             if (auto M = dyn_cast<MethodDecl>(D)) {
@@ -292,10 +302,8 @@ void SemaPass::lookupFunction(CandidateSet &CandSet,
    }
 }
 
-static MethodDecl *getEquivalentMethod(SemaPass &SP,
-                                       ASTContext &Ctx,
-                                       MethodDecl *Orig,
-                                       RecordDecl *Inst) {
+MethodDecl *SemaPass::getEquivalentMethod(MethodDecl *Orig,
+                                          RecordDecl *Inst) {
    if (Orig->isMemberwiseInitializer())
       return cast<StructDecl>(Inst)->getMemberwiseInitializer();
 
@@ -306,20 +314,25 @@ static MethodDecl *getEquivalentMethod(SemaPass &SP,
    switch (Name.getKind()) {
    case DeclarationName::ConstructorName:
    case DeclarationName::BaseConstructorName:
-      Name = Ctx.getDeclNameTable().getConstructorName(
-         Ctx.getRecordType(Inst),
+      Name = Context.getDeclNameTable().getConstructorName(
+         Context.getRecordType(Inst),
          Name.getKind() == DeclarationName::ConstructorName);
 
       break;
    case DeclarationName::DestructorName:
-      Name = Ctx.getDeclNameTable().getDestructorName(Ctx.getRecordType(Inst));
+      Name = Context.getDeclNameTable().getDestructorName(
+         Context.getRecordType(Inst));
       break;
    default:
       break;
    }
 
-   auto Result = SP.MultiLevelLookup(*Inst, Name);
-   for (auto *D : Result.allDecls()) {
+   const MultiLevelLookupResult *LookupRes;
+   if (QC.MultiLevelLookup(LookupRes, Inst, Name, false)) {
+      return Orig;
+   }
+
+   for (auto *D : LookupRes->allDecls()) {
       auto *M = dyn_cast<MethodDecl>(D);
       if (!M)
          continue;
@@ -335,37 +348,52 @@ bool SemaPass::maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                       const TemplateArgList &templateArgs,
                                       Statement *Caller) {
    auto F = Cand.Func;
-   Cand.OuterTemplateArgs = sema::FinalTemplateArgumentList::Create(
-      Context, templateArgs);
+   Cand.OuterTemplateArgs = FinalTemplateArgumentList::Create(Context,
+                                                              templateArgs);
 
    if (auto Case = dyn_cast<EnumCaseDecl>(F)) {
-      if (!Case->getRecord()->isUnboundedTemplate())
+      if (!Case->getRecord()->isTemplate())
          return true;
 
-      auto Inst =
-         Instantiator.InstantiateRecord(Caller, Case->getRecord(),
-                                        Cand.OuterTemplateArgs);
+      RecordDecl *Inst;
+      if (QC.InstantiateRecord(Inst, Case->getRecord(), Cand.OuterTemplateArgs,
+                               Caller->getSourceLoc())) {
+         Inst = nullptr;
+      }
 
       if (!Inst)
          return false;
 
-      Cand.Func = LookupSingle<EnumCaseDecl>(*cast<EnumDecl>(Inst.getValue()),
-                                             Case->getIdentifierInfo());
-
-      assert(Cand.Func && "did not instantiate enum correctly");
+      Cand.Func = maybeInstantiateTemplateMember(Inst, Case);
       return true;
    }
 
    auto Init = dyn_cast<InitDecl>(F);
-   if (!Init || !Init->getRecord()->isUnboundedTemplate())
+   if (!Init || !Init->getRecord()->isTemplate())
       return true;
 
-   auto Inst = Instantiator.InstantiateRecord(Caller, Init->getRecord(),
-                                              Cand.OuterTemplateArgs);
+   RecordDecl *Inst;
+   if (QC.InstantiateRecord(Inst, Init->getRecord(), Cand.OuterTemplateArgs,
+                            Caller->getSourceLoc())) {
+      Inst = nullptr;
+   }
 
-   if (Inst.hasValue()) {
-      Cand.Func = getEquivalentMethod(*this, Context, Init, Inst.getValue());
-      assert(Cand.Func && "did not instantiate enum correctly");
+   if (Inst) {
+      if (Init->isSynthesized()) {
+         if (QC.PrepareNameLookup(Inst)) {
+            return false;
+         }
+
+         Cand.Func = cast<StructDecl>(Inst)->getMemberwiseInitializer();
+      }
+      else {
+         Cand.Func = maybeInstantiateTemplateMember(Inst, Init);
+      }
+
+      if (QC.PrepareDeclInterface(Cand.Func)) {
+         return false;
+      }
+
       return true;
    }
 
@@ -393,7 +421,7 @@ void SemaPass::maybeInstantiate(CandidateSet &CandSet,
          Info->loadBody(F);
    }
 
-   if (!F->isUnboundedTemplate()) {
+   if (!F->isTemplate()) {
       if (auto M = dyn_cast<MethodDecl>(F)) {
          Cand.Func = maybeInstantiateMemberFunction(M, Caller);
       }
@@ -403,20 +431,20 @@ void SemaPass::maybeInstantiate(CandidateSet &CandSet,
 
    auto &TAs = Cand.InnerTemplateArgs;
    if (auto Fn = dyn_cast<FunctionDecl>(Cand.Func)) {
-      auto Inst = Instantiator.InstantiateFunction(Caller, Fn,
-                                                   move(TAs));
-
+      auto Inst = Instantiator.InstantiateFunction(Caller, Fn, TAs);
       if (Inst)
          Cand.Func = Inst.getValue();
    }
    else {
       auto Inst = Instantiator.InstantiateMethod(Caller,
                                                  cast<MethodDecl>(Cand.Func),
-                                                 move(TAs));
+                                                 TAs);
 
       if (Inst)
          Cand.Func = Inst.getValue();
    }
+
+   Cand.Func->setShouldBeSpecialized(true);
 }
 
 MethodDecl *SemaPass::maybeInstantiateMemberFunction(MethodDecl *M,
@@ -429,6 +457,12 @@ MethodDecl *SemaPass::maybeInstantiateMemberFunction(MethodDecl *M,
 
    if (auto FnInfo = M->getBodyTemplate()->getLazyFnInfo())
       FnInfo->loadBody(M->getBodyTemplate());
+
+   if (!M->getBodyTemplate()->isInUnboundedTemplate()
+         && !M->getBodyTemplate()->isExternal()) {
+      M->setShouldBeSpecialized(true);
+      return M;
+   }
 
    if (!Instantiator.InstantiateMethodBody(Caller, M))
       return M;
@@ -491,6 +525,24 @@ MethodDecl *SemaPass::InstantiateProperty(RecordDecl *R,
       ILGen->prepareFunctionForCtfe(Setter, SOD);
 
    return Setter;
+}
+
+RecordDecl *SemaPass::InstantiateRecord(SourceLocation POI,
+                                        RecordDecl *R,
+                                        FinalTemplateArgumentList *TemplateArgs){
+   RecordDecl *Inst;
+   if (QC.InstantiateRecord(Inst, R, TemplateArgs, POI)) {
+      return nullptr;
+   }
+
+   return Inst;
+}
+
+RecordDecl *SemaPass::InstantiateRecord(SourceLocation POI,
+                                        RecordDecl *R,
+                                        const TemplateArgList &TemplateArgs) {
+   return InstantiateRecord(
+      POI, R, FinalTemplateArgumentList::Create(Context, TemplateArgs));
 }
 
 static bool wouldSelfBeValid(SemaPass &SP, bool &Static)
@@ -574,6 +626,8 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
    }
 
    auto ParentExpr = Call->getParentExpr();
+   QualType ParentType;
+
    if (ParentExpr && !refersToNamespace(ParentExpr)) {
       ParentExpr->setAllowNamespaceRef(true);
 
@@ -584,8 +638,8 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       ParentExpr = ParentResult.get();
       Call->setParentExpr(ParentExpr);
 
-      auto ty = ParentExpr->getExprType()->stripReference();
-      if (ty->isDependentType()) {
+      ParentType = ParentExpr->getExprType()->stripReference();
+      if (ParentType->isDependentType()) {
          visitContextDependentArgs(*this, Call);
          Call->setIsTypeDependent(true);
          Call->setExprType(UnknownAnyTy);
@@ -594,16 +648,16 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       }
 
       // Handle '->'
-      if (ty->isPointerType() && Call->isPointerAccess()) {
+      if (ParentType->isPointerType() && Call->isPointerAccess()) {
          QualType RefTy;
-         if (ty->isMutablePointerType()) {
-            RefTy = Context.getMutableReferenceType(ty->getPointeeType());
+         if (ParentType->isMutablePointerType()) {
+            RefTy = Context.getMutableReferenceType(ParentType->getPointeeType());
          }
          else {
-            RefTy = Context.getReferenceType(ty->getPointeeType());
+            RefTy = Context.getReferenceType(ParentType->getPointeeType());
          }
 
-         FunctionType *DerefFnTy = Context.getFunctionType(RefTy, { ty });
+         FunctionType *DerefFnTy = Context.getFunctionType(RefTy, { ParentType });
          auto Deref = UnaryOperator::Create(Context, Call->getSourceLoc(),
                                             op::Deref, DerefFnTy,
                                             castToRValue(ParentExpr),
@@ -616,17 +670,17 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
          Call->setIsPointerAccess(false);
 
          ParentExpr = Call->getParentExpr();
-         ty = ParentExpr->getExprType()->stripReference();
+         ParentType = ParentExpr->getExprType()->stripReference();
       }
       else if (Call->isPointerAccess()) {
-         diagnose(Call, err_member_access_non_pointer, ty,
+         diagnose(Call, err_member_access_non_pointer, ParentType,
                   Call->getSourceLoc());
       }
 
       if (Call->isDotInit()) {
          // '.init' must either be called on self, in which case it has to be
          // in an initializer, or statically on a type
-         if (auto Meta = ty->asMetaType()) {
+         if (auto Meta = ParentType->asMetaType()) {
             auto UnderlyingTy = Meta->getUnderlyingType();
             if (!UnderlyingTy->isRecordType()) {
                diagnose(Call, err_dot_init_bad_type, UnderlyingTy,
@@ -652,11 +706,11 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
          else {
             // delegating initializer call
             Call->setIdent(Context.getDeclNameTable()
-                                  .getConstructorName(ty));
+                                  .getConstructorName(ParentType));
          }
       }
 
-      auto ContextAndIsStatic = getAsContext(ty);
+      auto ContextAndIsStatic = getAsContext(ParentType);
       IsLocalLookup = false;
       Ctx = ContextAndIsStatic.first;
 
@@ -677,7 +731,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       }
 
       auto *R = CtxTy->getRecord();
-      if (!ensureDeclared(R)) {
+      if (QC.PrepareDeclInterface(R)) {
          visitContextDependentArgs(*this, Call);
          Call->setExprType(Context.getRecordType(R));
          return Call;
@@ -702,13 +756,15 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
    bool DoUFCSLookup = IsLocalLookup;
 
    // Do a normal lookup first.
-   auto Result = MultiLevelLookup(*Ctx, Call->getDeclName(),
-                                  true, IsLocalLookup);
+   const MultiLevelLookupResult *Result;
+   if (QC.MultiLevelLookup(Result, Ctx, Call->getDeclName(), IsLocalLookup)) {
+      return ExprError();
+   }
 
-   if (!Result.empty()) {
+   if (!Result->empty()) {
       // check if we found something that is not a function first, no need to do
       // overload resolution or check UFCS here
-      auto ND = Result.front().front();
+      auto ND = Result->front().front();
       switch (ND->getKind()) {
       case Decl::EnumCaseDeclID: {
          auto *Case = LookupSingle<EnumCaseDecl>(*cast<EnumDecl>(Ctx),
@@ -725,7 +781,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
          bool FoundGetter = false;
          bool FoundSetter = false;
 
-         for (auto &Decls : Result) {
+         for (auto &Decls : *Result) {
             for (auto *Decl : Decls) {
                if (auto *SD = dyn_cast<SubscriptDecl>(Decl)) {
                   FoundGetter |= SD->hasGetter();
@@ -758,8 +814,10 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
                DeclarationName::SubscriptKind::Getter));
          }
 
-         Result = MultiLevelLookup(*Ctx, Call->getDeclName(),
-                                   true, IsLocalLookup);
+         if (QC.MultiLevelLookup(Result, Ctx, Call->getDeclName(),
+                                 IsLocalLookup)) {
+            return ExprError();
+         }
 
          break;
       }
@@ -769,10 +827,24 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
             auto UnderlyingTy = Alias->getType()->asMetaType()
                ->getUnderlyingType();
 
-            return HandleStaticTypeCall(Call, TemplateArgs, UnderlyingTy);
+            return HandleStaticTypeCall(Call, ArgExpr, UnderlyingTy);
          }
 
-         LLVM_FALLTHROUGH;
+         goto case_anonymous_call;
+      }
+      case Decl::TemplateParamDeclID: {
+         Call->setContainsGenericParam(true);
+
+         auto *P = cast<TemplateParamDecl>(ND);
+         if (!P->isVariadic() && P->isTypeName()) {
+            QualType Covar = P->getCovariance();
+            if (Covar->isRecordType()) {
+               return HandleConstructorCall(Call, ArgExpr,
+                                            Covar->getRecord(), P);
+            }
+         }
+
+         goto case_anonymous_call;
       }
       case Decl::FuncArgDeclID:
       case Decl::LocalVarDeclID:
@@ -780,7 +852,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       case Decl::FieldDeclID:
       case Decl::PropDeclID:
       case Decl::AssociatedTypeDeclID:
-      case Decl::TemplateParamDeclID: {
+      case_anonymous_call: {
          // this is semantically an anonymous call that happens to be spelled
          // like a normal function call, i.e.
          //  `let fn = () => {}; fn()` is semantically equivalent to
@@ -803,9 +875,9 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       case Decl::EnumDeclID:
       case Decl::UnionDeclID:
       case Decl::ProtocolDeclID:
-         return HandleConstructorCall(Call, TemplateArgs, cast<RecordDecl>(ND));
+         return HandleConstructorCall(Call, ArgExpr, cast<RecordDecl>(ND));
       case Decl::InitDeclID:
-         return HandleConstructorCall(Call, TemplateArgs, ND->getRecord());
+         return HandleConstructorCall(Call, ArgExpr, ND->getRecord());
       case Decl::MethodDeclID: {
          // if we found an instance method through local lookup, build an
          // implicit self expression. In this case we do not perform UFCS
@@ -841,7 +913,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       }
 
       // Add candidates found via normal lookup.
-      addCandidates(Result, CandSet);
+      addCandidates(*Result, CandSet);
    }
 
    // check if we can find additional candidates through UFCS
@@ -914,12 +986,41 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       }
    }
 
+   Expression *ResultExpr = Call;
    if (!Call->isDependent()) {
       Call->setIncludesSelf(true);
       Call->setParentExpr(nullptr);
       Call->getArgs().clear();
       Call->getArgs().append(Context, CandSet.ResolvedArgs.begin(),
                              CandSet.ResolvedArgs.end());
+
+      if (!Cand.InnerTemplateArgs.empty() && func->isTemplate()) {
+         auto *FinalList  = sema::FinalTemplateArgumentList::Create(
+            Context, Cand.InnerTemplateArgs);
+
+         if (ArgExpr) {
+            ArgExpr->setTemplateArgs(FinalList);
+         }
+         else {
+            ArgExpr = TemplateArgListExpr::Create(Context,
+                                                  Call->getSourceRange(),
+                                                  Call, FinalList);
+
+            ResultExpr = ArgExpr;
+         }
+      }
+   }
+
+   // Check if this function call should be specialized.
+   if (!Call->isDependent() && isa<MethodDecl>(func)) {
+      auto *SelfVal = args.front();
+      if (func->getRecord()->isTemplate() || SelfVal->containsGenericParam()) {
+         Call->setSpecializationCandidate(true);
+      }
+      else if (isa<ast::SelfExpr>(SelfVal->ignoreParens())
+            && SelfVal->getExprType()->isProtocol()) {
+         Call->setSpecializationCandidate(true);
+      }
    }
 
    if (IsSubscriptSetter) {
@@ -942,13 +1043,17 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call,
       }
    }
 
-   return Call;
+   if (ParentType) {
+      ResultExpr = UnwrapExistential(ParentType, ResultExpr);
+   }
+
+   return ResultExpr;
 }
 
 static void addTemplateArgs(SmallVectorImpl<Expression*> &Exprs,
                             SmallVectorImpl<std::unique_ptr<BuiltinExpr>>
                                &PlaceholderExprs,
-                            const sema::ResolvedTemplateArg &Arg) {
+                            const sema::TemplateArgument &Arg) {
    if (Arg.isVariadic()) {
       for (auto &VA : Arg.getVariadicArgs()) {
          addTemplateArgs(Exprs, PlaceholderExprs, VA);
@@ -968,7 +1073,7 @@ static void addTemplateArgs(SmallVectorImpl<Expression*> &Exprs,
 }
 
 ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
-                                          MutableArrayRef<Expression*> TemplateArgs,
+                                          TemplateArgListExpr *ArgExpr,
                                           Type *Ty) {
    if (Ty->isVoidType()) {
       auto& args = Call->getArgs();
@@ -986,6 +1091,10 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
    }
 
    if (Ty->isRecordType()) {
+      MutableArrayRef<Expression*> TemplateArgs;
+      if (ArgExpr)
+         TemplateArgs = ArgExpr->getExprs();
+
       SmallVector<Expression*, 0> RealTemplateArgs;
       SmallVector<std::unique_ptr<BuiltinExpr>, 0> PlaceholderExprs;
       if (Ty->isDependentRecordType()) {
@@ -1002,7 +1111,7 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
          TemplateArgs = RealTemplateArgs;
       }
 
-      return HandleConstructorCall(Call, TemplateArgs, Ty->getRecord());
+      return HandleConstructorCall(Call, ArgExpr, Ty->getRecord());
    }
 
    if (Call->getArgs().empty() && hasDefaultValue(Ty)) {
@@ -1072,9 +1181,18 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
 }
 
 ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
-                                           MutableArrayRef<Expression*> TemplateArgs,
-                                           RecordDecl *R) {
-   ensureDeclared(R);
+                                           TemplateArgListExpr *ArgExpr,
+                                           RecordDecl *R,
+                                           TemplateParamDecl *Param) {
+   MutableArrayRef<Expression*> TemplateArgs;
+   if (ArgExpr)
+      TemplateArgs = ArgExpr->getExprs();
+
+   if (QC.PrepareDeclInterface(R)) {
+      visitContextDependentArgs(*this, Call);
+      Call->setExprType(Context.getRecordType(R));
+      return Call;
+   }
 
    if (!R->isTemplate() && !TemplateArgs.empty()) {
       if (Call->getDeclName()) {
@@ -1091,7 +1209,7 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
       TemplateArgs = MutableArrayRef<Expression*>();
    }
 
-   if (isa<ProtocolDecl>(R) && !Call->isDotInit()) {
+   if (isa<ProtocolDecl>(R) && !Call->isDotInit() && !Param) {
       diagnose(Call, err_protocol_initializer, Call->getSourceRange());
 
       Call->setExprType(Context.getRecordType(R));
@@ -1132,10 +1250,20 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
    }
 
    auto &Cand = CandSet.getBestMatch();
-   auto method = cast<InitDecl>(Cand.Func);
-   checkAccessibility(method, Call);
+   auto Init = cast<InitDecl>(Cand.Func);
 
-   if (method->isInUnboundedTemplate()) {
+   // Update record since it might have been instantiated.
+   R = Init->getRecord();
+
+   // Check if this initializer is accessible.
+   QC.CheckAccessibility(DeclCtx, Init);
+
+   // Make sure the record we're constructing is valid.
+   if (QC.PrepareDeclInterface(R)) {
+      return ExprError();
+   }
+
+   if (Init->isInUnboundedTemplate()) {
       visitContextDependentArgs(*this, Call);
       Call->setIsTypeDependent(true);
       Call->setExprType(UnknownAnyTy);
@@ -1148,13 +1276,12 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
       return Call;
    }
 
-   R = method->getRecord();
    if (R->isAbstract() && !Call->isDotInit())
          diagnose(Call, err_instantiate_abstract_class, R->getDeclName(),
                   Call->getSourceRange());
 
    if (Call->isDotInit()) {
-      if (method->isFallible()) {
+      if (Init->isFallible()) {
          auto fn = getCurrentFun();
          if (!fn->isFallibleInit()) {
             diagnose(Call, err_fallible_init_in_non_fallible_init,
@@ -1164,12 +1291,15 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
 
       Call->setExprType(Context.getVoidType());
    }
-   else if (method->isFallibleInit()) {
-      Call->setExprType(cast<InitDecl>(method)->getOptionTy());
+   else if (Init->isFallibleInit()) {
+      Call->setExprType(cast<InitDecl>(Init)->getOptionTy());
+   }
+   else if (Param) {
+      Call->setExprType(Context.getTemplateArgType(Param));
    }
    else if (R->isTemplate()) {
-      Call->setExprType(Context.getDependentRecordType(R,
-                                                       Cand.OuterTemplateArgs));
+      Call->setExprType(Context.getDependentRecordType(
+         R, Cand.OuterTemplateArgs, getParentType(Call->getParentExpr())));
    }
    else {
       Call->setExprType(Context.getRecordType(R));
@@ -1183,8 +1313,34 @@ ExprResult SemaPass::HandleConstructorCall(CallExpr *Call,
                              CandSet.ResolvedArgs.end());
    }
 
-   Call->setKind(CallKind::InitializerCall);
-   Call->setFunc(method);
+   Call->setFunc(Init);
+   if (Param) {
+      Call->setParentExpr(
+         new(Context) IdentifierRefExpr(Call->getIdentLoc(),
+            IdentifierKind::TemplateParam, Param, Param->getCovariance()));
+
+      Call->setSpecializationCandidate(true);
+      Call->setKind(CallKind::GenericInitializerCall);
+   }
+   else {
+      Call->setKind(CallKind::InitializerCall);
+   }
+
+   if (!Cand.InnerTemplateArgs.empty() && Init->isTemplate()) {
+      auto *FinalList  = sema::FinalTemplateArgumentList::Create(
+         Context, Cand.InnerTemplateArgs);
+
+      if (ArgExpr) {
+         ArgExpr->setTemplateArgs(FinalList);
+      }
+      else {
+         ArgExpr = TemplateArgListExpr::Create(Context,
+                                               Call->getSourceRange(),
+                                               Call, FinalList);
+
+         return ArgExpr;
+      }
+   }
 
    return Call;
 }
@@ -1610,9 +1766,10 @@ QualType SemaPass::GetDefaultExprType(Expression *E)
    case Expression::FPLiteralID:
       return Context.getDoubleTy();
    case Expression::StringLiteralID: {
-      auto S = getStringDecl();
-      if (S)
-         return Context.getRecordType(S);
+      // FIXME
+//      auto S = getStringDecl();
+//      if (S)
+//         return Context.getRecordType(S);
 
       return Context.getUInt8PtrTy();
    }

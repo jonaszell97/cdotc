@@ -7,11 +7,10 @@
 #include "ILGen/ILGenPass.h"
 #include "TemplateInstantiator.h"
 
-using namespace cdot::support;
+using namespace cdot;
+using namespace cdot::ast;
 using namespace cdot::sema;
-
-namespace cdot {
-namespace ast {
+using namespace cdot::support;
 
 bool SemaPass::inTemplate()
 {
@@ -52,7 +51,7 @@ bool SemaPass::isInDependentContext()
 void SemaPass::finalizeRecordInstantiation(RecordDecl *R)
 {
    R->setFinalized(true);
-   if (R->isInUnboundedTemplate() || encounteredError()) {
+   if (R->isTemplateOrInTemplate() || encounteredError()) {
       return;
    }
 
@@ -107,7 +106,7 @@ void SemaPass::visitFunctionInstantiation(StmtOrDecl DependentStmt,
    }
    else {
       auto M = cast<MethodDecl>(Inst);
-      if (!M->isUnboundedTemplate())
+      if (!M->isTemplateOrInTemplate())
          ILGen->DeclareFunction(M);
 
       (void)visitStmt(DependentStmt, M);
@@ -121,6 +120,3 @@ void SemaPass::visitFunctionInstantiation(StmtOrDecl DependentStmt,
       }
    }
 }
-
-} // namespace ast
-} // namespace cdot

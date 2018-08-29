@@ -161,6 +161,7 @@ ParseResult Parser::parseRecordLevelDecl()
       return parseAttributedDecl();
 
    bool StaticValid = false;
+   bool DefaultValid = false;
    bool AccessValid = true;
 
    tok::TokenType DeclKind = currentTok().getKind();
@@ -170,6 +171,7 @@ ParseResult Parser::parseRecordLevelDecl()
    }
    else if (currentTok().is(Ident_subscript)) {
       NextDecl = parseSubscriptDecl();
+      DefaultValid = true;
    }
    else if (currentTok().is(Ident_memberwise)) {
       NextDecl = parseConstrDecl();
@@ -234,21 +236,26 @@ ParseResult Parser::parseRecordLevelDecl()
       break;
    case tok::kw_alias:
       NextDecl = parseAlias();
+      DefaultValid = true;
       break;
    case tok::kw_let:
    case tok::kw_var:
       StaticValid = true;
+      DefaultValid = true;
       NextDecl = parseFieldDecl();
       break;
    case tok::kw_prop:
       StaticValid = true;
+      DefaultValid = true;
       NextDecl = parsePropDecl();
       break;
    case tok::kw_def:
       StaticValid = true;
+      DefaultValid = true;
       NextDecl = parseMethodDecl();
       break;
    case tok::kw_init:
+      DefaultValid = true;
       NextDecl = parseConstrDecl();
       break;
    case tok::kw_case: {
@@ -282,6 +289,7 @@ ParseResult Parser::parseRecordLevelDecl()
       break;
    case tok::kw_associatedType:
       AccessValid = false;
+      DefaultValid = true;
       NextDecl = parseAssociatedType();
       break;
    case tok::kw___debug:
@@ -339,13 +347,20 @@ ParseResult Parser::parseRecordLevelDecl()
       SP.diagnose(err_cannot_be_static, CurDeclAttrs.StaticLoc, selector);
    }
 
+   if (!DefaultValid && CurDeclAttrs.Default) {
+      SP.diagnose(err_generic_error, "declaration cannot be marked 'default'",
+                  CurDeclAttrs.DefaultLoc, selector);
+   }
+
    if (!AccessValid && CurDeclAttrs.AccessLoc) {
       SP.diagnose(err_cannot_have_access_spec, CurDeclAttrs.AccessLoc,selector);
    }
 
    auto *D = NextDecl.getDecl();
-   if (auto ND = dyn_cast<NamedDecl>(D))
+   if (auto ND = dyn_cast<NamedDecl>(D)) {
       ND->setAccessLoc(CurDeclAttrs.AccessLoc);
+      ND->setDefault(CurDeclAttrs.Default);
+   }
 
    return D;
 }
@@ -442,8 +457,16 @@ ParseResult Parser::parseConstrDecl()
    if (IsMemberwise) {
       expect(tok::kw_init);
 
-      auto Decl = InitDecl::CreateMemberwise(Context, CurDeclAttrs.Access, Loc);
-      return ActOnDecl(Decl);
+      if (auto *R = dyn_cast<StructDecl>(&SP.getDeclContext())) {
+         R->setExplicitMemberwiseInit(true);
+      }
+      else {
+         SP.diagnose(err_generic_error, "'memberwise init' declaration cannot"
+                                        " appear here",
+                                        currentTok().getSourceLoc());
+      }
+
+      return ParseError();
    }
 
    auto params = tryParseTemplateParameters();
@@ -873,6 +896,14 @@ ParseResult Parser::parseAssociatedType()
 
    auto name = currentTok().getIdentifierInfo();
 
+   SourceType covariance;
+   if (lookahead().is(tok::colon)) {
+      advance();
+      advance();
+
+      covariance = parseType().tryGet();
+   }
+
    SourceType actualType;
    if (lookahead().is(tok::equals)) {
       advance();
@@ -888,7 +919,8 @@ ParseResult Parser::parseAssociatedType()
    }
 
    auto AT = AssociatedTypeDecl::Create(Context, Loc, protoSpecifier,
-                                        name, actualType, !ParsingProtocol);
+                                        name, actualType, covariance,
+                                        !ParsingProtocol);
 
    Context.setConstraints(AT, Constraints);
    return ActOnDecl(AT);

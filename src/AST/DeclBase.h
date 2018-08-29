@@ -22,11 +22,24 @@ namespace serial {
 } // namespace serial
 
 enum class AccessSpecifier : unsigned char {
+   /// \brief No explicit access specifier was given.
    Default = 0,
+
+   /// \brief This declaration is visible everywhere.
    Public,
+
+   /// \brief This declaration is only visible within the immediate surrounding
+   /// lexical context.
    Private,
+
+   /// \brief This declaration is visible within the current class as well as
+   /// its subclasses
    Protected,
+
+   /// \brief This declaration is only visible within the current module.
    Internal,
+
+   /// \brief This declaration is only visible within the current source file.
    FilePrivate,
 };
 
@@ -51,7 +64,7 @@ public:
 #  include "AST/Decl.def"
    };
 
-   enum DeclFlags : uint32_t {
+   enum DeclFlags : uint64_t {
       DF_None                = 0u,
 
       /// This declaration is dependent on an unbounded template parameter.
@@ -69,11 +82,11 @@ public:
       /// This declaration is marked 'static'.
       DF_Static              = DF_SemanticallyChecked << 1u,
 
-      /// This declaration is marked 'let'.
-      DF_Const               = DF_Static << 1u,
+      /// This declaration is marked 'default'.
+      DF_Default             = DF_Static << 1u,
 
       /// This declaration is defined, i.e. has a body.
-      DF_HasDefinition       = DF_Const << 1u,
+      DF_HasDefinition       = DF_Default << 1u,
 
       /// This declaration is externally imported.
       DF_External            = DF_HasDefinition << 1u,
@@ -144,12 +157,24 @@ public:
       /// instead of specialized.
       DF_UnboundedTemplate   = DF_ImportedFromClang << 1u,
 
-      DF_Last                = DF_UnboundedTemplate,
-      StatusFlags            = DF_TypeDependent | DF_ValueDependent |
-                               DF_IsInvalid,
+      /// This function should be specialized.
+      DF_Specialize          = DF_UnboundedTemplate << 1u,
+
+      /// This declaration contains a generic parameter somewhere.
+      DF_ContainsGenericParam   = DF_Specialize << 1u,
+      
+      /// This declaration contains an associated type of a protocol somewhere.
+      DF_ContainsAssociatedType = DF_ContainsGenericParam << 1u,
+
+      DF_Last                = DF_ContainsAssociatedType,
+      StatusFlags            = DF_TypeDependent
+                               | DF_ValueDependent
+                               | DF_IsInvalid
+                               | DF_ContainsGenericParam
+                               | DF_ContainsAssociatedType,
    };
 
-   static_assert(DF_Last < 1 << 31, "too many decl flags!");
+   static_assert(DF_Last < (1llu << 63llu), "too many decl flags!");
 
 #ifndef NDEBUG
    static void verifyID(DeclKind K);
@@ -159,7 +184,9 @@ public:
    void printFlags(llvm::raw_ostream &OS) const;
 
    bool isStatic() const { return declFlagSet(DF_Static); }
-   bool isConst() const { return declFlagSet(DF_Const); }
+
+   bool isDefault() const { return declFlagSet(DF_Default); }
+   void setDefault(bool D) { setDeclFlag(DF_Default, D); }
 
    bool hasDefinition() const { return declFlagSet(DF_HasDefinition); }
    void setHasDefinition(bool def) { setDeclFlag(DF_HasDefinition, def); }
@@ -185,6 +212,26 @@ public:
    void setIsValueDependent(bool valueDependant)
    {
       setDeclFlag(DF_ValueDependent, valueDependant);
+   }
+
+   bool containsGenericParam() const
+   {
+      return declFlagSet(DF_ContainsGenericParam);
+   }
+
+   void setContainsGenericParam(bool b)
+   {
+      setDeclFlag(DF_ContainsGenericParam, b);
+   }
+
+   bool containsAssociatedType() const
+   {
+      return declFlagSet(DF_ContainsAssociatedType);
+   }
+
+   void setContainsAssociatedType(bool b)
+   {
+      setDeclFlag(DF_ContainsAssociatedType, b);
    }
 
    bool isInvalid() const { return declFlagSet(DF_IsInvalid); }
@@ -238,6 +285,9 @@ public:
 
    bool isUnboundedTemplate() const { return declFlagSet(DF_UnboundedTemplate); }
    void setUnboundedTemplate(bool V) { setDeclFlag(DF_UnboundedTemplate, V); }
+
+   bool shouldBeSpecialized() const { return declFlagSet(DF_Specialize); }
+   void setShouldBeSpecialized(bool V) { setDeclFlag(DF_Specialize, V); }
 
    bool isProtocolDefaultImpl() const
    { return declFlagSet(DF_ProtoDefaultImpl); }
@@ -341,12 +391,13 @@ public:
    bool inStdNamespace() const;
    bool isGlobalDecl() const;
 
-   unsigned int getFlags() const { return flags; }
-   void setFlags(unsigned flags) { this->flags = flags; }
+   uint64_t getFlags() const { return flags; }
+   void setFlags(uint64_t flags) { this->flags = flags; }
 
    ModuleDecl *getModule() const;
 
    void dumpName() const;
+   std::string getNameAsString() const;
 
    static bool classofKind(DeclKind kind) { return kind != NotDecl; }
    static bool classof(const Decl *T) { return classofKind(T->getKind()); }
@@ -364,8 +415,8 @@ protected:
 #endif
    ~Decl();
 
-   DeclKind kind  : 8;
-   unsigned flags;
+   DeclKind kind;
+   uint64_t flags;
 
    Decl *nextDeclInContext = nullptr;
 
@@ -412,6 +463,8 @@ public:
    bool inDependentContext() const;
    bool isTemplateOrInTemplate() const;
    bool isInUnboundedTemplate() const;
+
+   bool isShallowInstantiation() const;
 
    llvm::ArrayRef<TemplateParamDecl*> getTemplateParams() const;
 
@@ -566,31 +619,13 @@ public:
          delete V;
    }
 
-   void appendDecl(NamedDecl *Decl)
-   {
-      if (auto Single = getAsDecl()) {
-         auto Vec = new VecTy{ Single, Decl };
-         Data = DataTy(Vec);
-      }
-      else {
-         getAsVec()->push_back(Decl);
-      }
-   }
+   void appendDecl(NamedDecl *Decl);
+   void removeDecl(NamedDecl *Decl);
 
-   bool isNull() const
-   {
-      return Data.isNull();
-   }
+   bool isNull() const { return Data.isNull(); }
 
-   NamedDecl *getAsDecl() const
-   {
-      return Data.dyn_cast<NamedDecl*>();
-   }
-
-   VecTy *getAsVec() const
-   {
-      return Data.dyn_cast<VecTy*>();
-   }
+   NamedDecl *getAsDecl() const { return Data.dyn_cast<NamedDecl*>(); }
+   VecTy *getAsVec() const { return Data.dyn_cast<VecTy*>(); }
 
    DeclContextLookupResult getAsLookupResult() const
    {
@@ -643,6 +678,11 @@ public:
    }
 
    const DeclsMap &getOwnNamedDecls() const { return namedDecls; }
+
+   /// Remove a declaration from the visible declarations in this context. This
+   /// does *not* remove the declaration from the lexical declarations in the
+   /// context.
+   void removeVisibleDecl(NamedDecl *D);
 
    bool hasExternalStorage() const;
 
@@ -747,6 +787,7 @@ public:
    Decl::DeclKind getDeclKind() const { return declKind; }
 
    void dumpName() const;
+   std::string getNameAsString() const;
 
    static bool classofKind(Decl::DeclKind kind)
    {

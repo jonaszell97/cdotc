@@ -38,6 +38,8 @@
 
 namespace cdot {
 
+class QueryContext;
+
 namespace sema {
    class ConformanceCheckerImpl;
 } // namespace sema
@@ -49,6 +51,7 @@ class OverloadResolver;
 class DeclContextLookupResult;
 class ExprResolverImpl;
 class ReflectionBuilder;
+class NameBinder;
 
 class SemaPass: public EmptyASTVisitor<ExprResult, StmtResult, DeclResult> {
 public:
@@ -372,8 +375,8 @@ public:
                        llvm::SmallVectorImpl<Statement*> &Stmts);
 
    DeclResult declareStaticIfDecl(StaticIfDecl *Stmt);
-   DeclResult declareStaticAssertStmt(StaticAssertStmt *Stmt);
-   DeclResult declareStaticPrintStmt(StaticPrintStmt *Stmt);
+   DeclResult declareStaticAssertDecl(StaticAssertDecl *Stmt);
+   DeclResult declareStaticPrintDecl(StaticPrintDecl *Stmt);
    DeclResult declareStaticForDecl(StaticForDecl *node);
    
    // Sema pass
@@ -526,8 +529,8 @@ public:
    StmtResult visitStaticIfStmt(StaticIfStmt *Stmt);
    StmtResult visitStaticForStmt(StaticForStmt *Stmt);
 
-   DeclResult visitStaticAssertStmt(StaticAssertStmt *Decl);
-   DeclResult visitStaticPrintStmt(StaticPrintStmt *Decl);
+   DeclResult visitStaticAssertDecl(StaticAssertDecl *Decl);
+   DeclResult visitStaticPrintDecl(StaticPrintDecl *Decl);
 
    ExprResult visitStaticExpr(StaticExpr *Expr);
    ExprResult visitTraitsExpr(TraitsExpr *Expr);
@@ -1128,6 +1131,11 @@ private:
    /// Pointer to the compiler instance this Sema object belongs to.
    CompilerInstance *compilationUnit;
 
+public:
+   /// Convenience reference to the global query context.
+   QueryContext &QC;
+
+private:
    /// Current diagnostic consumer. Default behaviour is to store the
    /// diagnostics and emit them when Sema is destructed.
    std::unique_ptr<DiagnosticConsumer> DiagConsumer;
@@ -1135,9 +1143,11 @@ private:
    /// Diagnostics Engine for this Sema object.
    DiagnosticsEngine Diags;
 
+public:
    /// Reference to the compilation's AST context.
    ASTContext &Context;
 
+private:
    /// Compilation stage.
    Stage stage = Stage::Parsing;
 
@@ -1398,6 +1408,8 @@ private:
    Module *TestModule    = nullptr;
 
    FunctionDecl *PureVirtual = nullptr;
+   FunctionDecl *CopyClass   = nullptr;
+   FunctionDecl *AtomicRelease = nullptr;
 
    StructDecl  *ArrayDecl     = nullptr;
    StructDecl *ArrayViewDecl  = nullptr;
@@ -1414,6 +1426,10 @@ private:
    StructDecl *ValueWitnessTableDecl    = nullptr;
    StructDecl *ProtocolConformanceDecl  = nullptr;
    StructDecl *ExistentialContainerDecl = nullptr;
+
+   EnumDecl   *GenericArgumentValueDecl = nullptr;
+   StructDecl *GenericArgumentDecl      = nullptr;
+   StructDecl *GenericEnvironmentDecl   = nullptr;
 
    ProtocolDecl *AnyDecl                 = nullptr;
    ProtocolDecl *EquatableDecl           = nullptr;
@@ -1460,6 +1476,8 @@ public:
    Module *getTestModule();
 
    FunctionDecl *getPureVirtualDecl();
+   FunctionDecl *getCopyClassDecl();
+   FunctionDecl *getAtomicReleaseDecl();
 
    StructDecl *getArrayDecl();
    StructDecl *getArrayViewDecl();
@@ -1476,6 +1494,10 @@ public:
    StructDecl *getValueWitnessTableDecl();
    StructDecl *getProtocolConformanceDecl();
    StructDecl *getExistentialContainerDecl();
+
+   EnumDecl   *getGenericArgumentValueDecl();
+   StructDecl *getGenericArgumentDecl();
+   StructDecl *getGenericEnvironmentDecl();
 
    ProtocolDecl *getAnyDecl();
    ProtocolDecl *getEquatableDecl();
@@ -1498,6 +1520,8 @@ public:
    bool isInReflectModule(Decl *D);
    bool isInBuiltinModule(Decl *D);
    bool isInStdModule(Decl *D);
+
+   QualType getOptionOf(QualType Ty, StmtOrDecl DependentStmt);
 
    bool trackDeclsPerFile() const { return TrackDeclsPerFile; }
    void setTrackDeclsPerFile(bool V) { TrackDeclsPerFile = V; }
@@ -1554,8 +1578,8 @@ public:
    // CTFE
    //===-------------------------------------------------------===//
 
-   bool ensureSizeKnown(QualType Ty, SourceLocation loc);
-   bool ensureSizeKnown(RecordDecl *R, SourceLocation loc);
+   bool ensureSizeKnown(QualType Ty, StmtOrDecl SOD);
+   bool ensureSizeKnown(RecordDecl *R, StmtOrDecl SOD);
 
    bool ensureDeclared(Decl *D);
    bool ensureContextDeclared(DeclContext *DC);
@@ -1763,16 +1787,36 @@ public:
    DeclResult doDestructure(DestructuringDecl *D,
                             QualType DestructuredTy);
 
+   MethodDecl *getEquivalentMethod(MethodDecl *Orig,
+                                   RecordDecl *Inst);
+
    void maybeInstantiate(CandidateSet &CandSet, Statement *Caller);
    bool maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                const TemplateArgList &templateArgs,
                                Statement *Caller);
+
+   template<class T>
+   T *maybeInstantiateTemplateMember(DeclContext *DC, T* Member)
+   {
+      return support::cast<T>(maybeInstantiateTemplateMemberImpl(DC, Member));
+   }
+
+   NamedDecl *maybeInstantiateTemplateMemberImpl(DeclContext *LookupCtx,
+                                                 NamedDecl *Member);
 
    MethodDecl *maybeInstantiateMemberFunction(MethodDecl *M, StmtOrDecl Caller);
 
    MethodDecl *InstantiateMethod(RecordDecl *R, StringRef Name, StmtOrDecl SOD);
    MethodDecl *InstantiateProperty(RecordDecl *R, StringRef Name,
                                    bool Getter, StmtOrDecl SOD);
+
+   RecordDecl *InstantiateRecord(SourceLocation POI,
+                                 RecordDecl *R,
+                                 sema::FinalTemplateArgumentList *TemplateArgs);
+
+   RecordDecl *InstantiateRecord(SourceLocation POI,
+                                 RecordDecl *R,
+                                 const sema::TemplateArgList &TemplateArgs);
 
    void declareMemberwiseInitializer(StructDecl *S,
                                      InitDecl *ExplicitDecl = nullptr);
@@ -1907,6 +1951,8 @@ public:
    StmtResult checkNamespaceRef(MacroExpansionStmt *Stmt);
    DeclResult checkNamespaceRef(MacroExpansionDecl *D);
 
+   QualType getParentType(Expression *ParentExpr);
+
 private:
    ExprResult HandleBuiltinTypeMember(IdentifierRefExpr *Expr, QualType Ty);
    ExprResult HandleStaticTypeMember(IdentifierRefExpr *Expr, QualType Ty);
@@ -1922,12 +1968,14 @@ private:
    // CallExpr
 
    ExprResult HandleStaticTypeCall(CallExpr *Call,
-                                   MutableArrayRef<Expression*> TemplateArgs,
+                                   TemplateArgListExpr *ArgExpr,
                                    Type *Ty);
    ExprResult HandleConstructorCall(CallExpr *Call,
-                                    MutableArrayRef<Expression*> TemplateArgs,
-                                    RecordDecl *R);
+                                    TemplateArgListExpr *ArgExpr,
+                                    RecordDecl *R,
+                                    TemplateParamDecl *Param = nullptr);
 
+public:
    void diagnoseMemberNotFound(DeclContext *Ctx,
                                StmtOrDecl Subject,
                                DeclarationName memberName,
@@ -1938,6 +1986,7 @@ private:
    bool isAccessible(NamedDecl *ND);
    void checkAccessibility(NamedDecl *ND, StmtOrDecl SOD);
 
+private:
    StmtOrDecl checkMacroCommon(StmtOrDecl SOD,
                                DeclarationName MacroName,
                                DeclContext &Ctx,
@@ -1945,6 +1994,7 @@ private:
                                llvm::ArrayRef<lex::Token> Tokens,
                                unsigned Kind);
 
+   Expression *UnwrapExistential(QualType ParentType, Expression *Expr);
 
 public:
    FuncArgDecl *MakeSelfArg(SourceLocation Loc);
@@ -1999,6 +2049,7 @@ public:
    ExprResult HandleBuiltinAlias(AliasDecl *Al, Expression *Expr);
 
    friend class ReflectionBuilder;
+   friend class NameBinder;
 };
 
 } // namespace ast

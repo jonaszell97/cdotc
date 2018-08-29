@@ -165,6 +165,8 @@ public:
    void dump() const;
    void print(llvm::raw_ostream &OS) const;
 
+   std::string toString() const;
+
    friend class DeclarationNameTable;
 
 private:

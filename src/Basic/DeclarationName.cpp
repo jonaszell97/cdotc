@@ -462,6 +462,17 @@ void DeclarationName::print(llvm::raw_ostream &OS) const
    }
 }
 
+std::string DeclarationName::toString() const
+{
+   std::string str;
+   {
+      llvm::raw_string_ostream OS(str);
+      OS << *this;
+   }
+
+   return str;
+}
+
 DeclarationName DeclarationName::getManglingName() const
 {
    if (getKind() == InstantiationName)

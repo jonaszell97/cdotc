@@ -179,6 +179,18 @@ void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr *A)
    }
 }
 
+//void SemaPass::checkTemplateAttr(Decl *D, TemplateAttr *A)
+//{
+//   auto *ND = cast<NamedDecl>(D);
+//   if (!ND->isTemplate()) {
+//      diagnose(err_generic_error,
+//               "@template is only valid on generic declarations",
+//               A->getSourceRange());
+//   }
+//
+//   ND->setUnboundedTemplate(true);
+//}
+
 void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*)
 {
 

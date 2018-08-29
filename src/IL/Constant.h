@@ -58,6 +58,7 @@ public:
    void replaceOperand(Constant *Prev, Constant *New);
 
    bool isAllZerosValue() const { return ConstBits.AllZeros; }
+   bool containsConstantEnum() const { return ConstBits.ContainsConstantEnum; }
 
 protected:
    Constant(TypeID id, ValueType ty)

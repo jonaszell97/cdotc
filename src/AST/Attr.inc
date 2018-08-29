@@ -321,6 +321,9 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::Align:
       return AfterSema;
+   case AttrKind::Thin:
+   case AttrKind::_Builtin:
+      return Immediate;
    case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
@@ -331,9 +334,6 @@ public:
    case AttrKind::Inline:
    case AttrKind::Implicit:
       return AfterDeclaration;
-   case AttrKind::Thin:
-   case AttrKind::_Builtin:
-      return Immediate;
    case AttrKind::Extern:
    case AttrKind::VersionDecl:
    case AttrKind::VersionStmt:
@@ -345,34 +345,34 @@ public:
    bool Attr::isInherited() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::CompileTime:
-      return true;
-   case AttrKind::Testable:
-      return false;
-   case AttrKind::_Builtin:
-      return false;
-   case AttrKind::AutoClosure:
-      return false;
-   case AttrKind::VersionDecl:
-      return false;
-   case AttrKind::DiscardableResult:
-      return true;
-   case AttrKind::Align:
-      return false;
-   case AttrKind::Inline:
-      return true;
-   case AttrKind::Opaque:
-      return false;
-   case AttrKind::Thin:
-      return false;
-   case AttrKind::Implicit:
-      return false;
-   case AttrKind::Escaping:
+         case AttrKind::_Builtin:
       return false;
    case AttrKind::VersionStmt:
       return false;
+   case AttrKind::VersionDecl:
+      return false;
+   case AttrKind::Align:
+      return false;
+   case AttrKind::Opaque:
+      return false;
+   case AttrKind::Escaping:
+      return false;
+   case AttrKind::AutoClosure:
+      return false;
+   case AttrKind::DiscardableResult:
+      return true;
    case AttrKind::Extern:
       return false;
+   case AttrKind::Testable:
+      return false;
+   case AttrKind::Thin:
+      return false;
+   case AttrKind::CompileTime:
+      return true;
+   case AttrKind::Implicit:
+      return false;
+   case AttrKind::Inline:
+      return true;
 
       }
    }

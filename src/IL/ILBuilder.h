@@ -181,7 +181,7 @@ public:
    ConstantEnum *GetConstantEnum(ast::EnumCaseDecl *Case,
                                  llvm::ArrayRef<Constant*> CaseVals);
 
-   ConstantArray *GetConstantArray(QualType ArrTy,
+   ConstantArray *GetConstantArray(QualType ElementTy,
                                    llvm::ArrayRef<Constant *> Arr);
 
    ConstantArray *GetConstantArray(llvm::ArrayRef<Constant *> Arr);
@@ -592,7 +592,13 @@ public:
                                               QualType toType,
                                               il::Value *ValueTypeInfo,
                                               il::GlobalVariable *ProtocolTypeInfo,
+                                              bool Preallocated = false,
                                               StringRef name = "");
+
+   GenericInitInst *CreateGenericInit(il::Value *Val,
+                                      il::Value *GenericEnvironment,
+                                      QualType GenericType,
+                                      StringRef Name = "");
 
    Value *CreateIsX(Value *V, uint64_t val);
    Value *CreateIsZero(Value *V);
@@ -607,6 +613,8 @@ public:
 
    bool overrideSymbols() const { return OverrideSymbols; }
    void setOverrideSymbols(bool V) { OverrideSymbols = V; }
+
+   bool emitDebugInfo() const { return EmitDebugInfo; }
 
    struct SynthesizedRAII {
       SynthesizedRAII(ILBuilder &Builder)

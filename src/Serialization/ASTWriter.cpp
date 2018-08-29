@@ -664,7 +664,7 @@ void ASTRecordWriter::AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc *Name)
    }
 }
 
-void ASTRecordWriter::AddTemplateArgument(const ResolvedTemplateArg &Arg)
+void ASTRecordWriter::AddTemplateArgument(const TemplateArgument &Arg)
 {
    push_back(Arg.isNull());
    push_back(Arg.isType());

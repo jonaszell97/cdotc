@@ -424,6 +424,8 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/ASTVector.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/ASTVisitor.h">
@@ -577,6 +579,11 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/AST/TypeBuilder.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/AST/TypeComparer.h">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
@@ -1152,6 +1159,11 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/IL/Utils/InstructionCloner.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/IL/Value.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
@@ -1223,6 +1235,11 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/ILGen/ILGenPass.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/ILGen/ILGenSpecialize.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
@@ -1384,6 +1401,71 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/BuiltinQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/CTFEQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/DriverQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/ILGenQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/InstantiationQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/LookupQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/Query.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/Query.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/QueryContext.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/QueryContext.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/SemaQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/TypeQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Query/UtilQueries.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Sema/ActionResult.h">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
@@ -1450,6 +1532,16 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Sema/Lookup.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/NameBinding.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/NameBinding.h">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
@@ -1685,6 +1777,11 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Support/Config.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Support/Format.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
@@ -1829,6 +1926,16 @@
 		<Unit filename="/Users/Jonas/CDot/src/TableGen/main.cpp">
 			<Option target="cdot-tblgen"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Tools/IRDebug/IRDebugAnnotatePass.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Tools/IRDebug/IRDebugAnnotatePass.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Tools/TableGenBackends/AttributesBackend.cpp">
 			<Option target="cdotc-tblgens"/>
 		</Unit>
@@ -1839,6 +1946,9 @@
 			<Option target="cdotc-tblgens"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Tools/TableGenBackends/DiagnosticsBackend.cpp">
+			<Option target="cdotc-tblgens"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Tools/TableGenBackends/QueryBackend.cpp">
 			<Option target="cdotc-tblgens"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/CMakeLists.txt">

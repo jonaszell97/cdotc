@@ -127,6 +127,7 @@
 #endif
 
 #ifdef CDOT_TABLEGEN_KW_TOKEN
+   CDOT_TABLEGEN_KW_TOKEN(tblgen_if, "if")
    CDOT_TABLEGEN_KW_TOKEN(tblgen_foreach, "foreach")
    CDOT_TABLEGEN_KW_TOKEN(tblgen_print, "print")
 #endif

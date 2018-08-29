@@ -925,6 +925,7 @@ public:
       case InitInstID:
       case AssignInstID:
       case StoreInstID:
+      case GenericInitInstID:
          return true;
       default:
          return false;
@@ -1293,11 +1294,14 @@ public:
                        QualType toType,
                        il::Value *ValueTypeInfo,
                        il::GlobalVariable *ProtocolTypeInfo,
+                       bool Preallocated,
                        BasicBlock *parent);
 
    Value *getTarget() const { return Operands[0]; }
    Value *getValueTypeInfo() const;
    GlobalVariable *getProtocolTypeInfo() const;
+
+   bool isPreallocated() const { return ExistentialBits.Preallocated; }
 
    op_iterator op_begin_impl() { return &Operands[0]; }
    op_const_iterator op_begin_impl() const { return &Operands[0]; }
@@ -1306,6 +1310,22 @@ public:
    static bool classof(Value const* T)
    {
       return T->getTypeID() == ExistentialInitInstID;
+   }
+};
+
+class GenericInitInst: public BinaryInstruction {
+public:
+   GenericInitInst(Value *Val,
+                   Value *GenericEnvironment,
+                   QualType GenericType,
+                   BasicBlock *Parent);
+
+   Value *getValue() const { return Operands[0]; }
+   Value *getGenericEnvironment() const { return Operands[1]; }
+
+   static bool classof(Value const* T)
+   {
+      return T->getTypeID() == GenericInitInstID;
    }
 };
 

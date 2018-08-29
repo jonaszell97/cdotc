@@ -44,13 +44,14 @@ public:
       ContainsUnexpandedPack = GlobalInitializer << 1u,
       Ignored                = ContainsUnexpandedPack << 1u,
       Unsafe                 = Ignored << 1u,
+      SpecializationCandidate = Unsafe << 1u,
+      ContainsGenericParam   = SpecializationCandidate << 1u,
+      ContainsAssociatedType = ContainsGenericParam << 1u,
 
-      _lastFlag         = Unsafe,
-      StatusFlags       = TypeDependent | ValueDependent | HadError
-                          | ContainsUnexpandedPack,
+      _lastFlag         = SpecializationCandidate,
    };
 
-   static_assert(_lastFlag <= (1 << 7), "too many flags!");
+   static_assert(_lastFlag <= (1 << 23), "too many flags!");
 
    void dumpFlags() const;
    void printFlags(llvm::raw_ostream &OS) const;
@@ -85,6 +86,12 @@ public:
       setFlag(ValueDependent, valueDependant);
    }
 
+   bool containsGenericParam() const { return flagIsSet(ContainsGenericParam); }
+   void setContainsGenericParam(bool b) { setFlag(ContainsGenericParam, b); }
+
+   bool containsAssociatedType() const { return flagIsSet(ContainsAssociatedType); }
+   void setContainsAssociatedType(bool b) { setFlag(ContainsAssociatedType, b); }
+
    void setContainsUnexpandedParameterPack(bool unexp)
    {
       setFlag(ContainsUnexpandedPack, unexp);
@@ -113,6 +120,16 @@ public:
    void setSemanticallyChecked(bool chk = true)
    {
       setFlag(SemanticallyChecked, chk);
+   }
+
+   bool isSpecializationCandidate() const
+   {
+      return flagIsSet(SpecializationCandidate);
+   }
+
+   void setSpecializationCandidate(bool V)
+   {
+      setFlag(SpecializationCandidate, V);
    }
 
    bool alreadyCheckedOrHasError() const

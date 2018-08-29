@@ -46,7 +46,7 @@ namespace ctfe {
 class EngineImpl {
 public:
    explicit EngineImpl(ast::SemaPass &SP)
-      : SP(SP), TI(SP.getContext(),
+      : SP(SP), TI(SP.getCompilationUnit(),
                    llvm::Triple(llvm::sys::getDefaultTargetTriple()))
    {}
 
@@ -2576,6 +2576,8 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::typeinfo_cmp:
    case Intrinsic::excn_object_ref:
    case Intrinsic::excn_typeinfo_ref:
+   case Intrinsic::generic_value:
+   case Intrinsic::generic_environment:
       llvm_unreachable("unimplemented!");
    default:
       llvm_unreachable("unsupported ctfe intrinsic");
@@ -3656,6 +3658,11 @@ ctfe::Value EngineImpl::visitUnionCastInst(UnionCastInst const& I)
 }
 
 ctfe::Value EngineImpl::visitExistentialInitInst(ExistentialInitInst const& I)
+{
+   llvm_unreachable("not yet");
+}
+
+Value EngineImpl::visitGenericInitInst(const GenericInitInst &I)
 {
    llvm_unreachable("not yet");
 }
