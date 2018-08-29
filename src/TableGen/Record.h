@@ -119,6 +119,17 @@ public:
       return true;
    }
 
+   bool addOverride(llvm::StringRef name,
+                    Type *type,
+                    Value *defaultValue,
+                    SourceLocation declLoc) {
+      if (getOverride(name))
+         return false;
+
+      overrides.emplace_back(name, type, defaultValue, declLoc, -1);
+      return true;
+   }
+
    bool addTemplateParam(llvm::StringRef name,
                          Type *type,
                          Value *defaultValue,
@@ -168,9 +179,31 @@ public:
       return nullptr;
    }
 
+   RecordField* getOverride(llvm::StringRef name) const
+   {
+      auto F = getOwnOverride(name);
+      if (F)
+         return F;
+
+      for (auto &b : bases)
+         if ((F = b.getBase()->getOverride(name)))
+            return F;
+
+      return nullptr;
+   }
+
    RecordField* getOwnField(llvm::StringRef name) const
    {
       for (auto &field : fields)
+         if (field.getName() == name)
+            return const_cast<RecordField*>(&field);
+
+      return nullptr;
+   }
+
+   RecordField* getOwnOverride(llvm::StringRef name) const
+   {
+      for (auto &field : overrides)
          if (field.getName() == name)
             return const_cast<RecordField*>(&field);
 
@@ -183,6 +216,11 @@ public:
    }
 
    const std::vector<RecordField> &getFields() const
+   {
+      return fields;
+   }
+
+   const std::vector<RecordField> &getOverrides() const
    {
       return fields;
    }
@@ -226,6 +264,7 @@ private:
 
    std::vector<RecordField> parameters;
    std::vector<RecordField> fields;
+   std::vector<RecordField> overrides;
 };
 
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &str, Class &C)

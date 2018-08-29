@@ -120,7 +120,7 @@ class TblGenDiagConsumer: public DiagnosticConsumer {
 public:
    void HandleDiagnostic(const Diagnostic &Diag) override
    {
-      llvm::outs() << Diag.getMsg();
+      llvm::errs() << Diag.getMsg();
    }
 };
 

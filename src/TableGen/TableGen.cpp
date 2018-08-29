@@ -20,15 +20,24 @@ static Value *resolveValue(Value *V,
                            SourceLocation errorLoc = {}) {
    if (auto Id = dyn_cast<IdentifierVal>(V)) {
       size_t i = 0;
+      Value *Val = nullptr;
       for (auto &P : PreviousBase.getBase()->getParameters()) {
-         if (P.getName() == Id->getVal())
+         if (P.getName() == Id->getVal()) {
+            if (i < ConcreteTemplateArgs.size()) {
+               Val = ConcreteTemplateArgs[i];
+            }
+            else {
+               Val = P.getDefaultValue();
+            }
+
             break;
+         }
 
          ++i;
       }
 
-      assert(i < ConcreteTemplateArgs.size());
-      return ConcreteTemplateArgs[i];
+      assert(Val);
+      return Val;
    }
    else if (auto DA = dyn_cast<DictAccessExpr>(V)) {
       auto dict = resolveValue(DA->getDict(), PreviousBase,
@@ -60,6 +69,17 @@ static void resolveValues(Class::BaseClass const &Base,
    }
 }
 
+static Value *getOverride(Record &R, llvm::StringRef FieldName)
+{
+   for (auto &Base : R.getBases()) {
+      if (auto *OV = Base.getBase()->getOverride(FieldName)) {
+         return OV->getDefaultValue();
+      }
+   }
+
+   return nullptr;
+}
+
 static RecordField const*
 implementBaseForRecord(Class::BaseClass const& Base,
                        Record &R,
@@ -67,6 +87,11 @@ implementBaseForRecord(Class::BaseClass const& Base,
    for (auto &Field : Base.getBase()->getFields()) {
       if (auto val = R.getOwnField(Field.getName())) {
          R.setFieldValue(Field.getName(), val->getDefaultValue());
+      }
+      else if (auto Override = getOverride(R, Field.getName())) {
+         R.setFieldValue(Field.getName(), resolveValue(Override, Base,
+                                                       BaseTemplateArgs,
+                                                       Field.getDeclLoc()));
       }
       else if (auto def = Field.getDefaultValue()) {
          R.setFieldValue(Field.getName(), resolveValue(def, Base,

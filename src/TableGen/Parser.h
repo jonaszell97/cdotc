@@ -45,15 +45,22 @@ private:
    std::unique_ptr<RecordKeeper> GlobalRK;
    RecordKeeper *RK;
 
+   lex::Lexer::LookaheadRAII *LR = nullptr;
    llvm::StringMap<Value*> ForEachVals;
 
+   LLVM_ATTRIBUTE_NORETURN
+   void abortBP();
+
    void parseNextDecl();
+   void parseRecordLevelDecl(Record *R);
+   void parseClassLevelDecl(Class *C);
 
    void parseClass();
    void parseTemplateParams(Class *C,
                             llvm::SmallVectorImpl<size_t> &fieldParameters);
    void parseBases(Class *C);
    void parseFieldDecl(Class *C);
+   void parseOverrideDecl(Class *C);
 
    void parseRecord();
    void parseBases(Record *R);
@@ -65,7 +72,8 @@ private:
                              std::vector<Value*> &givenParams);
 
    void parseValue();
-   void parseForEach();
+   void parseIf(Class *C = nullptr, Record *R = nullptr);
+   void parseForEach(Class *C = nullptr, Record *R = nullptr);
    void parsePrint();
    void parseNamespace();
 
@@ -129,6 +137,10 @@ private:
 
    void advance(bool ignoreNewline = true, bool ignoreWhitespace = true)
    {
+      if (LR) {
+         return LR->advance(ignoreNewline, !ignoreWhitespace);
+      }
+
       return lex.advance(ignoreNewline, !ignoreWhitespace);
    }
 

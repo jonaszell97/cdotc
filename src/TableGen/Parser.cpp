@@ -10,6 +10,7 @@
 #include "Basic/Precedence.h"
 #include "Support/Casting.h"
 #include "Support/LiteralParser.h"
+#include "Support/SaveAndRestore.h"
 #include "Support/StringSwitch.h"
 
 #include <llvm/ADT/SmallString.h>
@@ -17,12 +18,6 @@
 using namespace cdot::lex;
 using namespace cdot::diag;
 using namespace cdot::support;
-
-LLVM_ATTRIBUTE_NORETURN
-static void abortBP()
-{
-   abort();
-}
 
 namespace cdot {
 namespace tblgen {
@@ -40,6 +35,12 @@ Parser::Parser(TableGen &TG,
 Parser::~Parser()
 {
 
+}
+
+void Parser::abortBP()
+{
+   llvm::outs().flush();
+   std::exit(1);
 }
 
 bool Parser::parse()
@@ -68,6 +69,9 @@ void Parser::parseNextDecl()
    }
    else if (currentTok().is(tok::kw_namespace)) {
       parseNamespace();
+   }
+   else if (currentTok().is(tok::tblgen_if)) {
+      parseIf();
    }
    else if (currentTok().is(tok::tblgen_foreach)) {
       parseForEach();
@@ -123,17 +127,7 @@ void Parser::parseClass()
       advance();
 
       while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().is(tok::kw_let)) {
-            parseFieldDecl(C);
-         }
-         else {
-            TG.Diags.Diag(err_generic_error)
-               << "expected in-class declaration"
-               << lex.getSourceLoc();
-
-            abortBP();
-         }
-
+         parseClassLevelDecl(C);
          advance();
       }
    }
@@ -158,6 +152,29 @@ void Parser::parseClass()
    }
 
    currentClass = nullptr;
+}
+
+void Parser::parseClassLevelDecl(Class *C)
+{
+   if (currentTok().is(tok::kw_let)) {
+      parseFieldDecl(C);
+   }
+   else if (currentTok().isIdentifier("override")) {
+      parseOverrideDecl(C);
+   }
+   else if (currentTok().is(tok::tblgen_if)) {
+      parseIf(C, nullptr);
+   }
+   else if (currentTok().is(tok::tblgen_foreach)) {
+      parseForEach(C, nullptr);
+   }
+   else {
+      TG.Diags.Diag(err_generic_error)
+         << "expected in-class declaration"
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
 }
 
 void Parser::parseTemplateParams(Class *C,
@@ -285,6 +302,62 @@ void Parser::parseFieldDecl(Class *C)
       TG.Diags.Diag(note_generic_note)
          << "previous declaration here"
          << C->getField(name)->getDeclLoc();
+   }
+}
+
+void Parser::parseOverrideDecl(Class *C)
+{
+   assert(currentTok().isIdentifier("override"));
+   advance();
+
+   auto loc = currentTok().getSourceLoc();
+   auto name = tryParseIdentifier();
+   advance();
+
+   // Verify that the field exists in a base class.
+   RecordField *Field = nullptr;
+   for (auto &Base : C->getBases()) {
+      auto *F = Base.getBase()->getField(name);
+      if (F) {
+         Field = F;
+         break;
+      }
+   }
+
+   if (!Field) {
+      TG.Diags.Diag(err_generic_error)
+         << "'override' declaration does not override a base class field"
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
+
+   auto Ty = Field->getType();
+
+   Value *defaultValue = nullptr;
+   if (currentTok().is(tok::equals)) {
+      advance();
+
+      defaultValue = parseExpr(Ty);
+   }
+   else {
+      TG.Diags.Diag(err_generic_error)
+         << "expected override value"
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
+
+   auto newDecl = C->addOverride(name, Ty, defaultValue, loc);
+   if (!newDecl) {
+      TG.Diags.Diag(err_generic_error)
+         << "duplicate declaration of override " + name + " for class "
+            + C->getName()
+         << loc;
+
+      TG.Diags.Diag(note_generic_note)
+         << "previous declaration here"
+         << C->getOverride(name)->getDeclLoc();
    }
 }
 
@@ -434,22 +507,32 @@ void Parser::parseRecord()
       advance();
 
       while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().is(tok::ident)) {
-            parseFieldDef(R);
-         }
-         else {
-            TG.Diags.Diag(err_generic_error)
-               << "expected field definition"
-               << lex.getSourceLoc();
-
-            abortBP();
-         }
-
+         parseRecordLevelDecl(R);
          advance();
       }
    }
 
    finalizeRecord(*R);
+}
+
+void Parser::parseRecordLevelDecl(Record *R)
+{
+   if (currentTok().is(tok::ident)) {
+      parseFieldDef(R);
+   }
+   else if (currentTok().is(tok::tblgen_if)) {
+      parseIf(nullptr, R);
+   }
+   else if (currentTok().is(tok::tblgen_foreach)) {
+      parseForEach(nullptr, R);
+   }
+   else {
+      TG.Diags.Diag(err_generic_error)
+         << "expected field definition"
+         << lex.getSourceLoc();
+
+      abortBP();
+   }
 }
 
 void Parser::finalizeRecord(Record &R)
@@ -584,6 +667,19 @@ llvm::StringRef Parser::tryParseIdentifier()
       }
    }
 
+   if (currentTok().is(tok::exclaim)) {
+      auto *Expr = parseExpr(TG.getStringTy());
+      if (!Expr) {
+         TG.Diags.Diag(err_generic_error)
+            << "expected identifier"
+            << currentTok().getSourceLoc();
+
+         abortBP();
+      }
+
+      return cast<StringLiteral>(Expr)->getVal();
+   }
+
    TG.Diags.Diag(err_generic_error)
       << "expected identifier"
       << currentTok().getSourceLoc();
@@ -650,7 +746,60 @@ void Parser::parsePrint()
       << loc;
 }
 
-void Parser::parseForEach()
+void Parser::parseIf(Class *C, Record *R)
+{
+   assert(currentTok().is(tok::tblgen_if));
+   advance();
+
+   auto *Cond = parseExpr(TG.getInt1Ty());
+   if (!Cond || Cond->getType() != TG.getInt1Ty()) {
+      TG.Diags.Diag(err_generic_error)
+         << "expected boolean value"
+         << currentTok().getSourceLoc();
+
+      abortBP();
+   }
+
+   expect(tok::open_brace);
+   advance();
+
+   if (!cast<IntegerLiteral>(Cond)->getVal().getBoolValue()) {
+      unsigned Open = 1;
+      unsigned Close = 0;
+
+      while (true) {
+         switch (currentTok().getKind()) {
+         case tok::open_brace: ++Open; break;
+         case tok::close_brace: ++Close; break;
+         default:
+            break;
+         }
+
+         if (Open == Close)
+            break;
+
+         advance();
+      }
+
+      return;
+   }
+
+   while (!currentTok().is(tok::close_brace)) {
+      if (R) {
+         parseRecordLevelDecl(R);
+      }
+      else if (C) {
+         parseClassLevelDecl(C);
+      }
+      else {
+         parseNextDecl();
+      }
+
+      advance();
+   }
+}
+
+void Parser::parseForEach(Class *C, Record *R)
 {
    assert(currentTok().is(tok::tblgen_foreach));
 
@@ -672,32 +821,69 @@ void Parser::parseForEach()
    expect(tok::open_brace);
    advance();
 
-//   auto SafePoint = lex.makeSavePoint();
-
    if (auto L = dyn_cast<ListLiteral>(Range)) {
       for (auto &V : L->getValues()) {
+         Lexer::LookaheadRAII LR(lex);
+         auto SAR = support::saveAndRestore(this->LR, &LR);
+
          ForEachScope scope(*this, name, V);
-//         SafePoint.reset();
 
          while (!currentTok().is(tok::close_brace)) {
-            parseNextDecl();
-            advance();
+            if (R) {
+               parseRecordLevelDecl(R);
+            }
+            else if (C) {
+               parseClassLevelDecl(C);
+            }
+            else {
+               parseNextDecl();
+            }
+
+            LR.advance();
          }
       }
    }
    else if (auto D = dyn_cast<DictLiteral>(Range)) {
       for (auto &V : D->getValues()) {
+         Lexer::LookaheadRAII LR(lex);
+         auto SAR = support::saveAndRestore(this->LR, &LR);
+
          ForEachScope scope(*this, name, V.getValue());
-//         SafePoint.reset();
 
          while (!currentTok().is(tok::close_brace)) {
-            parseNextDecl();
-            advance();
+            if (R) {
+               parseRecordLevelDecl(R);
+            }
+            else if (C) {
+               parseClassLevelDecl(C);
+            }
+            else {
+               parseNextDecl();
+            }
+
+            LR.advance();
          }
       }
    }
    else {
       llvm_unreachable("hmmm...");
+   }
+
+   unsigned Open = 1;
+   unsigned Close = 0;
+
+   while (true) {
+      switch (currentTok().getKind()) {
+      case tok::open_brace: ++Open; break;
+      case tok::close_brace: ++Close; break;
+      default:
+         break;
+      }
+
+      if (Open == Close)
+         break;
+
+      advance();
    }
 }
 
@@ -1100,6 +1286,8 @@ Value* Parser::parseFunction(Type *contextualTy)
       First,
       Last,
       StrConcat,
+
+      Eq, Ne,
    };
 
    auto func = tryParseIdentifier();
@@ -1111,6 +1299,8 @@ Value* Parser::parseFunction(Type *contextualTy)
       .Case("last", Last)
       .Case("concat", Concat)
       .Case("str_concat", StrConcat)
+      .Case("eq", Eq)
+      .Case("ne", Ne)
       .Default(Unknown);
 
    expect(tok::open_paren);
@@ -1131,170 +1321,220 @@ Value* Parser::parseFunction(Type *contextualTy)
    }
 
    switch (kind) {
-      case Unknown:
-         TG.Diags.Diag(err_generic_error)
-            << "unknown function '" + func + "'"
-            << currentTok().getSourceLoc();
+   case Unknown:
+      TG.Diags.Diag(err_generic_error)
+         << "unknown function '" + func + "'"
+         << currentTok().getSourceLoc();
 
-         abortBP();
+      abortBP();
 
-      case AllOf: {
-         EXPECT_AT_LEAST_ARGS(1);
+   case AllOf: {
+      EXPECT_AT_LEAST_ARGS(1);
 
-         Class *CommonBase = nullptr;
-         llvm::SmallVector<Record *, 8> Records;
+      Class *CommonBase = nullptr;
+      llvm::SmallVector<Record *, 8> Records;
 
-         size_t i = 0;
-         for (auto &arg : args) {
-            EXPECT_ARG_VALUE(i, StringLiteral);
+      size_t i = 0;
+      for (auto &arg : args) {
+         EXPECT_ARG_VALUE(i, StringLiteral);
 
-            auto className = cast<StringLiteral>(arg)->getVal();
-            auto C = RK->lookupClass(className);
-            if (!C) {
+         auto className = cast<StringLiteral>(arg)->getVal();
+         auto C = RK->lookupClass(className);
+         if (!C) {
+            TG.Diags.Diag(err_generic_error)
+               << "class " + className + " does not exist"
+               << argLocs[i];
+
+            abortBP();
+         }
+
+         if (!CommonBase) {
+            CommonBase = C;
+         }
+         else {
+            CommonBase = findCommonBase(C, CommonBase);
+            if (!CommonBase) {
                TG.Diags.Diag(err_generic_error)
-                  << "class " + className + " does not exist"
+                  << "incompatible classes " + C->getName() + " and "
+                     + CommonBase->getName()
                   << argLocs[i];
 
                abortBP();
             }
-
-            if (!CommonBase) {
-               CommonBase = C;
-            }
-            else {
-               CommonBase = findCommonBase(C, CommonBase);
-               if (!CommonBase) {
-                  TG.Diags.Diag(err_generic_error)
-                     << "incompatible classes " + C->getName() + " and "
-                        + CommonBase->getName()
-                     << argLocs[i];
-
-                  abortBP();
-               }
-            }
-
-            RK->getAllDefinitionsOf(C, Records);
-            ++i;
          }
 
-
-         assert(CommonBase && "no common base class");
-
-         std::vector<Value *> vals;
-         for (auto &r : Records)
-            vals.push_back(new(TG) RecordVal(TG.getRecordType(r), r));
-
-         Type *listTy = TG.getListType(TG.getClassType(CommonBase));
-         if (contextualTy && typesCompatible(listTy, contextualTy))
-            listTy = contextualTy;
-
-         return new(TG) ListLiteral(listTy, move(vals));
+         RK->getAllDefinitionsOf(C, Records);
+         ++i;
       }
-      case Push: {
-         EXPECT_NUM_ARGS(2);
-         EXPECT_ARG_VALUE(0, ListLiteral);
 
-         auto list = cast<ListLiteral>(args[0]);
-         if (!typesCompatible(args[1]->getType(),
-                              cast<ListType>(list->getType())
-                                 ->getElementType())) {
+
+      assert(CommonBase && "no common base class");
+
+      std::vector<Value *> vals;
+      for (auto &r : Records)
+         vals.push_back(new(TG) RecordVal(TG.getRecordType(r), r));
+
+      Type *listTy = TG.getListType(TG.getClassType(CommonBase));
+      if (contextualTy && typesCompatible(listTy, contextualTy))
+         listTy = contextualTy;
+
+      return new(TG) ListLiteral(listTy, move(vals));
+   }
+   case Push: {
+      EXPECT_NUM_ARGS(2);
+      EXPECT_ARG_VALUE(0, ListLiteral);
+
+      auto list = cast<ListLiteral>(args[0]);
+      if (!typesCompatible(args[1]->getType(),
+                           cast<ListType>(list->getType())
+                              ->getElementType())) {
+         TG.Diags.Diag(err_generic_error)
+            << "incompatible types " + args[1]->getType()->toString()
+             + " and " + cast<ListType>(list->getType())
+               ->getElementType()->toString()
+            << currentTok().getSourceLoc();
+
+         abortBP();
+      }
+
+      std::vector<Value*> copy = list->getValues();
+      copy.push_back(args[1]);
+
+      return new(TG) ListLiteral(list->getType(), move(copy));
+   }
+   case Pop: {
+      EXPECT_NUM_ARGS(1);
+      EXPECT_ARG_VALUE(0, ListLiteral);
+
+      auto list = cast<ListLiteral>(args[0]);
+      std::vector<Value*> copy = list->getValues();
+
+      if (copy.empty()) {
+         TG.Diags.Diag(err_generic_error)
+            << "popping from empty list"
+            << parenLoc;
+
+         abortBP();
+      }
+
+      copy.pop_back();
+      return new(TG) ListLiteral(list->getType(), move(copy));
+   }
+   case First: {
+      EXPECT_NUM_ARGS(1);
+      EXPECT_ARG_VALUE(0, ListLiteral);
+
+      auto list = cast<ListLiteral>(args[0]);
+      if (list->getValues().empty()) {
+         TG.Diags.Diag(err_generic_error)
+            << "list is empty"
+            << parenLoc;
+
+         abortBP();
+      }
+
+      return list->getValues().front();
+   }
+   case Last: {
+      EXPECT_NUM_ARGS(1);
+      EXPECT_ARG_VALUE(0, ListLiteral);
+
+      auto list = cast<ListLiteral>(args[0]);
+      if (list->getValues().empty()) {
+         TG.Diags.Diag(err_generic_error)
+            << "list is empty"
+            << parenLoc;
+
+         abortBP();
+      }
+
+      return list->getValues().back();
+   }
+   case Concat: {
+      EXPECT_NUM_ARGS(2);
+      EXPECT_ARG_VALUE(0, ListLiteral);
+      EXPECT_ARG_VALUE(1, ListLiteral);
+
+      auto l1 = cast<ListLiteral>(args[0]);
+      auto l2 = cast<ListLiteral>(args[1]);
+
+      if (!typesCompatible(l2->getType(), l1->getType())) {
+         TG.Diags.Diag(err_generic_error)
+            << "incompatible types " + l1->getType()->toString()
+               + " and " + l2->getType()->toString()
+            << currentTok().getSourceLoc();
+
+         abortBP();
+      }
+
+      auto copy = l1->getValues();
+      copy.insert(copy.end(),
+                  l2->getValues().begin(),
+                  l2->getValues().end());
+
+      return new(TG) ListLiteral(l1->getType(), move(copy));
+   }
+   case StrConcat: {
+      if (args.empty()) {
+         TG.Diags.Diag(err_generic_error)
+            << "function " + func + " expects at least one argument";
+      }
+
+      std::string str;
+      for (auto *Arg : args) {
+         if (!isa<StringLiteral>(Arg)) {
             TG.Diags.Diag(err_generic_error)
-               << "incompatible types " + args[1]->getType()->toString()
-                + " and " + cast<ListType>(list->getType())
-                  ->getElementType()->toString()
-               << currentTok().getSourceLoc();
+               << "function " + func + " expects only string arguments";
 
             abortBP();
          }
 
-         std::vector<Value*> copy = list->getValues();
-         copy.push_back(args[1]);
-
-         return new(TG) ListLiteral(list->getType(), move(copy));
+         str += cast<StringLiteral>(Arg)->getVal();
       }
-      case Pop: {
-         EXPECT_NUM_ARGS(1);
-         EXPECT_ARG_VALUE(0, ListLiteral);
 
-         auto list = cast<ListLiteral>(args[0]);
-         std::vector<Value*> copy = list->getValues();
+      char *Mem = TG.Allocate<char>(str.size());
+      std::copy(str.begin(), str.end(), Mem);
 
-         if (copy.empty()) {
-            TG.Diags.Diag(err_generic_error)
-               << "popping from empty list"
-               << parenLoc;
+      return new(TG) StringLiteral(args.front()->getType(),
+                                   llvm::StringRef(Mem, str.size()));
+   }
+   case Eq:
+   case Ne: {
+      EXPECT_NUM_ARGS(2);
 
-            abortBP();
+      Value *LHS = args[0];
+      Value *RHS = args[1];
+
+      bool Result = false;
+      if (LHS->getTypeID() == RHS->getTypeID()) {
+         switch (LHS->getTypeID()) {
+         case Value::IntegerLiteralID:
+            Result = cast<IntegerLiteral>(LHS)->getVal()
+               == cast<IntegerLiteral>(RHS)->getVal();
+            break;
+         case Value::FPLiteralID:
+            Result = cast<FPLiteral>(LHS)->getVal().compare(
+               cast<FPLiteral>(RHS)->getVal()) == llvm::APFloat::cmpEqual;
+            break;
+         case Value::StringLiteralID:
+            Result = cast<StringLiteral>(LHS)->getVal()
+                     == cast<StringLiteral>(RHS)->getVal();
+            break;
+         case Value::CodeBlockID:
+            Result = cast<CodeBlock>(LHS)->getCode()
+                     == cast<CodeBlock>(RHS)->getCode();
+            break;
+         default:
+            break;
          }
-
-         copy.pop_back();
-         return new(TG) ListLiteral(list->getType(), move(copy));
       }
-      case First: {
-         EXPECT_NUM_ARGS(1);
-         EXPECT_ARG_VALUE(0, ListLiteral);
 
-         auto list = cast<ListLiteral>(args[0]);
-         if (list->getValues().empty()) {
-            TG.Diags.Diag(err_generic_error)
-               << "list is empty"
-               << parenLoc;
-
-            abortBP();
-         }
-
-         return list->getValues().front();
+      if (kind == Ne) {
+         Result = !Result;
       }
-      case Last: {
-         EXPECT_NUM_ARGS(1);
-         EXPECT_ARG_VALUE(0, ListLiteral);
 
-         auto list = cast<ListLiteral>(args[0]);
-         if (list->getValues().empty()) {
-            TG.Diags.Diag(err_generic_error)
-               << "list is empty"
-               << parenLoc;
-
-            abortBP();
-         }
-
-         return list->getValues().back();
-      }
-      case Concat: {
-         EXPECT_NUM_ARGS(2);
-         EXPECT_ARG_VALUE(0, ListLiteral);
-         EXPECT_ARG_VALUE(1, ListLiteral);
-
-         auto l1 = cast<ListLiteral>(args[0]);
-         auto l2 = cast<ListLiteral>(args[1]);
-
-         if (!typesCompatible(l2->getType(), l1->getType())) {
-            TG.Diags.Diag(err_generic_error)
-               << "incompatible types " + l1->getType()->toString()
-                  + " and " + l2->getType()->toString()
-               << currentTok().getSourceLoc();
-
-            abortBP();
-         }
-
-         auto copy = l1->getValues();
-         copy.insert(copy.end(),
-                     l2->getValues().begin(),
-                     l2->getValues().end());
-
-         return new(TG) ListLiteral(l1->getType(), move(copy));
-      }
-      case StrConcat: {
-         EXPECT_NUM_ARGS(2);
-         EXPECT_ARG_VALUE(0, StringLiteral);
-         EXPECT_ARG_VALUE(1, StringLiteral);
-
-         auto l1 = cast<StringLiteral>(args[0]);
-         auto l2 = cast<StringLiteral>(args[1]);
-
-         return new(TG) StringLiteral(l1->getType(),
-                                      (l1->getVal() + l2->getVal()).str());
-      }
+      return new(TG) IntegerLiteral(TG.getInt1Ty(), llvm::APInt(1, Result));
+   }
    }
 
    llvm_unreachable("unhandled function kind");
