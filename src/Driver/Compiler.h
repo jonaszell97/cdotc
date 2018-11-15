@@ -57,7 +57,7 @@ namespace support {
    struct Timer;
 } // namespace support
 
-enum class OutputKind : unsigned char {
+enum class OutputKind : uint8_t {
    Executable,
    ObjectFile,
    LlvmIR,
@@ -74,13 +74,13 @@ enum class OutputKind : unsigned char {
    SerializedIL,
 };
 
-enum class InputKind : unsigned char {
+enum class InputKind : uint8_t {
    SourceFile,
    ModuleFile,
    LinkerInput,
 };
 
-enum class OptimizationLevel : unsigned char {
+enum class OptimizationLevel : uint8_t {
    Debug,
    O1,
    O2,
@@ -91,7 +91,7 @@ class CompilerInstance;
 class Job;
 
 struct CompilerOptions {
-   enum Flag : unsigned {
+   enum Flag : uint64_t {
       F_None            = 0,
       F_EmitDebugInfo   = 1,
       F_TextOutputOnly  = F_EmitDebugInfo << 1,
@@ -105,6 +105,11 @@ struct CompilerOptions {
       F_StaticModuleLib = F_PrintStats << 1,
       F_NoDebugIL       = F_StaticModuleLib << 1,
       F_RunUnitTests    = F_NoDebugIL << 1,
+   };
+
+   enum FeatureFlag : uint64_t {
+      XNone               = 0x0,
+      XUseRuntimeGenerics = 0x1,
    };
 
    CompilerOptions() {}
@@ -121,7 +126,8 @@ private:
    OutputKind Output = OutputKind::Executable;
    StringRef OutFile;
 
-   unsigned Flags = 0;
+   uint64_t Flags = 0;
+   uint64_t Features = XNone;
 
 public:
    OptimizationLevel optimizationLevel = OptimizationLevel::O2;
@@ -170,11 +176,10 @@ public:
    bool noDebugIL() const { return flagIsSet(F_NoDebugIL); }
    bool runUnitTests() const { return flagIsSet(F_RunUnitTests); }
 
-   bool flagIsSet(Flag F) const
-   {
-      return (Flags & F) != 0;
-   }
+   /// Experimental feature checks.
+   bool runtimeGenerics() const { return (Features & XUseRuntimeGenerics) != 0;}
 
+   bool flagIsSet(Flag F) const { return (Flags & F) != 0; }
    void setFlag(Flag F, bool b)
    {
       if (b)
@@ -182,6 +187,8 @@ public:
       else
          Flags &= ~F;
    }
+
+   void setFeatureFlag(FeatureFlag F) { Features |= F; }
 };
 
 class CompilerInstance {

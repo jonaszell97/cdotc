@@ -17,6 +17,16 @@
 #include "ReorderBasicBlockPass.h"
 #include "VerifierPass.h"
 
+#include <llvm/Support/CommandLine.h>
+
+namespace cl = llvm::cl;
+
+static cl::opt<bool> VerifyILFunctions("verify-il",
+                                       cl::desc("Verify IL functions (for "
+                                                "compiler debugging purposes "
+                                                "only)"),
+                                       cl::init(false));
+
 namespace cdot {
 namespace il {
 
@@ -57,6 +67,10 @@ StackPromotion *createStackPromotion(PassManager &PM)
 
 void addMandatoryPasses(PassManager &PM)
 {
+   if (VerifyILFunctions) {
+      PM.addPass(PassKind::VerifierPassID);
+   }
+
    PM.addPass(PassKind::DefinitiveInitializationPassID);
    PM.addPass(PassKind::BorrowCheckPassID);
    PM.addPass(PassKind::ReorderBasicBlockPassID);

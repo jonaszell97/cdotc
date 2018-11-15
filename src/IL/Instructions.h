@@ -464,16 +464,19 @@ public:
 
 class VirtualCallInst: public CallInst {
    FunctionType *FnTy;
+   il::GlobalVariable *ProtocolTypeInfo;
    unsigned Offset;
 
 public:
    VirtualCallInst(Value *VTableOwner,
                    FunctionType *FnTy,
+                   il::GlobalVariable *ProtocolTypeInfo,
                    unsigned Offset,
                    ArrayRef<Value*> args,
                    BasicBlock *parent);
 
    FunctionType *getFunctionType() const { return FnTy; }
+   il::GlobalVariable *getProtocolTypeInfo() const { return ProtocolTypeInfo; }
    unsigned getOffset() const { return Offset; }
 
    static bool classof(Value const *T)
@@ -557,11 +560,13 @@ public:
 
 class VirtualInvokeInst: public InvokeInst {
    FunctionType *FnTy;
+   il::GlobalVariable *ProtocolTypeInfo;
    unsigned Offset;
 
 public:
    VirtualInvokeInst(Value *VTableOwner,
                      FunctionType *FnTy,
+                     il::GlobalVariable *ProtocolTypeInfo,
                      unsigned Offset,
                      ArrayRef<Value*> args,
                      BasicBlock *NormalContinuation,
@@ -569,6 +574,7 @@ public:
                      BasicBlock *parent);
 
    FunctionType *getFunctionType() const { return FnTy; }
+   il::GlobalVariable *getProtocolTypeInfo() const { return ProtocolTypeInfo; }
    unsigned getOffset() const { return Offset; }
 
    static bool classof(Value const *T)

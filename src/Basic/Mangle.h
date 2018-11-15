@@ -45,6 +45,8 @@ public:
    void manglePTable(const ast::RecordDecl *R, const ast::ProtocolDecl *P,
                      llvm::raw_ostream &OS) const;
 
+   void mangleProtocolStub(const ast::NamedDecl *D, std::string &Buf) const;
+
    void mangleTypeInfo(const QualType &T, llvm::raw_ostream &OS) const;
    void mangleTypeName(const QualType &T, llvm::raw_ostream &OS) const;
 

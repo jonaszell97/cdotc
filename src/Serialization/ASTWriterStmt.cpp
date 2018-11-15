@@ -995,6 +995,18 @@ void ASTStmtWriter::visitFunctionTypeExpr(FunctionTypeExpr *S)
    Record.push_back(S->isAsync());
 }
 
+void ASTStmtWriter::visitExistentialTypeExpr(ExistentialTypeExpr *S)
+{
+   visitTypeExpr(S);
+
+   auto Tys = S->getExistentials();
+   Record.push_back(Tys.size());
+
+   for (auto &Ty : Tys) {
+      Record.AddTypeRef(Ty);
+   }
+}
+
 void ASTStmtWriter::visitDeclTypeExpr(DeclTypeExpr *S)
 {
    visitTypeExpr(S);

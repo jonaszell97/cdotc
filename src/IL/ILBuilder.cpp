@@ -921,11 +921,13 @@ Instruction* ILBuilder::CreateLifetimeEnd(il::Value *V,
 
 VirtualCallInst* ILBuilder::CreateVirtualCall(Value *VTableOwner,
                                               FunctionType *FnTy,
+                                              il::GlobalVariable*ProtocolTypeInfo,
                                               unsigned Offset,
                                               ArrayRef<Value *> args,
                                               StringRef name) {
    auto inst = new VirtualCallInst(VTableOwner,
                                    FnTy->getCanonicalType()->asFunctionType(),
+                                   ProtocolTypeInfo,
                                    Offset, args, getInsertBlock());
 
    insertInstruction(inst, name);
@@ -953,6 +955,7 @@ InvokeInst* ILBuilder::CreateInvoke(Value *Callee, llvm::ArrayRef<Value *> args,
 
 VirtualInvokeInst* ILBuilder::CreateVirtualInvoke(Value *VTableOwner,
                                                   FunctionType *FnTy,
+                                                  il::GlobalVariable*ProtocolTypeInfo,
                                                   unsigned Offset,
                                                   ArrayRef<Value *> args,
                                                   BasicBlock *NormalCont,
@@ -960,6 +963,7 @@ VirtualInvokeInst* ILBuilder::CreateVirtualInvoke(Value *VTableOwner,
                                                   StringRef name) {
    auto inst = new VirtualInvokeInst(VTableOwner,
                                      FnTy->getCanonicalType()->asFunctionType(),
+                                     ProtocolTypeInfo,
                                      Offset, args, NormalCont, LandingPad,
                                      getInsertBlock());
 

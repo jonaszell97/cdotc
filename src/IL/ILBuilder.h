@@ -290,6 +290,7 @@ public:
 
    VirtualCallInst *CreateVirtualCall(Value *VTableOwner,
                                       FunctionType *FnTy,
+                                      il::GlobalVariable *ProtocolTypeInfo,
                                       unsigned Offset,
                                       ArrayRef<Value *> args,
                                       StringRef name = "");
@@ -306,6 +307,7 @@ public:
 
    VirtualInvokeInst *CreateVirtualInvoke(Value *VTableOwner,
                                           FunctionType *FnTy,
+                                          il::GlobalVariable *ProtocolTypeInfo,
                                           unsigned Offset,
                                           ArrayRef<Value*> args,
                                           BasicBlock *NormalCont,

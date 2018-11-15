@@ -1174,12 +1174,15 @@ void Lexer::expect_impl(tok::TokenType ty)
    }
 }
 
-void Lexer::advance(bool ignoreNewline, bool significantWhiteSpace)
-{
+void Lexer::advance(bool ignoreNewline,
+                    bool significantWhiteSpace,
+                    bool rememberTok) {
    assert(!CurTok.is(tok::eof) && "advancing past the end of the file!");
 
    /// Remember this token for backtracking.
-   LastTok = CurTok;
+   if (rememberTok) {
+      LastTok = CurTok;
+   }
 
    if (LookaheadIdx < LookaheadVec.size()) {
       /// Get the next token from the lookahead vector.
@@ -1198,13 +1201,13 @@ void Lexer::advance(bool ignoreNewline, bool significantWhiteSpace)
    switch (CurTok.getKind()) {
    case tok::newline:
       if (ignoreNewline) {
-         return advance(ignoreNewline, significantWhiteSpace);
+         return advance(ignoreNewline, significantWhiteSpace, false);
       }
 
       break;
    case tok::space:
       if (!significantWhiteSpace) {
-         return advance(ignoreNewline, significantWhiteSpace);
+         return advance(ignoreNewline, significantWhiteSpace, false);
       }
 
       break;

@@ -258,6 +258,19 @@ SourceLocation FileManager::getAliasLoc(SourceID sourceId)
    return it->second;
 }
 
+std::string FileManager::getSourceLocationAsString(SourceLocation Loc)
+{
+   std::string str;
+   {
+      llvm::raw_string_ostream OS(str);
+
+      auto LineAndCol = getLineAndCol(Loc);
+      OS << getFileName(Loc) << ":" << LineAndCol.line << ":" << LineAndCol.col;
+   }
+
+   return str;
+}
+
 FileManager::MacroExpansionLoc
 FileManager::createMacroExpansion(SourceLocation ExpansionLoc,
                                   SourceLocation PatternLoc,

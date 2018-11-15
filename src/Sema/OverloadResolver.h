@@ -32,6 +32,7 @@ class Statement;
 class OverloadResolver {
 public:
    OverloadResolver(SemaPass &SP,
+                    DeclarationName FuncName,
                     Expression *SelfArg,
                     ArrayRef<Expression*> givenArgs,
                     ArrayRef<Expression*> givenTemplateArgs,
@@ -50,6 +51,7 @@ public:
 
 protected:
    SemaPass &SP;
+   DeclarationName FuncName;
    Expression *SelfArg;
    ArrayRef<Expression*> givenArgs;
    ArrayRef<Expression*> givenTemplateArgs;

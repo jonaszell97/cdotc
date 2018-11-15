@@ -25,10 +25,7 @@ class NestedNameSpecifierWithLoc;
 class FunctionType;
 enum class KnownFunction : unsigned char;
 
-enum class BuiltinIdentifier: unsigned char {
-   None, NULLPTR, FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN,
-   FLOAT_SNAN, DOUBLE_SNAN, __ctfe, defaultValue
-};
+enum class BuiltinIdentifier: unsigned char;
 
 namespace il {
    class Constant;
@@ -115,8 +112,6 @@ public:
 
    Expression *getParentExpr() const;
    void setParentExpr(Expression *E);
-
-   bool warnOnUnusedResult() const;
 
 protected:
    explicit Expression(NodeType typeID);
@@ -420,6 +415,33 @@ public:
 
    const SourceType &getSubType() const { return SubType; }
    void setSubType(SourceType Ty) { SubType = Ty; }
+};
+
+class ExistentialTypeExpr final: public TypeExpr,
+                                 TrailingObjects<ExistentialTypeExpr, SourceType> {
+   ExistentialTypeExpr(SourceRange SR,
+                       ArrayRef<SourceType> Existentials,
+                       bool IsMeta);
+
+   ExistentialTypeExpr(unsigned N);
+
+   unsigned NumExistentials;
+
+public:
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+   static bool classofKind(NodeType K) { return K == ExistentialTypeExprID; }
+
+   static ExistentialTypeExpr *Create(ASTContext &C,
+                                      SourceRange SR,
+                                      ArrayRef<SourceType> Existentials,
+                                      bool IsMeta = true);
+
+   static ExistentialTypeExpr *CreateEmpty(ASTContext &C, unsigned N);
+
+   ArrayRef<SourceType> getExistentials() const;
+   MutableArrayRef<SourceType> getExistentials();
+
+   friend TrailingObjects;
 };
 
 class AttributedExpr final:
@@ -1945,14 +1967,22 @@ public:
 
 class BuiltinExpr: public Expression {
    explicit BuiltinExpr(QualType type);
+   explicit BuiltinExpr(SourceType T);
+
+   SourceType T;
 
 public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == BuiltinExprID; }
 
    static BuiltinExpr *Create(ASTContext &C, QualType Ty);
+   static BuiltinExpr *Create(ASTContext &C, SourceType Ty);
+
    static BuiltinExpr CreateTemp(QualType Ty);
    BuiltinExpr(EmptyShell Empty);
+
+   const SourceType &getType() const { return T; }
+   void setType(SourceType T) { this->T = T; }
 
    SourceRange getSourceRange() const { return SourceRange(); }
 };

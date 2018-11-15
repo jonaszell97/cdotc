@@ -146,7 +146,10 @@ public:
       return false;
    }
 
-   void advance(bool ignoreNewline = true, bool significantWhitespace = false);
+   void advance(bool ignoreNewline = true,
+                bool significantWhitespace =false,
+                bool rememberTok = true);
+
    Token lookahead(bool ignoreNewline = true, bool sw = false, size_t i = 0);
    void backtrack();
 

@@ -321,17 +321,11 @@ void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    D->setProtocolSpecifier(Record.getIdentifierInfo());
    D->setActualType(Record.readSourceType());
 
-   // FIXME
-//   D->setCovariance(Record.readSourceType());
+   D->setCovariance(Record.readSourceType());
    D->setProto(Record.readDeclAs<ProtocolDecl>());
    D->setImplementation(Record.readBool());
 
    D->setProtocolDefaultImpl(Record.readDeclAs<AssociatedTypeDecl>());
-
-   if (D->isImplementation()) {
-      Reader.getContext().getAssociatedType(D)
-            ->setCanonicalType(D->getActualType());
-   }
 
    auto CovSize = Record.readInt();
    while (CovSize--) {
@@ -757,6 +751,7 @@ void ASTDeclReader::visitVarDecl(VarDecl *D)
    D->setVariadic(Record.readBool());
    D->setCaptured(Record.readBool());
    D->setMovedFrom(Record.readBool());
+   D->setInferredType(Record.readBool());
 }
 
 void ASTDeclReader::visitLocalVarDecl(LocalVarDecl *D)
@@ -840,9 +835,6 @@ void ASTDeclReader::visitTemplateParamDecl(TemplateParamDecl *D)
    D->setContravariance(Record.readSourceType());
 
    D->setDefaultValue(Record.readExpr());
-
-   Reader.getContext().getTemplateArgType(D)
-         ->setCanonicalType(D->getCovariance());
 }
 
 void ASTDeclReader::visitRecordDecl(RecordDecl *D)
@@ -877,44 +869,23 @@ void ASTDeclReader::visitRecordDecl(RecordDecl *D)
       D->addExtension(Record.readDeclAs<ExtensionDecl>());
 
    D->setLastMethodID(Record.readInt());
-   D->setSize(Record.readInt());
-   D->setAlignment(Record.readInt());
-
-   D->setOpaque(Record.readBool());
-   D->setImplicitlyCopyable(Record.readBool());
-   D->setImplicitlyEquatable(Record.readBool());
-   D->setImplicitlyHashable(Record.readBool());
-   D->setImplicitlyStringRepresentable(Record.readBool());
-   D->setNeedsRetainOrRelease(Record.readBool());
-
    D->setType(Reader.getContext().getRecordType(D));
 
    unsigned DeinitID = Record.readDeclID();
-   unsigned EqualsID = Record.readDeclID();
-   unsigned HashCodeID = Record.readDeclID();
-   unsigned ToStringID = Record.readDeclID();
-   unsigned CopyID = Record.readDeclID();
-
    if (isa<StructDecl>(D)) {
       unsigned MemberwiseID = Record.readDeclID();
       unsigned DefaultID = Record.readDeclID();
 
-      Reader.addDeclUpdate(D, ThisDeclID, DeinitID, EqualsID, HashCodeID,
-                           ToStringID, CopyID, MemberwiseID, DefaultID);
+      Reader.addDeclUpdate(D, ThisDeclID, DeinitID, MemberwiseID, DefaultID);
    }
    else {
-      Reader.addDeclUpdate(D, ThisDeclID, DeinitID, EqualsID, HashCodeID,
-                           ToStringID, CopyID);
+      Reader.addDeclUpdate(D, ThisDeclID, DeinitID);
    }
 }
 
 void ASTDeclUpdateVisitor::visitRecordDecl(RecordDecl *D)
 {
    D->setDeinitializer(NextDecl<DeinitDecl>());
-   D->setOperatorEquals(NextDecl<MethodDecl>());
-   D->setHashCodeFn(NextDecl<MethodDecl>());
-   D->setToStringFn(NextDecl<MethodDecl>());
-   D->setCopyFn(NextDecl<MethodDecl>());
 }
 
 void ASTDeclReader::visitStructDecl(StructDecl *D)
@@ -963,7 +934,7 @@ void ASTDeclReader::visitEnumDecl(EnumDecl *D)
    visitRecordDecl(D);
 
    D->setRawType(Record.readSourceType());
-   D->setMaxAssociatedTypes(Record.readInt());
+   D->setMaxAssociatedValues(Record.readInt());
    D->setUnpopulated(Record.readBool());
 
    auto NumCases = Record.readInt();
@@ -1652,12 +1623,18 @@ void ASTReader::finalizeUnfinishedDecls()
             auto NumDefaultImpls = Record[Idx++];
             while (NumDefaultImpls--) {
                auto *Req = cast_or_null<NamedDecl>(GetDecl(Record[Idx++]));
-               auto *Impl = cast_or_null<NamedDecl>(GetDecl(Record[Idx++]));
-
-               if (!Req || !Impl)
+               if (!Req)
                   continue;
 
-               Context.addProtocolDefaultImpl(P, Req, Impl);
+               // FIXME
+//               auto InnerNumImpls = Record[Idx++];
+//               while (InnerNumImpls) {
+                  auto *Impl = cast_or_null<NamedDecl>(GetDecl(Record[Idx++]));
+                  if (!Impl)
+                     continue;
+
+                  Context.addProtocolDefaultImpl(P, Req, Impl);
+//               }
             }
          }
 

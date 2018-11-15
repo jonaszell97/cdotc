@@ -161,11 +161,11 @@ void ASTContext::addExtension(QualType T,
 void ASTContext::addProtocolDefaultImpl(const ProtocolDecl *P,
                                         const NamedDecl *Req,
                                         NamedDecl *Impl) {
-   ProtocolDefaultImplMap[P][Req] = Impl;
+   ProtocolDefaultImplMap[P][Req].push_back(Impl);
 }
 
-NamedDecl*
-ASTContext::getProtocolDefaultImpl(const ProtocolDecl *P,const NamedDecl *Req)
+ArrayRef<NamedDecl*>
+ASTContext::getProtocolDefaultImpls(const ProtocolDecl *P, const NamedDecl *Req)
 {
    auto It = ProtocolDefaultImplMap.find(P);
    if (It == ProtocolDefaultImplMap.end())
@@ -174,7 +174,7 @@ ASTContext::getProtocolDefaultImpl(const ProtocolDecl *P,const NamedDecl *Req)
    return It->getSecond()[Req];
 }
 
-const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+const llvm::DenseMap<const NamedDecl*, std::vector<NamedDecl*>>*
 ASTContext::getProtocolDefaultImpls(const ProtocolDecl *P)
 {
    auto It = ProtocolDefaultImplMap.find(P);
@@ -370,6 +370,54 @@ BoxType* ASTContext::getBoxType(QualType BoxedTy) const
    BoxTypes.try_emplace(BoxedTy, New);
 
    return New;
+}
+
+QualType
+ASTContext::getExistentialType(ArrayRef<QualType> Existentials) const
+{
+   if (Existentials.size() == 1) {
+      return Existentials.front();
+   }
+
+   llvm::FoldingSetNodeID ID;
+   ExistentialType::Profile(ID, Existentials);
+
+   void *InsertPos;
+   if (auto *T = ExistentialTypes.FindNodeOrInsertPos(ID, InsertPos)) {
+      return T;
+   }
+
+   TypeProperties Props;
+   bool Canonical = true;
+
+   for (auto &P : Existentials) {
+      Canonical &= P.isCanonical();
+      Props |= P->properties();
+
+      assert(P->isRecordType() && "existential must be RecordType!");
+   }
+
+   Type *CanonicalType = nullptr;
+   if (!Canonical) {
+      std::vector<QualType> canonicalArgs;
+      for (auto &P : Existentials)
+         canonicalArgs.push_back(P.getCanonicalType());
+
+      CanonicalType = getExistentialType(canonicalArgs);
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = ExistentialTypes.FindNodeOrInsertPos(ID, InsertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
+
+   void *Mem = Allocate(sizeof(ExistentialType)
+      + sizeof(QualType) * Existentials.size(), TypeAlignment);
+
+   auto *T = new(Mem) ExistentialType(Existentials, CanonicalType, Props);
+   ExistentialTypes.InsertNode(T, InsertPos);
+
+   return T;
 }
 
 FunctionType* ASTContext::getFunctionType(QualType returnType,
@@ -624,6 +672,8 @@ DependentRecordType*
 ASTContext::getDependentRecordType(RecordDecl *R,
                                    sema::FinalTemplateArgumentList *args,
                                    QualType Parent) const {
+   assert(!R->isInstantiation() && "dependent instantiation?");
+
    llvm::FoldingSetNodeID ID;
    DependentRecordType::Profile(ID, R, args, Parent);
 
@@ -652,16 +702,16 @@ GenericType* ASTContext::getTemplateArgType(TemplateParamDecl *Param) const
    return New;
 }
 
-AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl *AT) const
-{
+AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl *AT,
+                                              AssociatedType *OuterAT) const {
    llvm::FoldingSetNodeID ID;
-   AssociatedType::Profile(ID, AT);
+   AssociatedType::Profile(ID, AT, OuterAT);
 
    void *insertPos = nullptr;
    if (auto *Ptr = AssociatedTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) AssociatedType(AT);
+   auto New = new (*this, TypeAlignment) AssociatedType(AT, OuterAT);
    AssociatedTypes.InsertNode(New, insertPos);
 
    return New;
@@ -710,7 +760,7 @@ MetaType* ASTContext::getMetaType(QualType forType) const
 
 TypedefType* ASTContext::getTypedefType(AliasDecl *TD) const
 {
-   assert(TD->wasDeclared()
+   assert(TD->getType()
           && "should declare alias before using it!");
 
    llvm::FoldingSetNodeID ID;

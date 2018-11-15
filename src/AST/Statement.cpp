@@ -27,6 +27,17 @@ void Statement::printFlags(llvm::raw_ostream &OS) const
       << (containsUnexpandedParameterPack() ? "true" : "false") << "\n";
 }
 
+bool Statement::needsInstantiation() const
+{
+   static constexpr unsigned Mask =
+      Statement::ContainsGenericParam
+      | Statement::ContainsAssociatedType
+      | Statement::TypeDependent
+      | Statement::ValueDependent;
+
+   return (SubclassData & Mask) != 0;
+}
+
 void Statement::copyStatusFlags(Statement *Stmt)
 {
    static unsigned StatusFlags =
@@ -44,12 +55,6 @@ void Statement::copyStatusFlags(Statement *Stmt)
 
 void Statement::copyStatusFlags(Decl *D)
 {
-   // FIXME
-   if (D->containsGenericParam())
-      SubclassData |= ContainsGenericParam;
-   if (D->containsAssociatedType())
-      SubclassData |= ContainsAssociatedType;
-
    static uint32_t mask = Decl::StatusFlags;
    SubclassData |= (D->getFlags() & mask);
 }

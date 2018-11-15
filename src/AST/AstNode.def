@@ -111,6 +111,7 @@
          CDOT_TYPE_EXPR(PointerTypeExpr)
          CDOT_TYPE_EXPR(ReferenceTypeExpr)
          CDOT_TYPE_EXPR(OptionTypeExpr)
+         CDOT_TYPE_EXPR(ExistentialTypeExpr)
       CDOT_ABSTRACT(_lastTypeExpr)
    CDOT_ABSTRACT(_lastExpr)
 #endif

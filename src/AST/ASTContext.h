@@ -98,7 +98,7 @@ private:
                           CovarianceVec*> CovarianceMap;
 
    mutable llvm::DenseMap<const ProtocolDecl*,
-                          llvm::DenseMap<const NamedDecl*, NamedDecl*>>
+                          llvm::DenseMap<const NamedDecl*, std::vector<NamedDecl*>>>
                               ProtocolDefaultImplMap;
 
    mutable llvm::DenseMap<const RecordDecl*,
@@ -123,6 +123,7 @@ private:
    mutable llvm::FoldingSet<MutableReferenceType> MutableReferenceTypes;
    mutable llvm::FoldingSet<MutableBorrowType> MutableBorrowTypes;
    mutable llvm::DenseMap<QualType, BoxType*> BoxTypes;
+   mutable llvm::FoldingSet<ExistentialType> ExistentialTypes;
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
    mutable llvm::FoldingSet<LambdaType> LambdaTypes;
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
@@ -207,10 +208,10 @@ public:
    void addProtocolDefaultImpl(const ProtocolDecl *P, const NamedDecl *Req,
                                NamedDecl *Impl);
 
-   NamedDecl *getProtocolDefaultImpl(const ProtocolDecl *P,
-                                     const NamedDecl *Req);
+   ArrayRef<NamedDecl*> getProtocolDefaultImpls(const ProtocolDecl *P,
+                                                const NamedDecl *Req);
 
-   const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+   const llvm::DenseMap<const NamedDecl*, std::vector<NamedDecl*>>*
    getProtocolDefaultImpls(const ProtocolDecl *P);
 
    void addProtocolImpl(const RecordDecl *R, const NamedDecl *Req,
@@ -332,6 +333,7 @@ public:
    MutableBorrowType *getMutableBorrowType(QualType borrowedType) const;
 
    BoxType *getBoxType(QualType BoxedTy) const;
+   QualType getExistentialType(ArrayRef<QualType> Existentials) const;
 
    FunctionType *getFunctionType(QualType returnType,
                               llvm::ArrayRef<QualType> argTypes,
@@ -371,8 +373,9 @@ public:
 
    DependentNameType *getDependentNameType(NestedNameSpecifierWithLoc *Name) const;
 
-   AssociatedType *getAssociatedType(AssociatedTypeDecl *AT) const;
    GenericType *getTemplateArgType(TemplateParamDecl *Param) const;
+   AssociatedType *getAssociatedType(AssociatedTypeDecl *AT,
+                                     AssociatedType *OuterAT = nullptr) const;
 
    MetaType *getMetaType(QualType forType) const;
    TypedefType *getTypedefType(AliasDecl *TD) const;

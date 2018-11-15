@@ -41,6 +41,7 @@ public:
       MacroName,
       SubscriptName,
       ErrorName,
+      UniqueName,
    };
 
    enum AccessorKind : unsigned char {
@@ -114,6 +115,7 @@ public:
    QualType getConversionOperatorType() const;
    QualType getExtendedType() const;
 
+   uintptr_t getUniqueID() const;
    bool isErrorName() const { return getKind() == ErrorName; }
 
    DeclarationKind getKind() const;
@@ -296,6 +298,8 @@ class DeclarationNameTable {
    // actually a llvm::FoldingSet<NestedNameSpecifier>*
    void *NestedNameSpecifiers;
 
+   uintptr_t lastUniqueID = -1;
+
 public:
    explicit DeclarationNameTable(ast::ASTContext &Ctx);
    ~DeclarationNameTable();
@@ -342,6 +346,7 @@ public:
    DeclarationName getOperatorDeclName(DeclarationName OpName);
    DeclarationName getErrorName();
 
+   DeclarationName getUniqueName(uintptr_t Data = -1);
    DeclarationName getSpecialName(DeclarationName::DeclarationKind Kind,
                                   uintptr_t Data1, uintptr_t Data2 = 0);
 };

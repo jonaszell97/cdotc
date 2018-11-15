@@ -170,7 +170,11 @@ void ASTDeclWriter::visit(Decl *D)
 
          for (auto &Impl : *DefaultImpls) {
             Record.AddDeclRef(Impl.getFirst());
-            Record.AddDeclRef(Impl.getSecond());
+
+            Record.push_back(Impl.getSecond().size());
+            for (auto *D : Impl.getSecond()) {
+               Record.AddDeclRef(D);
+            }
          }
       }
    }
@@ -681,6 +685,7 @@ void ASTDeclWriter::visitVarDecl(VarDecl *D)
    Record.push_back(D->isVariadic());
    Record.push_back(D->isCaptured());
    Record.push_back(D->isMovedFrom());
+   Record.push_back(D->hasInferredType());
 }
 
 void ASTDeclWriter::visitLocalVarDecl(LocalVarDecl *D)
@@ -780,21 +785,7 @@ void ASTDeclWriter::visitRecordDecl(RecordDecl *D)
       Record.AddDeclRef(E);
 
    Record.push_back(D->getLastMethodID());
-   Record.push_back(D->getSize());
-   Record.push_back(D->getAlignment());
-
-   Record.push_back(D->isOpaque());
-   Record.push_back(D->isImplicitlyCopyable());
-   Record.push_back(D->isImplicitlyEquatable());
-   Record.push_back(D->isImplicitlyHashable());
-   Record.push_back(D->isImplicitlyStringRepresentable());
-   Record.push_back(D->needsRetainOrRelease());
-
    Record.AddDeclRef(D->getDeinitializer());
-   Record.AddDeclRef(D->getOperatorEquals());
-   Record.AddDeclRef(D->getHashCodeFn());
-   Record.AddDeclRef(D->getToStringFn());
-   Record.AddDeclRef(D->getCopyFn());
 
    if (auto S = dyn_cast<StructDecl>(D)) {
       Record.AddDeclRef(S->getMemberwiseInitializer());
@@ -828,7 +819,7 @@ void ASTDeclWriter::visitEnumDecl(EnumDecl *D)
    visitRecordDecl(D);
 
    Record.AddTypeRef(D->getRawType());
-   Record.push_back(D->getMaxAssociatedTypes());
+   Record.push_back(D->getMaxAssociatedValues());
    Record.push_back(D->isUnpopulated());
 
    auto Idx = Record.size();

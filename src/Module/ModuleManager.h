@@ -83,6 +83,8 @@ public:
                         SourceLocation DiagLoc,
                         IdentifierInfo *Name);
 
+   bool IsModuleLoaded(IdentifierInfo *Name);
+
    serial::ModuleReader *getReaderForModule(Module *Mod);
 
    void addSourceFileToModule(const fs::OpenFile &File,

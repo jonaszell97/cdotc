@@ -82,7 +82,7 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
       0
    );
 
-   // Every module starts with a '; Module ID:' line, followed with the
+   // Every module starts with a '; Module ID:' line, followed by the
    // source file name.
    CurLine += 2;
 

@@ -8,6 +8,7 @@
 #include "AST/Decl.h"
 #include "Driver/Compiler.h"
 #include "Module/Module.h"
+#include "Sema/Builtin.h"
 #include "Sema/SemaPass.h"
 
 #include <clang/AST/ASTContext.h>
@@ -182,7 +183,7 @@ StructDecl *ImporterImpl::importStruct(clang::RecordDecl *ClangRec)
    for (clang::FieldDecl *F : ClangRec->fields()) {
       if (F->isBitField()) {
          // Import as an opaque structure.
-         Rec->setOpaque(true);
+         Rec->addAttribute(new(Ctx) OpaqueAttr);
          break;
       }
 
@@ -377,7 +378,7 @@ static CompoundStmt *CreateUnionSetterBody(SemaPass &SP, ASTContext &Ctx,
 
    // Create a reference to the 'newValue' argument.
    auto *NewValRef = new(Ctx) IdentifierRefExpr(Loc, nullptr,
-                                                SP.getIdentifier("newValue"));
+                                                SP.getIdentifier("newVal"));
 
    // Store the pointer.
    auto *Assign = AssignExpr::Create(Ctx, Loc, Deref, NewValRef, false);
@@ -528,7 +529,7 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl *ClangU)
    for (clang::FieldDecl *F : ClangU->fields()) {
       if (F->isBitField()) {
          // Import as an opaque structure.
-         Rec->setOpaque(true);
+         Rec->addAttribute(new(Ctx) OpaqueAttr);
          break;
       }
 

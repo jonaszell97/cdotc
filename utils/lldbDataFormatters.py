@@ -537,7 +537,8 @@ class DeclContextUnionSynthProvider:
 class FinalTemplateArgumentListSynthProvider:
     def __init__(self, valobj, dict):
         self.valobj = valobj
-        self.normal_child_count = 2 # NumArgs, Dependent
+        self.normal_child_count = 4 # FoldingSetNode base, NumArgs, Dependent,
+                                    # RuntimeParam
         self.update()
 
     def num_children(self):

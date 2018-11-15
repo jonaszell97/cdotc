@@ -50,32 +50,38 @@ bool SemaPass::isInDependentContext()
 
 void SemaPass::finalizeRecordInstantiation(RecordDecl *R)
 {
-   R->setFinalized(true);
-   if (R->isTemplateOrInTemplate() || encounteredError()) {
-      return;
-   }
-
-   if (R->isInstantiation()) {
-      auto Deinit = R->getDeinitializer();
-      if (Deinit) {
-         maybeInstantiateMemberFunction(Deinit, R);
-      }
-
-      auto *Copy = R->getCopyFn();
-      if (Copy) {
-         // Always instantiate 'copy', since it is implicitly
-         // called by the compiler.
-         maybeInstantiateMemberFunction(Copy, R);
-      }
-   }
-
-   if (auto C = dyn_cast<ClassDecl>(R)) {
-      checkIfAbstractMethodsOverridden(C);
-      if (R->isInvalid())
-         return;
-   }
-
-   getILGen().GenerateTypeInfo(R);
+//   R->setFinalized(true);
+//   if (R->isTemplateOrInTemplate() || encounteredError()) {
+//      return;
+//   }
+//
+//   if (R->isInstantiation()) {
+//      auto Deinit = R->getDeinitializer();
+//      if (Deinit) {
+//         maybeInstantiateMemberFunction(Deinit, R);
+//      }
+//
+//      MethodDecl *CopyFn;
+//      if (QC.GetImplicitConformance(CopyFn, R,
+//                                    ImplicitConformanceKind::Copyable)) {
+//
+//      }
+//
+//      auto *Copy = R->getCopyFn();
+//      if (Copy) {
+//         // Always instantiate 'copy', since it is implicitly
+//         // called by the compiler.
+//         maybeInstantiateMemberFunction(Copy, R);
+//      }
+//   }
+//
+//   if (auto C = dyn_cast<ClassDecl>(R)) {
+//      checkIfAbstractMethodsOverridden(C);
+//      if (R->isInvalid())
+//         return;
+//   }
+//
+//   getILGen().GenerateTypeInfo(R);
 }
 
 void SemaPass::declareRecordInstantiation(StmtOrDecl DependentStmt,

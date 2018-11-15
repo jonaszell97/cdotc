@@ -65,13 +65,22 @@ public:
    };
 
    enum DeclFlags : uint64_t {
-      DF_None                = 0u,
+      DF_None                   = 0x0,
 
       /// This declaration is dependent on an unbounded template parameter.
-      DF_TypeDependent       = 1u,
+      DF_TypeDependent          = 0x1,
+
+      /// This declaration contains a generic parameter somewhere.
+      DF_ContainsGenericParam   = 0x2,
+
+      /// This declaration contains an associated type of a protocol somewhere.
+      DF_ContainsAssociatedType = 0x4,
+
+      /// This declaration contains an unexpanded parameter pack.
+      DF_ContainsUnexpandedPack = 0x8,
 
       /// This declaration is dependent on a value template parameter.
-      DF_ValueDependent      = DF_TypeDependent << 1u,
+      DF_ValueDependent         = 0x10,
 
       /// This declaration contained an error.
       DF_IsInvalid           = DF_ValueDependent << 1u,
@@ -160,17 +169,12 @@ public:
       /// This function should be specialized.
       DF_Specialize          = DF_UnboundedTemplate << 1u,
 
-      /// This declaration contains a generic parameter somewhere.
-      DF_ContainsGenericParam   = DF_Specialize << 1u,
-      
-      /// This declaration contains an associated type of a protocol somewhere.
-      DF_ContainsAssociatedType = DF_ContainsGenericParam << 1u,
-
       DF_Last                = DF_ContainsAssociatedType,
       StatusFlags            = DF_TypeDependent
                                | DF_ValueDependent
                                | DF_IsInvalid
                                | DF_ContainsGenericParam
+                               | DF_ContainsUnexpandedPack
                                | DF_ContainsAssociatedType,
    };
 
@@ -397,7 +401,12 @@ public:
    ModuleDecl *getModule() const;
 
    void dumpName() const;
+   void dumpSourceLine();
+
    std::string getNameAsString() const;
+
+   std::string getSourceLocAsString() const;
+   StringRef getFileName() const;
 
    static bool classofKind(DeclKind kind) { return kind != NotDecl; }
    static bool classof(const Decl *T) { return classofKind(T->getKind()); }
@@ -683,6 +692,7 @@ public:
    /// does *not* remove the declaration from the lexical declarations in the
    /// context.
    void removeVisibleDecl(NamedDecl *D);
+   void removeVisibleDecl(NamedDecl *D, DeclarationName VisibleName);
 
    bool hasExternalStorage() const;
 
@@ -787,6 +797,7 @@ public:
    Decl::DeclKind getDeclKind() const { return declKind; }
 
    void dumpName() const;
+   void dumpSourceLine();
    std::string getNameAsString() const;
 
    static bool classofKind(Decl::DeclKind kind)

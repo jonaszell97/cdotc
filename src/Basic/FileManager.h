@@ -77,6 +77,7 @@ public:
       return getFileName(getSourceId(loc));
    }
 
+   std::string getSourceLocationAsString(SourceLocation Loc);
    llvm::StringRef getFileName(SourceID sourceId);
 
    LineColPair getLineAndCol(SourceLocation loc);

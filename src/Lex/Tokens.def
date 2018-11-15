@@ -101,9 +101,6 @@
    CDOT_KEYWORD(associatedType)
 
    CDOT_KEYWORD(break)
-   CDOT_KEYWORD(infix)
-   CDOT_KEYWORD(prefix)
-   CDOT_KEYWORD(postfix)
    CDOT_KEYWORD(mutating)
    CDOT_KEYWORD(declare)
 

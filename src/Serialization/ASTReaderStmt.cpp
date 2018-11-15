@@ -1050,6 +1050,18 @@ void ASTStmtReader::visitFunctionTypeExpr(FunctionTypeExpr *S)
    S->setAsync(Record.readBool());
 }
 
+void ASTStmtReader::visitExistentialTypeExpr(ExistentialTypeExpr *S)
+{
+   visitTypeExpr(S);
+
+   auto *Ptr = S->getExistentials().data();
+   auto NumArgs = Record.readInt();
+
+   while (NumArgs--) {
+      *Ptr++ = Record.readSourceType();
+   }
+}
+
 void ASTStmtReader::visitDeclTypeExpr(DeclTypeExpr *S)
 {
    visitTypeExpr(S);
@@ -1364,6 +1376,10 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          break;
       case Statement::FunctionTypeExprID:
          S = FunctionTypeExpr::CreateEmpty(
+            C, Record[ASTStmtReader::NumTypeExprFields]);
+         break;
+      case Statement::ExistentialTypeExprID:
+         S = ExistentialTypeExpr::CreateEmpty(
             C, Record[ASTStmtReader::NumTypeExprFields]);
          break;
       case Statement::DeclTypeExprID:

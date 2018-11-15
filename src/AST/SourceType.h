@@ -57,6 +57,12 @@ struct SourceType {
       return ResolvedType;
    }
 
+   /*implicit*/ operator CanType() const
+   {
+      assert(isResolved() && "unresolved type!");
+      return ResolvedType;
+   }
+
    Expression *getTypeExpr()  const { return TypeExpr; }
    QualType getResolvedType() const { return ResolvedType; }
 

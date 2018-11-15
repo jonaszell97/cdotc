@@ -32,21 +32,16 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, MemoryOrder MO)
    }
 }
 
-ValueType::ValueType(il::Context &Ctx, Type *ty)
-   : Ty(ty), Ctx(&Ctx)
-{
-
-}
-
 ValueType::ValueType(il::Context &Ctx, QualType ty)
-   : Ty(ty), Ctx(&Ctx)
+   : Ty(ty ? ty.getCanonicalType()->getDesugaredType() : QualType()),
+     Ctx(&Ctx)
 {
 
 }
 
-ValueType &ValueType::operator=(QualType const& that)
+ValueType &ValueType::operator=(QualType ty)
 {
-   Ty = that;
+   Ty = ty ? ty.getCanonicalType()->getDesugaredType() : QualType();
    return *this;
 }
 

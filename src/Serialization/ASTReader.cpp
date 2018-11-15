@@ -138,6 +138,11 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
       Result = Tbl.getSubscriptName(SubKind);
       break;
    }
+   case DeclarationName::UniqueName: {
+      auto ID = endian::readNext<uint64_t, little, unaligned>(d);
+      Result = Tbl.getUniqueName(ID);
+      break;
+   }
    default:
       llvm_unreachable("bad name kind");
    }
@@ -285,13 +290,16 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       return Context.getArrayType(ElementTy, NumElements);
    }
    case Type::AssociatedTypeID: {
-      if (Record.size() != 1) {
+      if (Record.size() != 2) {
          Error("bad associated type encoding");
          return QualType();
       }
 
       auto *AD = ReadDeclAs<AssociatedTypeDecl>(Record, Idx);
-      return Context.getAssociatedType(AD);
+      auto OuterAT = readType(Record, Idx);
+
+      return Context.getAssociatedType(
+         AD, cast_or_null<AssociatedType>(OuterAT.getBuiltinTy()));
    }
    case Type::BoxTypeID: {
       if (Record.size() != 1) {
@@ -301,6 +309,16 @@ QualType ASTReader::readTypeRecord(unsigned ID)
 
       auto BoxedTy = readType(Record, Idx);
       return Context.getBoxType(BoxedTy);
+   }
+   case Type::ExistentialTypeID: {
+      SmallVector<QualType, 4> Tys;
+
+      unsigned NumTys = Record[Idx++];
+      for (unsigned i = 0; i < NumTys; ++i) {
+         Tys.push_back(readType(Record, Idx));
+      }
+
+      return Context.getExistentialType(Tys);
    }
    case Type::TokenTypeID:
       return Context.getTokenType();
@@ -1052,6 +1070,10 @@ DeclarationName ASTReader::ReadDeclarationName(const RecordData &Record,
    case DeclarationName::SubscriptName: {
       auto SubKind = static_cast<DeclarationName::SubscriptKind>(Record[Idx++]);
       return Context.getDeclNameTable().getSubscriptName(SubKind);
+   }
+   case DeclarationName::UniqueName: {
+      auto ID = Record[Idx++];
+      return Context.getDeclNameTable().getUniqueName(ID);
    }
    case DeclarationName::ErrorName:
       return Context.getDeclNameTable().getErrorName();

@@ -6,6 +6,7 @@
 #include "Driver/Compiler.h"
 #include "IL/Module.h"
 #include "IRGen/IRGen.h"
+#include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
 #include "Serialization/ModuleFile.h"
 #include "Serialization/ModuleReader.h"
@@ -115,6 +116,11 @@ Module* ModuleManager::LookupModule(SourceRange Loc,
    return Mod;
 }
 
+bool ModuleManager::IsModuleLoaded(IdentifierInfo *Name)
+{
+   return LoadedModules.find(Name) != LoadedModules.end();
+}
+
 ModuleDecl *ModuleManager::GetOrCreateModule(SourceRange Loc,
                                              ArrayRef<IdentifierInfo*> Name) {
    assert(!Name.empty() && "invalid module name!");
@@ -210,6 +216,11 @@ void ModuleManager::EmitModule(Module *Mod)
    bool EmitStaticLib = EmitLib && CI.getOptions().emitStaticModuleLib();
    SmallString<128> TmpFile;
 
+   il::IRGen *IRGen;
+   if (CI.getQueryContext().SetupIRGen(IRGen)) {
+      llvm_unreachable("setting up IRGen failed?");
+   }
+
    if (EmitStaticLib) {
       // emit the static library
       EC = llvm::sys::fs::createUniqueFile("cdot-tmp-%%%%%%%%.a", TmpFile);
@@ -221,8 +232,7 @@ void ModuleManager::EmitModule(Module *Mod)
       llvm::sys::path::system_temp_directory(true, TmpDir);
 
       TmpFile.insert(TmpFile.begin(), TmpDir.begin(), TmpDir.end());
-      CI.getIRGen()->emitStaticLibrary(TmpFile,
-                                       Mod->getILModule()->getLLVMModule());
+      IRGen->emitStaticLibrary(TmpFile, Mod->getILModule()->getLLVMModule());
    }
    else if (EmitLib) {
       SmallString<56> LibDir = fs::getLibraryDir();
@@ -230,8 +240,7 @@ void ModuleManager::EmitModule(Module *Mod)
                        "libcdot" + Mod->getName()->getIdentifier()
                           + "." + fs::getDynamicLibraryExtension());
 
-      CI.getIRGen()->emitDynamicLibrary(LibDir,
-                                        Mod->getILModule()->getLLVMModule());
+      IRGen->emitDynamicLibrary(LibDir, Mod->getILModule()->getLLVMModule());
    }
 
    {

@@ -20,7 +20,7 @@ QueryResult ResolveStaticExprQuery::run()
 QueryResult ResolveStaticExprToBoolQuery::run()
 {
    il::Constant *Result;
-   if (QC.ResolveStaticExpr(Result, Expr, Loc)) {
+   if (QC.ResolveStaticExpr(Result, Expr)) {
       return fail();
    }
 

@@ -28,6 +28,11 @@ enum class KnownFunction: unsigned char {
    llvm_cttz_i32, llvm_cttz_i64,
 };
 
+enum class BuiltinIdentifier: unsigned char {
+   None, NULLPTR, FUNC, MANGLED_FUNC, FLOAT_QNAN, DOUBLE_QNAN,
+   FLOAT_SNAN, DOUBLE_SNAN, __ctfe, defaultValue, __builtin_void
+};
+
 } // namespace cdot
 
 #endif //CDOT_BUILTIN_H

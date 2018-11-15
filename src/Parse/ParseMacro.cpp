@@ -168,7 +168,6 @@ static void diagnoseInvalidSeparator(SemaPass &SP,
    case tok::kw_prop:
    case tok::kw_continue: case tok::kw_init:
    case tok::kw_associatedType: case tok::kw_break:
-   case tok::kw_infix: case tok::kw_prefix: case tok::kw_postfix:
    case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
    case tok::kw_import: case tok::kw_using:
    case tok::kw_static_if: case tok::kw_static_for:

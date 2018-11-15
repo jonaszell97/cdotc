@@ -4,6 +4,7 @@
 
 #include "SemaPass.h"
 #include "IL/Constants.h"
+#include "Query/QueryContext.h"
 
 using namespace cdot::diag;
 using namespace cdot::support;
@@ -138,7 +139,7 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
                                 .getAlignOfType(VD->getType());
    }
    else {
-      NaturalAlignment = cast<RecordDecl>(D)->getAlignment();
+      QC.GetTypeAlignment(NaturalAlignment, VD->getType());
    }
 
    if (APS < NaturalAlignment) {

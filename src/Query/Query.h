@@ -13,10 +13,6 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/FoldingSet.h>
 
-namespace llvm {
-   class Module;
-} // namespace llvm
-
 namespace cdot {
 namespace ast {
 #  define CDOT_DECL(NAME) class NAME;
@@ -26,8 +22,15 @@ namespace ast {
    class DeclConstraint;
    class SemaPass;
    class VarDecl;
+   enum class ImplicitConformanceKind: unsigned char;
 } // namespace ast
+} // namespace cdot
 
+namespace llvm {
+   class Module;
+} // namespace llvm
+
+namespace cdot {
 namespace il {
    class Constant;
    class Function;
@@ -43,6 +46,86 @@ namespace lex {
 class CompilerInstance;
 class Module;
 class QueryContext;
+
+enum class ConformanceKind : unsigned char;
+
+/// Keeps track of some meta data about a record. This is stored here instead
+/// of in the record itself to avoid access to these flags before they are
+/// computed.
+struct RecordMetaInfo {
+   RecordMetaInfo() :
+      ManualAlignment(false),
+      Opaque(false),
+      NeedsRetainOrRelease(false),
+      IsTriviallyCopyable(false),
+      IsImplicitlyEquatable(false),
+      IsImplicitlyHashable(false),
+      IsImplicitlyCopyable(false),
+      IsImplicitlyStringRepresentable(false)
+   {}
+
+   unsigned Size = 0;
+   unsigned short Alignment = 1;
+
+   bool ManualAlignment : 1;
+   bool Opaque : 1;
+   bool NeedsRetainOrRelease : 1;
+   bool IsTriviallyCopyable : 1;
+   bool IsImplicitlyEquatable : 1;
+   bool IsImplicitlyHashable : 1;
+   bool IsImplicitlyCopyable : 1;
+   bool IsImplicitlyStringRepresentable : 1;
+
+   ast::MethodDecl *OperatorEquals = nullptr;
+   ast::MethodDecl *HashCodeFn = nullptr;
+   ast::MethodDecl *ToStringFn = nullptr;
+   ast::MethodDecl *CopyFn = nullptr;
+};
+
+/// Flags that are common to all lookup queries.
+enum class LookupOpts: uint8_t {
+   /// \brief No options set.
+   None = 0x0,
+
+   /// \brief Look for local names.
+   LocalLookup = 0x1,
+
+   /// \brief Look for types only.
+   TypeLookup = 0x2,
+
+   /// \brief Prepare all declaration contexts for lookup.
+   PrepareNameLookup = 0x4,
+
+   /// \brief Whether to issue a diagnostic if no result is found.
+   IssueDiag = 0x8,
+};
+
+extern LookupOpts DefaultLookupOpts;
+
+inline LookupOpts operator~(LookupOpts LHS)
+{
+   return static_cast<LookupOpts>(~static_cast<uint8_t>(LHS));
+}
+
+inline LookupOpts operator&(LookupOpts LHS, LookupOpts RHS)
+{
+   return static_cast<LookupOpts>(static_cast<uint8_t>(LHS)
+                                  & static_cast<uint8_t>(RHS));
+}
+
+inline LookupOpts operator|(LookupOpts LHS, LookupOpts RHS)
+{
+   return static_cast<LookupOpts>(static_cast<uint8_t>(LHS)
+                                  | static_cast<uint8_t>(RHS));
+}
+
+inline LookupOpts &operator|=(LookupOpts &LHS, LookupOpts RHS)
+{
+   return LHS = static_cast<LookupOpts>(static_cast<uint8_t>(LHS)
+                                         | static_cast<uint8_t>(RHS));
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, LookupOpts Opts);
 
 /// Simple wrapper class for a query result to avoid implicit conversion
 /// errors in query returns.
@@ -65,15 +148,57 @@ struct QueryResult {
    /// `if`-conditions.
    /*implicit*/ operator bool() const { return K != Success; }
 
-   /// The result value.
+   /// \return true if the query is dependent.
+   bool isDependent() const { return K == Dependent; }
+
+   /// \return true if the query is not successful.
+   bool isErr() const { return *this; }
+
+   /// The result kind.
    ResultKind K;
+
+   /// Helper function to update a query status.
+   static void update(ResultKind &Previous, ResultKind New);
+};
+
+template<class T>
+struct SimpleQueryResult: public QueryResult {
+   SimpleQueryResult(T &&Val, ResultKind RK = Success)
+      : QueryResult(RK), Value(std::move(Val))
+   {}
+
+   SimpleQueryResult(const T &Val, ResultKind RK = Success)
+      : QueryResult(RK), Value(Val)
+   {}
+
+   /*implicit*/ SimpleQueryResult(ResultKind RK)
+      : QueryResult(RK)
+   {
+      assert(RK != Success && "must provide a value!");
+   }
+
+   /*implicit*/ SimpleQueryResult(QueryResult R)
+      : QueryResult(R.K)
+   {
+      assert(R.K != Success && "must provide a value!");
+   }
+
+   /// \return The result value. Asserts if it does not exist.
+   T &get() { return Value.getValue(); }
+
+   /// \return The result value. Asserts if it does not exist.
+   const T &get() const { return Value.getValue(); }
+
+private:
+   /// The result value.
+   llvm::Optional<T> Value;
 };
 
 class Query {
 public:
    enum Kind : uint8_t {
 #  define CDOT_QUERY(NAME) NAME##ID,
-#  include "Queries.def"
+#  include "Inc/Queries.def"
    };
 
    enum Status : uint8_t {
@@ -104,7 +229,7 @@ public:
 
 protected:
    /// Subclass C'tor.
-   Query(Kind K, QueryContext &QC, SourceRange SR);
+   Query(Kind K, QueryContext &QC);
 
    /// The kind of this query.
    Kind K;
@@ -112,21 +237,27 @@ protected:
    /// The status of this query.
    Status Stat;
 
-   /// The source range where this query was first created.
-   SourceRange Loc;
-
    /// Reference to the query context that owns this query.
    QueryContext &QC;
 
+public:
    /// Set this queries status to \param St.
    /// \return true iff the exection failed.
    QueryResult finish(Status St = Done);
 
+   /// Set this queries status according to another query result.
+   /// \return The query result to return.
+   QueryResult finish(QueryResult Result);
+
    /// Set this queries status to Aborted and return true;
    QueryResult fail() { return finish(Aborted); }
 
+protected:
    /// \return A reference to the Sema object.
    ast::SemaPass &sema() const;
+
+   /// \return The query that is \param n up in the stack of running queries.
+   Query *up(unsigned n = 1) const;
 
 public:
    /// \return The kind discriminator of this query.
@@ -140,9 +271,6 @@ public:
 
    /// \return A unique, parseable summary of this query.
    std::string summary() const;
-
-   /// \return The source range where this query was created.
-   SourceRange loc() const { return Loc; }
 
    /// \return true iff this query has finished calculating its result.
    bool done() const { return Stat != Idle && Stat != Running; }
@@ -165,10 +293,12 @@ public:
 
    /// \return true iff queries of this kind can serialize their result.
    bool canBeSerialized() const;
+
+   /// \return true iff queries of this kind can be dependent.
+   bool canBeDependent() const;
 };
 
-#define CDOT_QUERY_DECL
-#include "Queries.inc"
+#include "Inc/QueryDecls.inc"
 
 } // namespace cdot
 

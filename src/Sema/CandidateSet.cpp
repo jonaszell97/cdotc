@@ -552,7 +552,8 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
       case CouldNotInferTemplateArg: {
          auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
          SP.diagnose(Caller, note_could_not_infer_template_arg,
-                     TP->getName(), TP->getSourceLoc());
+                     TP->getName(), Cand.Func->getSourceLoc());
+         SP.diagnose(note_declared_here, TP->getSourceLoc());
 
          break;
       }
@@ -635,14 +636,20 @@ void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
          auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
          assert(templateArg && "bad diagnostic data");
 
-         auto *CovarRec = Param->getCovariance()->getRecord();
+         QualType Covar = Param->getCovariance();
          SP.diagnose(Caller, note_template_arg_covariance,
-                     isa<ClassDecl>(CovarRec), CovarRec->getDeclName(),
+                     Covar->isClass(), Covar,
                      Param->getDeclName(), Given, templateArg->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());
 
+         break;
+      }
+      case RecursivelyDependent: {
+         SP.diagnose(note_generic_note,
+                     "candidate cannot be referred to here",
+                     Cand.Func->getSourceLoc());
          break;
       }
       }
@@ -900,13 +907,20 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
          auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
          assert(templateArg && "bad diagnostic data");
 
-         auto *CovarRec = Param->getCovariance()->getRecord();
+         QualType Covar = Param->getCovariance();
          SP.diagnose(Caller, note_template_arg_covariance,
-                     isa<ClassDecl>(CovarRec), CovarRec->getDeclName(),
+                     Covar->isClass(), Covar,
                      Param->getDeclName(), Given, templateArg->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());
+
+         break;
+      }
+      case RecursivelyDependent: {
+         SP.diagnose(note_generic_note,
+                     "candidate cannot be referred to here",
+                     Cand.Alias->getSourceLoc());
 
          break;
       }

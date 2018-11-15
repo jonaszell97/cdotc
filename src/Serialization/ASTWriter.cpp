@@ -76,6 +76,9 @@ unsigned ComputeHash(DeclarationName Name)
    case DeclarationName::SubscriptName:
       support::hash_combine(hash, Name.getSubscriptKind());
       break;
+   case DeclarationName::UniqueName:
+      support::hash_combine(hash, Name.getUniqueID());
+      break;
    case DeclarationName::ErrorName:
    default:
       break;
@@ -360,11 +363,21 @@ void ASTTypeWriter::visitArrayType(const ArrayType *Ty)
 void ASTTypeWriter::visitAssociatedType(const AssociatedType *Ty)
 {
    Record.AddDeclRef(Ty->getDecl());
+   Record.AddTypeRef(Ty->getOuterAT());
 }
 
 void ASTTypeWriter::visitBoxType(const BoxType *Ty)
 {
    Record.AddTypeRef(Ty->getBoxedType());
+}
+
+void ASTTypeWriter::visitExistentialType(const ExistentialType *Ty)
+{
+   auto Existentials = Ty->getExistentials();
+   Record.push_back(Existentials.size());
+
+   for (auto E : Existentials)
+      Record.AddTypeRef(E);
 }
 
 void ASTTypeWriter::visitTokenType(const TokenType *Ty)
@@ -613,6 +626,9 @@ void ASTWriter::AddDeclarationName(DeclarationName Name, ASTRecordWriter &Record
    case DeclarationName::SubscriptName:
       Record.push_back(static_cast<uint64_t>(Name.getSubscriptKind()));
       break;
+   case DeclarationName::UniqueName:
+      Record.push_back(Name.getUniqueID());
+      break;
    case DeclarationName::ErrorName:
       break;
    }
@@ -684,7 +700,7 @@ void ASTRecordWriter::AddTemplateArgument(const TemplateArgument &Arg)
          AddTemplateArgument(VA);
    }
    else if (Arg.isType()) {
-      AddTypeRef(Arg.getType());
+      AddTypeRef(Arg.getNonCanonicalType());
    }
    else {
       AddStmt(Arg.getValueExpr());

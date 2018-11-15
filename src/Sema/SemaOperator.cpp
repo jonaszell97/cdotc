@@ -6,6 +6,7 @@
 
 #include "Sema/ExpressionResolver.h"
 #include "AST/Type.h"
+#include "Query/QueryContext.h"
 #include "Support/StringSwitch.h"
 
 #include <llvm/Support/raw_ostream.h>
@@ -92,8 +93,14 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          auto Self = TypeToCheck->getRecord();
          auto Other = rhs->getRecord();
 
-         ensureDeclared(Self);
-         ensureDeclared(Other);
+         if (QC.PrepareDeclInterface(Self)) {
+            result = true;
+            break;
+         }
+         if (QC.PrepareDeclInterface(Other)) {
+            result = true;
+            break;
+         }
 
          if (Self->isClass() && Other->isClass()) {
             auto SelfClass = cast<ClassDecl>(Self);
@@ -234,11 +241,6 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
                                        lhs, BinOp);
 
       return visitExpr(BinOp, Assign);
-   }
-
-   if (lhs->getExprType()->isPointerType()) {
-      ensureSizeKnown(lhs->getExprType()->getPointeeType(),
-                      BinOp);
    }
 
    BinOp->setExprType(BinOp->getFunctionType()->getReturnType());

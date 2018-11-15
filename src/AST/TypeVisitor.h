@@ -133,6 +133,13 @@ private:
       }
    }
 
+   void visitExistentialTypeChildren(const ExistentialType *T)
+   {
+      for (QualType Cont : T->getExistentials()) {
+         visit(Cont);
+      }
+   }
+
    void visitFunctionTypeChildren(const FunctionType *T)
    {
       for (QualType Cont : T->getParamTypes()) {
@@ -160,7 +167,7 @@ private:
          return true;
       }
 
-      visit(Arg.getType());
+      visit(Arg.getNonCanonicalType());
       return true;
    }
 
@@ -215,8 +222,9 @@ private:
 
    void visitAssociatedTypeChildren(const AssociatedType *T)
    {
-      if (QualType Ty = T->getActualType())
-         visit(Ty);
+      if (auto Outer = T->getOuterAT()) {
+         visit(Outer);
+      }
    }
 
    void visitTypedefTypeChildren(const TypedefType *T)

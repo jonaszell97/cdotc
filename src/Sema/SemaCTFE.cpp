@@ -32,11 +32,6 @@ bool SemaPass::ensureVisited(Decl *D)
    llvm_unreachable("don't call me, bitch");
 }
 
-bool SemaPass::ensureDeclared(class Module *M)
-{
-   llvm_unreachable("don't call me, bitch");
-}
-
 bool SemaPass::ensureVisited(class Module *M)
 {
    llvm_unreachable("don't call me, bitch");
@@ -95,14 +90,15 @@ bool SemaPass::ensureSizeKnown(QualType Ty, StmtOrDecl SOD)
 
 bool SemaPass::ensureSizeKnown(RecordDecl *R, StmtOrDecl SOD)
 {
-   if (R->getSize() == 0) {
-      diagnose(SOD, diag::err_size_not_known, SOD.getSourceLoc(),
-               R->getSpecifierForDiagnostic(), R->getName());
-
-      return false;
-   }
-
-   return true;
+//   if (R->getSize() == 0) {
+//      diagnose(SOD, diag::err_size_not_known, SOD.getSourceLoc(),
+//               R->getSpecifierForDiagnostic(), R->getName());
+//
+//      return false;
+//   }
+//
+//   return true;
+llvm_unreachable("");
 }
 
 } // namespace ast

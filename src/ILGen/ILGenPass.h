@@ -217,6 +217,7 @@ public:
 
    void DeclareDeclContext(DeclContext *Ctx);
    void DeclareRecord(RecordDecl *R);
+   void AssignProtocolMethodOffsets(ProtocolDecl *P);
    void declareRecordInstantiation(RecordDecl *Inst);
 
    struct StringInfo {
@@ -343,7 +344,6 @@ private:
    void DeclareClassOrStruct(StructDecl *S);
    void DeclareEnum(EnumDecl *E);
    void DeclareUnion(UnionDecl *U);
-   void DeclareProtocol(ProtocolDecl *cl);
 
    void DeclareField(FieldDecl *field);
 
@@ -379,6 +379,9 @@ public:
    il::Function *getPartiallyAppliedLambda(il::Method *M, il::Value *Self);
    il::Function *getPartiallyAppliedLambda(il::Value *F, il::Value *Self);
 
+   il::Method *createProtocolRequirementImplStub(MethodDecl *Req,
+                                                 MethodDecl *Impl);
+
    il::Value *getDefaultValue(QualType Ty);
    il::Value *getTuple(TupleType *Ty, llvm::ArrayRef<il::Value*> Vals);
 
@@ -412,14 +415,14 @@ public:
                           il::Value *Val,
                           bool forced = false);
 
-   il::Value *Convert(il::Value *Val, QualType ToTy);
+   il::Value *Convert(il::Value *Val, QualType ToTy, bool forced = false);
 
    il::Value *DoPointerArith(op::OperatorKind op,
                              il::Value *lhs, il::Value *rhs);
    il::Value *CreateLogicalAnd(il::Value *lhs, Expression *rhsNode);
    il::Value *CreateLogicalOr(il::Value *lhs, Expression *rhsNode);
 
-   CallableDecl *MaybeSpecialize(CallableDecl *C);
+   CallableDecl *MaybeSpecialize(CallableDecl *C, Expression *SelfArg =nullptr);
    NamedDecl *MaybeSpecialize(NamedDecl *G);
 
    il::Value *CreateCall(CallableDecl *C,
@@ -452,6 +455,11 @@ public:
 
    il::GlobalVariable *GetOrCreatePTable(RecordDecl *R, ProtocolDecl *P);
    il::GlobalVariable *GetPTable(RecordDecl *R, ProtocolDecl *P);
+
+   il::Method *GetDeinitializer(RecordDecl *R);
+   il::Method *GetCopyFn(RecordDecl *R);
+   il::Method *GetOperatorEquals(RecordDecl *R);
+   il::Method *GetToStringFn(RecordDecl *R);
 
    il::Value *stringify(il::Value *Val);
    il::Value *getString(const llvm::Twine &str);

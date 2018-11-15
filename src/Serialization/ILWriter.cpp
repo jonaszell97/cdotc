@@ -710,6 +710,7 @@ void ILWriter::writeInstruction(const il::Instruction &I)
    case Value::VirtualCallInstID: {
       auto &Call = cast<VirtualCallInst>(I);
       Writer.AddTypeRef(Call.getFunctionType());
+      Writer.AddValue(Call.getProtocolTypeInfo());
       Writer.push_back(Call.getOffset());
 
       break;
@@ -724,6 +725,7 @@ void ILWriter::writeInstruction(const il::Instruction &I)
    case Value::VirtualInvokeInstID: {
       auto &Inv = cast<VirtualInvokeInst>(I);
       Writer.AddTypeRef(Inv.getFunctionType());
+      Writer.AddValue(Inv.getProtocolTypeInfo());
       Writer.push_back(Inv.getOffset());
       Writer.AddValue(Inv.getNormalContinuation());
       Writer.AddValue(Inv.getLandingPad());

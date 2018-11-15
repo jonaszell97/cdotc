@@ -373,8 +373,8 @@ private:
    bool ParsingProtocol = false;
    bool AllowPattern = false;
 
-   bool isModuleParser;
    bool DiscardDecls = false;
+   bool UnboundedByDefault = false;
 
    lex::Lexer *lexer;
    SemaPass &SP;
@@ -390,6 +390,9 @@ private:
    IdentifierInfo *Ident_do;
    IdentifierInfo *Ident_then;
    IdentifierInfo *Ident_where;
+   IdentifierInfo *Ident_prefix;
+   IdentifierInfo *Ident_postfix;
+   IdentifierInfo *Ident_infix;
    IdentifierInfo *Ident_default;
    IdentifierInfo *Ident_deinit;
    IdentifierInfo *Ident_typename;
@@ -419,7 +422,7 @@ private:
    IdentifierInfo *Ident_unittest;
    IdentifierInfo *Ident___traits;
    IdentifierInfo *Ident___nullptr;
-   IdentifierInfo *Ident___func__;
+   IdentifierInfo *Ident___builtin_void;
    IdentifierInfo *Ident___mangled_func;
    IdentifierInfo *Ident___ctfe;
 
@@ -613,10 +616,12 @@ private:
                              lex::tok::TokenType expected);
 
    AccessSpecifier tokenToAccessSpec(lex::tok::TokenType kind);
-   FixKind tokenToFix(lex::tok::TokenType kind);
+   FixKind tokenToFix(const lex::Token &Tok);
 
    lex::Token lookahead(bool ignoreNewline = true, bool sw = false);
    void advance(bool ignoreNewline = true, bool sw = false);
+
+   bool validOperatorFollows();
 
    template<class Fst, class ...Toks>
    SourceLocation consumeToken(Fst fst, Toks ...rest)

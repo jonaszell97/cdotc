@@ -5,6 +5,7 @@ class Note <let msg: string>
 
 /* ANY */
 def err_generic_error : Error<"$0">
+def fatal_any_fatal : Error<"$0", true>
 def warn_generic_warn : Warning<"$0">
 def note_generic_note : Note<"$0">
 
@@ -143,6 +144,8 @@ def err_expression_in_type_position : Error<"expression cannot be used as a type
 
 def err_no_explicit_cast : Error<"no known explicit conversion from $0 to $1">
 
+def err_not_existential : Error<"cannot apply type-union operator to non-existential type '$0'">
+
 def err_return_type_mismatch : Error<"returned value of type $0 is not compatible with declared return type $1">
 def err_cond_not_boolean : Error<"${ 0 | select(if,while,for,ternay operator '?:') } condition must be boolean">
 def err_if_let_must_have_value : Error<"'if let' declaration must define a value">
@@ -242,6 +245,7 @@ def err_ambiguous_destructure : Error<"reference to destructuring operator is am
 
 /* FUNCTION / METHOD CALL ERRORS */
 def err_func_not_found : Error<"${ 0 | select(function, method) } '$1' not found">
+def err_method_not_found : Error<"method '$0' does not exist on ${ 1 | if(instances of ) }type '$2'">
 def err_no_matching_call : Error<"no matching call ${ 0 | if(for ${ 1 | select(function,method,alias) } '$2') } found">
 def err_no_matching_initializer : Error<"no ${ 0 | select(matching , accessible ) }initializer for ${ 1 | select(class,struct,enum,union,protocol) } '$2' found">
 
@@ -282,7 +286,7 @@ def err_ambiguous_call : Error<"call to ${ 0 | select(function, method, alias) }
 def note_candidate_here : Note<"candidate declared here">
 def note_builtin_candidate : Note<"builtin ${ 0 | if(operator ) }candidate">
 
-def err_ambiguous_reference : Error<"reference to ${ 0 | select(function, method, alias) } $1 is ambiguous">
+def err_ambiguous_reference : Error<"reference to '$0' is ambiguous">
 
 def err_prop_does_not_have : Error<"property '$0' does not have a ${ 1 | select(getter, setter) }">
 def err_subscript_does_not_have : Error<"susbcript does not have a ${ 0 | select(getter, setter) }">
@@ -434,7 +438,7 @@ def note_associated_type_missing : Note<"associated type '$0' must be defined">
 def err_no_such_associated_type : Error<"${ 0 | select(class, struct, enum, union, protocol) } '$1' does not conform to a protocol with an associated type named '$2'">
 def err_associated_type_ambiguous : Error<"reference to associated type '$0' is ambiguous">
 def err_associated_type_no_default : Error<"must specify a type for associated type '$0' because it does not have a default type">
-def err_associated_type_constraint : Note<"associated type '$0' (aka $1) does not satisfy constraint: $2">
+def err_associated_type_constraint : Error<"associated type '$0' (aka $1) does not satisfy constraint: $2">
 
 def err_constraint_not_satisfied : Error<"unsatisified constraint${ 0 | if(: ) }$1">
 def note_constraint_here : Note<"constraint declared here">

@@ -62,17 +62,17 @@ void QueryDefEmitter::Emit()
 namespace {
 
 class QueryClassEmitter {
-   /// Reference to the record keeper.
-   RecordKeeper &RK;
-
    /// The stream to write to.
    llvm::raw_ostream &OS;
 
+   /// All query def's.
+   SmallVector<Record*, 128> Queries;
+
    struct QueryParam {
-      QueryParam(string Type, StringRef Name,
-                 StringRef DefaultVal, bool InnerType, bool Excluded)
+      QueryParam(string Type, StringRef Name, StringRef DefaultVal,
+                 bool InnerType, bool Excluded, bool Nullable)
          : Type(Type), Name(std::move(Name)), DefaultVal(DefaultVal),
-           InnerType(InnerType), Excluded(Excluded)
+           InnerType(InnerType), Excluded(Excluded), Nullable(Nullable)
       {}
 
       std::string Type;
@@ -80,15 +80,19 @@ class QueryClassEmitter {
       StringRef DefaultVal;
       bool InnerType;
       bool Excluded;
+      bool Nullable;
    };
 
    struct QueryInfo {
       std::string ClassName;
+      bool SimpleQuery;
       bool CanBeCached;
       bool CanBeSerialized;
+      bool CanBeDependent;
       bool ShouldMoveResult;
       bool Private;
       bool HashMap;
+      bool IgnoreCircularDependency;
       std::vector<QueryParam> Params;
 
       /// The parameter string with types and parameter names.
@@ -111,6 +115,9 @@ class QueryClassEmitter {
 
       /// The parameter string without excluded parameters and no types.
       std::string ParamStrNoExcludeNoTypes;
+
+      /// The fields of this query.
+      std::string Fields;
 
       StringRef Type;
       StringRef GetReturnType;
@@ -139,103 +146,195 @@ class QueryClassEmitter {
    /// Information about a query record.
    llvm::DenseMap<Record*, QueryInfo> QueryMap;
 
+public:
+   QueryClassEmitter(RecordKeeper &RK, raw_ostream &OS)
+      : OS(OS)
+   {
+      RK.getAllDefinitionsOf(RK.lookupClass("Query"), Queries);
+      Setup();
+   }
+
+   void EmitQueryDecls();
+   void EmitQueryImpls();
+
+   void EmitQueryContextFields();
+   void EmitQueryContextDecls();
+   void EmitQueryContextSpecializations();
+   void EmitQueryContextImpls();
+
+private:
+   void Setup();
+
    /// Query
    void EmitDecl(Record *Query);
+   void EmitSimpleDecl(Record *Query, QueryInfo &Info);
+
    void EmitImpl(Record *Query);
    void EmitQueryClassImpls(ArrayRef<Record*> Queries);
 
-   /// QueryContext
-   void EmitQueryContextFoldingSets(ArrayRef<Record*> Queries);
-   void EmitQueryContextDecls(ArrayRef<Record*> Queries);
-   void EmitQueryContextImpls(ArrayRef<Record*> Queries);
-
-public:
-   QueryClassEmitter(RecordKeeper &RK, raw_ostream &OS)
-      : RK(RK), OS(OS)
-   {}
-
-   void Emit();
+   /// Query Macros
+   void EmitQueryMacros(ArrayRef<Record*> Queries);
 };
 
 } // anonymous namespace
 
-void QueryClassEmitter::Emit()
+void QueryClassEmitter::EmitQueryDecls()
 {
-   SmallVector<Record*, 128> Queries;
-   RK.getAllDefinitionsOf(RK.lookupClass("Query"), Queries);
-
-   OS << "#ifdef CDOT_QUERY_DECL\n";
    for (auto *Q : Queries) {
       EmitDecl(Q);
    }
-   OS << "#endif\n\n";
+}
 
-   OS << "#ifdef CDOT_QUERY_IMPL\n";
+void QueryClassEmitter::EmitQueryImpls()
+{
+   EmitQueryClassImpls(Queries);
+
    for (auto *Q : Queries) {
       EmitImpl(Q);
    }
-   OS << "#endif\n\n";
+}
 
-   OS << "#ifdef CDOT_QUERY_CLASS_IMPL\n";
-   EmitQueryClassImpls(Queries);
-   OS << "#endif\n\n";
+void QueryClassEmitter::Setup()
+{
+   for (auto *Query : Queries) {
+      auto &Info = QueryMap[Query];
 
-   OS << "#ifdef CDOT_QUERY_CONTEXT_FIELDS\n";
-   EmitQueryContextFoldingSets(Queries);
-   OS << "#endif\n\n";
+      Info.ClassName = Query->getName();
+      Info.ClassName += "Query";
 
-   OS << "#ifdef CDOT_QUERY_CONTEXT_DECLS\n";
-   EmitQueryContextDecls(Queries);
-   OS << "#endif\n\n";
+      Info.Type = cast<StringLiteral>(Query->getFieldValue("type"))
+         ->getVal();
 
-   OS << "#ifdef CDOT_QUERY_CONTEXT_IMPL\n";
-   EmitQueryContextImpls(Queries);
-   OS << "#endif\n\n";
+      Info.GetReturnType = cast<StringLiteral>(
+         Query->getFieldValue("getReturnType"))->getVal();
+      Info.CustomKeyType = cast<StringLiteral>(
+         Query->getFieldValue("customKeyType"))->getVal();
+      Info.CustomGet = cast<CodeBlock>(Query->getFieldValue("customGet"))
+         ->getCode();
+      Info.CustomHeaderCode = cast<CodeBlock>(
+         Query->getFieldValue("customHeaderCode"))->getCode();
+      Info.ConstructorCode = cast<CodeBlock>(
+         Query->getFieldValue("constructorCode"))->getCode();
+      Info.PersistentState = cast<CodeBlock>(
+         Query->getFieldValue("persistentState"))->getCode();
+      Info.RefreshCondition = cast<CodeBlock>(
+         Query->getFieldValue("refreshCondition"))->getCode();
+      Info.SimpleQuery = cast<IntegerLiteral>(
+         Query->getFieldValue("simpleQuery"))->getVal().getBoolValue();
+      Info.CanBeCached = cast<IntegerLiteral>(
+         Query->getFieldValue("canBeCached"))->getVal().getBoolValue();
+      Info.CanBeSerialized = cast<IntegerLiteral>(
+         Query->getFieldValue("canBeSerialized"))->getVal().getBoolValue();
+      Info.CanBeDependent = cast<IntegerLiteral>(
+         Query->getFieldValue("canBeDependent"))->getVal().getBoolValue();
+      Info.ShouldMoveResult = cast<IntegerLiteral>(
+         Query->getFieldValue("shouldMoveResult"))->getVal().getBoolValue();
+      Info.IgnoreCircularDependency = cast<IntegerLiteral>(
+         Query->getFieldValue("ignoreCircularDependency"))->getVal().getBoolValue();
+      Info.Private = cast<IntegerLiteral>(
+         Query->getFieldValue("private"))->getVal().getBoolValue();
 
-   OS << "#undef CDOT_QUERY_DECL\n";
-   OS << "#undef CDOT_QUERY_IMPL\n";
-   OS << "#undef CDOT_QUERY_CLASS_IMPL\n";
-   OS << "#undef CDOT_QUERY_CONTEXT_FIELDS\n";
-   OS << "#undef CDOT_QUERY_CONTEXT_DECLS\n";
-   OS << "#undef CDOT_QUERY_CONTEXT_IMPL\n";
+      llvm::raw_string_ostream ParamWithDefaultOS(Info.ParamStrWithDefaultVals);
+      llvm::raw_string_ostream ParamOS(Info.ParamStr);
+      llvm::raw_string_ostream ParamNoTypesOS(Info.ParamStrNoTypes);
+      llvm::raw_string_ostream ParamNoMoveOS(Info.ParamStrNoMove);
+      llvm::raw_string_ostream ParamNoMoveNoTypeOS(Info.ParamStrNoMoveNoTypes);
+      llvm::raw_string_ostream ParamNoExcludeOS(Info.ParamStrNoExclude);
+      llvm::raw_string_ostream ParamNoExcludeNoTypeOS(Info.ParamStrNoExcludeNoTypes);
+      llvm::raw_string_ostream FieldOS(Info.Fields);
+
+      auto &ParamInfo = Info.Params;
+
+      unsigned i = 0;
+      unsigned j = 0;
+
+      // Use a HashMap instead of a FoldingSet if there's a single key.
+      auto *ParamsVal = cast<ListLiteral>(Query->getFieldValue("parameters"));
+      Info.HashMap = ParamsVal->getValues().size() == 1 || Info.SimpleQuery;
+
+      for (auto *ParamVal : ParamsVal->getValues()) {
+         auto *Param = cast<RecordVal>(ParamVal)->getRecord();
+
+         StringRef Name = cast<StringLiteral>(Param->getFieldValue("name"))
+            ->getVal();
+         string Type = cast<StringLiteral>(Param->getFieldValue("type"))
+            ->getVal();
+         StringRef DefaultVal = cast<StringLiteral>(Param->getFieldValue("defaultVal"))
+            ->getVal();
+         bool InnerType = cast<IntegerLiteral>(Param->getFieldValue("isInnerType"))
+            ->getVal().getBoolValue();
+         bool Exclude = cast<IntegerLiteral>(Param->getFieldValue("exclude"))
+            ->getVal().getBoolValue();
+         bool Nullable = cast<IntegerLiteral>(Param->getFieldValue("nullable"))
+            ->getVal().getBoolValue();
+
+         if (InnerType) {
+            Type = Info.ClassName + "::" + Type;
+         }
+         else if (Param->getBases().front().getBase()->getName() == "ArrayParam") {
+            Type = "llvm::ArrayRef<" + Type + ">";
+         }
+
+         ParamInfo.emplace_back(Type, Name, DefaultVal,
+                                InnerType, Exclude, Nullable);
+
+         if (i++ != 0) {
+            ParamOS << ", ";
+            ParamNoTypesOS << ", ";
+            ParamWithDefaultOS << ", ";
+            ParamNoMoveOS << ", ";
+            ParamNoMoveNoTypeOS << ", ";
+         }
+         if (!Exclude && j++ != 0) {
+            ParamNoExcludeOS << ", ";
+            ParamNoExcludeNoTypeOS << ", ";
+         }
+
+         if (!Exclude) {
+            ParamNoExcludeNoTypeOS << Name;
+         }
+
+         ParamNoMoveNoTypeOS << Name;
+         FieldOS << "   " << Type << " " << Name << ";\n";
+
+         if (shouldBeMoved(Type)) {
+            ParamNoTypesOS << "std::move(" << Name << ")";
+            ParamNoMoveOS << "const " << Type << " &" << Name;
+
+            if (!Exclude) {
+               ParamNoExcludeOS << "const " << Type << " &" << Name;;
+            }
+         }
+         else {
+            ParamNoTypesOS << Name;
+            ParamNoMoveOS << Type << " " << Name;
+
+            if (!Exclude) {
+               ParamNoExcludeOS << Type << " " << Name;
+            }
+         }
+
+         ParamOS << Type << " " << Name;
+         ParamWithDefaultOS << Type << " " << Name;
+
+         if (!DefaultVal.empty()) {
+            ParamWithDefaultOS << " = " << DefaultVal;
+         }
+      }
+
+      ParamOS.flush();
+      ParamWithDefaultOS.flush();
+      ParamNoTypesOS.flush();
+      ParamNoMoveOS.flush();
+      ParamNoMoveNoTypeOS.flush();
+      ParamNoExcludeOS.flush();
+      ParamNoExcludeNoTypeOS.flush();
+   }
 }
 
 void QueryClassEmitter::EmitDecl(Record *Query)
 {
    auto &Info = QueryMap[Query];
-
-   Info.ClassName = Query->getName();
-   Info.ClassName += "Query";
-
-   Info.Type = cast<StringLiteral>(Query->getFieldValue("type"))
-      ->getVal();
-
-   Info.GetReturnType = cast<StringLiteral>(
-      Query->getFieldValue("getReturnType"))->getVal();
-   Info.CustomKeyType = cast<StringLiteral>(
-      Query->getFieldValue("customKeyType"))->getVal();
-   Info.CustomGet = cast<CodeBlock>(Query->getFieldValue("customGet"))
-      ->getCode();
-   Info.CustomHeaderCode = cast<CodeBlock>(
-      Query->getFieldValue("customHeaderCode"))->getCode();
-   Info.ConstructorCode = cast<CodeBlock>(
-      Query->getFieldValue("constructorCode"))->getCode();
-   Info.PersistentState = cast<CodeBlock>(
-      Query->getFieldValue("persistentState"))->getCode();
-   Info.RefreshCondition = cast<CodeBlock>(
-      Query->getFieldValue("refreshCondition"))->getCode();
-   Info.CanBeCached = cast<IntegerLiteral>(
-      Query->getFieldValue("canBeCached"))->getVal().getBoolValue();
-   Info.CanBeSerialized = cast<IntegerLiteral>(
-      Query->getFieldValue("canBeSerialized"))->getVal().getBoolValue();
-   Info.ShouldMoveResult = cast<IntegerLiteral>(
-      Query->getFieldValue("shouldMoveResult"))->getVal().getBoolValue();
-   Info.Private = cast<IntegerLiteral>(
-      Query->getFieldValue("private"))->getVal().getBoolValue();
-
-   // Use a HashMap instead of a FoldingSet if there's a single key.
-   auto *ParamsVal = cast<ListLiteral>(Query->getFieldValue("parameters"));
-   Info.HashMap = ParamsVal->getValues().size() == 1;
 
    OS << "class " << Info.ClassName << ": public Query";
 
@@ -254,6 +353,9 @@ void QueryClassEmitter::EmitDecl(Record *Query)
          "{ return classofKind(Q->kind()); }\n"
       << "   static bool classofKind(Kind K) "
          "{ return K == Kind::" << Info.ClassName << "ID; }\n\n";
+
+   // result_type
+   OS << "   using result_type = " << Info.GetReturnType << ";\n\n";
 
    // description, summary
    OS << "   std::string description() const;\n";
@@ -280,101 +382,10 @@ void QueryClassEmitter::EmitDecl(Record *Query)
    }
 
    // C'tor.
-   llvm::raw_string_ostream ParamWithDefaultOS(Info.ParamStrWithDefaultVals);
-   llvm::raw_string_ostream ParamOS(Info.ParamStr);
-   llvm::raw_string_ostream ParamNoTypesOS(Info.ParamStrNoTypes);
-   llvm::raw_string_ostream ParamNoMoveOS(Info.ParamStrNoMove);
-   llvm::raw_string_ostream ParamNoMoveNoTypeOS(Info.ParamStrNoMoveNoTypes);
-   llvm::raw_string_ostream ParamNoExcludeOS(Info.ParamStrNoExclude);
-   llvm::raw_string_ostream ParamNoExcludeNoTypeOS(Info.ParamStrNoExcludeNoTypes);
-
-   std::string FieldsStr;
-   llvm::raw_string_ostream FieldOS(FieldsStr);
-
-   auto &ParamInfo = Info.Params;
-
-   unsigned i = 0;
-   unsigned j = 0;
-
-   for (auto *ParamVal : ParamsVal->getValues()) {
-      auto *Param = cast<RecordVal>(ParamVal)->getRecord();
-
-      StringRef Name = cast<StringLiteral>(Param->getFieldValue("name"))
-         ->getVal();
-      string Type = cast<StringLiteral>(Param->getFieldValue("type"))
-         ->getVal();
-      StringRef DefaultVal = cast<StringLiteral>(Param->getFieldValue("defaultVal"))
-         ->getVal();
-      bool InnerType = cast<IntegerLiteral>(Param->getFieldValue("isInnerType"))
-         ->getVal().getBoolValue();
-      bool Exclude = cast<IntegerLiteral>(Param->getFieldValue("exclude"))
-         ->getVal().getBoolValue();
-
-      if (InnerType) {
-         Type = Info.ClassName + "::" + Type;
-      }
-      else if (Param->getBases().front().getBase()->getName() == "ArrayParam") {
-         Type = "llvm::ArrayRef<" + Type + ">";
-      }
-
-      ParamInfo.emplace_back(Type, Name, DefaultVal, InnerType, Exclude);
-
-      if (i++ != 0) {
-         ParamOS << ", ";
-         ParamNoTypesOS << ", ";
-         ParamWithDefaultOS << ", ";
-         ParamNoMoveOS << ", ";
-         ParamNoMoveNoTypeOS << ", ";
-      }
-      if (!Exclude && j++ != 0) {
-         ParamNoExcludeOS << ", ";
-         ParamNoExcludeNoTypeOS << ", ";
-      }
-
-      if (!Exclude) {
-         ParamNoExcludeNoTypeOS << Name;
-      }
-
-      ParamNoMoveNoTypeOS << Name;
-      FieldOS << "   " << Type << " " << Name << ";\n";
-
-      if (shouldBeMoved(Type)) {
-         ParamNoTypesOS << "std::move(" << Name << ")";
-         ParamNoMoveOS << "const " << Type << " &" << Name;
-
-         if (!Exclude) {
-            ParamNoExcludeOS << "const " << Type << " &" << Name;;
-         }
-      }
-      else {
-         ParamNoTypesOS << Name;
-         ParamNoMoveOS << Type << " " << Name;
-
-         if (!Exclude) {
-            ParamNoExcludeOS << Type << " " << Name;
-         }
-      }
-
-      ParamOS << Type << " " << Name;
-      ParamWithDefaultOS << Type << " " << Name;
-
-      if (!DefaultVal.empty()) {
-         ParamWithDefaultOS << " = " << DefaultVal;
-      }
-   }
-
-   ParamOS.flush();
-   ParamWithDefaultOS.flush();
-   ParamNoTypesOS.flush();
-   ParamNoMoveOS.flush();
-   ParamNoMoveNoTypeOS.flush();
-   ParamNoExcludeOS.flush();
-   ParamNoExcludeNoTypeOS.flush();
-
    OS << "   " << Info.ClassName << "(QueryContext &QC"
-      << (ParamWithDefaultOS.str().empty() ? "" : ", ")
-      << ParamWithDefaultOS.str()
-      << ", SourceRange Loc = {});\n\n";
+      << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
+      << Info.ParamStrWithDefaultVals
+      << ");\n\n";
 
    // finish()
    if (Info.GetReturnType != "void") {
@@ -390,7 +401,7 @@ void QueryClassEmitter::EmitDecl(Record *Query)
          << Result << ", Status St = Done);\n\n";
    }
 
-   OS << FieldOS.str();
+   OS << Info.Fields;
    if (Info.Type != "void") {
       // Result field value.
       OS << "   llvm::Optional<" << Info.Type << "> Result;\n";
@@ -401,8 +412,8 @@ void QueryClassEmitter::EmitDecl(Record *Query)
       OS << "public:\n";
       OS << "   void Profile(llvm::FoldingSetNodeID &ID) const;\n";
       OS << "   static void Profile(llvm::FoldingSetNodeID &ID"
-         << (ParamNoExcludeOS.str().empty() ? "" : ", ")
-         << ParamNoExcludeOS.str()
+         << (Info.ParamStrNoExclude.empty() ? "" : ", ")
+         << Info.ParamStrNoExclude
          << ");\n\n";
    }
 
@@ -475,6 +486,13 @@ void QueryClassEmitter::appendParam(ParamKind K,
       else if (TypeName == "SourceLocation") {
          OS << "ID.AddInteger(" << VarName << ".getOffset());";
       }
+      else if (TypeName == "SourceRange") {
+         OS << "ID.AddInteger(" << VarName << ".getStart().getOffset());";
+         OS << "ID.AddInteger(" << VarName << ".getEnd().getOffset());";
+      }
+      else if (TypeName == "LookupOpts") {
+         OS << "ID.AddInteger((uint8_t)(" << VarName << "));";
+      }
       else if (TypeName == "DeclarationName" || TypeName == "StmtOrDecl") {
          OS << "ID.AddPointer(" << VarName << ".getAsOpaquePtr());";
       }
@@ -505,6 +523,9 @@ void QueryClassEmitter::appendString(ParamKind K,
          OS << "OS << \"'\" << " << VarName
             << "->Decl::getNameAsString() << \"'\";";
       }
+      else if (TypeName == "sema::FinalTemplateArgumentList*") {
+         OS << VarName << "->print(OS);";
+      }
       else {
          OS << "OS << " << VarName << ";";
       }
@@ -521,6 +542,7 @@ void QueryClassEmitter::appendString(ParamKind K,
          OS << "OS << '[';\n"
             << "   unsigned i = 0;\n"
             << "   for (auto &El : " << VarName << ") {\n"
+            << "      if (i == 5) { OS << \", ...\"; break; }\n"
             << "      if (i++ != 0) OS << \", \";\n"
             << "      ";
 
@@ -531,6 +553,9 @@ void QueryClassEmitter::appendString(ParamKind K,
       else if (TypeName.back() == '&') {
          OS << "OS << &" << VarName  << ";";
       }
+      else if (TypeName == "sema::MultiLevelFinalTemplateArgList") {
+         OS << VarName << ".print(OS);";
+      }
       else if (TypeName == "DeclarationName") {
          OS << "OS << \"'\" << " << VarName << " << \"'\";";
       }
@@ -538,10 +563,8 @@ void QueryClassEmitter::appendString(ParamKind K,
          OS << "OS << " << VarName << ".getAsOpaquePtr();";
       }
       else if (TypeName == "SourceLocation") {
-         OS << "OS << " << VarName << ".getOffset();";
-      }
-      else if (TypeName == "sema::MultiLevelFinalTemplateArgList") {
-         OS << "OS << " << VarName << ".toString();";
+         OS << "OS << QC.CI.getFileMgr().getSourceLocationAsString(" << VarName
+            << ");";
       }
       else if (TypeName.endswith("Kind")) {
          OS << "OS << (uint64_t)" << VarName << ";";
@@ -562,8 +585,11 @@ void QueryClassEmitter::EmitImpl(Record *Query)
    // C'tor.
    OS << Info.ClassName << "::" << Info.ClassName << "(QueryContext &QC"
       << (Info.ParamStr.empty() ? "" : ", ")
-      << Info.ParamStr << ", SourceRange Loc) "
-                          ": Query(" << Info.ClassName << "ID, QC, Loc)";
+      << Info.ParamStr << ") "
+                          ": Query(" << Info.ClassName << "ID, QC)";
+
+   std::string NullChecks;
+   llvm::raw_string_ostream NullOS(NullChecks);
 
    for (auto &P : Info.Params) {
       OS << ", " << P.Name << "(";
@@ -576,9 +602,16 @@ void QueryClassEmitter::EmitImpl(Record *Query)
       }
 
       OS << ")";
+
+      // Assert on 'null' pointer arguments if they're not nullable.
+      if (!P.Nullable) {
+         NullOS << "assert(" << P.Name << " && \"parameter '" << P.Name
+                << "' should not be null!\");\n";
+      }
    }
 
    OS << " {\n"
+      << NullOS.str()
       << Info.ConstructorCode << "\n"
       << "}\n\n";
 
@@ -697,6 +730,9 @@ void QueryClassEmitter::EmitImpl(Record *Query)
 
       unsigned i = 0;
       for (auto &Param : Info.Params) {
+         if (Param.Excluded)
+            continue;
+
          if (i++ != 0)
             OS << "   OS << ',';\n";
 
@@ -800,9 +836,21 @@ void QueryClassEmitter::EmitQueryClassImpls(ArrayRef<Record*> Queries)
    }
 
    OS << "   }\n}\n\n";
+
+   /// canBeDependent()
+   OS << "bool Query::canBeDependent() const\n{\n"
+      << "   switch (K) {\n";
+
+   for (auto *Q : Queries) {
+      auto &Info = QueryMap[Q];
+      OS << "   case " << Info.ClassName << "ID: return "
+         << (Info.CanBeDependent ? "true" : "false") << ";\n";
+   }
+
+   OS << "   }\n}\n\n";
 }
 
-void QueryClassEmitter::EmitQueryContextFoldingSets(ArrayRef<Record*> Queries)
+void QueryClassEmitter::EmitQueryContextFields()
 {
    for (auto *Q : Queries) {
       auto &Info = QueryMap[Q];
@@ -813,19 +861,81 @@ void QueryClassEmitter::EmitQueryContextFoldingSets(ArrayRef<Record*> Queries)
 
       if (Info.Params.empty()) {
          OS << "/// \\brief Single query instance.\n"
-            << "private:   "
-            <<  Info.ClassName << " *" << Q->getName() << "Instance = nullptr;\n";
+            << "private:   ";
+
+         if (Info.SimpleQuery) {
+            if (Info.Type == "void") {
+               OS << "bool Ran" << Q->getName() << "Query = false;\n";
+            }
+            else {
+               OS << "llvm::Optional<" << Info.Type << "> "
+                  << Q->getName() << "Result = nullptr;\n";
+            }
+         }
+         else {
+            OS << Info.ClassName << " *"
+               << Q->getName() << "Instance = nullptr;\n";
+         }
       }
       else if (Info.HashMap) {
          OS << "/// \\brief Maps from query kinds to a folding set containing instances of\n"
                "/// that query.\n"
-            << "private:   "
-            << "llvm::DenseMap<"
-            << (Info.CustomKeyType.empty()
-               ? llvm::StringRef(Info.Params.front().Type)
-               : Info.CustomKeyType)
-            << ", " << Info.ClassName << "*> "
-            << Q->getName() << "Queries;\n";
+            << "private:   ";
+
+         if (Info.SimpleQuery && Info.Type == "void") {
+            OS << "llvm::DenseSet<"
+               << (Info.CustomKeyType.empty()
+                   ? llvm::StringRef(Info.Params.front().Type)
+                   : Info.CustomKeyType)
+               << "> " << Q->getName() << "Queries;\n";
+         }
+         else if (Info.SimpleQuery) {
+            OS << "llvm::DenseMap<";
+
+            if (!Info.CustomKeyType.empty()) {
+               OS << Info.CustomKeyType;
+            }
+            else if (Info.Params.size() == 1) {
+               OS << Info.Params.front().Type;
+            }
+            else {
+               // Use recursive pairs because they can be used as
+               // DenseMap keys.
+               OS << "std::pair<";
+
+               unsigned i = 0;
+               unsigned NumPairs = 1;
+               unsigned NumParams = Info.Params.size();
+
+               for (auto &P : Info.Params) {
+                  if (i != 0) OS << ", ";
+
+                  // If we're at an uneven number and it's not the last one,
+                  // we need to start a new pair.
+                  if ((i & 1) != 0 && i != NumParams - 1) {
+                     OS << "std::pair<";
+                     ++NumPairs;
+                  }
+
+                  OS << P.Type;
+                  ++i;
+               }
+
+               for (i = 0; i < NumPairs; ++i) {
+                  OS << ">";
+               }
+            }
+
+            OS << ", " << Info.Type << "> " << Q->getName() << "Queries;\n";
+         }
+         else {
+            OS << "llvm::DenseMap<"
+               << (Info.CustomKeyType.empty()
+                   ? llvm::StringRef(Info.Params.front().Type)
+                   : Info.CustomKeyType)
+               << ", " << Info.ClassName << "*> " << Q->getName()
+               << "Queries;\n";
+         }
       }
       else {
          OS << "/// \\brief Maps from query kinds to a folding set containing instances of\n"
@@ -837,7 +947,7 @@ void QueryClassEmitter::EmitQueryContextFoldingSets(ArrayRef<Record*> Queries)
    }
 }
 
-void QueryClassEmitter::EmitQueryContextDecls(ArrayRef<Record*> Queries)
+void QueryClassEmitter::EmitQueryContextDecls()
 {
    for (auto *Q : Queries) {
       auto &Info = QueryMap[Q];
@@ -851,16 +961,18 @@ void QueryClassEmitter::EmitQueryContextDecls(ArrayRef<Record*> Queries)
       if (Info.GetReturnType == "void") {
          OS << "QueryResult " << Q->getName()
             << "(" << Info.ParamStrWithDefaultVals
-            << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
-            << "SourceRange Loc = {});\n";
+            << ");\n";
       }
       else {
          OS << "QueryResult " << Q->getName()
             << "(" << Info.GetReturnType << " &Result"
             << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
             << Info.ParamStrWithDefaultVals
-            << ", SourceRange Loc = {});\n";
+            << ");\n";
       }
+
+      // Queries can also be retrieved without running them.
+      // TODO
    }
 
    OS << "\n\n";
@@ -870,45 +982,149 @@ void QueryClassEmitter::EmitQueryContextDecls(ArrayRef<Record*> Queries)
    }
 }
 
-void QueryClassEmitter::EmitQueryContextImpls(ArrayRef<Record*> Queries)
+void QueryClassEmitter::EmitQueryContextSpecializations()
 {
    for (auto *Q : Queries) {
       auto &Info = QueryMap[Q];
-      if (Info.GetReturnType == "void") {
-         OS << "QueryResult QueryContext::" << Q->getName()
-            << "(" << Info.ParamStr
-            << (Info.ParamStr.empty() ? "" : ", ")
-            << "SourceRange Loc)\n";
-      }
-      else {
-         OS << "QueryResult QueryContext::" << Q->getName()
-            << "(" << Info.GetReturnType << " &Result"
-            << (Info.ParamStr.empty() ? "" : ", ") << Info.ParamStr
-            << ", SourceRange Loc)\n";
+      if (Info.SimpleQuery || !Info.CanBeCached) {
+         continue;
       }
 
-      OS << "\n{\n";
+      OS << "template<> " << Info.ClassName << " *"
+         << "QueryContext::getQuery<" << Info.ClassName << ">("
+         << Info.ParamStrNoExclude << ");\n";
+   }
+}
 
-      if (Info.CanBeCached && !Info.Params.empty()) {
+void QueryClassEmitter::EmitQueryContextImpls()
+{
+   for (auto *Q : Queries) {
+      auto &Info = QueryMap[Q];
+
+      // getQuery specialization
+      if (Info.CanBeCached && !Info.SimpleQuery) {
+         OS << "template<> " << Info.ClassName << " *"
+            << "QueryContext::getQuery<" << Info.ClassName << ">("
+            << Info.ParamStrNoExclude << ")\n{\n";
+
          if (Info.HashMap) {
             std::string HashMap = Q->getName();
             HashMap += "Queries";
 
             OS << "   auto It = " << HashMap << ".find("
-               << Info.Params.front().Name << ");\n";
+               << Info.Params.front().Name << ");\n"
+               << "   if (It != " << HashMap
+               << ".end()) return It->getSecond();\n"
+               << "   return nullptr;\n";
+         }
+         else if (!Info.Params.empty()) {
+            std::string FoldingSet = Q->getName();
+            FoldingSet += "Queries";
 
-            OS << "   " << Info.ClassName << " *_Q;\n";
-            OS << "   if (It == " << HashMap << ".end()) {\n"
-               << "      _Q = new(*this) " << Info.ClassName << "(*this"
-                                   << (Info.ParamStrNoTypes.empty() ? "" : ", ")
-                                   << Info.ParamStrNoTypes << ");\n"
-               << "      " << HashMap << "[_Q->" << Info.Params.front().Name
-                           << "] = _Q;\n"
-               << "   } else {\n"
-               << "      _Q = It->getSecond();\n"
-               << "   }";
+            OS << "   llvm::FoldingSetNodeID ID;\n";
+            OS << "   " << Info.ClassName << "::Profile(ID"
+               << (Info.ParamStrNoExcludeNoTypes.empty() ? "" : ", ")
+               << Info.ParamStrNoExcludeNoTypes << ");\n";
+
+            OS << "   void *InsertPos;\n";
+            OS << "   return " << FoldingSet
+               << ".FindNodeOrInsertPos(ID, InsertPos);\n";
          }
          else {
+            string Instance = Q->getName();
+            Instance += "Instance";
+
+            OS << "   return " << Instance << ";\n";
+         }
+
+         OS << "}\n\n";
+      }
+
+      // query run implementation
+      if (Info.GetReturnType == "void") {
+         OS << "QueryResult QueryContext::" << Q->getName()
+            << "(" << Info.ParamStr << ")\n";
+      }
+      else {
+         OS << "QueryResult QueryContext::" << Q->getName()
+            << "(" << Info.GetReturnType << " &Result"
+            << (Info.ParamStr.empty() ? "" : ", ")
+            << Info.ParamStr << ")\n";
+      }
+
+      OS << "\n{\n";
+
+      std::string DenseMapKey;
+      if (Info.CanBeCached && !Info.Params.empty()) {
+         if (Info.HashMap) {
+            std::string HashMap = Q->getName();
+            HashMap += "Queries";
+
+            llvm::raw_string_ostream KeyOS(DenseMapKey);
+
+            if (Info.SimpleQuery && Info.Params.size() == 1) {
+               KeyOS << Info.Params.front().Name;
+            }
+            else if (Info.SimpleQuery) {
+               // Use recursive pairs because they can be used as
+               // DenseMap keys.
+               KeyOS << "std::make_pair(";
+
+               unsigned i = 0;
+               unsigned NumPairs = 1;
+               unsigned NumParams = Info.Params.size();
+
+               for (auto &P : Info.Params) {
+                  if (i != 0) KeyOS << ", ";
+
+                  // If we're at an uneven number and it's not the last one,
+                  // we need to start a new pair.
+                  if ((i & 1) != 0 && i != NumParams - 1) {
+                     KeyOS << "std::make_pair(";
+                     ++NumPairs;
+                  }
+
+                  KeyOS << P.Name;
+                  ++i;
+               }
+
+               for (i = 0; i < NumPairs; ++i) {
+                  KeyOS << ")";
+               }
+            }
+            else {
+               KeyOS << Info.Params.front().Name;
+            }
+
+            OS << "   auto Key = " << KeyOS.str() << ";\n";
+            OS << "   auto It = " << HashMap << ".find(Key);\n";
+
+            if (Info.SimpleQuery) {
+               OS << "   if (It != " << HashMap << ".end()) {\n";
+
+               if (Info.Type != "void") {
+                  OS << "      Result = It->getSecond();";
+               }
+
+               OS << "      return QueryResult(QueryResult::Success);"
+                  << "   }\n";
+            }
+            else {
+               OS << "   " << Info.ClassName << " *_Q;\n";
+               OS << "   if (It == " << HashMap << ".end()) {\n"
+                  << "      _Q = new(*this) " << Info.ClassName << "(*this"
+                  << (Info.ParamStrNoTypes.empty() ? "" : ", ")
+                  << Info.ParamStrNoTypes << ");\n"
+                  << "      " << HashMap << "[_Q->" << Info.Params.front().Name
+                  << "] = _Q;\n"
+                  << "   } else {\n"
+                  << "      _Q = It->getSecond();\n"
+                  << "   }";
+            }
+         }
+         else {
+            assert(!Info.SimpleQuery);
+
             std::string FoldingSet = Q->getName();
             FoldingSet += "Queries";
 
@@ -928,33 +1144,98 @@ void QueryClassEmitter::EmitQueryContextImpls(ArrayRef<Record*> Queries)
          }
       }
       else if (Info.CanBeCached && Info.ParamStr.empty()) {
-         std::string Instance = Q->getName();
-         Instance += "Instance";
+         string Instance = Q->getName();
+         if (Info.SimpleQuery && Info.Type == "void") {
+            Instance = string("Ran") + Q->getName().str();
+            OS << "   if (" << Instance << ") {\n"
+               << "      return QueryResult(QueryResult::Success);"
+               << "   }\n";
+         }
+         else if (Info.SimpleQuery) {
+            Instance += "Result";
 
-         OS << "   if (!" << Instance << ")\n"
-            << "      " << Instance
-            << " = new(*this) " << Info.ClassName << "(*this"
-            << (Info.ParamStrNoTypes.empty() ? "" : ", ")
-            << Info.ParamStrNoTypes << ");\n";
+            OS << "   if (" << Instance << ") {\n"
+               << "      Result = Instance.getValue();"
+               << "      return QueryResult(QueryResult::Success);"
+               << "   }\n";
+         }
+         else {
+            Instance += "Instance";
 
-         OS << "auto *_Q = " << Instance << ";\n";
+            OS << "   if (!" << Instance << ")\n"
+               << "      " << Instance
+               << " = new(*this) " << Info.ClassName << "(*this"
+               << (Info.ParamStrNoTypes.empty() ? "" : ", ")
+               << Info.ParamStrNoTypes << ");\n";
+
+            OS << "auto *_Q = " << Instance << ";\n";
+         }
       }
-      else {
+      else if (!Info.SimpleQuery) {
          OS << "   auto *_Q = new(*this) " << Info.ClassName << "(*this"
             << (Info.ParamStrNoTypes.empty() ? "" : ", ")
             << Info.ParamStrNoTypes << ");";
-      }
-
-      StringRef AssignResult;
-      if (Info.GetReturnType != "void") {
-         AssignResult = "Result = _Q->get();";
       }
 
       if (!Info.RefreshCondition.empty()) {
          OS << "   _Q->refresh();\n";
       }
 
-      OS << R"__(
+      if (Info.SimpleQuery && Info.Type == "void") {
+         OS << Info.ClassName << " _Q(*this"
+            << (Info.ParamStrNoTypes.empty() ? "" : ", ")
+            << Info.ParamStrNoTypes
+            << ");\n\n"
+            << "auto MaybeErr = _Q.run();\n"
+            << "if (MaybeErr.isErr()) return MaybeErr;\n\n";
+
+         if (Info.CanBeCached) {
+            if (Info.Params.empty()) {
+               OS << "Ran" << Info.ClassName << " = true;\n";
+            }
+            else {
+               OS << Q->getName() << "Queries.insert("
+                  << Info.Params.front().Name << ");\n";
+            }
+         }
+
+         OS << "return QueryResult(QueryResult::Success);";
+      }
+      else if (Info.SimpleQuery) {
+         OS << Info.ClassName << " _Q(*this"
+            << (Info.ParamStrNoTypes.empty() ? "" : ", ")
+            << Info.ParamStrNoTypes
+            << ");\n\n"
+            << "auto MaybeErr = _Q.run();\n"
+            << "if (MaybeErr.isErr()) return MaybeErr;\n\n"
+            << "Result = _Q.get();\n";
+
+         if (Info.CanBeCached) {
+            if (Info.Params.empty()) {
+               OS << Info.ClassName << "Result = Result;\n";
+            }
+            else {
+               OS << Q->getName() << "Queries[Key] = Result;\n";
+            }
+         }
+
+         OS << "return QueryResult(QueryResult::Success);";
+      }
+      else {
+         std::string AssignResult;
+         if (Info.GetReturnType != "void") {
+            AssignResult += "Result = _Q->get();";
+         }
+
+         std::string beginExecution;
+         if (Info.IgnoreCircularDependency) {
+            beginExecution += "_Q->Stat = Query::Idle;";
+         }
+         else {
+            beginExecution += "_Q->Stat = Query::Running;";
+         }
+
+         OS << R"__(
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -962,7 +1243,8 @@ void QueryClassEmitter::EmitQueryContextImpls(ArrayRef<Record*> Queries)
    case Query::Idle:
       {
          ExecutingQuery EQ(*this, _Q);
-         if (auto _R = _Q->Query::run()) {
+         )__" << beginExecution << R"__(
+         if (auto _R = _Q->run()) {
             return _R;
          }
       }
@@ -979,9 +1261,15 @@ void QueryClassEmitter::EmitQueryContextImpls(ArrayRef<Record*> Queries)
       return QueryResult(QueryResult::Dependent);
    }
 )__";
+      }
 
       OS << "\n}\n\n";
    }
+}
+
+void QueryClassEmitter::EmitQueryMacros(ArrayRef<Record *> Queries)
+{
+
 }
 
 extern "C" {
@@ -991,9 +1279,34 @@ void EmitQueryDefs(llvm::raw_ostream &out, RecordKeeper &RK)
    QueryDefEmitter(out, RK).Emit();
 }
 
-void EmitQueryClasses(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitQueryDecls(llvm::raw_ostream &out, RecordKeeper &RK)
 {
-   QueryClassEmitter(RK, out).Emit();
+   QueryClassEmitter(RK, out).EmitQueryDecls();
+}
+
+void EmitQueryImpls(llvm::raw_ostream &out, RecordKeeper &RK)
+{
+   QueryClassEmitter(RK, out).EmitQueryImpls();
+}
+
+void EmitQueryContextFields(llvm::raw_ostream &out, RecordKeeper &RK)
+{
+   QueryClassEmitter(RK, out).EmitQueryContextFields();
+}
+
+void EmitQueryContextDecls(llvm::raw_ostream &out, RecordKeeper &RK)
+{
+   QueryClassEmitter(RK, out).EmitQueryContextDecls();
+}
+
+void EmitQueryContextSpecializations(llvm::raw_ostream &out, RecordKeeper &RK)
+{
+   QueryClassEmitter(RK, out).EmitQueryContextSpecializations();
+}
+
+void EmitQueryContextImpls(llvm::raw_ostream &out, RecordKeeper &RK)
+{
+   QueryClassEmitter(RK, out).EmitQueryContextImpls();
 }
 
 } // extern C

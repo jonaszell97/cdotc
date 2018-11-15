@@ -7,9 +7,10 @@
 using namespace cdot;
 using namespace cdot::diag;
 
-Diagnostic::Diagnostic(llvm::StringRef Msg,
+Diagnostic::Diagnostic(DiagnosticsEngine &Engine,
+                       llvm::StringRef Msg,
                        SeverityLevel Severity)
-   : Msg(Msg), Severity(Severity)
+   : Engine(Engine), Msg(Msg), Severity(Severity)
 { }
 
 DiagnosticsEngine::DiagnosticsEngine(DiagnosticConsumer *Consumer,
@@ -40,5 +41,5 @@ void DiagnosticsEngine::finalizeDiag(llvm::StringRef msg,
    }
 
    if (Consumer && !TooManyErrorsMsgEmitted)
-      Consumer->HandleDiagnostic(Diagnostic(msg, Sev));
+      Consumer->HandleDiagnostic(Diagnostic(*this, msg, Sev));
 }

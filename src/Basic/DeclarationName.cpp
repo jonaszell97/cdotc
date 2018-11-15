@@ -355,6 +355,12 @@ DeclarationName DeclarationName::getDeclaredOperatorName() const
    return DeclarationName();
 }
 
+uintptr_t DeclarationName::getUniqueID() const
+{
+   assert(getKind() == DeclarationName::UniqueName);
+   return getDeclInfo()->getData1();
+}
+
 int DeclarationName::compare(const DeclarationName &RHS) const
 {
    auto OwnKind = getKind();
@@ -378,6 +384,16 @@ int DeclarationName::compare(const DeclarationName &RHS) const
          RHS.getIdentifierInfo()->getIdentifier());
    case InstantiationName:
       return getInstantiationName().compare(RHS.getInstantiationName());
+   case UniqueName: {
+      auto UniqueID1 = getDeclInfo()->getData1();
+      auto UniqueID2 = RHS.getDeclInfo()->getData1();
+
+      if (UniqueID1 == -1 || UniqueID2 == -1) {
+         return -1;
+      }
+
+      return (int)(UniqueID1 - UniqueID2);
+   }
    default:
       return (int)(getDeclInfo()->getData1() - RHS.getDeclInfo()->getData1());
    }
@@ -458,6 +474,9 @@ void DeclarationName::print(llvm::raw_ostream &OS) const
       break;
    case SubscriptName:
       OS << "subscript";
+      break;
+   case UniqueName:
+      OS << "<private name>";
       break;
    }
 }
@@ -575,6 +594,15 @@ DeclarationNameTable::getOperatorDeclName(DeclarationName OpName)
 DeclarationName DeclarationNameTable::getErrorName()
 {
    return ErrorName;
+}
+
+DeclarationName DeclarationNameTable::getUniqueName(uintptr_t Data)
+{
+   if (Data == -1) {
+      return getSpecialName(DeclarationName::UniqueName, lastUniqueID--, 0);
+   }
+
+   return getSpecialName(DeclarationName::UniqueName, Data, 0);
 }
 
 DeclarationName

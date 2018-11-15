@@ -46,18 +46,22 @@ struct CandidateSet {
       CouldNotInferArgumentType,
       ArgumentRequiresRef,
 
-      CouldNotInferTemplateArg, // Must be kept in this order
+      CouldNotInferTemplateArg, // begin of fixed order, don't change
       ConflictingInferredArg,
       TooManyTemplateArgs,
       IncompatibleTemplateArgKind,
       IncompatibleTemplateArgVal,
-      TemplateArgCovarianceError,
+      TemplateArgCovarianceError, // end of fixed order
 
       FailedConstraint,
       MustBeStatic,
 
+      RecursivelyDependent,
+
       MutatingOnConstSelf,
       MutatingOnRValueSelf,
+
+
 
       IsDependent,
       IsInvalid, // invalid declaration, don't emit any extra diagnostics
@@ -249,6 +253,12 @@ struct CandidateSet {
       void setMustBeStatic()
       {
          FR = MustBeStatic;
+      }
+
+      void setRecursivelyDependent(SourceLocation Loc)
+      {
+         Data1 = Loc.getOffset();
+         FR = RecursivelyDependent;
       }
 
       void setIsInvalid()

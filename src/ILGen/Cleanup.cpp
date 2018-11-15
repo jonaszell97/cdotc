@@ -60,6 +60,9 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
       auto deinit = ty->getRecord()->getDeinitializer();
       assert(deinit && "trivially deinitializable type!");
 
+      deinit = ILGen.getSema().maybeInstantiateTemplateMember(
+         ty->getRecord(), deinit);
+
       if (ILGen.inCTFE()) {
          if (!ILGen.registerCalledFunction(deinit, deinit)) {
             return;

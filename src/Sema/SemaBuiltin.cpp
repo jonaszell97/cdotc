@@ -9,6 +9,7 @@
 #include "IL/ILBuilder.h"
 #include "ILGen/ILGenPass.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 
 using namespace cdot::builtin;
 using namespace cdot::diag;
@@ -143,7 +144,9 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
       return ExprError();
    }
 
-   ensureDeclared(BuiltinMod);
+//   if (ensureDeclared(BuiltinMod)) {
+//      return ExprError();
+//   }
 
    auto Name = Alias->getDeclName().getManglingName();
    if (!Name.isSimpleIdentifier()) {
@@ -156,7 +159,10 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    auto *II = Name.getIdentifierInfo();
 
    // look the declaration up to make sure it's deserialized.
-   (void) Lookup(*BuiltinMod->getDecl(), II);
+   const MultiLevelLookupResult *LookupRes;
+   if (QC.DirectLookup(LookupRes, BuiltinMod->getDecl(), II)) {
+      return ExprError();
+   }
 
    bool DoCache = true;
    Expression *ResultExpr = nullptr;

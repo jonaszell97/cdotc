@@ -52,4 +52,30 @@ using llvm::raw_ostream;
 
 } // namespace cdot
 
+#define ENUM_DENSE_MAP_INFO(TYPE)                                          \
+   template<> struct DenseMapInfo<TYPE> {                                  \
+      static TYPE getEmptyKey()                                            \
+      {                                                                    \
+         return (TYPE)DenseMapInfo<__underlying_type(TYPE)>::getEmptyKey();\
+      }                                                                    \
+                                                                           \
+      static TYPE getTombstoneKey()                                        \
+      {                                                                    \
+         return (TYPE)DenseMapInfo<__underlying_type(TYPE)>::getTombstoneKey();\
+      }                                                                    \
+                                                                           \
+      static int getHashValue(const TYPE &V)                               \
+      {                                                                    \
+         return DenseMapInfo<__underlying_type(TYPE)>                      \
+            ::getHashValue((__underlying_type(TYPE))V);                    \
+      }                                                                    \
+                                                                           \
+      static bool isEqual(const TYPE &LHS,                                 \
+                          const TYPE &RHS) {                               \
+         return DenseMapInfo<__underlying_type(TYPE)>                      \
+            ::isEqual((__underlying_type(TYPE))LHS,                        \
+                      (__underlying_type(TYPE))RHS);                       \
+      }                                                                    \
+   }
+
 #endif //CDOT_LLVM_H

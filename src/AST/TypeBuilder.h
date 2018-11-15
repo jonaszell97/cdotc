@@ -19,11 +19,11 @@ class TypeBuilder {
 protected:
    ast::SemaPass &SP;
    ast::ASTContext &Ctx;
-   StmtOrDecl SOD;
+   SourceRange SR;
 
 public:
-   explicit TypeBuilder(ast::SemaPass &SP, StmtOrDecl SOD)
-      : SP(SP), Ctx(SP.getContext()), SOD(SOD)
+   explicit TypeBuilder(ast::SemaPass &SP, SourceRange SR)
+      : SP(SP), Ctx(SP.getContext()), SR(SR)
    {}
 
    QualType visit(QualType T)
@@ -93,11 +93,20 @@ public:
 
    QualType visitTupleType(TupleType *T)
    {
-      llvm::SmallVector<QualType, 4> ContainedTys;
+      SmallVector<QualType, 4> ContainedTys;
       for (QualType Cont : T->getContainedTypes())
          ContainedTys.push_back(visit(Cont));
 
       return Ctx.getTupleType(ContainedTys);
+   }
+
+   QualType visitExistentialType(ExistentialType *T)
+   {
+      SmallVector<QualType, 4> ContainedTys;
+      for (QualType Cont : T->getExistentials())
+         ContainedTys.push_back(visit(Cont));
+
+      return Ctx.getExistentialType(ContainedTys);
    }
 
    QualType visitFunctionType(FunctionType *T)
@@ -154,7 +163,7 @@ public:
          return Ctx.getDependentRecordType(R, FinalList);
 
       auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
-      auto Inst = SP.InstantiateRecord(SOD.getSourceLoc(), Template, FinalList);
+      auto Inst = SP.InstantiateRecord(SR.getStart(), Template, FinalList);
 
       if (Inst)
          return Ctx.getRecordType(Inst);
@@ -166,7 +175,8 @@ public:
    {
       auto  R = T->getRecord();
       if (R->isInstantiation()) {
-         return visitRecordTypeCommon(T, R, R->getTemplateArgs());
+         return visitRecordTypeCommon(T, R->getSpecializedTemplate(),
+                                      R->getTemplateArgs());
       }
 
       return T;
@@ -232,6 +242,10 @@ public:
 
    QualType visitAssociatedType(AssociatedType *T)
    {
+      if (auto OuterAT = T->getOuterAT()) {
+         return this->Ctx.getAssociatedType(T->getDecl(), OuterAT);
+      }
+
       return T;
    }
 

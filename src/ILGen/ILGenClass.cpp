@@ -48,9 +48,25 @@ void ILGenPass::DeclareUnion(UnionDecl *U)
    DeclareDeclContext(U);
 }
 
-void ILGenPass::DeclareProtocol(ProtocolDecl *P)
+void ILGenPass::AssignProtocolMethodOffsets(ProtocolDecl *P)
 {
+   unsigned i = 0;
+   for (auto *D : P->getDecls()) {
+      if (!D->isProtocolRequirement() || D->getDeclContext() != P)
+         continue;
 
+      auto *M = dyn_cast<MethodDecl>(D);
+      if (!M || M->isBaseInitializer())
+         continue;
+
+      auto Offset = getProtocolMethodOffset(M);
+      if (Offset == -1) {
+         Offset = i;
+         setProtocolMethodOffset(M, Offset);
+      }
+
+      ++i;
+   }
 }
 
 void ILGenPass::DeclareRecord(RecordDecl *R)
@@ -68,7 +84,7 @@ void ILGenPass::DeclareRecord(RecordDecl *R)
       DeclareEnum(E);
    }
    else {
-      DeclareProtocol(cast<ProtocolDecl>(R));
+      AssignProtocolMethodOffsets(cast<ProtocolDecl>(R));
    }
 
    for (auto *Ext : R->getExtensions()) {
@@ -231,7 +247,10 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M)
                                                     SP.getContext().getRecordType(
                                                        Base));
 
-               CreateCall(Base->getDeinitializer(), { NewSelf });
+               auto *Deinit = SP.maybeInstantiateTemplateMember(
+                  Base, Base->getDeinitializer());
+
+               CreateCall(Deinit, { NewSelf });
                BaseClassFields = Base->getNumNonStaticFields();
             }
          }
@@ -364,25 +383,25 @@ void ILGenPass::visitRecordCommon(RecordDecl *R)
 //
 //   auto SAR = support::saveAndRestore(this->GenericEnv, GenericEnv);
 
-   for (auto &decl : R->getDecls())
-      visit(decl);
-
-   if (R->isInstantiation()) {
-      for (auto *Ext : R->getExtensions())
-         visit(Ext);
-   }
-
-   if (R->isImplicitlyEquatable())
-      DefineImplicitEquatableConformance(R->getOperatorEquals(), R);
-
-   if (R->isImplicitlyHashable())
-      DefineImplicitHashableConformance(R->getHashCodeFn(), R);
-
-   if (R->isImplicitlyCopyable())
-      DefineImplicitCopyableConformance(R->getCopyFn(), R);
-
-   if (R->isImplicitlyStringRepresentable())
-      DefineImplicitStringRepresentableConformance(R->getToStringFn(), R);
+//   for (auto &decl : R->getDecls())
+//      visit(decl);
+//
+//   if (R->isInstantiation()) {
+//      for (auto *Ext : R->getExtensions())
+//         visit(Ext);
+//   }
+//
+//   if (R->isImplicitlyEquatable())
+//      DefineImplicitEquatableConformance(R->getOperatorEquals(), R);
+//
+//   if (R->isImplicitlyHashable())
+//      DefineImplicitHashableConformance(R->getHashCodeFn(), R);
+//
+//   if (R->isImplicitlyCopyable())
+//      DefineImplicitCopyableConformance(R->getCopyFn(), R);
+//
+//   if (R->isImplicitlyStringRepresentable())
+//      DefineImplicitStringRepresentableConformance(R->getToStringFn(), R);
 }
 
 void ILGenPass::visitClassDecl(ClassDecl *C)
@@ -459,6 +478,90 @@ il::GlobalVariable *ILGenPass::GenerateVTable(ClassDecl *C)
    return Builder.CreateGlobalVariable(VT, true, s, C->getSourceLoc());
 }
 
+il::Method* ILGenPass::createProtocolRequirementImplStub(MethodDecl *Req,
+                                                         MethodDecl *Impl) {
+   // If the method contains associated types in its signature, we need to
+   // create a stub method that converts the concrete types to existential
+   // containers.
+   auto *M = getFunc(Impl);
+
+   if (isa<InitDecl>(Req) || true)
+      return M;
+
+   std::string Name = M->getName();
+   SP.getMangler().mangleProtocolStub(Impl, Name);
+
+   SmallVector<il::Argument*, 4> Args;
+   Args.reserve(Req->getArgs().size());
+
+   for (auto *Arg : Req->getArgs()) {
+      QualType argType = Arg->getType();
+      if (argType->isEmptyTupleType())
+         continue;
+
+      if (Arg->hasAttribute<AutoClosureAttr>()) {
+         argType = SP.getContext().getLambdaType(argType, { });
+      }
+
+      if (Arg->getConvention() == ArgumentConvention::MutableRef
+          && !argType->isMutableBorrowType()) {
+         argType = SP.getContext().getMutableBorrowType(argType);
+      }
+      else if (Arg->getConvention() == ArgumentConvention::ImmutableRef) {
+         argType = SP.getContext().getReferenceType(argType);
+      }
+
+
+      auto A = Builder.CreateArgument(Arg->getType(), Arg->getConvention());
+      A->setSourceLoc(Arg->getSourceLoc());
+      A->setSelf(Arg->isSelf());
+
+      Args.push_back(A);
+   }
+
+   QualType RetTy;
+   if (Req->getReturnType()->isEmptyTupleType()) {
+      RetTy = VoidTy;
+   }
+   else {
+      RetTy = Req->getReturnType();
+   }
+
+   il::Method *Stub = Builder.CreateMethod(Name, RetTy, Args,
+                                           Req->isStatic(), false,
+                                           Req->throws(), false, false,
+                                           Impl->getSourceLoc());
+
+   Stub->addDefinition();
+   Stub->setStructReturn(SP.NeedsStructReturn(Req->getReturnType()));
+   Stub->setAsync(Req->isAsync());
+
+   InsertPointRAII IPR(*this, Stub->getEntryBlock());
+//   auto It = Stub->getEntryBlock()->arg_begin();
+
+   Builder.SetDebugLoc(Impl->getSourceLoc());
+
+   // FIXME
+
+//   SmallVector<il::Value*, 4> CallArgs;
+//   CallArgs.reserve(Req->getArgs().size());
+//
+//   for (auto *Arg : Impl->getArgs()) {
+//      CallArgs.push_back(Convert(&*It++, Arg->getType(), true));
+//   }
+//
+//   auto *RetVal = Builder.CreateCall(M, CallArgs);
+//   if (Stub->getReturnType()->isVoidType()) {
+//      Builder.CreateRetVoid();
+//   }
+//   else {
+//      Builder.CreateRet(Convert(RetVal, Req->getReturnType(), true));
+//   }
+
+   Builder.CreateUnreachable();
+   return Stub;
+}
+
 il::GlobalVariable *ILGenPass::GeneratePTable(RecordDecl *R, ProtocolDecl *P)
 {
    SmallVector<il::Constant*, 8> Impls;
@@ -493,7 +596,12 @@ il::GlobalVariable *ILGenPass::GeneratePTable(RecordDecl *R, ProtocolDecl *P)
       }
 
       auto *MethodImpl = cast<MethodDecl>(Impl);
-      auto *ILFn = getFunc(MethodImpl);
+
+      // Make sure the implementation is instantiated.
+      MethodImpl = cast<MethodDecl>(
+         SP.maybeInstantiateMemberFunction(MethodImpl, P));
+
+      auto *ILFn = createProtocolRequirementImplStub(M, MethodImpl);
       ILFn->setPtableOffset(Offset);
 
       SP.addProtocolImplementation(MethodImpl);
@@ -1178,6 +1286,22 @@ QueryResult GetILTypeInfoQuery::run()
 
    auto &ILGen = sema().getILGen();
 
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      sema().getMangler().mangleTypeInfo(T, OS);
+   }
+
+   auto GV = ILGen.Builder.CreateGlobalVariable(
+      QC.Context.getRecordType(QC.Sema->getTypeInfoDecl()), true, nullptr, s,
+      Loc);
+
+   if (!T->isRecordType()) {
+      GV->setLinkage(GlobalVariable::InternalLinkage);
+   }
+
+   finish(GV);
+
    ILGenPass::ModuleRAII MR(ILGen, Mod);
    Constant *TI;
 
@@ -1192,28 +1316,25 @@ QueryResult GetILTypeInfoQuery::run()
       }
    }
 
-   std::string s;
-   {
-      llvm::raw_string_ostream OS(s);
-      sema().getMangler().mangleTypeInfo(T, OS);
-   }
-
-   auto GV = ILGen.Builder.CreateGlobalVariable(TI, true, s, Loc);
-   if (!T->isRecordType())
-      GV->setLinkage(GlobalVariable::InternalLinkage);
-
+   GV->setInitializer(TI);
    return finish(GV);
 }
 
 il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
 {
+   // FIXME
+   if (ty->isProtocol()) {
+      ty = SP.Context.getExistentialType(ty);
+   }
+
    il::GlobalVariable *GV;
    if (SP.QC.GetILTypeInfo(GV, ty)) {
       return nullptr;
    }
 
-   if (auto M = Builder.getModule())
+   if (auto M = Builder.getModule()) {
       return GV->getDeclarationIn(M);
+   }
 
    return GV;
 }
@@ -1268,6 +1389,8 @@ QueryResult CreateILRecordTypeInfoQuery::run()
    // Deinitializer.
    Constant *deinit;
    if (auto *DeinitFn = R->getDeinitializer()) {
+      DeinitFn = QC.Sema->maybeInstantiateTemplateMember(R, DeinitFn);
+
       il::Function *ILFn;
       if (QC.GetILFunction(ILFn, DeinitFn)) {
          return fail();
@@ -1314,6 +1437,9 @@ QueryResult CreateILBasicTypeInfoQuery::run()
    if (QC.GetBuiltinRecord(TypeInfoDecl, GetBuiltinRecordQuery::TypeInfo)) {
       return fail();
    }
+   if (QC.DeclareSelfAlias(TypeInfoDecl)) {
+      return fail();
+   }
 
    // Base class pointer.
    auto baseClass = Builder.GetConstantNull(
@@ -1334,10 +1460,16 @@ QueryResult CreateILBasicTypeInfoQuery::run()
                            GetBuiltinRecordQuery::ValueWitnessTable)) {
       return fail();
    }
+   if (QC.DeclareSelfAlias(ValueWitnessDecl)) {
+      return fail();
+   }
 
    RecordDecl *ProtocolConformanceDecl;
    if (QC.GetBuiltinRecord(ProtocolConformanceDecl,
                            GetBuiltinRecordQuery::ProtocolConformance)) {
+      return fail();
+   }
+   if (QC.DeclareSelfAlias(TypeInfoDecl)) {
       return fail();
    }
 
@@ -1380,9 +1512,15 @@ il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl *R)
                              CopyClass);
       }
    }
-   else if (auto *Copy = R->getCopyFn()) {
-      SP.QC.GetILFunction(reinterpret_cast<il::Function*&>(CopyFn),
-                          Copy);
+   else {
+      MethodDecl *CopyDecl;
+      if (!SP.QC.GetImplicitConformance(CopyDecl, R,
+                                        ImplicitConformanceKind::Copyable)) {
+         if (CopyDecl) {
+            SP.QC.GetILFunction(reinterpret_cast<il::Function*&>(CopyFn),
+                                CopyDecl);
+         }
+      }
    }
 
    if (!CopyFn) {
@@ -1395,14 +1533,17 @@ il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl *R)
    il::Constant *DeinitFn = nullptr;
    if (isa<ClassDecl>(R)) {
       auto *Decl = SP.getAtomicReleaseDecl();
-      SP.ensureDeclared(Decl);
 
-      DeinitFn = getFunc(Decl);
+      il::Function *Deinit;
+      if (!SP.QC.GetILFunction(Deinit, Decl)) {
+         DeinitFn = Deinit;
+      }
    }
    else if (auto *Deinit = R->getDeinitializer()) {
-      DeinitFn = getFunc(Deinit);
+      DeinitFn = getFunc(SP.maybeInstantiateTemplateMember(R, Deinit));
    }
-   else {
+
+   if (!DeinitFn) {
       DeinitFn = Builder.GetConstantNull(DeinitializerTy);
    }
 
@@ -1434,6 +1575,15 @@ il::Constant* ILGenPass::CreateProtocolConformances(RecordDecl *R)
             SP.getProtocolConformanceDecl())));
    }
 
+   // Create a null marker protcol conformance to indicate the end of the array.
+   auto *NullTI = Builder.GetConstantNull(Context.getPointerType(
+      Context.getRecordType(SP.getTypeInfoDecl())));
+   auto *NullVT = Builder.GetConstantNull(Int8PtrTy->getPointerTo(Context));
+
+   Conformances.push_back(
+      Builder.GetConstantStruct(SP.getProtocolConformanceDecl(),
+                                { NullTI, NullVT }));
+
    auto *Arr = Builder.GetConstantArray(Conformances);
    auto *GV = Builder.CreateGlobalVariable(Arr, true);
 
@@ -1444,7 +1594,8 @@ il::Constant* ILGenPass::CreateProtocolConformances(RecordDecl *R)
 il::ConstantStruct* ILGenPass::CreateProtocolConformance(RecordDecl *R,
                                                          ProtocolDecl *P) {
    // Type info reference.
-   auto *TI = GetOrCreateTypeInfo(Context.getRecordType(P));
+   auto *TI = GetOrCreateTypeInfo(
+      Context.getExistentialType(QualType(Context.getRecordType(P))));
 
    // VTable.
    auto *VTable = ConstantExpr::getBitCast(

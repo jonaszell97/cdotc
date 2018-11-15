@@ -455,13 +455,15 @@ llvm::ArrayRef<Value*> CallInst::getArgs() const
 
 VirtualCallInst::VirtualCallInst(Value *VTableOwner,
                                  FunctionType *FnTy,
+                                 il::GlobalVariable *ProtocolTypeInfo,
                                  unsigned Offset,
                                  ArrayRef<Value *> args,
                                  BasicBlock *parent)
    : CallInst(VirtualCallInstID, VTableOwner, FnTy, args, parent),
-     FnTy(FnTy), Offset(Offset)
+     FnTy(FnTy), ProtocolTypeInfo(ProtocolTypeInfo), Offset(Offset)
 {
-
+   if (ProtocolTypeInfo)
+      ProtocolTypeInfo->addUse(this);
 }
 
 LambdaCallInst::LambdaCallInst(Value *lambda,
@@ -512,12 +514,12 @@ Value* InvokeInst::getCallee() const
 
 Function *InvokeInst::getCalledFunction() const
 {
-   return support::cast<Function>(Operands[numOperands - 1]);
+   return support::dyn_cast<Function>(Operands[numOperands - 1]);
 }
 
 Method *InvokeInst::getCalledMethod() const
 {
-   return support::cast<Method>(Operands[numOperands - 1]);
+   return support::dyn_cast<Method>(Operands[numOperands - 1]);
 }
 
 llvm::ArrayRef<Value*> InvokeInst::getArgs() const
@@ -526,16 +528,19 @@ llvm::ArrayRef<Value*> InvokeInst::getArgs() const
 }
 
 VirtualInvokeInst::VirtualInvokeInst(il::Value *VTableOwner,
-                                     FunctionType *FnTy, unsigned Offset,
+                                     FunctionType *FnTy,
+                                     il::GlobalVariable *ProtocolTypeInfo,
+                                     unsigned Offset,
                                      ArrayRef<il::Value *> args,
                                      il::BasicBlock *NormalContinuation,
                                      il::BasicBlock *LandingPad,
                                      il::BasicBlock *parent)
    : InvokeInst(VirtualInvokeInstID, VTableOwner, args, NormalContinuation,
                 LandingPad, parent),
-     FnTy(FnTy), Offset(Offset)
+     FnTy(FnTy), ProtocolTypeInfo(ProtocolTypeInfo), Offset(Offset)
 {
-
+   if (ProtocolTypeInfo)
+      ProtocolTypeInfo->addUse(this);
 }
 
 IntrinsicCallInst::IntrinsicCallInst(Intrinsic id,

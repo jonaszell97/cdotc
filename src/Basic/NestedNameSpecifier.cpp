@@ -229,14 +229,10 @@ bool NestedNameSpecifier::isDependent() const
    case NestedNameSpecifier::Type:
       return getType()->isDependentType();
    case NestedNameSpecifier::AssociatedType: {
-      auto *AT = getAssociatedType();
-      if (!AT->isImplementation())
-         return true;
-
-      return AT->getActualType()->isDependentType();
+      return false;
    }
    case NestedNameSpecifier::TemplateParam:
-      return getParam()->isInUnboundedTemplate();
+      return true;
    }
 }
 

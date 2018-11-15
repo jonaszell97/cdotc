@@ -668,6 +668,16 @@ protected:
       return true;
    }
 
+   bool visitExistentialTypeExpr(ExistentialTypeExpr* Expr)
+   {
+      for (auto &Ty : Expr->getExistentials())
+         if (auto E = Ty.getTypeExpr())
+            if (!visit(E))
+               return true;
+
+      return true;
+   }
+
    bool visitArrayTypeExpr(ArrayTypeExpr* Expr)
    {
       if (auto E = Expr->getElementTy().getTypeExpr())

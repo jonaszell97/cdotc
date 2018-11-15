@@ -36,20 +36,29 @@ public:
    struct EmptyShell {};
 
    enum Flags: uint32_t {
-      TypeDependent          = 1u,
-      ValueDependent         = TypeDependent  << 1u,
-      HadError               = ValueDependent << 1u,
-      SemanticallyChecked    = HadError << 1u,
-      GlobalInitializer      = SemanticallyChecked  << 1u,
-      ContainsUnexpandedPack = GlobalInitializer << 1u,
-      Ignored                = ContainsUnexpandedPack << 1u,
-      Unsafe                 = Ignored << 1u,
-      SpecializationCandidate = Unsafe << 1u,
-      ContainsGenericParam   = SpecializationCandidate << 1u,
-      ContainsAssociatedType = ContainsGenericParam << 1u,
+      TypeDependent          = 0x1,
+      ContainsGenericParam   = 0x2,
+      ContainsAssociatedType = 0x4,
+      ContainsUnexpandedPack = 0x8,
+      ValueDependent         = 0x10,
+      HadError               = 0x20,
+      SemanticallyChecked    = 0x40,
+      GlobalInitializer      = 0x80,
+      Ignored                = 0x100,
+      Unsafe                 = 0x200,
+      SpecializationCandidate = 0x300,
 
       _lastFlag         = SpecializationCandidate,
    };
+
+   static_assert((int)ContainsGenericParam == (int)TypeProperties::ContainsGenericType,
+                 "type and statement flags must match!");
+
+   static_assert((int)ContainsAssociatedType == (int)TypeProperties::ContainsAssociatedType,
+                 "type and statement flags must match!");
+
+   static_assert((int)ContainsUnexpandedPack == (int)TypeProperties::ContainsUnexpandedParameterPack,
+                 "type and statement flags must match!");
 
    static_assert(_lastFlag <= (1 << 23), "too many flags!");
 
@@ -85,6 +94,8 @@ public:
    {
       setFlag(ValueDependent, valueDependant);
    }
+
+   bool needsInstantiation() const;
 
    bool containsGenericParam() const { return flagIsSet(ContainsGenericParam); }
    void setContainsGenericParam(bool b) { setFlag(ContainsGenericParam, b); }

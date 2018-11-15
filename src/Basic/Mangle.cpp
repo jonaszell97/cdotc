@@ -104,7 +104,7 @@ public:
    void mangleFunctionEncoding(const CallableDecl *D);
    void mangleSeqID(unsigned SeqID);
    void mangleName(const NamedDecl *D);
-   void mangleType(QualType T);
+   void mangleType(CanType T);
 
    void manglePrefix(const DeclContext *DC, bool NoFunction = false);
    void manglePrefix(const DeclContext *DC,
@@ -444,6 +444,8 @@ void ItaniumLikeMangler::mangleUnqualifiedName(const NamedDecl *ND,
    case DeclarationName::ClosureArgumentName:
       OS << "Ca" << Name.getClosureArgumentIdx();
       break;
+   case DeclarationName::UniqueName:
+      break;
    case DeclarationName::SubscriptName:
       switch (Name.getSubscriptKind()) {
       case DeclarationName::SubscriptKind::Getter:
@@ -659,7 +661,7 @@ static bool isTypeSubstitutable(Qualifiers Quals, QualType Ty)
    return Ty->getTypeID() != Type::BuiltinTypeID;
 }
 
-void ItaniumLikeMangler::mangleType(QualType T)
+void ItaniumLikeMangler::mangleType(CanType T)
 {
    bool isSubstitutable = isTypeSubstitutable(T.getQuals(), T);
    if (isSubstitutable && mangleSubstitution(T))
@@ -926,6 +928,20 @@ void ItaniumLikeMangler::mangleType(const BoxType *T)
    mangleType(T->getBoxedType());
 }
 
+void ItaniumLikeMangler::mangleType(const cdot::ExistentialType *T)
+{
+   OS << "Ex";
+   if (T->getExistentials().size() == 0) {
+      //   <builtin-type> ::= v   # void
+      OS << 'v';
+      return;
+   }
+
+   for (auto &Param : T->getExistentials()) {
+      mangleType(Param);
+   }
+}
+
 void ItaniumLikeMangler::mangleType(const TokenType*)
 {
    OS << "To";
@@ -947,8 +963,12 @@ void ItaniumLikeMangler::mangleType(const GenericType *T)
 
 void ItaniumLikeMangler::mangleType(const AssociatedType *T)
 {
-   assert(T->getDecl()->isImplementation() && "mangling protocol method!");
-   mangleType(T->getActualType());
+   if (T->getDecl()->isImplementation()) {
+      mangleType(T->getActualType());
+   }
+   else {
+      llvm_unreachable("should not be mangled");
+   }
 }
 
 void ItaniumLikeMangler::mangleType(const TupleType *T)
@@ -1219,6 +1239,13 @@ void SymbolMangler::manglePTable(const RecordDecl *R,
    OS << "_CTP";
    Mangler.mangleName(R);
    Mangler.mangleName(P);
+}
+
+void SymbolMangler::mangleProtocolStub(const cdot::ast::NamedDecl *D,
+                                       std::string &Buf) const {
+   // Replace _C with _CPs
+   assert(Buf[0] == '_' && Buf[1] == 'C');
+   Buf.insert(2, "Ps");
 }
 
 void SymbolMangler::mangleTypeInfo(const QualType &T,

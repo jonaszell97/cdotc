@@ -19,7 +19,6 @@
 #include "Basic/Mangle.h"
 #include "Basic/Precedence.h"
 #include "BuiltinCandidateBuilder.h"
-#include "ConformanceChecker.h"
 #include "Driver/Compiler.h"
 #include "CTFE/StaticEvaluator.h"
 #include "Lookup.h"
@@ -79,10 +78,10 @@ public:
    void pushDeclContext(DeclContext *Ctx);
    void popDeclContext();
 
-   bool implicitlyCastableTo(QualType from, QualType to);
-   ConversionSequenceBuilder getConversionSequence(QualType from, QualType to);
+   bool implicitlyCastableTo(CanType from, CanType to);
+   ConversionSequenceBuilder getConversionSequence(CanType from, CanType to);
    void getConversionSequence(ConversionSequenceBuilder &Seq,
-                              QualType from, QualType to);
+                              CanType from, CanType to);
 
    // -1 indicates compatible signatures, positive values are error codes to
    // be used in diagnostics
@@ -155,7 +154,12 @@ public:
    ExprResult visitExpr(StmtOrDecl DependentStmt, Expression *E)
    {
       auto res = visit(E, true);
-      DependentStmt.copyStatusFlags(E);
+      if (res) {
+         DependentStmt.copyStatusFlags(res.get());
+      }
+      else {
+         DependentStmt.copyStatusFlags(E);
+      }
 
       return res;
    }
@@ -164,7 +168,12 @@ public:
    ExprResult getRValue(StmtOrDecl DependentStmt, Expression *E)
    {
       auto res = visit(E, true);
-      DependentStmt.copyStatusFlags(E);
+      if (res) {
+         DependentStmt.copyStatusFlags(res.get());
+      }
+      else {
+         DependentStmt.copyStatusFlags(E);
+      }
 
       if (!res)
          return ExprError();
@@ -182,7 +191,12 @@ public:
       E->setContextualType(expectedType);
 
       auto res = visit(E, true);
-      DependentStmt.copyStatusFlags(E);
+      if (res) {
+         DependentStmt.copyStatusFlags(res.get());
+      }
+      else {
+         DependentStmt.copyStatusFlags(E);
+      }
 
       if (!res)
          return ExprError();
@@ -198,7 +212,12 @@ public:
       E->setContextualType(contextualType);
 
       auto res = visit(E, true);
-      DependentStmt.copyStatusFlags(E);
+      if (res) {
+         DependentStmt.copyStatusFlags(res.get());
+      }
+      else {
+         DependentStmt.copyStatusFlags(E);
+      }
 
       return res;
    }
@@ -207,7 +226,12 @@ public:
    StmtResult visitStmt(StmtOrDecl DependentStmt, Statement *Stmt)
    {
       auto res = visit(Stmt, true);
-      DependentStmt.copyStatusFlags(Stmt);
+      if (res) {
+         DependentStmt.copyStatusFlags(res.get());
+      }
+      else {
+         DependentStmt.copyStatusFlags(Stmt);
+      }
 
       return res;
    }
@@ -216,7 +240,12 @@ public:
    DeclResult visitStmt(StmtOrDecl DependentStmt, Decl *D)
    {
       auto res = visit(D, true);
-      DependentStmt.copyStatusFlags(D);
+      if (res) {
+         DependentStmt.copyStatusFlags(res.get());
+      }
+      else {
+         DependentStmt.copyStatusFlags(D);
+      }
 
       return res;
    }
@@ -277,6 +306,7 @@ public:
    void ActOnMethodDecl(MethodDecl *M);
    void ActOnInitDecl(InitDecl *I);
    void ActOnDeinitDecl(DeinitDecl *D);
+   void ActOnSubscriptDecl(SubscriptDecl *D);
 
    void ActOnTemplateParamDecl(DeclContext &Ctx, TemplateParamDecl *P);
 
@@ -514,6 +544,7 @@ public:
    ExprResult visitPointerTypeExpr(PointerTypeExpr *Expr);
    ExprResult visitReferenceTypeExpr(ReferenceTypeExpr *Expr);
    ExprResult visitOptionTypeExpr(OptionTypeExpr *Expr);
+   ExprResult visitExistentialTypeExpr(ExistentialTypeExpr *Expr);
 
    StmtResult visitNullStmt(NullStmt *stmt);
    DeclResult visitModuleDecl(ModuleDecl *Mod);
@@ -735,13 +766,13 @@ public:
                                 const sema::MultiLevelFinalTemplateArgList& TAs,
                                 StmtOrDecl PointOfInstantiation);
 
-   QualType resolveNestedNameSpecToType(NestedNameSpecifierWithLoc *Name,
-                                        bool Diagnose = true,
-                                        StmtOrDecl SOD = {});
+   /// Check whether we have additional information about a type in the
+   /// current context, and return the adapted type.
+   Expression *checkCurrentTypeCapabilities(Expression *E);
+   QualType checkCurrentTypeCapabilities(QualType T,
+                                         ExtensionDecl *Ext = nullptr);
 
-   NamedDecl *resolveNestedNameSpecToDecl(NestedNameSpecifierWithLoc *Name,
-                                          bool Diagnose = true,
-                                          StmtOrDecl SOD = {});
+   bool warnOnUnusedResult(Expression *E) const;
 
    template<class ...Args>
    void diagnose(Statement *Stmt, diag::MessageKind msg, Args const&... args)
@@ -1127,6 +1158,9 @@ public:
 
    size_t getNumGlobals() const { return numGlobals; }
 
+   // For setting some quick access flags to compilation options.
+   friend CompilerInstance;
+
 private:
    /// Pointer to the compiler instance this Sema object belongs to.
    CompilerInstance *compilationUnit;
@@ -1173,6 +1207,10 @@ private:
 
    /// Set of method declarations that fulfill protocol requirements.
    llvm::SmallVector<MethodDecl*, 4> ProtocolImplementations;
+
+   /// True iff runtime generics are enabled. Will be set by the
+   /// CompilerInstance.
+   bool RuntimeGenerics = false;
 
 public:
    /// Dependency graph that tracks struct / enum / tuple layouts and finds
@@ -1398,58 +1436,17 @@ private:
 
    /// Builtin declarations.
 
-   Module *StdModule     = nullptr;
-   Module *PreludeModule = nullptr;
-   Module *BuiltinModule = nullptr;
-   Module *ReflectModule = nullptr;
-   Module *SysModule     = nullptr;
-   Module *RuntimeModule = nullptr;
-   Module *AsyncModule   = nullptr;
-   Module *TestModule    = nullptr;
-
-   FunctionDecl *PureVirtual = nullptr;
-   FunctionDecl *CopyClass   = nullptr;
-   FunctionDecl *AtomicRelease = nullptr;
-
-   StructDecl  *ArrayDecl     = nullptr;
-   StructDecl *ArrayViewDecl  = nullptr;
-   ClassDecl  *DictionaryDecl = nullptr;
-   StructDecl  *StringDecl    = nullptr;
-   StructDecl *StringViewDecl = nullptr;
-   EnumDecl   *OptionDecl     = nullptr;
-   StructDecl *BoxDecl        = nullptr;
-   ClassDecl *PromiseDecl     = nullptr;
-   ClassDecl *FutureDecl      = nullptr;
-   StructDecl *CoroHandleDecl = nullptr;
-
-   StructDecl *TypeInfoDecl             = nullptr;
-   StructDecl *ValueWitnessTableDecl    = nullptr;
-   StructDecl *ProtocolConformanceDecl  = nullptr;
-   StructDecl *ExistentialContainerDecl = nullptr;
-
    EnumDecl   *GenericArgumentValueDecl = nullptr;
    StructDecl *GenericArgumentDecl      = nullptr;
    StructDecl *GenericEnvironmentDecl   = nullptr;
 
-   ProtocolDecl *AnyDecl                 = nullptr;
-   ProtocolDecl *EquatableDecl           = nullptr;
-   ProtocolDecl *HashableDecl            = nullptr;
-   ProtocolDecl *CopyableDecl            = nullptr;
-   ProtocolDecl *MoveOnlyDecl            = nullptr;
-   ProtocolDecl *ImplicitlyCopyableDecl  = nullptr;
-   ProtocolDecl *StringRepresentableDecl = nullptr;
-   ProtocolDecl *PersistableDecl         = nullptr;
-   ProtocolDecl *AwaiterDecl             = nullptr;
-   ProtocolDecl *AwaitableDecl           = nullptr;
-
+public:
    enum class InitializableByKind {
-      Integer, Float, Char, Bool, String, Array,
+      Integer = 0, Float, Char, Bool, String, Array, _Last
    };
 
-   ProtocolDecl *InitializableBy[6] = { nullptr };
-
-   PrecedenceGroupDecl *DefaultPrecedenceGroup = nullptr;
-
+private:
+   ProtocolDecl *InitializableBy[(int)InitializableByKind::_Last] = { nullptr };
    InitDecl *StringInit = nullptr;
    MethodDecl *StringPlusEqualsString = nullptr;
 
@@ -1778,11 +1775,13 @@ public:
 
    /// -1 indicates that the type cannot be returned, other values are the
    /// respective conversion penalty, if any
-   int ExprCanReturn(Expression *E, QualType Ty);
+   int ExprCanReturn(Expression *E, CanType Ty);
+   int ExprCanReturnImpl(Expression *E, CanType Ty);
+
    QualType ResolveContextualLambdaExpr(LambdaExpr *E, QualType Ty);
    QualType GetDefaultExprType(Expression *E);
 
-   void visitTypeDependentContextualExpr(Expression *E);
+   ExprResult visitTypeDependentContextualExpr(Expression *E);
 
    DeclResult doDestructure(DestructuringDecl *D,
                             QualType DestructuredTy);
@@ -1804,7 +1803,8 @@ public:
    NamedDecl *maybeInstantiateTemplateMemberImpl(DeclContext *LookupCtx,
                                                  NamedDecl *Member);
 
-   MethodDecl *maybeInstantiateMemberFunction(MethodDecl *M, StmtOrDecl Caller);
+   CallableDecl *maybeInstantiateMemberFunction(CallableDecl *M,
+                                               StmtOrDecl Caller);
 
    MethodDecl *InstantiateMethod(RecordDecl *R, StringRef Name, StmtOrDecl SOD);
    MethodDecl *InstantiateProperty(RecordDecl *R, StringRef Name,
@@ -1865,6 +1865,14 @@ public:
                                        SourceLocation DiagLoc = {},
                                        SourceRange DiagRange = {});
 
+   void checkDeclaredVsGivenType(Decl *DependentDecl,
+                                 Expression *&val,
+                                 const SourceType &ST,
+                                 QualType DeclaredType,
+                                 QualType GivenType,
+                                 bool IsLet,
+                                 SourceLocation EqualsLoc);
+
    // don't allow accidentally passing two QualTypes
    Expression *implicitCastIfNecessary(Expression*, QualType, QualType,
                                        diag::MessageKind
@@ -1876,10 +1884,11 @@ public:
    void toRValue(Expression *Expr);
 
 public:
-   CallableDecl*checkFunctionReference(Expression *E,
-                                       DeclarationName funcName,
-                                       MultiLevelLookupResult &MultiLevelResult,
-                                       llvm::ArrayRef<Expression*>templateArgs);
+   CallableDecl* checkFunctionReference(
+                                 Expression *E,
+                                 DeclarationName funcName,
+                                 const MultiLevelLookupResult &MultiLevelResult,
+                                 llvm::ArrayRef<Expression*> templateArgs);
 
    struct AliasResult {
       explicit AliasResult(AliasDecl *Alias)
@@ -1936,7 +1945,7 @@ public:
       AliasDecl *Result;
    };
 
-   AliasResult checkAlias(MultiLevelLookupResult &MultiLevelResult,
+   AliasResult checkAlias(const MultiLevelLookupResult &MultiLevelResult,
                           llvm::ArrayRef<Expression*> templateArgs,
                           Expression *E);
 
@@ -1969,11 +1978,13 @@ private:
 
    ExprResult HandleStaticTypeCall(CallExpr *Call,
                                    TemplateArgListExpr *ArgExpr,
-                                   Type *Ty);
+                                   CanType Ty);
+
    ExprResult HandleConstructorCall(CallExpr *Call,
                                     TemplateArgListExpr *ArgExpr,
                                     RecordDecl *R,
-                                    TemplateParamDecl *Param = nullptr);
+                                    TemplateParamDecl *Param = nullptr,
+                                    AssociatedTypeDecl *AT = nullptr);
 
 public:
    void diagnoseMemberNotFound(DeclContext *Ctx,
@@ -2028,6 +2039,10 @@ public:
    }
 
 private:
+   // A namespace to which the compiler can add builtin declarations without
+   // conflicting with user-defined types.
+   NamespaceDecl *PrivateNamespace = nullptr;
+
    // Builtin namespace
    const IdentifierInfo *BuiltinIdents[64];
    bool BuiltinIdentsInitialized = false;
@@ -2047,6 +2062,8 @@ public:
    ExprResult HandleReflectionAlias(AliasDecl *Al, Expression *Expr);
    ExprResult HandleReflectionCall(CallableDecl *C);
    ExprResult HandleBuiltinAlias(AliasDecl *Al, Expression *Expr);
+
+   NamespaceDecl *getPrivateNamespace();
 
    friend class ReflectionBuilder;
    friend class NameBinder;

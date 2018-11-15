@@ -67,8 +67,8 @@ UsingDecl::UsingDecl(SourceRange Loc,
                      llvm::ArrayRef<DeclarationName> NestedImportName,
                      bool wildCardImport)
    : NamedDecl(UsingDeclID, Access, Name),
-     Loc(Loc), NumSpecifierNames((unsigned)NestedImportName.size()),
-     IsWildCard(wildCardImport)
+     Loc(Loc), IsWildCard(wildCardImport),
+     NumSpecifierNames((unsigned)NestedImportName.size())
 {
    std::copy(NestedImportName.begin(), NestedImportName.end(),
              getTrailingObjects<DeclarationName>());
@@ -90,7 +90,7 @@ UsingDecl* UsingDecl::Create(ASTContext &C,
 
 UsingDecl::UsingDecl(EmptyShell, unsigned N)
    : NamedDecl(UsingDeclID, AccessSpecifier::Default, DeclarationName()),
-     NumSpecifierNames(N), IsWildCard(false)
+   IsWildCard(false), NumSpecifierNames(N)
 {}
 
 UsingDecl *UsingDecl::CreateEmpty(ASTContext &C, unsigned N)
@@ -297,7 +297,8 @@ VarDecl::VarDecl(DeclKind id,
      VarOrLetLoc(VarOrLetLoc), ColonLoc(ColonLoc),
      type(type), Value(value),
      Const(isConst), CanElideCopy(false), Variadic(false), Captured(false),
-     IsMovedFrom(false), HasTemplate(false)
+     IsMovedFrom(false), HasTemplate(false),
+     InferredType(type.isResolved() && type->isAutoType())
 {
 
 }
@@ -726,6 +727,18 @@ bool CallableDecl::willHaveDefinition() const
    return false;
 }
 
+void CallableDecl::setBodyTemplate(CallableDecl *T)
+{
+   if (T && T->getBodyTemplate()) {
+      assert(!T->getBodyTemplate()->getBodyTemplate()
+         && "more than one level of body template");
+      BodyTemplate = T->getBodyTemplate();
+   }
+   else {
+      BodyTemplate = T;
+   }
+}
+
 KnownFunction CallableDecl::getKnownFnKind()
 {
    checkKnownFnKind();
@@ -989,24 +1002,17 @@ RecordDecl::RecordDecl(DeclKind typeID,
                        ASTVector<TemplateParamDecl*> &&templateParams)
    : NamedDecl(typeID, access, Name),
      DeclContext(typeID),
-     KeywordLoc(KeywordLoc), conformanceTypes(move(conformanceTypes)),
-     templateParams(move(templateParams)),
-     manualAlignment(false), opaque(false),
-     implicitlyEquatable(false), implicitlyHashable(false),
-     implicitlyCopyable(false), implicitlyStringRepresentable(false),
-     NeedsRetainOrRelease(false), ExplicitMemberwiseInit(false)
+     KeywordLoc(KeywordLoc),
+     ExplicitMemberwiseInit(false),
+     conformanceTypes(move(conformanceTypes)),
+     templateParams(move(templateParams))
 {}
 
 RecordDecl::RecordDecl(EmptyShell E,
                        DeclKind typeID)
    : NamedDecl(typeID, AccessSpecifier::Default, {}),
      DeclContext(typeID),
-     KeywordLoc(), conformanceTypes(),
-     templateParams(),
-     manualAlignment(false), opaque(false),
-     implicitlyEquatable(false), implicitlyHashable(false),
-     implicitlyCopyable(false), implicitlyStringRepresentable(false),
-     NeedsRetainOrRelease(false), ExplicitMemberwiseInit(false)
+     ExplicitMemberwiseInit(false)
 {
 
 }
@@ -1043,8 +1049,8 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
       auto EDecl = cast<EnumDecl>(this);
       EDecl->Unpopulated = false;
 
-      if (E->getArgs().size() > EDecl->maxAssociatedTypes)
-         EDecl->maxAssociatedTypes = E->getArgs().size();
+      if (E->getArgs().size() > EDecl->maxAssociatedValues)
+         EDecl->maxAssociatedValues = E->getArgs().size();
 
       break;
    }
@@ -1071,8 +1077,9 @@ CDOT_RECORD_IS_X(Protocol)
 
 bool RecordDecl::isRawEnum() const
 {
-   if (auto E = dyn_cast<EnumDecl>(this))
-      return E->getMaxAssociatedTypes() == 0;
+   if (auto E = dyn_cast<EnumDecl>(this)) {
+      return E->getMaxAssociatedValues() == 0;
+   }
 
    return false;
 }
@@ -1192,28 +1199,6 @@ FieldDecl* RecordDecl::getField(DeclarationName name)
    }
 
    return F;
-}
-
-bool RecordDecl::isNonUnionStruct() const
-{
-   switch (kind) {
-   case StructDeclID:
-   case ClassDeclID:
-      return true;
-   default:
-      return false;
-   }
-}
-
-StructDecl* RecordDecl::asNonUnionStruct() const
-{
-   switch (kind) {
-   case StructDeclID:
-   case ClassDeclID:
-      return cast<StructDecl>(const_cast<RecordDecl*>(this));
-   default:
-      return nullptr;
-   }
 }
 
 StructDecl::StructDecl(AccessSpecifier access,
@@ -1446,7 +1431,9 @@ ExtensionDecl *ExtensionDecl::Create(ASTContext &C,
    auto Size = totalSizeToAlloc<SourceType>(conformanceTypes.size());
    void *Mem = C.Allocate(Size, alignof(ExtensionDecl));
 
-   return new(Mem) ExtensionDecl(access, KeywordLoc, R, move(conformanceTypes));
+   return new(Mem) ExtensionDecl(access, KeywordLoc,
+                                 SourceType(C.getRecordType(R)),
+                                 move(conformanceTypes));
 }
 
 ExtensionDecl::ExtensionDecl(EmptyShell, unsigned N)

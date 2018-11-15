@@ -29,7 +29,8 @@ static void instantiateArgumentList(QueryContext &QC, ASTContext &Context,
       }
 
       QualType SubstTy;
-      if (QC.SubstAssociatedTypes(SubstTy, Arg->getType(), Self)) {
+      if (QC.SubstAssociatedTypes(SubstTy, Arg->getType(), Self,
+                                  Arg->getSourceLoc())) {
          SubstTy = Context.getErrorTy();
       }
 
@@ -47,37 +48,37 @@ static void instantiateArgumentList(QueryContext &QC, ASTContext &Context,
 static MethodDecl *InstantiateMethodDefaultImpl(QueryContext &QC,
                                                 MethodDecl *Impl,
                                                 QualType Self) {
-   auto &Context = QC.CI.getContext();
-
    SmallVector<FuncArgDecl*, 4> ArgInsts;
-   instantiateArgumentList(QC, Context, Impl->getArgs(), Self, ArgInsts);
+   instantiateArgumentList(QC, QC.Context, Impl->getArgs(), Self, ArgInsts);
 
    QualType ReturnType;
-   if (QC.SubstAssociatedTypes(ReturnType, Impl->getReturnType(), Self)) {
-      ReturnType = Context.getErrorTy();
+   if (QC.SubstAssociatedTypes(ReturnType, Impl->getReturnType(), Self,
+                               Self->getRecord()->getSourceLoc())) {
+      ReturnType = QC.Context.getErrorTy();
    }
 
    ASTVector<TemplateParamDecl*> TemplateParams(
-      Context, (unsigned)Impl->getTemplateParams().size());
-   TemplateParams.append(Context, Impl->getTemplateParams().begin(),
+      QC.Context, (unsigned)Impl->getTemplateParams().size());
+   TemplateParams.append(QC.Context, Impl->getTemplateParams().begin(),
                          Impl->getTemplateParams().end());
 
    MethodDecl *Inst;
    if (auto *I = dyn_cast<InitDecl>(Impl)) {
-      Inst = InitDecl::Create(Context, Impl->getAccess(), Impl->getSourceLoc(),
+      auto &Tbl = QC.Context.getDeclNameTable();
+      Inst = InitDecl::Create(QC.Context, Impl->getAccess(),Impl->getSourceLoc(),
                               ArgInsts, move(TemplateParams), nullptr,
-                              DeclarationName(), I->isFallible());
+                              Tbl.getConstructorName(Self), I->isFallible());
    }
    else {
-      Inst = MethodDecl::Create(Context, Impl->getAccess(), Impl->getDefLoc(),
+      Inst = MethodDecl::Create(QC.Context, Impl->getAccess(),Impl->getDefLoc(),
                                 Impl->getDeclName(), SourceType(ReturnType),
                                 ArgInsts, move(TemplateParams),
                                 nullptr, Impl->isStatic());
    }
 
-   Inst->setShouldBeSpecialized(true);
    Inst->setBodyTemplate(Impl);
    Inst->setFunctionFlags(Impl->getFunctionFlags());
+   Inst->setInstantiatedFromProtocolDefaultImpl(true);
 
    return Inst;
 }
@@ -96,40 +97,58 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
       MethodDecl *Getter = nullptr;
       MethodDecl *Setter = nullptr;
 
+      SourceType T;
       if (auto *GetterImpl = P->getGetterMethod()) {
          Getter = InstantiateMethodDefaultImpl(QC, GetterImpl, Self);
+
+         if (Getter) {
+            T = Getter->getReturnType();
+         }
       }
       if (auto *SetterImpl = P->getSetterMethod()) {
          Setter = InstantiateMethodDefaultImpl(QC, SetterImpl, Self);
+
+         if (!T && Setter) {
+            T = Setter->getArgs().back()->getType();
+         }
       }
 
       Inst = PropDecl::Create(sema().Context, P->getAccess(),
                               P->getSourceRange(), P->getDeclName(),
-                              SourceType(), P->isStatic(), Getter, Setter);
+                              T, P->isStatic(), Getter, Setter);
    }
    else if (auto *S = dyn_cast<SubscriptDecl>(Impl)) {
       MethodDecl *Getter = nullptr;
       MethodDecl *Setter = nullptr;
 
+      SourceType T;
       if (auto *GetterImpl = S->getGetterMethod()) {
          Getter = InstantiateMethodDefaultImpl(QC, GetterImpl, Self);
+
+         if (Getter) {
+            T = Getter->getReturnType();
+         }
       }
       if (auto *SetterImpl = S->getSetterMethod()) {
          Setter = InstantiateMethodDefaultImpl(QC, SetterImpl, Self);
+
+         if (!T && Setter) {
+            T = Setter->getArgs().back()->getType();
+         }
       }
 
       Inst = SubscriptDecl::Create(sema().Context, P->getAccess(),
-                                   P->getSourceRange(), SourceType(),
-                                   Getter, Setter);
+                                   P->getSourceRange(), T, Getter, Setter);
    }
    else {
       llvm_unreachable("bad protocol default implementation kind!");
    }
 
-   if (!Inst)
+   if (!Inst) {
       return fail();
+   }
 
-   sema().ActOnDecl(Self->getRecord(), Inst);
+   QC.Sema->ActOnDecl(Self->getRecord(), Inst);
    return finish(Inst);
 }
 

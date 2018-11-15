@@ -39,10 +39,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = "/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake"
+CMAKE_COMMAND = "/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake"
 
 # The command to remove a file.
-RM = "/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -E remove -f
+RM = "/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -E remove -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -59,43 +59,43 @@ CMAKE_BINARY_DIR = /Users/Jonas/CDot/cmake-build-debug
 # Special rule for the target install/strip
 install/strip: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip
 
 # Special rule for the target install/strip
 install/strip/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip/fast
 
 # Special rule for the target install/local
 install/local: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing only the local directory..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local
 
 # Special rule for the target install/local
 install/local/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing only the local directory..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local/fast
 
 # Special rule for the target install
 install: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Install the project..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -P cmake_install.cmake
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -P cmake_install.cmake
 .PHONY : install
 
 # Special rule for the target install
 install/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Install the project..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -P cmake_install.cmake
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -P cmake_install.cmake
 .PHONY : install/fast
 
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "No interactive CMake dialog available..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -E echo No\ interactive\ CMake\ dialog\ available.
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -E echo No\ interactive\ CMake\ dialog\ available.
 .PHONY : edit_cache
 
 # Special rule for the target edit_cache
@@ -116,7 +116,7 @@ list_install_components/fast: list_install_components
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
-	"/Applications/CLion EAP.app/Contents/bin/cmake/mac/bin/cmake" -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	"/Applications/CLion 2018.3 EAP.app/Contents/bin/cmake/mac/bin/cmake" -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -5009,6 +5009,33 @@ src/Support/LiteralParser.cpp.s:
 	$(MAKE) -f CMakeFiles/cdot-tblgen.dir/build.make CMakeFiles/cdot-tblgen.dir/src/Support/LiteralParser.cpp.s
 .PHONY : src/Support/LiteralParser.cpp.s
 
+src/Support/Log.o: src/Support/Log.cpp.o
+
+.PHONY : src/Support/Log.o
+
+# target to build an object file
+src/Support/Log.cpp.o:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Support/Log.cpp.o
+.PHONY : src/Support/Log.cpp.o
+
+src/Support/Log.i: src/Support/Log.cpp.i
+
+.PHONY : src/Support/Log.i
+
+# target to preprocess a source file
+src/Support/Log.cpp.i:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Support/Log.cpp.i
+.PHONY : src/Support/Log.cpp.i
+
+src/Support/Log.s: src/Support/Log.cpp.s
+
+.PHONY : src/Support/Log.s
+
+# target to generate assembly for a file
+src/Support/Log.cpp.s:
+	$(MAKE) -f CMakeFiles/cdotc.dir/build.make CMakeFiles/cdotc.dir/src/Support/Log.cpp.s
+.PHONY : src/Support/Log.cpp.s
+
 src/Support/Timer.o: src/Support/Timer.cpp.o
 
 .PHONY : src/Support/Timer.o
@@ -5938,6 +5965,9 @@ help:
 	@echo "... src/Support/LiteralParser.o"
 	@echo "... src/Support/LiteralParser.i"
 	@echo "... src/Support/LiteralParser.s"
+	@echo "... src/Support/Log.o"
+	@echo "... src/Support/Log.i"
+	@echo "... src/Support/Log.s"
 	@echo "... src/Support/Timer.o"
 	@echo "... src/Support/Timer.i"
 	@echo "... src/Support/Timer.s"

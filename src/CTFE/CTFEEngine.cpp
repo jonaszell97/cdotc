@@ -739,7 +739,7 @@ Value EngineImpl::getEnum(QualType ty,
                           EnumCaseDecl *Case,
                           llvm::ArrayRef<Value> CaseVals) {
    auto E = cast<EnumDecl>(ty->getRecord());
-   if (E->getMaxAssociatedTypes() == 0)
+   if (E->getMaxAssociatedValues() == 0)
       return getCtfeValue(Case->getILValue());
 
    auto V = getNullValue(ty);
@@ -1158,24 +1158,9 @@ static bool isStdArray(SemaPass &SP, QualType Ty)
           && R->getSpecializedTemplate() == SP.getArrayDecl();
 }
 
-static bool isArrayView(SemaPass &SP, QualType Ty)
-{
-   if (!Ty->isRecordType())
-      return false;
-
-   auto R = Ty->getRecord();
-   return R->isInstantiation()
-          && R->getSpecializedTemplate() == SP.getArrayViewDecl();
-}
-
 static bool isStdString(SemaPass &SP, QualType Ty)
 {
    return Ty->isRecordType() && Ty->getRecord() == SP.getStringDecl();
-}
-
-static bool isStringView(SemaPass &SP, QualType Ty)
-{
-   return Ty->isRecordType() && Ty->getRecord() == SP.getStringViewDecl();
 }
 
 Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
@@ -1468,23 +1453,6 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
                                       { Str, Size, Size });
    }
 
-   if (isStringView(SP, type)) {
-      auto chars = getStructElement(Val, type, 0).load(SP.getContext()
-                                                         .getUInt8PtrTy());
-
-      auto size = getStructElement(Val, type, 1).load(SP.getContext()
-                                                        .getUIntTy()).getU64();
-
-      auto Str =  ConstantString::get(ILCtx,
-                                      llvm::StringRef(chars.getBuffer(), size));
-      auto Size = ConstantInt::get(ValueType(ILCtx,
-                                            SP.getContext().getUIntTy()), size);
-
-      auto &Builder = SP.getILGen().Builder;
-      return Builder.GetConstantStruct(cast<StructDecl>(type->getRecord()),
-                                       { Str, Size });
-   }
-
    if (isStdArray(SP, type)) {
       auto ElementTy = type->getRecord()->getTemplateArgs().front().getType();
 
@@ -1530,38 +1498,6 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
                                       SP.getILGen().GetOrCreateTypeInfo(type),
                                       { FstElementPtr, EndPtr, EndPtr });
-   }
-
-   if (isArrayView(SP, type)) {
-      auto ElementTy = type->getRecord()->getTemplateArgs().front().getType();
-      auto ElementPtr = SP.getContext().getPointerType(ElementTy);
-
-      auto beginPtr = getStructElement(Val, type, 0).load(ElementPtr);
-      auto ElementSize = TI.getSizeOfType(ElementTy);
-
-      char *ptr = beginPtr.getBuffer();
-      auto size = getStructElement(Val, type, 1)
-         .load(SP.getContext().getUIntTy()).getU64();
-
-      llvm::SmallVector<il::Constant*, 8> vec;
-      for (size_t i = 0; i < size; ++i) {
-         auto V = Value(ptr);
-         vec.emplace_back(toConstant(V.load(ElementTy), ElementTy));
-
-         ptr += ElementSize;
-      }
-
-      auto ArrTy = SP.getContext().getArrayType(ElementTy, vec.size());
-      auto Arr = ConstantArray::get(ValueType(ILCtx, ArrTy), vec);
-      auto GV = new GlobalVariable(ArrTy, true, "",
-                                   SP.getILGen().Builder.getModule(), Arr);
-
-      auto Size = ConstantInt::get(
-         ValueType(ILCtx, SP.getContext().getUIntTy()), size);
-      auto *FirstElPtr = il::ConstantExpr::getBitCast(
-         GV, ElementTy->getPointerTo(SP.getContext()));
-
-      return ConstantStruct::get(ValueType(ILCtx, type), { FirstElPtr, Size });
    }
 
    if (auto Obj = type->asRecordType()) {

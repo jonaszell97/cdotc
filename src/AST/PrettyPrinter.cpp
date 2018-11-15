@@ -518,6 +518,15 @@ void PrettyPrinterImpl::visitOptionTypeExpr(OptionTypeExpr *expr)
    out << "?";
 }
 
+void PrettyPrinterImpl::visitExistentialTypeExpr(ExistentialTypeExpr *expr)
+{
+   unsigned i = 0;
+   for (auto &E : expr->getExistentials()) {
+      if (i++ != 0) out << " & ";
+      visit(E);
+   }
+}
+
 void PrettyPrinterImpl::visitParenExpr(ast::ParenExpr *expr)
 {
    out << "(";
@@ -735,7 +744,7 @@ void PrettyPrinterImpl::visitAssignExpr(AssignExpr *expr)
 void PrettyPrinterImpl::visitTypePredicateExpr(TypePredicateExpr *expr)
 {
    visitExpr(expr->getLHS());
-   out << " : ";
+   out << " is ";
    visitExpr(expr->getRHS());
 }
 

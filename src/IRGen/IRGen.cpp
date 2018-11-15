@@ -25,8 +25,9 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Target/TargetMachine.h>
 
 using namespace cdot::support;
 using namespace cdot::ast;
@@ -34,6 +35,40 @@ using namespace cdot::fs;
 
 namespace cdot {
 namespace il {
+
+namespace {
+
+class IRGenPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
+public:
+   explicit IRGenPrettyStackTraceEntry(const il::Function &F) : F(F) {}
+
+   void print(raw_ostream &OS) const override
+   {
+      OS << "while generating IL for function '" << F.getName() << "'";
+
+      if (!F.isDeclared()) {
+         F.dump();
+         OS << " (dumped function contents)";
+      }
+
+      OS << "\n";
+   }
+
+private:
+   const il::Function &F;
+};
+
+} // anonymous namespace
+
+#ifndef NDEBUG
+
+LLVM_ATTRIBUTE_UNUSED
+void dump(llvm::Function *F)
+{
+   F->print(llvm::outs());
+}
+
+#endif
 
 IRGen::IRGen(CompilerInstance &CI,
              llvm::LLVMContext &Ctx,
@@ -150,11 +185,13 @@ void IRGen::visitModule(Module& ILMod)
    UnwrapExistentialFn = nullptr;
    CopyClassFn = nullptr;
    GetConformanceFn = nullptr;
+   GetProtocolVTableFn = nullptr;
 
    GetGenericArgumentFn = nullptr;
    GetGenericTypeValueFn = nullptr;
 
    DynamicDownCastFn = nullptr;
+   RuntimeFunctions.clear();
 
    auto *TypeInfoDecl = CI.getSema().getTypeInfoDecl();
    auto *ECDecl = CI.getSema().getExistentialContainerDecl();
@@ -592,6 +629,21 @@ llvm::Constant* IRGen::getGetConformanceFn()
    return GetConformanceFn;
 }
 
+llvm::Constant* IRGen::getGetProtocolVTableFn()
+{
+   if (!GetProtocolVTableFn) {
+      GetProtocolVTableFn =
+         M->getOrInsertFunction("_cdot_GetProtocolVTable",
+                                llvm::FunctionType::get(Int8PtrTy,
+                                                        {
+                                                           Int8PtrTy,
+                                                           Int8PtrTy
+                                                        }, false));
+   }
+
+   return GetProtocolVTableFn;
+}
+
 llvm::Constant* IRGen::getGetGenericArgumentFn()
 {
    if (!GetGenericArgumentFn) {
@@ -682,12 +734,12 @@ void IRGen::addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal)
    ValueMap[ILVal] = LLVMVal;
 }
 
-bool IRGen::NeedsStructReturn(QualType Ty)
+bool IRGen::NeedsStructReturn(CanType Ty)
 {
-   return CI.getSema().NeedsStructReturn(Ty);
+   return CI.getSema().NeedsStructReturn(Ty->getDesugaredType());
 }
 
-bool IRGen::PassStructDirectly(QualType Ty)
+bool IRGen::PassStructDirectly(CanType Ty)
 {
    return false;
 //   if (!Ty->isRecordType())
@@ -717,7 +769,8 @@ llvm::StructType* IRGen::getEnumCaseTy(ast::EnumCaseDecl *Decl)
    }
 
    // add padding to get to the same size as the Enum type
-   auto NeededCaseValSize = Decl->getRecord()->getSize()
+   auto NeededCaseValSize =
+      TI.getSizeOfType(cast<EnumDecl>(Decl->getRecord())->getType())
       - TI.getSizeOfType(cast<EnumDecl>(Decl->getRecord())->getRawType());
 
    if (Size < NeededCaseValSize) {
@@ -751,7 +804,7 @@ llvm::StructType* IRGen::getStructTy(RecordDecl *R)
    return StructTypeMap[R];
 }
 
-llvm::Type* IRGen::getLlvmTypeImpl(QualType Ty)
+llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
 {
    switch (Ty->getTypeID()) {
    case Type::BuiltinTypeID:
@@ -852,17 +905,20 @@ llvm::Type* IRGen::getLlvmTypeImpl(QualType Ty)
 
       return getStructTy(Ty);
    }
+   case Type::ExistentialTypeID:
+      return ExistentialContainerTy;
    case Type::MetaTypeID:
       return TypeInfoTy;
+   case Type::GenericTypeID:
+   case Type::AssociatedTypeID:
+      return getLlvmTypeImpl(Ty->getDesugaredType());
    default:
       llvm_unreachable("type should note be possible here");
    }
 }
 
-llvm::Type* IRGen::getStorageType(QualType Ty)
+llvm::Type* IRGen::getStorageType(CanType Ty)
 {
-   Ty = Ty->getCanonicalType();
-
    auto it = TypeMap.find(Ty);
    if (it != TypeMap.end())
       return it->getSecond();
@@ -873,7 +929,7 @@ llvm::Type* IRGen::getStorageType(QualType Ty)
    return llvmTy;
 }
 
-llvm::Type* IRGen::getParameterType(QualType Ty)
+llvm::Type* IRGen::getParameterType(CanType Ty)
 {
    auto llvmTy = getStorageType(Ty);
    if (llvmTy->isArrayTy() || llvmTy->isStructTy())
@@ -882,7 +938,7 @@ llvm::Type* IRGen::getParameterType(QualType Ty)
    return llvmTy;
 }
 
-llvm::Type* IRGen::getGlobalType(QualType Ty)
+llvm::Type* IRGen::getGlobalType(CanType Ty)
 {
 //   if (Ty->isClass())
 //      return getStructTy(Ty);
@@ -892,6 +948,7 @@ llvm::Type* IRGen::getGlobalType(QualType Ty)
 
 void IRGen::DeclareFunction(il::Function const* F)
 {
+   IRGenPrettyStackTraceEntry PSE(*F);
    auto funcTy = F->getType()->asFunctionType();
 
    SmallVector<llvm::Type*, 8> argTypes;
@@ -1116,11 +1173,7 @@ void IRGen::DeclareType(ast::RecordDecl *R)
 
    SmallVector<llvm::Type*, 8> ContainedTypes;
 
-   if (auto U = dyn_cast<UnionDecl>(R)) {
-      auto *ArrTy = llvm::ArrayType::get(Builder.getInt8Ty(), U->getSize());
-      ContainedTypes.push_back(ArrTy);
-   }
-   else if (auto S = dyn_cast<StructDecl>(R)) {
+   if (auto S = dyn_cast<StructDecl>(R)) {
       if (isa<ClassDecl>(R)) {
          ContainedTypes.push_back(Builder.getInt64Ty());   // strong refcount
          ContainedTypes.push_back(Builder.getInt64Ty());   // weak refcount
@@ -1135,7 +1188,9 @@ void IRGen::DeclareType(ast::RecordDecl *R)
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       ContainedTypes.push_back(getStorageType(E->getRawType()));
 
-      auto CaseSize = R->getSize() - TI.getSizeOfType(E->getRawType());
+      auto CaseSize = TI.getSizeOfType(E->getType())
+         - TI.getSizeOfType(E->getRawType());
+
       auto *ArrTy = llvm::ArrayType::get(Builder.getInt8Ty(), CaseSize);
       ContainedTypes.push_back(ArrTy);
    }
@@ -1193,6 +1248,8 @@ void IRGen::visitFunction(Function &F)
 {
    if (F.isDeclared())
       return;
+
+   IRGenPrettyStackTraceEntry PSE((F));
 
    auto func = cast<llvm::Function>(ValueMap[&F]);
    assert(func && "func not declared?");
@@ -1266,6 +1323,9 @@ void IRGen::visitFunction(Function &F)
    }
 
    for (auto &B : F.getBasicBlocks()) {
+      if (B.hasNoPredecessors())
+         continue;
+
       visitBasicBlock(B);
    }
 
@@ -2699,20 +2759,21 @@ llvm::Value *IRGen::visitVirtualInvokeInst(const VirtualInvokeInst &I)
       VTableRef = Builder.CreateLoad(getVTable(Callee));
    }
    else {
-      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
-      Val = Builder.CreateBitCast(
-         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
-            ->getPointerTo());
+//      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
+//      Val = Builder.CreateBitCast(
+//         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
+//            ->getPointerTo());
+//
+//      args[1] = Builder.CreateLoad(Val);
+      args[1] = Callee;
 
-      args[1] = Builder.CreateLoad(Val);
+      VTableRef = Builder.CreateCall(getGetProtocolVTableFn(), {
+         // The existential container.
+         toInt8Ptr(Callee),
 
-      auto *Conformance = Builder.CreateLoad(
-         Builder.CreateStructGEP(ExistentialContainerTy, Callee, 2));
-
-      VTableRef = Builder.CreateLoad(
-         Builder.CreateStructGEP(
-            Conformance->getType()->getPointerElementType(),
-            Conformance, 1));
+         // The conformance we're looking for.
+         toInt8Ptr(getLlvmValue(I.getProtocolTypeInfo()))
+      });
    }
 
    auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
@@ -2723,7 +2784,7 @@ llvm::Value *IRGen::visitVirtualInvokeInst(const VirtualInvokeInst &I)
 
    auto TypedFnPtr = Builder.CreateBitCast(
       Builder.CreateLoad(FuncPtr),
-      getStorageType(I.getFunctionType()));
+      getStorageType(I.getFunctionType()->getCanonicalType()));
 
    auto *Call = Builder.CreateCall(TypedFnPtr, args);
    Call->addParamAttr(0, llvm::Attribute::SwiftError);
@@ -3247,20 +3308,22 @@ llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
       VTableRef = Builder.CreateLoad(getVTable(Callee));
    }
    else {
-      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
-      Val = Builder.CreateBitCast(
-         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
-                 ->getPointerTo());
+//      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
+//      Val = Builder.CreateBitCast(
+//         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
+//                 ->getPointerTo());
+//
+//      args[i] = Builder.CreateLoad(Val);
 
-      args[i] = Builder.CreateLoad(Val);
+      args[i] = Callee;
 
-      auto *Conformance = Builder.CreateLoad(
-         Builder.CreateStructGEP(ExistentialContainerTy, Callee, 2));
+      VTableRef = Builder.CreateCall(getGetProtocolVTableFn(), {
+         // The existential container.
+         toInt8Ptr(Callee),
 
-      VTableRef = Builder.CreateLoad(
-         Builder.CreateStructGEP(
-            Conformance->getType()->getPointerElementType(),
-            Conformance, 1));
+         // The conformance we're looking for.
+         toInt8Ptr(getLlvmValue(I.getProtocolTypeInfo()))
+      });
    }
 
    auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
@@ -3271,7 +3334,7 @@ llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
 
    auto TypedFnPtr = Builder.CreateBitCast(
       Builder.CreateLoad(FuncPtr),
-      getStorageType(I.getFunctionType()));
+      getStorageType(I.getFunctionType()->getCanonicalType()));
 
    auto *RetVal = PrepareReturnedValue(&I, Builder.CreateCall(TypedFnPtr,
                                                               args));
@@ -3481,7 +3544,7 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
                              ast::EnumCaseDecl *Case,
                              llvm::ArrayRef<llvm::Value*> CaseVals,
                              bool CanUseSRetValue) {
-   if (EnumTy->getMaxAssociatedTypes() == 0) {
+   if (EnumTy->getMaxAssociatedValues() == 0) {
       auto rawTy = getStorageType(EnumTy->getRawType());
       return llvm::ConstantInt::get(rawTy,
                                     cast<ConstantInt>(Case->getILValue())
@@ -3808,7 +3871,18 @@ llvm::Value* IRGen::visitUnionCastInst(UnionCastInst const& I)
 
 llvm::Value* IRGen::visitExistentialInitInst(ExistentialInitInst const& I)
 {
-   auto val = getLlvmValue(I.getOperand(0));
+   llvm::Value *Val = getLlvmValue(I.getOperand(0));
+   llvm::Value *ValPtr;
+
+   if (!Val->getType()->isPointerTy()) {
+      auto *Alloc = Builder.CreateAlloca(Val->getType());
+      Builder.CreateStore(Val, Alloc);
+
+      ValPtr = toInt8Ptr(Alloc);
+   }
+   else {
+      ValPtr = toInt8Ptr(Val);
+   }
 
    // Get the type info.
    auto *valueTypeInfo = getLlvmValue(I.getValueTypeInfo());
@@ -3821,13 +3895,13 @@ llvm::Value* IRGen::visitExistentialInitInst(ExistentialInitInst const& I)
    if (I.isPreallocated()) {
       CallRuntimeFunction(
          "_cdot_InitializeExistentialPreallocated",
-         { toInt8Ptr(val), toInt8Ptr(valueTypeInfo),
+         { ValPtr, toInt8Ptr(valueTypeInfo),
             toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca) });
    }
    else {
       Builder.CreateCall(
          getInitializeExistentialFn(),
-         { toInt8Ptr(val), toInt8Ptr(valueTypeInfo),
+         { ValPtr, toInt8Ptr(valueTypeInfo),
             toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca) });
    }
 
@@ -3908,6 +3982,10 @@ llvm::Value *IRGen::visitExistentialCastInst(const il::ExistentialCastInst &I)
       break;
    default:
       llvm_unreachable("not an existential cast!");
+   }
+
+   if (!NeedsStructReturn(I.getType())) {
+      return Builder.CreateLoad(ResultAlloc);
    }
 
    return ResultAlloc;

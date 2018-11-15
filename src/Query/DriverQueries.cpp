@@ -13,6 +13,7 @@
 #include "Parse/Parser.h"
 #include "Sema/SemaPass.h"
 #include "Support/Timer.h"
+#include "Support/Various.h"
 #include "QueryContext.h"
 
 #include <llvm/ADT/SmallString.h>
@@ -92,7 +93,7 @@ QueryResult ParseSourceFileQuery::run()
       Mod = ModDecl->getModule();
 
    if (!Mod) {
-      StringRef ModName = fs::getFileName(FileName);
+      std::string ModName = support::toCamelCase(fs::getFileName(FileName));
 
       auto *DefaultModuleName = &Context.getIdentifiers().get(ModName);
       ModDecl = ModuleMgr.GetOrCreateModule(SourceLocation(File.BaseOffset),
@@ -104,7 +105,7 @@ QueryResult ParseSourceFileQuery::run()
    if (!CI.getCompilationModule()) {
       CI.setCompilationModule(Mod->getBaseModule());
 
-      if (!CI.getOptions().noPrelude()) {
+      if (!CI.getOptions().noPrelude() && !CI.getOptions().isStdLib()) {
          ModuleMgr.ImportPrelude(Mod->getBaseModule());
       }
    }

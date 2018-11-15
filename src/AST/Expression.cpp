@@ -154,61 +154,6 @@ bool Expression::isConst() const
    return false;
 }
 
-bool Expression::warnOnUnusedResult() const
-{
-   if (isDependent() || isInvalid())
-      return false;
-
-   switch (typeID) {
-   case NodeType::ParenExprID:
-   case NodeType::AttributedExprID:
-   case NodeType::ImplicitCastExprID:
-      return ignoreParensAndImplicitCasts()->warnOnUnusedResult();
-   case NodeType::BinaryOperatorID:
-      return true;
-   case NodeType::AssignExprID:
-      return false;
-   case NodeType::ExprSequenceID:
-      // we can't tell what an unresolved expr sequence will end up being
-      return false;
-   case NodeType::UnaryOperatorID:
-      switch (cast<UnaryOperator>(this)->getKind()) {
-      case op::PreInc: case op::PreDec: case op::PostInc: case op::PostDec:
-         return false;
-      default:
-         return true;
-      }
-   case NodeType::CallExprID: {
-      auto Call = cast<CallExpr>(this);
-      switch (Call->getKind()) {
-      case CallKind::NamedFunctionCall:
-      case CallKind::StaticMethodCall:
-      case CallKind::MethodCall:
-      case CallKind::InitializerCall: {
-         if (Call->isDotInit())
-            return false;
-
-         QualType RetTy = Call->getExprType();
-         return !RetTy->isVoidType()
-                && !RetTy->isEmptyTupleType()
-                && !RetTy->isUnpopulatedType()
-                && !Call->getFunc()->hasAttribute<DiscardableResultAttr>();
-      }
-      default:
-         return !Call->getExprType()->isVoidType()
-            && !Call->getExprType()->isEmptyTupleType()
-            && !Call->getExprType()->isUnpopulatedType();
-      }
-   }
-   case NodeType::AnonymousCallExprID: {
-      return !exprType->isVoidType() && !exprType->isUnpopulatedType()
-         && !exprType->isEmptyTupleType();
-   }
-   default:
-      return !exprType->isVoidType() && !exprType->isEmptyTupleType();
-   }
-}
-
 bool Expression::isContextDependent() const
 {
    if (exprType)
@@ -460,6 +405,50 @@ OptionTypeExpr* OptionTypeExpr::Create(ASTContext &C,
    return new(C) OptionTypeExpr(SR, SubType, IsMeta);
 }
 
+ExistentialTypeExpr::ExistentialTypeExpr(SourceRange SR,
+                                         ArrayRef<SourceType> Existentials,
+                                         bool IsMeta)
+   : TypeExpr(ExistentialTypeExprID, SR, IsMeta),
+     NumExistentials((unsigned)Existentials.size())
+{
+   std::copy(Existentials.begin(), Existentials.end(),
+             getTrailingObjects<SourceType>());
+}
+
+ExistentialTypeExpr::ExistentialTypeExpr(unsigned N)
+   : TypeExpr(ExistentialTypeExprID, SourceRange(), false),
+     NumExistentials(N)
+{
+
+}
+
+ExistentialTypeExpr* ExistentialTypeExpr::Create(ASTContext &C,
+                                                 SourceRange SR,
+                                                 ArrayRef<SourceType> Existentials,
+                                                 bool IsMeta) {
+   void *Mem = C.Allocate(sizeof(ExistentialTypeExpr)
+      + sizeof(SourceType) * Existentials.size(), alignof(ExistentialTypeExpr));
+
+   return new(Mem) ExistentialTypeExpr(SR, Existentials, IsMeta);
+}
+
+ExistentialTypeExpr* ExistentialTypeExpr::CreateEmpty(ASTContext &C,
+                                                      unsigned N) {
+   void *Mem = C.Allocate(sizeof(ExistentialTypeExpr) + sizeof(SourceType) * N,
+                          alignof(ExistentialTypeExpr));
+
+   return new(Mem) ExistentialTypeExpr(N);
+}
+
+ArrayRef<SourceType> ExistentialTypeExpr::getExistentials() const
+{
+   return {getTrailingObjects<SourceType>(), NumExistentials};
+}
+
+MutableArrayRef<SourceType> ExistentialTypeExpr::getExistentials()
+{
+   return {getTrailingObjects<SourceType>(), NumExistentials};
+}
 
 AttributedExpr::AttributedExpr(Expression *Expr,
                                llvm::ArrayRef<Attr *> Attrs)
@@ -1415,9 +1404,15 @@ BuiltinIdentExpr* BuiltinIdentExpr::Create(ASTContext &C,
 }
 
 BuiltinExpr::BuiltinExpr(QualType type)
-   : Expression(BuiltinExprID)
+   : Expression(BuiltinExprID), T(type)
 {
    exprType = type;
+}
+
+BuiltinExpr::BuiltinExpr(SourceType T)
+   : Expression(BuiltinExprID), T(T)
+{
+
 }
 
 BuiltinExpr::BuiltinExpr(EmptyShell)
@@ -1425,6 +1420,11 @@ BuiltinExpr::BuiltinExpr(EmptyShell)
 {}
 
 BuiltinExpr* BuiltinExpr::Create(ASTContext &C, QualType Ty)
+{
+   return new(C) BuiltinExpr(Ty);
+}
+
+BuiltinExpr* BuiltinExpr::Create(ASTContext &C, SourceType Ty)
 {
    return new(C) BuiltinExpr(Ty);
 }

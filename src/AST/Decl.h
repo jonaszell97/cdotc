@@ -133,6 +133,9 @@ public:
       return ConceptRef;
    }
 
+   QualType getConstrainedType() const { return ConstrainedType; }
+   void setConstrainedType(QualType C){ ConstrainedType = C; }
+
    ArrayRef<IdentifierInfo*> getNameQualifier() const
    {
       return { getTrailingObjects<IdentifierInfo*>(), NameQualifierSize };
@@ -161,6 +164,7 @@ private:
 
    Kind K;
    SourceRange SR;
+   QualType ConstrainedType;
    unsigned NameQualifierSize;
    ArrayRef<AssociatedTypeDecl*> ReferencedAssociatedTypes;
 
@@ -182,8 +186,8 @@ class UsingDecl final: public NamedDecl,
    UsingDecl(EmptyShell, unsigned N);
 
    SourceRange Loc;
-   unsigned NumSpecifierNames;
    bool IsWildCard;
+   unsigned NumSpecifierNames;
 
 public:
    static bool classofKind(DeclKind kind) { return kind == UsingDeclID; }
@@ -345,6 +349,7 @@ protected:
    bool Captured     : 1;
    bool IsMovedFrom  : 1;
    bool HasTemplate  : 1;
+   bool InferredType : 1;
 
 public:
    SourceRange getSourceRange() const;
@@ -380,6 +385,9 @@ public:
 
    bool isMovedFrom() const { return IsMovedFrom; }
    void setMovedFrom(bool Moved) { VarDecl::IsMovedFrom = Moved; }
+
+   bool hasInferredType() const { return InferredType; }
+   void setInferredType(bool I) { VarDecl::InferredType = I; }
 };
 
 class LocalVarDecl: public VarDecl {
@@ -913,7 +921,7 @@ public:
    void setLazyFnInfo(serial::LazyFunctionInfo* V) { LazyFnInfo = V; }
 
    CallableDecl *getBodyTemplate() const { return BodyTemplate; }
-   void setBodyTemplate(CallableDecl *T) { BodyTemplate = T; }
+   void setBodyTemplate(CallableDecl *T);
 
    bool isKnownFunction();
    void checkKnownFnKind();
@@ -1323,6 +1331,7 @@ protected:
    SourceRange BraceRange;
 
    unsigned lastMethodID = 1;
+   bool ExplicitMemberwiseInit = false;
 
    ASTVector<SourceType> conformanceTypes;
    ASTVector<TemplateParamDecl*> templateParams;
@@ -1330,24 +1339,7 @@ protected:
    InstantiationInfo<RecordDecl> *instantiationInfo = nullptr;
 
    DeinitDecl *deinitializer = nullptr;
-
    QualType RecordType;
-   unsigned occupiedBytes = 0;
-   unsigned short alignment = 1;
-
-   bool manualAlignment : 1;
-   bool opaque          : 1;
-   bool implicitlyEquatable : 1;
-   bool implicitlyHashable : 1;
-   bool implicitlyCopyable : 1;
-   bool implicitlyStringRepresentable : 1;
-   bool NeedsRetainOrRelease : 1;
-   bool ExplicitMemberwiseInit : 1;
-
-   MethodDecl *operatorEquals = nullptr;
-   MethodDecl *hashCodeFn = nullptr;
-   MethodDecl *toStringFn = nullptr;
-   MethodDecl *copyFn = nullptr;
 
 public:
    bool isStruct() const;
@@ -1414,12 +1406,6 @@ public:
       return *instantiationInfo->templateArgs;
    }
 
-   bool isNonUnionStruct() const;
-   StructDecl *asNonUnionStruct() const;
-
-   unsigned getSize() const { return occupiedBytes; }
-   unsigned short getAlignment() const { return alignment; }
-
    unsigned getLastMethodID() const { return lastMethodID; }
    unsigned getAndIncrementLastMethodID() { return lastMethodID++; }
    void setLastMethodID(unsigned ID) { lastMethodID = ID; }
@@ -1427,55 +1413,7 @@ public:
    QualType getType() const { return RecordType; }
    void setType(QualType V) { RecordType = V; }
 
-   void setSize(unsigned s) { occupiedBytes = s; }
-   void setAlignment(unsigned short al) { alignment = al; }
-
-   bool hasManualAlignment() const { return manualAlignment; }
-
-   bool isOpaque() const { return opaque; }
-   void setOpaque(bool opaque) { RecordDecl::opaque = opaque; }
-
-   MethodDecl *getOperatorEquals() const { return operatorEquals; }
-   void setOperatorEquals(MethodDecl *Eq) { operatorEquals = Eq; }
-
-   MethodDecl *getHashCodeFn() const { return hashCodeFn; }
-   void setHashCodeFn(MethodDecl *fn) { RecordDecl::hashCodeFn = fn; }
-
-   MethodDecl *getToStringFn() const { return toStringFn; }
-   void setToStringFn(MethodDecl *fn) { toStringFn = fn; }
-
-   MethodDecl *getCopyFn() const { return copyFn; }
-   void setCopyFn(MethodDecl *fn) { copyFn = fn; }
-
-   bool isTriviallyCopyable() const {return declFlagSet(DF_TriviallyCopyable);}
-   void setTriviallyCopyable(bool val)
-   {
-      setDeclFlag(DF_TriviallyCopyable, val);
-   }
-
    int getNameSelector() const;
-
-   bool isImplicitlyEquatable() const { return implicitlyEquatable; }
-   void setImplicitlyEquatable(bool eq) { implicitlyEquatable = eq; }
-
-   bool isImplicitlyHashable() const { return implicitlyHashable; }
-   void setImplicitlyHashable(bool hash) { implicitlyHashable = hash; }
-
-   bool isImplicitlyCopyable() const { return implicitlyCopyable; }
-   void setImplicitlyCopyable(bool copyable) { implicitlyCopyable = copyable; }
-
-   bool isImplicitlyStringRepresentable() const
-   {
-      return implicitlyStringRepresentable;
-   }
-
-   void setImplicitlyStringRepresentable(bool rep)
-   {
-      implicitlyStringRepresentable = rep;
-   }
-
-   void setNeedsRetainOrRelease(bool N) { NeedsRetainOrRelease = N; }
-   bool needsRetainOrRelease() const { return NeedsRetainOrRelease; }
 
    bool hasExplicitMemberwiseInit() const { return ExplicitMemberwiseInit; }
    void setExplicitMemberwiseInit(bool b) { ExplicitMemberwiseInit = b; }
@@ -1719,14 +1657,14 @@ private:
    EnumDecl(EmptyShell Empty);
 
    SourceType rawType;
-   size_t maxAssociatedTypes = 0;
    bool Unpopulated = true;
+   unsigned maxAssociatedValues = 0;
 
 public:
    const SourceType &getRawType() const { return rawType; }
    void setRawType(SourceType ty) { rawType = ty; }
 
-   size_t getMaxAssociatedTypes() const { return maxAssociatedTypes; }
+   unsigned getMaxAssociatedValues() const { return maxAssociatedValues; }
    specific_decl_iterator_range<EnumCaseDecl> getCases() const
    {
       return getDecls<EnumCaseDecl>();
@@ -1739,7 +1677,7 @@ public:
 
    bool isUnpopulated() const { return Unpopulated; }
 
-   void setMaxAssociatedTypes(size_t N) { maxAssociatedTypes = N; }
+   void setMaxAssociatedValues(size_t N) { maxAssociatedValues = N; }
    void setUnpopulated(bool B) { Unpopulated = B; }
 };
 

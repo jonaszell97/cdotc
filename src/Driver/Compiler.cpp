@@ -113,6 +113,12 @@ static cl::opt<string> EmitIR("emit-ir",
                               cl::cat(OutputCat), cl::ValueOptional,
                               cl::init("-"));
 
+/// Maximum number of errors to emit before aborting.
+static cl::opt<unsigned> MaxErrors("error-limit",
+                                   cl::desc("maximum number of error diagnostics "
+                                            "to emit before aborting"),
+                                   cl::init(16));
+
 static cl::OptionCategory StageSelectionCat("Stage Selection Options",
                                          "These control which stages are run.");
 
@@ -148,6 +154,18 @@ static cl::opt<bool> PrintPhases("print-phases",
                                 cl::desc("print duration of compilation "
                                          "phases"));
 
+/// Features
+
+static cl::OptionCategory FeatureCat("Experimental Features",
+                                     "These flags toggle experimental compiler "
+                                     "features that are disabled by default.");
+
+static cl::opt<bool> RuntimeGenerics("Xruntime-generics",
+                                     cl::cat(FeatureCat),
+                                     cl::init(false),
+                                     cl::desc("enable experimental runtime "
+                                              "generics support"));
+
 /// Clang Options
 
 static cl::OptionCategory ClangCat("Clang Importer Options",
@@ -170,7 +188,7 @@ CompilerInstance::CompilerInstance(CompilerOptions &&options)
      ILCtx(std::make_unique<il::Context>(*this)),
      Sema(std::make_unique<SemaPass>(*this))
 {
-
+   QC->Sema = Sema.get();
 }
 
 CompilerInstance::CompilerInstance(int argc, char **argv)
@@ -184,7 +202,10 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
      ILCtx(std::make_unique<il::Context>(*this)),
      Sema(std::make_unique<SemaPass>(*this))
 {
+   QC->Sema = Sema.get();
    cl::ParseCommandLineOptions(argc, argv);
+
+   Sema->getDiags().setMaxErrors(MaxErrors);
 
    /* Input Files */
 
@@ -222,8 +243,9 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
 
    /* Output File */
 
-   if (!OutputFilename.empty())
+   if (!OutputFilename.empty()) {
       options.setOutput(OutputFilename);
+   }
 
    /* Include Paths */
 
@@ -262,10 +284,10 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    }
    if (IsStdLib) {
       options.setFlag(CompilerOptions::F_IsStdLib, true);
-      options.setFlag(CompilerOptions::F_NoPrelude, true);
    }
    if (EmitModules) {
       options.setFlag(CompilerOptions::F_EmitModules, true);
+      options.Output = OutputKind::Module;
    }
    if (TextOutputOnly) {
       options.setFlag(CompilerOptions::F_TextOutputOnly, true);
@@ -302,6 +324,13 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    if (!NoIncremental) {
       IncMgr = std::make_unique<serial::IncrementalCompilationManager>(*this);
       Sema->setTrackDeclsPerFile(true);
+   }
+
+   /// Features
+
+   if (RuntimeGenerics) {
+      options.setFeatureFlag(CompilerOptions::XUseRuntimeGenerics);
+      Sema->RuntimeGenerics = true;
    }
 
    if (options.inFiles.empty()) {
@@ -391,6 +420,8 @@ public:
          OS << "  " << Qs->summary()
             << "\n";
       }
+
+      CI.getSema().issueDiagnostics();
    }
 };
 

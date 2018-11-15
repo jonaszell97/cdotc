@@ -27,9 +27,9 @@ bool TypeProperties::isDependent() const
    static constexpr uint16_t DependentMask =
       ContainsDependentNameType
       | ContainsDependentSizeArrayType
-      | ContainsUnboundGeneric
+      | ContainsUnconstrainedGeneric
       | ContainsUnknownAny
-      | ContainsGenericType;
+      | ContainsTemplate;
 
    return (Props & DependentMask) != 0;
 }
@@ -44,6 +44,11 @@ bool TypeProperties::containsAssociatedType() const
    return (Props & ContainsAssociatedType) != 0;
 }
 
+bool TypeProperties::containsTemplate() const
+{
+   return (Props & ContainsTemplate) != 0;
+}
+
 bool TypeProperties::containsUnexpandedParameterPack() const
 {
    return (Props & ContainsUnexpandedParameterPack) != 0;
@@ -54,9 +59,29 @@ bool TypeProperties::containsRuntimeGenericParam() const
    return (Props & ContainsRuntimeGenericParam) != 0;
 }
 
-bool TypeProperties::isUnpopulated() const
+CanType::CanType(Type *T) : QualType(T)
 {
-   return (Props & ContainsUnpopulatedType) != 0;
+   assert(!T || T->isCanonical());
+}
+
+CanType::CanType(QualType T) : QualType(T)
+{
+   assert(!T || T->isCanonical());
+}
+
+CanType::CanType(void *Ptr) : QualType(Ptr, FromOpaque::Placeholder)
+{
+
+}
+
+CanType CanType::getFromOpaquePtr(void *Ptr)
+{
+   return CanType(QualType::getFromOpaquePtr(Ptr));
+}
+
+CanType CanType::getFromOpaquePtrUnchecked(void *Ptr)
+{
+   return CanType(Ptr);
 }
 
 Type::~Type()
@@ -313,12 +338,7 @@ bool Type::isStringRepresentable() const
 
 bool Type::isSelfComparable() const
 {
-   switch (getTypeID()) {
-      default:
-         return true;
-      case TypeID::RecordTypeID:
-         return getRecord()->getOperatorEquals() != nullptr;
-   }
+   llvm_unreachable("should not be called!");
 }
 
 bool Type::isHashable() const
@@ -423,19 +443,24 @@ TypedefType const* Type::asRealTypedefType() const
    return static_cast<TypedefType const*>(this);
 }
 
-Type* Type::getDesugaredType() const
+QualType Type::getDesugaredType() const
 {
-   llvm_unreachable("");
-}
+   switch (getTypeID()) {
+   case Type::GenericTypeID:
+      return cast<GenericType>(this)->getCovariance();
+   case Type::AssociatedTypeID: {
+      auto *AT = cast<AssociatedType>(this)->getDecl();
+      if (!AT->isImplementation()) {
+         return AT->getCovariance().getResolvedType();
+      }
 
-bool Type::isUnpopulatedType() const
-{
-   auto RecTy = asRecordType();
-   if (!RecTy)
-      return false;
+      break;
+   }
+   default:
+      break;
+   }
 
-   auto R = RecTy->getRecord();
-   return support::isa<EnumDecl>(R) && cast<EnumDecl>(R)->isUnpopulated();
+   return const_cast<Type*>(this);
 }
 
 sema::FinalTemplateArgumentList& Type::getTemplateArgs() const
@@ -730,6 +755,11 @@ public:
 
    void visitBuiltinType(const BuiltinType *Ty)
    {
+      if (Ty->isUnknownAnyTy()) {
+         OS << "?";
+         return;
+      }
+
       switch (Ty->getKind()) {
 #        define CDOT_BUILTIN_TYPE(Name) \
             case BuiltinType::Name: OS << #Name; break;
@@ -754,7 +784,7 @@ public:
          OS << ")";
       }
       else if (Arg.isType()) {
-         this->visit(Arg.getType());
+         this->visit(Arg.getNonCanonicalType());
       }
       else if (auto Val = Arg.getValue()) {
          OS << *Val;
@@ -766,13 +796,13 @@ public:
 
    void visitRecordType(const RecordType *Ty)
    {
-      OS << Ty->getRecord()->getDeclName();
+      OS << Ty->getRecord()->getFullName();
    }
 
    void visitDependentRecordType(const DependentRecordType *Ty)
    {
       auto R = Ty->getRecord();
-      OS << R->getDeclName() << "<";
+      OS << R->getFullName() << "<";
 
       auto &Args = cast<DependentRecordType>(Ty)->getTemplateArgs();
       unsigned i = 0;
@@ -783,6 +813,15 @@ public:
       }
 
       OS << ">";
+   }
+
+   void visitExistentialType(const ExistentialType *T)
+   {
+      unsigned i = 0;
+      for (auto P : T->getExistentials()) {
+         if (i++ != 0) OS << " & ";
+         OS << P;
+      }
    }
 
    void visitFunctionType(const FunctionType *Ty)
@@ -860,7 +899,7 @@ public:
 
    void visitAssociatedType(const AssociatedType *Ty)
    {
-      OS << Ty->getDecl()->getDeclName();
+      OS << Ty->getDecl()->getFullName();
    }
 
    void visitDependentNameType(const DependentNameType *Ty)
@@ -941,8 +980,19 @@ public:
 
    void visitAssociatedType(const AssociatedType *Ty)
    {
-      auto AT = cast<AssociatedType>(Ty)->getDecl();
-      OS << AT->getDeclName();
+      auto AT = Ty->getDecl();
+      if (auto Outer = Ty->getOuterAT()) {
+         OS << QualType(Outer) << "." << AT->getDeclName();
+         return;
+      }
+      else {
+         OS << AT->getFullName();
+      }
+
+//      if (AT->isSelf()) {
+//         OS << AT->getActualType().getResolvedType();
+//         return;
+//      }
 
       if (AT->isImplementation()) {
          OS << " (aka ";
@@ -1052,7 +1102,13 @@ std::string QualType::toDiagString() const
    std::string str;
    llvm::raw_string_ostream OS(str);
 
-   OS << *this;
+   if (!*this) {
+      OS << "<null>";
+   }
+   else {
+      DiagTypePrinter(OS).visit(*this);
+   }
+
    return OS.str();
 }
 
@@ -1138,7 +1194,7 @@ RecordType::RecordType(RecordDecl *record)
      Rec(record)
 {
    if (record->isTemplateOrInTemplate()) {
-      Bits.Props |= TypeProperties::ContainsUnboundGeneric;
+      Bits.Props |= TypeProperties::ContainsTemplate;
    }
 }
 
@@ -1149,7 +1205,7 @@ RecordType::RecordType(TypeID typeID,
      Rec(record)
 {
    if (Dependent) {
-      Bits.Props |= TypeProperties::ContainsUnboundGeneric;
+      Bits.Props |= TypeProperties::ContainsUnconstrainedGeneric;
    }
 }
 
@@ -1203,12 +1259,12 @@ bool RecordType::isRawEnum() const
 
 unsigned short RecordType::getAlignment() const
 {
-   return Rec->getAlignment();
+   llvm_unreachable("delete this!");
 }
 
 size_t RecordType::getSize() const
 {
-   return Rec->getSize();
+   llvm_unreachable("delete this!");
 }
 
 void RecordType::setDependent(bool dep)
@@ -1255,6 +1311,35 @@ InferredSizeArrayType::InferredSizeArrayType(QualType elementTy,
    : ArrayType(TypeID::InferredSizeArrayTypeID, elementTy, CanonicalTy)
 {
 
+}
+
+ExistentialType::ExistentialType(ArrayRef<QualType> Existentials,
+                                 Type *CanonicalType,
+                                 TypeProperties Props)
+   : Type(TypeID::ExistentialTypeID, CanonicalType),
+     NumExistentials((unsigned)Existentials.size())
+{
+   Bits.Props = Props;
+   std::copy(Existentials.begin(), Existentials.end(),
+             reinterpret_cast<QualType*>(this + 1));
+}
+
+ArrayRef<QualType> ExistentialType::getExistentials() const
+{
+   return { reinterpret_cast<QualType const*>(this + 1),
+      NumExistentials };
+}
+
+void ExistentialType::Profile(llvm::FoldingSetNodeID &ID)
+{
+   Profile(ID, getExistentials());
+}
+
+void ExistentialType::Profile(llvm::FoldingSetNodeID &ID,
+                              ArrayRef<QualType> Existentials){
+   for (auto P : Existentials) {
+      P.Profile(ID);
+   }
 }
 
 FunctionType::FunctionType(TypeID typeID,
@@ -1360,16 +1445,11 @@ GenericType::GenericType(TemplateParamDecl *Param)
    }
 
    if (Param->isUnbounded()) {
-      Bits.Props |= TypeProperties::ContainsUnboundGeneric;
+      Bits.Props |= TypeProperties::ContainsUnconstrainedGeneric;
    }
    else {
       Bits.Props |= TypeProperties::ContainsRuntimeGenericParam;
    }
-}
-
-void GenericType::setCanonicalType(QualType CanonicalType)
-{
-   this->CanonicalType = CanonicalType->getCanonicalType();
 }
 
 llvm::StringRef GenericType::getGenericTypeName() const
@@ -1397,23 +1477,22 @@ bool GenericType::isVariadic() const
    return P->isVariadic();
 }
 
-AssociatedType::AssociatedType(AssociatedTypeDecl *AT)
+AssociatedType::AssociatedType(AssociatedTypeDecl *AT, AssociatedType *OuterAT)
    : Type(AssociatedTypeID, nullptr),
-     AT(AT)
+     AT(AT), OuterAT(OuterAT)
 {
-   if (!AT->isImplementation()) {
-      Bits.Props |= TypeProperties::ContainsAssociatedType;
-   }
-   else if (AT->isImplementation() && AT->getActualType().isResolved()) {
+   if (AT->isImplementation()) {
+      assert(AT->getActualType().isResolved());
+
       this->CanonicalType = AT->getActualType()->getCanonicalType();
       Bits.Props |= CanonicalType->properties();
    }
-}
+   else {
+      assert(AT->getCovariance().isResolved());
 
-void AssociatedType::setCanonicalType(QualType CanonicalType)
-{
-   this->CanonicalType = CanonicalType->getCanonicalType();
-   Bits.Props |= CanonicalType->properties();
+      Bits.Props |= TypeProperties::ContainsAssociatedType;
+      Bits.Props |= AT->getCovariance()->properties();
+   }
 }
 
 QualType AssociatedType::getActualType() const

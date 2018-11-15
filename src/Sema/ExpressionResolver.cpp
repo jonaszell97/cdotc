@@ -162,6 +162,10 @@ public:
                              CandidateSet::Candidate &Cand,
                              Expression *LHS, Expression *RHS);
 
+   Expression *buildMetaTypeUnionExpr(PrecedenceResult &Res,
+                                      CandidateSet::Candidate &Cand,
+                                      Expression *LHS, Expression *RHS);
+
    struct UnaryOpResult {
       UnaryOpResult()
          : Expr(nullptr)
@@ -353,7 +357,7 @@ ExprResolverImpl::ParseUnaryExpression(QualType ContextualType)
    if (ExprElement)
       ExprElement->setExpr(Target);
 
-   if (Target->isTypeDependent()) {
+   if (Target->needsInstantiation()) {
       TypeDependent = true;
       return nullptr;
    }
@@ -453,7 +457,7 @@ ExprResolverImpl::UnaryOpExistsOnType(Expression *Expr,
                                       SourceLocation loc) {
    auto &II = SP.getContext().getIdentifiers().get(op);
 
-   // fast path if there exists no prefix / postfix operator with this name
+   // Fast path if there exists no prefix / postfix operator with this name
    // in the whole program (which is the case most times when calling this)
    if (fix == FixKind::Prefix && !SP.getContext().isPrefixOperator(&II)) {
       return UnaryOpResult(Expr, II);
@@ -647,6 +651,19 @@ Expression* ExprResolverImpl::buildCastExpr(PrecedenceResult &Res,
                            LHS, SourceType(RHS));
 }
 
+Expression* ExprResolverImpl::buildMetaTypeUnionExpr(PrecedenceResult &Res,
+                                                     CandidateSet::Candidate &Cand,
+                                                     Expression *LHS,
+                                                     Expression *RHS) {
+   SourceType Types[] {
+      SourceType(LHS->getExprType()->stripMetaType()),
+      SourceType(RHS->getExprType()->stripMetaType())
+   };
+
+   SourceRange SR(LHS->getSourceLoc(), RHS->getSourceRange().getEnd());
+   return ExistentialTypeExpr::Create(SP.Context, SR, Types, true);
+}
+
 Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
                                             Expression *LHS,
                                             Expression *RHS) {
@@ -699,6 +716,12 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
          return AssignExpr::Create(SP.getContext(), Res.OpLoc, LHS, RHS);
       case op::As: case op::AsQuestion: case op::AsExclaim:
          return buildCastExpr(Res, Cand, LHS, RHS);
+      case op::And:
+         if (LHS->getExprType()->isMetaType()) {
+            return buildMetaTypeUnionExpr(Res, Cand, LHS, RHS);
+         }
+
+         LLVM_FALLTHROUGH;
       default:
          return BinaryOperator::Create(SP.getContext(), Res.OpLoc,
                                        Cand.BuiltinCandidate.OpKind,
@@ -752,7 +775,7 @@ Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
          return nullptr;
 
       LHS = exprResult.get();
-      if (LHS->isTypeDependent()) {
+      if (LHS->needsInstantiation()) {
          TypeDependent = true;
          return nullptr;
       }
@@ -773,7 +796,7 @@ Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
          return nullptr;
 
       RHS = rhsResult.get();
-      if (RHS->isTypeDependent()) {
+      if (RHS->needsInstantiation()) {
          TypeDependent = true;
          return nullptr;
       }
@@ -797,7 +820,7 @@ Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
          return nullptr;
 
       LHS = binOpResult.get();
-      if (LHS->isTypeDependent()) {
+      if (LHS->needsInstantiation()) {
          TypeDependent = true;
          return nullptr;
       }
@@ -894,7 +917,10 @@ static void visitContextDependentExpr(SemaPass &SP, Expression *E)
       EC->setIsTypeDependent(true);
 
       for (auto *Arg : EC->getArgs()) {
-         (void) SP.visitExpr(EC, Arg);
+         auto Result = SP.visitExpr(EC, Arg);
+         if (Result) {
+            Arg = Result.get();
+         }
       }
 
       break;
@@ -903,8 +929,11 @@ static void visitContextDependentExpr(SemaPass &SP, Expression *E)
       auto *CE = cast<CallExpr>(E);
       CE->setIsTypeDependent(true);
 
-      for (auto *Arg : CE->getArgs()) {
-         (void) SP.visitExpr(CE, Arg);
+      for (auto &Arg : CE->getArgs()) {
+         auto Result = SP.visitExpr(CE, Arg);
+         if (Result) {
+            Arg = Result.get();
+         }
       }
 
       break;
@@ -913,7 +942,10 @@ static void visitContextDependentExpr(SemaPass &SP, Expression *E)
       auto *LE = cast<LambdaExpr>(E);
       LE->setIsTypeDependent(true);
 
-      (void) SP.visitStmt(LE, LE->getBody());
+      auto Result = SP.visitStmt(LE, LE->getBody());
+      if (Result) {
+         LE->setBody(Result.get());
+      }
 
       break;
    }

@@ -23,6 +23,7 @@ enum {
 };
 
 class Type;
+class CanType;
 class QualType;
 class NestedNameSpecifier;
 class NestedNameSpecifierWithLoc;
@@ -50,6 +51,9 @@ public:
 template <>
 struct isPodLike<cdot::QualType> { static const bool value = true; };
 
+template <>
+struct isPodLike<cdot::CanType> { static const bool value = true; };
+
 class raw_ostream;
 
 } // namespace llvm
@@ -62,6 +66,7 @@ namespace ast {
    class StaticExpr;
    class TemplateParamDecl;
    class AssociatedTypeDecl;
+   class ProtocolDecl;
    struct SourceType;
 } // namespace ast
 
@@ -115,7 +120,7 @@ struct TypeProperties {
 public:
    enum Property : uint16_t {
       /// This type contains an unconstrained generic type.
-      ContainsUnboundGeneric              = 0x1,
+      ContainsUnconstrainedGeneric        = 0x1,
 
       /// This type contains a generic type.
       ContainsGenericType                 = 0x2,
@@ -132,14 +137,14 @@ public:
       /// This type contains a dependently sized array type.
       ContainsDependentSizeArrayType      = 0x20,
 
-      /// This type contains an unpopulated type, i.e. Never.
-      ContainsUnpopulatedType             = 0x40,
-
       /// This type contains an UnknownAny type.
-      ContainsUnknownAny                  = 0x80,
+      ContainsUnknownAny                  = 0x40,
 
       /// This type contains a runtime generic parameter.
-      ContainsRuntimeGenericParam         = 0x100,
+      ContainsRuntimeGenericParam         = 0x80,
+
+      /// This type contains a template with no specified template parameters.
+      ContainsTemplate                    = 0x100,
 
       _lastProp = ContainsRuntimeGenericParam
    };
@@ -172,9 +177,9 @@ public:
    bool isDependent() const;
    bool containsGenericType() const;
    bool containsAssociatedType() const;
+   bool containsTemplate() const;
    bool containsUnexpandedParameterPack() const;
    bool containsRuntimeGenericParam() const;
-   bool isUnpopulated() const;
 };
 
 class Type {
@@ -249,9 +254,8 @@ public:
    TypedefType const* asRealTypedefType() const;
 
    bool isCanonical() const { return this == CanonicalType; }
-   Type *getCanonicalType() const { return CanonicalType; }
-
-   Type *getDesugaredType() const;
+   CanType getCanonicalType() const;
+   QualType getDesugaredType() const;
 
    bool isNumeric() const
    {
@@ -267,8 +271,6 @@ public:
 
    bool containsRuntimeGenericParam() const
    { return properties().containsRuntimeGenericParam(); }
-
-   bool isUnpopulatedType() const;
 
    sema::FinalTemplateArgumentList& getTemplateArgs() const;
    bool hasTemplateArgs() const;
@@ -457,6 +459,7 @@ private:
 };
 
 class QualType {
+protected:
    using ValueTy = llvm::PointerIntPair<Type*, TypeAlignmentInBits>;
    ValueTy Value;
 
@@ -509,10 +512,8 @@ public:
       return (**this)->isCanonical();
    }
 
-   QualType getCanonicalType() const
-   {
-      return QualType((**this)->getCanonicalType(), Value.getInt());
-   }
+   CanType getCanonicalType() const;
+   /*implicit*/ operator CanType() const;
 
    Type *operator->() const { return Value.getPointer(); }
    Type *operator *() const { return Value.getPointer(); }
@@ -555,6 +556,47 @@ public:
    }
 };
 
+/// A QualType that is statically guaranteed to be canonical.
+class CanType final: public QualType {
+   /// Construct from a Type that must be canonical.
+   explicit CanType(Type *T);
+
+   /// Construct from a QualType that must be canonical.
+   explicit CanType(QualType T);
+
+   /// (Unchecked) constructor for tombstone keys.
+   explicit CanType(void *Ptr);
+
+public:
+   friend class Type;
+   friend class QualType;
+
+   static CanType getFromOpaquePtr(void *Ptr);
+   static CanType getFromOpaquePtrUnchecked(void *Ptr);
+
+   /// Constructors from types that are always canonical.
+#  define CDOT_CAN_TYPE(TYPE, PARENT)                       \
+   /*implicit*/ CanType(TYPE *T) : CanType((Type*)T) {}
+#  define CDOT_CAN_DEPENDENT_TYPE(TYPE, PARENT) CDOT_CAN_TYPE(TYPE, PARENT)
+#  include "Types.def"
+};
+
+inline CanType Type::getCanonicalType() const
+{
+   return CanType(CanonicalType);
+}
+
+inline CanType QualType::getCanonicalType() const
+{
+   return (*this)->getCanonicalType();
+//   return CanType(QualType(getBuiltinTy()->getCanonicalType(), getQuals()));
+}
+
+inline QualType::operator CanType() const
+{
+   return getCanonicalType();
+}
+
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, QualType Ty);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const ast::SourceType &Ty);
 
@@ -589,6 +631,16 @@ template<> struct simplify_type<::cdot::QualType> {
    }
 };
 
+// teach isa etc. to treat CanType like a type
+template<> struct simplify_type<::cdot::CanType> {
+   using SimpleType = ::cdot::Type*;
+
+   static SimpleType getSimplifiedValue(::cdot::CanType Val)
+   {
+      return *Val;
+   }
+};
+
 template<>
 struct PointerLikeTypeTraits<::cdot::QualType> {
 public:
@@ -600,6 +652,23 @@ public:
    static inline ::cdot::QualType getFromVoidPointer(void *P)
    {
       return ::cdot::QualType::getFromOpaquePtr(P);
+   }
+
+   // Various qualifiers go in low bits.
+   enum { NumLowBitsAvailable = 0 };
+};
+
+template<>
+struct PointerLikeTypeTraits<::cdot::CanType> {
+public:
+   static inline void *getAsVoidPointer(::cdot::CanType P)
+   {
+      return P.getAsOpaquePtr();
+   }
+
+   static inline ::cdot::CanType getFromVoidPointer(void *P)
+   {
+      return ::cdot::CanType::getFromOpaquePtrUnchecked(P);
    }
 
    // Various qualifiers go in low bits.
@@ -625,6 +694,29 @@ template<> struct DenseMapInfo<::cdot::QualType> {
 
    static bool isEqual(const ::cdot::QualType &LHS,
                        const ::cdot::QualType &RHS) {
+      return LHS == RHS;
+   }
+};
+
+template<> struct DenseMapInfo<::cdot::CanType> {
+   static ::cdot::CanType getEmptyKey() {
+      uintptr_t Val = static_cast<uintptr_t>(-1);
+      Val <<= ::cdot::TypeAlignmentInBits;
+      return ::cdot::CanType::getFromOpaquePtrUnchecked((void*)Val);
+   }
+
+   static ::cdot::CanType getTombstoneKey() {
+      uintptr_t Val = static_cast<uintptr_t>(-2);
+      Val <<= ::cdot::TypeAlignmentInBits;
+      return ::cdot::CanType::getFromOpaquePtrUnchecked((void*)Val);
+   }
+
+   static int getHashValue(const ::cdot::CanType &P) {
+      return (int)(uintptr_t)P.getAsOpaquePtr();
+   }
+
+   static bool isEqual(const ::cdot::CanType &LHS,
+                       const ::cdot::CanType &RHS) {
       return LHS == RHS;
    }
 };
@@ -912,6 +1004,33 @@ public:
    {
       ID.AddPointer(elementType.getAsOpaquePtr());
    }
+
+   friend class ast::ASTContext;
+};
+
+class ExistentialType final: public Type, public llvm::FoldingSetNode {
+   explicit ExistentialType(ArrayRef<QualType> Existentials,
+                            Type *CanonicalType,
+                            TypeProperties Props);
+
+   /// The number of protocols this existential type entails.
+   unsigned NumExistentials;
+
+public:
+   ArrayRef<QualType> getExistentials() const;
+
+   void Profile(llvm::FoldingSetNodeID &ID);
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       ArrayRef<QualType> Existentials);
+
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::ExistentialTypeID;
+   }
+
+   child_iterator child_begin() const
+   { return reinterpret_cast<child_iterator>(this + 1); }
+   child_iterator child_end() const { return child_begin() + NumExistentials; }
 
    friend class ast::ASTContext;
 };
@@ -1208,8 +1327,6 @@ public:
    friend class ast::ASTContext;
 };
 
-// to be used when resolving template arguments and the actual underlying
-// record of the type might not exist
 class DependentRecordType: public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl *record,
@@ -1248,12 +1365,6 @@ class GenericType: public Type, public llvm::FoldingSetNode {
    ast::TemplateParamDecl *P;
 
 public:
-   // HACK - on creation, the actual underlying type of the
-   // TemplateParamDecl might not be known yet. We have to violate type
-   // immutability to update the canonical type before any actual type
-   // checking is done
-   void setCanonicalType(QualType CanonicalType);
-
    ast::TemplateParamDecl *getParam() const { return P; }
    llvm::StringRef getGenericTypeName() const;
    QualType getCovariance() const;
@@ -1283,18 +1394,15 @@ public:
 };
 
 class AssociatedType: public Type, public llvm::FoldingSetNode {
-   explicit AssociatedType(ast::AssociatedTypeDecl *AT);
+   AssociatedType(ast::AssociatedTypeDecl *AT, AssociatedType *OuterAT);
 
    ast::AssociatedTypeDecl *AT;
+   AssociatedType *OuterAT;
 
 public:
-   // HACK - on creation, the actual underlying type of the
-   // AssociatedTypeDecl might not be known yet. We have to violate type
-   // immutability to update the canonical type before any actual type
-   // checking is done
-   void setCanonicalType(QualType CanonicalType);
-
    ast::AssociatedTypeDecl *getDecl() const { return AT; }
+   AssociatedType *getOuterAT() const { return OuterAT; }
+
    QualType getActualType() const;
 
    child_iterator child_begin() const { return child_iterator{}; }
@@ -1302,12 +1410,13 @@ public:
 
    void Profile(llvm::FoldingSetNodeID &ID)
    {
-      Profile(ID, AT);
+      Profile(ID, AT, OuterAT);
    }
 
-   static void Profile(llvm::FoldingSetNodeID &ID, ast::AssociatedTypeDecl *P)
-   {
+   static void Profile(llvm::FoldingSetNodeID &ID, ast::AssociatedTypeDecl *P,
+                       AssociatedType *OuterAT) {
       ID.AddPointer(P);
+      ID.AddPointer(OuterAT);
    }
 
    static bool classof(Type const* T)

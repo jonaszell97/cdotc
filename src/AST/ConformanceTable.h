@@ -18,10 +18,22 @@ namespace ast {
 } // namespace ast
 
 enum class ConformanceKind : unsigned char {
-   None = 0,
-   Implicit = 1,
-   Explicit = 2,
-   Inherited = 4
+   /// \brief The conformance does not exist.
+   None        = 0,
+
+   /// \brief The conformance is implicit, e.g. an enum's conformance to
+   /// Equatable.
+   Implicit    = 1,
+
+   /// \brief The conformance was explicitly declared in the code.
+   Explicit    = 2,
+
+   /// \brief The conformance was inherited from a superclass or a protocol.
+   Inherited   = 4,
+
+   /// \brief The conformance is dependent on a constraint. Only applicable to
+   /// templates or protocols with unresolved constraints.
+   Conditional = 5,
 };
 
 class Conformance {
@@ -35,6 +47,8 @@ public:
 
    ConformanceKind getKind() const { return Kind; }
    ast::ProtocolDecl *getProto() const { return Proto; }
+
+   bool isConditional() const { return Kind == ConformanceKind::Conditional; }
 };
 
 class ConformanceTable {
@@ -66,6 +80,11 @@ public:
                                      ast::ProtocolDecl *P) const;
 
    bool conformsTo(ast::RecordDecl *Decl, ast::ProtocolDecl *P) const;
+
+   bool addConformance(ast::ASTContext &C,
+                       ConformanceKind Kind,
+                       ast::RecordDecl *Decl,
+                       ast::ProtocolDecl *P);
 
    bool addExplicitConformance(ast::ASTContext &C,
                                ast::RecordDecl *Decl,

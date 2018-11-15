@@ -19,6 +19,7 @@ struct Diagnostic;
 
 class DiagnosticConsumer {
 public:
+   virtual ~DiagnosticConsumer() = default;
    virtual void HandleDiagnostic(const Diagnostic &Diag) = 0;
 };
 
@@ -30,11 +31,17 @@ public:
    { }
 };
 
+class DiagnosticsEngine;
+
 struct Diagnostic {
-   Diagnostic(llvm::StringRef Msg, diag::SeverityLevel Severity);
+   Diagnostic(DiagnosticsEngine &Engine,
+              llvm::StringRef Msg,
+              diag::SeverityLevel Severity);
 
    llvm::StringRef getMsg() const { return Msg; }
    diag::SeverityLevel getSeverity() const { return Severity; }
+
+   DiagnosticsEngine &Engine;
 
 private:
    llvm::StringRef Msg;

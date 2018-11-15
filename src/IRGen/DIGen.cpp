@@ -395,8 +395,30 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
       auto &ASTCtx = CI.getContext();
       auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
 
-      llvm::Metadata *ContainedTys[5] = {
+      llvm::Metadata *ContainedTys[] {
          Int8PtrTy, Int8PtrTy, Int8PtrTy, Int8PtrTy, Int8PtrTy
+      };
+
+      MD = DI->createStructType(
+         ScopeStack.top(),
+         ty->toString(),
+         File,
+         0,
+         TI.getSizeOfType(ty) * 8u,
+         TI.getAlignOfType(ty) * 8u,
+         llvm::DINode::DIFlags::FlagZero,
+         nullptr,
+         DI->getOrCreateArray(ContainedTys)
+      );
+
+      break;
+   }
+   case Type::ExistentialTypeID: {
+      auto &ASTCtx = CI.getContext();
+      auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
+
+      llvm::Metadata *ContainedTys[] {
+         Int8PtrTy, Int8PtrTy, Int8PtrTy
       };
 
       MD = DI->createStructType(
@@ -560,7 +582,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       DI->replaceArrays(forwardDecl, contained);
 
       if (forwardDecl->isForwardDecl())
-         llvm::MDNode::replaceWithPermanent(
+         forwardDecl = llvm::MDNode::replaceWithPermanent(
             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto U = dyn_cast<UnionDecl>(Ty)) {
@@ -572,7 +594,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       DI->replaceArrays(forwardDecl, contained);
 
       if (forwardDecl->isForwardDecl())
-         llvm::MDNode::replaceWithPermanent(
+         forwardDecl = llvm::MDNode::replaceWithPermanent(
             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto E = dyn_cast<EnumDecl>(Ty)) {
@@ -609,7 +631,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
          DI->replaceArrays(DiscrimDecl, DI->getOrCreateArray(containedTypes));
          if (DiscrimDecl->isForwardDecl())
-            llvm::MDNode::replaceWithPermanent(
+            DiscrimDecl = llvm::MDNode::replaceWithPermanent(
                llvm::TempDICompositeType(DiscrimDecl));
 
          CurrentName.clear();
@@ -681,7 +703,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
             DI->replaceArrays(PayloadDecl, DI->getOrCreateArray(CaseTypes));
             if (PayloadDecl->isForwardDecl())
-               llvm::MDNode::replaceWithPermanent(
+               PayloadDecl = llvm::MDNode::replaceWithPermanent(
                   llvm::TempDICompositeType(PayloadDecl));
 
             llvm::DIType *PayloadTy = PayloadDecl;
@@ -704,7 +726,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       }
 
       if (forwardDecl->isForwardDecl())
-         llvm::MDNode::replaceWithPermanent(
+         forwardDecl = llvm::MDNode::replaceWithPermanent(
             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto P = dyn_cast<ProtocolDecl>(Ty)) {
@@ -712,7 +734,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       DI->replaceArrays(forwardDecl, contained);
 
       if (forwardDecl->isForwardDecl())
-         llvm::MDNode::replaceWithPermanent(
+         forwardDecl = llvm::MDNode::replaceWithPermanent(
             llvm::TempDICompositeType(forwardDecl));
    }
    else {
@@ -824,6 +846,9 @@ llvm::MDNode* IRGen::emitGlobalVarDI(GlobalVariable const& G,
 
 llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
 {
+   if (F.getName()=="_CNW3std7reflectE15OperatingSystemGa8isDarwinES_L0") {
+       int i=3; //CBP
+   }
    std::vector<llvm::Metadata*> argTypes;
    for (const auto& arg : F.getEntryBlock()->getArgs()) {
       argTypes.push_back(getTypeDI(arg.getType()));
@@ -859,7 +884,7 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
          false,
          !F.isDeclared(),
          M->isVirtual(),
-         M->getVtableOffset(),
+         M->getVtableOffset() == -1 ? 0 : M->getVtableOffset(),
          1,
          nullptr //FIXME
       );

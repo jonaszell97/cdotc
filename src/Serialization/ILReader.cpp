@@ -817,10 +817,11 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    }
    case Value::VirtualCallInstID: {
       auto FnTy = cast<FunctionType>(Record.readType().getBuiltinTy());
+      auto TI = cast_or_null<GlobalVariable>(Record.readValue());
       auto Offset = (unsigned)Record.readInt();
 
       I = Builder.CreateVirtualCall(cast<Function>(Operands.back()),
-                                    FnTy, Offset,
+                                    FnTy, TI, Offset,
                                     ArrayRef<Value*>(Operands).drop_back(1));
 
       break;
@@ -842,12 +843,13 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    }
    case Value::VirtualInvokeInstID: {
       auto FnTy = cast<FunctionType>(Record.readType().getBuiltinTy());
+      auto TI = cast_or_null<GlobalVariable>(Record.readValue());
       auto Offset = (unsigned)Record.readInt();
       auto NormalDst = Record.readValueAs<BasicBlock>();
       auto LPad = Record.readValueAs<BasicBlock>();
 
       I = Builder.CreateVirtualInvoke(cast<Function>(Operands.back()),
-                                      FnTy, Offset,
+                                      FnTy, TI, Offset,
                                       ArrayRef<Value*>(Operands).drop_back(1),
                                       NormalDst, LPad);
 

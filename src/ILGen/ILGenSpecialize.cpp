@@ -71,7 +71,7 @@ void Specializer::specialize(il::Function &OldFn, il::Function &NewFn)
          continue;
       }
 
-      visitBasicBlock(NewFn, BB);
+      cloneBasicBlock(NewFn, BB);
    }
 
    for (auto &BB : OldFn) {
@@ -177,7 +177,7 @@ class TypeSubstVisitor: public TypeBuilder<TypeSubstVisitor> {
 
 public:
    explicit TypeSubstVisitor(ILGenPass &ILGen)
-      : TypeBuilder(ILGen.getSema(), StmtOrDecl()),
+      : TypeBuilder(ILGen.getSema(), SourceRange()),
         ILGen(ILGen)
    {}
 

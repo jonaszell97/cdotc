@@ -16,6 +16,15 @@ using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::support;
 
+static_assert((int)Decl::DF_ContainsGenericParam == (int)Statement::ContainsGenericParam,
+              "flag must be the same!");
+
+static_assert((int)Decl::DF_ContainsAssociatedType == (int)Statement::ContainsAssociatedType,
+              "flag must be the same!");
+
+static_assert((int)Decl::DF_ContainsUnexpandedPack == (int)Statement::ContainsUnexpandedPack,
+              "flag must be the same!");
+
 Decl::Decl(DeclKind kind, unsigned flags)
    : kind(kind), flags(flags)
 {}
@@ -244,12 +253,6 @@ void Decl::addAttribute(Attr *A) const
 
 void Decl::copyStatusFlags(Statement *D)
 {
-   // FIXME
-   if (D->containsGenericParam())
-      flags |= DF_ContainsGenericParam;
-   if (D->containsAssociatedType())
-      flags |= DF_ContainsAssociatedType;
-
    flags |= (D->getSubclassData() & StatusFlags);
 }
 
@@ -342,12 +345,39 @@ void Decl::dumpName() const
    llvm::outs() << "<unnamed decl>" << "\n";
 }
 
+void Decl::dumpSourceLine()
+{
+   SourceRange SR = getSourceRange();
+   SourceLocation Start = SR.getStart();
+   SourceLocation End = SR.getEnd();
+
+   if (Start && End) {
+      getASTCtx().CI.getFileMgr().dumpSourceRange(SR);
+   }
+   else if (Start) {
+      getASTCtx().CI.getFileMgr().dumpSourceLine(Start);
+   }
+   else {
+      llvm::outs() << "<invalid source location>";
+   }
+}
+
 std::string Decl::getNameAsString() const
 {
    if (auto ND = dyn_cast<NamedDecl>(this))
       return ND->getFullName();
 
    return "<unnamed decl>";
+}
+
+StringRef Decl::getFileName() const
+{
+   return getASTCtx().CI.getFileMgr().getFileName(getSourceLoc());
+}
+
+std::string Decl::getSourceLocAsString() const
+{
+   return getASTCtx().CI.getFileMgr().getSourceLocationAsString(getSourceLoc());
 }
 
 NamedDecl::NamedDecl(DeclKind typeID,
@@ -394,7 +424,16 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
       OS << Name;
    }
 
-   if (auto *C = dyn_cast<CallableDecl>(this)) {
+   auto *C = dyn_cast<CallableDecl>(this);
+   if (!C && isa<SubscriptDecl>(this)) {
+      auto *S = dyn_cast<SubscriptDecl>(this);
+      C = S->getGetterMethod();
+
+      if (!C)
+         C = S->getSetterMethod();
+   }
+
+   if (C) {
       unsigned i = 0;
       OS << "(";
 
@@ -692,7 +731,11 @@ void DeclList::appendDecl(NamedDecl *Decl)
 void DeclList::removeDecl(NamedDecl *Decl)
 {
    auto &Vec = *getAsVec();
-   Vec.erase(std::find(Vec.begin(), Vec.end(), Decl));
+   auto It = std::find(Vec.begin(), Vec.end(), Decl);
+
+   if (It != Vec.end()) {
+      Vec.erase(It);
+   }
 }
 
 bool DeclContext::hasExternalStorage() const
@@ -909,9 +952,15 @@ ASTContext& DeclContext::getDeclASTContext() const
 
 void DeclContext::removeVisibleDecl(NamedDecl *D)
 {
-   auto DeclIt = primaryCtx->namedDecls.find(D->getDeclName());
-   if (DeclIt == primaryCtx->namedDecls.end())
+   removeVisibleDecl(D, D->getDeclName());
+}
+
+void DeclContext::removeVisibleDecl(NamedDecl *D,
+                                    DeclarationName VisibleName){
+   auto DeclIt = primaryCtx->namedDecls.find(VisibleName);
+   if (DeclIt == primaryCtx->namedDecls.end()) {
       return;
+   }
 
    DeclList &Decls = DeclIt->getSecond();
    if (Decls.getAsDecl()) {
@@ -1000,6 +1049,15 @@ void DeclContext::dumpName() const
       return ND->dumpName();
 
    llvm::outs() << "<unnamed decl>" << "\n";
+}
+
+void DeclContext::dumpSourceLine()
+{
+   if (auto ND = dyn_cast<NamedDecl>(this)) {
+      return ND->dumpSourceLine();
+   }
+
+   llvm::outs() << "<invalid source location>" << "\n";
 }
 
 std::string DeclContext::getNameAsString() const

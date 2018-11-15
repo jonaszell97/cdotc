@@ -18,6 +18,11 @@ using namespace cdot::support;
 
 QueryResult IsEquatableQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    default:
@@ -32,8 +37,8 @@ QueryResult IsEquatableQuery::run()
 
       for (auto SubTy : T->children()) {
          // Check whether or not the subtype is equatable.
-         if (QC.IsEquatable(Result, SubTy)) {
-            return fail();
+         if (auto Err = QC.IsEquatable(Result, SubTy)) {
+            return Query::finish(Err);
          }
 
          if (!Result) {
@@ -42,25 +47,44 @@ QueryResult IsEquatableQuery::run()
       }
 
       break;
+   case Type::ExistentialTypeID: {
+      Result = false;
+
+      auto *Eq = QC.Sema->getEquatableDecl();
+      for (auto E : T->asExistentialType()->getExistentials()) {
+         if (E->getRecord() == Eq) {
+            Result = true;
+            break;
+         }
+      }
+
+      break;
+   }
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID:
       Result = true;
 
       if (!isa<ClassDecl>(T->getRecord())) {
-         if (QC.ConformsTo(Result, T->getRecord()->getType(),
-                           sema().getEquatableDecl())) {
-            return fail();
+         if (auto Err = QC.ConformsTo(Result,
+                                      QC.Context.getRecordType(T->getRecord()),
+                                      QC.Sema->getEquatableDecl())) {
+            return Query::finish(Err);
          }
       }
 
       break;
    }
 
-   return finish(Result);
+   return finish(Result, S);
 }
 
 QueryResult IsMoveOnlyQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    default:
@@ -75,8 +99,8 @@ QueryResult IsMoveOnlyQuery::run()
 
       for (auto SubTy : T->children()) {
          // Check whether or not the subtype is equatable.
-         if (QC.IsMoveOnly(Result, SubTy)) {
-            return fail();
+         if (auto Err = QC.IsMoveOnly(Result, SubTy)) {
+            return Query::finish(Err);
          }
 
          if (Result) {
@@ -85,35 +109,57 @@ QueryResult IsMoveOnlyQuery::run()
       }
 
       break;
+   case Type::ExistentialTypeID: {
+      Result = false;
+
+      auto *MoveOnly = QC.Sema->getMoveOnlyDecl();
+      for (auto E : T->asExistentialType()->getExistentials()) {
+         if (E->getRecord() == MoveOnly) {
+            Result = true;
+            break;
+         }
+      }
+
+      break;
+   }
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID:
       Result = false;
 
       if (!isa<ClassDecl>(T->getRecord())) {
-         if (QC.ConformsTo(Result, T->getRecord()->getType(),
-                           sema().getMoveOnlyDecl())) {
-            return fail();
+         if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
+            return Query::finish(Err);
+         }
+         if (auto Err = QC.ConformsTo(Result,
+                                      QC.Context.getRecordType(T->getRecord()),
+                                      QC.Sema->getMoveOnlyDecl())) {
+            return Query::finish(Err);
          }
       }
 
       break;
    }
 
-   return finish(Result);
+   return finish(Result, S);
 }
 
 QueryResult IsCopyableQuery::run()
 {
    bool Result;
-   if (QC.IsMoveOnly(Result, T)) {
-      return fail();
+   if (auto Err = QC.IsMoveOnly(Result, T)) {
+      return Query::finish(Err);
    }
 
-   return finish(Result);
+   return finish(!Result);
 }
 
 QueryResult IsImplicitlyCopyableQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    default:
@@ -134,8 +180,8 @@ QueryResult IsImplicitlyCopyableQuery::run()
 
       for (auto SubTy : T->children()) {
          // Check whether or not the subtype is equatable.
-         if (QC.IsImplicitlyCopyable(Result, SubTy)) {
-            return fail();
+         if (auto Err = QC.IsImplicitlyCopyable(Result, SubTy)) {
+            return Query::finish(Err);
          }
 
          if (!Result) {
@@ -149,20 +195,29 @@ QueryResult IsImplicitlyCopyableQuery::run()
       Result = true;
 
       if (!isa<ClassDecl>(T->getRecord())) {
-         if (QC.ConformsTo(Result, T->getRecord()->getType(),
-                           sema().getImplicitlyCopyableDecl())) {
-            return fail();
+         if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
+            return Query::finish(Err);
+         }
+         if (auto Err = QC.ConformsTo(Result,
+                                      QC.Context.getRecordType(T->getRecord()),
+                                      QC.Sema->getImplicitlyCopyableDecl())) {
+            return Query::finish(Err);
          }
       }
 
       break;
    }
 
-   return finish(Result);
+   return finish(Result, S);
 }
 
 QueryResult NeedsRetainOrReleaseQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    default:
@@ -174,8 +229,8 @@ QueryResult NeedsRetainOrReleaseQuery::run()
 
       for (auto SubTy : T->children()) {
          // Check whether or not the subtype is equatable.
-         if (QC.NeedsRetainOrRelease(Result, SubTy)) {
-            return fail();
+         if (auto Err = QC.NeedsRetainOrRelease(Result, SubTy)) {
+            return Query::finish(Err);
          }
 
          if (Result) {
@@ -189,20 +244,34 @@ QueryResult NeedsRetainOrReleaseQuery::run()
       Result = true;
       break;
    case Type::RecordTypeID:
-   case Type::DependentRecordTypeID:
-      Result = isa<ClassDecl>(T->getRecord());
+   case Type::DependentRecordTypeID: {
+      if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
+         return Query::finish(Err);
+      }
+
+      Result = QC.RecordMeta[T->getRecord()].NeedsRetainOrRelease;
       break;
    }
+   }
 
-   return finish(Result);
+   return finish(Result, S);
 }
 
 QueryResult NeedsStructReturnQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    default:
       Result = false;
+      break;
+   case Type::AssociatedTypeID:
+   case Type::ExistentialTypeID:
+      Result = true;
       break;
    case Type::RecordTypeID: {
       auto rec = T->getRecord();
@@ -234,11 +303,16 @@ QueryResult NeedsStructReturnQuery::run()
       break;
    }
 
-   return finish(Result);
+   return finish(Result, S);
 }
 
 QueryResult NeedsDeinitilizationQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    default:
@@ -250,8 +324,8 @@ QueryResult NeedsDeinitilizationQuery::run()
 
       for (auto SubTy : T->children()) {
          // Check whether or not the subtype is equatable.
-         if (QC.NeedsDeinitilization(Result, SubTy)) {
-            return fail();
+         if (auto Err = QC.NeedsDeinitilization(Result, SubTy)) {
+            return Query::finish(Err);
          }
 
          if (Result) {
@@ -262,18 +336,22 @@ QueryResult NeedsDeinitilizationQuery::run()
       break;
    case Type::BoxTypeID:
    case Type::LambdaTypeID:
-      Result = true;
-      break;
    case Type::RecordTypeID:
+   case Type::ExistentialTypeID:
       Result = true;
       break;
    }
 
-   return finish(Result);
+   return finish(Result, S);
 }
 
 QueryResult IsTriviallyCopyableQuery::run()
 {
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
    bool Result;
    switch (T->getTypeID()) {
    case Type::BuiltinTypeID:
@@ -294,8 +372,8 @@ QueryResult IsTriviallyCopyableQuery::run()
       Result = true;
 
       for (auto SubTy : T->children()) {
-         if (QC.IsTriviallyCopyable(Result, SubTy)) {
-            return fail();
+         if (auto Err = QC.IsTriviallyCopyable(Result, SubTy)) {
+            return Query::finish(Err);
          }
 
          if (!Result) {
@@ -307,42 +385,160 @@ QueryResult IsTriviallyCopyableQuery::run()
    }
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID: {
+      if (T->isDependentType()) {
+         return finish(true, Dependent);
+      }
+
       if (isa<ast::ClassDecl>(T->getRecord())) {
          Result = false;
       }
       else {
-         unsigned Size;
-         if (QC.CalculateRecordSize(Size, T->getRecord(), Loc)) {
-            return fail();
+         if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
+            return Query::finish(Err);
          }
 
-         if (T->getRecord()->getCopyFn()
-               && !T->getRecord()->getCopyFn()->isSynthesized()) {
+         auto &Meta = QC.RecordMeta[T->getRecord()];
+         if (Meta.CopyFn) {
             Result = false;
          }
          else if (T->getRecord()->isInvalid()) {
             Result = true;
          }
          else {
-            Result = T->getRecord()->isTriviallyCopyable();
+            Result = Meta.IsTriviallyCopyable;
          }
       }
 
       break;
    }
    default:
-      llvm_unreachable("bad type kind!");
+      Result = false;
+      break;
    }
 
-   return finish(Result);
+   return finish(Result, S);
+}
+
+QueryResult IsUnpopulatedQuery::run()
+{
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
+   bool Result;
+   switch (T->getTypeID()) {
+   default:
+      Result = false;
+      break;
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
+      QC.IsUnpopulated(Result, *T->child_begin());
+      break;
+   case Type::ArrayTypeID:
+   case Type::TupleTypeID: {
+      Result = false;
+
+      for (auto SubTy : T->children()) {
+         if (auto Err = QC.IsUnpopulated(Result, SubTy)) {
+            return Query::finish(Err);
+         }
+
+         if (Result) {
+            break;
+         }
+      }
+
+      break;
+   }
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
+      if (T->isDependentType()) {
+         return finish(false, Dependent);
+      }
+
+      if (auto *E = dyn_cast<EnumDecl>(T->getRecord())) {
+         if (E->isInstantiation()) {
+            Result =
+               cast<EnumDecl>(E->getSpecializedTemplate())->isUnpopulated();
+         }
+         else {
+            Result = E->decl_empty<EnumCaseDecl>();
+         }
+      }
+      else {
+         Result = false;
+      }
+
+      break;
+   }
+   }
+
+   return finish(Result, S);
+}
+
+QueryResult IsPersistableQuery::run()
+{
+   switch (T->getTypeID()) {
+   default:
+      return finish(true);
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID: {
+      if (T->getPointeeType()->isInt8Ty()) {
+         return finish(true);
+      }
+
+      return finish(false);
+   }
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
+      return finish(false);
+   case Type::ArrayTypeID:
+   case Type::TupleTypeID: {
+      bool IsPersistable = true;
+      for (auto SubTy : T->children()) {
+         if (!QC.IsPersistable(IsPersistable, SubTy) && !IsPersistable) {
+            return finish(false);
+         }
+      }
+
+      return finish(true);
+   }
+   case Type::RecordTypeID:
+   case Type::DependentRecordTypeID: {
+      auto R = T->getRecord();
+
+      RecordDecl *Decl;
+      if (QC.GetBuiltinRecord(Decl, GetBuiltinRecordQuery::String)) {
+         return finish(true, DoneWithError);
+      }
+      if (R == Decl) {
+         return finish(true);
+      }
+
+      if (QC.GetBuiltinRecord(Decl, GetBuiltinRecordQuery::Array)) {
+         return finish(true, DoneWithError);
+      }
+      if (R == Decl) {
+         return finish(true);
+      }
+      if (R->isInstantiation() && R->getSpecializedTemplate() == Decl) {
+         return finish(true);
+      }
+
+      // FIXME Persistable protocol
+      return finish(true);
+   }
+   }
 }
 
 QueryResult GetTypeSizeQuery::run()
 {
-   // FIXME CanType
-   T = T->getCanonicalType();
-
-   auto &TI = sema().Context.getTargetInfo();
+   auto &TI = QC.Sema->Context.getTargetInfo();
    switch (T->getTypeID()) {
    case Type::RecordTypeID: {
       auto R = T->getRecord();
@@ -354,8 +550,8 @@ QueryResult GetTypeSizeQuery::run()
    }
    default: {
       unsigned Stride;
-      if (QC.GetTypeStride(Stride, T)) {
-         return fail();
+      if (auto Err = QC.GetTypeStride(Stride, T)) {
+         return Query::finish(Err);
       }
 
       return finish(Stride);
@@ -365,10 +561,7 @@ QueryResult GetTypeSizeQuery::run()
 
 QueryResult GetTypeStrideQuery::run()
 {
-   // FIXME CanType
-   T = T->getCanonicalType();
-
-   auto &TI = sema().Context.getTargetInfo();
+   auto &TI = QC.Sema->Context.getTargetInfo();
    switch (T->getTypeID()) {
    case Type::BuiltinTypeID: {
       using BK = Type::BuiltinKind;
@@ -399,8 +592,8 @@ QueryResult GetTypeStrideQuery::run()
    case Type::ArrayTypeID: {
       auto Arr = T->uncheckedAsArrayType();
       unsigned ElementStride;
-      if (QC.GetTypeStride(ElementStride, Arr->getElementType())) {
-         return fail();
+      if (auto Err = QC.GetTypeStride(ElementStride, Arr->getElementType())) {
+         return Query::finish(Err);
       }
 
       return finish(Arr->getNumElements() * ElementStride);
@@ -409,8 +602,8 @@ QueryResult GetTypeStrideQuery::run()
       unsigned size = 0;
       for (auto &ElTy : T->uncheckedAsTupleType()->getContainedTypes()) {
          unsigned ElementStride;
-         if (QC.GetTypeStride(ElementStride, ElTy)) {
-            return fail();
+         if (auto Err = QC.GetTypeStride(ElementStride, ElTy)) {
+            return Query::finish(Err);
          }
 
          size += ElementStride;
@@ -418,11 +611,26 @@ QueryResult GetTypeStrideQuery::run()
 
       return finish(size);
    }
+   case Type::ExistentialTypeID:
+   case Type::GenericTypeID: {
+      RecordDecl *EC;
+      if (auto Err = QC.GetBuiltinRecord(EC,
+                                 GetBuiltinRecordQuery::ExistentialContainer)) {
+         return Query::finish(Err);
+      }
+
+      unsigned Stride;
+      if (auto Err = QC.GetTypeStride(Stride, QC.Context.getRecordType(EC))) {
+         return Query::finish(Err);
+      }
+
+      return finish(Stride);
+   }
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID: {
       unsigned Size;
-      if (QC.CalculateRecordSize(Size, T->getRecord(), Loc)) {
-         return fail();
+      if (auto Err = QC.CalculateRecordSize(Size, T->getRecord())) {
+         return Query::finish(Err);
       }
 
       return finish(Size);
@@ -438,15 +646,12 @@ QueryResult GetTypeStrideQuery::run()
 
 QueryResult GetTypeAlignmentQuery::run()
 {
-   // FIXME CanType
-   T = T->getCanonicalType();
-
-   auto &TI = sema().Context.getTargetInfo();
+   auto &TI = QC.Sema->Context.getTargetInfo();
    switch (T->getTypeID()) {
    case Type::BuiltinTypeID: {
       unsigned Size;
-      if (QC.GetTypeSize(Size, T)) {
-         return fail();
+      if (auto Err = QC.GetTypeSize(Size, T)) {
+         return Query::finish(Err);
       }
 
       return finish((unsigned short) Size);
@@ -463,8 +668,10 @@ QueryResult GetTypeAlignmentQuery::run()
       return finish(TI.getPointerAlignInBytes());
    case Type::ArrayTypeID: {
       unsigned short ElementAlign;
-      if (QC.GetTypeAlignment(ElementAlign, T->asArrayType()->getElementType()))
-         return fail();
+      if (auto Err = QC.GetTypeAlignment(ElementAlign,
+                                         T->asArrayType()->getElementType())) {
+         return Query::finish(Err);
+      }
 
       return finish(ElementAlign);
    }
@@ -472,8 +679,9 @@ QueryResult GetTypeAlignmentQuery::run()
       unsigned short align = 1;
       for (auto &ElTy : T->uncheckedAsTupleType()->getContainedTypes()) {
          unsigned short ElementAlign;
-         if (QC.GetTypeAlignment(ElementAlign, ElTy))
-            return fail();
+         if (auto Err = QC.GetTypeAlignment(ElementAlign, ElTy)) {
+            return Query::finish(Err);
+         }
 
          if (ElementAlign > align)
             align = ElementAlign;
@@ -481,18 +689,56 @@ QueryResult GetTypeAlignmentQuery::run()
 
       return finish(align);
    }
+   case Type::ExistentialTypeID:
+   case Type::GenericTypeID: {
+      RecordDecl *EC;
+      if (auto Err = QC.GetBuiltinRecord(EC,
+                                 GetBuiltinRecordQuery::ExistentialContainer)) {
+         return Query::finish(Err);
+      }
+
+      unsigned short Align;
+      if (auto Err = QC.GetTypeAlignment(Align, QC.Context.getRecordType(EC))) {
+         return Query::finish(Err);
+      }
+
+      return finish(Align);
+   }
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID: {
       unsigned Size;
-      if (QC.CalculateRecordSize(Size, T->getRecord(), Loc)) {
-         return fail();
+      if (auto Err = QC.CalculateRecordSize(Size, T->getRecord())) {
+         return Query::finish(Err);
       }
 
-      return finish(T->getRecord()->getAlignment());
+      return finish(QC.RecordMeta[T->getRecord()].Alignment);
    }
    default:
       llvm_unreachable("bad type kind!");
    }
+}
+
+QueryResult IsCovariantQuery::run()
+{
+   if (T->isDependentType()) {
+      return finish(true, Dependent);
+   }
+
+   if (Covar->isUnknownAnyType()) {
+      return finish(true);
+   }
+
+   if (T->getCanonicalType() == Covar->getCanonicalType()) {
+      return finish(true);
+   }
+
+   auto ConvSeq = QC.Sema->getConversionSequence(T, Covar);
+   return finish(ConvSeq.isValid());
+}
+
+QueryResult IsContravariantQuery::run()
+{
+   llvm_unreachable("TODO");
 }
 
 namespace {
@@ -504,40 +750,60 @@ class AssociatedTypeSubstVisitorBase: public TypeBuilder<SubClass>
    QualType Self;
 
 public:
-   AssociatedTypeSubstVisitorBase(SemaPass &SP, QualType Self)
-      : TypeBuilder<SubClass>(SP, StmtOrDecl()), Self(Self)
+   AssociatedTypeSubstVisitorBase(SemaPass &SP, QualType Self, SourceRange SR)
+      : TypeBuilder<SubClass>(SP, SR), Self(Self)
    {}
 
    QualType visitAssociatedType(AssociatedType *T)
    {
-      if (T->getDecl()->isImplementation())
-         return T;
-
-      if (!Self)
-         return T;
-
-      QueryContext &QC = this->SP.QC;
-      NamedDecl *LookupRes;
-
-      // FIXME generalized extensions
-      if (QC.LookupSingle(LookupRes, Self->getRecord(),
-                          T->getDecl()->getDeclName())) {
+      if (T->getDecl()->isImplementation()) {
          return T;
       }
 
-      auto *AT = dyn_cast<AssociatedTypeDecl>(LookupRes);
-      if (!AT)
+      if (!Self) {
          return T;
+      }
 
-      return this->Ctx.getAssociatedType(AT);
+      RecordDecl *DC;
+      if (auto *Outer = T->getOuterAT()) {
+         auto OuterImpl = this->visit(Outer);
+         DC = OuterImpl->getRecord();
+      }
+      else {
+         DC = Self->getRecord();
+      }
+
+      QueryContext &QC = this->SP.QC;
+      AssociatedTypeDecl *AT;
+
+      if (QC.GetAssociatedType(AT, DC, T->getDecl()->getDeclName(),
+                               DC->getExtensions())) {
+         return T;
+      }
+
+      if (!AT || AT->isDefault()) {
+         assert(isa<ProtocolDecl>(DC) && "associated type not implemented!");
+         return T;
+      }
+
+      auto *Inst = QC.template InstantiateTemplateMember<AssociatedTypeDecl>(
+         AT, DC);
+
+      if (Inst != AT) {
+         if (QC.PrepareDeclInterface(Inst)) {
+            return T;
+         }
+      }
+
+      return this->Ctx.getAssociatedType(Inst);
    }
 };
 
 class AssociatedTypeSubstVisitor:
       public AssociatedTypeSubstVisitorBase<AssociatedTypeSubstVisitor> {
 public:
-   AssociatedTypeSubstVisitor(SemaPass &SP, QualType Self)
-      : AssociatedTypeSubstVisitorBase(SP, Self)
+   AssociatedTypeSubstVisitor(SemaPass &SP, QualType Self, SourceRange SR)
+      : AssociatedTypeSubstVisitorBase(SP, Self, SR)
    {}
 };
 
@@ -545,29 +811,36 @@ public:
 
 QueryResult SubstAssociatedTypesQuery::run()
 {
-   return finish(AssociatedTypeSubstVisitor(sema(), Self).visit(T));
+   return finish(AssociatedTypeSubstVisitor(sema(), Self, SR).visit(T));
 }
 
 namespace {
 
-class GenericTypeSubstVisitor: public TypeBuilder<GenericTypeSubstVisitor> {
+template<class TemplateArgList>
+class GenericTypeSubstVisitor:
+      public TypeBuilder<GenericTypeSubstVisitor<TemplateArgList>> {
    /// The template arguments we are substituting with.
-   sema::MultiLevelFinalTemplateArgList &TemplateArgs;
+   const TemplateArgList &TemplateArgs;
 
 public:
    GenericTypeSubstVisitor(SemaPass &SP,
-                           sema::MultiLevelFinalTemplateArgList &TemplateArgs)
-      : TypeBuilder(SP, StmtOrDecl()), TemplateArgs(TemplateArgs)
+                           const TemplateArgList &TemplateArgs,
+                           SourceRange SR)
+      : TypeBuilder<GenericTypeSubstVisitor<TemplateArgList>>(SP, SR),
+        TemplateArgs(TemplateArgs)
    {}
 
    QualType visitGenericType(GenericType *T)
    {
       const TemplateArgument *Arg = TemplateArgs.getArgForParam(T->getParam());
-      if (!Arg)
+      if (!Arg || Arg->isNull()) {
          return T;
+      }
 
-      assert(!Arg->isVariadic() && !Arg->isValue()
-                && "should not appear in type position!");
+      assert(!Arg->isValue() && "should not appear in type position!");
+      if (Arg->isVariadic()) {
+         return T;
+      }
 
       return Arg->getType();
    }
@@ -693,9 +966,9 @@ public:
          T->getNameSpecWithLoc()->getSourceRanges());
 
       // Resolve the dependent name to a type.
-      auto Ty = this->SP.resolveNestedNameSpecToType(WithLoc);
-      if (!Ty) {
-         return this->Ctx.getDependentNameType(WithLoc);
+      QualType Ty;
+      if (this->SP.QC.ResolveNestedNameSpecToType(Ty, WithLoc)) {
+         return T;
       }
 
       return Ty;
@@ -725,7 +998,7 @@ public:
          }
 
          for (auto &VA : Arg->getVariadicArgs()) {
-            ParamTys.push_back(this->visit(VA.getType()));
+            ParamTys.push_back(this->visit(VA.getNonCanonicalType()));
             Info.push_back(GivenInfo[i]);
          }
 
@@ -759,7 +1032,7 @@ public:
          }
 
          for (auto &VA : Arg->getVariadicArgs()) {
-            ResolvedTys.push_back(this->visit(VA.getType()));
+            ResolvedTys.push_back(this->visit(VA.getNonCanonicalType()));
          }
       }
 
@@ -780,7 +1053,7 @@ public:
             continue;
          }
 
-         auto Ty = Arg.getType();
+         auto Ty = Arg.getNonCanonicalType();
          auto *TA = Ty->asGenericType();
          if (!TA || !TA->isVariadic()) {
             auto Copy = this->VisitTemplateArg(Arg);
@@ -813,7 +1086,7 @@ public:
          return this->Ctx.getDependentRecordType(R, FinalList);
 
       auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
-      auto Inst = this->SP.InstantiateRecord(this->SOD.getSourceLoc(), Template,
+      auto Inst = this->SP.InstantiateRecord(this->SR.getStart(), Template,
                                              FinalList);
 
       if (Inst)
@@ -826,7 +1099,8 @@ public:
    {
       auto  R = T->getRecord();
       if (R->isInstantiation()) {
-         return this->visitRecordTypeCommon(T, R, R->getTemplateArgs());
+         return this->visitRecordTypeCommon(T, R->getSpecializedTemplate(),
+                                            R->getTemplateArgs());
       }
       if (R->isTemplate()) {
          SmallVector<TemplateArgument, 0> Args;
@@ -854,7 +1128,7 @@ public:
 
          auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
          auto Inst = this->SP.InstantiateRecord(
-            this->SOD.getSourceLoc(), Template, FinalList);
+            this->SR.getStart(), Template, FinalList);
 
          if (Inst)
             return this->Ctx.getRecordType(Inst);
@@ -884,7 +1158,20 @@ public:
 
 QueryResult SubstGenericTypesQuery::run()
 {
-   return finish(GenericTypeSubstVisitor(sema(), TemplateArgs).visit(T));
+   GenericTypeSubstVisitor<MultiLevelFinalTemplateArgList> Visitor(*QC.Sema,
+                                                                   TemplateArgs,
+                                                                   SR);
+
+   return finish(Visitor.visit(T));
+}
+
+QueryResult SubstGenericTypesNonFinalQuery::run()
+{
+   GenericTypeSubstVisitor<MultiLevelTemplateArgList> Visitor(*QC.Sema,
+                                                              TemplateArgs,
+                                                              SR);
+
+   return finish(Visitor.visit(T));
 }
 
 namespace {
@@ -895,8 +1182,9 @@ class TypeEquivalenceBuilder:
    DeclContext *LHSDecl;
 
 public:
-   TypeEquivalenceBuilder(SemaPass &SP, DeclContext *LHSDecl, QualType Self)
-      : AssociatedTypeSubstVisitorBase(SP, Self),
+   TypeEquivalenceBuilder(SemaPass &SP, DeclContext *LHSDecl, QualType Self,
+                          SourceRange SR)
+      : AssociatedTypeSubstVisitorBase(SP, Self, SR),
         LHSDecl(LHSDecl)
    {}
 
@@ -906,7 +1194,7 @@ public:
          return T;
 
       auto *Param = this->SP.QC.LookupSingleAs<TemplateParamDecl>(
-         LHSDecl, T->getParam()->getDeclName(), false, false);
+         LHSDecl, T->getParam()->getDeclName());
 
       if (!Param)
          return T;
@@ -919,6 +1207,6 @@ public:
 
 QueryResult CheckTypeEquivalenceQuery::run()
 {
-   RHS = TypeEquivalenceBuilder(sema(), LHSDecl, Self).visit(RHS);
+   RHS = TypeEquivalenceBuilder(sema(), LHSDecl, Self, {}).visit(RHS);
    return finish(LHS == RHS);
 }

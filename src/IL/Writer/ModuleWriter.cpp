@@ -219,8 +219,15 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
       WriteQualType(ty->getBoxedType());
       out << ">";
    }
+   else if (ty->isExistentialType()) {
+      unsigned i = 0;
+      for (auto E : ty->asExistentialType()->getExistentials()) {
+         if (i++ != 0) out << " & ";
+         WriteQualType(E);
+      }
+   }
    else {
-      llvm_unreachable("bad type kind");
+      out << ty;
    }
 }
 

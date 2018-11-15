@@ -143,10 +143,7 @@ void Parser::parseClassInner()
    advance();
 
    while (!currentTok().is(tok::close_brace)) {
-      if (!parseNextDecl()) {
-         if (!skipUntilNextDeclOrClosingBrace())
-            break;
-      }
+      (void) parseNextDecl();
 
       advance();
       while (currentTok().is(tok::semicolon)) {
@@ -382,6 +379,11 @@ void Parser::parseClassHead(RecordHead &Head)
 
    Head.recordName = currentTok().getIdentifierInfo();
 
+   auto params = tryParseTemplateParameters();
+   Head.templateParams.insert(Context, Head.templateParams.end(),
+                              params.begin(),
+                              params.end());
+
    if (lexer->lookahead().is(tok::open_paren)) {
       advance();
       advance();
@@ -390,15 +392,10 @@ void Parser::parseClassHead(RecordHead &Head)
 
       advance();
       if (!currentTok().is(tok::close_paren)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "')'");
       }
    }
-
-   auto params = tryParseTemplateParameters();
-   Head.templateParams.insert(Context, Head.templateParams.end(),
-                              params.begin(),
-                              params.end());
 
    auto next = lookahead();
    while (!next.is(tok::open_brace)) {
@@ -687,7 +684,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
             if (!IsProperty) {
                // the argument needs a dummy default value for overload
                // resolution.
-               DefaultVal = BuiltinExpr::Create(Context, QualType());
+               DefaultVal = BuiltinExpr::Create(Context, Type);
             }
 
             auto *NewValArg = FuncArgDecl::Create(Context, SetLoc, SetLoc,
@@ -704,6 +701,8 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
             Info.SetterMethod = MethodDecl::Create(Context, AS, SetLoc, DN,
                                                    SourceType(Context.getVoidType()),
                                                    Args, {}, nullptr, IsStatic);
+
+            Info.SetterMethod->setSynthesized(true);
 
             if (lexer->lookahead().is(tok::open_brace)) {
                if (ParsingProtocol) {
@@ -740,6 +739,8 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                                                    Type, Args, {},
                                                    nullptr, IsStatic);
 
+            Info.GetterMethod->setSynthesized(true);
+
             if (lexer->lookahead().is(tok::open_brace)) {
                if (ParsingProtocol) {
                   SP.diagnose(err_definition_in_protocol, IsProperty ? 1 : 2,
@@ -774,6 +775,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                                                    Type, Args, {},
                                                    nullptr, IsStatic);
 
+            Info.GetterMethod->setSynthesized(true);
 
             DeclContextRAII DCR(*this, Info.GetterMethod);
             Info.GetterMethod->setBody(
@@ -901,7 +903,12 @@ ParseResult Parser::parseAssociatedType()
       advance();
       advance();
 
-      covariance = parseType().tryGet();
+      if (currentTok().is(tok::question)) {
+         covariance = Context.getUnknownAnyTy();
+      }
+      else {
+         covariance = parseType().tryGet();
+      }
    }
 
    SourceType actualType;
@@ -967,12 +974,12 @@ DeclarationName Parser::parseOperatorName(FixKind Fix,
       return MakeDeclName("as");
    }
 
-   if (currentTok().is_operator()) {
-      return MakeDeclName(currentTok().toString());
-   }
-
    if (currentTok().oneOf(tok::ident, tok::op_ident)) {
       return MakeDeclName(currentTok().getIdentifier());
+   }
+
+   if (currentTok().is_operator()) {
+      return MakeDeclName(currentTok().toString());
    }
 
    SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
@@ -1013,19 +1020,13 @@ ParseResult Parser::parseMethodDecl()
             IsAbstract = true;
             advance();
             break;
-         case tok::kw_infix:
-         case tok::kw_prefix:
-         case tok::kw_postfix:
-            switch (currentTok().getKind()) {
-            case tok::kw_infix: Fix = FixKind::Infix; break;
-            case tok::kw_prefix: Fix = FixKind::Prefix; break;
-            case tok::kw_postfix: Fix = FixKind::Postfix; break;
-            default:
-               llvm_unreachable("bad fix kind");
+         case tok::ident:
+            if (currentTok().oneOf(Ident_prefix, Ident_postfix, Ident_infix)
+                && validOperatorFollows()) {
+               Fix = tokenToFix(currentTok());
+               IsOperator = true;
+               advance();
             }
-
-            IsOperator = true;
-            advance();
 
             LLVM_FALLTHROUGH;
          default:

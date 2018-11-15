@@ -16,12 +16,13 @@ namespace ast {
 using ConvSeqVec = SmallVectorImpl<ConversionSequenceBuilder>;
 
 OverloadResolver::OverloadResolver(SemaPass &SP,
+                                   DeclarationName FuncName,
                                    Expression *SelfArg,
                                    ArrayRef<Expression*> givenArgs,
                                    ArrayRef<Expression*> givenTemplateArgs,
                                    ArrayRef<IdentifierInfo*> givenLabels,
                                    Statement *Caller)
-   : SP(SP), SelfArg(SelfArg), givenArgs(givenArgs),
+   : SP(SP), FuncName(FuncName), SelfArg(SelfArg), givenArgs(givenArgs),
      givenTemplateArgs(givenTemplateArgs), givenLabels(givenLabels),
      Caller(Caller)
 {
@@ -118,7 +119,7 @@ static bool createsNewValue(ConversionSequenceBuilder &Seq)
 }
 
 static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
-                                 QualType NeededTy, QualType GivenTy,
+                                 CanType NeededTy, CanType GivenTy,
                                  FunctionType::ParamInfo NeededParamInfo,
                                  CandidateSet::Candidate &Cand,
                                  CandidateSet &CandSet,
@@ -129,6 +130,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
    }
 
    if (NeededTy->isUnknownAnyType()) {
+      // Conversion operators have 'UnknownAny' as their right-hand side type.
       assert((SP.isInDependentContext() || Cand.isBuiltinCandidate())
              && "argument of UnknownAny type in non-dependent context!");
 
@@ -158,7 +160,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
        && NeededTy->isMutableBorrowType()
        && GivenTy->isMutableReferenceType()) {
       GivenTy = SP.getContext().getMutableBorrowType(
-         GivenTy->stripReference());
+         GivenTy->stripReference())->getCanonicalType();
 
       ConvSeq.addStep(CastKind::BitCast, GivenTy);
    }
@@ -199,7 +201,8 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
       }
 
       if (!NeededTy->isReferenceType())
-         NeededTy = SP.getContext().getReferenceType(NeededTy);
+         NeededTy = SP.getContext().getReferenceType(NeededTy)
+            ->getCanonicalType();
 
       break;
    }
@@ -207,14 +210,16 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
       // the left hand side of an assignment does not need to be
       // explicitly borrowed
       if (Cand.isAssignmentOperator() && ArgNo == 0) {
-         if (!NeededTy->isMutableReferenceType())
+         if (!NeededTy->isMutableReferenceType()) {
             NeededTy = SP.getContext()
-                         .getMutableReferenceType(
-                            NeededTy->stripReference());
+                         .getMutableReferenceType(NeededTy->stripReference())
+                         ->getCanonicalType();
+         }
       }
       else if (!NeededTy->isMutableBorrowType()) {
          NeededTy = SP.getContext()
-                      .getMutableBorrowType(NeededTy->stripReference());
+                      .getMutableBorrowType(NeededTy->stripReference())
+                      ->getCanonicalType();
       }
       else if (!GivenTy->isMutableBorrowType()) {
          if (IsSelf && GivenTy->isReferenceType()) {
@@ -241,22 +246,33 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
          QualType Deref = GivenTy->getReferencedType();
          if (Deref->isRefcounted()) {
             AddCopy = true;
+            break;
          }
-         else if (SP.getContext().getTargetInfo().isTriviallyCopyable(Deref)) {
+
+         if (SP.getContext().getTargetInfo().isTriviallyCopyable(Deref)) {
             AddCopy = true;
+            break;
          }
-         else if (GivenTy->isMutableReferenceType() && isMovable(Expr)) {
+
+         if (GivenTy->isMutableReferenceType() && isMovable(Expr)) {
             // Prefer moving a mutable reference where possible.
             AddForward = true;
+            break;
          }
-         else if (SP.IsImplicitlyCopyableType(Deref)) {
+
+         bool ImplicitlyCopyable;
+         if (SP.QC.IsImplicitlyCopyable(ImplicitlyCopyable, Deref)) {
+            break;
+         }
+
+         if (ImplicitlyCopyable) {
             AddCopy = true;
+            break;
          }
-         else {
-            // can't pass a non-mutable reference to an owned parameter
-            Cand.setRequiresRef(ArgNo);
-            return true;
-         }
+
+         // can't pass a non-mutable reference to an owned parameter
+         Cand.setRequiresRef(ArgNo);
+         return true;
       }
       // if it's an rvalue, forward it
       else {
@@ -308,7 +324,7 @@ static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
       return true;
    }
 
-   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E)) {
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
       if ((!Ident->getParentExpr()
       || isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
       && Ident->getIdentInfo() == NeededLabel) {
@@ -343,22 +359,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
    FuncArgDecl *VariadicArgDecl = nullptr;
 
    bool CStyleVararg = CD->isCstyleVararg();
-   bool SubstituteArgs = true;
    unsigned NumGivenArgs = (unsigned)UnorderedArgs.size();
-
-//   if (!canSpecialize(CD)) {
-//      SubstituteArgs = false;
-//
-//      if (CD->isUnboundedTemplate()) {
-//         SubstituteArgs = true;
-//      }
-//      else if (auto *Init = dyn_cast<InitDecl>(CD)) {
-//         SubstituteArgs = Init->getRecord()->isUnboundedTemplate();
-//      }
-//      else if (auto *Case = dyn_cast<EnumCaseDecl>(CD)) {
-//         SubstituteArgs = Case->getRecord()->isUnboundedTemplate();
-//      }
-//   }
 
    unsigned i = 0;
    unsigned LabelNo = 0;
@@ -476,9 +477,13 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 
       for (Expression *ArgVal : DeclArgMap[ArgDecl]) {
          QualType NeededTy = ArgDecl->getType();
-         if (TemplateArgs && SubstituteArgs) {
-            NeededTy = SP.resolveDependencies(NeededTy, *TemplateArgs,
-                                              Caller);
+         SourceLocation ArgLoc = ArgVal->getSourceLoc();
+
+         if (TemplateArgs && NeededTy->isDependentType()) {
+            if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+                                                *TemplateArgs, ArgLoc)) {
+               continue;
+            }
          }
 
          // If the arguments type is context depentent, we need to some extra
@@ -490,6 +495,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                if (!LambdaTy) {
                   if (LE->isInvalid()) {
                      Cand.setIsInvalid();
+                     CandSet.InvalidCand = true;
                   }
                   else if (auto Def = SP.GetDefaultExprType(LE)) {
                      Cand.setHasIncompatibleArgument(i, Def);
@@ -501,10 +507,9 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                   return false;
                }
 
-               if (TemplateArgs)
-                  TemplateArgs->inferFromType(
-                     LambdaTy, NeededTy,
-                     false);
+               if (TemplateArgs) {
+                  TemplateArgs->inferFromType(LambdaTy, NeededTy, false);
+               }
 
                Conversions.emplace_back(ConversionSequenceBuilder::MakeNoop());
                ArgExprs.emplace_back(ArgVal);
@@ -518,6 +523,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             if (CanReturn == -1) {
                if (ArgVal->isInvalid()) {
                   Cand.setIsInvalid();
+                  CandSet.InvalidCand = true;
                }
                else {
                   if (auto Def = SP.GetDefaultExprType(ArgVal)) {
@@ -533,8 +539,8 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 
             QualType ArgValType;
             if (NeededTy->containsGenericType()) {
-               // we can't infer a context dependent expression from a
-               // dependent type
+               // We can't infer a context dependent expression from a
+               // dependent type.
                auto DefaultType = SP.GetDefaultExprType(ArgVal);
                if (DefaultType) {
                   if (TemplateArgs && NeededTy->containsGenericType()) {
@@ -547,10 +553,11 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                      if (isVariadic(NeededTy)) {
                         NeededTy = DefaultType;
                      }
-                     else {
-                        NeededTy = SP.resolveDependencies(NeededTy,
-                                                          *TemplateArgs,
-                                                          Caller);
+                     else if (SP.QC.SubstGenericTypesNonFinal(NeededTy,
+                                                              NeededTy,
+                                                              *TemplateArgs,
+                                                              ArgLoc)) {
+                        continue;
                      }
                   }
 
@@ -562,6 +569,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                else {
                   if (ArgVal->isInvalid()) {
                      Cand.setIsInvalid();
+                     CandSet.InvalidCand = true;
                      return false;
                   }
 
@@ -600,10 +608,10 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                   // Never infer reference types for template arguments.
                   NeededTy = ArgValType->stripReference();
                }
-               else if (SubstituteArgs) {
-                  NeededTy = SP.resolveDependencies(NeededTy,
-                                                    *TemplateArgs,
-                                                    Caller);
+               else if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+                                                        *TemplateArgs,
+                                                        ArgLoc)) {
+                  continue;
                }
             }
 
@@ -675,8 +683,13 @@ static bool resolveContextDependentArgs(SemaPass &SP,
       }
 
       QualType NeededTy = neededArgs[i];
-      if (TemplateArgs)
-         NeededTy = SP.resolveDependencies(NeededTy, *TemplateArgs, Caller);
+      if (TemplateArgs && NeededTy->isDependentType()) {
+         if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+                                             *TemplateArgs,
+                                             ArgVal->getSourceLoc())) {
+            continue;
+         }
+      }
 
       if (ArgVal->isContextDependent()) {
          if (auto LE = dyn_cast<LambdaExpr>(ArgVal)) {
@@ -684,6 +697,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             if (!LambdaTy) {
                if (LE->isInvalid()) {
                   Cand.setIsInvalid();
+                  CandSet.InvalidCand = true;
                }
                else if (auto Def = SP.GetDefaultExprType(LE)) {
                   Cand.setHasIncompatibleArgument(i, Def);
@@ -703,6 +717,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
          if (CanReturn == -1) {
             if (ArgVal->isInvalid()) {
                Cand.setIsInvalid();
+               CandSet.InvalidCand = true;
             }
             else {
                if (auto Def = SP.GetDefaultExprType(ArgVal)) {
@@ -730,6 +745,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             else {
                if (ArgVal->isInvalid()) {
                   Cand.setIsInvalid();
+                  CandSet.InvalidCand = true;
                   return false;
                }
 
@@ -818,8 +834,13 @@ static bool applyConversions(SemaPass &SP,
    auto &Cand = CandSet.getBestMatch();
    ArrayRef<FuncArgDecl*> ArgDecls;
    if (!Cand.isBuiltinCandidate()) {
-      if (Cand.Func->isInvalid())
+      if (Cand.Func->isInvalid()) {
+         Cand.setIsInvalid();
+         CandSet.Status = CandidateSet::NoMatch;
+         CandSet.InvalidCand = true;
+
          return true;
+      }
 
       ArgDecls = Cand.Func->getArgs();
    }
@@ -917,21 +938,9 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
    ArgVec.push_back(SelfArg);
    ArgVec.append(givenArgs.begin(), givenArgs.end());
 
-   RecordDecl *RecordInst = nullptr;
-   if (SelfArg) {
-      QualType SelfTy = SelfArg->getExprType()->stripReference();
-      if (SelfTy->isRecordType() && SelfTy->getRecord()->isInstantiation()) {
-         RecordInst = SelfTy->getRecord();
-      }
-   }
-
    ArrayRef<Expression*> ArgRef = ArgVec;
    for (unsigned i = 0; i < NumCandidates; ++i) {
       CandidateSet::Candidate &Cand = CandSet.Candidates[i];
-
-      if (RecordInst && Cand.Func) {
-         Cand.Func = SP.maybeInstantiateTemplateMember(RecordInst, Cand.Func);
-      }
 
       if (Cand.Func && SP.QC.PrepareDeclInterface(Cand.Func)) {
          Cand.setIsInvalid();
@@ -1043,89 +1052,81 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
                                ConvSeqVec &Conversions,
                                ArgVec &ArgExprs) {
    FunctionType *FuncTy = Cand.getFunctionType();
-   llvm::SmallVector<QualType, 8> resolvedGivenArgs;
+   SmallVector<QualType, 8> resolvedGivenArgs;
 
+   // FIXME runtime-generics
    bool IsTemplate = !Cand.isBuiltinCandidate()
                      && (Cand.Func->isTemplate()
                          || Cand.Func->isInitializerOfTemplate()
                          || Cand.Func->isCaseOfTemplatedEnum());
 
-   if (IsTemplate) {
-      // Penalize templates over non-templates.
-      ++Cand.ConversionPenalty;
-
-      SourceLocation listLoc = givenTemplateArgs.empty()
-                               ? Caller->getSourceLoc()
-                               : givenTemplateArgs.front()->getSourceLoc();
-
-      bool NeedOuterTemplateParams
-         = (isa<InitDecl>(Cand.Func) || isa<EnumCaseDecl>(Cand.Func))
-            && Cand.Func->getRecord()->isTemplate();
-
-      Cand.InnerTemplateArgs = TemplateArgList(
-         SP, Cand.Func,
-         // if we have an initializer or enum case, the given template
-         // arguments will be passed to the record parameter list
-         NeedOuterTemplateParams ? llvm::ArrayRef<Expression*>()
-                                 : givenTemplateArgs,
-         listLoc);
-
-      TemplateArgList OuterTemplateArgs;
-      MultiLevelTemplateArgList TemplateArgs(Cand.InnerTemplateArgs);
-
-      // initializers and enum cases also need their containing records
-      // template arguments specified (or inferred)
-      if (NeedOuterTemplateParams) {
-         OuterTemplateArgs = TemplateArgList(SP, Cand.Func->getRecord(),
-                                             givenTemplateArgs, listLoc);
-
-         TemplateArgs.addOuterList(OuterTemplateArgs);
+   if (!IsTemplate) {
+      if (!givenTemplateArgs.empty()) {
+         return Cand.setHasTooManyTemplateArgs(givenTemplateArgs.size(), 0);
       }
 
-      // try to infer unspecified template arguments from the function signature
-      if (Caller && Caller->getContextualType()) {
-         TemplateArgs.inferFromType(Caller->getContextualType(),
-                                    FuncTy->getReturnType());
-      }
+      resolveContextDependentArgs(SP, Caller, SelfArg, givenArgs,
+                                  givenLabels, ArgExprs, Cand,
+                                  CandSet, Conversions, nullptr);
 
-      if (!resolveContextDependentArgs(SP, Caller, SelfArg, givenArgs,
-                                       givenLabels, ArgExprs, Cand, CandSet,
-                                       Conversions, &TemplateArgs)) {
-         if (Cand.FR != CandidateSet::None)
-            return;
+      return;
+   }
 
-         if (NeedOuterTemplateParams) {
-            auto OuterComp = OuterTemplateArgs.checkCompatibility();
-            if (!OuterComp) {
-               // This is kind of a hack, but the template argument list will
-               // only be used for diagnostics after this.
-               Cand.InnerTemplateArgs = move(OuterTemplateArgs);
-               Cand.setTemplateArgListFailure(OuterComp);
+   // Penalize templates over non-templates.
+   ++Cand.ConversionPenalty;
 
-               return;
-            }
-         }
+   SourceLocation listLoc = givenTemplateArgs.empty()
+                            ? Caller->getSourceLoc()
+                            : givenTemplateArgs.front()->getSourceLoc();
 
-         auto comp = Cand.InnerTemplateArgs.checkCompatibility();
-         if (!comp) {
-            return Cand.setTemplateArgListFailure(comp);
-         }
+   bool NeedOuterTemplateParams
+      = (isa<InitDecl>(Cand.Func) || isa<EnumCaseDecl>(Cand.Func))
+        && Cand.Func->getRecord()->isTemplate();
 
+   Cand.InnerTemplateArgs = TemplateArgList(
+      SP, Cand.Func,
+      // if we have an initializer or enum case, the given template
+      // arguments will be passed to the record parameter list
+      NeedOuterTemplateParams ? llvm::ArrayRef<Expression*>()
+                              : givenTemplateArgs,
+      listLoc);
+
+   TemplateArgList OuterTemplateArgs;
+   MultiLevelTemplateArgList TemplateArgs(Cand.InnerTemplateArgs);
+
+   // initializers and enum cases also need their containing records
+   // template arguments specified (or inferred)
+   if (NeedOuterTemplateParams) {
+      OuterTemplateArgs = TemplateArgList(SP, Cand.Func->getRecord(),
+                                          givenTemplateArgs, listLoc);
+
+      TemplateArgs.addOuterList(OuterTemplateArgs);
+   }
+
+   // Try to infer unspecified template arguments from the function
+   // signature.
+   if (Caller && Caller->getContextualType()) {
+      TemplateArgs.inferFromType(Caller->getContextualType(),
+                                 FuncTy->getReturnType());
+   }
+
+   if (!resolveContextDependentArgs(SP, Caller, SelfArg, givenArgs,
+                                    givenLabels, ArgExprs, Cand, CandSet,
+                                    Conversions, &TemplateArgs)) {
+      // Already diagnosed an error.
+      if (Cand.FR != CandidateSet::None) {
          return;
       }
 
-      // if the template argument list is itself dependent, we have to delay
-      // the overload resolution until instantiation time
-      if (TemplateArgs.isStillDependent()) {
-         CandSet.Dependent = true;
-         return Cand.setIsDependent();
-      }
-
       if (NeedOuterTemplateParams) {
-         auto comp = OuterTemplateArgs.checkCompatibility();
-         if (!comp) {
+         auto OuterComp = OuterTemplateArgs.checkCompatibility();
+         if (!OuterComp) {
+            // This is kind of a hack, but the template argument list will
+            // only be used for diagnostics after this.
             Cand.InnerTemplateArgs = move(OuterTemplateArgs);
-            return Cand.setTemplateArgListFailure(comp);
+            Cand.setTemplateArgListFailure(OuterComp);
+
+            return;
          }
       }
 
@@ -1134,38 +1135,53 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
          return Cand.setTemplateArgListFailure(comp);
       }
 
-      // Instantiate the record if this is a template initializer.
-      if (NeedOuterTemplateParams) {
-         if (!SP.maybeInstantiateRecord(Cand, OuterTemplateArgs, Caller)) {
-            return Cand.setIsInvalid();
-         }
-      }
-
-      // check the constraints here to take the resolved
-      // template arguments into account
-      if (!Cand.Func->getConstraints().empty()) {
-         auto Res = SP.checkConstraints(Caller, Cand.Func,
-                                        TemplateArgs.outermost());
-
-         if (auto C = Res.getFailedConstraint()) {
-            return Cand.setHasFailedConstraint(C);
-         }
-
-         if (Res.isDependent()) {
-            Cand.setIsDependent();
-         }
-      }
-
       return;
    }
 
-   if (!givenTemplateArgs.empty()) {
-      return Cand.setHasTooManyTemplateArgs(givenTemplateArgs.size(), 0);
+   // If the template argument list is itself dependent, we have to delay
+   // the overload resolution until instantiation time.
+   if (TemplateArgs.isStillDependent()) {
+      CandSet.Dependent = true;
+      return Cand.setIsDependent();
    }
 
-   resolveContextDependentArgs(SP, Caller, SelfArg, givenArgs,
-                               givenLabels, ArgExprs, Cand,
-                               CandSet, Conversions, nullptr);
+   if (NeedOuterTemplateParams) {
+      auto comp = OuterTemplateArgs.checkCompatibility();
+      if (!comp) {
+         Cand.InnerTemplateArgs = move(OuterTemplateArgs);
+         return Cand.setTemplateArgListFailure(comp);
+      }
+   }
+
+   auto comp = Cand.InnerTemplateArgs.checkCompatibility();
+   if (!comp) {
+      return Cand.setTemplateArgListFailure(comp);
+   }
+
+   // Instantiate the record if this is a template initializer.
+   if (NeedOuterTemplateParams) {
+      if (!SP.maybeInstantiateRecord(Cand, OuterTemplateArgs, Caller)) {
+         Cand.setIsInvalid();
+         CandSet.InvalidCand = true;
+
+         return;
+      }
+   }
+
+   // Check the constraints here to take the resolved
+   // template arguments into account
+   if (!Cand.Func->getConstraints().empty()) {
+      auto Res = SP.checkConstraints(Caller, Cand.Func,
+                                     TemplateArgs.outermost());
+
+      if (auto C = Res.getFailedConstraint()) {
+         return Cand.setHasFailedConstraint(C);
+      }
+
+      if (Res.isDependent()) {
+         Cand.setIsDependent();
+      }
+   }
 }
 
 } // namespace ast

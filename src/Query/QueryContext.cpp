@@ -11,13 +11,14 @@ using namespace cdot;
 using namespace cdot::diag;
 using namespace cdot::support;
 
-QueryContext::QueryContext(CompilerInstance &CI) : CI(CI)
+QueryContext::QueryContext(CompilerInstance &CI)
+   : CI(CI), Context(CI.getContext())
 {
 
 }
 
 QueryContext::ExecutingQuery::ExecutingQuery(QueryContext &QC,
-                                             const Query *Q) : QC(QC) {
+                                             Query *Q) : QC(QC) {
    QC.QueryStack.push_back(Q);
 }
 
@@ -46,11 +47,10 @@ void QueryContext::diagnoseCircularDependency(const Query *Q)
       }
    }
 
-   OS << "\033[21;31m" << "  " << i++ << ". " << Q->summary()
+   OS << "\033[21;31m" << "  " << i << ". " << Q->summary()
       << "\n" << "\033[0m";
 
-   CI.getSema().diagnose(err_generic_error, OS.str());
+   CI.getSema().diagnose(fatal_any_fatal, OS.str());
 }
 
-#  define CDOT_QUERY_CONTEXT_IMPL
-#  include "Queries.inc"
+#  include "Inc/QueryContextImpls.inc"

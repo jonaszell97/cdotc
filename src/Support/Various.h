@@ -30,6 +30,30 @@ inline void hash_combine(HashTy& seed, const T& v)
    seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
 }
 
+inline std::string toCamelCase(StringRef Str)
+{
+   if (Str.find('_') != std::string::npos)
+      return Str;
+
+   std::string res;
+   res.reserve(Str.size());
+
+   for (unsigned i = 0; i < Str.size(); ++i) {
+      if (::isupper(Str[i])) {
+         if (i != 0) {
+            res += '_';
+         }
+
+         res += (char)std::tolower(Str[i]);
+      }
+      else {
+         res += Str[i];
+      }
+   }
+
+   return res;
+}
+
 } // namespace support
 } // namespace cdot
 

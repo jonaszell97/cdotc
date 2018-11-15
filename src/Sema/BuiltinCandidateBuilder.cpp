@@ -253,8 +253,19 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       Vec.emplace_back(FnTy);
       break;
    }
+   // Bitwise / Type union
+   case op::And: {
+      if (lhsType->isMetaType()) {
+         FunctionType *FnTy = Context.getFunctionType(
+            lhsType, { lhsType, Context.getUnknownAnyTy() });
+
+         Vec.emplace_back(FnTy);
+      }
+
+      LLVM_FALLTHROUGH;
+   }
    // Bitwise Ops
-   case op::And: case op::Or: case op::Xor: case op::Shl: case op::LShr:
+   case op::Or: case op::Xor: case op::Shl: case op::LShr:
    case op::AShr: {
       if (lhsType->isReferenceType())
          lhsType = lhsType->getReferencedType();
@@ -266,9 +277,10 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
          lhsType, { lhsType, lhsType });
 
       Vec.emplace_back(FnTy);
+
       break;
    }
-      // Comparison / Relational Ops
+   // Comparison / Relational Ops
    case op::CompGE: case op::CompLE: case op::CompGT: case op::CompLT:
    case op::Spaceship: case op::CompEQ: case op::CompNE: {
       if (lhsType->isReferenceType())

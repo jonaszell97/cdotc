@@ -84,7 +84,7 @@ public:
                                                     A.getSourceLoc()));
    }
 
-   void visitBasicBlock(il::Function &F, const il::BasicBlock &B)
+   void cloneBasicBlock(il::Function &F, const il::BasicBlock &B)
    {
       auto *Copy = Builder.CreateBasicBlock(&F, true, B.getName());
       addSubstitution(B, Copy);
@@ -303,8 +303,8 @@ public:
    il::Value *visitVirtualInvokeInst(const VirtualInvokeInst &I)
    {
       return Builder.CreateVirtualInvoke(
-         visit(I.getCallee()), I.getFunctionType(), I.getOffset(),
-         visit(I.getArgs()),
+         visit(I.getCallee()), I.getFunctionType(),
+         I.getProtocolTypeInfo(), I.getOffset(), visit(I.getArgs()),
          getSubstitution<BasicBlock>(I.getNormalContinuation()),
          getSubstitution<BasicBlock>(I.getLandingPad()),
          I.getName());
@@ -376,6 +376,7 @@ public:
    il::Value *visitVirtualCallInst(const VirtualCallInst &I)
    {
       return Builder.CreateVirtualCall(visit(I.getCallee()), I.getFunctionType(),
+                                       I.getProtocolTypeInfo(),
                                        I.getOffset(), visit(I.getArgs()),
                                        I.getName());
    }

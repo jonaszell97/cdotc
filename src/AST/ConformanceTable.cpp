@@ -60,6 +60,23 @@ void ConformanceTable::insertConformance(RecordDecl *Rec, Conformance *Conf)
    Conformances[Rec].push_back(Conf);
 }
 
+bool ConformanceTable::addConformance(ASTContext &C,
+                                      ConformanceKind Kind,
+                                      RecordDecl *Decl,
+                                      ProtocolDecl *P) {
+   assert(Kind != ConformanceKind::None && "invalid conformance kind!");
+   if (Kind != ConformanceKind::Conditional) {
+      if (!registerConformance(C, Decl, P)) {
+         return false;
+      }
+   }
+
+   Conformance *Conf = new (C) Conformance(Kind, P);
+   insertConformance(Decl, Conf);
+
+   return true;
+}
+
 bool ConformanceTable::addExplicitConformance(ASTContext &C,
                                               RecordDecl *Decl,
                                               ProtocolDecl *P) {

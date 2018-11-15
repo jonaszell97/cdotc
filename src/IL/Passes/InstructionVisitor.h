@@ -6,6 +6,7 @@
 #define CDOT_PASSBASE_H
 
 #include "IL/BasicBlock.h"
+#include "IL/Constants.h"
 #include "IL/Function.h"
 #include "IL/Instructions.h"
 #include "IL/Module.h"
@@ -92,11 +93,6 @@ public:
 
    // default fallbacks
    void visitModule    (Module &M) override {}
-   void visitFunction  (Function &F) {}
-   void visitBasicBlock(BasicBlock &BB) {}
-
-   void visitGlobalVariable(GlobalVariable &GV) {}
-   void visitGlobalVariable(const GlobalVariable &GV) {}
 
    void visitArgument(Argument &A) {}
    void visitArgument(const Argument &A) {}
@@ -113,14 +109,10 @@ public:
             static_cast<SubClass*>(this)                              \
                       ->visit##Name(static_cast<Name&>(V));           \
          break;
-
+#     define CDOT_CONSTANT(NAME) CDOT_INSTRUCTION(NAME)
 #     include "IL/Instructions.def"
       case Value::ArgumentID:
          static_cast<SubClass*>(this)->visitArgument(static_cast<Argument&>(V));
-         break;
-      case Value::GlobalVariableID:
-         static_cast<SubClass*>(this)
-            ->visitGlobalVariable(static_cast<GlobalVariable&>(V));
          break;
       default:
          llvm_unreachable("bad instruction kind");
@@ -139,15 +131,11 @@ public:
             static_cast<SubClass*>(this)                              \
                  ->visit##Name(static_cast<Name const&>(V));          \
         break;
-
+#     define CDOT_CONSTANT(NAME) CDOT_INSTRUCTION(NAME)
 #     include "IL/Instructions.def"
       case Value::ArgumentID:
          static_cast<SubClass*>(this)
             ->visitArgument(static_cast<const Argument&>(V));
-         break;
-      case Value::GlobalVariableID:
-         static_cast<SubClass*>(this)
-            ->visitGlobalVariable(static_cast<const GlobalVariable&>(V));
          break;
       default:
          llvm_unreachable("bad instruction kind");
@@ -155,11 +143,13 @@ public:
    }
 
 #  define CDOT_INSTRUCTION(Name)                                           \
-   RetType visit##Name(Name& I, Args&&...) { return RetType(); }
+   RetType visit##Name(Name& I, Args&&...) { return RetType(); }           \
+   RetType visit##Name(const Name& I, Args&&...) { return RetType(); }
 #  include "IL/Instructions.def"
 
-#  define CDOT_INSTRUCTION(Name)                                           \
-   RetType visit##Name(Name const& I, Args&&...) { return RetType(); }
+#  define CDOT_CONSTANT(Name)                                              \
+   RetType visit##Name(Name& C, Args&&...) { return RetType(); }           \
+   RetType visit##Name(const Name& C, Args&&...) { return RetType(); }
 #  include "IL/Instructions.def"
 
 protected:

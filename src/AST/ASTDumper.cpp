@@ -466,6 +466,11 @@ bool DumperImpl::visitOptionTypeExpr(OptionTypeExpr *expr)
    return true;
 }
 
+bool DumperImpl::visitExistentialTypeExpr(ExistentialTypeExpr *expr)
+{
+   return true;
+}
+
 bool DumperImpl::visitParenExpr(ParenExpr *expr)
 {
    return true;

@@ -7,7 +7,22 @@
 
 #include "Query.h"
 
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/Support/Allocator.h>
+
+namespace llvm {
+   // Provide DenseMapInfo for unsigned chars.
+   template<> struct DenseMapInfo<unsigned char> {
+      static inline unsigned char getEmptyKey() { return ~0; }
+      static inline unsigned char getTombstoneKey() { return ~0 - 1; }
+      static unsigned getHashValue(const unsigned char& Val) { return Val * 37U; }
+      static bool isEqual(const unsigned char &LHS, const unsigned char &RHS) {
+         return LHS == RHS;
+      }
+   };
+
+   ENUM_DENSE_MAP_INFO(::cdot::ast::ImplicitConformanceKind);
+} // namespace llvm
 
 namespace cdot {
 
@@ -18,23 +33,29 @@ public:
    /// \brief Reference to the compiler instance.
    CompilerInstance &CI;
 
+   /// \brief Pointer to the Sema instance. Can't be a reference, since Sema
+   // has a refernce to this query context.
+   ast::SemaPass *Sema = nullptr;
+
+   /// \brief Reference to the ASTContext instance.
+   ast::ASTContext &Context;
+
    /// \brief Allocator used to allocate memory for queries and their needed
    /// data.
    mutable llvm::BumpPtrAllocator Allocator;
 
    /// \brief Keeps track of queries that are currently being evaluated.
-   SmallVector<const Query*, 8> QueryStack;
+   SmallVector<Query*, 8> QueryStack;
 
 private:
-#  define CDOT_QUERY_CONTEXT_FIELDS
-#  include "Queries.inc"
+#  include "Inc/QueryContextFields.inc"
 
    void diagnoseCircularDependency(const Query *Q);
 
    /// \brief Helper RAII to keep track of running queries.
    struct ExecutingQuery {
       /// C'tor.
-      ExecutingQuery(QueryContext &QC, const Query *Q);
+      ExecutingQuery(QueryContext &QC, Query *Q);
 
       /// D'tor.
       ~ExecutingQuery();
@@ -64,9 +85,14 @@ public:
    /// \brief Does nothing.
    void Deallocate(void*) const {}
 
-#  define CDOT_QUERY_CONTEXT_DECLS
-#  include "Queries.inc"
+   /// \brief Return a query if it already exists, or nullptr if not.
+   template<class Q, class ...Args>
+   Q *getQuery(Args...) { llvm_unreachable(""); }
+
+#  include "Inc/QueryContextDecls.inc"
 };
+
+#include "Inc/QueryContextSpecializations.inc"
 
 } // namespace cdot
 

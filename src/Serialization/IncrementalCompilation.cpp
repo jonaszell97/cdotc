@@ -730,11 +730,6 @@ void IncrementalCompilationManager::addDependency(unsigned DependentFile,
    if (It2 == FileNameMap.end())
       return;
 
-//   if (It->getSecond()->getIdentifier().find("BigUInt")!=string::npos
-//      &&It2->getSecond()->getIdentifier().find("XString")!=string::npos) {
-//       int i=3; //CBP
-//   }
-
    auto ThisID = FileInfoMap[It->getSecond()->getIdentifier()].FileID;
    auto OtherID = FileInfoMap[It2->getSecond()->getIdentifier()].FileID;
 

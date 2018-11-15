@@ -50,26 +50,21 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, MemoryOrder MO);
 
 class ValueType {
 public:
-   ValueType(Context &Ctx, Type *ty);
    ValueType(Context &Ctx, QualType ty);
 
-   ValueType &operator=(QualType const& that);
+   ValueType &operator=(QualType T);
 
-   Context &getCtx() const
-   {
-      return *Ctx;
-   }
+   Context &getCtx() const { return *Ctx; }
 
    ValueType getPointerTo() const;
-
    ValueType getReferenceTo() const;
    void makeReference();
 
    /*implicit*/ operator QualType() const { return Ty; }
+   /*implicit*/ operator CanType()  const { return Ty; }
    /*implicit*/ operator bool()     const { return Ty; }
 
    Type *operator->()  const { return *Ty; }
-
    QualType get() const { return Ty; }
 
    bool operator==(const QualType &other) const { return Ty == other; }

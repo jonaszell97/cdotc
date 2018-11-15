@@ -18,6 +18,8 @@ struct SingleLevelLookupResult: public ast::DeclContextLookupResult {
       : DeclContextLookupResult(), LS(nullptr)
    {}
 
+   bool unique() const;
+
    LambdaScope *LS = nullptr;
 };
 
@@ -186,6 +188,8 @@ public:
    {
       Vec.push_back(Result);
    }
+
+   bool unique() const;
 };
 
 } // namespace cdot

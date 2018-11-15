@@ -5,11 +5,13 @@
 #include "SemaPass.h"
 
 #include "Basic/TargetInfo.h"
+#include "Builtin.h"
 #include "IL/Constants.h"
 #include "IL/Function.h"
 #include "IL/GlobalVariable.h"
 #include "ILGen/ILGenPass.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 
 using namespace cdot::diag;
 using namespace cdot::sema;
@@ -19,7 +21,7 @@ namespace cdot {
 namespace ast {
 
 enum ReflectionIdent {
-   sizeOf = 0, alignOf, line, column, fileName, sourceLocation,
+   sizeOf = 0, alignOf, strideOf, line, column, fileName, sourceLocation,
    function, mangledFunction, targetInfo, RI_inCTFE,
 
    mirror,
@@ -48,6 +50,7 @@ void SemaPass::initReflectionIdents()
 
    ReflectionIdents[sizeOf] = &Idents.get("sizeOf");
    ReflectionIdents[alignOf] = &Idents.get("alignOf");
+   ReflectionIdents[strideOf] = &Idents.get("strideOf");
    ReflectionIdents[line] = &Idents.get("line");
    ReflectionIdents[column] = &Idents.get("column");
    ReflectionIdents[fileName] = &Idents.get("fileName");
@@ -899,7 +902,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       return ExprError();
    }
 
-   ensureDeclared(ReflectMod);
+   if (QC.PrepareNameLookup(ReflectMod->getDecl())) {
+      return ExprError();
+   }
 
    auto It = ReflectionValues.find(Alias);
    if (It != ReflectionValues.end())
@@ -926,7 +931,10 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
 
    auto getReflectionDecl = [&](ReflectionIdent Ident) {
       auto *II = ReflectionIdents[Ident];
-      (void)this->Lookup(*ReflectMod->getDecl(), II);
+      const MultiLevelLookupResult *LookupRes;
+      if (QC.DirectLookup(LookupRes, ReflectMod->getDecl(), II)) {
+         return (NamedDecl*)nullptr;
+      }
 
       return BuiltinDecls[II];
    };
@@ -934,7 +942,10 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
    auto *II = Name.getIdentifierInfo();
 
    // look the declaration up to make sure it's deserialized.
-   (void) Lookup(*ReflectMod->getDecl(), II);
+   const MultiLevelLookupResult *LookupRes;
+   if (QC.DirectLookup(LookupRes, ReflectMod->getDecl(), II)) {
+      return ExprError();
+   }
 
    if (II == ReflectionIdents[sizeOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -953,17 +964,42 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return Expr;
       }
 
-      if (Ty->isRecordType()) {
-         if (!ensureSizeKnown(Ty->getRecord(), Expr))
-            return ExprError();
+      unsigned Size;
+      if (QC.GetTypeSize(Size, Ty)) {
+         Expr->setIsInvalid(true);
+         Size = 1;
       }
-
-      auto &TI = Context.getTargetInfo();
-      auto Size = TI.getSizeOfType(Ty);
 
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
                                           Context.getUIntTy(),
                                           llvm::APSInt(llvm::APInt(64, Size)));
+   }
+   else if (II == ReflectionIdents[strideOf]) {
+      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
+          || !Alias->getTemplateArgs().front().isType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+
+         return ExprError();
+      }
+
+      QualType Ty = Alias->getTemplateArgs().front().getType();
+      if (Ty->isDependentType()) {
+         Expr->setIsTypeDependent(true);
+         Expr->setExprType(Context.getUIntTy());
+
+         return Expr;
+      }
+
+      unsigned Stride;
+      if (QC.GetTypeStride(Stride, Ty)) {
+         Expr->setIsInvalid(true);
+         Stride = 1;
+      }
+
+      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
+                                          Context.getUIntTy(),
+                                          llvm::APSInt(llvm::APInt(64, Stride)));
    }
    else if (II == ReflectionIdents[alignOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -982,17 +1018,15 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return Expr;
       }
 
-      if (Ty->isRecordType()) {
-         if (!ensureSizeKnown(Ty->getRecord(), Expr))
-            return ExprError();
+      unsigned short Align;
+      if (QC.GetTypeAlignment(Align, Ty)) {
+         Expr->setIsInvalid(true);
+         Align = 1;
       }
-
-      auto &TI = Context.getTargetInfo();
-      auto Size = TI.getAlignOfType(Ty);
 
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
                                           Context.getUIntTy(),
-                                          llvm::APSInt(llvm::APInt(64, Size)));
+                                          llvm::APSInt(llvm::APInt(64, Align)));
    }
    else if (II == ReflectionIdents[line]) {
       if (Bits.InDefaultArgumentValue) {

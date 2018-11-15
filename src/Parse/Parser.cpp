@@ -42,7 +42,7 @@ Parser::Parser(ASTContext& Context,
                bool isModuleParser)
    : Context(Context),
      source_id(lexer->getSourceId()),
-     isModuleParser(isModuleParser),
+     UnboundedByDefault(!Context.CI.getOptions().runtimeGenerics()),
      lexer(lexer),
      SP(SP),
      Idents(lexer->getIdents()),
@@ -55,6 +55,9 @@ Parser::Parser(ASTContext& Context,
      Ident_do(&Idents.get("do")),
      Ident_then(&Idents.get("then")),
      Ident_where(&Idents.get("where")),
+     Ident_prefix(&Idents.get("prefix")),
+     Ident_postfix(&Idents.get("postfix")),
+     Ident_infix(&Idents.get("infix")),
      Ident_default(&Idents.get("default")),
      Ident_deinit(&Idents.get("deinit")),
      Ident_typename(&Idents.get("typename")),
@@ -84,7 +87,7 @@ Parser::Parser(ASTContext& Context,
      Ident_unittest(&Idents.get("unittest")),
      Ident___traits(&Idents.get("__traits")),
      Ident___nullptr(&Idents.get("__nullptr")),
-     Ident___func__(&Idents.get("__func__")),
+     Ident___builtin_void(&Idents.get("__builtin_void")),
      Ident___mangled_func(&Idents.get("__mangled_func")),
      Ident___ctfe(&Idents.get("__ctfe"))
 {
@@ -271,14 +274,43 @@ AccessSpecifier Parser::tokenToAccessSpec(tok::TokenType kind)
    }
 }
 
-FixKind Parser::tokenToFix(tok::TokenType kind)
+FixKind Parser::tokenToFix(const lex::Token &Tok)
 {
-   switch (kind) {
-   case tok::kw_prefix: return FixKind::Prefix;
-   case tok::kw_infix: return FixKind::Infix;
-   case tok::kw_postfix: return FixKind::Postfix;
+   assert(Tok.getKind() == tok::ident && "not a fix token");
+   auto *II = Tok.getIdentifierInfo();
+   if (II == Ident_prefix) {
+      return FixKind::Prefix;
+   }
+   else if (II == Ident_postfix) {
+      return FixKind::Postfix;
+   }
+   else {
+      return FixKind::Infix;
+   }
+}
+
+bool Parser::validOperatorFollows()
+{
+   assert(currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix));
+   switch (lookahead().getKind()) {
+   case tok::ident: case tok::op_ident:
+#  define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
+#  include "Lex/Tokens.def"
+      return true;
+   case tok::open_paren: {
+      if (!currentTok().is(Ident_postfix)) {
+         return false;
+      }
+
+      advance();
+
+      bool Result = lookahead().is(tok::close_paren);
+      lexer->backtrack();
+
+      return Result;
+   }
    default:
-      llvm_unreachable("not a fix kind");
+      return false;
    }
 }
 
@@ -498,7 +530,6 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
 
    auto typeref = typeResult.get();
 
-   // pointer type
    auto next = lookahead();
    while (1) {
       if (next.oneOf(tok::times, tok::times_times, tok::op_ident)) {
@@ -542,11 +573,8 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
                typeref = SourceType(PtrTy);
             }
          }
-
-         break;
       }
-      // optional type
-      if (next.is(tok::question)) {
+      else if (next.is(tok::question)) {
          advance();
 
          SourceRange SR(SourceLocation(BeginLoc.getOffset()),
@@ -566,6 +594,31 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
       }
 
       next = lookahead();
+   }
+
+   // Existential type union
+   if (next.is(tok::op_and)) {
+      SmallVector<SourceType, 2> Types{ typeref };
+
+      while (next.is(tok::op_and)) {
+         advance();
+         advance();
+
+         auto Next = parseTypeImpl(allowInferredArraySize, InTypePosition,
+                                   AllowMissingTemplateArguments);
+
+         if (Next) {
+            Types.push_back(Next.get());
+         }
+
+         next = lookahead();
+      }
+
+      SourceRange SR(BeginLoc, currentTok().getEndLoc());
+      auto *Expr = ExistentialTypeExpr::Create(Context, SR,
+                                               Types, !InTypePosition);
+
+      typeref = SourceType(Expr);
    }
 
    // as a special case, allow a '...' with a space after a function type to
@@ -1196,15 +1249,7 @@ ParseResult Parser::parseOperatorDecl()
 {
    auto KeywordLoc = currentTok().getSourceLoc();
 
-   FixKind Fix;
-   switch (currentTok().getKind()) {
-   case tok::kw_infix: Fix = FixKind::Infix; break;
-   case tok::kw_prefix: Fix = FixKind::Prefix; break;
-   case tok::kw_postfix: Fix = FixKind::Postfix; break;
-   default:
-      llvm_unreachable("bad fix kind");
-   }
-
+   FixKind Fix = tokenToFix(currentTok());
    advance();
 
    bool isCastOp;
@@ -1256,15 +1301,9 @@ ParseResult Parser::parseIdentifierExpr(bool parsingType,
    if (Ident == Ident___nullptr)
       return BuiltinIdentExpr::Create(Context, BeginLoc,
                                       BuiltinIdentifier::NULLPTR);
-   if (Ident == Ident___func__)
+   if (Ident == Ident___builtin_void)
       return BuiltinIdentExpr::Create(Context, BeginLoc,
-                                      BuiltinIdentifier::FUNC);
-   if (Ident == Ident___mangled_func)
-      return BuiltinIdentExpr::Create(Context, BeginLoc,
-                                      BuiltinIdentifier::MANGLED_FUNC);
-   if (Ident == Ident___ctfe)
-      return BuiltinIdentExpr::Create(Context, BeginLoc,
-                                      BuiltinIdentifier::__ctfe);
+                                      BuiltinIdentifier::__builtin_void);
 
    Expression *IdentExpr;
    if (Ident == Ident_Self) {
@@ -1313,9 +1352,10 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       advance(false);
 
       // Operator function reference
-      if (currentTok().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)) {
+      if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
+            && validOperatorFollows()) {
          auto Loc = currentTok().getSourceLoc();
-         auto Fix = tokenToFix(currentTok().getKind());
+         auto Fix = tokenToFix(currentTok());
 
          advance();
 
@@ -1545,6 +1585,9 @@ ParseResult Parser::parseTemplateArgListExpr(Expression *ParentExpr,
          auto *E = NextExpr.getExpr();
          if (auto *Ty = dyn_cast<TypeExpr>(E)) {
             Ty->setIsMeta(false);
+         }
+         else if (auto *Ident = dyn_cast<IdentifierRefExpr>(E)) {
+            Ident->setInTypePos(true);
          }
 
          Args.push_back(E);
@@ -1864,6 +1907,19 @@ ParseResult Parser::parseUnaryExpr()
             && lookahead().is(tok::open_paren)) {
       Expr = parseFunctionCall();
    }
+   else if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
+            && validOperatorFollows()) {
+      // Operator function reference
+      auto Loc = currentTok().getSourceLoc();
+      auto Fix = tokenToFix(currentTok().getKind());
+
+      advance();
+
+      bool IsConvOp;
+      auto OpName = parseOperatorName(Fix, IsConvOp);
+
+      Expr = parseIdentifierExpr(false, false, OpName, Loc);
+   }
    else if (currentTok().is(tok::ident)) {
       SourceLocation IdentLoc = currentTok().getSourceLoc();
       DeclarationName Ident = currentTok().getIdentifierInfo();
@@ -1944,18 +2000,6 @@ ParseResult Parser::parseUnaryExpr()
             Expr = TAs;
          }
       }
-   }
-   else if (currentTok().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)){
-      // Operator function reference
-      auto Loc = currentTok().getSourceLoc();
-      auto Fix = tokenToFix(currentTok().getKind());
-
-      advance();
-
-      bool IsConvOp;
-      auto OpName = parseOperatorName(Fix, IsConvOp);
-
-      Expr = parseIdentifierExpr(false, false, OpName, Loc);
    }
    else if (currentTok().is(tok::macro_name)) {
       Expr = parseMacroExpansionExpr();
@@ -2396,11 +2440,17 @@ Parser::ParseArtefactKind Parser::getNextArtefactKind()
    case tok::kw_internal: case tok::kw_protected: case tok::kw_static:
    case tok::kw_abstract: case tok::kw_prop: case tok::kw_init:
    case tok::kw_associatedType:
-   case tok::kw_infix: case tok::kw_prefix: case tok::kw_postfix:
    case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
    case tok::kw_import: case tok::kw_using:
    case tok::kw_static_assert: case tok::kw_static_print:
       return K_Decl;
+   case tok::ident:
+      if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
+            && validOperatorFollows()) {
+         return K_Decl;
+      }
+
+      LLVM_FALLTHROUGH;
    default:
       return K_Statement;
    }
@@ -2643,7 +2693,6 @@ ParseResult Parser::parseExprSequence(int Flags)
       case tok::kw_prop:
       case tok::kw_continue: case tok::kw_init:
       case tok::kw_associatedType: case tok::kw_break:
-      case tok::kw_infix: case tok::kw_prefix: case tok::kw_postfix:
       case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
       case tok::kw_import: case tok::kw_using:
       case tok::kw_static_if: case tok::kw_static_for:
@@ -3240,15 +3289,9 @@ ParseResult Parser::parseFunctionDecl()
    bool IsOperator = false;
 
    FixKind Fix;
-   if (currentTok().oneOf(tok::kw_infix, tok::kw_prefix, tok::kw_postfix)) {
-      switch (currentTok().getKind()) {
-      case tok::kw_infix: Fix = FixKind::Infix; break;
-      case tok::kw_prefix: Fix = FixKind::Prefix; break;
-      case tok::kw_postfix: Fix = FixKind::Postfix; break;
-      default:
-         llvm_unreachable("bad fix kind");
-      }
-
+   if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
+       && validOperatorFollows()) {
+      Fix = tokenToFix(currentTok());
       IsOperator = true;
       advance();
    }
@@ -3609,7 +3652,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
       SourceLocation NameLoc = currentTok().getSourceLoc();
       auto Name = currentTok().getIdentifierInfo();
 
-      bool Unbounded = !isTypeName || variadic;
+      bool Unbounded = UnboundedByDefault || !isTypeName || variadic;
       SourceType covariance;
       SourceType contravariance;
 
@@ -4681,11 +4724,18 @@ ParseResult Parser::parseTopLevelDecl()
    case tok::open_brace:
       return parseCompoundDecl(true, CurDeclAttrs.AccessLoc.isValid());
    case tok::ident: {
-      if (Tok.is(Ident_precedenceGroup))
+      if (Tok.is(Ident_precedenceGroup)) {
          return parsePrecedenceGroup();
+      }
 
-      if (Tok.is(Ident_macro))
+      if (Tok.is(Ident_macro)) {
          return parseMacro();
+      }
+
+      if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
+          && validOperatorFollows()) {
+         return parseOperatorDecl();
+      }
 
       // This might be a macro expansion with a nested name.
       if (lookahead().is(tok::period)) {
@@ -4738,10 +4788,6 @@ ParseResult Parser::parseTopLevelDecl()
    }
    case tok::macro_declaration:
       return currentTok().getDecl();
-   case tok::kw_prefix:
-   case tok::kw_postfix:
-   case tok::kw_infix:
-      return parseOperatorDecl();
    case tok::macro_name:
       return parseMacroExpansionDecl();
    case tok::kw_var:
@@ -5409,6 +5455,9 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
          if (II == Ident_default) {
             CurDeclAttrs.Default = true;
             CurDeclAttrs.DefaultLoc = currentTok().getSourceLoc();
+         }
+         else {
+            done = true;
          }
 
          break;

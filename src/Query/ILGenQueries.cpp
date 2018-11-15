@@ -3,6 +3,7 @@
 //
 
 #include "AST/Decl.h"
+#include "IL/Constants.h"
 #include "IL/ILBuilder.h"
 #include "ILGen/ILGenPass.h"
 #include "Module/Module.h"
@@ -21,31 +22,31 @@ QueryResult CreateILModuleQuery::run()
    for (StringRef File : SourceFiles) {
       ModuleDecl *NextModule;
       if (QC.ParseSourceFile(NextModule, File)) {
-         return fail();
+         continue;
       }
 
       ModuleDecls.push_back(NextModule);
    }
 
+   ModuleDecls.push_back(QC.CI.getCompilationModule()->getDecl());
+
    QC.PrintUsedMemory();
 
    // Typecheck the source files.
    for (ModuleDecl *Mod : ModuleDecls) {
-      if (QC.TypeCheckAST(Mod)) {
-         return fail();
-      }
+      QC.TypecheckDecl(Mod);
    }
 
    QC.PrintUsedMemory();
 
    // Bail out now if we encountered any errors.
-   if (sema().encounteredError()) {
+   if (QC.Sema->encounteredError()) {
       return fail();
    }
 
    auto *ILMod = QC.CI.getCompilationModule()->getILModule();
 
-   auto &ILGen = sema().getILGen();
+   auto &ILGen = QC.Sema->getILGen();
    ILGen.Builder.SetModule(ILMod);
 
    // Generate IL for the source files.
@@ -60,6 +61,7 @@ QueryResult CreateILModuleQuery::run()
 
 QueryResult GenerateILForContextQuery::run()
 {
+   Status S = Done;
    for (auto *D : DC->getDecls()) {
       switch (D->getKind()) {
       case Decl::FunctionDeclID:
@@ -67,19 +69,22 @@ QueryResult GenerateILForContextQuery::run()
       case Decl::InitDeclID:
       case Decl::DeinitDeclID: {
          auto *Fn = cast<CallableDecl>(D);
-         if (Fn->isTemplate())
+         if (Fn->isTemplate()) {
             continue;
+         }
 
-         if (QC.GenerateILFunctionBody(Fn, Loc)) {
-            return fail();
+         if (QC.GenerateILFunctionBody(Fn)) {
+            S = DoneWithError;
+            continue;
          }
 
          break;
       }
       case Decl::GlobalVarDeclID: {
          auto *GV = cast<GlobalVarDecl>(D);
-         if (QC.GenerateLazyILGlobalDefinition(GV, Loc)) {
-            return fail();
+         if (QC.GenerateLazyILGlobalDefinition(GV)) {
+            S = DoneWithError;
+            continue;
          }
 
          break;
@@ -88,21 +93,32 @@ QueryResult GenerateILForContextQuery::run()
       case Decl::ClassDeclID:
       case Decl::EnumDeclID: {
          auto *R = cast<RecordDecl>(D);
-         if (R->isTemplate())
+         if (R->isTemplate()) {
             continue;
+         }
 
          if (QC.GenerateRecordIL(R)) {
-            return fail();
+            S = DoneWithError;
+            continue;
          }
 
          break;
       }
-      case Decl::ProtocolDeclID:
-         continue;
+      case Decl::ProtocolDeclID: {
+         auto *P = cast<ProtocolDecl>(D);
+         QC.Sema->getILGen().AssignProtocolMethodOffsets(P);
+
+         break;
+      }
       case Decl::ExtensionDeclID: {
-         auto *Ext = dyn_cast<ExtensionDecl>(D);
-         if (Ext->getExtendedRecord()->isProtocol())
+         // Only visit protocol extensions if runtime generics are enabled.
+         auto *R = cast<ExtensionDecl>(D)->getExtendedRecord();
+         if (isa<ProtocolDecl>(R) && !QC.CI.getOptions().runtimeGenerics()) {
             continue;
+         }
+         if (R->isTemplateOrInTemplate()) {
+            continue;
+         }
 
          break;
       }
@@ -111,30 +127,31 @@ QueryResult GenerateILForContextQuery::run()
       }
 
       if (auto *InnerDC = dyn_cast<DeclContext>(D)) {
-         if (QC.GenerateILForContext(InnerDC, Loc)) {
+         if (QC.GenerateILForContext(InnerDC)) {
             return fail();
          }
       }
    }
 
-   return finish();
+   return finish(S);
 }
 
 QueryResult GenerateRecordILQuery::run()
 {
-   if (QC.PrepareDeclInterface(R)) {
+   if (QC.TypecheckDecl(R)) {
       return fail();
    }
 
-   il::GlobalVariable *TI;
-   if (QC.GetILTypeInfo(TI, R->getType())) {
-      return fail();
-   }
+   if (R->isExternal()) {
+      il::GlobalVariable *TI;
+      if (QC.GetILTypeInfo(TI, R->getType())) {
+         return fail();
+      }
 
-   if (R->isExternal())
       return finish();
+   }
 
-   auto &ILGen = sema().getILGen();
+   auto &ILGen = QC.Sema->getILGen();
 
    // Register type in the module.
    ILGen.ForwardDeclareRecord(R);
@@ -176,15 +193,14 @@ QueryResult GenerateRecordILQuery::run()
       }
    }
 
-   // Generate superclass VTable.
-   if (auto C = dyn_cast<ClassDecl>(R)) {
-      // FIXME into-query
-      ILGen.GetOrCreateVTable(C);
+   il::GlobalVariable *TI;
+   if (QC.GetILTypeInfo(TI, R->getType())) {
+      return fail();
    }
 
    // Generate protocol VTables.
    if (!isa<ProtocolDecl>(R)) {
-      auto Conformances = sema().Context.getConformanceTable()
+      auto Conformances = QC.Sema->Context.getConformanceTable()
                                 .getAllConformances(R);
 
       for (auto *Conf : Conformances) {
@@ -216,40 +232,62 @@ QueryResult GenerateRecordILQuery::run()
    }
 
    // Synthesize derived conformances.
-   if (R->isImplicitlyEquatable())
-      ILGen.DefineImplicitEquatableConformance(R->getOperatorEquals(), R);
+   const RecordMetaInfo *Meta;
+   if (auto Err = QC.GetRecordMeta(Meta, R)) {
+      return Query::finish(Err);
+   }
 
-   if (R->isImplicitlyHashable())
-      ILGen.DefineImplicitHashableConformance(R->getHashCodeFn(), R);
-
-   if (R->isImplicitlyCopyable())
-      ILGen.DefineImplicitCopyableConformance(R->getCopyFn(), R);
-
-   if (R->isImplicitlyStringRepresentable())
-      ILGen.DefineImplicitStringRepresentableConformance(R->getToStringFn(), R);
+   if (Meta->IsImplicitlyEquatable) {
+      ILGen.DefineImplicitEquatableConformance(Meta->OperatorEquals, R);
+   }
+   if (Meta->IsImplicitlyHashable) {
+      ILGen.DefineImplicitHashableConformance(Meta->HashCodeFn, R);
+   }
+   if (Meta->IsImplicitlyCopyable) {
+      ILGen.DefineImplicitCopyableConformance(Meta->CopyFn, R);
+   }
+   if (Meta->IsImplicitlyStringRepresentable) {
+      ILGen.DefineImplicitStringRepresentableConformance(Meta->ToStringFn, R);
+   }
 
    return finish();
 }
 
 QueryResult GetILFunctionQuery::run()
 {
-   auto &ILGen = sema().getILGen();
+   auto &ILGen = QC.Sema->getILGen();
+   if (auto Err = QC.PrepareDeclInterface(C)) {
+       return Query::finish(Err);
+   }
+
    return finish(ILGen.DeclareFunction(C));
 }
 
 QueryResult GetILGlobalQuery::run()
 {
-   auto &ILGen = sema().getILGen();
+   auto &ILGen = QC.Sema->getILGen();
+   if (auto Err = QC.PrepareDeclInterface(GV)) {
+      return Query::finish(Err);
+   }
+
    return finish(ILGen.DeclareGlobalVariable(GV));
 }
 
 QueryResult GenerateILFunctionBodyQuery::run()
 {
-   auto &ILGen = sema().getILGen();
+   if (auto Err = QC.TypecheckDecl(C)) {
+      return Query::finish(Err);
+   }
+   if (C->isInvalid()) {
+      return fail();
+   }
+
+   auto &ILGen = QC.Sema->getILGen();
    if (C->shouldBeSpecialized()) {
       ILGen.SpecializeFunction(C->getBodyTemplate(), C);
       return finish();
    }
+
    if (!C->getBody()) {
       return finish();
    }
@@ -260,10 +298,15 @@ QueryResult GenerateILFunctionBodyQuery::run()
 
 QueryResult GenerateLazyILGlobalDefinitionQuery::run()
 {
-   if (!GV->getValue())
-      return finish();
+   if (auto Err = QC.TypecheckDecl(GV)) {
+      return Query::finish(Err);
+   }
 
-   auto &ILGen = sema().getILGen();
+   if (!GV->getValue()) {
+      return finish();
+   }
+
+   auto &ILGen = QC.Sema->getILGen();
 
    il::GlobalVariable *G;
    if (QC.GetILGlobal(G, GV)) {
@@ -272,4 +315,34 @@ QueryResult GenerateLazyILGlobalDefinitionQuery::run()
 
    ILGen.DefineLazyGlobal(G, GV->getValue());
    return finish();
+}
+
+QueryResult GetBoolValueQuery::run()
+{
+   auto *CI = dyn_cast<il::ConstantInt>(C);
+   if (!CI) {
+      return fail();
+   }
+
+   return finish(CI->getBoolValue());
+}
+
+QueryResult GetIntValueQuery::run()
+{
+   auto *CI = dyn_cast<il::ConstantInt>(C);
+   if (!CI) {
+      return fail();
+   }
+
+   return finish(CI->getZExtValue());
+}
+
+QueryResult GetStringValueQuery::run()
+{
+   auto *CS = dyn_cast<il::ConstantString>(C);
+   if (!CS) {
+      return fail();
+   }
+
+   return finish(CS->getValue());
 }

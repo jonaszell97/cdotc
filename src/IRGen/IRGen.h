@@ -30,7 +30,7 @@ namespace il {
 
 class ConstantClass;
 
-class IRGen: public InstructionVisitor<IRGen, llvm::Value*> {
+class IRGen final: public InstructionVisitor<IRGen, llvm::Value*> {
 public:
    explicit IRGen(CompilerInstance &CU,
                   llvm::LLVMContext &Ctx,
@@ -78,19 +78,19 @@ private:
    void finalize(const CompilerInstance &CU);
    void runMandatoryPasses(llvm::Module *M);
 
-   bool NeedsStructReturn(QualType Ty);
-   bool PassStructDirectly(QualType Ty);
+   bool NeedsStructReturn(CanType Ty);
+   bool PassStructDirectly(CanType Ty);
 
    void addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal);
 
    llvm::StructType *getStructTy(QualType Ty);
    llvm::StructType *getStructTy(ast::RecordDecl *R);
 
-   llvm::Type *getLlvmTypeImpl(QualType Ty);
+   llvm::Type *getLlvmTypeImpl(CanType Ty);
 
-   llvm::Type *getGlobalType(QualType Ty);
-   llvm::Type *getStorageType(QualType Ty);
-   llvm::Type *getParameterType(QualType Ty);
+   llvm::Type *getGlobalType(CanType Ty);
+   llvm::Type *getStorageType(CanType Ty);
+   llvm::Type *getParameterType(CanType Ty);
 
    llvm::Value *unboxValue(llvm::Value *V, QualType Ty);
    llvm::Value *getLlvmValue(il::Value const* V);
@@ -120,6 +120,11 @@ private:
    llvm::Function *getFunction(il::Function *F);
    llvm::Value *getCurrentSRetValue();
    llvm::Value *getCurrentErrorValue();
+
+   /// Return the VTable for a protocol conformance given a protocol type
+   /// info and an existential container.
+   llvm::Value *getVTableForConformance(llvm::Value *Existential,
+                                        llvm::Value *ProtocolTypeInfo);
 
    llvm::ConstantInt *wordSizedInt(uint64_t val);
    llvm::Value *toInt8Ptr(llvm::Value *V);
@@ -189,6 +194,7 @@ private:
    llvm::Constant *getCastExistentialFallibleFn();
    llvm::Constant *getUnwrapExistentialFn();
    llvm::Constant *getCopyClassFn();
+   llvm::Constant *getGetProtocolVTableFn();
    llvm::Constant *getGetConformanceFn();
 
    llvm::Constant *getGetGenericArgumentFn();
@@ -304,6 +310,7 @@ private:
    llvm::Constant *CastExistentialFn;
    llvm::Constant *CastExistentialFallibleFn;
    llvm::Constant *UnwrapExistentialFn;
+   llvm::Constant *GetProtocolVTableFn;
    llvm::Constant *GetConformanceFn;
 
    llvm::Constant *GetGenericArgumentFn;
