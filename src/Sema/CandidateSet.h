@@ -5,11 +5,13 @@
 #ifndef CDOT_CANDIDATESET_H
 #define CDOT_CANDIDATESET_H
 
+#include "AST/StmtOrDecl.h"
 #include "Basic/DeclarationName.h"
 #include "Basic/Precedence.h"
 #include "ConversionSequence.h"
 #include "Template.h"
 
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Support/ErrorHandling.h>
 
@@ -25,6 +27,10 @@ namespace ast {
    class SemaPass;
    class PrecedenceGroupDecl;
 } // namespace ast
+
+namespace sema {
+   class ConstraintBuilder;
+} // namespace sema
 
 class FunctionType;
 
@@ -43,6 +49,7 @@ struct CandidateSet {
       IncompatibleArgument,
       IncompatibleLabel,
       IncompatibleSelfArgument,
+      IncompatibleReturnType,
       CouldNotInferArgumentType,
       ArgumentRequiresRef,
 
@@ -61,54 +68,37 @@ struct CandidateSet {
       MutatingOnConstSelf,
       MutatingOnRValueSelf,
 
-
-
       IsDependent,
       IsInvalid, // invalid declaration, don't emit any extra diagnostics
    };
 
-   enum UFCSKind {
-      NoUFCS,
-      MethodCalledAsFunction,
-      FunctionCalledAsMethod,
-   };
-
    struct Candidate {
-      Candidate() = default;
+      Candidate();
 
-      explicit Candidate(ast::CallableDecl *Func, unsigned Distance = 0)
-         : Func(Func), UFCS(NoUFCS), IsBuiltinCand(false), Distance(Distance)
-      {}
+      explicit Candidate(ast::CallableDecl *Func, unsigned Distance = 0);
+      explicit Candidate(ast::AliasDecl *Alias, unsigned Distance = 0);
+      explicit Candidate(ast::Expression *FnExpr);
+      explicit Candidate(ast::NamedDecl *FnDecl);
 
-      explicit Candidate(FunctionType *FuncTy,
-                         ast::PrecedenceGroupDecl *PG = nullptr,
-                         op::OperatorKind OpKind = op::UnknownOp)
-         : precedenceGroup(PG), BuiltinCandidate{ FuncTy, OpKind },
-           UFCS(NoUFCS), IsBuiltinCand(true), Distance(0)
-      {}
+      ~Candidate();
 
-      explicit Candidate(ast::AliasDecl *Alias, unsigned Distance = 0)
-         : Alias(Alias), UFCS(NoUFCS), IsBuiltinCand(false), Distance(Distance)
-      {}
+      Candidate(const Candidate&) = delete;
+      Candidate(Candidate&&) noexcept;
 
-      union {
-         ast::CallableDecl *Func = nullptr;
-         ast::AliasDecl *Alias;
-         ast::PrecedenceGroupDecl *precedenceGroup;
-      };
+      Candidate &operator=(const Candidate&) = delete;
+      Candidate &operator=(Candidate&&) noexcept;
+
+      StmtOrDecl CandDecl;
 
       sema::TemplateArgList InnerTemplateArgs;
       sema::FinalTemplateArgumentList *OuterTemplateArgs = nullptr;
 
-      struct {
-         FunctionType *FuncTy = nullptr;
-         op::OperatorKind OpKind = op::UnknownOp;
-      } BuiltinCandidate;
+      FailureReason FR : 7;
+      bool IsAnonymousCand : 1;
+      uint8_t Distance;
 
-      FailureReason FR = None;
-      UFCSKind UFCS : 7;
-      bool IsBuiltinCand : 1;
-      unsigned Distance : 8;
+      // Mapping from arguments to their assigned type after typechecking.
+      std::unique_ptr<sema::ConstraintBuilder> Builder;
 
       union {
          uintptr_t ConversionPenalty = 0;
@@ -116,24 +106,19 @@ struct CandidateSet {
       };
 
       uintptr_t Data2  = 0; // additional info dependent on the failure reason
+      uintptr_t Data3  = 0; // additional info dependent on the failure reason
 
-      bool isValid() const
-      {
-         return FR == None;
-      }
-
-      operator bool() const
-      {
-         return isValid();
-      }
+      bool isValid() const { return FR == None; }
+      operator bool() const { return isValid(); }
 
       bool isAssignmentOperator();
-      bool isInitializerOrDeinitializer();
 
-      void setFunctionType(FunctionType *FTy)
-      {
-         BuiltinCandidate.FuncTy = FTy;
-      }
+      ast::CallableDecl *getFunc() const;
+      ast::Expression *getFuncExpr() const;
+      ast::AliasDecl *getAlias() const;
+      ast::NamedDecl *getFuncDecl() const;
+
+      void setCandDecl(StmtOrDecl D) { CandDecl = D; }
 
       FunctionType *getFunctionType() const;
       SourceLocation getSourceLoc() const;
@@ -141,9 +126,9 @@ struct CandidateSet {
 
       unsigned getNumConstraints() const;
 
-      bool isBuiltinCandidate() const
+      bool isAnonymousCandidate() const
       {
-         return IsBuiltinCand;
+         return IsAnonymousCand;
       }
 
       void setHasTooFewArguments(uintptr_t givenCount,
@@ -160,11 +145,12 @@ struct CandidateSet {
          Data2 = expectedAtMost;
       }
 
-      void setHasIncompatibleArgument(uintptr_t argIndex, QualType GivenTy)
-      {
+      void setHasIncompatibleArgument(uintptr_t argIndex, QualType GivenTy,
+                                      QualType NeededTy) {
          FR = IncompatibleArgument;
          Data1 = argIndex;
          Data2 = reinterpret_cast<uintptr_t>(GivenTy.getAsOpaquePtr());
+         Data3 = reinterpret_cast<uintptr_t>(NeededTy.getAsOpaquePtr());
       }
 
       void setHasIncompatibleLabel(uintptr_t argIndex, IdentifierInfo *Label)
@@ -172,6 +158,13 @@ struct CandidateSet {
          FR = IncompatibleLabel;
          Data1 = argIndex;
          Data2 = reinterpret_cast<uintptr_t>(Label);
+      }
+
+      void setHasIncompatibleReturnType(QualType Expected, QualType Found)
+      {
+         FR = IncompatibleReturnType;
+         Data1 = reinterpret_cast<uintptr_t>(Expected.getAsOpaquePtr());
+         Data2 = reinterpret_cast<uintptr_t>(Found.getAsOpaquePtr());
       }
 
       void setCouldNotInferArgumentType(uintptr_t argIndex)
@@ -278,26 +271,15 @@ struct CandidateSet {
    {}
 
    CandidateSet(const CandidateSet&) = delete;
-   CandidateSet(CandidateSet&&)      = default;
+   CandidateSet(CandidateSet&&) noexcept;
 
    CandidateSet &operator=(const CandidateSet&) = delete;
-   CandidateSet &operator=(CandidateSet&&)      = default;
-
-   Candidate &addCandidate()
-   {
-      Candidates.emplace_back();
-      return Candidates.back();
-   }
+   CandidateSet &operator=(CandidateSet&&) noexcept;
 
    Candidate *addCandidate(ast::CallableDecl *CD, unsigned Distance = 0);
    Candidate *addCandidate(ast::AliasDecl *Alias, unsigned Distance = 0);
-
-   Candidate &addCandidate(FunctionType *FuncTy,
-                           ast::PrecedenceGroupDecl *PG = nullptr,
-                           op::OperatorKind OpKind = op::UnknownOp) {
-      Candidates.emplace_back(FuncTy, PG, OpKind);
-      return Candidates.back();
-   }
+   Candidate &addCandidate(ast::Expression *FnExpr);
+   Candidate &addCandidate(ast::NamedDecl *FnDecl);
 
    void maybeUpdateBestConversionPenalty(uintptr_t Penalty)
    {
@@ -321,19 +303,17 @@ struct CandidateSet {
    }
 
    void diagnose(ast::SemaPass &SP,
-                 DeclarationName funcName,
-                 llvm::ArrayRef<ast::Expression *> args,
-                 llvm::ArrayRef<ast::Expression *> templateArgs,
+                 ast::Expression *SelfVal,
+                 ArrayRef<ast::Expression *> args,
+                 ArrayRef<ast::Expression *> templateArgs,
                  ast::Statement *Caller,
-                 bool OperatorLookup = false,
                  SourceLocation OpLoc = {}) {
       if (Status == NoMatch)
-         return diagnoseFailedCandidates(SP, funcName, args, templateArgs,
-                                         Caller, OperatorLookup, OpLoc);
+         return diagnoseFailedCandidates(SP, SelfVal, args, templateArgs,
+                                         Caller, OpLoc);
 
       assert(Status == Ambiguous && "not a failed CandSet");
-      return diagnoseAmbiguousCandidates(SP, funcName, args, templateArgs,
-                                         Caller, OperatorLookup, OpLoc);
+      return diagnoseAmbiguousCandidates(SP, Caller);
    }
 
    void diagnoseAlias(ast::SemaPass &SP, DeclarationName AliasName,
@@ -341,24 +321,13 @@ struct CandidateSet {
                       ast::Statement *Caller);
 
    void diagnoseFailedCandidates(ast::SemaPass &SP,
-                                 DeclarationName funcName,
-                                 llvm::ArrayRef<ast::Expression *> args,
-                                 llvm::ArrayRef<ast::Expression *> templateArgs,
+                                 ast::Expression *SelfVal,
+                                 ArrayRef<ast::Expression *> args,
+                                 ArrayRef<ast::Expression *> templateArgs,
                                  ast::Statement *Caller,
-                                 bool OperatorLookup = false,
                                  SourceLocation OpLoc = {});
 
-   void diagnoseAnonymous(ast::SemaPass &SP,
-                          llvm::ArrayRef<ast::Expression *> args,
-                          ast::Statement *Caller);
-
-   void diagnoseAmbiguousCandidates(ast::SemaPass &SP,
-                                    DeclarationName funcName,
-                                    llvm::ArrayRef<ast::Expression *> args,
-                                    llvm::ArrayRef<ast::Expression *> templateArgs,
-                                    ast::Statement *Caller,
-                                    bool OperatorLookup = false,
-                                    SourceLocation OpLoc = {});
+   void diagnoseAmbiguousCandidates(ast::SemaPass &SP, ast::Statement *Caller);
 
    Candidate &getBestMatch() { return Candidates[MatchIdx]; }
 

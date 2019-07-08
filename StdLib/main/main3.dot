@@ -1,0 +1,150 @@
+
+// import { RawPointer, u8, i8, i32, i64, u64, f64, f32 } from builtin
+
+// struct X {
+//     static let instance: X
+//     static let x: u64 = 0
+
+//     def infix +(rhs: u8) -> X {
+//         return self
+//     }
+
+//     def prefix ~() {}
+//     static def prefix !(lhs: Self) {}
+//     static def infix -(lhs: Self, rhs: u8) {}
+
+//     def method() -> X {
+//         return self
+//     }
+
+//     static def staticMethod() {
+//     }
+
+//     init {
+//         self.init(3)
+//     }
+
+//     init (_ val: u8) {
+
+//     }
+// }
+
+// def infix *(_ lhs: X, _ rhs: u8) {
+// }
+
+// def test(_ val: RawPointer<u8>, _ val2: u8, _ val3: i32, _ val4: X) {
+// }
+
+// def func<T>(_ t: T) {}
+
+// def tuple(_ val: (i8, u64)) {}
+// def generic_tuple<T>(_ val: (T, T)) {}
+
+// def ptr(_ p: RawPointer<i8>) {}
+
+// def closure(_ fn: (u64) -> ()) {}
+// def closure2<T>(_ fn: () -> T) {}
+// def closure3<T, U>(_ val: T, _ fn: (T) -> U) {}
+// def closure4<...Ts, U>(_ fn: (Ts...) -> U) {}
+
+// alias A: u64 = 3
+// alias A: f64 = 3.0
+
+// def intTaker(_ val: u64) {}
+
+// def fn() -> u64
+// def fn() -> f64
+
+// def fn2(_ val: f64) -> u64
+// def fn2(_ val: f64) -> f32
+// def fn2(_ val: u64, label: f32) -> u64
+// def fn2(_ val: u64) -> u64
+
+// // alias DefaultSignedIntegerLiteralType = X
+
+// // def variadic(_ v1: i64, _ v2: f64) {}
+// def variadic<...Ts>(_ ts: Ts...) {}
+
+// def variadic2<...Ts>(_ ts: (Ts...)) {}
+// def variadic3<...Ts>(_ ts: (Ts...), _ ts2: Ts...) {}
+
+// enum Optional<T> {
+//     case None
+//     case Some(T)
+// }
+
+// enum Enum {
+//     case One
+//     case Two(i64)
+// }
+
+// def optionalTaker<T>(_ opt: Optional<T>) {}
+// def enumTaker(_ e: Enum) {}
+
+// def test2() {
+//     // enumTaker(.One)
+//     // enumTaker(.Two(3))
+//     // var fn = (x: u8) => x
+//     // _ = fn(3)
+//     // var x: i64 = fn()
+
+//     // _ = variadic(3, 3.0)
+//     // var val = (3, 4.0)
+//     // _ = variadic3(val, 30, 69.0)
+//     // _ = variadic3((3, 3.0), 3, 30.0)
+
+//     // _ = X() + 3
+//     // _ = X() - 3
+//     // _ = X.infix +(X(), 3)
+//     // _ = X.infix -(X(), 3)
+//     // _ = X().infix +(3)
+
+//     // _ = ~X()
+//     // _ = !X()
+//     // _ = X.prefix ~(X())
+//     // _ = X.prefix !(X())
+
+//     // _ = X() * 3
+//     // _ = infix *(X(), 3)
+
+//     // _ = X.infix +(3, 3, 3)
+
+//     // _ = ((x: u8) => x)(3)
+
+//     // var x = func< >(3)
+
+//     // var __0: (f64, u64) = (3.0, A)
+//     // var __3: @thin (u64) -> () = intTaker
+//     // var __4: f64 = fn()
+
+//     // var __2: u64 = fn2(3, label: 3.0)
+//     // var __1 = test("hello", 'c', 311, .instance)
+
+//     // var val = X()
+//     // func(val)
+
+//     // tuple((1, 3))
+//     // generic_tuple((1, 3))
+//     // ptr(__nullptr)
+
+//     // closure { var x: u8 = $0 }
+//     // closure2 { return X() }
+//     // closure2 { return 3 }
+//     // closure3(2) { return $0 }
+
+//     // var c = (x: u8) => x
+//     // closure4(c)
+
+//     // closure4((x: u8) => x)
+
+//     // intTaker(A)
+
+//     // var x = X()
+//     // x.method().staticMethod()
+
+//     // _ = ~x
+//     // _ = x.method()
+//     // _ = x.staticMethod()
+//     // _ = X.method()
+//     // _ = X.staticMethod()
+// }

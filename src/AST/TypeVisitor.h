@@ -11,14 +11,14 @@
 
 #define DISPATCH(Name)                                  \
   static_cast<SubClass*>(this)->                        \
-           visit##Name(static_cast<const Name*>(T))
+           visit##Name(static_cast<Name*>(T))
 
 namespace cdot {
 
 template<class SubClass, class RetTy = void>
 class TypeVisitor {
 public:
-   RetTy visit(const Type *T)
+   RetTy visit(Type *T)
    {
       switch (T->getTypeID()) {
 #     define CDOT_TYPE(Name, Parent)                              \
@@ -28,21 +28,21 @@ public:
    }
 
 #  define CDOT_TYPE(Name, Parent)                                 \
-   RetTy visit##Name(const Name *T) { return DISPATCH(Parent); }
+   RetTy visit##Name(Name *T) { return DISPATCH(Parent); }
 #  include "Types.def"
 
    RetTy visit(QualType Ty)
    {
-      return visit((const Type*)Ty.getBuiltinTy());
+      return visit((Type*)Ty.getBuiltinTy());
    }
 
-   RetTy visitType(const Type*) { return RetTy(); }
+   RetTy visitType(Type*) { return RetTy(); }
 };
 
 template<class SubClass>
 class RecursiveTypeVisitor {
 public:
-   void visit(const Type *T)
+   void visit(Type *T)
    {
       bool Continue = true;
       switch (T->getTypeID()) {
@@ -56,91 +56,91 @@ public:
    }
 
 #  define CDOT_TYPE(Name, Parent)                                 \
-   bool visit##Name(const Name *T) { return DISPATCH(Parent); }
+   bool visit##Name(Name *T) { return DISPATCH(Parent); }
 #  include "Types.def"
 
-   bool visitType(const Type*) { return true; }
+   bool visitType(Type*) { return true; }
    
 private:
-   void visitChildren(const Type *T)
+   void visitChildren(Type *T)
    {
       switch (T->getTypeID()) {
 #     define CDOT_TYPE(Name, Parent)                                                \
       case Type::Name##ID:                                                          \
-         RecursiveTypeVisitor::visit##Name##Children(static_cast<const Name*>(T));  \
+         RecursiveTypeVisitor::visit##Name##Children(static_cast<Name*>(T));  \
          break;
 #     include "Types.def"
       }
    }
 
-   void visitBuiltinTypeChildren(const BuiltinType *T)
+   void visitBuiltinTypeChildren(BuiltinType *T)
    {
    }
 
-   void visitTokenTypeChildren(const TokenType *T)
+   void visitTokenTypeChildren(TokenType *T)
    {
    }
 
-   void visitPointerTypeChildren(const PointerType *T)
-   {
-      return visit(T->getPointeeType());
-   }
-
-   void visitMutablePointerTypeChildren(const MutablePointerType *T)
+   void visitPointerTypeChildren(PointerType *T)
    {
       return visit(T->getPointeeType());
    }
 
-   void visitReferenceTypeChildren(const ReferenceType *T)
+   void visitMutablePointerTypeChildren(MutablePointerType *T)
+   {
+      return visit(T->getPointeeType());
+   }
+
+   void visitReferenceTypeChildren(ReferenceType *T)
    {
       return visit(T->getReferencedType());
    }
 
-   void visitMutableReferenceTypeChildren(const MutableReferenceType *T)
+   void visitMutableReferenceTypeChildren(MutableReferenceType *T)
    {
       return visit(T->getReferencedType());
    }
 
-   void visitMutableBorrowTypeChildren(const MutableBorrowType *T)
+   void visitMutableBorrowTypeChildren(MutableBorrowType *T)
    {
       return visit(T->getReferencedType());
    }
 
-   void visitMetaTypeChildren(const cdot::MetaType *T)
+   void visitMetaTypeChildren(cdot::MetaType *T)
    {
       return visit(T->getUnderlyingType());
    }
 
-   void visitArrayTypeChildren(const ArrayType *T)
+   void visitArrayTypeChildren(ArrayType *T)
    {
       return visit(T->getElementType());
    }
 
-   void visitDependentSizeArrayTypeChildren(const DependentSizeArrayType *T)
+   void visitDependentSizeArrayTypeChildren(DependentSizeArrayType *T)
    {
       return visit(T->getElementType());
    }
 
-   void visitInferredSizeArrayTypeChildren(const InferredSizeArrayType *T)
+   void visitInferredSizeArrayTypeChildren(InferredSizeArrayType *T)
    {
       return visit(T->getElementType());
    }
 
-   void visitTupleTypeChildren(const TupleType *T)
+   void visitTupleTypeChildren(TupleType *T)
    {
       for (QualType Cont : T->getContainedTypes()) {
          visit(Cont);
       }
    }
 
-   void visitExistentialTypeChildren(const ExistentialType *T)
+   void visitExistentialTypeChildren(ExistentialType *T)
    {
       for (QualType Cont : T->getExistentials()) {
          visit(Cont);
       }
    }
 
-   void visitFunctionTypeChildren(const FunctionType *T)
+   void visitFunctionTypeChildren(FunctionType *T)
    {
       for (QualType Cont : T->getParamTypes()) {
          visit(Cont);
@@ -149,7 +149,7 @@ private:
       return visit(T->getReturnType());
    }
 
-   void visitLambdaTypeChildren(const LambdaType *T)
+   void visitLambdaTypeChildren(LambdaType *T)
    {
       return visitFunctionTypeChildren(T);
    }
@@ -171,7 +171,7 @@ private:
       return true;
    }
 
-   void visitRecordTypeChildren(const RecordType *T)
+   void visitRecordTypeChildren(RecordType *T)
    {
       if (T->hasTemplateArgs()) {
          for (auto &Arg : T->getTemplateArgs()) {
@@ -181,7 +181,7 @@ private:
       }
    }
 
-   void visitDependentRecordTypeChildren(const DependentRecordType *T)
+   void visitDependentRecordTypeChildren(DependentRecordType *T)
    {
       for (auto &Arg : T->getTemplateArgs()) {
          if (!VisitTemplateArg(Arg))
@@ -189,12 +189,12 @@ private:
       }
    }
 
-   void visitGenericTypeChildren(const GenericType *T)
+   void visitGenericTypeChildren(GenericType *T)
    {
       return visit(T->getCovariance());
    }
 
-   void visitNestedNameSpecifier(const NestedNameSpecifier *Name)
+   void visitNestedNameSpecifier(NestedNameSpecifier *Name)
    {
       if (!Name)
          return;
@@ -207,34 +207,327 @@ private:
       case NestedNameSpecifier::Namespace:
       case NestedNameSpecifier::Module:
       case NestedNameSpecifier::TemplateParam:
-         break;
       case NestedNameSpecifier::AssociatedType:
+      case NestedNameSpecifier::Alias:
+      case NestedNameSpecifier::TemplateArgList:
+         break;
          break;
       }
 
       visitNestedNameSpecifier(Name->getPrevious());
    }
 
-   void visitDependentNameTypeChildren(const DependentNameType *T)
+   void visitDependentNameTypeChildren(DependentNameType *T)
    {
       return visitNestedNameSpecifier(T->getNameSpec());
    }
 
-   void visitAssociatedTypeChildren(const AssociatedType *T)
+   void visitTypeVariableTypeChildren(TypeVariableType *T)
+   {
+   }
+
+   void visitAssociatedTypeChildren(AssociatedType *T)
    {
       if (auto Outer = T->getOuterAT()) {
          visit(Outer);
       }
    }
 
-   void visitTypedefTypeChildren(const TypedefType *T)
+   void visitTypedefTypeChildren(TypedefType *T)
    {
       return visit(T->getAliasedType());
    }
 
-   void visitBoxTypeChildren(const BoxType *T)
+   void visitBoxTypeChildren(BoxType *T)
    {
       return visit(T->getBoxedType());
+   }
+};
+
+template<class SubClass>
+class TypeComparer {
+public:
+   bool visit(QualType LHS, QualType RHS)
+   {
+      switch (LHS->getTypeID()) {
+#     define CDOT_TYPE(Name, Parent)                                             \
+      case Type::Name##ID:                                                       \
+         return static_cast<SubClass*>(this)->visit##Name(support::cast<Name>(LHS), RHS);
+#     include "Types.def"
+      }
+   }
+
+protected:
+   bool visitBuiltinType(BuiltinType *LHS, QualType RHS)
+   {
+      return RHS->getCanonicalType() == LHS->getCanonicalType();
+   }
+
+   bool visitTokenType(TokenType *LHS, QualType RHS)
+   {
+      return RHS->getCanonicalType() == LHS->getCanonicalType();
+   }
+
+   bool visitPointerType(PointerType *LHS, QualType RHS)
+   {
+      if (auto *Ptr = RHS->asPointerType()) {
+         return visit(LHS->getPointeeType(), Ptr->getPointeeType());
+      }
+
+      return false;
+   }
+
+   bool visitMutablePointerType(MutablePointerType *LHS, QualType RHS)
+   {
+      if (auto *Ptr = RHS->asPointerType()) {
+         return visit(LHS->getPointeeType(), Ptr->getPointeeType());
+      }
+
+      return false;
+   }
+
+   bool visitReferenceType(ReferenceType *LHS, QualType RHS)
+   {
+      if (auto *Ptr = RHS->asReferenceType()) {
+         return visit(LHS->getReferencedType(), Ptr->getReferencedType());
+      }
+
+      return false;
+   }
+
+   bool visitMutableReferenceType(MutableReferenceType *LHS, QualType RHS)
+   {
+      if (auto *Ptr = RHS->asReferenceType()) {
+         return visit(LHS->getReferencedType(), Ptr->getReferencedType());
+      }
+
+      return false;
+   }
+
+   bool visitMutableBorrowType(MutableBorrowType *LHS, QualType RHS)
+   {
+      if (auto *Ptr = RHS->asReferenceType()) {
+         return visit(LHS->getReferencedType(), Ptr->getReferencedType());
+      }
+
+      return false;
+   }
+
+   bool visitMetaType(cdot::MetaType *LHS, QualType RHS)
+   {
+      if (auto *Meta = RHS->asMetaType()) {
+         return visit(LHS->getUnderlyingType(), Meta->getUnderlyingType());
+      }
+
+      return false;
+   }
+
+   bool visitArrayType(ArrayType *LHS, QualType RHS)
+   {
+      if (auto *Arr = RHS->asArrayType()) {
+         if (LHS->getNumElements() != Arr->getNumElements()) {
+            return false;
+         }
+
+         return visit(LHS->getElementType(), Arr->getElementType());
+      }
+
+      return false;
+   }
+
+   bool visitDependentSizeArrayType(DependentSizeArrayType *LHS, QualType RHS)
+   {
+      if (auto *Arr = RHS->asArrayType()) {
+         return visit(LHS->getElementType(), Arr->getElementType());
+      }
+
+      return false;
+   }
+
+   bool visitInferredSizeArrayType(InferredSizeArrayType *LHS, QualType RHS)
+   {
+      if (auto *Arr = RHS->asArrayType()) {
+         return visit(LHS->getElementType(), Arr->getElementType());
+      }
+
+      return false;
+   }
+
+   bool visitTupleType(TupleType *LHS, QualType RHS)
+   {
+      auto *Tup = RHS->asTupleType();
+      if (!Tup || Tup->getArity() != LHS->getArity()) {
+         return false;
+      }
+
+      unsigned Arity = LHS->getArity();
+      for (unsigned i = 0; i < Arity; ++i) {
+         if (!visit(LHS->getContainedType(i), Tup->getContainedType(i))) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   bool visitExistentialType(ExistentialType *LHS, QualType RHS)
+   {
+      auto *Tup = RHS->asExistentialType();
+      if (!Tup) {
+         return false;
+      }
+
+      auto LHSTypes = LHS->getExistentials();
+      auto RHSTypes = Tup->getExistentials();
+
+      if (LHSTypes.size() != RHSTypes.size()) {
+         return false;
+      }
+
+      unsigned Arity = LHSTypes.size();
+      for (unsigned i = 0; i < Arity; ++i) {
+         if (!visit(LHSTypes[i], RHSTypes[i])) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   bool visitFunctionType(FunctionType *LHS, QualType RHS)
+   {
+      auto *Fun = RHS->asFunctionType();
+      if (!Fun || Fun->getNumParams() != LHS->getNumParams()) {
+         return false;
+      }
+
+      if (LHS->getRawFlags() != Fun->getRawFlags()) {
+         return false;
+      }
+
+      auto LHSParams = LHS->getParamTypes();
+      auto RHSParams = Fun->getParamTypes();
+
+      auto LHSParamInfo = LHS->getParamInfo();
+      auto RHSParamInfo = Fun->getParamInfo();
+
+      unsigned Arity = LHS->getNumParams();
+      for (unsigned i = 0; i < Arity; ++i) {
+         if (LHSParamInfo[i] != RHSParamInfo[i]) {
+            return false;
+         }
+         if (!visit(LHSParams[i], RHSParams[i])) {
+            return false;
+         }
+      }
+
+      return visit(LHS->getReturnType(), Fun->getReturnType());
+   }
+
+   bool visitLambdaType(LambdaType *LHS, QualType RHS)
+   {
+      return static_cast<SubClass*>(this)->visitFunctionType(LHS, RHS);
+   }
+
+   bool visitRecordType(RecordType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
+
+   bool visitTemplateArg(const sema::TemplateArgument &LHS,
+                         const sema::TemplateArgument &RHS) {
+      if (LHS.isValue() || RHS.isValue()) {
+         return false;
+      }
+
+      if (LHS.isVariadic()) {
+         if (!RHS.isVariadic()) {
+            return false;
+         }
+
+         auto &LHSArgs = LHS.getVariadicArgs();
+         auto &RHSArgs = RHS.getVariadicArgs();
+
+         auto N1 = LHSArgs.size();
+         auto N2 = RHSArgs.size();
+
+         if (N1 != N2) {
+            return false;
+         }
+
+         for (unsigned i = 0; i < N1; ++i) {
+            if (!visitTemplateArg(LHSArgs[i], RHSArgs[i])) {
+               return false;
+            }
+         }
+
+         return true;
+      }
+
+      return visit(LHS.getNonCanonicalType(), RHS.getNonCanonicalType());
+   }
+
+   bool visitDependentRecordType(DependentRecordType *LHS, QualType RHS)
+   {
+      if (!RHS->hasTemplateArgs()) {
+         return false;
+      }
+
+      auto &LHSArgs = LHS->getTemplateArgs();
+      auto &RHSArgs = RHS->getTemplateArgs();
+
+      auto N1 = LHSArgs.size();
+      auto N2 = RHSArgs.size();
+
+      if (N1 != N2) {
+         return false;
+      }
+
+      for (unsigned i = 0; i < N1; ++i) {
+         if (!visitTemplateArg(LHSArgs[i], RHSArgs[i])) {
+            return false;
+         }
+      }
+
+      ast::RecordDecl *RHSRec;
+      if (auto *Dep = RHS->asDependentRecordType()) {
+         RHSRec = Dep->getRecord();
+      }
+      else {
+         RHSRec = RHS->getRecord()->getSpecializedTemplate();
+      }
+
+      return LHS->getRecord() == RHSRec;
+   }
+
+   bool visitGenericType(GenericType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
+
+   bool visitDependentNameType(DependentNameType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
+
+   bool visitTypeVariableType(TypeVariableType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
+
+   bool visitAssociatedType(AssociatedType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
+
+   bool visitTypedefType(TypedefType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
+
+   bool visitBoxType(BoxType *LHS, QualType RHS)
+   {
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
    }
 };
 

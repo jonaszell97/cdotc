@@ -122,6 +122,11 @@ void PrettyPrinterImpl::visitCompoundStmt(CompoundStmt* stmt)
    out << "}";
 }
 
+void PrettyPrinterImpl::visitSourceFileDecl(cdot::ast::SourceFileDecl *decl)
+{
+
+}
+
 void PrettyPrinterImpl::visitAttributedStmt(cdot::ast::AttributedStmt *stmt)
 {
 
@@ -639,6 +644,21 @@ void PrettyPrinterImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
       out << DeclarationName(expr->getIdentInfo());
 }
 
+void PrettyPrinterImpl::visitDeclRefExpr(DeclRefExpr *expr)
+{
+   out << expr->getDecl()->getDeclName();
+}
+
+void PrettyPrinterImpl::visitMemberRefExpr(MemberRefExpr *expr)
+{
+   out << "." << expr->getMemberDecl()->getDeclName();
+}
+
+void PrettyPrinterImpl::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *expr)
+{
+
+}
+
 void PrettyPrinterImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *expr)
 {
 
@@ -780,6 +800,12 @@ void PrettyPrinterImpl::visitCastExpr(CastExpr *expr)
    visit(expr->getTargetType());
 }
 
+void PrettyPrinterImpl::visitAddrOfExpr(AddrOfExpr *expr)
+{
+   out << "&";
+   visitExpr(expr->getTarget());
+}
+
 void PrettyPrinterImpl::visitImplicitCastExpr(ImplicitCastExpr* expr)
 {
    visitExpr(expr->getTarget());
@@ -788,7 +814,7 @@ void PrettyPrinterImpl::visitImplicitCastExpr(ImplicitCastExpr* expr)
 void PrettyPrinterImpl::visitIfExpr(IfExpr *expr)
 {
    out << "if ";
-   visit(expr->getCond());
+   visit(expr->getCond().ExprData.Expr);
    out << " then ";
    visit(expr->getTrueVal());
    out << " else ";

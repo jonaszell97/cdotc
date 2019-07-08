@@ -12,6 +12,7 @@
 
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/FoldingSet.h>
+#include <llvm/ADT/STLExtras.h>
 
 namespace cdot {
 namespace ast {
@@ -44,6 +45,7 @@ namespace lex {
 } // namespace lex
 
 class CompilerInstance;
+class ConversionSequence;
 class Module;
 class QueryContext;
 
@@ -57,29 +59,139 @@ struct RecordMetaInfo {
       ManualAlignment(false),
       Opaque(false),
       NeedsRetainOrRelease(false),
+      IsBuiltinIntegerType(false),
+      IsBuiltinFloatingPointType(false),
+      IsBuiltinBoolType(false),
       IsTriviallyCopyable(false),
       IsImplicitlyEquatable(false),
       IsImplicitlyHashable(false),
       IsImplicitlyCopyable(false),
-      IsImplicitlyStringRepresentable(false)
+      IsImplicitlyStringRepresentable(false),
+      IsImplicitlyRawRepresentable(false)
    {}
 
    unsigned Size = 0;
    unsigned short Alignment = 1;
 
+   IdentifierInfo *Semantics = nullptr;
+
    bool ManualAlignment : 1;
    bool Opaque : 1;
    bool NeedsRetainOrRelease : 1;
+
+   mutable bool IsBuiltinIntegerType : 1;
+   mutable bool IsBuiltinFloatingPointType : 1;
+   mutable bool IsBuiltinBoolType : 1;
+
    bool IsTriviallyCopyable : 1;
    bool IsImplicitlyEquatable : 1;
    bool IsImplicitlyHashable : 1;
    bool IsImplicitlyCopyable : 1;
    bool IsImplicitlyStringRepresentable : 1;
+   bool IsImplicitlyRawRepresentable : 1;
 
    ast::MethodDecl *OperatorEquals = nullptr;
    ast::MethodDecl *HashCodeFn = nullptr;
    ast::MethodDecl *ToStringFn = nullptr;
    ast::MethodDecl *CopyFn = nullptr;
+   ast::MethodDecl *GetRawValueFn = nullptr;
+   ast::InitDecl *FromRawValueInit = nullptr;
+};
+
+/// Represents additional capabilities that a type has at a point in the
+/// program.
+struct TypeCapability {
+   enum Kind: uint8_t {
+      /// \brief This type is known to equal a specific type.
+      Equality,
+
+      /// \brief This type is known not to equal a specific type.
+      Inequality,
+
+      /// \brief This type is known to conform to a protocol.
+      Conformance,
+
+      /// \brief This type is known not to conform to a protocol.
+      NonConformance,
+
+      /// \brief This type is known to be a subclass of a class.
+      SubClass,
+
+      /// \brief This type is known not to be a subclass of a class.
+      NotSubClass,
+
+      /// \brief This type satisfies a concept.
+      Concept,
+
+      /// \brief This type is known to be a class.
+      Class,
+
+      /// \brief This type is known to be a struct.
+      Struct,
+
+      /// \brief This type is known to be an enum.
+      Enum,
+   };
+
+   /// Initialize a type capability.
+   TypeCapability(QualType T, QualType CT, Kind K);
+
+   /// Initialize a conformance capability.
+   TypeCapability(QualType T, ast::ProtocolDecl *P, Kind K);
+
+   /// Initialize a subclass capability.
+   TypeCapability(QualType T, ast::ClassDecl *C, Kind K);
+
+   /// Initialize a concept capability.
+   explicit TypeCapability(QualType T, ast::AliasDecl *A);
+
+   /// Initialize a record kind capability.
+   explicit TypeCapability(QualType T, Kind K);
+
+   /// \return the kind of this capability.
+   Kind getKind() const { return K; }
+
+   /// \return the type this capability applies to.
+   QualType getConstrainedType() const { return T; }
+
+   /// \return the type value of this capability.
+   QualType getType() const
+   {
+      assert(K == Equality || K == Inequality);
+      return QualType::getFromOpaquePtr(TypeVal);
+   }
+
+   /// \return the protocol value of this capability.
+   ast::ProtocolDecl *getProto() const
+   {
+      assert(K == Conformance || K == NonConformance);
+      return ProtoVal;
+   }
+
+   /// \return the class value of this capability.
+   ast::ClassDecl *getClass() const
+   {
+      assert(K == SubClass || K == NotSubClass);
+      return ClassVal;
+   }
+
+   /// \return the concept value of this capability.
+   ast::AliasDecl *getConcept() const
+   {
+      assert(K == Concept);
+      return ConceptVal;
+   }
+
+private:
+   Kind K;
+   QualType T;
+
+   union {
+      void *TypeVal;
+      ast::ProtocolDecl *ProtoVal;
+      ast::ClassDecl *ClassVal;
+      ast::AliasDecl *ConceptVal;
+   };
 };
 
 /// Flags that are common to all lookup queries.
@@ -271,6 +383,9 @@ public:
 
    /// \return A unique, parseable summary of this query.
    std::string summary() const;
+
+   /// Invalidate the cached result of this query.
+   void invalidate() { Stat = Idle; }
 
    /// \return true iff this query has finished calculating its result.
    bool done() const { return Stat != Idle && Stat != Running; }

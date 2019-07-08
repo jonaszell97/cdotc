@@ -1,0 +1,314 @@
+
+module std.io
+
+using std.sys.fs
+
+public struct EndOfStreamError {
+    prop description: String {
+        return "reading past the end of the stream"
+    }
+}
+
+public abstract class InputStream {
+    /// Subclass C'tor. Subclasses must manage the actual underlying memory.
+    protected init () {}
+
+    /// D'tor. Cleanup of the underlying resources must be handled by subclasses.
+    deinit {}
+
+    /// Close the stream, if supported. Any subsequent reads might fail.
+    def virtual close() {}
+
+    /// Read @param{buf}.size bytes, or throw an exception if there are less than 
+    /// @param{buf}.size bytes left in the stream.
+    def readBytes(into buf: mut ref [Byte]) throws {
+        var i = 0
+        while i < buf.size as Int {
+            buf[i++] = try readByte()
+        }
+    }
+
+    /// Read a word from the stream, considering the characters in @templateParam{Boundary}
+    /// as word boundaries.
+    public def readWord(withBoundary boundary: String = " \n\r\t\v\0") -> String {
+        var str = ""
+        while !atEnd() {
+            var next = try! readByte()
+            if boundary.contains(Character(ascii: next)) {
+                return str
+            }
+
+            str += Character(ascii: next)
+        }
+
+        return str
+    }
+
+    /// Read a word from the stream. The characters '\n', '\r' and '\0' are considered
+    /// as line separators for this purpose.
+    public def readLine() -> String {
+        return readWord(withBoundary: "\n\r\0")
+    }
+
+    /// Read a string from the stream.
+    public def read<T>() -> T where T is String {
+        return readWord()
+    }
+
+    /// Read an integer from the stream.
+    public def read<T>() -> T where IsIntegral<T> {
+        var str = readWord()
+        return intFromString<T>(str) ?? (0 as T)
+    }
+
+    /// Utility methods for reading into references.
+    @discardableResult
+    public def infix >> <T>(t: mut ref T) -> Self {
+        t = read<T>()
+        return self
+    }
+
+    /// Returns true if the end of the stream has been reached.
+    public def atEnd() -> Bool { return available() == 0 }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Interface
+    //===--------------------------------------------------------------------===//
+
+    /// Read the next byte from the stream. If the end of the stream is reached,
+    /// an exception will be thrown.
+    public def abstract readByte() throws -> Byte
+
+    /// Return the approximate number of bytes left in the stream. If the stream
+    /// reached the end, 0 must be returned.
+    public def abstract available() -> Int
+
+    /// Returns true if this stream supports rewinding to a previous position 
+    /// in the stream. Subclasses can override this if they provide rewinding.
+    public def virtual isRewindable() -> Bool { return false }
+
+    /// Rewinds to the given position, if supported.
+    /// Subclasses can override this to provide rewinding.
+    public def virtual rewind(to pos: Int) {
+        unreachable!("stream does not support rewinding!")
+    }
+
+    /// Returns the current position in the stream, if supported.
+    /// Subclasses can override this to provide rewinding.
+    public def virtual currentPosition() -> Int {
+        unreachable!("stream does not support rewinding!")
+    }
+}
+
+extend InputStream with Iterable {
+    struct Iterator<T> with IteratorProtocol {
+        /// Reference to the input stream.
+        let stream: InputStream
+
+        /// Default C'tor.
+        memberwise init
+
+        /// The elemnt type.
+        associatedType Element = T
+
+        /// Returns the next value, or none if the end is reached.
+        public def next() -> Element? {
+            if stream.atEnd() {
+                return none
+            }
+
+            return .Some(stream.read<T>())
+        }
+    }
+
+    /// The element type.
+    associatedType Element = Byte
+
+    /// The default iterator type.
+    associatedType It = Iterator<Byte>
+
+    /// Create a new iterator for this stream.
+    def getIterator() -> It {
+        return It(stream: self)
+    }
+
+    /// Create a new typed iterator for this stream.
+    def getTypedIterator<T>() -> Iterator<T> {
+        return Iterator<T>(stream: self)
+    }
+}
+
+public abstract class BufferedInputStream: InputStream {
+    /// True if we use a buffer for reading.
+    var buffered: Bool { get }
+
+    /// Pointer to the beginning of the streamed memory.
+    protected var bufferStart: UnsafePtr<Byte> { get }
+
+    /// Pointer to the end of the streamed memory.
+    protected var bufferEnd: UnsafePtr<Byte> { get }
+
+    /// Pointer to the current position in the stream.
+    protected var bufferCur: UnsafePtr<Byte> { get }
+
+    /// Default buffer size to use for a buffered stream.
+    public alias DefaultBufferSize = 1024u
+
+    /// Subclass C'tor.
+    protected init (buffered: Bool) {
+        self.buffered    = false
+        self.bufferStart = __nullptr
+        self.bufferEnd   = __nullptr
+        self.bufferCur   = __nullptr
+
+        setBuffered(buffered)
+    }
+
+    /// D'tor. Cleanup of the underlying resources must be handled by subclasses.
+    deinit {
+        setBuffered(false)
+    }
+
+    /// Set up the buffer.
+    public def setBuffered(_ buffered: Bool) {
+        if buffered == self.buffered {
+            return
+        }
+
+        if !buffered {
+            self.buffered = false
+            mem.deallocate(self.bufferStart)
+        }
+        else {
+            self.buffered = true
+
+            self.bufferStart = mem.allocate<Byte>(DefaultBufferSize)
+            self.bufferEnd   = self.bufferStart
+            self.bufferCur   = self.bufferStart
+        }
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Interface / Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// Either return the next byte from the buffer if there is one, or refill
+    /// the buffer and retry.
+    public def override readByte() throws -> Byte {
+        if bufferCur == bufferEnd {
+            try refillBuffer()
+        }
+
+        return builtin.loadFromPointer(bufferCur++)
+    }
+
+    /// Return the approximate number of bytes left in the stream. If the stream
+    /// reached the end, 0 must be returned.
+    public def override available() -> Int {
+        return (bufferEnd - bufferCur) as Int
+    }
+
+    /// Refill the buffer with as many bytes as are available.
+    public def abstract refillBuffer() throws
+}
+
+public class StringInputStream: InputStream {
+    /// The String object that is being streamed.
+    let str: String { get }
+
+    /// The current position in the String.
+    var pos: Int
+
+    /// Public C'tor. Creates a Stream for the given String.
+    public init (_ str: String, pos: Int = 0) {
+        super.init()
+        self.str = str
+        self.pos = pos
+    }
+
+    /// Public C'tor. Creates a Stream for an empty String.
+    public init {
+        self.init("")
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// \inherit
+    public def override readByte() throws -> Byte {
+        if pos > str.size {
+            throw EndOfStreamError()
+        }
+
+        // allow reading one past the end
+        if pos == str.size {
+            ++pos
+            return '\0'
+        }
+
+        return str[pos++].ascii
+    }
+
+    /// \inherit
+    public def override available() -> Int {
+        return str.size - pos + 1
+    }
+
+    /// \inherit
+    public def override isRewindable() -> Bool { return true }
+
+    /// \inherit
+    public def override rewind(to pos: Int) { self.pos = pos }
+
+    /// \inherit
+    public def override currentPosition() -> Int { return pos }
+}
+
+/// An input stream that is always empty.
+public class NullInputStream: InputStream {
+    /// C'tor.
+    public init {
+
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// \inherit
+    public def override readByte() throws -> Byte { throw EndOfStreamError() }
+
+    /// \inherit
+    public def override available() -> Int { return 0 }
+}
+
+/// An input stream that inifinitely returns the same value.
+public class InfiniteInputStream: InputStream {
+    /// The value that will be returned.
+    let value: Byte
+
+    /// C'tor.
+    init (_ value: Byte = '\0') {
+        self.value = value
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// \inherit
+    public def override readByte() throws -> Byte { return value }
+
+    /// \inherit
+    public def override available() -> Int { return limits.max<Int> }
+
+    /// \inherit
+    public def override isRewindable() -> Bool { return true }
+
+    /// \inherit
+    public def override rewind(to pos: Int) {}
+
+    /// \inherit
+    public def override currentPosition() -> Int { return 0 }
+}

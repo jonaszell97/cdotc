@@ -181,6 +181,11 @@ public:
         ILGen(ILGen)
    {}
 
+   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   {
+      Types.push_back(visitGenericType(T));
+   }
+
    QualType visitGenericType(GenericType *T)
    {
       auto *Subst = ILGen.getSubstitution(T->getParam());

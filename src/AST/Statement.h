@@ -46,7 +46,8 @@ public:
       GlobalInitializer      = 0x80,
       Ignored                = 0x100,
       Unsafe                 = 0x200,
-      SpecializationCandidate = 0x300,
+      SpecializationCandidate = 0x400,
+      NeedsInstantiation      = 0x800,
 
       _lastFlag         = SpecializationCandidate,
    };
@@ -70,32 +71,26 @@ public:
       return isTypeDependent() || isValueDependent();
    }
 
-   bool isTypeDependent() const
-   {
-      return flagIsSet(TypeDependent);
-   }
-
-   bool isValueDependent() const
-   {
-      return flagIsSet(ValueDependent);
-   }
+   bool isTypeDependent() const;
+   bool isValueDependent() const;
 
    bool containsUnexpandedParameterPack() const
    {
       return flagIsSet(ContainsUnexpandedPack);
    }
 
-   void setIsTypeDependent(bool typeDependant)
+   void setIsTypeDependent(bool typeDependent)
    {
-      setFlag(TypeDependent, typeDependant);
+      setFlag(TypeDependent, typeDependent);
    }
 
-   void setIsValueDependent(bool valueDependant)
+   void setIsValueDependent(bool valueDependent)
    {
-      setFlag(ValueDependent, valueDependant);
+      setFlag(ValueDependent, valueDependent);
    }
 
    bool needsInstantiation() const;
+   void setNeedsInstantiation(bool b) { setFlag(NeedsInstantiation, b); }
 
    bool containsGenericParam() const { return flagIsSet(ContainsGenericParam); }
    void setContainsGenericParam(bool b) { setFlag(ContainsGenericParam, b); }
@@ -419,8 +414,8 @@ struct IfCondition {
       : K(Expression), ExprData{ E }
    {}
 
-   IfCondition(LocalVarDecl *D, ConversionSequence *ConvSeq = nullptr)
-      : K(Binding), BindingData{ D, ConvSeq }
+   IfCondition(LocalVarDecl *D, CallableDecl *TryUnwrapFn = nullptr)
+      : K(Binding), BindingData{ D, TryUnwrapFn }
    {}
 
    IfCondition(PatternExpr *Pat, ast::Expression *E = nullptr)
@@ -431,11 +426,12 @@ struct IfCondition {
 
    struct ExprDataType {
       ast::Expression *Expr = nullptr;
+      CallableDecl *TruthValueFn = nullptr;
    };
 
    struct BindingDataType {
       LocalVarDecl *Decl = nullptr;
-      ConversionSequence *ConvSeq = nullptr;
+      CallableDecl *TryUnwrapFn = nullptr;
    };
 
    struct PatternDataType {

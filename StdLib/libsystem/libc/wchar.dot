@@ -1,4 +1,0 @@
-
-module libc.wchar
-
-// include_system_header!("wchar.h")

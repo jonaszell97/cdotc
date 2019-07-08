@@ -333,12 +333,32 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
 
          assert(Mod && "module not created");
          Mod->setLastModified(Record[0]);
+
+         uint8_t Flags = (uint8_t)Record[1];
+         Mod->setAllImplicitlyExported((Flags & 0x1) != 0);
+         Mod->setDeclarationsOnly((Flags & 0x2) != 0);
+         Mod->setCompileTimeByDefault((Flags & 0x4) != 0);
+
          break;
       }
       case IMPORTS: {
          auto NumImports = Record.readInt();
          while (NumImports--) {
             ImportedModuleIdents.push_back(Record.readInt());
+         }
+
+         break;
+      }
+      case IMPLICIT_IMPORTS: {
+         auto NumImports = Record.readInt();
+         while (NumImports--) {
+            ImplicitlyImportedModuleIdents.emplace_back();
+            auto &ModuleName = ImplicitlyImportedModuleIdents.back();
+
+            unsigned NameDepth = Record.readInt();
+            while (NameDepth--) {
+               ModuleName.push_back(Record.readInt());
+            }
          }
 
          break;
@@ -895,6 +915,18 @@ void ModuleReader::LoadModuleImports()
          continue;
 
       Mod->addImport(Import);
+   }
+
+   SmallVector<IdentifierInfo*, 2> Idents;
+   for (auto &ModName : ImplicitlyImportedModuleIdents) {
+      for (unsigned ID : ModName) {
+         Idents.push_back(getLocalIdentifier(ID));
+      }
+
+      auto *II = Mgr.GetModule(Idents);
+      Mod->addImplicitlyImportedModule(II);
+
+      Idents.clear();
    }
 }
 

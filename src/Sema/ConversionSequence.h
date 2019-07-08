@@ -51,12 +51,13 @@ public:
 };
 
 class ConversionSequenceBuilder {
-   CastStrength Strength;
+   CastStrength Strength : 4;
+   bool Dependent : 1;
    std::vector<ConversionStep> Steps;
 
 public:
    ConversionSequenceBuilder()
-      : Strength(CastStrength::Implicit)
+      : Strength(CastStrength::Implicit), Dependent(false)
    { }
 
    ConversionSequenceBuilder(ConversionSequenceBuilder&&)            = default;
@@ -65,13 +66,16 @@ public:
    ConversionSequenceBuilder(const ConversionSequenceBuilder&)            = delete;
    ConversionSequenceBuilder &operator=(const ConversionSequenceBuilder&) = delete;
 
-   static ConversionSequenceBuilder MakeNoop()
+   static ConversionSequenceBuilder MakeNoop(QualType T)
    {
       ConversionSequenceBuilder Seq;
-      Seq.addStep(CastKind::NoOp, QualType());
+      Seq.addStep(CastKind::NoOp, T);
 
       return Seq;
    }
+
+   void setDependent(bool D) { Dependent = D; }
+   bool isDependent() const { return Dependent; }
 
    void addStep(CastKind kind, QualType resultType)
    {
@@ -143,12 +147,15 @@ class ConversionSequence final: TrailingObjects<ConversionSequence,
    CastStrength Strength;
    unsigned NumSteps;
 
-   ConversionSequence(const ConversionSequenceBuilder &Builder);
+   ConversionSequence(const ConversionSequenceBuilder &Builder,
+                      QualType finalType);
+
    ConversionSequence(CastStrength Strength, ArrayRef<ConversionStep> Steps);
 
 public:
    static ConversionSequence *Create(ast::ASTContext &C,
-                                     const ConversionSequenceBuilder &Builder);
+                                     const ConversionSequenceBuilder &Builder,
+                                     QualType finalType = QualType());
 
    static ConversionSequence *Create(ast::ASTContext &C,
                                      CastStrength Strength,

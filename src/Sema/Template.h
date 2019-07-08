@@ -121,6 +121,9 @@ struct TemplateArgument {
                              bool Freeze = false,
                              ast::TemplateParamDecl *P = nullptr) const;
 
+   bool operator==(const TemplateArgument &RHS) const;
+   bool operator!=(const TemplateArgument &RHS) const { return !(*this == RHS);}
+
    bool isVariadic() const { return IsVariadic; }
    bool isType()     const { return IsType; }
    bool isNull()     const { return IsNull; }
@@ -275,6 +278,9 @@ public:
    static void Profile(llvm::FoldingSetNodeID &ID,
                        TemplateArgList const& list);
 
+   bool setParamValue(TemplateParamDecl *Param,
+                      TemplateArgument &&Arg);
+
    bool inferFromType(QualType contextualType, QualType returnType,
                       bool IsLastVariadicParam = false) const;
 
@@ -330,7 +336,9 @@ private:
    mutable TemplateArgListImpl *pImpl;
 };
 
-class FinalTemplateArgumentList final:
+ASSERT_NOEXCEPT_MOVE_CONSTRUCTIBLE(TemplateArgList);
+
+class LLVM_ALIGNAS(sizeof(void*)) FinalTemplateArgumentList final:
          llvm::TrailingObjects<FinalTemplateArgumentList, TemplateArgument>,
          public llvm::FoldingSetNode {
    FinalTemplateArgumentList(llvm::MutableArrayRef<TemplateArgument> Args,
@@ -576,68 +584,6 @@ private:
    VecTy ArgLists;
 };
 
-#define DISPATCH(FUNC)                                   \
-   isFinal() ? getFinal().FUNC : getNonFinal().FUNC
-
-/// Wrapper struct for a (final) multi level template argument list. This is
-/// not safe to store and should only be passed down to functions.
-struct MultiLevelTemplateArgListRef {
-   /// Opaque pointer to either a MultiLevelTemplateArgList or a
-   /// MultiLevelFinalTemplateArgList.
-   const void *OpaquePtr;
-   bool IsFinal;
-
-public:
-   MultiLevelTemplateArgListRef(const MultiLevelTemplateArgList &List)
-      : OpaquePtr(&List), IsFinal(false)
-   {}
-
-   MultiLevelTemplateArgListRef(const MultiLevelFinalTemplateArgList &List)
-      : OpaquePtr(&List), IsFinal(true)
-   {}
-
-   MultiLevelTemplateArgListRef() : OpaquePtr(nullptr), IsFinal(false) {}
-
-   bool isFinal() const { return IsFinal; }
-
-   const MultiLevelTemplateArgList &getNonFinal() const
-   {
-      assert(OpaquePtr && !IsFinal);
-      return *reinterpret_cast<const MultiLevelTemplateArgList*>(OpaquePtr);
-   }
-
-   const MultiLevelFinalTemplateArgList &getFinal() const
-   {
-      assert(OpaquePtr && IsFinal);
-      return *reinterpret_cast<const MultiLevelFinalTemplateArgList*>(OpaquePtr);
-   }
-
-   const TemplateArgument* getNamedArg(DeclarationName Name) const
-   {
-      return DISPATCH(getNamedArg(Name));
-   }
-
-   const TemplateArgument* getArgForParam(ast::TemplateParamDecl *P) const
-   {
-      return DISPATCH(getArgForParam(P));
-   }
-
-   ast::TemplateParamDecl* getParameter(TemplateArgument *forArg) const
-   {
-      return DISPATCH(getParameter(forArg));
-   }
-
-   size_t size() const { return DISPATCH(size()); }
-   bool empty() const { return DISPATCH(empty()); }
-
-   void print(llvm::raw_ostream &OS) const { DISPATCH(print(OS)); }
-   std::string toString() const { return DISPATCH(toString()); }
-
-   void Profile(llvm::FoldingSetNodeID &ID) const { DISPATCH(Profile(ID)); }
-};
-
-#undef DISPATCH
-
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                                      const TemplateArgList &list) {
    list.print(OS); return OS;
@@ -656,11 +602,6 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                                      const MultiLevelFinalTemplateArgList
                                        &list) {
-   list.print(OS); return OS;
-}
-
-inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
-                                     MultiLevelTemplateArgListRef list) {
    list.print(OS); return OS;
 }
 

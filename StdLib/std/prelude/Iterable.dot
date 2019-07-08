@@ -1,0 +1,231 @@
+
+module std.experimental
+
+public protocol IteratorProtocol {
+    /// The type of elements in the sequence.
+    associatedType Element
+    
+    /// Return the next element in the sequence, or none if the end has been reached.
+    public def mutating next() -> Element?
+}
+
+public protocol Iterable with /* FIXME */ Copyable {
+    /// The type of elements in the sequence.
+    associatedType Element
+
+    /// The iterator type of this sequence.
+    associatedType It: IteratorProtocol
+        where It.Element == Element
+
+    /// \return an iterator over this sequence.
+    public def getIterator() -> It
+
+    /// \return an estimate for the number of elements contained in this sequence that might underestimate the actual number of elements, but never overestimates it.
+    prop underestimatedSize: Int { get }
+
+    /// The type of elements in the sequence.
+    // associatedType Enumeration = EnumeratedSequence<Self>
+
+    /// \return an enumerated iterator over this sequence.
+    // def enumerated() -> Enumeration
+}
+
+extend Iterable {
+    default prop underestimatedSize: Int {
+        return 0
+    }
+}
+
+extend Iterable where It == Self {
+    /// \return an iterator over this sequence.
+    default def getIterator() -> It {
+        return self
+    }
+}
+
+// extend Iterable where Self !is _EnumeratedSequence
+//                 where Enumeration == EnumeratedSequence<Self> {
+//     /// \inherit
+//     default def enumerated() -> Enumeration {
+//         return EnumeratedSequence(base: self.copy())
+//     }
+// }
+
+extend Iterable {
+    /// \return a \ref std.prelude.Array containing the elements of this sequence.
+    def collect() -> [Element] {
+        var arr = [Element](withInitialCapacity: underestimatedSize)
+        for el in self {
+            arr.push(el)
+        }
+
+        return arr
+    }
+
+    /// \return the minimum element in the sequence.
+    def min(_ isSmallerThan: (Element, Element) -> Bool) -> Element? {
+        var it = getIterator()
+        var minVal: Element? = none
+
+        loop {
+            var next = it.next()
+            if !next {
+                return minVal
+            }
+
+            if !minVal || isSmallerThan(next!, minVal!) {
+                minVal = next
+            }
+        }
+
+        unreachable!("")
+    }
+
+    /// \return the maximum element in the sequence.
+    def max(_ isGreaterThan: (Element, Element) -> Bool) -> Element? {
+        var it = getIterator()
+        var maxVal: Element? = none
+
+        loop {
+            var next = it.next()
+            if !next {
+                return maxVal
+            }
+
+            if !maxVal || isGreaterThan(next!, maxVal!) {
+                maxVal = next
+            }
+        }
+
+        unreachable!("")
+    }
+
+    /// \return `true` if an element satisfying the predicate \param where is contained in the sequence.
+    def contains(where predicate: (Element) -> Bool) -> Bool {
+        for el in self {
+            if predicate(el) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// \return the first element of the sequence that satisfies the given predicate.
+    def first(where predicate: (Element) -> Bool) -> Element? {
+        for el in self {
+            if predicate(el) {
+                return .Some(el)
+            }
+        }
+
+        return none
+    }
+
+    /// \return `true` iff any element in the sequence satisfies the given predicate.
+    def anySatisfy(_ predicate: (Element) -> Bool) -> Bool {
+        for el in self {
+            if predicate(el) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// \return `true` iff no element in the sequence satisfies the given predicate.
+    def noneSatisfy(_ predicate: (Element) -> Bool) -> Bool {
+        return !anySatisfy(predicate)
+    }
+
+    /// \return `true` iff all elements in the sequence satisfy the given predicate.
+    def allSatisfy(_ predicate: (Element) -> Bool) -> Bool {
+        for el in self {
+            if !predicate(el) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /// Call a function on each element in a sequence.
+    def forEach(_ callback: (Element) -> Void) {
+        for el in self {
+            callback(el)
+        }
+    }
+
+    /// Return an array with each element in the sequence mapped to a new value.
+    def map<T>(_ callback: (Element) -> T) -> [T] {
+        var arr = [T]()
+        for el in self {
+            arr.push(callback(el))
+        }
+
+        return arr
+    }
+
+    /// Reduce the elements of this sequence by accumulating them in a value.
+    def reduce<T>(initial: T, callback: (Element, T) -> T) -> T {
+        var curr = initial
+        for el in self {
+            curr = callback(el, curr)
+        }
+
+        return curr
+    }
+}
+
+extend Iterable where Element is Equatable {
+    /// \return `true` iff the element is contained in the sequence.
+    def contains(_ value: Element) -> Bool {
+        for el in self {
+            if el == value {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// \param el the element to compare with.
+    /// \return `true` iff all elements in the sequence are equal to `el`.
+    def allEqual(to otherEl: Element) -> Bool {
+        for el in self {
+            if el != otherEl {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /// \param el the element to compare with.
+    /// \return `true` iff none of the elements in the sequence are equal to `el`.
+    def noneEqual(to otherEl: Element) -> Bool {
+        for el in self {
+            if el == otherEl {
+                return false
+            }
+        }
+
+        return true
+    }
+}
+
+extend Iterable where Element is Comparable {
+    /// \return the minimum element in the sequence.
+    def min() -> Element? {
+        return min {
+            return $0 < $1
+        }
+    }
+
+    /// \return the maximum element in the sequence.
+    def max() -> Element? {
+        return max {
+            return $0 > $1
+        }
+    }
+}

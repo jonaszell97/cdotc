@@ -119,6 +119,11 @@ static cl::opt<unsigned> MaxErrors("error-limit",
                                             "to emit before aborting"),
                                    cl::init(16));
 
+static cl::opt<unsigned> MaxInstDepth("max-instantiation-depth",
+                                      cl::desc("maximum allowed recursive "
+                                               "template instantiations"),
+                                      cl::init(16));
+
 static cl::OptionCategory StageSelectionCat("Stage Selection Options",
                                          "These control which stages are run.");
 
@@ -206,11 +211,15 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    cl::ParseCommandLineOptions(argc, argv);
 
    Sema->getDiags().setMaxErrors(MaxErrors);
+   options.MaxInstantiationDepth = MaxInstDepth;
 
    /* Input Files */
 
    SmallVector<string, 4> files;
    SmallString<64> ScratchBuf;
+
+   bool FoundModule = false;
+   bool FoundOther = false;
 
    for (auto &FileName : InputFilenames) {
       fs::getAllMatchingFiles(FileName, files);
@@ -219,11 +228,40 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
          ScratchBuf += f;
          fs::makeAbsolute(ScratchBuf);
 
-         options.addInput(ScratchBuf.str());
+         auto FileName = ScratchBuf.str();
+         if (ScratchBuf.endswith("dotm")) {
+            if (FoundModule) {
+               Sema->diagnose(err_generic_error,
+                              "cannot compile more than one "
+                              "module per compilation");
+            }
+            if (FoundOther) {
+               Sema->diagnose(err_generic_error,
+                              "cannot compile other files along with a module");
+            }
+
+            FoundModule = true;
+
+            // Add the path of this module to the include paths.
+            options.includePaths.push_back(fs::getPath(FileName));
+         }
+         else {
+            FoundOther = true;
+         }
+
+         options.addInput(FileName);
          ScratchBuf.clear();
       }
 
       files.clear();
+   }
+
+   if (FoundModule) {
+      EmitModules = true;
+   }
+   else if (EmitModules) {
+      Sema->diagnose(err_generic_error, "no module file specified");
+      EmitModules = false;
    }
 
    for (auto &LI : LinkedLibraries) {
@@ -323,7 +361,6 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    }
    if (!NoIncremental) {
       IncMgr = std::make_unique<serial::IncrementalCompilationManager>(*this);
-      Sema->setTrackDeclsPerFile(true);
    }
 
    /// Features
@@ -429,16 +466,15 @@ public:
 
 int CompilerInstance::compile()
 {
+   /// Return early if we encountered errors during argument parsing.
+   if (Sema->encounteredError()) {
+      return 1;
+   }
+
    support::Timer Timer(*this, "Compilation", PrintPhases);
    llvm::CrashRecoveryContextCleanupRegistrar<SemaPass> CleanupSema(Sema.get());
 
    QueryStackTraceEntry StackTrace(*this);
-
-   SmallVector<StringRef, 4> SourceFiles;
-   for (auto &File : options.getInputFiles(InputKind::SourceFile)) {
-      SourceFiles.emplace_back(File);
-   }
-
    switch (options.output()) {
    case OutputKind::Module:
       if (QC->CompileModule()) {
@@ -447,7 +483,7 @@ int CompilerInstance::compile()
 
       break;
    case OutputKind::Executable:
-      if (QC->CreateExecutable(SourceFiles, options.getOutFile())) {
+      if (QC->CreateExecutable(options.getOutFile())) {
          return 1;
       }
 
@@ -461,20 +497,20 @@ int CompilerInstance::compile()
          return 1;
       }
 
-      if (QC->CreateObject(SourceFiles, OS)) {
+      if (QC->CreateObject(OS)) {
          return 1;
       }
 
       break;
    }
    case OutputKind::StaticLib:
-      if (QC->CreateStaticLib(SourceFiles, options.getOutFile())) {
+      if (QC->CreateStaticLib(options.getOutFile())) {
          return 1;
       }
 
       break;
    case OutputKind::SharedLib:
-      if (QC->CreateDynamicLib(SourceFiles, options.getOutFile())) {
+      if (QC->CreateDynamicLib(options.getOutFile())) {
          return 1;
       }
 
@@ -505,7 +541,7 @@ int CompilerInstance::compile()
          return 1;
       }
 
-      if (QC->EmitIL(SourceFiles, OS)) {
+      if (QC->EmitIL(OS)) {
          return 1;
       }
    }
@@ -532,7 +568,7 @@ int CompilerInstance::compile()
          return 1;
       }
 
-      if (QC->EmitIR(SourceFiles, OS)) {
+      if (QC->EmitIR(OS)) {
          return 1;
       }
    }

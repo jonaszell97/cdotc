@@ -93,24 +93,6 @@ QueryResult ResolveWildcardDeclarationsQuery::run()
    return finish(QueryResult(K));
 }
 
-QueryResult InstantiateFieldsQuery::run()
-{
-   assert(S->isInstantiation() && "not an instantiation!");
-
-   for (auto *F : S->getSpecializedTemplate()->getDecls<FieldDecl>()) {
-      if (F->isStatic()) {
-         continue;
-      }
-
-      NamedDecl *Inst;
-      if (auto Err = QC.InstantiateTemplateMember(Inst, F, S)) {
-         return Query::finish(Err);
-      }
-   }
-
-   return finish();
-}
-
 QueryResult PrepareTypeNameLookupQuery::run()
 {
    finish();
@@ -172,6 +154,16 @@ QueryResult PrepareTypeNameLookupQuery::run()
       default:
          break;
       }
+
+      // Make sure all transparent inner contexts are prepared.
+      auto *InnerDC = dyn_cast<DeclContext>(Decl);
+      if (!InnerDC || !InnerDC->isTransparent()) {
+         continue;
+      }
+
+      if (auto Err = QC.PrepareTypeNameLookup(InnerDC)) {
+         return Query::finish(Err);
+      }
    }
 
    // If this is not a record, we're done.
@@ -199,6 +191,18 @@ QueryResult PrepareNameLookupQuery::run()
    // Prepare the enclosing context.
    if (DC->getParentCtx() && QC.PrepareNameLookup(DC->getParentCtx())) {
       return fail();
+   }
+
+   // Make sure all transparent inner contexts are prepared.
+   for (auto *D : DC->getDecls()) {
+      auto *InnerDC = dyn_cast<DeclContext>(D);
+      if (!InnerDC || !InnerDC->isTransparent()) {
+         continue;
+      }
+
+      if (auto Err = QC.PrepareNameLookup(InnerDC)) {
+         return Query::finish(Err);
+      }
    }
 
    // If this is not a record, we're done.
@@ -282,15 +286,15 @@ QueryResult FindExtensionsQuery::run()
          updateSpecialNames(*QC.Sema, T, Ext);
 
          LLVM_FALLTHROUGH;
-      case ResultKind::Applies:
+      case ResultKind::Applies: {
          Context.addExtension(T, Ext);
 
          // Add conformances if this declaration is not constrained, not a
          // protocol and not a template.
          bool AddConformances =
             QC.CI.getContext().getExtConstraints(Ext).empty()
-               && !isa<ProtocolDecl>(T->getRecord())
-               && !T->getRecord()->isTemplate();
+            && !isa<ProtocolDecl>(T->getRecord())
+            && !T->getRecord()->isTemplate();
 
          ConformanceKind Kind;
          if (AddConformances) {
@@ -306,6 +310,7 @@ QueryResult FindExtensionsQuery::run()
          }
 
          break;
+      }
       }
    }
 
@@ -764,34 +769,7 @@ QueryResult GetExtensionTypeKindQuery::run()
    }
 
    assert(isa<IdentifierRefExpr>(Expr) && "invalid type expression");
-
-   auto *Ident = cast<IdentifierRefExpr>(Expr);
-   if (Ident->getParentExpr())
-      return finish(Nominal);
-
-   if (HasTemplateArgs) {
-      if (Ident->getDeclName().isStr("UnsafePtr"))
-         return finish(Pointer);
-
-      if (Ident->getDeclName().isStr("UnsafeMutablePtr"))
-         return finish(Pointer);
-
-      return finish(Nominal);
-   }
-
-   if (!Ident->getDeclName().isSimpleIdentifier())
-      return finish(Nominal);
-
-   return finish(StringSwitch<ResultKind>(Ident->getIdent())
-      .Case("UnsafeRawPtr", Pointer)
-      .Case("UnsafeMutableRawPtr", Pointer)
-#     define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
-      .Case(#Name, Builtin)
-#     define CDOT_BUILTIN_FP(Name, Precision)               \
-      .Case(#Name, Builtin)
-#     include "Basic/BuiltinTypes.def"
-      .Default(Nominal)
-   );
+   return finish(Nominal);
 }
 
 QueryResult ResolveExtensionQuery::run()
@@ -836,12 +814,14 @@ static DeclarationName adaptName(ASTContext &Ctx,
 
       switch (Name.getKind()) {
       case DeclarationName::ConstructorName:
-         return Ctx.getDeclNameTable().getConstructorName(NewRec->getType());
+         return Ctx.getDeclNameTable().getConstructorName(
+            Ctx.getRecordType(NewRec));
       case DeclarationName::BaseConstructorName:
-         return Ctx.getDeclNameTable().getConstructorName(NewRec->getType(),
-                                                          false);
+         return Ctx.getDeclNameTable().getConstructorName(
+            Ctx.getRecordType(NewRec), false);
       case DeclarationName::DestructorName:
-         return Ctx.getDeclNameTable().getDestructorName(NewRec->getType());
+         return Ctx.getDeclNameTable().getDestructorName(
+            Ctx.getRecordType(NewRec));
       default:
          llvm_unreachable("bad name kind");
       }
@@ -1048,7 +1028,7 @@ static bool LookupInExtension(ExtensionDecl *Ext,
 
    // Only look for members of the extended record if this extension is the
    // original lookup context.
-   if (Ext == Data.OriginalCtx && !Data.CheckedExtendedRecord) {
+   if (!Data.CheckedExtendedRecord) {
       Data.CheckedExtendedRecord = true;
 
       if (MultiLevelLookupImpl(*Ext->getExtendedRecord(), Name, Data)) {
@@ -1496,16 +1476,8 @@ static bool MultiLevelLookupImpl(DeclContext &CtxRef,
          return false;
       }
 
-      // Get the correct enclosing context.
-      if (auto *ND = dyn_cast<NamedDecl>(Ctx)) {
-         Ctx = ND->getNonTransparentDeclContext();
-      }
-      else {
-         Ctx = Ctx->getParentCtx();
-      }
-
+      Ctx = Ctx->getParentCtx();
       if (Ctx) {
-         Ctx = Ctx->lookThroughExtension();
          if (PrepareNameLookup(Ctx, Data)) {
             return true;
          }
@@ -1603,7 +1575,7 @@ QueryResult MultiLevelLookupQuery::run()
 QueryResult MultiLevelTypeLookupQuery::run()
 {
    MultiLevelLookupResult Result;
-   T = T->stripMetaType();
+   T = T->stripMetaType()->getDesugaredType();
 
    if (auto *R = T->asRecordType()) {
       const MultiLevelLookupResult *Lookup;
@@ -1684,7 +1656,8 @@ QueryResult DirectLookupQuery::run()
          auto NewName = adaptName(Context, *R, *Conf->getProto(), Name);
          const MultiLevelLookupResult *ConfResult;
 
-         if (QC.DirectLookup(ConfResult, Conf->getProto(), NewName)) {
+         if (QC.DirectLookup(ConfResult, Conf->getProto(), NewName,
+                             LookInExtensions, Opts)) {
             return fail();
          }
 
@@ -1792,8 +1765,13 @@ QueryResult FindEquivalentDeclQuery::run()
       return fail();
    }
 
+   DeclarationName LookupName = adaptName(QC.Context,
+                                          *Decl->getDeclContext()
+                                               ->lookThroughExtension(),
+                                          *DC, Decl->getDeclName());
+
    const MultiLevelLookupResult *LookupRes;
-   if (QC.DirectLookup(LookupRes, DC, Decl->getDeclName(), LookInExtensions)) {
+   if (QC.DirectLookup(LookupRes, DC, LookupName, LookInExtensions)) {
       return fail();
    }
 
@@ -1955,43 +1933,6 @@ QueryResult FindEquivalentDeclQuery::run()
    return finish(nullptr);
 }
 
-QueryResult ResolveNestedNameSpecToTypeQuery::run()
-{
-   NamedDecl *ND;
-   if (auto Err = QC.ResolveNestedNameSpecToDecl(ND, Name, DC, IssueDiag)) {
-      return Query::finish(Err);
-   }
-
-   assert(ND && "query should have failed!");
-
-   if (auto *R = dyn_cast<RecordDecl>(ND)) {
-      return finish(R->getType());
-   }
-
-   if (auto *AT = dyn_cast<AssociatedTypeDecl>(ND)) {
-      return finish(QC.Context.getAssociatedType(AT));
-   }
-
-   if (auto *Alias = dyn_cast<AliasDecl>(ND)) {
-      if (Alias->getType()->isMetaType()) {
-         if (QC.PrepareDeclInterface(Alias)) {
-            return fail();
-         }
-
-         return finish(QC.Context.getTypedefType(Alias));
-      }
-
-      return finish(Alias->getType());
-   }
-
-   if (IssueDiag) {
-      QC.Sema->diagnose(err_generic_error, "name does not refer to a type",
-                        Name->getFullRange());
-   }
-
-   return fail();
-}
-
 static DeclContext *getContextForDecl(SemaPass &SP, NamedDecl *ND)
 {
    if (!ND)
@@ -2016,6 +1957,247 @@ static DeclContext *getContextForDecl(SemaPass &SP, NamedDecl *ND)
    return nullptr;
 }
 
+static QualType getTypeForDecl(QueryContext &QC, NamedDecl *ND, bool IssueDiag,
+                               NestedNameSpecifierWithLoc *Name) {
+   if (ND) {
+      if (auto *R = dyn_cast<RecordDecl>(ND)) {
+         return R->getType();
+      }
+
+      if (auto *AT = dyn_cast<AssociatedTypeDecl>(ND)) {
+         if (QC.PrepareDeclInterface(AT)) {
+            return QualType();
+         }
+
+         return QC.Context.getAssociatedType(AT);
+      }
+
+      if (auto *Alias = dyn_cast<AliasDecl>(ND)) {
+         if (QC.PrepareDeclInterface(Alias)) {
+            return QualType();
+         }
+         if (Alias->getType()->isMetaType()) {
+            return QC.Context.getTypedefType(Alias);
+         }
+
+         return Alias->getType();
+      }
+   }
+
+   if (IssueDiag) {
+      QC.Sema->diagnose(err_generic_error, "name does not refer to a type",
+                        Name->getFullRange());
+   }
+
+   return QualType();
+}
+
+QueryResult ResolveNestedNameSpecToTypeQuery::run()
+{
+   if (!DC) {
+      DC = &QC.Sema->getDeclContext();
+   }
+
+   NestedNameSpecifier *Name = this->Name->getNameSpec();
+
+   SmallVector<const NestedNameSpecifier*, 4> Names{ Name };
+   auto *Prev = Name->getPrevious();
+   while (Prev) {
+      Names.push_back(Prev);
+      Prev = Prev->getPrevious();
+   }
+
+   unsigned i = 0;
+   unsigned NameDepth = Names.size();
+
+   for (auto it = Names.rbegin(), end = Names.rend(); it != end;  ++i) {
+      const NestedNameSpecifier *CurName = *it++;
+
+      switch (CurName->getKind()) {
+      case NestedNameSpecifier::Identifier: {
+         const MultiLevelLookupResult *Result;
+         if (QC.MultiLevelLookup(Result, DC, CurName->getIdentifier())) {
+            return fail();
+         }
+
+         if (Result->empty()) {
+            if (IssueDiag) {
+               QC.Sema->diagnoseMemberNotFound(DC, StmtOrDecl(),
+                                               CurName->getIdentifier(),
+                                               diag::err_member_not_found,
+                                               this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         auto *ND = Result->front().front();
+         if (i == NameDepth - 1) {
+            QualType T = getTypeForDecl(QC, ND, IssueDiag, this->Name);
+            if (!T) {
+               return fail();
+            }
+
+            return finish(T);
+         }
+
+         DC = getContextForDecl(*QC.Sema, ND);
+         if (!DC) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_cannot_lookup_member_in,
+                                 ND->getSpecifierForDiagnostic(),
+                                 ND->getDeclName(),
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         break;
+      }
+      case NestedNameSpecifier::Namespace:
+         DC = CurName->getNamespace();
+         break;
+      case NestedNameSpecifier::Type: {
+         QualType Ty = CurName->getType();
+         if (i == NameDepth - 1) {
+            return finish(Ty);
+         }
+
+         auto *TypeDecl = QC.Sema->getTypeDecl(Ty);
+         if (!TypeDecl) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_access_member_on_type, Ty,
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+         if (!isa<DeclContext>(TypeDecl)) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_cannot_lookup_member_in,
+                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl->getDeclName(),
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         DC = cast<DeclContext>(TypeDecl);
+         break;
+      }
+      case NestedNameSpecifier::Module:
+         DC = CurName->getModule()->getDecl();
+         break;
+      case NestedNameSpecifier::AssociatedType: {
+         auto *AT = CurName->getAssociatedType();
+         if (!AT->isImplementation()) {
+            auto *ATImpl = QC.LookupSingleAs<AssociatedTypeDecl>(
+               DC, AT->getDeclName());
+
+            if (!ATImpl || !ATImpl->isImplementation()) {
+               return finish(nullptr, Dependent);
+            }
+
+            AT = ATImpl;
+         }
+
+         if (i == NameDepth - 1) {
+            return finish(AT->getActualType());
+         }
+
+         QualType Ty = AT->getActualType();
+         auto *TypeDecl = QC.Sema->getTypeDecl(Ty);
+
+         if (!TypeDecl) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_access_member_on_type, Ty,
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+         if (!isa<DeclContext>(TypeDecl)) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_cannot_lookup_member_in,
+                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl->getDeclName(),
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         DC = cast<DeclContext>(TypeDecl);
+         break;
+      }
+      case NestedNameSpecifier::Alias: {
+         auto *Alias = CurName->getAlias();
+         if (i == NameDepth - 1) {
+            QualType T = getTypeForDecl(QC, Alias, IssueDiag, this->Name);
+            if (!T) {
+               return fail();
+            }
+
+            return finish(T);
+         }
+
+         if (auto Err = QC.PrepareDeclInterface(Alias)) {
+            return Query::finish(Err);
+         }
+
+         QualType Ty = Alias->getType();
+         if (!Ty->isMetaType()) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_access_member_on_type, Ty,
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         auto *TypeDecl = QC.Sema->getTypeDecl(Ty);
+         if (!TypeDecl) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_access_member_on_type, Ty,
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         if (!isa<DeclContext>(TypeDecl)) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_cannot_lookup_member_in,
+                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl->getDeclName(),
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         DC = cast<DeclContext>(TypeDecl);
+         break;
+      }
+      case NestedNameSpecifier::TemplateParam:
+      case NestedNameSpecifier::TemplateArgList: {
+         return finish(nullptr, Dependent);
+      }
+      }
+   }
+
+   QualType T = getTypeForDecl(QC, dyn_cast<NamedDecl>(DC), IssueDiag,
+                               this->Name);
+
+   if (!T) {
+      return fail();
+   }
+
+   return finish(T);
+}
+
 QueryResult ResolveNestedNameSpecToDeclQuery::run()
 {
    if (!DC) {
@@ -2034,8 +2216,8 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
    unsigned i = 0;
    unsigned NameDepth = Names.size();
 
-   for (auto it = Names.rbegin(), end = Names.rend(); it != end; ++it, ++i) {
-      const NestedNameSpecifier *CurName = *it;
+   for (auto it = Names.rbegin(), end = Names.rend(); it != end;  ++i) {
+      const NestedNameSpecifier *CurName = *it++;
 
       switch (CurName->getKind()) {
       case NestedNameSpecifier::Identifier: {
@@ -2150,7 +2332,51 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
          DC = cast<DeclContext>(TypeDecl);
          break;
       }
-      case NestedNameSpecifier::TemplateParam: {
+      case NestedNameSpecifier::Alias: {
+         auto *Alias = CurName->getAlias();
+         if (auto Err = QC.PrepareDeclInterface(Alias)) {
+            return Query::finish(Err);
+         }
+
+         QualType Ty = Alias->getType();
+         if (!Ty->isMetaType()) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_access_member_on_type, Ty,
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         auto *TypeDecl = QC.Sema->getTypeDecl(Ty);
+         if (!TypeDecl) {
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_access_member_on_type, Ty,
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         if (!isa<DeclContext>(TypeDecl)) {
+            if (i == NameDepth - 1)
+               return finish(TypeDecl);
+
+            if (IssueDiag) {
+               QC.Sema->diagnose(err_cannot_lookup_member_in,
+                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl->getDeclName(),
+                                 this->Name->getSourceRange(i));
+            }
+
+            return fail();
+         }
+
+         DC = cast<DeclContext>(TypeDecl);
+         break;
+      }
+      case NestedNameSpecifier::TemplateParam:
+      case NestedNameSpecifier::TemplateArgList: {
          return finish(nullptr, Dependent);
       }
       }

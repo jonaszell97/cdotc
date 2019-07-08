@@ -1,0 +1,144 @@
+
+@version(None)
+module std._internal
+
+class Node {
+    public var x: Int
+    public var y: Int
+    public var left: Node? = none
+    public var right: Node? = none
+
+    init(x: Int) {
+        self.x = x
+        self.y = libc.rand() as Int
+    }
+}
+
+def merge(lower: Node?, greater: Node?) -> Node? {
+    if case .Some(let lower) = lower {
+        if case .Some(let greater) = greater {
+            if lower.y < greater.y {
+                lower.right = merge(lower: lower.right, greater: .Some(greater))
+                return .Some(lower)
+            } else {
+                greater.left = merge(lower: .Some(lower), greater: greater.left)
+                return .Some(greater)
+            }
+        }
+    } 
+    
+    if case .None = lower {
+        return greater
+    } else {
+        return lower
+    }
+}
+
+def splitBinary(orig: Node?, value: Int) -> (Node?, Node?) {
+    if case .Some(let orig) = orig {
+        if orig.x < value {
+            var splitPair = splitBinary(orig: orig.right, value: value)
+            orig.right = splitPair.0.copy()
+            return (.Some(orig), splitPair.1.copy())
+        } else {
+            var splitPair = splitBinary(orig: orig.left, value: value)
+            orig.left = splitPair.1.copy()
+            return (splitPair.0.copy(), .Some(orig))
+        }
+
+        unreachable!("")
+    } else {
+        return ((Node?).None, (Node?).None)
+    }
+}
+
+def merge(lower: Node?, equal: Node?, greater: Node?) -> Node? {
+    return merge(lower: merge(lower: lower, greater: equal), greater: greater)
+}
+
+struct SplitResult {
+    var lower: Node?
+    var equal: Node?
+    var greater: Node?
+
+    init(lower: Node?, equal: Node?, greater: Node?) {
+        self.lower = lower
+        self.equal = equal
+        self.greater = greater
+    }
+}
+
+def split(orig: Node?, value: Int) -> SplitResult {
+    var res1 = splitBinary(orig: orig, value: value)
+    var lower = res1.0
+    var equalGreater = res1.1
+    
+    var res2 = splitBinary(orig: equalGreater, value: value + 1)
+    var equal = res2.0
+    var greater = res2.1
+
+    return SplitResult(lower: lower, equal: equal, greater: greater)
+}
+
+struct Tree {
+    init {
+
+    }
+
+    public def mutating hasValue(x: Int) -> Bool {
+        let splited = split(orig: mRoot, value: x)
+        let res = splited.equal != none
+        mRoot = merge(lower: splited.lower, equal: splited.equal, greater: splited.greater)
+        return res
+    }
+    
+    public def mutating insert(x: Int) {
+        var splited = split(orig: mRoot, value: x)
+        if case .None = splited.equal {
+            splited.equal = .Some(Node(x: x))
+        }
+        mRoot = merge(lower: splited.lower, equal: splited.equal, greater: splited.greater)
+    }
+    
+    public def mutating erase(x: Int) {
+        let splited = split(orig: mRoot, value: x)
+        mRoot = merge(lower: splited.lower, greater: splited.greater)
+    }
+    
+    var mRoot: Node? = none
+}
+
+declare C def atoi(UnsafePtr[u8]) -> i32
+
+struct MoveOnly {
+    var deinitialized: Bool = false
+    deinit {
+        libc.printf("goodbye\n")
+        assert!(!deinitialized, "duplicate deinitilization!")
+        Builtin.storeToPointer(
+            true, Builtin.reinterpretCast[Bool](Builtin.unsafeConstCast(Builtin.addressOf(self))))
+    }
+}
+
+def main(argc: Int, argv: UnsafePtr[UnsafePtr[u8]]) {
+    libc.srand(libc.time(0 as! UnsafeMutableRawPtr))
+
+    assert!(argc == 2, "expected 1 argument")
+
+    var tree = Tree()
+    var cur = 5
+    var res = 0
+
+    for let i in 1..(atoi(argv[1]) as i32) {
+        let a = i % 3
+        cur = (cur * 57 + 43) % 10007
+        match a {
+            case 0: tree.insert(x: cur)
+            case 1: tree.erase(x: cur)
+            case 2: if tree.hasValue(x: cur) { res += 1 }
+            default: break
+        }
+    }
+
+    print(res)
+}

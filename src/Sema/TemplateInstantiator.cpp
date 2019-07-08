@@ -11,6 +11,7 @@
 #include "ILGen/ILGenPass.h"
 #include "Message/Diagnostics.h"
 #include "Module/Module.h"
+#include "Support/Log.h"
 #include "Query/QueryContext.h"
 #include "SemaPass.h"
 #include "Serialization/ModuleFile.h"
@@ -42,14 +43,16 @@ static constexpr uint16_t DependentMask =
 class InstantiatorImpl: public ASTTypeVisitor<InstantiatorImpl>,
                         public TypeBuilder<InstantiatorImpl> {
 public:
-   InstantiatorImpl(SemaPass &SP, MultiLevelFinalTemplateArgList &&templateArgs,
+   InstantiatorImpl(SemaPass &SP,
+                    MultiLevelFinalTemplateArgList &&templateArgs,
                     StmtOrDecl SOD = StmtOrDecl(),
                     DeclContext *InstCtx = nullptr,
-                    SourceLocation POI = {})
+                    SourceLocation POI = {},
+                    QualType Self = QualType())
       : ASTTypeVisitor(false), TypeBuilder(SP, SourceRange(POI)),
         SP(SP), Context(SP.getContext()),
         InstScope(SP, InstCtx ? InstCtx : &SP.getDeclContext()),
-        templateArgs(move(templateArgs)), POI(POI)
+        templateArgs(move(templateArgs)), Self(Self), POI(POI)
    {
       SourceID = SP.getCompilationUnit().getFileMgr()
                    .getSourceId(SP.getCurrentDecl()->getSourceLoc());
@@ -227,8 +230,8 @@ private:
 
    Expression* visit(Expression *expr)
    {
-      assert((expr->isSemanticallyChecked() || expr->isContextDependent())
-                && "instantiating unchecked expr");
+//      assert((expr->isSemanticallyChecked() || expr->isContextDependent())
+//                && "instantiating unchecked expr");
 
       if (canElideInstantiation(expr))
          return expr;
@@ -432,6 +435,11 @@ private:
       llvm_unreachable("precedence groups can't be dependent!");
    }
 
+   SourceFileDecl *visitSourceFileDecl(SourceFileDecl*)
+   {
+      llvm_unreachable("should not be in a template!");
+   }
+
    OperatorDecl *visitOperatorDecl(OperatorDecl*)
    {
       llvm_unreachable("should not be in a template!");
@@ -455,6 +463,14 @@ private:
    ModuleDecl* visitModuleDecl(ModuleDecl *node)
    {
       llvm_unreachable("module should not be instantiated!");
+   }
+
+   DeclRefExpr *visitDeclRefExpr(DeclRefExpr *Expr);
+   MemberRefExpr *visitMemberRefExpr(MemberRefExpr *Expr);
+
+   OverloadedDeclRefExpr *visitOverloadedDeclRefExpr(OverloadedDeclRefExpr*)
+   {
+      llvm_unreachable("should never be dependent!");
    }
 
    MacroExpansionExpr *visitMacroExpansionExpr(MacroExpansionExpr *Expr);
@@ -560,6 +576,7 @@ private:
    Expression* visitBinaryOperator(BinaryOperator *node);
    Expression *visitAssignExpr(AssignExpr *Expr);
    CastExpr* visitCastExpr(CastExpr *node);
+   AddrOfExpr* visitAddrOfExpr(AddrOfExpr *Expr);
    TypePredicateExpr* visitTypePredicateExpr(TypePredicateExpr *node);
    UnaryOperator* visitUnaryOperator(UnaryOperator *node);
 
@@ -611,8 +628,6 @@ private:
    ReferenceTypeExpr *visitReferenceTypeExpr(ReferenceTypeExpr *Expr);
    OptionTypeExpr *visitOptionTypeExpr(OptionTypeExpr *Expr);
    ExistentialTypeExpr *visitExistentialTypeExpr(ExistentialTypeExpr *Expr);
-
-   NestedNameSpecifier *visitNestedNameSpecifier(NestedNameSpecifier *Name);
 
    /// Reference to the Sema instance.
    SemaPass &SP;
@@ -898,7 +913,7 @@ private:
       ASTVector<TemplateParamDecl*> Params(Context, OriginalParams.size());
 
       for (auto &P : OriginalParams) {
-         if (!hasTemplateArg(P->getDeclName())) {
+         if (!hasTemplateArg(P)) {
             Params.push_back(P, Context);
          }
       }
@@ -942,40 +957,41 @@ private:
    public:
       VariadicParamFinder(
          llvm::SmallPtrSetImpl<TemplateParamDecl*> &Params,
-         llvm::SmallPtrSetImpl<IdentifierRefExpr*> &PackArguments)
+         llvm::SmallPtrSetImpl<FuncArgDecl*> &PackArguments)
          : VariadicParams(Params), PackArguments(PackArguments)
       { }
 
-      bool visitIdentifierRefExpr(IdentifierRefExpr *Expr)
+      bool visitDeclRefExpr(DeclRefExpr *Expr)
       {
-         if (Expr->getKind() == IdentifierKind::TemplateParam) {
-            auto Param = Expr->getTemplateParam();
+         auto *ND = Expr->getDecl();
+         switch (ND->getKind()) {
+         case Decl::TemplateParamDeclID: {
+            auto *Param = cast<TemplateParamDecl>(ND);
             if (Param->isVariadic()) {
                VariadicParams.insert(Param);
-               return false;
             }
+
+            break;
          }
-         else if (Expr->getKind() == IdentifierKind::FunctionArg) {
-            auto Arg = Expr->getFuncArg();
+         case Decl::FuncArgDeclID: {
+            auto *Arg = cast<FuncArgDecl>(ND);
             if (Arg->isVariadicArgPackExpansion()) {
-               PackArguments.insert(Expr);
+               PackArguments.insert(Arg);
                visit(Arg->getType().getTypeExpr());
             }
+
+            break;
          }
-         else if (Expr->getKind() == IdentifierKind::Field) {
-            auto F = Expr->getFieldDecl();
-            if (F->isVariadic()) {
-               PackArguments.insert(Expr);
-               visit(F->getType().getTypeExpr());
-            }
+         default:
+            break;
          }
 
-         return true;
+         return false;
       }
 
    private:
       llvm::SmallPtrSetImpl<TemplateParamDecl*> &VariadicParams;
-      llvm::SmallPtrSetImpl<IdentifierRefExpr*> &PackArguments;
+      llvm::SmallPtrSetImpl<FuncArgDecl*> &PackArguments;
    };
 
    template<class Container>
@@ -992,8 +1008,8 @@ private:
          return false;
       }
 
-      llvm::SmallPtrSet<TemplateParamDecl*, 4> VariadicParams;
-      llvm::SmallPtrSet<IdentifierRefExpr*, 4> PackArguments;
+      SmallPtrSet<TemplateParamDecl*, 4> VariadicParams;
+      SmallPtrSet<FuncArgDecl*, 4> PackArguments;
 
       VariadicParamFinder Visitor(VariadicParams, PackArguments);
       Visitor.visit(variadicExpr);
@@ -1005,7 +1021,7 @@ private:
       }
 
       TemplateParamDecl *ParameterPack = *VariadicParams.begin();
-      IdentifierRefExpr *PackArgument = nullptr;
+      FuncArgDecl *PackArgument = nullptr;
 
       if (!PackArguments.empty())
          PackArgument = *PackArguments.begin();
@@ -1025,7 +1041,7 @@ private:
          const IdentifierInfo *FuncArg = nullptr;
 
          if (PackArgument) {
-            FuncArg = PackArgument->getIdentInfo();
+            FuncArg = PackArgument->getIdentifierInfo();
             IdentSubst = Context.getDeclNameTable()
                                 .getPackExpansionName(FuncArg, i);
          }
@@ -1045,7 +1061,7 @@ private:
    bool expandVariadicDecl(FieldDecl *Decl)
    {
       llvm::SmallPtrSet<TemplateParamDecl*, 4> VariadicParams;
-      llvm::SmallPtrSet<IdentifierRefExpr*, 4> PackArguments;
+      llvm::SmallPtrSet<FuncArgDecl*, 4> PackArguments;
 
       VariadicParamFinder Visitor(VariadicParams, PackArguments);
       Visitor.visit(Decl->getType().getTypeExpr());
@@ -1097,7 +1113,7 @@ private:
    bool expandVariadicDecl(FuncArgDecl *Decl,
                            llvm::SmallVectorImpl<FuncArgDecl*> &Vec) {
       llvm::SmallPtrSet<TemplateParamDecl*, 4> VariadicParams;
-      llvm::SmallPtrSet<IdentifierRefExpr*, 4> PackArguments;
+      llvm::SmallPtrSet<FuncArgDecl*, 4> PackArguments;
 
       VariadicParamFinder Visitor(VariadicParams, PackArguments);
       Visitor.visit(Decl->getType().getTypeExpr());
@@ -1253,88 +1269,7 @@ RecordDecl *InstantiatorImpl::instantiateRecordDecl(RecordDecl *Decl)
 
 RecordDecl *InstantiatorImpl::instantiateRecordDefinition(RecordDecl *Template,
                                                           RecordDecl *Inst) {
-   InstantiatingRecordRAII IRR(*this, Inst);
-   {
-      SemaPass::DeclContextRAII declContext(SP, Inst,
-                                            SemaPass::SetParentContext);
-
-      // resolve static conditions line because they might contain decls that
-      // are needed by others
-      for (auto *D : Template->getDecls()) {
-         if (D->isSynthesized())
-            continue;
-
-         switch (D->getKind()) {
-         case Decl::StaticIfDeclID:
-         case Decl::StaticForDeclID: {
-            (void)visit(D);
-            break;
-         }
-         case Decl::MacroExpansionDeclID:
-         case Decl::TemplateParamDeclID:
-         default:
-            break;
-         }
-      }
-
-      // associated types and aliases must be visited line because their types
-      // might be used in fields / method signatures / etc.
-      for (auto *D : Template->getDecls()) {
-         if (D->isSynthesized())
-            continue;
-
-         switch (D->getKind()) {
-         case Decl::TypedefDeclID:
-         case Decl::AssociatedTypeDeclID:
-         case Decl::AliasDeclID:
-         case Decl::UsingDeclID:
-         case Decl::ImportDeclID:
-         case Decl::ModuleDeclID: {
-            (void)visit(D);
-            break;
-         }
-         case Decl::TemplateParamDeclID:
-         default:
-            break;
-         }
-      }
-
-      // Now we can instantiate the rest
-      for (auto &D : Template->getDecls()) {
-         if (D->isSynthesized())
-            continue;
-
-         switch (D->getKind()) {
-         case Decl::TypedefDeclID:
-         case Decl::AssociatedTypeDeclID:
-         case Decl::AliasDeclID:
-         case Decl::TemplateParamDeclID:
-         case Decl::UsingDeclID:
-         case Decl::ImportDeclID:
-         case Decl::ModuleDeclID:
-         case Decl::OperatorDeclID:
-         case Decl::PrecedenceGroupDeclID:
-         case Decl::StaticIfDeclID:
-         case Decl::StaticForDeclID:
-         case Decl::MacroExpansionDeclID:
-            break;
-         default: {
-            (void)visit(D);
-            break;
-         }
-         }
-      }
-   }
-
-   for (auto &E : Template->getExtensions()) {
-      auto ExtInst = visitExtensionDecl(E, Inst);
-      if (!ExtInst)
-         continue;
-
-      SP.registerExtension(ExtInst);
-   }
-
-   return Inst;
+   llvm_unreachable("remove this!");
 }
 
 RecordDecl *InstantiatorImpl::visitRecordCommon(RecordDecl *Template)
@@ -1377,11 +1312,6 @@ EnumCaseDecl* InstantiatorImpl::visitEnumCaseDecl(EnumCaseDecl *Decl)
                                   cloneVector(Decl->getArgs()));
 
    EC->setILValue(Decl->getILValue());
-
-   if (Decl != Template) {
-      ActOnDecl(EC);
-   }
-
    return EC;
 }
 
@@ -1398,9 +1328,6 @@ ProtocolDecl* InstantiatorImpl::visitProtocolDecl(ProtocolDecl *node)
 ExtensionDecl*
 InstantiatorImpl::visitExtensionDecl(ExtensionDecl *Ext, RecordDecl *RecInst)
 {
-   if (!SP.ensureDeclared(Ext))
-      return nullptr;
-
    assert(RecInst && "instantiating extension without instantiated record!");
 
    auto constraints = cloneVector(Ext->getConstraints());
@@ -1453,16 +1380,12 @@ PropDecl* InstantiatorImpl::visitPropDecl(PropDecl *Decl, bool IsFieldAccessor)
 
    auto Prop = PropDecl::Create(Context, Decl->getAccess(),
                                 Decl->getSourceRange(), Decl->getDeclName(),
-                                visit(Decl->getType()), Decl->isStatic(),
+                                visit(Decl->getType()),
+                                Decl->isStatic(), Decl->isReadWrite(),
                                 copyOrNull(Decl->getGetterMethod()),
                                 copyOrNull(Decl->getSetterMethod()));
 
    Prop->setPropTemplate(Decl);
-
-   if (!IsFieldAccessor && Decl != Template) {
-      ActOnDecl(Prop);
-   }
-
    return Prop;
 }
 
@@ -1475,11 +1398,6 @@ SubscriptDecl* InstantiatorImpl::visitSubscriptDecl(SubscriptDecl *Decl)
                                    copyOrNull(Decl->getSetterMethod()));
 
    SD->setTemplate(Decl);
-
-   if (Decl != Template) {
-      ActOnDecl(SD);
-   }
-
    return SD;
 }
 
@@ -1518,11 +1436,6 @@ MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
    Inst->setFunctionFlags(M->getFunctionFlags());
 
    VariadicTemplateArgs.clear();
-
-   if (!IsMainTemplate && !Inst->isProperty() && !Inst->isSubscript()) {
-      ActOnDecl(Inst);
-   }
-
    return Inst;
 }
 
@@ -1545,26 +1458,16 @@ InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *Decl)
                                           Decl->isImplementation());
 
    Context.setConstraints(Inst, cloneVector(Decl->getConstraints()));
-
-   if (Decl != Template) {
-      ActOnDecl(Inst);
-   }
-
    return Inst;
 }
 
 TypedefDecl* InstantiatorImpl::visitTypedefDecl(TypedefDecl *TD)
 {
-   bool IsMainTemplate = TD == Template;
    DeclarationName Name = TD->getDeclName();
-
    auto Inst = TypedefDecl::Create(Context, TD->getAccess(),
                                    TD->getSourceLoc(), Name,
                                    visit(TD->getOriginTy()),
                                    copyTemplateParameters(TD));
-
-   if (!IsMainTemplate)
-      ActOnDecl(Inst);
 
    return Inst;
 }
@@ -1586,11 +1489,6 @@ AliasDecl* InstantiatorImpl::visitAliasDecl(AliasDecl *Alias)
                                  copyTemplateParameters(Alias));
 
    Context.setConstraints(Inst, cloneVector(Alias->getConstraints()));
-
-   if (!IsMainTemplate) {
-      ActOnDecl(Inst);
-   }
-
    return Inst;
 }
 
@@ -1632,10 +1530,6 @@ FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *Decl)
       Inst->setAccessor(AccInst);
    }
 
-   if (Decl != Template) {
-      ActOnDecl(Inst);
-   }
-
    return Inst;
 }
 
@@ -1668,20 +1562,6 @@ InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
    Inst->setMethodID(Decl->getMethodID());
    Inst->setFunctionFlags(Decl->getFunctionFlags());
 
-   if (!IsMainTemplate) {
-      ActOnDecl(Inst);
-
-      auto *Template = cast<RecordDecl>(
-         SP.getDeclContext().lookThroughExtension());
-
-      if (auto *S = dyn_cast<StructDecl>(Template)) {
-         if (Decl == S->getMemberwiseInitializer()) {
-            Inst->setMemberwiseInitializer(true);
-            S->setMemberwiseInitializer(Inst);
-         }
-      }
-   }
-
    return Inst;
 }
 
@@ -1698,10 +1578,6 @@ DeinitDecl* InstantiatorImpl::visitDeinitDecl(DeinitDecl *Decl)
    Inst->setMethodID(Decl->getMethodID());
    Inst->setBodyTemplate(Decl);
    Inst->setFunctionFlags(Decl->getFunctionFlags());
-
-   if (Decl != Template) {
-      ActOnDecl(Inst);
-   }
 
    return Inst;
 }
@@ -1726,10 +1602,6 @@ FunctionDecl* InstantiatorImpl::visitFunctionDecl(FunctionDecl *F)
    Inst->setBodyTemplate(F);
    Inst->setFunctionFlags(F->getFunctionFlags());
    VariadicTemplateArgs.clear();
-
-   if (!IsMainTemplate) {
-      ActOnDecl(Inst);
-   }
 
    return Inst;
 }
@@ -1822,9 +1694,22 @@ InstantiatorImpl::visitExistentialTypeExpr(ExistentialTypeExpr *Expr)
 
 Expression* InstantiatorImpl::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
-   return visit(node->getTarget());
-//   return ImplicitCastExpr::Create(Context, visit(node->getTarget()),
-//                                   node->getConvSeq().copy());
+   auto *expr = visit(node->getTarget());
+   auto fromType = visit(node->getTarget()->getExprType());
+   auto toType = visit(node->getExprType());
+
+//   ConversionSequenceBuilder builder;
+//   for (auto &step : node->getConvSeq().getSteps()) {
+//      switch (step.getKind()) {
+//      case CastKind::LValueToRValue:
+//
+//      }
+//   }
+
+   auto ConvSeq = SP.getConversionSequence(fromType, toType);
+   return ImplicitCastExpr::Create(
+      Context, expr,
+      ConversionSequence::Create(Context, ConvSeq));
 }
 
 CompoundDecl* InstantiatorImpl::visitCompoundDecl(CompoundDecl *D)
@@ -2120,7 +2005,6 @@ GlobalVarDecl* InstantiatorImpl::visitGlobalVarDecl(GlobalVarDecl *node)
                                      visitOrAuto(node->getType()),
                                      copyOrNull(node->getValue()));
 
-   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2132,7 +2016,6 @@ InstantiatorImpl::visitDestructuringDecl(DestructuringDecl *Decl)
                                           visit(Decl->getType()),
                                           visit(Decl->getValue()));
 
-   ActOnDecl(Inst);
    return Inst;
 }
 
@@ -2200,56 +2083,6 @@ Expression* InstantiatorImpl::makeLiteralExpr(Expression *Expr,
    return literal;
 }
 
-NestedNameSpecifier*
-InstantiatorImpl::visitNestedNameSpecifier(NestedNameSpecifier *Name)
-{
-   if (!Name)
-      return nullptr;
-
-   switch (Name->getKind()) {
-   case NestedNameSpecifier::Type: {
-      SourceType ST(Name->getType());
-      visit(ST);
-
-      return NestedNameSpecifier::Create(
-         Context.getDeclNameTable(), ST ? (QualType)ST : Name->getType(),
-         visitNestedNameSpecifier(Name->getPrevious()));
-   }
-   case NestedNameSpecifier::Identifier:
-      return NestedNameSpecifier::Create(
-         Context.getDeclNameTable(), Name->getIdentifier(),
-         visitNestedNameSpecifier(Name->getPrevious()));
-   case NestedNameSpecifier::Namespace:
-      return NestedNameSpecifier::Create(
-         Context.getDeclNameTable(), Name->getNamespace(),
-         visitNestedNameSpecifier(Name->getPrevious()));
-   case NestedNameSpecifier::TemplateParam: {
-      auto *Arg = hasTemplateArg(Name->getParam()->getDeclName());
-      if (Arg && Arg->isType() && !Arg->isVariadic()) {
-         return NestedNameSpecifier::Create(Context.getDeclNameTable(),
-                                            Arg->getType(),
-                                            visitNestedNameSpecifier(
-                                               Name->getPrevious()));
-      }
-
-      return NestedNameSpecifier::Create(Context.getDeclNameTable(),
-                                         Name->getParam(),
-                                         visitNestedNameSpecifier(
-                                            Name->getPrevious()));
-   }
-   case NestedNameSpecifier::AssociatedType: {
-      return NestedNameSpecifier::Create(Context.getDeclNameTable(),
-                                         Name->getAssociatedType(),
-                                         visitNestedNameSpecifier(
-                                            Name->getPrevious()));
-   }
-   case NestedNameSpecifier::Module:
-      return NestedNameSpecifier::Create(
-         Context.getDeclNameTable(), Name->getModule(),
-         visitNestedNameSpecifier(Name->getPrevious()));
-   }
-}
-
 Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
 {
    if (!Ident->getParentExpr()) {
@@ -2302,13 +2135,81 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
                                               nullptr);
 
    Inst->setSelf(Ident->isSelf());
-   Inst->setNameSpec(visitNestedNameSpecifier(Ident->getNameSpec()));
    Inst->setParentExpr(copyOrNull(Ident->getParentExpr()));
    Inst->setIsPointerAccess(Ident->isPointerAccess());
    Inst->setAllowNamespaceRef(Ident->allowNamespaceRef());
    Inst->setLeadingDot(Ident->hasLeadingDot());
 
+   auto *NameSpec = Ident->getNameSpec();
+   if (NameSpec && Ident->isInTypePosition()) {
+      QualType T = Context.getDependentNameType(NameSpec);
+      T = visit(SourceType(T));
+
+      if (auto *DN = dyn_cast<DependentNameType>(T)) {
+         Ident->setNameSpec(DN->getNameSpecWithLoc());
+      }
+      else {
+         Ident->setNameSpec(NameSpec);
+      }
+   }
+
    return Inst;
+}
+
+DeclRefExpr* InstantiatorImpl::visitDeclRefExpr(DeclRefExpr *Expr)
+{
+   auto *decl = Expr->getDecl();
+   switch (decl->getKind()) {
+   case Decl::AssociatedTypeDeclID: {
+      assert(Self && "no Self type to find associated type implementation!");
+
+      NamedDecl *inst;
+      if (SP.QC.FindEquivalentDecl(inst, decl,
+                                   cast<DeclContext>(SP.getTypeDecl(Self)),
+                                   Self)) {
+         return nullptr;
+      }
+
+      assert(inst && "associated type not implemented");
+      return DeclRefExpr::Create(Context, inst, Expr->getSourceRange());
+   }
+   case Decl::TemplateParamDeclID: {
+      llvm_unreachable("todo!");
+   }
+   default:
+      llvm_unreachable("should never be dependent");
+   }
+}
+
+MemberRefExpr *InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *Expr)
+{
+   CanType parentType = Expr->getParentExpr()
+                            ->ignoreParensAndImplicitCasts()
+                            ->getExprType();
+
+   assert((parentType->containsGenericType()
+         || parentType->containsAssociatedType())
+      && "should not be instantiated");
+
+   SourceType instantiatedType(parentType);
+   instantiatedType = visit(instantiatedType);
+
+   if (!instantiatedType) {
+      return nullptr;
+   }
+
+   QualType lookupType = instantiatedType->stripReference();
+   NamedDecl *decl;
+
+   if (SP.QC.FindEquivalentDecl(decl, Expr->getMemberDecl(),
+                                cast<DeclContext>(SP.getTypeDecl(lookupType)),
+                                lookupType)) {
+      return nullptr;
+   }
+
+   assert(decl && "no instantiated decl!");
+   return MemberRefExpr::Create(Context, visit(Expr->getParentExpr()),
+                                decl, Expr->getSourceRange());
 }
 
 BuiltinIdentExpr*InstantiatorImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *node)
@@ -2332,13 +2233,6 @@ EnumCaseExpr* InstantiatorImpl::visitEnumCaseExpr(EnumCaseExpr *node)
 
 Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 {
-   DeclContext *Ctx = node->getContext();
-   if (auto ND = dyn_cast_or_null<NamedDecl>(Ctx)) {
-      if (ND->inDependentContext()) {
-         Ctx = nullptr;
-      }
-   }
-
    SmallVector<Expression*, 4> ArgVec;
    ArgVec.reserve(node->getArgs().size());
 
@@ -2347,49 +2241,70 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 
    copyArgumentList(node->getArgs(), node->getLabels(), ArgVec, Labels);
 
-   DeclarationName FuncName = node->getDeclName();
-   if (auto Arg = hasTemplateArg(FuncName)) {
-      if (Arg->isVariadic()) {
-         auto Subst = getParameterSubst(FuncName);
-         assert(Subst && "didn't diagnose unexpanded parameter pack!");
-
-         Arg = Subst;
+   auto *func = node->getFunc();
+   if (auto *PE = node->getParentExpr()) {
+      if (!isa<InitDecl>(func)) {
+         auto *memExpr = cast<MemberRefExpr>(PE);
+         PE = memExpr->getParentExpr();
       }
 
-      if (!Arg->isType()) {
-         auto *SE = StaticExpr::Create(Context, Arg->getParam()->getValueType(),
-                                       node->getSourceRange(),
-                                       Arg->getValue());
+      QualType lookupType = visit(SourceType(PE->getExprType()->stripReference()));
+      NamedDecl *decl;
 
-         return AnonymousCallExpr::Create(Context, node->getParenRange(), SE,
-                                          ArgVec, Labels);
+      if (SP.QC.FindEquivalentDecl(decl, func,
+                                   cast<DeclContext>(SP.getTypeDecl(lookupType)),
+                                   lookupType)) {
+         return nullptr;
       }
 
-      QualType Ty = Arg->getType();
-      if (true||!Ty->isRecordType()) {
-         auto *IE = new(Context) IdentifierRefExpr(
-            node->getSourceRange(), IdentifierKind::MetaType,
-            Context.getMetaType(Ty));
-
-         return AnonymousCallExpr::Create(Context, node->getParenRange(), IE,
-                                          ArgVec, Labels);
-      }
-
-      FuncName = Context.getDeclNameTable().getConstructorName(Ty);
+      assert(decl && "no instantiated decl!");
+      func = cast<CallableDecl>(decl);
    }
 
-   auto call = CallExpr::Create(Context,
-                                node->getIdentLoc(), node->getParenRange(),
-                                copyOrNull(node->getParentExpr()),
-                                astvec(ArgVec), Labels,
-                                FuncName, node->isDotInit(),
-                                node->isDotDeinit());
+   return SP.CreateCall(func, ArgVec, node->getSourceLoc());
 
-   call->setContext(Ctx);
-   call->setIncludesSelf(node->includesSelf());
-   call->setDirectCall(node->isDirectCall());
-   call->setIsPointerAccess(node->isPointerAccess());
-   call->setLeadingDot(node->hasLeadingDot());
+//   DeclarationName FuncName = node->getDeclName();
+//   if (auto Arg = hasTemplateArg(FuncName)) {
+//      if (Arg->isVariadic()) {
+//         auto Subst = getParameterSubst(FuncName);
+//         assert(Subst && "didn't diagnose unexpanded parameter pack!");
+//
+//         Arg = Subst;
+//      }
+//
+//      if (!Arg->isType()) {
+//         auto *SE = StaticExpr::Create(Context, Arg->getParam()->getValueType(),
+//                                       node->getSourceRange(),
+//                                       Arg->getValue());
+//
+//         return AnonymousCallExpr::Create(Context, node->getParenRange(), SE,
+//                                          ArgVec, Labels);
+//      }
+//
+//      QualType Ty = Arg->getType();
+//      if (true||!Ty->isRecordType()) {
+//         auto *IE = new(Context) IdentifierRefExpr(
+//            node->getSourceRange(), IdentifierKind::MetaType,
+//            Context.getMetaType(Ty));
+//
+//         return AnonymousCallExpr::Create(Context, node->getParenRange(), IE,
+//                                          ArgVec, Labels);
+//      }
+//
+//      FuncName = Context.getDeclNameTable().getConstructorName(Ty);
+//   }
+//
+//   auto call = CallExpr::Create(Context,
+//                                node->getIdentLoc(), node->getParenRange(),
+//                                copyOrNull(node->getParentExpr()),
+//                                astvec(ArgVec), Labels,
+//                                FuncName, node->isDotInit(),
+//                                node->isDotDeinit());
+//
+//   call->setContext(Ctx);
+//   call->setDirectCall(node->isDirectCall());
+//   call->setIsPointerAccess(node->isPointerAccess());
+//   call->setLeadingDot(node->hasLeadingDot());
 
 //   if (!node->isTypeDependent()) {
 //      assert(node->isValueDependent() && "instantiating non-dependent "
@@ -2417,7 +2332,7 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 //      }
 //   }
 
-   return call;
+//   return call;
 }
 
 Expression *InstantiatorImpl::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
@@ -2546,6 +2461,12 @@ CastExpr* InstantiatorImpl::visitCastExpr(CastExpr *Expr)
                            visit(Expr->getTargetType()));
 }
 
+AddrOfExpr* InstantiatorImpl::visitAddrOfExpr(AddrOfExpr *Expr)
+{
+   return AddrOfExpr::Create(Context, Expr->getAmpLoc(),
+                             visit(Expr->getTarget()));
+}
+
 TypePredicateExpr*
 InstantiatorImpl::visitTypePredicateExpr(TypePredicateExpr *Expr)
 {
@@ -2562,7 +2483,8 @@ Expression* InstantiatorImpl::visitExprSequence(ExprSequence *node)
    for (const auto &El : node->getFragments()) {
       switch (El.getKind()) {
          case SequenceElement::EF_Operator:
-            fragments.emplace_back(El.getOperatorKind(), El.getLoc());
+            fragments.emplace_back(El.getOperatorKind(), El.getWhitespace(),
+                                   El.getLoc());
             break;
          case SequenceElement::EF_PossibleOperator: {
             auto maybeIdent = new(Context) IdentifierRefExpr(El.getLoc(),
@@ -2574,7 +2496,8 @@ Expression* InstantiatorImpl::visitExprSequence(ExprSequence *node)
             if (!ident || ident->getIdentInfo() != El.getOp())
                fragments.emplace_back(expr);
             else
-               fragments.emplace_back(El.getOp(), El.getLoc());
+               fragments.emplace_back(El.getOp(), El.getWhitespace(),
+                                      El.getLoc());
 
             break;
          }
@@ -2590,7 +2513,8 @@ Expression* InstantiatorImpl::visitExprSequence(ExprSequence *node)
 IfExpr* InstantiatorImpl::visitIfExpr(IfExpr *node)
 {
    return IfExpr::Create(Context, node->getIfLoc(),
-                         visit(node->getCond()), visit(node->getTrueVal()),
+                         visitIfCondition(node->getCond()).ExprData.Expr,
+                         visit(node->getTrueVal()),
                          visit(node->getFalseVal()));
 }
 
@@ -2614,7 +2538,7 @@ LambdaExpr* InstantiatorImpl::visitLambdaExpr(LambdaExpr *node)
    Fun->setSemanticallyChecked(true);
 
    E->setFunc(Fun);
-   SP.ActOnFunctionDecl(Fun);
+   ActOnDecl(Fun);
 
    return E;
 }
@@ -2639,7 +2563,7 @@ IfCondition InstantiatorImpl::visitIfCondition(const IfCondition &C)
    case IfCondition::Expression:
       return IfCondition(visit(C.ExprData.Expr));
    case IfCondition::Binding:
-      return IfCondition(clone(C.BindingData.Decl), C.BindingData.ConvSeq);
+      return IfCondition(clone(C.BindingData.Decl));
    case IfCondition::Pattern:
       return IfCondition(clone(C.PatternData.Pattern),
                          copyOrNull(C.PatternData.Expr));
@@ -2792,7 +2716,10 @@ UnittestDecl *InstantiatorImpl::visitUnittestDecl(UnittestDecl *D)
 
 DeclStmt *InstantiatorImpl::visitDeclStmt(DeclStmt *Stmt)
 {
-   return DeclStmt::Create(Context, visit(Stmt->getDecl()));
+   auto *D = visit(Stmt->getDecl());
+   ActOnDecl(D);
+
+   return DeclStmt::Create(Context, D);
 }
 
 StaticExpr *InstantiatorImpl::visitStaticExpr(StaticExpr *node)
@@ -2879,7 +2806,6 @@ MixinDecl* InstantiatorImpl::visitMixinDecl(MixinDecl *Decl)
                                  Decl->getParenRange(),
                                  visit(Decl->getMixinExpr()));
 
-   ActOnDecl(Inst);
    return Inst;
 }
 
@@ -2908,7 +2834,6 @@ Decl* InstantiatorImpl::visitStaticIfDecl(StaticIfDecl *node)
                                     clone(node->getCondition()),
                                     Template);
 
-   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2920,7 +2845,6 @@ Decl* InstantiatorImpl::visitStaticForDecl(StaticForDecl *node)
                                      clone(node->getRange()),
                                      copyOrNull(node->getBodyDecl()));
 
-   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2958,7 +2882,6 @@ StaticAssertDecl*InstantiatorImpl::visitStaticAssertDecl(StaticAssertDecl *node)
                                         visitStaticExpr(node->getExpr()),
                                         node->getMessage());
 
-   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -2968,7 +2891,6 @@ StaticPrintDecl* InstantiatorImpl::visitStaticPrintDecl(StaticPrintDecl *node)
                                        node->getParenRange(),
                                        visit(node->getExpr()));
 
-   ActOnDecl(Decl);
    return Decl;
 }
 
@@ -3043,6 +2965,64 @@ void TemplateInstantiator::setInstantiationDepth(NamedDecl *Decl,
    InstantiationDepthMap[Decl] = Depth;
 }
 
+static unsigned getDepth(const TemplateArgument &Arg)
+{
+   if (!Arg.isType()) {
+      return 0;
+   }
+
+   if (Arg.isVariadic()) {
+      unsigned Max = 0;
+      for (auto &VA : Arg.getVariadicArgs()) {
+         unsigned Depth = getDepth(VA);
+         if (Depth > Max) {
+            Max = Depth;
+         }
+      }
+
+      return Max;
+   }
+
+   QualType T = Arg.getType()->stripReference()->stripMetaType();
+   if (!T->isRecordType()) {
+      return 0;
+   }
+
+   auto *R = T->getRecord();
+   if (!R->isInstantiation()) {
+      return 0;
+   }
+
+   return R->getInstantiationInfo()->Depth + 1;
+}
+
+static unsigned getInstantiationDepth(NamedDecl *Template,
+                                      FinalTemplateArgumentList *TemplateArgs) {
+   unsigned Max = 0;
+   for (auto &Arg : *TemplateArgs) {
+      unsigned Depth = getDepth(Arg);
+      if (Depth > Max) {
+         Max = Depth;
+      }
+   }
+
+   return Max;
+}
+
+static bool checkDepth(SemaPass &SP,
+                       SourceLocation POI,
+                       unsigned Depth) {
+   if (Depth > SP.getCompilationUnit().getOptions().MaxInstantiationDepth) {
+      SP.diagnose(err_generic_error,
+                  "maximum template instantiation depth exceeded",
+                  POI);
+
+      return true;
+   }
+
+   return false;
+}
+
 static DeclarationName getNameFor(ASTContext &C, NamedDecl *D, RecordDecl *Inst)
 {
    auto DN = D->getDeclName();
@@ -3063,7 +3043,9 @@ static void updateSpecialFunction(QueryContext &QC,
                                   NamedDecl *D,
                                   NamedDecl *MemberInst,
                                   RecordDecl *Template,
-                                  RecordDecl *Inst) {
+                                  RecordDecl *Inst,
+                                  RecordMetaInfo &TemplateInfo,
+                                  RecordMetaInfo &InstInfo) {
    auto *M = dyn_cast<MethodDecl>(D);
    if (!M)
       return;
@@ -3085,24 +3067,24 @@ static void updateSpecialFunction(QueryContext &QC,
          cast<MethodDecl>(MemberInst));
    }
 
-   static constexpr ImplicitConformanceKind ICKs[] = {
-      ImplicitConformanceKind::Copyable,
-      ImplicitConformanceKind::Equatable,
-      ImplicitConformanceKind::StringRepresentable,
-      ImplicitConformanceKind::Hashable
-   };
-
-   for (auto Kind : ICKs) {
-      MethodDecl *Fn;
-      if (QC.GetImplicitConformance(Fn, Template, Kind)) {
-         continue;
-      }
-      if (M == Fn) {
-         QC.AddImplicitConformance(Fn, Inst, Kind,
-                                   cast<MethodDecl>(MemberInst));
-
-         return;
-      }
+   if (TemplateInfo.IsImplicitlyCopyable && M == TemplateInfo.CopyFn) {
+      InstInfo.IsImplicitlyCopyable = true;
+      InstInfo.CopyFn = cast<MethodDecl>(MemberInst);
+   }
+   else if (TemplateInfo.IsImplicitlyEquatable
+         && M == TemplateInfo.OperatorEquals) {
+      InstInfo.IsImplicitlyEquatable = true;
+      InstInfo.OperatorEquals = cast<MethodDecl>(MemberInst);
+   }
+   else if (TemplateInfo.IsImplicitlyHashable
+         && M == TemplateInfo.HashCodeFn) {
+      InstInfo.IsImplicitlyHashable = true;
+      InstInfo.HashCodeFn = cast<MethodDecl>(MemberInst);
+   }
+   else if (TemplateInfo.IsImplicitlyStringRepresentable
+         && M == TemplateInfo.ToStringFn) {
+      InstInfo.IsImplicitlyStringRepresentable = true;
+      InstInfo.ToStringFn = cast<MethodDecl>(MemberInst);
    }
 }
 
@@ -3121,10 +3103,51 @@ QueryResult PrepareDeclForInstantiationQuery::run()
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:
+      if (auto Err = QC.PrepareDeclInterface(ND)) {
+         return Query::finish(Err);
+      }
+
+      // Make sure default values are instantiated.
+      for (auto *Arg : cast<CallableDecl>(ND)->getArgs()) {
+         if (auto Err = QC.TypecheckDecl(Arg)) {
+            return Query::finish(Err);
+         }
+      }
+
+      break;
    case Decl::PropDeclID:
+      if (auto Err = QC.PrepareDeclInterface(ND)) {
+         return Query::finish(Err);
+      }
+
+      if (auto *G = cast<PropDecl>(ND)->getGetterMethod()) {
+         if (auto Err = QC.PrepareDeclForInstantiation(G)) {
+            return Query::finish(Err);
+         }
+      }
+
+      if (auto *S = cast<PropDecl>(ND)->getSetterMethod()) {
+         if (auto Err = QC.PrepareDeclForInstantiation(S)) {
+            return Query::finish(Err);
+         }
+      }
+
+      break;
    case Decl::SubscriptDeclID:
       if (auto Err = QC.PrepareDeclInterface(ND)) {
          return Query::finish(Err);
+      }
+
+      if (auto *G = cast<SubscriptDecl>(ND)->getGetterMethod()) {
+         if (auto Err = QC.PrepareDeclForInstantiation(G)) {
+            return Query::finish(Err);
+         }
+      }
+
+      if (auto *S = cast<SubscriptDecl>(ND)->getSetterMethod()) {
+         if (auto Err = QC.PrepareDeclForInstantiation(S)) {
+            return Query::finish(Err);
+         }
       }
 
       break;
@@ -3134,6 +3157,10 @@ QueryResult PrepareDeclForInstantiationQuery::run()
       }
 
       break;
+   }
+
+   if (ND->isInvalid()) {
+      return fail();
    }
 
    return finish();
@@ -3164,6 +3191,11 @@ QueryResult InstantiateRecordQuery::run()
       return finish(Inst);
    }
 
+   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   if (checkDepth(SP, PointOfInstantiation, Depth)) {
+      return fail();
+   }
+
    // Instantiate the interface only for now.
    InstantiatorImpl Instantiator(SP, *TemplateArgs, Template, QualType(),
                                  PointOfInstantiation);
@@ -3174,9 +3206,9 @@ QueryResult InstantiateRecordQuery::run()
 
       // Remember the scope in which this instantiation was requested.
       auto *InstScope = SP.getCurrentDecl();
-      auto InstInfo = new (SP.getContext()) InstantiationInfo<RecordDecl> {
-         PointOfInstantiation, TemplateArgs, Template
-      };
+      auto InstInfo = new(QC.Context) InstantiationInfo<RecordDecl>(
+         PointOfInstantiation, TemplateArgs, Template, Depth
+      );
 
       Inst->setInstantiationInfo(InstInfo);
       Inst->setIsInstantiation(true);
@@ -3193,8 +3225,15 @@ QueryResult InstantiateRecordQuery::run()
    // Make this instantiation usable from here onwards.
    finish(Inst);
 
+   LOG(Instantiations, "instantiated record '", Inst->getFullName(),
+      "', requested from ",
+      QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
+
    QueryResult::ResultKind K = QueryResult::Success;
    SemaPass::DeclScopeRAII DSR(SP, Inst);
+
+   auto &TemplateInfo = QC.RecordMeta[Template];
+   auto &InstInfo = QC.RecordMeta[Inst];
 
    // Make all declarations visible without instantiating them.
    for (auto *D : Template->getDecls<NamedDecl>()) {
@@ -3217,7 +3256,8 @@ QueryResult InstantiateRecordQuery::run()
       }
       else {
          SP.makeDeclAvailable(*Inst, getNameFor(QC.Context, D, Inst), D);
-         updateSpecialFunction(QC, D, D, Template, Inst);
+         updateSpecialFunction(QC, D, D, Template, Inst, TemplateInfo,
+                               InstInfo);
       }
    }
 
@@ -3252,7 +3292,8 @@ QueryResult InstantiateRecordQuery::run()
          }
          else {
             SP.makeDeclAvailable(*Inst, getNameFor(QC.Context, D, Inst), D);
-            updateSpecialFunction(QC, D, D, Template, Inst);
+            updateSpecialFunction(QC, D, D, Template, Inst, TemplateInfo,
+                                  InstInfo);
          }
       }
    }
@@ -3267,7 +3308,8 @@ QueryResult InstantiateTemplateMemberQuery::run()
    }
 
    if (auto *C = dyn_cast<CallableDecl>(TemplateMember)) {
-      if (C->getBodyTemplate() && QC.TypecheckDecl(C->getBodyTemplate())) {
+      if (C->getBodyTemplate()
+      && QC.PrepareDeclForInstantiation(C->getBodyTemplate())) {
          return fail();
       }
    }
@@ -3277,12 +3319,13 @@ QueryResult InstantiateTemplateMemberQuery::run()
       NamedDecl *Result;
       if (auto Err = QC.InstantiateProtocolDefaultImpl(Result,
                                               TemplateMember,
-                                              QC.Context.getRecordType(Inst))) {
+                                              QC.Context.getRecordType(Inst),
+                                              false)) {
          return Query::finish(Err);
       }
 
       Inst->removeVisibleDecl(TemplateMember, Result->getDeclName());
-      QC.Sema->makeDeclAvailable(*Inst, Result);
+      QC.Sema->ActOnDecl(Inst, Result);
 
       return finish(Result);
    }
@@ -3296,7 +3339,7 @@ QueryResult InstantiateTemplateMemberQuery::run()
 
    NamedDecl *MemberInst;
    if (auto *R = dyn_cast<RecordDecl>(TemplateMember)) {
-      if (QC.InstantiateRecord(R, R, TemplateArgs, PointOfInstantiation,Inst)) {
+      if (QC.InstantiateRecord(R, R, TemplateArgs, PointOfInstantiation, Inst)){
          return fail();
       }
 
@@ -3310,7 +3353,8 @@ QueryResult InstantiateTemplateMemberQuery::run()
       }
    }
    else {
-      InstantiatorImpl Instantiator(*QC.Sema, *TemplateArgs, TemplateMember,
+      InstantiatorImpl Instantiator(*QC.Sema, *TemplateArgs,
+                                    TemplateMember->getRecord(),
                                     QC.Context.getRecordType(Inst),
                                     PointOfInstantiation);
 
@@ -3329,6 +3373,10 @@ QueryResult InstantiateTemplateMemberQuery::run()
       QC.Sema->ActOnDecl(Inst, MemberInst);
    }
 
+   LOG(Instantiations, "instantiated template member '",
+       MemberInst->getFullName(), "', requested from ",
+       QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
+
    if (TemplateMember->shouldBeSpecialized()) {
       MemberInst->setShouldBeSpecialized(true);
       cast<CallableDecl>(MemberInst)->setBodyTemplate(
@@ -3337,7 +3385,11 @@ QueryResult InstantiateTemplateMemberQuery::run()
 
    // Don't do this for inner records.
    if (Inst->isInstantiation()) {
-      updateSpecialFunction(QC, TemplateMember, MemberInst, Inst, Inst);
+      auto &TemplateInfo = QC.RecordMeta[Inst];
+      auto &InstInfo = QC.RecordMeta[Inst];
+
+      updateSpecialFunction(QC, TemplateMember, MemberInst, Inst, Inst,
+                            TemplateInfo, InstInfo);
    }
 
    return finish(MemberInst);
@@ -3346,17 +3398,6 @@ QueryResult InstantiateTemplateMemberQuery::run()
 QueryResult PrepareInstantiationForNameLookupQuery::run()
 {
    llvm_unreachable("unimplemented");
-}
-
-void TemplateInstantiator::visitPendingInstantiations()
-{
-   auto PendingInstantiations = move(this->PendingInstantiations);
-   while (!PendingInstantiations.empty()) {
-      auto *Next = PendingInstantiations.front();
-      PendingInstantiations.pop();
-
-      SP.ensureDeclared(Next);
-   }
 }
 
 QueryResult InstantiateCallableQuery::run()
@@ -3403,6 +3444,11 @@ QueryResult InstantiateFunctionQuery::run()
       return finish(Inst);
    }
 
+   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   if (checkDepth(SP, PointOfInstantiation, Depth)) {
+      return fail();
+   }
+
    auto *InstScope = SP.getCurrentDecl();
 
    InstantiatorImpl Instantiator(SP, *TemplateArgs, Template, QualType(),
@@ -3414,17 +3460,20 @@ QueryResult InstantiateFunctionQuery::run()
    }
 
    // Remember where this template was instantiated.
-   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
-      PointOfInstantiation, TemplateArgs, Template
-   };
+   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>(
+      PointOfInstantiation, TemplateArgs, Template, Depth
+   );
 
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
    SP.registerInstantiation(Inst, InstScope);
 
-   SemaPass::DeclScopeRAII raii(SP, Template->getDeclContext());
-
    Instantiator.ActOnDecl(Inst, Template->getDeclContext());
+
+   LOG(Instantiations, "instantiated function '", Inst->getFullName(),
+       "', requested from ",
+       QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
+
    return finish(Inst);
 }
 
@@ -3448,6 +3497,11 @@ QueryResult InstantiateMethodQuery::run()
    if (auto Inst = lookupExternalInstantiation<MethodDecl>(MangledName, SP)) {
       Inst->setImportedInstantiation(true);
       return finish(Inst);
+   }
+
+   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   if (checkDepth(SP, PointOfInstantiation, Depth)) {
+      return fail();
    }
 
    if (auto BT = Template->getBodyTemplate()) {
@@ -3491,15 +3545,20 @@ QueryResult InstantiateMethodQuery::run()
       return fail();
    }
 
-   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>{
-      PointOfInstantiation, TemplateArgs, Template
-   };
+   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>(
+      PointOfInstantiation, TemplateArgs, Template, Depth
+   );
 
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
    SP.registerInstantiation(Inst, InstScope);
 
    Instantiator.ActOnDecl(Inst, Template->getDeclContext());
+
+   LOG(Instantiations, "instantiated method '", Inst->getFullName(),
+       "', requested from ",
+       QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
+
    return finish(Inst);
 }
 
@@ -3531,6 +3590,20 @@ ExprResult TemplateInstantiator::InstantiateTypeExpr(RecordDecl *Rec,
    llvm_unreachable("needed?");
 //   InstantiatorImpl Instantiator(SP, Rec);
 //   return cast<Expression>(Instantiator.instantiateStatement(E));
+}
+
+QueryResult InstantiateDeclQuery::run()
+{
+   // Make a copy of the template argument list.
+   auto TemplateArgs = this->TemplateArgs;
+
+   InstantiatorImpl Instantiator(*QC.Sema, move(TemplateArgs));
+   auto *Inst = Instantiator.instantiateDecl(Template);
+   if (!Inst) {
+      return fail();
+   }
+
+   return finish(Inst);
 }
 
 DeclResult
@@ -3565,8 +3638,10 @@ QueryResult InstantiateMethodBodyQuery::run()
    }
 
    if (Inst->getBodyTemplate()->isInvalid()) {
+      Inst->setIsInvalid(true);
       return Query::finish(DoneWithError);
    }
+
    if (!Inst->getBodyTemplate()->getBody()) {
       assert(Inst->getBodyTemplate()->hasAttribute<_BuiltinAttr>());
       return finish();
@@ -3587,8 +3662,15 @@ QueryResult InstantiateMethodBodyQuery::run()
    }
 
    auto *InstScope = QC.Sema->getCurrentDecl();
+   QualType Self;
 
-   InstantiatorImpl Instantiator(*QC.Sema, move(ArgList), StmtOrDecl(), Inst);
+   if (auto *M = dyn_cast<MethodDecl>(Inst)) {
+      Self = QC.Context.getRecordType(M->getRecord());
+   }
+
+   InstantiatorImpl Instantiator(*QC.Sema, move(ArgList), StmtOrDecl(), Inst,
+                                 {}, Self);
+
    auto BodyInst = Instantiator.instantiateStatement(Inst->getBodyTemplate()
                                                          ->getBody());
 
@@ -3631,6 +3713,7 @@ QueryResult InstantiateMethodBodyQuery::run()
       }
    }
 
+   LOG(Instantiations, "instantiated body of '", Inst->getFullName(), "'");
    return finish(S);
 }
 
@@ -3666,10 +3749,14 @@ QueryResult InstantiateAliasQuery::run()
       return finish(Inst);
    }
 
-   auto *InstScope = SP.getCurrentDecl();
+   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   if (checkDepth(SP, PointOfInstantiation, Depth)) {
+      return fail();
+   }
 
+   auto *InstScope = SP.getCurrentDecl();
    auto *InstInfo = new(SP.getContext()) InstantiationInfo<AliasDecl>(
-      PointOfInstantiation, TemplateArgs, Template
+      PointOfInstantiation, TemplateArgs, Template, Depth
    );
 
    InstantiatorImpl Instantiator(SP, *InstInfo->templateArgs, Template,
@@ -3685,5 +3772,10 @@ QueryResult InstantiateAliasQuery::run()
    SP.registerInstantiation(Inst, InstScope);
 
    Instantiator.ActOnDecl(Inst, Template->getDeclContext());
+
+   LOG(Instantiations, "instantiated alias '", Inst->getFullName(),
+       "', requested from ",
+       QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
+
    return finish(Inst);
 }

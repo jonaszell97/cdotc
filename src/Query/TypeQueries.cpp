@@ -6,6 +6,7 @@
 
 #include "AST/Decl.h"
 #include "AST/TypeBuilder.h"
+#include "AST/TypeVisitor.h"
 #include "IL/Constants.h"
 #include "Sema/SemaPass.h"
 #include "QueryContext.h"
@@ -18,6 +19,8 @@ using namespace cdot::support;
 
 QueryResult IsEquatableQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -80,6 +83,8 @@ QueryResult IsEquatableQuery::run()
 
 QueryResult IsMoveOnlyQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -155,6 +160,8 @@ QueryResult IsCopyableQuery::run()
 
 QueryResult IsImplicitlyCopyableQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -173,6 +180,12 @@ QueryResult IsImplicitlyCopyableQuery::run()
    case Type::FunctionTypeID:
    case Type::MetaTypeID:
       Result = true;
+      break;
+   case Type::ExistentialTypeID:
+      if (auto Err = QC.IsCopyable(Result, T)) {
+         return Query::finish(Err);
+      }
+
       break;
    case Type::ArrayTypeID:
    case Type::TupleTypeID:
@@ -194,7 +207,10 @@ QueryResult IsImplicitlyCopyableQuery::run()
    case Type::DependentRecordTypeID:
       Result = true;
 
-      if (!isa<ClassDecl>(T->getRecord())) {
+      if (T->isProtocol()) {
+         Result = T->getRecord() != QC.Sema->getImplicitlyCopyableDecl();
+      }
+      else if (!T->isClass()) {
          if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
             return Query::finish(Err);
          }
@@ -213,6 +229,8 @@ QueryResult IsImplicitlyCopyableQuery::run()
 
 QueryResult NeedsRetainOrReleaseQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -259,6 +277,8 @@ QueryResult NeedsRetainOrReleaseQuery::run()
 
 QueryResult NeedsStructReturnQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -279,7 +299,29 @@ QueryResult NeedsStructReturnQuery::run()
       case Decl::EnumDeclID:
          Result = !cast<EnumDecl>(rec)->isRawEnum();
          break;
-      case Decl::StructDeclID:
+      case Decl::StructDeclID: {
+         auto &StoredFields = cast<StructDecl>(rec)->getStoredFields();
+         if (StoredFields.size() > 3) {
+            Result = true;
+         }
+         else {
+            for (auto *F : StoredFields) {
+               if (QC.PrepareDeclInterface(F)) {
+                  continue;
+               }
+
+               if (QC.NeedsStructReturn(Result, F->getType())) {
+                  continue;
+               }
+
+               if (Result) {
+                  break;
+               }
+            }
+         }
+
+         break;
+      }
       case Decl::UnionDeclID:
       case Decl::ProtocolDeclID:
          Result = true;
@@ -293,10 +335,38 @@ QueryResult NeedsStructReturnQuery::run()
 
       break;
    }
-   case Type::TupleTypeID:
-      Result = T->asTupleType()->getArity() > 1;
+   case Type::TupleTypeID: {
+      auto ContainedTypes = T->asTupleType()->getContainedTypes();
+      if (ContainedTypes.size() > 3) {
+         Result = true;
+      }
+      else {
+         for (auto ContainedTy : ContainedTypes) {
+            if (QC.NeedsStructReturn(Result, ContainedTy)) {
+               continue;
+            }
+
+            if (Result) {
+               break;
+            }
+         }
+      }
+
       break;
-   case Type::ArrayTypeID:
+   }
+   case Type::ArrayTypeID: {
+      auto *Arr = T->asArrayType();
+      if (Arr->getNumElements() > 3) {
+         Result = true;
+      }
+      else {
+         if (auto Err = QC.NeedsStructReturn(Result, Arr->getElementType())) {
+            return Query::finish(Err);
+         }
+      }
+
+      break;
+   }
    case Type::MetaTypeID:
    case Type::BoxTypeID:
       Result = true;
@@ -308,6 +378,8 @@ QueryResult NeedsStructReturnQuery::run()
 
 QueryResult NeedsDeinitilizationQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -347,6 +419,8 @@ QueryResult NeedsDeinitilizationQuery::run()
 
 QueryResult IsTriviallyCopyableQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -421,6 +495,8 @@ QueryResult IsTriviallyCopyableQuery::run()
 
 QueryResult IsUnpopulatedQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    Status S = Done;
    if (T->isDependentType()) {
       S = Dependent;
@@ -482,6 +558,8 @@ QueryResult IsUnpopulatedQuery::run()
 
 QueryResult IsPersistableQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    switch (T->getTypeID()) {
    default:
       return finish(true);
@@ -538,6 +616,8 @@ QueryResult IsPersistableQuery::run()
 
 QueryResult GetTypeSizeQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
+
    auto &TI = QC.Sema->Context.getTargetInfo();
    switch (T->getTypeID()) {
    case Type::RecordTypeID: {
@@ -561,6 +641,7 @@ QueryResult GetTypeSizeQuery::run()
 
 QueryResult GetTypeStrideQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
    auto &TI = QC.Sema->Context.getTargetInfo();
    switch (T->getTypeID()) {
    case Type::BuiltinTypeID: {
@@ -646,6 +727,7 @@ QueryResult GetTypeStrideQuery::run()
 
 QueryResult GetTypeAlignmentQuery::run()
 {
+   CanType T = this->T->getDesugaredType();
    auto &TI = QC.Sema->Context.getTargetInfo();
    switch (T->getTypeID()) {
    case Type::BuiltinTypeID: {
@@ -723,17 +805,25 @@ QueryResult IsCovariantQuery::run()
    if (T->isDependentType()) {
       return finish(true, Dependent);
    }
-
    if (Covar->isUnknownAnyType()) {
       return finish(true);
    }
-
    if (T->getCanonicalType() == Covar->getCanonicalType()) {
       return finish(true);
    }
 
+   QualType T = this->T;
+   QualType Covar = this->Covar;
+
+   if (!T->isMetaType()) {
+      T = QC.Context.getMetaType(T);
+   }
+   if (!Covar->isMetaType()) {
+      Covar = QC.Context.getMetaType(Covar);
+   }
+
    auto ConvSeq = QC.Sema->getConversionSequence(T, Covar);
-   return finish(ConvSeq.isValid());
+   return finish(ConvSeq.isImplicit());
 }
 
 QueryResult IsContravariantQuery::run()
@@ -756,7 +846,7 @@ public:
 
    QualType visitAssociatedType(AssociatedType *T)
    {
-      if (T->getDecl()->isImplementation()) {
+      if (T->getDecl()->isImplementation() && !T->getDecl()->isDefault()) {
          return T;
       }
 
@@ -766,7 +856,12 @@ public:
 
       RecordDecl *DC;
       if (auto *Outer = T->getOuterAT()) {
-         auto OuterImpl = this->visit(Outer);
+         CanType OuterImpl = this->visit(Outer)->getCanonicalType();
+
+         if (OuterImpl->isDependentType() || OuterImpl->isAssociatedType()) {
+            return T;
+         }
+
          DC = OuterImpl->getRecord();
       }
       else {
@@ -781,18 +876,15 @@ public:
          return T;
       }
 
-      if (!AT || AT->isDefault()) {
-         assert(isa<ProtocolDecl>(DC) && "associated type not implemented!");
+      if (!AT /*|| AT->isDefault()*/) {
          return T;
       }
 
       auto *Inst = QC.template InstantiateTemplateMember<AssociatedTypeDecl>(
          AT, DC);
 
-      if (Inst != AT) {
-         if (QC.PrepareDeclInterface(Inst)) {
-            return T;
-         }
+      if (QC.PrepareDeclInterface(Inst)) {
+         return T;
       }
 
       return this->Ctx.getAssociatedType(Inst);
@@ -829,6 +921,11 @@ public:
       : TypeBuilder<GenericTypeSubstVisitor<TemplateArgList>>(SP, SR),
         TemplateArgs(TemplateArgs)
    {}
+
+   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   {
+      Types.push_back(visitGenericType(T));
+   }
 
    QualType visitGenericType(GenericType *T)
    {
@@ -868,44 +965,53 @@ public:
    }
 
    NestedNameSpecifier *visitNestedNameSpecifier(NestedNameSpecifier *Name,
-                                                 bool &Dependent) {
-      if (!Name)
+                                                 SmallVectorImpl<SourceRange>
+                                                    &Locs,
+                                                 unsigned i,
+                                                 bool &Dependent,
+                                                 FinalTemplateArgumentList
+                                                      *TemplateArgs = nullptr) {
+      if (!Name) {
          return nullptr;
+      }
 
       NestedNameSpecifier *Copy = nullptr;
       switch (Name->getKind()) {
-      case NestedNameSpecifier::Type:
+      case NestedNameSpecifier::Type: {
          Copy = NestedNameSpecifier::Create(this->Ctx.getDeclNameTable(),
                                             this->visit(Name->getType()),
                                             this->visitNestedNameSpecifier(
-                                               Name->getPrevious(),
+                                               Name->getPrevious(), Locs, i - 1,
                                                Dependent));
 
          break;
-      case NestedNameSpecifier::Identifier:
+      }
+      case NestedNameSpecifier::Identifier: {
          Copy = NestedNameSpecifier::Create(this->Ctx.getDeclNameTable(),
                                             Name->getIdentifier(),
                                             this->visitNestedNameSpecifier(
-                                               Name->getPrevious(),
+                                               Name->getPrevious(), Locs, i - 1,
                                                Dependent));
 
          break;
+      }
       case NestedNameSpecifier::Namespace:
          Copy = NestedNameSpecifier::Create(this->Ctx.getDeclNameTable(),
                                             Name->getNamespace(),
                                             this->visitNestedNameSpecifier(
-                                               Name->getPrevious(),
+                                               Name->getPrevious(), Locs, i - 1,
                                                Dependent));
 
          break;
       case NestedNameSpecifier::TemplateParam: {
-         if (auto Arg = TemplateArgs.getArgForParam(Name->getParam())) {
+         if (auto Arg = this->TemplateArgs.getArgForParam(Name->getParam())) {
             if (Arg->isType()) {
                if (!Arg->isVariadic()) {
                   Copy = NestedNameSpecifier::Create(this->Ctx.getDeclNameTable(),
                                                      Arg->getType(),
                                                      visitNestedNameSpecifier(
                                                         Name->getPrevious(),
+                                                        Locs, i - 1,
                                                         Dependent));
                }
             }
@@ -916,6 +1022,7 @@ public:
                                                Name->getParam(),
                                                this->visitNestedNameSpecifier(
                                                   Name->getPrevious(),
+                                                  Locs, i - 1,
                                                   Dependent));
 
          break;
@@ -925,6 +1032,26 @@ public:
                                             Name->getAssociatedType(),
                                             this->visitNestedNameSpecifier(
                                                Name->getPrevious(),
+                                               Locs, i - 1,
+                                               Dependent));
+
+         break;
+      }
+      case NestedNameSpecifier::Alias: {
+         auto *Alias = Name->getAlias();
+         if (TemplateArgs) {
+            AliasDecl *Inst;
+            if (!this->SP.QC.InstantiateAlias(Inst, Alias, TemplateArgs,
+                                              this->SR.getStart())) {
+               Alias = Inst;
+            }
+         }
+
+         Copy = NestedNameSpecifier::Create(this->Ctx.getDeclNameTable(),
+                                            Alias,
+                                            this->visitNestedNameSpecifier(
+                                               Name->getPrevious(),
+                                               Locs, i - 1,
                                                Dependent));
 
          break;
@@ -934,9 +1061,29 @@ public:
                                             Name->getModule(),
                                             this->visitNestedNameSpecifier(
                                                Name->getPrevious(),
+                                               Locs, i - 1,
                                                Dependent));
 
          break;
+      }
+      case NestedNameSpecifier::TemplateArgList: {
+         auto *TemplateArgs = copyTemplateArgs(Name->getTemplateArgs());
+         if (TemplateArgs->isStillDependent()) {
+            Copy = NestedNameSpecifier::Create(this->Ctx.getDeclNameTable(),
+                                               TemplateArgs,
+                                               this->visitNestedNameSpecifier(
+                                                  Name->getPrevious(),
+                                                  Locs, i - 1,
+                                                  Dependent));
+         }
+         else {
+            Locs.erase(Locs.begin() + i);
+            Copy = this->visitNestedNameSpecifier(
+               Name->getPrevious(),
+               Locs, i - 2,
+               Dependent,
+               TemplateArgs);
+         }
       }
       }
 
@@ -947,7 +1094,13 @@ public:
    QualType visitDependentNameType(DependentNameType *T)
    {
       bool Dependent = false;
-      auto *Name = this->visitNestedNameSpecifier(T->getNameSpec(), Dependent);
+
+      auto Ranges = T->getNameSpecWithLoc()->getSourceRanges();
+      SmallVector<SourceRange, 4> Locs(Ranges.begin(), Ranges.end());
+
+      unsigned Depth = Locs.size() - 1;
+      auto *Name = this->visitNestedNameSpecifier(T->getNameSpec(), Locs, Depth,
+                                                  Dependent);
 
       if (Dependent) {
          if (Name != T->getNameSpec()) {
@@ -963,7 +1116,7 @@ public:
 
       auto *WithLoc = NestedNameSpecifierWithLoc::Create(
          this->Ctx.getDeclNameTable(), Name,
-         T->getNameSpecWithLoc()->getSourceRanges());
+         Locs);
 
       // Resolve the dependent name to a type.
       QualType Ty;
@@ -1039,12 +1192,13 @@ public:
       return this->Ctx.getTupleType(ResolvedTys);
    }
 
-   QualType visitRecordTypeCommon(QualType T, RecordDecl *R,
-                                  const sema::FinalTemplateArgumentList &TemplateArgs) {
+   FinalTemplateArgumentList*
+   copyTemplateArgs(const FinalTemplateArgumentList *TemplateArgs)
+   {
       SmallVector<sema::TemplateArgument, 0> Args;
 
       bool Dependent = false;
-      for (auto &Arg : TemplateArgs) {
+      for (auto &Arg : *TemplateArgs) {
          if (!Arg.isType() || Arg.isVariadic()) {
             auto Copy = this->VisitTemplateArg(Arg);
             Dependent |= Copy.isStillDependent();
@@ -1063,7 +1217,7 @@ public:
             continue;
          }
 
-         auto *ArgVal = TemplateArgs.getArgForParam(TA->getParam());
+         auto *ArgVal = TemplateArgs->getArgForParam(TA->getParam());
          if (!ArgVal || !ArgVal->isFrozen()) {
             auto Copy = this->VisitTemplateArg(Arg);
             Dependent |= Copy.isStillDependent();
@@ -1079,10 +1233,15 @@ public:
          }
       }
 
-      auto FinalList = sema::FinalTemplateArgumentList::Create(
+      return sema::FinalTemplateArgumentList::Create(
          this->SP.getContext(), Args, !Dependent);
+   }
 
-      if (Dependent)
+   QualType visitRecordTypeCommon(
+                        QualType T, RecordDecl *R,
+                        const sema::FinalTemplateArgumentList &TemplateArgs) {
+      auto *FinalList = copyTemplateArgs(&TemplateArgs);
+      if (FinalList->isStillDependent())
          return this->Ctx.getDependentRecordType(R, FinalList);
 
       auto *Template = R->isTemplate() ? R : R->getSpecializedTemplate();
@@ -1176,30 +1335,41 @@ QueryResult SubstGenericTypesNonFinalQuery::run()
 
 namespace {
 
-class TypeEquivalenceBuilder:
-      public AssociatedTypeSubstVisitorBase<TypeEquivalenceBuilder> {
-   /// The left hand side declaration.
-   DeclContext *LHSDecl;
-
+class TypeEquivalenceChecker: public TypeComparer<TypeEquivalenceChecker> {
 public:
-   TypeEquivalenceBuilder(SemaPass &SP, DeclContext *LHSDecl, QualType Self,
-                          SourceRange SR)
-      : AssociatedTypeSubstVisitorBase(SP, Self, SR),
-        LHSDecl(LHSDecl)
-   {}
-
-   QualType visitGenericType(GenericType *T)
+   bool visitGenericType(GenericType *LHS, QualType RHS)
    {
-      if (!LHSDecl)
-         return T;
+      if (auto *Param = RHS->asGenericType()) {
+         return visit(LHS->getCovariance(), Param->getCovariance());
+      }
 
-      auto *Param = this->SP.QC.LookupSingleAs<TemplateParamDecl>(
-         LHSDecl, T->getParam()->getDeclName());
+      return false;
+   }
 
-      if (!Param)
-         return T;
+   bool visitDependentNameType(DependentNameType *LHS, QualType RHS)
+   {
+      // FIXME
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
+   }
 
-      return this->SP.Context.getTemplateArgType(Param);
+   bool visitAssociatedType(AssociatedType *LHS, QualType RHS)
+   {
+      if (auto *AT = RHS->asAssociatedType()) {
+         auto *LHSOuter = LHS->getOuterAT();
+         auto *RHSOuter = AT->getOuterAT();
+
+         if ((LHSOuter == nullptr) != (RHSOuter == nullptr)) {
+            return false;
+         }
+
+         if (LHSOuter && !visit(LHSOuter, RHSOuter)) {
+            return false;
+         }
+
+         return LHS->getDecl()->getDeclName() == AT->getDecl()->getDeclName();
+      }
+
+      return LHS->getCanonicalType() == RHS->getCanonicalType();
    }
 };
 
@@ -1207,6 +1377,380 @@ public:
 
 QueryResult CheckTypeEquivalenceQuery::run()
 {
-   RHS = TypeEquivalenceBuilder(sema(), LHSDecl, Self, {}).visit(RHS);
-   return finish(LHS == RHS);
+   RHS = AssociatedTypeSubstVisitor(sema(), Self, {}).visit(RHS);
+   LHS = AssociatedTypeSubstVisitor(sema(), Self, {}).visit(LHS);
+
+   return finish(TypeEquivalenceChecker().visit(LHS, RHS));
+}
+
+namespace {
+
+struct AssociatedTypeFinder: public RecursiveTypeVisitor<AssociatedTypeFinder> {
+   explicit AssociatedTypeFinder()
+   {
+
+   }
+
+   bool FoundAssociatedType = false;
+
+   bool visitAssociatedType(const AssociatedType *T)
+   {
+      if (T->getDecl()->isImplementation())
+         return true;
+
+      FoundAssociatedType = true;
+      return false;
+   }
+};
+
+} // anonymous namespace
+
+QueryResult ContainsAssociatedTypeConstraintQuery::run()
+{
+   AssociatedTypeFinder Finder;
+   Finder.visit(T);
+
+   return finish(Finder.FoundAssociatedType);
+}
+
+QueryResult CheckTypeCapabilitiesQuery::run()
+{
+   auto Constraints = QC.Context.getExtConstraints(ND);
+   if (Constraints.empty()) {
+      return finish({});
+   }
+
+   std::vector<TypeCapability> Capabilities;
+   for (auto *C : Constraints) {
+      if (auto Err = QC.VerifyConstraint(C, ND)) {
+         return Query::finish(Err);
+      }
+
+      QualType CT = C->getConstrainedType();
+
+      if (C->getKind() == DeclConstraint::Concept) {
+         Capabilities.emplace_back(CT, C->getConceptRefExpr()->getAlias());
+         continue;
+      }
+
+      QualType T = C->getType();
+      switch (C->getKind()) {
+      case DeclConstraint::TypeEquality:
+         Capabilities.emplace_back(CT, T, TypeCapability::Equality);
+         break;
+      case DeclConstraint::TypeInequality:
+         Capabilities.emplace_back(CT, T, TypeCapability::Inequality);
+         break;
+      case DeclConstraint::TypePredicate: {
+         ArrayRef<QualType> Types;
+         if (T->isRecordType()) {
+            Types = T;
+         }
+         else {
+            Types = T->asExistentialType()->getExistentials();
+         }
+
+         for (QualType Ty : Types) {
+            if (Ty->isClass()) {
+               Capabilities.emplace_back(CT, cast<ClassDecl>(Ty->getRecord()),
+                                         TypeCapability::SubClass);
+            }
+            else {
+               Capabilities.emplace_back(CT,cast<ProtocolDecl>(Ty->getRecord()),
+                                         TypeCapability::Conformance);
+            }
+         }
+
+         break;
+      }
+      case DeclConstraint::TypePredicateNegated: {
+         ArrayRef<QualType> Types;
+         if (T->isRecordType()) {
+            Types = T;
+         }
+         else {
+            Types = T->asExistentialType()->getExistentials();
+         }
+
+         for (QualType Ty : Types) {
+            if (Ty->isClass()) {
+               Capabilities.emplace_back(CT, cast<ClassDecl>(Ty->getRecord()),
+                                         TypeCapability::NotSubClass);
+            }
+            else {
+               Capabilities.emplace_back(CT,cast<ProtocolDecl>(Ty->getRecord()),
+                                         TypeCapability::NonConformance);
+            }
+         }
+
+         break;
+      }
+      case DeclConstraint::Class:
+         Capabilities.emplace_back(CT, TypeCapability::Class);
+         break;
+      case DeclConstraint::Struct:
+         Capabilities.emplace_back(CT, TypeCapability::Struct);
+         break;
+      case DeclConstraint::Enum:
+         Capabilities.emplace_back(CT, TypeCapability::Enum);
+         break;
+      case DeclConstraint::Concept:
+         llvm_unreachable("handled above");
+      }
+   }
+
+   // FIXME verify capabilities.
+
+   return finish(move(Capabilities));
+}
+
+static void applyCapabilities(QueryContext &QC,
+                              ArrayRef<TypeCapability> Capabilities,
+                              SmallVectorImpl<QualType> &Existentials,
+                              QualType Stripped,
+                              QualType &NewTy,
+                              bool &done) {
+   for (auto &C : Capabilities) {
+      bool Applies = false;
+      QualType ConstrainedTy = C.getConstrainedType();
+
+      switch (C.getKind()) {
+      case TypeCapability::Concept:
+      case TypeCapability::Class:
+      case TypeCapability::Struct:
+      case TypeCapability::Enum:
+      case TypeCapability::Conformance:
+      case TypeCapability::NonConformance:
+      case TypeCapability::SubClass:
+      case TypeCapability::NotSubClass:
+         Applies = Stripped == ConstrainedTy;
+         break;
+      case TypeCapability::Inequality:
+         // The relationship is commutative.
+         Applies |= Stripped != ConstrainedTy;
+         Applies |= Stripped != C.getType();
+
+         break;
+      case TypeCapability::Equality:
+         // The relationship is commutative.
+         Applies |= Stripped == ConstrainedTy;
+         Applies |= Stripped == C.getType();
+
+         break;
+      }
+
+      if (!Applies) {
+         continue;
+      }
+
+      switch (C.getKind()) {
+      case TypeCapability::Concept:
+      case TypeCapability::Struct:
+      case TypeCapability::Class:
+      case TypeCapability::Enum:
+      case TypeCapability::Inequality:
+         // Can't reason about these yet.
+         break;
+      case TypeCapability::Conformance:
+         Existentials.push_back(QC.Context.getRecordType(C.getProto()));
+         break;
+      case TypeCapability::SubClass:
+         Existentials.push_back(QC.Context.getRecordType(C.getClass()));
+         break;
+      case TypeCapability::Equality:
+         // Only one equality constraint is allowed in any given context,
+         // so we know that this is the concrete type.
+         NewTy = C.getType();
+         done = true;
+
+         break;
+      case TypeCapability::NonConformance: {
+         auto It = std::find(Existentials.begin(), Existentials.end(),
+                             QC.Context.getRecordType(C.getProto()));
+
+         if (It != Existentials.end()) {
+            Existentials.erase(It);
+         }
+
+         break;
+      }
+      case TypeCapability::NotSubClass: {
+         auto It = std::find(Existentials.begin(), Existentials.end(),
+                             QC.Context.getRecordType(C.getClass()));
+
+         if (It != Existentials.end()) {
+            Existentials.erase(It);
+         }
+
+         break;
+      }
+      }
+   }
+}
+
+QueryResult ApplyCapabilitesQuery::run()
+{
+   QualType Stripped;
+   switch (T->getTypeID()) {
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
+      Stripped = cast<ReferenceType>(T)->getReferencedType();
+      break;
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+      Stripped = cast<PointerType>(T)->getPointeeType();
+      break;
+   case Type::MetaTypeID:
+      Stripped = cast<MetaType>(T)->getUnderlyingType();
+      break;
+   default:
+      Stripped = T;
+      break;
+   }
+
+   // Check if the current context adds additional conformances to this type.
+   SmallVector<QualType, 2> Existentials;
+
+   QualType NewTy;
+   bool done = false;
+
+   QualType Covariance;
+   if (auto *AT = Stripped->asAssociatedType()) {
+      auto *ATDecl = AT->getDecl();
+      if (QC.PrepareDeclInterface(ATDecl) || ATDecl->isImplementation()) {
+         return finish(T);
+      }
+
+      Covariance = ATDecl->getCovariance();
+
+      // Get the constraints defined directly on the associated type.
+      ArrayRef<TypeCapability> Capabilities;
+      if (auto Err = QC.CheckTypeCapabilities(Capabilities, ATDecl)) {
+         return Query::finish(Err);
+      }
+
+      applyCapabilities(QC, Capabilities, Existentials, Stripped, NewTy,
+                        done);
+   }
+   else if (auto *GT = Stripped->asGenericType()) {
+      auto *Param = GT->getParam();
+      if (QC.PrepareDeclInterface(Param)) {
+         return finish(T);
+      }
+
+      Covariance = Param->getCovariance();
+   }
+   else {
+      return finish(T);
+   }
+
+   if (Covariance->isUnknownAnyType()) {
+      return finish(T);
+   }
+
+   // Check if the current context adds additional conformances to this type.
+   Existentials.push_back(Covariance);
+
+   auto *DC = this->DC;
+   while (DC && !done) {
+      if (auto *ND = dyn_cast<NamedDecl>(DC)) {
+         ArrayRef<TypeCapability> Capabilities;
+         if (QC.CheckTypeCapabilities(Capabilities, ND)) {
+            DC = DC->getParentCtx();
+            continue;
+         }
+
+         applyCapabilities(QC, Capabilities, Existentials, Stripped, NewTy,
+                           done);
+      }
+
+      DC = DC->getParentCtx();
+   }
+
+   if (!NewTy) {
+      if (Existentials.empty()) {
+         NewTy = QC.Context.getRecordType(QC.Sema->getAnyDecl());
+      }
+      else if (Existentials.size() == 1) {
+         return finish(T);
+      }
+      else {
+         NewTy = QC.Context.getExistentialType(Existentials);
+      }
+   }
+
+   switch (T->getTypeID()) {
+   case Type::ReferenceTypeID:
+      return finish(QC.Context.getReferenceType(NewTy));
+   case Type::MutableReferenceTypeID:
+      return finish(QC.Context.getMutableReferenceType(NewTy));
+   case Type::MutableBorrowTypeID:
+      return finish(QC.Context.getMutableBorrowType(NewTy));
+   case Type::PointerTypeID:
+      return finish(QC.Context.getPointerType(NewTy));
+   case Type::MutablePointerTypeID:
+      return finish(QC.Context.getMutablePointerType(NewTy));
+   case Type::MetaTypeID:
+      return finish(QC.Context.getMetaType(NewTy));
+   default:
+      return finish(NewTy);
+   }
+}
+
+namespace {
+
+class TypeVariableSubstVisitor: public TypeBuilder<TypeVariableSubstVisitor> {
+   const llvm::DenseMap<TypeVariableType*, QualType> &SubstMap;
+
+public:
+   TypeVariableSubstVisitor(
+         SemaPass &SP,
+         const llvm::DenseMap<TypeVariableType*, QualType> &SubstMap,
+         SourceRange SR)
+      : TypeBuilder(SP, SR),
+        SubstMap(SubstMap)
+   {}
+
+   QualType visitTypeVariableType(TypeVariableType *T)
+   {
+      auto It = SubstMap.find(T);
+      if (It == SubstMap.end()) {
+         return T;
+      }
+
+      return It->getSecond();
+   }
+};
+
+} // anonymous namespace
+
+QueryResult SubstTypeVariablesQuery::run()
+{
+   return finish(TypeVariableSubstVisitor(*QC.Sema,
+                                          ReplacementMap,
+                                          SR).visit(T));
+}
+
+QueryResult IsImplicitlyConvertibleQuery::run()
+{
+   ConversionSequence *Seq;
+   if (auto Err = QC.GetConversionSequence(Seq, From, To)) {
+      return Query::finish(Err);
+   }
+
+   return finish(Seq && Seq->isImplicit());
+}
+
+QueryResult GetConversionSequenceQuery::run()
+{
+   auto Builder = QC.Sema->getConversionSequence(From, To);
+   if (Builder.isDependent()) {
+      return Query::finish(Status::Dependent);
+   }
+   if (!Builder.isValid()) {
+      return finish(nullptr);
+   }
+
+   return finish(ConversionSequence::Create(QC.Context, Builder));
 }

@@ -5,6 +5,7 @@
 #include "BuiltinCandidateBuilder.h"
 
 #include "AST/Expression.h"
+#include "Query/QueryContext.h"
 #include "SemaPass.h"
 
 using namespace cdot::support;
@@ -70,9 +71,9 @@ void BuiltinCandidateBuilder::addBuiltinCandidates(CandidateSet &CandSet,
    if (OpIt == TypeCache.end())
       OpIt = fillCache(TypeCache, lhsType, opKind);
 
-   for (auto &Cand : OpIt->second) {
-      CandSet.addCandidate(Cand.Ty, Cand.PG, opKind);
-   }
+//   for (auto &Cand : OpIt->second) {
+//      CandSet.addCandidate(Cand.Ty, Cand.PG, opKind);
+//   }
 }
 
 static QualType getMutableReference(ast::ASTContext &Context, QualType Ty)
@@ -542,8 +543,12 @@ BuiltinCandidateBuilder::getPrecedenceGroup(op::OperatorKind opKind)
    auto OpName = SP.getContext().getDeclNameTable().getInfixOperatorName(II);
    auto OpDecl = SP.getContext().getDeclNameTable().getOperatorDeclName(OpName);
 
-   return cast<ast::OperatorDecl>(SP.BuiltinDecls[OpDecl])
-      ->getPrecedenceGroup();
+   OperatorDecl *Op;
+   if (SP.QC.FindOperator(Op, OpDecl, false)) {
+       llvm_unreachable("builtin operator not found!");
+   }
+
+   return Op->getPrecedenceGroup();
 }
 
 void BuiltinCandidateBuilder::getOpKindAndFix(DeclarationName op,

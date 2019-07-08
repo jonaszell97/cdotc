@@ -97,25 +97,23 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
       MethodDecl *Getter = nullptr;
       MethodDecl *Setter = nullptr;
 
-      SourceType T;
+      QualType SubstTy;
+      if (QC.SubstAssociatedTypes(SubstTy, P->getType(), Self,
+                                  P->getSourceLoc())) {
+         SubstTy = QC.Context.getErrorTy();
+      }
+
       if (auto *GetterImpl = P->getGetterMethod()) {
          Getter = InstantiateMethodDefaultImpl(QC, GetterImpl, Self);
-
-         if (Getter) {
-            T = Getter->getReturnType();
-         }
       }
       if (auto *SetterImpl = P->getSetterMethod()) {
          Setter = InstantiateMethodDefaultImpl(QC, SetterImpl, Self);
-
-         if (!T && Setter) {
-            T = Setter->getArgs().back()->getType();
-         }
       }
 
       Inst = PropDecl::Create(sema().Context, P->getAccess(),
                               P->getSourceRange(), P->getDeclName(),
-                              T, P->isStatic(), Getter, Setter);
+                              SourceType(SubstTy), P->isStatic(),
+                              P->isReadWrite(), Getter, Setter);
    }
    else if (auto *S = dyn_cast<SubscriptDecl>(Impl)) {
       MethodDecl *Getter = nullptr;
@@ -137,8 +135,8 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
          }
       }
 
-      Inst = SubscriptDecl::Create(sema().Context, P->getAccess(),
-                                   P->getSourceRange(), T, Getter, Setter);
+      Inst = SubscriptDecl::Create(sema().Context, S->getAccess(),
+                                   S->getSourceRange(), T, Getter, Setter);
    }
    else {
       llvm_unreachable("bad protocol default implementation kind!");
@@ -148,7 +146,12 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
       return fail();
    }
 
-   QC.Sema->ActOnDecl(Self->getRecord(), Inst);
+   QC.Context.setAttributes(Inst, Impl->getAttributes());
+
+   if (ActOnDecl) {
+      QC.Sema->ActOnDecl(Self->getRecord(), Inst);
+   }
+
    return finish(Inst);
 }
 
@@ -174,4 +177,36 @@ QueryResult CheckTemplateExtensionApplicabilityQuery::run()
    }
 
    return finish(true);
+}
+
+QueryResult InstantiateFieldsQuery::run()
+{
+   assert(S->isInstantiation() && "not an instantiation!");
+
+   for (auto *F : S->getSpecializedTemplate()->getDecls<FieldDecl>()) {
+      if (F->isStatic()) {
+         continue;
+      }
+
+      NamedDecl *Inst;
+      if (auto Err = QC.InstantiateTemplateMember(Inst, F, S)) {
+         return Query::finish(Err);
+      }
+   }
+
+   return finish();
+}
+
+QueryResult InstantiateCasesQuery::run()
+{
+   assert(E->isInstantiation() && "not an instantiation!");
+
+   for (auto *Case : E->getSpecializedTemplate()->getDecls<EnumCaseDecl>()) {
+      NamedDecl *Inst;
+      if (auto Err = QC.InstantiateTemplateMember(Inst, Case, E)) {
+         return Query::finish(Err);
+      }
+   }
+
+   return finish();
 }

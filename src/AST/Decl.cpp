@@ -39,6 +39,17 @@ DeclConstraint::DeclConstraint(SourceRange SR,
              getTrailingObjects<IdentifierInfo*>());
 }
 
+DeclConstraint::DeclConstraint(SourceRange SR,
+                               ArrayRef<IdentifierInfo*> NameQual,
+                               Kind K)
+   : K(K), SR(SR), NameQualifierSize((unsigned)NameQual.size())
+{
+   std::copy(NameQual.begin(), NameQual.end(),
+             getTrailingObjects<IdentifierInfo*>());
+
+   assert(K == Class || K == Struct || K == Enum);
+}
+
 DeclConstraint* DeclConstraint::Create(ASTContext &C,
                                        Kind K,
                                        SourceRange SR,
@@ -59,6 +70,16 @@ DeclConstraint* DeclConstraint::Create(ASTContext &C,
                           alignof(DeclConstraint));
 
    return new(Mem) DeclConstraint(SR, NameQual, ConceptRef);
+}
+
+DeclConstraint* DeclConstraint::Create(ASTContext &C,
+                                       Kind K,
+                                       SourceRange SR,
+                                       ArrayRef<IdentifierInfo*> NameQual) {
+   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(NameQual.size()),
+                          alignof(DeclConstraint));
+
+   return new(Mem) DeclConstraint(SR, NameQual, K);
 }
 
 UsingDecl::UsingDecl(SourceRange Loc,
@@ -184,6 +205,26 @@ ModuleDecl* ModuleDecl::getBaseModule() const
       Mod = Base;
 
    return Mod->getPrimaryModule();
+}
+
+SourceFileDecl::SourceFileDecl(SourceRange FileRange,
+                               DeclarationName FileName)
+   : NamedDecl(SourceFileDeclID, AccessSpecifier::Public, FileName),
+     DeclContext(SourceFileDeclID),
+     FileRange(FileRange)
+{
+
+}
+
+SourceFileDecl* SourceFileDecl::Create(ASTContext &C,
+                                       SourceRange FileRange,
+                                       DeclarationName FileName) {
+   return new(C) SourceFileDecl(FileRange, FileName);
+}
+
+SourceFileDecl* SourceFileDecl::CreateEmpty(ASTContext &C)
+{
+   return new(C) SourceFileDecl({}, {});
 }
 
 TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
@@ -717,13 +758,16 @@ bool CallableDecl::isNonStaticMethod() const
 
 bool CallableDecl::willHaveDefinition() const
 {
-   if (body) return true;
-   if (auto M = dyn_cast<MethodDecl>(this)) {
-      if (M->getBodyTemplate())
-         return true;
+   if (body) {
+      return true;
+   }
+   if (BodyTemplate && BodyTemplate->willHaveDefinition()) {
+      return true;
+   }
+   if (LazyFnInfo) {
+      return true;
    }
 
-   // FIXME loaded from module
    return false;
 }
 
@@ -1690,10 +1734,11 @@ PropDecl::PropDecl(AccessSpecifier access,
                    DeclarationName propName,
                    SourceType type,
                    bool isStatic,
+                   bool IsReadWrite,
                    MethodDecl *GetterMethod,
                    MethodDecl *SetterMethod)
    : NamedDecl(PropDeclID, access, propName),
-     Loc(Loc), type(type),
+     Loc(Loc), type(type), IsReadWrite(IsReadWrite),
      getterMethod(GetterMethod), setterMethod(SetterMethod)
 {
    setDeclFlag(DF_Static, isStatic);
@@ -1705,14 +1750,16 @@ PropDecl* PropDecl::Create(ASTContext &C,
                            DeclarationName propName,
                            SourceType type,
                            bool isStatic,
+                           bool IsReadWrite,
                            MethodDecl *GetterMethod,
                            MethodDecl *SetterMethod) {
-   return new(C) PropDecl(access, Loc, propName, type, isStatic,
+   return new(C) PropDecl(access, Loc, propName, type, isStatic, IsReadWrite,
                           GetterMethod, SetterMethod);
 }
 
 PropDecl::PropDecl(EmptyShell)
-   : NamedDecl(PropDeclID, AccessSpecifier::Default, DeclarationName())
+   : NamedDecl(PropDeclID, AccessSpecifier::Default, DeclarationName()),
+     IsReadWrite(false)
 {}
 
 PropDecl *PropDecl::CreateEmpty(ASTContext &C)

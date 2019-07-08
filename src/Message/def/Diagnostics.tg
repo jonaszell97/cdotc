@@ -262,6 +262,7 @@ def note_cand_no_implicit_conv_inferred : Note<"candidate not viable: no implici
 def note_cand_failed_constraint : Note<"candidate not viable because of failed constraint: $0">
 def note_cand_failed_constraint_inferred : Note<"candidate not viable because of failed constraint: $0 (with template arguments inferred as [$1])">
 def note_cand_invalid_self : Note<"candidate not viable: 'self' argument has type '$0', '$1' given">
+def note_cand_invalid_return : Note<"candidate not viable: return type is '$0', need '$1'">
 def note_cand_label : Note<"candidate not viable: expected ${ 0 | select(no label, label '$0')} for ${ 1 | ordinal } argument, ${ 2 | select(none, label '$2')} given">
 def note_too_few_arguments : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
 def note_too_many_arguments : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
@@ -291,7 +292,7 @@ def err_ambiguous_reference : Error<"reference to '$0' is ambiguous">
 def err_prop_does_not_have : Error<"property '$0' does not have a ${ 1 | select(getter, setter) }">
 def err_subscript_does_not_have : Error<"susbcript does not have a ${ 0 | select(getter, setter) }">
 
-def err_incompatible_template_args : Error<"incompatible template arguments for ${ 0 | select(class,struct,enum,union,protocol,alias) } $1">
+def err_incompatible_template_args : Error<"incompatible template arguments for ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property) } $1">
 
 def err_mutating_accessor_on_const : Error<"cannot access mutating ${ 0 | select(getter, setter) } on a 'let' constant">
 

@@ -1386,6 +1386,11 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Parse/ParseModule.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Parse/ParseRecord.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
@@ -1486,6 +1491,16 @@
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
 		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/CSApply.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/CSDiags.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Sema/CandidateSet.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
@@ -1497,6 +1512,46 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Sema/ConformanceChecker.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintBuilder.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintBuilder.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintGraph.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintGraph.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintStep.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintStep.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintSystem.cpp">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/ConstraintSystem.h">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>
@@ -1547,6 +1602,11 @@
 			<Option target="cdotc"/>
 		</Unit>
 		<Unit filename="/Users/Jonas/CDot/src/Sema/OverloadResolver.h">
+			<Option target="cdotc_asan"/>
+			<Option target="cdotc_ubsan"/>
+			<Option target="cdotc"/>
+		</Unit>
+		<Unit filename="/Users/Jonas/CDot/src/Sema/OverloadResolverNew.cpp">
 			<Option target="cdotc_asan"/>
 			<Option target="cdotc_ubsan"/>
 			<Option target="cdotc"/>

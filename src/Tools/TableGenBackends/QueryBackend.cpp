@@ -93,6 +93,7 @@ class QueryClassEmitter {
       bool Private;
       bool HashMap;
       bool IgnoreCircularDependency;
+      bool Infallible;
       std::vector<QueryParam> Params;
 
       /// The parameter string with types and parameter names.
@@ -119,10 +120,14 @@ class QueryClassEmitter {
       /// The fields of this query.
       std::string Fields;
 
+      /// The trailing objects of this query.
+      std::vector<StringRef> TrailingObjects;
+
       StringRef Type;
       StringRef GetReturnType;
       StringRef CustomKeyType;
       StringRef CustomGet;
+      StringRef CustomAssign;
       StringRef CustomHeaderCode;
       StringRef ConstructorCode;
       StringRef CustomImplCode;
@@ -211,6 +216,8 @@ void QueryClassEmitter::Setup()
          Query->getFieldValue("customKeyType"))->getVal();
       Info.CustomGet = cast<CodeBlock>(Query->getFieldValue("customGet"))
          ->getCode();
+      Info.CustomAssign = cast<CodeBlock>(Query->getFieldValue("customAssign"))
+         ->getCode();
       Info.CustomHeaderCode = cast<CodeBlock>(
          Query->getFieldValue("customHeaderCode"))->getCode();
       Info.ConstructorCode = cast<CodeBlock>(
@@ -233,6 +240,15 @@ void QueryClassEmitter::Setup()
          Query->getFieldValue("ignoreCircularDependency"))->getVal().getBoolValue();
       Info.Private = cast<IntegerLiteral>(
          Query->getFieldValue("private"))->getVal().getBoolValue();
+      Info.Infallible = cast<IntegerLiteral>(
+         Query->getFieldValue("infallible"))->getVal().getBoolValue();
+
+      auto *TrailingObjects = cast<ListLiteral>(
+         Query->getFieldValue("trailingObjects"));
+
+      for (auto *Val : TrailingObjects->getValues()) {
+         Info.TrailingObjects.push_back(cast<StringLiteral>(Val)->getVal());
+      }
 
       llvm::raw_string_ostream ParamWithDefaultOS(Info.ParamStrWithDefaultVals);
       llvm::raw_string_ostream ParamOS(Info.ParamStr);
@@ -268,11 +284,18 @@ void QueryClassEmitter::Setup()
          bool Nullable = cast<IntegerLiteral>(Param->getFieldValue("nullable"))
             ->getVal().getBoolValue();
 
+         if (Info.SimpleQuery && Type == "bool") {
+            Type = "uint8_t";
+         }
+
          if (InnerType) {
             Type = Info.ClassName + "::" + Type;
          }
          else if (Param->getBases().front().getBase()->getName() == "ArrayParam") {
             Type = "llvm::ArrayRef<" + Type + ">";
+         }
+         else if (Param->getBases().front().getBase()->getName() == "FunctionRefParam") {
+            Type = "llvm::function_ref<" + Type + ">";
          }
 
          ParamInfo.emplace_back(Type, Name, DefaultVal,
@@ -342,6 +365,10 @@ void QueryClassEmitter::EmitDecl(Record *Query)
       OS << ", public llvm::FoldingSetNode";
    }
 
+   for (auto &TO : Info.TrailingObjects) {
+      OS << ", llvm::TrailingObjects<" << TO << ">";
+   }
+
    OS << " {\n";
 
    // custom code
@@ -367,8 +394,12 @@ void QueryClassEmitter::EmitDecl(Record *Query)
    }
 
    // Friend decls.
-   OS << "   friend class Query; // for run().\n\n";
+   OS << "   friend class Query; // for run().\n";
    OS << "   friend class QueryContext; // for C'tor.\n\n";
+
+   if (!Info.TrailingObjects.empty()) {
+      OS << "   friend TrailingObjects;\n\n";
+   }
 
    // Private decls.
    OS << "private:\n";
@@ -430,6 +461,14 @@ QueryClassEmitter::ParamKind QueryClassEmitter::getParamKind(StringRef Str)
       .Case("unsigned", Integer)
       .Case("bool", Integer)
       .Case("char", Integer)
+      .Case("uint8_t", Integer)
+      .Case("int8_t", Integer)
+      .Case("uint16_t", Integer)
+      .Case("int16_t", Integer)
+      .Case("uint32_t", Integer)
+      .Case("int32_t", Integer)
+      .Case("uint64_t", Integer)
+      .Case("int64_t", Integer)
       .Case("size_t", Integer)
       .Case("QualType", QualType)
       .Case("StringRef", String)
@@ -514,17 +553,22 @@ void QueryClassEmitter::appendString(ParamKind K,
       break;
    case Pointer: {
       if (TypeName.find("DeclContext") != string::npos) {
-         OS << "OS << \"'\" << " << VarName << "->getNameAsString() << \"'\";";
+         OS << "OS << \"'\" << ("
+            << VarName << " ? " << VarName
+            << "->getNameAsString() : \"<null>\") << \"'\";";
       }
       else if (TypeName.find("DeclConstraint") != string::npos) {
          OS << "OS << " << VarName << ";";
       }
       else if (TypeName.find("Decl") != string::npos) {
-         OS << "OS << \"'\" << " << VarName
-            << "->Decl::getNameAsString() << \"'\";";
+         OS << "OS << \"'\" << ("
+            << VarName << " ? " << VarName
+            << "->Decl::getNameAsString() : \"<null>\") << \"'\";";
       }
       else if (TypeName == "sema::FinalTemplateArgumentList*") {
-         OS << VarName << "->print(OS);";
+         OS << "if (" << VarName << ")"
+            << "   " << VarName << "->print(OS);"
+            << "else OS << \"<null>\";";
       }
       else {
          OS << "OS << " << VarName << ";";
@@ -958,13 +1002,21 @@ void QueryClassEmitter::EmitQueryContextDecls()
          OS << "public: ";
       }
 
-      if (Info.GetReturnType == "void") {
-         OS << "QueryResult " << Q->getName()
+      StringRef Type;
+      if (!Info.Infallible) {
+         Type = "QueryResult";
+      }
+      else {
+         Type = Info.GetReturnType;
+      }
+
+      if (Info.GetReturnType == "void" || Info.Infallible) {
+         OS << Type << " " << Q->getName()
             << "(" << Info.ParamStrWithDefaultVals
             << ");\n";
       }
       else {
-         OS << "QueryResult " << Q->getName()
+         OS << Type <<  " " << Q->getName()
             << "(" << Info.GetReturnType << " &Result"
             << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
             << Info.ParamStrWithDefaultVals
@@ -1040,13 +1092,21 @@ void QueryClassEmitter::EmitQueryContextImpls()
          OS << "}\n\n";
       }
 
+      StringRef RetType;
+      if (!Info.Infallible) {
+         RetType = "QueryResult";
+      }
+      else {
+         RetType = Info.GetReturnType;
+      }
+
       // query run implementation
-      if (Info.GetReturnType == "void") {
-         OS << "QueryResult QueryContext::" << Q->getName()
+      if (Info.GetReturnType == "void" || Info.Infallible) {
+         OS << RetType << " QueryContext::" << Q->getName()
             << "(" << Info.ParamStr << ")\n";
       }
       else {
-         OS << "QueryResult QueryContext::" << Q->getName()
+         OS << RetType << " QueryContext::" << Q->getName()
             << "(" << Info.GetReturnType << " &Result"
             << (Info.ParamStr.empty() ? "" : ", ")
             << Info.ParamStr << ")\n";
@@ -1102,12 +1162,28 @@ void QueryClassEmitter::EmitQueryContextImpls()
             if (Info.SimpleQuery) {
                OS << "   if (It != " << HashMap << ".end()) {\n";
 
-               if (Info.Type != "void") {
-                  OS << "      Result = It->getSecond();";
+               if (Info.Infallible) {
+                  if (!Info.CustomAssign.empty()) {
+                     OS << "      return " << Info.CustomAssign << ";";
+                  }
+                  else {
+                     OS << "      return It->getSecond();";
+                  }
+               }
+               else {
+                  if (Info.Type != "void") {
+                     if (!Info.CustomAssign.empty()) {
+                        OS << "      Result = " << Info.CustomAssign << ";";
+                     }
+                     else {
+                        OS << "      Result = It->getSecond();";
+                     }
+                  }
+
+                  OS << "      return QueryResult(QueryResult::Success);";
                }
 
-               OS << "      return QueryResult(QueryResult::Success);"
-                  << "   }\n";
+               OS << "   }\n";
             }
             else {
                OS << "   " << Info.ClassName << " *_Q;\n";
@@ -1147,17 +1223,32 @@ void QueryClassEmitter::EmitQueryContextImpls()
          string Instance = Q->getName();
          if (Info.SimpleQuery && Info.Type == "void") {
             Instance = string("Ran") + Q->getName().str();
-            OS << "   if (" << Instance << ") {\n"
-               << "      return QueryResult(QueryResult::Success);"
-               << "   }\n";
+
+            if (Info.Infallible) {
+               OS << "   if (" << Instance << ") {\n"
+                  << "      return;"
+                  << "   }\n";
+            }
+            else {
+               OS << "   if (" << Instance << ") {\n"
+                  << "      return QueryResult(QueryResult::Success);"
+                  << "   }\n";
+            }
          }
          else if (Info.SimpleQuery) {
             Instance += "Result";
 
-            OS << "   if (" << Instance << ") {\n"
-               << "      Result = Instance.getValue();"
-               << "      return QueryResult(QueryResult::Success);"
-               << "   }\n";
+            if (Info.Infallible) {
+               OS << "   if (" << Instance << ") {\n"
+                  << "      return Instance.getValue();"
+                  << "   }\n";
+            }
+            else {
+               OS << "   if (" << Instance << ") {\n"
+                  << "      Result = Instance.getValue();"
+                  << "      return QueryResult(QueryResult::Success);"
+                  << "   }\n";
+            }
          }
          else {
             Instance += "Instance";
@@ -1187,7 +1278,14 @@ void QueryClassEmitter::EmitQueryContextImpls()
             << Info.ParamStrNoTypes
             << ");\n\n"
             << "auto MaybeErr = _Q.run();\n"
-            << "if (MaybeErr.isErr()) return MaybeErr;\n\n";
+            << "if (MaybeErr.isErr()) ";
+
+         if (Info.Infallible) {
+            OS << "llvm_unreachable(\"infallible query failed!\");\n\n";
+         }
+         else {
+            OS << "return MaybeErr;\n\n";
+         }
 
          if (Info.CanBeCached) {
             if (Info.Params.empty()) {
@@ -1199,7 +1297,12 @@ void QueryClassEmitter::EmitQueryContextImpls()
             }
          }
 
-         OS << "return QueryResult(QueryResult::Success);";
+         if (Info.Infallible) {
+            OS << "return;";
+         }
+         else {
+            OS << "return QueryResult(QueryResult::Success);";
+         }
       }
       else if (Info.SimpleQuery) {
          OS << Info.ClassName << " _Q(*this"
@@ -1207,19 +1310,78 @@ void QueryClassEmitter::EmitQueryContextImpls()
             << Info.ParamStrNoTypes
             << ");\n\n"
             << "auto MaybeErr = _Q.run();\n"
-            << "if (MaybeErr.isErr()) return MaybeErr;\n\n"
-            << "Result = _Q.get();\n";
+            << "if (MaybeErr.isErr()) ";
 
-         if (Info.CanBeCached) {
-            if (Info.Params.empty()) {
-               OS << Info.ClassName << "Result = Result;\n";
+         if (Info.Infallible) {
+            OS << "llvm_unreachable(\"infallible query failed!\");\n\n";
+
+            OS << "auto Result = _Q.get();\n";
+            if (Info.CanBeCached) {
+               if (Info.Params.empty()) {
+                  OS << Info.ClassName << "Result = Result;\n";
+               }
+               else {
+                  OS << Q->getName() << "Queries[Key] = Result;\n";
+               }
             }
-            else {
-               OS << Q->getName() << "Queries[Key] = Result;\n";
+
+            OS << "return Result;";
+         }
+         else {
+            OS << "return MaybeErr;\n\n";
+            OS << "Result = _Q.get();\n";
+
+            if (Info.CanBeCached) {
+               if (Info.Params.empty()) {
+                  OS << Info.ClassName << "Result = Result;\n";
+               }
+               else {
+                  OS << Q->getName() << "Queries[Key] = Result;\n";
+               }
             }
+
+            OS << "return QueryResult(QueryResult::Success);";
+         }
+      }
+      else if (Info.Infallible) {
+         std::string ReturnResult;
+         if (Info.GetReturnType != "void") {
+            ReturnResult += "return _Q->get()";
+         }
+         else {
+            ReturnResult += "return";
          }
 
-         OS << "return QueryResult(QueryResult::Success);";
+         std::string beginExecution;
+         if (Info.IgnoreCircularDependency) {
+            beginExecution += "_Q->Stat = Query::Idle;";
+         }
+         else {
+            beginExecution += "_Q->Stat = Query::Running;";
+         }
+
+         OS << R"__(
+   switch (_Q->status()) {
+   case Query::Running:
+      llvm_unreachable("circular dependency in infallible query!");
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         )__" << beginExecution << R"__(
+         if (auto _R = _Q->run()) {
+            llvm_unreachable("infallible query failed!");
+         }
+      }
+
+      )__" << ReturnResult << R"__(;
+   case Query::Done:
+      )__" << ReturnResult << R"__(;
+   case Query::Aborted:
+   case Query::Dependent:
+   case Query::DoneWithError:
+      llvm_unreachable(infallible query failed!");
+   }
+)__";
       }
       else {
          std::string AssignResult;

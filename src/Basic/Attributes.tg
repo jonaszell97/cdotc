@@ -1,5 +1,45 @@
 
-#include "DeclNodes.tg"
+// #include "DeclNodes.tg"
+
+class DeclClass
+class DerivedDecl<let Base: DeclClass> : DeclClass
+class DeclContext
+
+def Decl : DeclClass
+
+def StaticAssertStmt : DerivedDecl<Decl>
+def StaticPrintStmt : DerivedDecl<Decl>
+def StaticIfDecl : DerivedDecl<Decl>
+def StaticForDecl : DerivedDecl<Decl>
+def MixinDecl : DerivedDecl<Decl>
+def NamedDecl : DerivedDecl<Decl>
+    def NamespaceDecl : DerivedDecl<NamedDecl>, DeclContext
+    def TranslationUnit : DerivedDecl<NamedDecl>, DeclContext
+    def VarDecl : DerivedDecl<NamedDecl>
+        def LocalVarDecl : DerivedDecl<VarDecl>
+        def GlobalVarDecl : DerivedDecl<VarDecl>
+        def FuncArgDecl : DerivedDecl<VarDecl>
+        def FieldDecl : DerivedDecl<VarDecl>
+    def CallableDecl : DerivedDecl<NamedDecl>, DeclContext
+        def FunctionDecl : DerivedDecl<CallableDecl>
+        def EnumCaseDecl : DerivedDecl<CallableDecl>
+        def MethodDecl : DerivedDecl<CallableDecl>
+            def DeinitDecl : DerivedDecl<MethodDecl>
+            def InitDecl : DerivedDecl<MethodDecl>
+    def RecordDecl : DerivedDecl<NamedDecl>
+        def StructDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ClassDecl : DerivedDecl<RecordDecl>, DeclContext
+        def EnumDecl : DerivedDecl<RecordDecl>, DeclContext
+        def UnionDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ProtocolDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ExtensionDecl : DerivedDecl<RecordDecl>, DeclContext
+    def AssociatedTypeDecl : DerivedDecl<NamedDecl>
+    def PropDecl : DerivedDecl<NamedDecl>
+    def TypedefDecl : DerivedDecl<NamedDecl>
+    def TemplateParamDecl : DerivedDecl<NamedDecl>
+    def CompoundDecl : DeclClass, DeclContext
+    def AliasDecl : DerivedDecl<NamedDecl>, DeclContext
+
 
 class Arg<let name: string, let optional: i1>
 class IntArg<name: string, optional: i1 = false, let defaultVal: u64 = 0> : Arg<name, optional>
@@ -79,10 +119,11 @@ def CompileTime : DeclAttr<"compiletime", [Decl]> {
     Inherited = true
 }
 
-// def Template : DeclAttr<"template", [CallableDecl, RecordDecl, AliasDecl]> {
-//     Visit = BeforeDeclaration
-//     Inherited = true
-// }
+def NoDerive : DeclAttr<"noDerive", [RecordDecl]> {
+    Visit = Never
+    Args = [EnumArg<"kind", ["Equatable", "Copyable", "_All"], true, "_All",
+                    [EnumArgAlias<"*", "_All">]>]
+}
 
 def VersionDecl : DeclAttr<"version", [Decl]> {
     Visit = BeforeDeclaration
@@ -98,4 +139,9 @@ def VersionStmt : StmtAttr<"version"> {
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
     Visit = Immediate
     Args = [StringArg<"builtinName", true, "">]
+}
+
+def _Semantics : DeclAttr<"_semantics", [NamedDecl]> {
+    Visit = Immediate
+    Args = [StringArg<"semanticsKind">]
 }

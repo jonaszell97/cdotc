@@ -225,22 +225,7 @@ SemaJob::SemaJob(CompilerInstance &CI)
 
 void SemaJob::run()
 {
-   {
-      support::Timer Timer(CI, "Declarations");
-      CI.getSema().doDeclarations();
-   }
-
-   if (CI.getSema().encounteredError()) {
-      HadError = true;
-      return;
-   }
-
-   {
-      support::Timer Timer(CI, "Semantic Analysis");
-      CI.getSema().doSema();
-   }
-
-   HadError |= CI.getSema().encounteredError();
+   llvm_unreachable("Hmmm");
 }
 
 ILGenJob::ILGenJob(cdot::CompilerInstance &CI)
@@ -252,7 +237,7 @@ ILGenJob::ILGenJob(cdot::CompilerInstance &CI)
 void ILGenJob::run()
 {
    support::Timer Timer(CI, "IL Generation");
-   HadError = CI.getSema().doILGen();
+   llvm_unreachable("Hmmm");
 }
 
 ILVerifyJob::ILVerifyJob(cdot::CompilerInstance &CI)

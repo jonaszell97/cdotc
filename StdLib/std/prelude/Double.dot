@@ -1,0 +1,53 @@
+
+module std.prelude
+
+public alias IsFloating<FP: ?> = __traits(is_floating, FP)
+
+public def toString<FP: ?>(_ fp: FP, precision: u32 = 2) -> String where IsFloating<FP> {
+    var fp = fp
+    var s = ""
+
+    if fp < 0.0 {
+        s += '-'
+        fp = -fp
+    }
+
+    var i = (fp * ((10.0 ** precision) as FP)) as! u64
+    var neededDigits = 0u
+    var _i = i.copy()
+
+    loop {
+        ++neededDigits
+        _i /= 10
+
+        if _i == 0 {
+            break
+        }
+    }
+
+    var power = (neededDigits - 1) as u64
+    loop {
+        if power == precision - 1 {
+            s += '.'
+        }
+
+        var exp = (10 as u64) ** power
+        var fits = i / exp
+
+        s += ('0' + (fits as u8))
+        i -= exp * fits
+
+        if power == 0 {
+            break
+        }
+
+        --power
+    }
+
+    return s
+}
+
+@inline(always)
+public def copy<FP: ?>(_ fp: FP) -> FP where IsFloating<FP> {
+    return fp
+}

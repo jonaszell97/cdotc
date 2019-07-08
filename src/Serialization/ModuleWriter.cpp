@@ -109,6 +109,7 @@ void ModuleWriter::WriteBlockInfoBlock()
       RECORD(METADATA);
       RECORD(INPUT_FILES);
       RECORD(IMPORTS);
+      RECORD(IMPLICIT_IMPORTS);
       RECORD(MODULE_DECL);
 
    BLOCK(FILE_MANAGER_BLOCK);
@@ -227,6 +228,18 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
       Record.clear();
       Record.push_back(Mod->getLastModified());
 
+      uint8_t Flags = 0;
+      if (Mod->allImplicitlyExported()) {
+         Flags |= 0x1;
+      }
+      if (Mod->declarationsOnly()) {
+         Flags |= 0x2;
+      }
+      if (Mod->isCompileTimeByDefault()) {
+         Flags |= 0x4;
+      }
+
+      Record.push_back(Flags);
       Stream.EmitRecord(METADATA, Record);
    }
 
@@ -269,6 +282,39 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
 
       Record[Idx] = NumImports;
       Stream.EmitRecord(IMPORTS, Record);
+   }
+
+   // Implicit Imports
+   {
+      Record.clear();
+
+      auto Imports = Mod->getImplicitlyImportedModules();
+
+      auto Idx = Record.size();
+      Record.emplace_back();
+
+      unsigned NumImports = 0;
+      SmallVector<IdentifierInfo*, 2> ModuleName;
+
+      for (auto *I : Imports) {
+         while (I) {
+            ModuleName.push_back(I->getName());
+            I = I->getParentModule();
+         }
+
+         std::reverse(ModuleName.begin(), ModuleName.end());
+
+         Record.push_back(ModuleName.size());
+         for (auto *II : ModuleName) {
+            Record.push_back(getIdentifierRef(II));
+         }
+
+         ++NumImports;
+         ModuleName.clear();
+      }
+
+      Record[Idx] = NumImports;
+      Stream.EmitRecord(IMPLICIT_IMPORTS, Record);
    }
 
    // Submodules

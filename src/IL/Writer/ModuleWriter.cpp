@@ -196,7 +196,7 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
          out << "[thick] ";
 
       auto Args = ty->asFunctionType()->getParamTypes();
-      WriteList(Args, &ModuleWriterImpl::WriteQualType, "$(", ", ", " -> ");
+      WriteList(Args, &ModuleWriterImpl::WriteQualType, "$(", ", ", ") -> ");
       WriteQualType(ty->asFunctionType()->getReturnType());
    }
    else if (ty->isTupleType()) {

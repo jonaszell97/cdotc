@@ -1,4 +1,0 @@
-
-module libc.stddef
-
-include_system_header!("stddef.h")

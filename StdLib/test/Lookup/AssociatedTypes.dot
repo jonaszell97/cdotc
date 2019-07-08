@@ -1,0 +1,46 @@
+
+// Providing a template parameter as an associated type in an extension.
+
+protocol P {
+    associatedType AT
+}
+
+struct S<T> {}
+extend S with P {
+    associatedType AT = T
+}
+
+// Reference associated type from different protocol in constraint.
+
+protocol P1 {
+    associatedType AT = i64
+}
+
+protocol P2 with P1 {}
+extend P2 where AT is Any {}
+
+struct S2 with P2 {}
+
+
+protocol PIterable {
+    associatedType Element
+    associatedType It
+        where It is PIterator
+        where It.Element == Element
+}
+
+protocol PIterator {
+    associatedType Element
+}
+
+struct SmallVector<T: ?, let N: u64> {
+}
+
+extend SmallVector with PIterable {
+    struct SmallVectorIterator with PIterator {
+        associatedType Element = T
+    }
+
+    associatedType Element = T
+    associatedType It = SmallVectorIterator
+}

@@ -1,0 +1,76 @@
+
+import libc
+import posix
+
+@_builtin internal var argc: Int = 0
+@_builtin internal var argv: UnsafeBufferPtr<libc.cstring> = .null
+
+internal var programArgs = [String]()
+
+/// Get the command line arguments the program was called with.
+public def getProgramArguments() -> [String] {
+    if argc != programArgs.size {
+        programArgs.reserveCapacity(argc)
+        for i in 0..argc {
+            programArgs.append(String(cstring: argv[i]))
+        }
+    }
+
+    return programArgs
+}
+
+/// \return the value of the environment variable `name` if it exists, `none` otherwise.
+public def getEnvironmentVariable(_ name: String) -> String? {
+    var val = libc.stdlib.getenv(name.unsafeCString)
+    if UnsafeRawPtr(rawPointer: val) {
+        return .Some(String(cstring: val))
+    }
+
+    return none
+}
+
+/// Shorthand for common exit codes.
+enum ExitCode(Int32) {
+    case EXIT_SUCCESS = 0
+    case EXIT_FAILURE = 1
+}
+
+@compiletime
+public def exit(_ exitCode: ExitCode = .EXIT_SUCCESS) -> Never {
+    libc.stdlib.exit(exitCode.rawValue.value)
+}
+
+@compiletime
+public def terminate() -> Never {
+    libc.stdlib.exit(ExitCode.EXIT_FAILURE.rawValue.value)
+}
+
+@compiletime
+public def abort() -> Never {
+    raiseSignal(.SIGABRT)
+    __unreachable
+}
+
+@compiletime
+public def reportFatalError(_ msg: String) -> Never {
+    print("fatal error: $msg")
+    terminate()
+}
+
+enum Signal(builtin.i32) {
+    case SIGABRT = 6,
+        SIGFPE = 8,
+        SIGILL = 4,
+        SIGINT = 2,
+        SIGSEGV = 11,
+        SIGKILL = 9
+}
+
+public def raiseSignal(_ sig: Signal) {
+    _ = libc.signal.raise(sig.rawValue)
+}
+
+public def setSignalHandler(forSignal sig: Signal, _ handler: @thin (Int32) -> Void) {
+    _ = libc.signal.signal(sig.rawValue, 
+                           handler as! builtin.RawPointer as! @thin (builtin.i32) -> Void)
+}

@@ -918,6 +918,7 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, bool IsComplete)
    unsigned i = 0;
    for (auto F : S->getFields()) {
       if (F->getDefaultVal()) {
+         ++i;
          continue;
       }
 
@@ -1033,7 +1034,12 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R)
       llvm_unreachable("bad record kind");
    }
 
-   Builder.CreateRet(res);
+   auto *BoolVal = Builder.CreateAlloca(M->getReturnType());
+   auto *Ld = Builder.CreateLoad(BoolVal);
+   auto *GEP = Builder.CreateStructGEP(Ld, 0);
+   Builder.CreateStore(res, GEP);
+
+   Builder.CreateRet(Ld);
 }
 
 void ILGenPass::DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *)
@@ -1068,8 +1074,10 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R)
    bool CanUseSRet = false;
    if (auto S = dyn_cast<StructDecl>(R)) {
       // FIXME use memcpy for trivial structs
-      auto Alloc = Builder.CreateAlloca(SP.getContext().getRecordType(R));
-      if (!isa<ClassDecl>(S)) {
+      QualType T = SP.Context.getRecordType(R);
+      auto Alloc = Builder.CreateAlloca(T);
+
+      if (SP.NeedsStructReturn(T)) {
          CanUseSRet = true;
          Alloc->setCanUseSRetValue();
       }
@@ -1411,14 +1419,23 @@ QueryResult CreateILRecordTypeInfoQuery::run()
    // Protocol conformances.
    auto conformances = ILGen.CreateProtocolConformances(R);
 
+   RecordDecl *IntDecl;
+   QC.GetBuiltinRecord(IntDecl, GetBuiltinRecordQuery::Int64);
+
    // Type size.
-   auto size = Builder.GetConstantInt(ILGen.USizeTy, TI.getSizeOfType(T));
+   auto size = Builder.GetConstantStruct(
+      cast<StructDecl>(IntDecl),
+      Builder.GetConstantInt(ILGen.WordTy, TI.getSizeOfType(T)));
 
    // Type alignment.
-   auto alignment = Builder.GetConstantInt(ILGen.USizeTy, TI.getAlignOfType(T));
+   auto alignment = Builder.GetConstantStruct(
+      cast<StructDecl>(IntDecl),
+      Builder.GetConstantInt(ILGen.WordTy, TI.getAlignOfType(T)));
 
    // Type stride.
-   auto stride = Builder.GetConstantInt(ILGen.USizeTy, TI.getAllocSizeOfType(T));
+   auto stride = Builder.GetConstantStruct(
+      cast<StructDecl>(IntDecl),
+      Builder.GetConstantInt(ILGen.WordTy, TI.getAllocSizeOfType(T)));
 
    return finish(Builder.GetConstantStruct(cast<StructDecl>(TypeInfoDecl), {
       baseClass, vtable, deinit, name, valueWitnessTable, conformances, size,
@@ -1481,14 +1498,23 @@ QueryResult CreateILBasicTypeInfoQuery::run()
    auto conformances = Builder.GetConstantNull(Context.getPointerType(
       Context.getRecordType(ProtocolConformanceDecl)));
 
+   RecordDecl *IntDecl;
+   QC.GetBuiltinRecord(IntDecl, GetBuiltinRecordQuery::Int64);
+
    // Type size.
-   auto size = Builder.GetConstantInt(ILGen.USizeTy, TI.getSizeOfType(T));
+   auto size = Builder.GetConstantStruct(
+      cast<StructDecl>(IntDecl),
+      Builder.GetConstantInt(ILGen.WordTy, TI.getSizeOfType(T)));
 
    // Type alignment.
-   auto alignment = Builder.GetConstantInt(ILGen.USizeTy, TI.getAlignOfType(T));
+   auto alignment = Builder.GetConstantStruct(
+      cast<StructDecl>(IntDecl),
+      Builder.GetConstantInt(ILGen.WordTy, TI.getAlignOfType(T)));
 
    // Type stride.
-   auto stride = Builder.GetConstantInt(ILGen.USizeTy, TI.getAllocSizeOfType(T));
+   auto stride = Builder.GetConstantStruct(
+      cast<StructDecl>(IntDecl),
+      Builder.GetConstantInt(ILGen.WordTy, TI.getAllocSizeOfType(T)));
 
    return finish(Builder.GetConstantStruct(cast<StructDecl>(TypeInfoDecl), {
       baseClass, vtable, deinit, name, valueWitnessTable, conformances, size,

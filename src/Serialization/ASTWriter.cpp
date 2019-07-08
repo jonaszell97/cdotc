@@ -407,6 +407,11 @@ void ASTTypeWriter::visitDependentNameType(const DependentNameType *Ty)
    Record.AddNestedNameSpecWithLoc(Ty->getNameSpecWithLoc());
 }
 
+void ASTTypeWriter::visitTypeVariableType(const TypeVariableType *Ty)
+{
+   Record.push_back(Ty->getVariableID());
+}
+
 void ASTTypeWriter::visitFunctionType(const FunctionType *Ty)
 {
    Record.AddTypeRef(Ty->getReturnType());
@@ -661,6 +666,12 @@ void ASTRecordWriter::AddNestedNameSpec(NestedNameSpecifier *Name)
       break;
    case NestedNameSpecifier::AssociatedType:
       AddDeclRef(Name->getAssociatedType());
+      break;
+   case NestedNameSpecifier::Alias:
+      AddDeclRef(Name->getAlias());
+      break;
+   case NestedNameSpecifier::TemplateArgList:
+      AddTemplateArgumentList(*Name->getTemplateArgs());
       break;
    case NestedNameSpecifier::Module:
       AddModuleRef(Name->getModule());
@@ -1106,7 +1117,10 @@ void ASTWriter::addOperatorsPrecedenceGroups(ModuleDecl *M,
          case Decl::OperatorDeclID:
          case Decl::PrecedenceGroupDeclID:
          case Decl::ImportDeclID:
-            Vec.push_back(GetDeclRef(D));
+            if (!D->isExternal()) {
+               Vec.push_back(GetDeclRef(D));
+            }
+
             break;
          default:
             break;

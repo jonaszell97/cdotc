@@ -31,14 +31,21 @@ ModuleManager::ModuleManager(CompilerInstance &CI)
 
 ModuleManager::~ModuleManager()
 {
-   for (auto &Reader : ReaderMap)
+   for (auto &Reader : ReaderMap) {
       Reader.second->~ModuleReader();
+   }
 
-   if (MainModule)
-      MainModule->~Module();
+   for (auto &Pair : LoadedModules) {
+      if (Pair.getSecond() == MainModule) {
+         continue;
+      }
 
-   for (auto &Pair : LoadedModules)
       Pair.getSecond()->~Module();
+   }
+
+   if (MainModule) {
+      MainModule->~Module();
+   }
 }
 
 Module* ModuleManager::CreateModule(SourceRange Loc,
@@ -58,6 +65,7 @@ Module* ModuleManager::CreateModule(SourceRange Loc,
       Mod->addDecl(D);
    }
 
+   LoadedModules[Name] = Mod;
    return Mod;
 }
 
@@ -212,7 +220,9 @@ void ModuleManager::EmitModule(Module *Mod)
 
    // if the module doesn't export anything, there's no need to emit a
    // static library.
-   bool EmitLib = Mod->getILModule()->hasExternallyVisibleSymbols();
+   bool EmitLib = Mod->getILModule()->hasExternallyVisibleSymbols()
+      && !Mod->declarationsOnly();
+
    bool EmitStaticLib = EmitLib && CI.getOptions().emitStaticModuleLib();
    SmallString<128> TmpFile;
 

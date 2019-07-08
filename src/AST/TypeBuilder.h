@@ -21,6 +21,22 @@ protected:
    ast::ASTContext &Ctx;
    SourceRange SR;
 
+   void visit(QualType T, SmallVectorImpl<QualType> &VariadicTypes)
+   {
+      if (auto *G = T->asGenericType()) {
+         static_cast<SubClass*>(this)
+            ->visitGenericType(G, VariadicTypes);
+
+         return;
+      }
+
+      switch (T->getTypeID()) {
+#     define CDOT_TYPE(Name, Parent)                                          \
+      case Type::Name##ID: VariadicTypes.push_back(DISPATCH(Name)); break;
+#     include "Types.def"
+      }
+   }
+
 public:
    explicit TypeBuilder(ast::SemaPass &SP, SourceRange SR)
       : SP(SP), Ctx(SP.getContext()), SR(SR)
@@ -94,8 +110,9 @@ public:
    QualType visitTupleType(TupleType *T)
    {
       SmallVector<QualType, 4> ContainedTys;
-      for (QualType Cont : T->getContainedTypes())
-         ContainedTys.push_back(visit(Cont));
+      for (QualType Cont : T->getContainedTypes()) {
+         visit(Cont, ContainedTys);
+      }
 
       return Ctx.getTupleType(ContainedTys);
    }
@@ -103,8 +120,9 @@ public:
    QualType visitExistentialType(ExistentialType *T)
    {
       SmallVector<QualType, 4> ContainedTys;
-      for (QualType Cont : T->getExistentials())
-         ContainedTys.push_back(visit(Cont));
+      for (QualType Cont : T->getExistentials()) {
+         visit(Cont, ContainedTys);
+      }
 
       return Ctx.getExistentialType(ContainedTys);
    }
@@ -112,8 +130,9 @@ public:
    QualType visitFunctionType(FunctionType *T)
    {
       SmallVector<QualType, 4> ParamTys;
-      for (QualType Cont : T->getParamTypes())
-         ParamTys.push_back(visit(Cont));
+      for (QualType Cont : T->getParamTypes()) {
+         visit(Cont, ParamTys);
+      }
 
       return Ctx.getFunctionType(visit(T->getReturnType()), ParamTys,
                                  T->getParamInfo(), T->getRawFlags(),
@@ -125,23 +144,43 @@ public:
       return visitFunctionType(T);
    }
 
-   sema::TemplateArgument
-   VisitTemplateArg(const sema::TemplateArgument &Arg)
-   {
-      if (!Arg.isType())
-         return Arg.clone();
+   template<class Vector>
+   void VisitTemplateArg(const sema::TemplateArgument &Arg,
+                         Vector &ArgList,
+                         bool &Dependent) {
+      if (!Arg.isType()) {
+         ArgList.emplace_back(Arg.clone());
+         Dependent |= ArgList.back().isStillDependent();
+
+         return;
+      }
 
       if (Arg.isVariadic()) {
          std::vector<sema::TemplateArgument> Cloned;
-         for (auto &VA : Arg.getVariadicArgs())
-            Cloned.push_back(VisitTemplateArg(VA));
+         for (auto &VA : Arg.getVariadicArgs()) {
+            VisitTemplateArg(VA, Cloned, Dependent);
+         }
 
-         return sema::TemplateArgument(Arg.getParam(), true, move(Cloned),
-                                          Arg.getLoc());
+         ArgList.emplace_back(Arg.getParam(), true, move(Cloned), Arg.getLoc());
+         return;
       }
 
-      QualType Ty = visit(Arg.getNonCanonicalType());
-      return sema::TemplateArgument(Arg.getParam(), Ty, Arg.getLoc());
+      SmallVector<QualType, 4> CopiedTypes;
+      visit(Arg.getNonCanonicalType(), CopiedTypes);
+
+      for (auto &Ty : CopiedTypes) {
+         ArgList.emplace_back(Arg.getParam(), Ty, Arg.getLoc());
+         Dependent |= ArgList.back().isStillDependent();
+      }
+   }
+
+   sema::TemplateArgument VisitTemplateArg(const sema::TemplateArgument &Arg)
+   {
+      SmallVector<sema::TemplateArgument, 1> Args;
+      bool Dependent;
+
+      VisitTemplateArg(Arg, Args, Dependent);
+      return std::move(Args.front());
    }
 
    QualType visitRecordTypeCommon(QualType T, ast::RecordDecl *R,
@@ -150,10 +189,7 @@ public:
 
       bool Dependent = false;
       for (auto &Arg : TemplateArgs) {
-         auto Copy = VisitTemplateArg(Arg);
-         Dependent |= Copy.isStillDependent();
-
-         Args.emplace_back(move(Copy));
+         VisitTemplateArg(Arg, Args, Dependent);
       }
 
       auto FinalList = sema::FinalTemplateArgumentList::Create(
@@ -189,7 +225,15 @@ public:
 
    QualType visitGenericType(GenericType *T)
    {
-      return T;
+      SmallVector<QualType, 1> Args;
+      visitGenericType(T, Args);
+
+      return Args.empty() ? QualType(T) : Args.front();
+   }
+
+   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Args)
+   {
+      Args.emplace_back(T);
    }
 
    NestedNameSpecifier *visitNestedNameSpecifier(NestedNameSpecifier *Name)
@@ -219,10 +263,18 @@ public:
          return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
                                 Name->getAssociatedType(),
                                 visitNestedNameSpecifier(Name->getPrevious()));
+      case NestedNameSpecifier::Alias:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                            Name->getAlias(),
+                                            visitNestedNameSpecifier(Name->getPrevious()));
       case NestedNameSpecifier::Module:
          return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
                                 Name->getModule(),
                                 visitNestedNameSpecifier(Name->getPrevious()));
+      case NestedNameSpecifier::TemplateArgList:
+         return NestedNameSpecifier::Create(Ctx.getDeclNameTable(),
+                                            Name->getTemplateArgs(),
+                                            visitNestedNameSpecifier(Name->getPrevious()));
       }
    }
 
@@ -237,6 +289,11 @@ public:
          return this->Ctx.getDependentNameType(WithLoc);
       }
 
+      return T;
+   }
+
+   QualType visitTypeVariableType(TypeVariableType *T)
+   {
       return T;
    }
 

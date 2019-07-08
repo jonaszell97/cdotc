@@ -5,6 +5,7 @@
 #ifndef CDOT_SOURCETYPE_H
 #define CDOT_SOURCETYPE_H
 
+#include "Lex/SourceLocation.h"
 #include "Type.h"
 
 namespace cdot {
@@ -17,13 +18,13 @@ struct SourceType {
       : TypeExpr(TypeExpr)
    {}
 
-   explicit SourceType(QualType ResolvedType = QualType())
+   /*implicit*/ SourceType(QualType ResolvedType = QualType())
       : TypeExpr(nullptr), ResolvedType(ResolvedType)
    {}
 
    SourceType(Expression *TypeExpr, QualType ResolvedType)
       : TypeExpr(TypeExpr), ResolvedType(ResolvedType)
-   { }
+   {}
 
    void Profile(llvm::FoldingSetNodeID &ID) const
    {
@@ -62,6 +63,8 @@ struct SourceType {
       assert(isResolved() && "unresolved type!");
       return ResolvedType;
    }
+
+   SourceRange getSourceRange() const;
 
    Expression *getTypeExpr()  const { return TypeExpr; }
    QualType getResolvedType() const { return ResolvedType; }

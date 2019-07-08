@@ -9,8 +9,11 @@ using namespace cdot::ast;
 Module::Module(IdentifierInfo *Name, SourceRange Loc, Module *ParentModule)
    : Name(Name), Loc(Loc), ParentModule(ParentModule)
 {
-   if (ParentModule)
+   if (ParentModule) {
       ParentModule->SubModules.push_back(this);
+      DeclarationsOnly = ParentModule->declarationsOnly();
+      DefaultAccess = ParentModule->getDefaultAccessSpec();
+   }
 }
 
 Module::Module(IdentifierInfo *ModulePath,
@@ -21,8 +24,11 @@ Module::Module(IdentifierInfo *ModulePath,
    : Name(Name), Loc(Loc), ModulePath(ModulePath), ParentModule(ParentModule),
      ImportedFrom(ImportedFrom)
 {
-   if (ParentModule)
+   if (ParentModule) {
       ParentModule->SubModules.push_back(this);
+      DeclarationsOnly = ParentModule->declarationsOnly();
+      DefaultAccess = ParentModule->getDefaultAccessSpec();
+   }
 }
 
 Module* Module::Create(ASTContext &C,

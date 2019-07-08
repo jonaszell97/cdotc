@@ -3,6 +3,8 @@
 //
 
 #include "Use.h"
+
+#include <llvm/ADT/SmallPtrSet.h>
 #include <list>
 
 namespace cdot {
@@ -18,7 +20,10 @@ void Use::verify()
    }
 
    // verify linked list invariants
+   llvm::SmallPtrSet<Use*, 4> Uses;
    while (U->Next) {
+      assert(Uses.insert(U).second && "duplicate use!");
+
       Use *Next = U->Next;
       assert(Next->Prev == U);
 

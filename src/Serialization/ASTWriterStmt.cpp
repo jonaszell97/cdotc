@@ -83,9 +83,9 @@ static void WriteIfCondition(const IfCondition &C, ASTRecordWriter &Record)
    case IfCondition::Binding:
       Record.AddDeclRef(C.BindingData.Decl);
 
-      if (C.BindingData.ConvSeq) {
+      if (C.BindingData.TryUnwrapFn) {
          Record.push_back(true);
-         WriteConvSeq(Record, *C.BindingData.ConvSeq);
+         Record.AddDeclRef(C.BindingData.TryUnwrapFn);
       }
       else {
          Record.push_back(false);
@@ -529,19 +529,57 @@ void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
    uint64_t Flags = 0;
    Flags |= S->isStaticLookup();
    Flags |= (S->isPointerAccess() << 1);
-   Flags |= (S->foundResult() << 2);
+   Flags |= (S->isOnlyForLookup() << 2);
    Flags |= (S->isInTypePosition() << 3);
    Flags |= (S->isSynthesized() << 4);
    Flags |= (S->isCapture() << 5);
    Flags |= (S->isSelf() << 6);
    Flags |= (S->allowIncompleteTemplateArgs() << 7);
    Flags |= (S->allowNamespaceRef() << 8);
-   Flags |= (S->hasLeadingDot() << 9);
+   Flags |= (S->allowOverloadRef() << 9);
+   Flags |= (S->hasLeadingDot() << 10);
+   Flags |= (S->isCalled() << 11);
 
    Record.push_back(Flags);
    Record.push_back(S->getCaptureIndex());
    Record.AddStmt(S->getParentExpr());
    Record.AddDeclRef(support::cast_or_null<Decl>(S->getDeclCtx()));
+}
+
+void ASTStmtWriter::visitDeclRefExpr(DeclRefExpr *S)
+{
+   visitExpr(S);
+
+   Record.AddDeclRef(S->getDecl());
+   Record.AddSourceRange(S->getSourceRange());
+
+   uint64_t Flags = 0;
+   Flags |= S->allowModuleRef();
+
+   Record.push_back(Flags);
+}
+
+void ASTStmtWriter::visitMemberRefExpr(MemberRefExpr *S)
+{
+   visitExpr(S);
+
+   Record.AddStmt(S->getParentExpr());
+   Record.AddDeclRef(S->getMemberDecl());
+   Record.AddSourceRange(S->getSourceRange());
+   Record.push_back(S->isCalled());
+}
+
+void ASTStmtWriter::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *S)
+{
+   visitExpr(S);
+
+   Record.push_back(S->getNumOverloads());
+   for (auto *D : S->getOverloads()) {
+      Record.AddDeclRef(D);
+   }
+
+   Record.AddSourceRange(S->getSourceRange());
+   Record.AddStmt(S->getParentExpr());
 }
 
 void ASTStmtWriter::visitEnumCaseExpr(EnumCaseExpr *S)
@@ -749,9 +787,11 @@ static void WriteSequenceElement(ASTRecordWriter &Record,
       Record.AddStmt(El.getExpr());
       break;
    case SequenceElement::EF_PossibleOperator:
+      Record.push_back(El.getWhitespace());
       Record.AddIdentifierRef(El.getOp());
       break;
    case SequenceElement::EF_Operator:
+      Record.push_back(El.getWhitespace());
       Record.push_back(El.getOperatorKind());
       break;
    }
@@ -811,6 +851,14 @@ void ASTStmtWriter::visitCastExpr(CastExpr *S)
    WriteConvSeq(Record, S->getConvSeq());
 }
 
+void ASTStmtWriter::visitAddrOfExpr(AddrOfExpr *S)
+{
+   visitExpr(S);
+
+   Record.AddSourceLocation(S->getAmpLoc());
+   Record.AddStmt(S->getTarget());
+}
+
 void ASTStmtWriter::visitTypePredicateExpr(TypePredicateExpr *S)
 {
    visitExpr(S);
@@ -833,7 +881,7 @@ void ASTStmtWriter::visitIfExpr(IfExpr *S)
    visitExpr(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddStmt(S->getCond());
+   WriteIfCondition(S->getCond(), Record);
    Record.AddStmt(S->getTrueVal());
    Record.AddStmt(S->getFalseVal());
 }

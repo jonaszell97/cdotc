@@ -846,9 +846,6 @@ llvm::MDNode* IRGen::emitGlobalVarDI(GlobalVariable const& G,
 
 llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
 {
-   if (F.getName()=="_CNW3std7reflectE15OperatingSystemGa8isDarwinES_L0") {
-       int i=3; //CBP
-   }
    std::vector<llvm::Metadata*> argTypes;
    for (const auto& arg : F.getEntryBlock()->getArgs()) {
       argTypes.push_back(getTypeDI(arg.getType()));

@@ -432,8 +432,11 @@ void DiagnosticBuilder::finalize()
             End = SourceLocation(Start.getOffset() + Diff);
       }
 
+      assert(Engine.FileMgr->getSourceId(Start) == ID
+             && "source locations in different files!");
+
       // single source location, show caret
-      if (!End) {
+      if (!End || End == Start) {
          unsigned offset = Start.getOffset() - File.BaseOffset;
          if (lineEndIndex <= offset || newlineIndex >= offset) {
             // source location is on a different line

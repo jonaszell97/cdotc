@@ -9,6 +9,7 @@
 #include "Query/QueryContext.h"
 #include "SemaPass.h"
 #include "Serialization/ModuleFile.h"
+#include "Support/Log.h"
 #include "TemplateInstantiator.h"
 
 #include <llvm/ADT/SetVector.h>
@@ -45,6 +46,11 @@ public:
       return Ty;
    }
 
+   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   {
+      Types.push_back(visitGenericType(T));
+   }
+
    QualType visitGenericType(GenericType *Ty)
    {
       if (!ND)
@@ -58,8 +64,9 @@ public:
          return Ty;
 
       auto *OtherParam = ND->getTemplateParams()[Idx];
-      if (SP.equivalent(Param, OtherParam))
+      if (SP.equivalent(Param, OtherParam)) {
          return SP.getContext().getTemplateArgType(OtherParam);
+      }
 
       return Ty;
    }
@@ -67,9 +74,10 @@ public:
 
 class ConformanceCheckerImpl {
 public:
-   ConformanceCheckerImpl(SemaPass &SP, RecordDecl *R)
+   ConformanceCheckerImpl(SemaPass &SP, RecordDecl *R,
+                          LookupOpts Opts = DefaultLookupOpts)
       : SP(SP), SelfTy(SP.Context.getRecordType(R)), Rec(R),
-        TypeSubstVisitor(SP, R)
+        Opts(Opts), TypeSubstVisitor(SP, R)
    {}
 
    void checkConformance();
@@ -93,6 +101,7 @@ private:
    QualType SelfTy;
    RecordDecl *Rec = nullptr;
 
+   LookupOpts Opts;
    AssociatedTypeSubstVisitor TypeSubstVisitor;
 
    SmallSetVector<NamedDecl*, 4> DefaultImpls;
@@ -145,49 +154,9 @@ void ConformanceCheckerImpl::genericError(RecordDecl *Rec, ProtocolDecl *P)
                Rec->getDeclName(), P->getDeclName(), Rec->getSourceLoc());
 }
 
-bool ConformanceCheckerImpl::maybeInstantiateType(SourceType &needed,
-                                                  NamedDecl *LookupDecl) {
-   if (!needed.isResolved() || needed->isDependentType()) {
-      assert(needed.getTypeExpr() && needed.getTypeExpr()->isDependent());
-
-      auto *TE = needed.getTypeExpr();
-      auto &Instantiator = SP.getInstantiator();
-
-      DeclContext *Ctx = dyn_cast<DeclContext>(LookupDecl);
-      if (!Ctx)
-         Ctx = Rec;
-
-      SemaPass::DeclScopeRAII DCR(SP, Ctx);
-      auto Inst = Instantiator.InstantiateTypeExpr(Rec, TE);
-
-      if (!Inst.hasValue()) {
-         return true;
-      }
-
-      SourceType ST(Inst.getValue());
-
-      auto Res = SP.visitSourceType(ST);
-      if (!Res) {
-         return true;
-      }
-
-      needed.setResolvedType(Res.get());
-   }
-
-   return false;
-}
-
 bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
                                                     SourceType &needed,
                                                     NamedDecl *LookupDecl) {
-//   if (maybeInstantiateType(needed, LookupDecl)) {
-//      return true;
-//   }
-//
-//   if (given->isDependentType() || needed->isDependentType()) {
-//      return true;
-//   }
-
    QualType GivenCan = given;
    QualType NeededCan = needed;
 
@@ -203,7 +172,7 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
       NeededCan = TypeSubstVisitor.visit(NeededCan);
    }
 
-   if (given->isDependentType() || needed->isDependentType()) {
+   if (given->isDependentType() && needed->isDependentType()) {
       return true;
    }
 
@@ -211,19 +180,6 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
 }
 
 namespace {
-
-struct SuppressInstantiationRAII {
-   SuppressInstantiationRAII(SemaPass &SP) : IDR(SP.getInstantiator())
-   {}
-
-   ~SuppressInstantiationRAII()
-   {
-      IDR.Inst.visitPendingInstantiations();
-   }
-
-private:
-   TemplateInstantiator::InstantiationDepthRAII IDR;
-};
 
 DeclarationName getNameFor(ASTContext &C, NamedDecl *D, RecordDecl *Inst)
 {
@@ -246,12 +202,16 @@ DeclarationName getNameFor(ASTContext &C, NamedDecl *D, RecordDecl *Inst)
 void ConformanceCheckerImpl::checkConformance()
 {
    if (auto *P = dyn_cast<ProtocolDecl>(Rec)) {
-      SP.registerImplicitAndInheritedConformances(Rec);
       return;
    }
 
    if (Rec->isInvalid()) {
       return;
+   }
+
+
+   if (Rec->getFullName()=="core.String") {
+      int i=3; //CBP
    }
 
    SemaPass::DeclScopeRAII declScopeRAII(SP, Rec);
@@ -463,25 +423,6 @@ MethodDecl *ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
          return Result;
       }
    }
-   else if (Proto == SP.getStringRepresentableDecl()) {
-      auto Str = SP.getStringDecl();
-      assert(Str && "StringRepresentable without String decl?");
-
-      DeclarationName DN = SP.getContext().getIdentifiers().get("toString");
-      if (M.getDeclName() == DN) {
-         // Don't actually instantiate if we're checking a protocol.
-         if (isa<ProtocolDecl>(Rec))
-            return &M;
-
-         MethodDecl *Result;
-         if (SP.QC.AddImplicitConformance(Result, Rec,
-                                ImplicitConformanceKind::StringRepresentable)) {
-            return &M;
-         }
-
-         return Result;
-      }
-   }
    else if (Proto == SP.getCopyableDecl()) {
       if (M.getDeclName().isStr("copy") && M.getArgs().size() == 1) {
          for (auto F : Rec->getDecls<FieldDecl>()) {
@@ -514,6 +455,25 @@ MethodDecl *ConformanceCheckerImpl::checkIfImplicitConformance(RecordDecl *Rec,
          MethodDecl *Result;
          if (SP.QC.AddImplicitConformance(Result, Rec,
                                           ImplicitConformanceKind::Copyable)) {
+            return &M;
+         }
+
+         return Result;
+      }
+   }
+   else if (Proto == SP.getStringRepresentableDecl()) {
+      auto Str = SP.getStringDecl();
+      assert(Str && "StringRepresentable without String decl?");
+
+      DeclarationName DN = SP.getContext().getIdentifiers().get("toString");
+      if (M.getDeclName() == DN) {
+         // Don't actually instantiate if we're checking a protocol.
+         if (isa<ProtocolDecl>(Rec))
+            return &M;
+
+         MethodDecl *Result;
+         if (SP.QC.AddImplicitConformance(Result, Rec,
+                                          ImplicitConformanceKind::StringRepresentable)) {
             return &M;
          }
 
@@ -613,7 +573,7 @@ bool ConformanceCheckerImpl::checkAssociatedType(RecordDecl *Rec,
                                                  AssociatedTypeDecl *AT) {
    AssociatedTypeDecl *Impl = nullptr;
    if (SP.QC.GetAssociatedType(Impl, Rec, AT->getDeclName(),
-                               Rec->getExtensions())) {
+                               Rec->getExtensions()) || !Impl) {
       return true;
    }
 
@@ -742,6 +702,7 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
                                                        ProtocolDecl *Proto,
                                                        NamedDecl *Req) {
    if (SP.QC.PrepareDeclInterface(Req)) {
+      Rec->setIsInvalid(true);
       return nullptr;
    }
 
@@ -752,7 +713,7 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
 
    if (auto Prop = dyn_cast<PropDecl>(Req)) {
       const MultiLevelLookupResult *Result;
-      if (SP.QC.DirectLookup(Result, Rec, Prop->getDeclName()))
+      if (SP.QC.DirectLookup(Result, Rec, Prop->getDeclName(), true, Opts))
          return nullptr;
 
       PropDecl *FoundProp = nullptr;
@@ -787,6 +748,14 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
          return nullptr;
       }
 
+      if (Prop->isReadWrite() && !FoundProp->isReadWrite()) {
+         genericError(Rec, Proto);
+         SP.diagnose(err_generic_error, "expected property to be read-write",
+                     Prop->getSourceLoc());
+
+         return nullptr;
+      }
+
       auto GivenTy = FoundProp->getType().getResolvedType();
 
       SourceType NeededTy = Prop->getType();
@@ -798,7 +767,7 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
          genericError(Rec, Proto);
          SP.diagnose(note_incorrect_protocol_impl_prop_type, 1 /*property*/,
                      Prop->getDeclName(), NeededTy, GivenTy,
-                     Rec->getSourceLoc());
+                     Prop->getSourceLoc());
 
          return nullptr;
       }
@@ -833,7 +802,7 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
    }
    else if (auto S = dyn_cast<SubscriptDecl>(Req)) {
       const MultiLevelLookupResult *Subscripts;
-      if (SP.QC.DirectLookup(Subscripts, Rec, S->getDeclName())) {
+      if (SP.QC.DirectLookup(Subscripts, Rec, S->getDeclName(), true, Opts)) {
          return nullptr;
       }
 
@@ -919,9 +888,9 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
       // Make sure all initializers are deserialized.
       auto InitName = SP.getContext().getDeclNameTable()
                         .getConstructorName(SP.getContext().getRecordType(Rec));
-
+      
       const MultiLevelLookupResult *Impls;
-      if (SP.QC.DirectLookup(Impls, Rec, InitName)) {
+      if (SP.QC.DirectLookup(Impls, Rec, InitName, true, Opts)) {
          return nullptr;
       }
 
@@ -1042,7 +1011,8 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
    else if (auto Method = dyn_cast<MethodDecl>(Req)) {
       // Make sure all methods with this name are deserialized.
       const MultiLevelLookupResult *MethodImpls;
-      if (SP.QC.DirectLookup(MethodImpls, Rec, Method->getDeclName())) {
+      if (SP.QC.DirectLookup(MethodImpls, Rec, Method->getDeclName(), true,
+                             Opts)) {
          return nullptr;
       }
 
@@ -1282,10 +1252,10 @@ QueryResult DeclareSelfAliasQuery::run()
 
    QualType CanonicalTy = QC.Context.getRecordType(R);
    if (IsImplementation) {
-      ActualType = CanonicalTy;
+      ActualType.setResolvedType(CanonicalTy);
    }
    else {
-      Covariance = CanonicalTy;
+      Covariance.setResolvedType(CanonicalTy);
    }
 
    auto *Self = AssociatedTypeDecl::Create(QC.Context, R->getSourceLoc(),
@@ -1307,12 +1277,51 @@ QueryResult GetNeededAssociatedTypesQuery::run()
 
    for (auto &Conf : ConfTable.getAllConformances(R)) {
       ProtocolDecl *Proto = Conf->getProto();
-      NeededAssociatedTypes.insert(NeededAssociatedTypes.end(),
-                                   Proto->decl_begin<AssociatedTypeDecl>(),
-                                   Proto->decl_end<AssociatedTypeDecl>());
+
+      for (auto *AT : Proto->getDecls<AssociatedTypeDecl>()) {
+         if (!AT->isSelf()) {
+            NeededAssociatedTypes.push_back(AT);
+         }
+      }
    }
 
    return finish(std::move(NeededAssociatedTypes));
+}
+
+static bool checkIfAssociatedTypeImplemented(QueryContext &QC,
+                     AssociatedTypeDecl *AT,
+                     RecordDecl *Rec,
+                     ArrayRef<ExtensionDecl*>Extensions,
+                     SmallSetVector<const IdentifierInfo*, 4> &ImplementedATs) {
+   // Associated types must be visible in the immediate context (or in the
+   // immediate context of an extension) to avoid a circular dependency
+   // with the lookup here.
+   AssociatedTypeDecl *Impl;
+   if (QC.GetAssociatedType(Impl, Rec, AT->getDeclName(), Extensions)) {
+      return true;
+   }
+
+   if (!Impl) {
+      if (!AT->getActualType()) {
+         return false;
+      }
+
+      auto *Inst = makeAssociatedType(*QC.Sema, AT, Rec);
+      if (!Inst) {
+         return true;
+      }
+
+      ImplementedATs.insert(AT->getDeclName().getIdentifierInfo());
+      return false;
+   }
+
+   ImplementedATs.insert(AT->getDeclName().getIdentifierInfo());
+
+   if (QC.PrepareDeclInterface(Impl)) {
+      return true;
+   }
+
+   return false;
 }
 
 QueryResult ResolveAssociatedTypesQuery::run()
@@ -1367,46 +1376,27 @@ QueryResult ResolveAssociatedTypesQuery::run()
       UnresolvedExtensions.append(Extensions.begin(), Extensions.end());
    }
 
-   ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypes;
-   if (QC.GetNeededAssociatedTypes(NeededAssociatedTypes, Rec)) {
+   ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypesRef;
+   if (QC.GetNeededAssociatedTypes(NeededAssociatedTypesRef, Rec)) {
       return fail();
    }
+
+   SmallVector<AssociatedTypeDecl*, 4> NeededAssociatedTypes(
+      NeededAssociatedTypesRef.begin(), NeededAssociatedTypesRef.end());
 
    SemaPass::DeclScopeRAII DSR(*QC.Sema, Rec);
    auto Extensions = Rec->getExtensions();
 
    // First of all, resolve the associated types that are directly provided
    // by the type.
+   Status S = Done;
    for (auto *AT : NeededAssociatedTypes) {
-      // Associated types must be visible in the immediate context (or in the
-      // immediate context of an extension) to avoid a circular dependency
-      // with the lookup here.
-      AssociatedTypeDecl *Impl;
-      if (QC.GetAssociatedType(Impl, Rec, AT->getDeclName(), Extensions)) {
-         return fail();
-      }
-
-      if (!Impl) {
-         if (!AT->getActualType()) {
-            continue;
-         }
-
-         auto *Inst = makeAssociatedType(sema(), AT, Rec);
-         if (!Inst)
-            return fail();
-
-         ImplementedATs.insert(AT->getDeclName().getIdentifierInfo());
-         continue;
-      }
-
-      ImplementedATs.insert(AT->getDeclName().getIdentifierInfo());
-
-      if (QC.PrepareDeclInterface(Impl)) {
-         return fail();
+      if (checkIfAssociatedTypeImplemented(QC, AT, Rec, Extensions,
+                                           ImplementedATs)) {
+         S = DoneWithError;
+         Rec->setIsInvalid(true);
       }
    }
-
-   Status S = Done;
 
    // Resolve extensions until there are no more changes or we resolved all
    // of them.
@@ -1458,14 +1448,23 @@ QueryResult ResolveAssociatedTypesQuery::run()
                continue;
             }
 
+            AssociatedTypeDecl *Impl;
+            if (QC.GetAssociatedType(Impl, Rec, Name, Extensions)) {
+               return fail();
+            }
+            if (Impl) {
+               continue;
+            }
+
             if (QC.PrepareDeclInterface(AT)) {
                S = DoneWithError;
                continue;
             }
 
             auto *Inst = makeAssociatedType(sema(), AT, Rec);
-            if (!Inst)
+            if (!Inst) {
                return fail();
+            }
 
             FoundChanges = true;
          }
@@ -1478,21 +1477,37 @@ QueryResult ResolveAssociatedTypesQuery::run()
                continue;
             }
 
-            bool IsNew = ConfTable.addConformance(QC.Context,
-                                                  ConformanceKind::Implicit,
-                                                  T->getRecord(), P);
+            auto ActOnNewConf = [&](ProtocolDecl *NewConf) {
+               if (auto Err = QC.FindExtensions(
+                      QC.Context.getRecordType(NewConf))) {
+                  S = Err.isDependent() ? Dependent : DoneWithError;
+                  return;
+               }
 
-            if (!IsNew) {
+               auto NewExtensions = NewConf->getExtensions();
+               UnresolvedExtensions.append(NewExtensions.begin(),
+                                           NewExtensions.end());
+
+               // Resolve new associated type requirements.
+               for (auto *NewAT : NewConf->getDecls<AssociatedTypeDecl>()) {
+                  if (NewAT->isSelf()) {
+                     continue;
+                  }
+
+                  if (checkIfAssociatedTypeImplemented(QC, NewAT, Rec,
+                                                       Extensions,
+                                                       ImplementedATs)) {
+                     return;
+                  }
+
+                  NeededAssociatedTypes.push_back(NewAT);
+               }
+            };
+
+            if (QC.AddSingleConformance(T, P, ConformanceKind::Implicit, true,
+                                        ActOnNewConf)) {
                continue;
             }
-
-            if (auto Err = QC.FindExtensions(QC.Context.getRecordType(P))) {
-               S = Err.isDependent() ? Dependent : DoneWithError;
-               continue;
-            }
-
-            auto Extensions = P->getExtensions();
-            UnresolvedExtensions.append(Extensions.begin(), Extensions.end());
          }
       }
 
@@ -1513,7 +1528,9 @@ QueryResult ResolveAssociatedTypesQuery::run()
    }
 
    if (i != UnresolvedExtensions.size()) {
-      assert(Rec->isTemplateOrInTemplate() && "could not resolve extension!");
+      assert((Rec->isTemplateOrInTemplate()
+         || ImplementedATs.size() != NeededAssociatedTypes.size())
+         && "could not resolve extension!");
    }
 
    if (ImplementedATs.size() != NeededAssociatedTypes.size()) {
@@ -1555,7 +1572,9 @@ QueryResult CheckConformancesQuery::run()
 
 QueryResult CheckSingleConformanceQuery::run()
 {
-   ConformanceCheckerImpl Checker(*QC.Sema, T->getRecord());
+   auto Opts = DefaultLookupOpts & ~LookupOpts::PrepareNameLookup;
+
+   ConformanceCheckerImpl Checker(*QC.Sema, T->getRecord(), Opts);
    Checker.checkSingleConformance(P);
 
    return finish(Checker.IssuedError ? Aborted : Done);
@@ -1567,12 +1586,16 @@ QueryResult CheckAssociatedTypeConstraintsQuery::run()
       return Query::finish(DoneWithError);
    }
 
-   ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypes;
-   if (QC.GetNeededAssociatedTypes(NeededAssociatedTypes, R)) {
-      return fail();
+   QualType Self = QC.Context.getRecordType(R);
+   if (auto Err = QC.CheckConformances(Self)) {
+       return Query::finish(Err);
    }
 
-   QualType Self = QC.Context.getRecordType(R);
+   ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypes;
+   if (auto Err = QC.GetNeededAssociatedTypes(NeededAssociatedTypes, R)) {
+      return Query::finish(Err);
+   }
+
    for (auto *AT : NeededAssociatedTypes) {
       if (AT->isSelf()) {
          continue;
@@ -1587,7 +1610,7 @@ QueryResult CheckAssociatedTypeConstraintsQuery::run()
                           AT->getCovariance()) && !IsCovariant) {
          QC.Sema->diagnose(err_generic_error,
                         Impl->getActualType().getResolvedType().toDiagString()
-                        + " is not covariant to "
+                        + " is not covariant with "
                         + AT->getCovariance().getResolvedType().toDiagString(),
                         Impl->getSourceLoc());
       }
@@ -1624,24 +1647,251 @@ QueryResult CheckAssociatedTypeConstraintsQuery::run()
    return finish();
 }
 
+QueryResult ResolveConformanceToProtocolQuery::run()
+{
+   auto res = QC.Sema->visitSourceType(Conf);
+   if (!res)
+      return fail();
+
+   auto protoTy = res.get();
+   if (!protoTy->isRecordType()) {
+      QC.Sema->diagnose(Conf.getTypeExpr(), err_conforming_to_non_protocol,
+                        protoTy);
+      return fail();
+   }
+
+   auto Proto = protoTy->getRecord();
+   if (!isa<ProtocolDecl>(Proto)) {
+      QC.Sema->diagnose(Conf.getTypeExpr(), err_conforming_to_non_protocol,
+                        Proto->getDeclName());
+
+      return fail();
+   }
+
+   SourceLocation Loc;
+   if (auto *E = Conf.getTypeExpr()) {
+      Loc = E->getSourceLoc();
+   }
+
+   QC.CheckAccessibility(T->getRecord(), Proto, Loc);
+
+   auto PD = cast<ProtocolDecl>(Proto);
+   if (PD->isTemplate())
+      return finish(PD, Dependent);
+
+   return finish(PD);
+}
+
+QueryResult ResolveExplicitConformancesQuery::run()
+{
+   finish();
+
+   ArrayRef<SourceType> Conformances;
+   if (auto *R = T->asRecordType()) {
+      Conformances = R->getRecord()->getConformanceTypes();
+   }
+   else {
+      // FIXME generalized extensions
+   }
+
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, T->getRecord()->getDeclContext());
+
+   Status S = Done;
+   for (auto &Conf : Conformances) {
+      ProtocolDecl *PD;
+      if (auto Err = QC.ResolveConformanceToProtocol(PD, T, Conf)) {
+         S = Err.isDependent() ? Dependent : DoneWithError;
+         continue;
+      }
+
+      if (auto Err = QC.AddSingleConformance(T, PD, ConformanceKind::Explicit)) {
+         S = Err.isDependent() ? Dependent : DoneWithError;
+         continue;
+      }
+   }
+
+   return finish(S);
+}
+
+QueryResult ResolveDeclaredConformancesQuery::run()
+{
+   finish();
+
+   Status S = Done;
+   for (auto &Conf : Conformances) {
+      ProtocolDecl *PD;
+      if (QC.ResolveConformanceToProtocol(PD, T, Conf)) {
+         S = DoneWithError;
+         continue;
+      }
+
+      if (auto Err = QC.AddSingleConformance(T, PD, Kind)) {
+         S = Err.isDependent() ? Dependent : DoneWithError;
+         continue;
+      }
+   }
+
+   return finish(S);
+}
+
+static StringRef conformanceKindToString(ConformanceKind K)
+{
+   switch (K) {
+   case ConformanceKind::None: return "non-existant";
+   case ConformanceKind::Implicit: return "implicit";
+   case ConformanceKind::Explicit: return "explicit";
+   case ConformanceKind::Inherited: return "inherited";
+   case ConformanceKind::Conditional: return "conditional";
+   }
+}
+
+QueryResult AddSingleConformanceQuery::run()
+{
+   if (Proto->isTemplate()) {
+      return finish(Dependent);
+   }
+
+   // Prepare the protocol for lookup.
+   if (QC.ResolveExplicitConformances(QC.Context.getRecordType(Proto))) {
+      return fail();
+   }
+
+   auto &Context = QC.CI.getContext();
+   auto &ConfTable = Context.getConformanceTable();
+
+   bool IsNew = ConfTable.addConformance(Context, Kind, T->getRecord(), Proto);
+   if (!IsNew) {
+      return finish();
+   }
+
+   // Make sure to invalidate queries that depend on the number of conformances.
+   if (auto *Q = QC.getQuery<GetNeededAssociatedTypesQuery>(T->getRecord())) {
+      Q->invalidate();
+   }
+
+   if (Callback) {
+      Callback(Proto);
+   }
+
+   LOG(ProtocolConformances, "registered ", conformanceKindToString(Kind),
+       " conformance of ", T.toDiagString(), " to protocol ",
+       Proto->getFullName());
+
+   // If we are adding the conformance to a protocol, copy over the
+   // associated types.
+   if (T->isProtocol() && Kind != ConformanceKind::Conditional) {
+      auto *P = cast<ProtocolDecl>(T->getRecord());
+      SmallVector<DeclConstraint*, 4> Constraints;
+
+      for (auto *AT : Proto->getDecls<AssociatedTypeDecl>()) {
+         if (AT->isSelf()) {
+            continue;
+         }
+
+         auto *FoundAT = P->lookupSingle<AssociatedTypeDecl>(AT->getDeclName());
+         if (!FoundAT) {
+            FoundAT =  AssociatedTypeDecl::Create(Context,
+                                                  AT->getSourceLoc(), nullptr,
+                                                  AT->getDeclName(),
+                                                  SourceType(),
+                                                  AT->getCovariance(), false);
+
+            QC.Sema->addDeclToContext(*P, FoundAT);
+         }
+         else {
+            if (auto Cov = AT->getCovariance()) {
+               DeclConstraint *CovConstraint =
+                  DeclConstraint::Create(Context,
+                     DeclConstraint::TypePredicate,
+                     AT->getSourceLoc(),
+                     AT->getDeclName().getIdentifierInfo(), Cov);
+
+               Constraints.push_back(CovConstraint);
+            }
+
+            auto ExistingConstraints = Context.getExtConstraints(FoundAT);
+            Constraints.append(ExistingConstraints.begin(),
+                               ExistingConstraints.end());
+         }
+
+         // Add the constraints.
+         auto NewConstraints = Context.getExtConstraints(AT);
+         Constraints.append(NewConstraints.begin(), NewConstraints.end());
+
+         Context.setConstraints(FoundAT, Constraints);
+         Constraints.clear();
+      }
+   }
+
+   Status S = Done;
+   if (AddRecursiveConformances) {
+      ConformanceKind K = Kind;
+      if (K != ConformanceKind::Conditional) {
+         K = ConformanceKind::Implicit;
+      }
+
+      // Add inherited conformances.
+      for (auto *Conf : ConfTable.getExplicitConformances(Proto)) {
+         if (auto Err = QC.AddSingleConformance(T, Conf, K, true, Callback)) {
+            S = Err.isDependent() ? Dependent : DoneWithError;
+         }
+      }
+   }
+
+   return finish(S);
+}
+
 QueryResult ConformsToQuery::run()
 {
+   if (P->isAny()) {
+      return finish(true);
+   }
+
    auto &ConfTable = QC.CI.getContext().getConformanceTable();
    if (auto *R = T->asRecordType()) {
+      if (R->getRecord() == P) {
+         return finish(true);
+      }
+
       // Make sure all conformances are registered.
-      if (QC.ResolveAssociatedTypes(T)) {
-         // Assume that the conformance exists to avoid more useless
-         // diagnostics.
+      if (QC.ResolveExplicitConformances(T)) {
          return finish(true, DoneWithError);
+      }
+
+      // If the conformance is already known, we can return here.
+      if (ConfTable.conformsTo(R->getRecord(), P)) {
+         return finish(true);
       }
 
       if (R->getRecord()->isTemplate()) {
          return finish(true, Dependent);
       }
 
+      // Otherwise we need to resolve all conformances.
+      if (QC.ResolveAssociatedTypes(T)) {
+         // Assume that the conformance exists to avoid more useless
+         // diagnostics.
+         return finish(true, DoneWithError);
+      }
+
       return finish(ConfTable.conformsTo(R->getRecord(), P));
    }
+   else if (auto *Ext = T->asExistentialType()) {
+      for (QualType EQ : Ext->getExistentials()) {
+         bool Conforms;
+         if (auto Err = QC.ConformsTo(Conforms, EQ, P)) {
+            return Query::finish(Err);
+         }
+
+         if (!Conforms) {
+            return finish(true);
+         }
+      }
+
+      return finish(true);
+   }
    else {
-      llvm_unreachable("FIXME generalized extensions");
+      // FIXME generalized extensions
+      return finish(false);
    }
 }

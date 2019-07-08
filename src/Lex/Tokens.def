@@ -106,7 +106,6 @@
 
    CDOT_KEYWORD(module)
    CDOT_KEYWORD(import)
-   CDOT_KEYWORD(using)
 
    CDOT_KEYWORD(static_if)
    CDOT_KEYWORD(static_for)
@@ -115,6 +114,13 @@
 
    CDOT_KEYWORD(__debug)
    CDOT_KEYWORD(__unreachable)
+#endif
+
+#ifdef CDOT_SOFT_KEYWORD
+   CDOT_SOFT_KEYWORD(using)
+   CDOT_SOFT_KEYWORD(read)
+   CDOT_SOFT_KEYWORD(write)
+   CDOT_SOFT_KEYWORD(nonmutating)
 #endif
 
 #ifdef CDOT_MODULE_KW_TOKEN
@@ -240,6 +246,7 @@
 #undef CDOT_OPERATOR_TOKEN
 #undef CDOT_PUNCTUATOR_TOKEN
 #undef CDOT_KEYWORD_TOKEN
+#undef CDOT_SOFT_KEYWORD
 #undef CDOT_POUND_KEYWORD_TOKEN
 #undef CDOT_LITERAL_TOKEN
 #undef CDOT_CONTEXTUAL_KW_TOKEN

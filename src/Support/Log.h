@@ -34,6 +34,9 @@ enum LogKind : uint64_t {
    /// \brief Log resolved protocol conformances.
    ProtocolConformances = 0x10,
 
+   /// \brief Log template instantiations.
+   Instantiations = 0x20,
+
    /// \brief Log everything.
    All = uint64_t(-1),
 };

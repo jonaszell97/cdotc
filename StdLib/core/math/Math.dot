@@ -1,0 +1,68 @@
+
+public alias π  = 3.141592653589793238463
+public alias pi = π
+public alias e  = 2.71828182845904
+
+/// \return the maximum of all passed values.
+def max<T: Comparable>(currentMax: T) -> T {
+    return currentMax
+}
+
+/// \return the maximum of all passed values.
+def max<T: Comparable, ...Rest: Comparable>(_ value: T, _ rest: Rest..., currentMax: T) -> T {
+    return if value > currentMax then max(rest..., currentMax: value)
+                                 else max(rest..., currentMax: currentMax)
+}
+
+/// \return the maximum of all passed values.
+public def max<T: Comparable, ...Rest: Comparable>(_ lhs: T, _ rest: Rest...) -> T {
+    return max(rest..., currentMax: lhs)
+}
+
+/// \return the minimum of all passed values.
+def min<T: Comparable>(currentMin: T) -> T {
+    return currentMin
+}
+
+/// \return the minimum of all passed values.
+def min<T: Comparable, ...Rest: Comparable>(_ value: T, _ rest: Rest..., currentMin: T) -> T {
+    return if value < currentMin then min(rest..., currentMin: value)
+                                 else min(rest..., currentMin: currentMin)
+}
+
+/// \return the minimum of all passed values.
+public def min<T: Comparable, ...Rest: Comparable>(_ lhs: T, _ rest: Rest...) -> T {
+    return min(rest..., currentMin: lhs)
+}
+
+/// \return the absolute of the given value.
+public def abs<T: BinaryInteger>(_ i: T) -> T {
+    return i.magnitude
+}
+
+fileprivate macro floating_point_op {
+    (def ($name:tok -> $ret:tok) for $(($type:tok, $builtinType:tok)),*) => { $(
+        public def $name(_ val: $type) -> $ret {
+            return $ret($type(builtin.${$name _ $builtinType}(val.value)))
+        }
+    )... }
+}
+
+floating_point_op!{ def (round -> Int) for (Float, f32), (Double, f64) }
+floating_point_op!{ def (ceil -> Int) for (Float, f32), (Double, f64) }
+floating_point_op!{ def (floor -> Int) for (Float, f32), (Double, f64) }
+
+floating_point_op!{ def (log10 -> Float) for (Float, f32) }
+floating_point_op!{ def (log2 -> Float) for (Float, f32) }
+floating_point_op!{ def (log -> Float) for (Float, f32) }
+floating_point_op!{ def (log10 -> Double) for (Double, f64) }
+floating_point_op!{ def (log2 -> Double) for (Double, f64) }
+floating_point_op!{ def (log -> Double) for (Double, f64) }
+
+public def closestPowerOfTwo<T: BinaryInteger>(_ num: T) -> T {
+    if num < 2 {
+        return num
+    }
+
+    return T(T(1) << (num.bitWidth - num.trailingZeroBitCount - 1))
+}

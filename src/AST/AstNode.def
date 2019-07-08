@@ -68,6 +68,10 @@
          CDOT_EXPR(EnumCaseExpr)
       CDOT_ABSTRACT(_lastIdentifiedExpr)
 
+      CDOT_EXPR(DeclRefExpr)
+      CDOT_EXPR(MemberRefExpr)
+      CDOT_EXPR(OverloadedDeclRefExpr)
+
       CDOT_EXPR(CallExpr)
       CDOT_EXPR(AnonymousCallExpr)
       CDOT_EXPR(SubscriptExpr)
@@ -89,6 +93,7 @@
       CDOT_EXPR(AssignExpr)
       CDOT_EXPR(CastExpr)
       CDOT_EXPR(TypePredicateExpr)
+      CDOT_EXPR(AddrOfExpr)
 
       CDOT_EXPR(IfExpr)
       CDOT_EXPR(TryExpr)

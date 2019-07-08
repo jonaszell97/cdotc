@@ -1,4 +1,0 @@
-
-module libc.signal
-
-include_system_header!("signal.h")

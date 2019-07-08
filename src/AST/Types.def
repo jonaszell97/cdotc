@@ -21,6 +21,8 @@
 
 CDOT_CAN_TYPE(RecordType, Type)
 CDOT_CAN_TYPE(BuiltinType, Type)
+CDOT_CAN_TYPE(TypeVariableType, Type)
+
 CDOT_TYPE(FunctionType, Type)
 CDOT_TYPE(LambdaType, FunctionType)
 CDOT_TYPE(AssociatedType, Type)

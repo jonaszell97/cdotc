@@ -206,6 +206,18 @@ IdentifierInfo* DeclarationName::getIdentifierInfo() const
    }
 }
 
+bool DeclarationName::isAnyOperatorName() const
+{
+   switch (getKind()) {
+   case DeclarationName::InfixOperatorName:
+   case DeclarationName::PrefixOperatorName:
+   case DeclarationName::PostfixOperatorName:
+      return true;
+   default:
+      return false;
+   }
+}
+
 QualType DeclarationName::getConstructorType() const
 {
    if (getStoredKind() == StoredInitializerName)
@@ -568,8 +580,10 @@ DeclarationNameTable::getNormalIdentifier(const IdentifierInfo &II)
 }
 
 DeclarationName
-DeclarationNameTable::getConstructorName(QualType ConstructedType,
+DeclarationNameTable::getConstructorName(CanType ConstructedType,
                                          bool IsCompleteCtor) {
+   assert(!ConstructedType || ConstructedType->isRecordType());
+
    if (IsCompleteCtor)
       return DeclarationName(ConstructedType,
                              DeclarationName::ConstructorName);
@@ -579,8 +593,9 @@ DeclarationNameTable::getConstructorName(QualType ConstructedType,
 }
 
 DeclarationName
-DeclarationNameTable::getDestructorName(QualType DestructedType)
+DeclarationNameTable::getDestructorName(CanType DestructedType)
 {
+   assert(!DestructedType || DestructedType->isRecordType());
    return DeclarationName(DestructedType, DeclarationName::DestructorName);
 }
 

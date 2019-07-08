@@ -16,34 +16,39 @@ using namespace cdot::support;
 
 QueryResult GetBuiltinModuleQuery::run()
 {
-   auto It = Cache.find(Mod);
-   if (It != Cache.end())
-      return finish(It->getSecond());
-
-   auto *StdII = sema().getIdentifier("std");
    auto &ModuleMgr = QC.CI.getModuleMgr();
+   auto Loc = QC.CI.getMainFileLoc();
+
+   if (Mod == Builtin) {
+      auto *II = QC.Sema->getIdentifier("builtin");
+      auto *M = ModuleMgr.LookupModule(Loc, Loc, II);
+
+      return finish(M);
+   }
+
+   if (Mod == Prelude) {
+      auto *II = QC.Sema->getIdentifier("core");
+      auto *M = ModuleMgr.LookupModule(Loc, Loc, II);
+
+      return finish(M);
+   }
+
+   auto *StdII = sema().getIdentifier("core");
    if (QC.CI.getOptions().noPrelude() && !ModuleMgr.IsModuleLoaded(StdII)) {
       return finish(nullptr);
    }
 
    if (Mod == Std) {
-      auto Loc = QC.CI.getMainFileLoc();
-
       auto *M = ModuleMgr.LookupModule(Loc, Loc, StdII);
-      Cache[Mod] = M;
-
       return finish(M);
    }
 
    IdentifierInfo *Idents[] { StdII, nullptr };
    switch (Mod) {
-   case Std: llvm_unreachable("already handled!");
+   case Std:
    case Prelude:
-      Idents[1] = sema().getIdentifier("prelude");
-      break;
    case Builtin:
-      Idents[1] = sema().getIdentifier("builtin");
-      break;
+      llvm_unreachable("already handled!");
    case Reflect:
       Idents[1] = sema().getIdentifier("reflect");
       break;
@@ -62,17 +67,11 @@ QueryResult GetBuiltinModuleQuery::run()
    }
 
    auto *M = QC.CI.getModuleMgr().GetModule(Idents);
-   Cache[Mod] = M;
-
    return finish(M);
 }
 
 QueryResult GetBuiltinFuncQuery::run()
 {
-   auto It = Cache.find(Fn);
-   if (It != Cache.end())
-      return finish(It->getSecond());
-
    Module *Mod;
    IdentifierInfo *II;
 
@@ -106,17 +105,65 @@ QueryResult GetBuiltinFuncQuery::run()
    }
 
    auto *Res = dyn_cast<CallableDecl>(LookupRes);
-   Cache[Fn] = Res;
-
    return finish(Res);
+}
+
+QueryResult GetBuiltinAliasQuery::run()
+{
+   DeclContext *DC;
+   if (this->DC) {
+      DC = this->DC;
+   }
+   else {
+      Module *Mod;
+      if (auto Err = QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
+         return Query::finish(Err);
+      }
+      if (!Mod) {
+         return finish(nullptr);
+      }
+
+      DC = Mod->getDecl();
+   }
+
+   IdentifierInfo *II;
+   switch (K) {
+   case DefaultSignedIntegerLiteralType:
+      II = QC.Sema->getIdentifier("DefaultSignedIntegerLiteralType");
+      break;
+   case DefaultUnsignedIntegerLiteralType:
+      II = QC.Sema->getIdentifier("DefaultUnsignedIntegerLiteralType");
+      break;
+   case DefaultFloatingPointLiteralType:
+      II = QC.Sema->getIdentifier("DefaultFloatingPointLiteralType");
+      break;
+   case DefaultBooleanLiteralType:
+      II = QC.Sema->getIdentifier("DefaultBooleanLiteralType");
+      break;
+   case DefaultCharacterLiteralType:
+      II = QC.Sema->getIdentifier("DefaultCharacterLiteralType");
+      break;
+   case DefaultStringLiteralType:
+      II = QC.Sema->getIdentifier("DefaultStringLiteralType");
+      break;
+   case DefaultArrayLiteralType:
+      II = QC.Sema->getIdentifier("DefaultArrayLiteralType");
+      break;
+   case DefaultDictionaryLiteralType:
+      II = QC.Sema->getIdentifier("DefaultDictionaryLiteralType");
+      break;
+   }
+
+   NamedDecl *LookupRes;
+   if (QC.LookupSingle(LookupRes, DC, II)) {
+      return fail();
+   }
+
+   return finish(dyn_cast_or_null<AliasDecl>(LookupRes));
 }
 
 QueryResult GetBuiltinRecordQuery::run()
 {
-   auto It = Cache.find(R);
-   if (It != Cache.end())
-      return finish(It->getSecond());
-
    // Synthesize some types that the runtime needs even if there's no std
    // module.
    if (QC.CI.getOptions().noPrelude()) {
@@ -130,7 +177,6 @@ QueryResult GetBuiltinRecordQuery::run()
                                       Loc, Idents.get("TypeInfo"), {}, {});
 
          S->setSynthesized(true);
-         Cache[R] = S;
          finish(S);
 
          QualType T = QC.Context.getRecordType(S);
@@ -227,6 +273,8 @@ QueryResult GetBuiltinRecordQuery::run()
          QC.Sema->ActOnDecl(S, stride);
 
          QC.Sema->ActOnDecl(NS, S);
+         S->addAttribute(new(QC.Context) NoDeriveAttr());
+
          return finish(S);
       }
       case ValueWitnessTable: {
@@ -236,7 +284,6 @@ QueryResult GetBuiltinRecordQuery::run()
                                       {}, {});
 
          S->setSynthesized(true);
-         Cache[R] = S;
          finish(S);
 
          // let copyFn: @thin (UnsafeMutableRawPtr, UnsafeRawPtr) -> Void
@@ -266,6 +313,8 @@ QueryResult GetBuiltinRecordQuery::run()
          QC.Sema->ActOnDecl(S, deinit);
 
          QC.Sema->ActOnDecl(NS, S);
+         S->addAttribute(new(QC.Context) NoDeriveAttr());
+
          return finish(S);
       }
       case ProtocolConformance: {
@@ -275,7 +324,6 @@ QueryResult GetBuiltinRecordQuery::run()
                                       {}, {});
 
          S->setSynthesized(true);
-         Cache[R] = S;
          finish(S);
 
          // var typeInfo: UnsafePtr<TypeInfo>
@@ -303,6 +351,8 @@ QueryResult GetBuiltinRecordQuery::run()
          QC.Sema->ActOnDecl(S, vtable);
 
          QC.Sema->ActOnDecl(NS, S);
+         S->addAttribute(new(QC.Context) NoDeriveAttr());
+
          return finish(S);
       }
       case ExistentialContainer: {
@@ -312,7 +362,6 @@ QueryResult GetBuiltinRecordQuery::run()
                                       {}, {});
 
          S->setSynthesized(true);
-         Cache[R] = S;
          finish(S);
 
          // var value: UnsafeMutableRawPtr
@@ -353,8 +402,95 @@ QueryResult GetBuiltinRecordQuery::run()
          QC.Sema->ActOnDecl(S, conformance);
 
          QC.Sema->ActOnDecl(NS, S);
+         S->addAttribute(new(QC.Context) NoDeriveAttr());
+
          return finish(S);
       }
+      case Bool: {
+         SourceLocation Loc = QC.CI.getMainFileLoc();
+         auto *Name = QC.Sema->getIdentifier("Bool");
+         auto *S = StructDecl::Create(QC.Context, AccessSpecifier::Public, Loc,
+                                      Name, {}, {});
+
+         QualType BoolTy = QC.Context.getBoolTy();
+
+         S->setSynthesized(true);
+         auto *ValName = QC.Sema->getIdentifier("value");
+         auto *F = FieldDecl::Create(QC.Context, AccessSpecifier::Private, Loc,
+                                     Loc, ValName, SourceType(BoolTy),
+                                     false, false, nullptr);
+
+         QC.Sema->ActOnDecl(S, F);
+         QC.Sema->ActOnDecl(NS, S);
+         QC.DeclareImplicitInitializers(S);
+
+         // def prefix !() -> Bool
+         DeclarationName DN = QC.Context.getDeclNameTable()
+                                .getPrefixOperatorName(
+                                   *QC.Sema->getIdentifier("!"));
+
+         auto *negate = MethodDecl::CreateOperator(QC.Context,
+                                              AccessSpecifier::Public,
+                                              Loc, DN, SourceType(
+                                                 QC.Context.getRecordType(S)),
+                                              { QC.Sema->MakeSelfArg(Loc) },
+                                              {}, nullptr, false);
+
+         // return Self(not_i1(self.value))
+         auto *Self = SelfExpr::Create(QC.Context, Loc, false);
+         auto *ValueRef = MemberRefExpr::Create(QC.Context, Self, F, Loc);
+
+         auto *FnTy = QC.Context.getFunctionType(BoolTy, BoolTy);
+         auto *Not = UnaryOperator::Create(QC.Context, Loc, op::UnaryLNot,
+                                           FnTy, ValueRef, true);
+
+         auto *Ref = DeclRefExpr::Create(QC.Context,
+                                         S->getMemberwiseInitializer(), Loc);
+
+         auto *Call = AnonymousCallExpr::Create(QC.Context, Loc, Ref, Not,
+                                                ValName);
+
+         auto *Ret = ReturnStmt::Create(QC.Context, Loc, Call);
+         auto *CS = CompoundStmt::Create(QC.Context, Ret, false, Loc, Loc);
+
+         negate->setBody(CS);
+         QC.Sema->ActOnDecl(S, negate);
+
+         return finish(S);
+      }
+
+#  define SYNTHESIZE(NAME)                                                     \
+      case NAME: {                                                             \
+         SourceLocation Loc = QC.CI.getMainFileLoc();                          \
+         auto *Name = QC.Sema->getIdentifier(#NAME);                           \
+         auto *S = StructDecl::Create(QC.Context, AccessSpecifier::Public, Loc,\
+                                      Name, {}, {});                           \
+         S->setSynthesized(true);                                              \
+         auto *ValName = QC.Sema->getIdentifier("value");                      \
+         auto *F = FieldDecl::Create(QC.Context, AccessSpecifier::Private, Loc,\
+                                     Loc, ValName,                             \
+                                     SourceType(QC.Context.get##NAME##Ty()),   \
+                                     false, false, nullptr);                   \
+         QC.Sema->ActOnDecl(S, F);                                             \
+         QC.Sema->ActOnDecl(NS, S);                                            \
+         return finish(S);                                                     \
+      }
+
+      SYNTHESIZE(Int8)
+      SYNTHESIZE(UInt8)
+      SYNTHESIZE(Int16)
+      SYNTHESIZE(UInt16)
+      SYNTHESIZE(Int32)
+      SYNTHESIZE(UInt32)
+      SYNTHESIZE(Int64)
+      SYNTHESIZE(UInt64)
+      SYNTHESIZE(Int128)
+      SYNTHESIZE(UInt128)
+      SYNTHESIZE(Float)
+      SYNTHESIZE(Double)
+
+#  undef SYNTHESIZE
+      
       default:
          return finish(nullptr);
       }
@@ -364,34 +500,46 @@ QueryResult GetBuiltinRecordQuery::run()
    IdentifierInfo *II;
 
    switch (R) {
-   case Array:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("Array");
+#  define PRELUDE_RECORD(NAME)                                          \
+   case NAME:                                                           \
+      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {   \
+         return fail();                                                 \
+      }                                                                 \
+                                                                        \
+      II = sema().getIdentifier(#NAME);                                 \
       break;
-   case Dictionary:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
 
-      II = sema().getIdentifier("Dictionary");
-      break;
-   case String:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
+   PRELUDE_RECORD(Bool)
+   PRELUDE_RECORD(Character)
 
-      II = sema().getIdentifier("String");
-      break;
-   case Option:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
+   PRELUDE_RECORD(Int8)
+   PRELUDE_RECORD(UInt8)
+   PRELUDE_RECORD(Int16)
+   PRELUDE_RECORD(UInt16)
+   PRELUDE_RECORD(Int32)
+   PRELUDE_RECORD(UInt32)
+   PRELUDE_RECORD(Int64)
+   PRELUDE_RECORD(UInt64)
+   PRELUDE_RECORD(Int128)
+   PRELUDE_RECORD(UInt128)
 
-      II = sema().getIdentifier("Option");
-      break;
+   PRELUDE_RECORD(Float)
+   PRELUDE_RECORD(Double)
+
+   PRELUDE_RECORD(UnsafePtr)
+   PRELUDE_RECORD(UnsafeMutablePtr)
+   PRELUDE_RECORD(UnsafeRawPtr)
+   PRELUDE_RECORD(UnsafeMutableRawPtr)
+   PRELUDE_RECORD(UnsafeBufferPtr)
+   PRELUDE_RECORD(UnsafeMutableBufferPtr)
+
+   PRELUDE_RECORD(Array)
+   PRELUDE_RECORD(Dictionary)
+   PRELUDE_RECORD(String)
+   PRELUDE_RECORD(Option)
+
+#  undef PRELUDE_RECORD
+
    case Box:
       if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Runtime)) {
          return fail();
@@ -455,18 +603,11 @@ QueryResult GetBuiltinRecordQuery::run()
       return fail();
    }
 
-   auto *Res = dyn_cast<RecordDecl>(LookupRes);
-   Cache[R] = Res;
-
-   return finish(Res);
+   return finish(dyn_cast_or_null<RecordDecl>(LookupRes));
 }
 
 QueryResult GetBuiltinProtocolQuery::run()
 {
-   auto It = Cache.find(P);
-   if (It != Cache.end())
-      return finish(It->getSecond());
-
    // Synthesize some types that the runtime needs even if there's no std
    // module.
    if (QC.CI.getOptions().noPrelude()) {
@@ -481,7 +622,6 @@ QueryResult GetBuiltinProtocolQuery::run()
 
          P->setIsAny(true);
          QC.Sema->ActOnDecl(NS, P);
-         Cache[this->P] = P;
 
          return finish(P);
       }
@@ -506,8 +646,6 @@ QueryResult GetBuiltinProtocolQuery::run()
                                          {}, nullptr, false);
 
          QC.Sema->ActOnDecl(P, copy);
-
-         Cache[this->P] = P;
          return finish(P);
       }
       case ImplicitlyCopyable: {
@@ -517,8 +655,6 @@ QueryResult GetBuiltinProtocolQuery::run()
                                         {}, {});
 
          QC.Sema->ActOnDecl(NS, P);
-         Cache[this->P] = P;
-
          return finish(P);
       }
       case MoveOnly: {
@@ -528,7 +664,36 @@ QueryResult GetBuiltinProtocolQuery::run()
                                         {}, {});
 
          QC.Sema->ActOnDecl(NS, P);
-         Cache[this->P] = P;
+         return finish(P);
+      }
+      case TruthValue: {
+         SourceLocation Loc = QC.CI.getMainFileLoc();
+         auto *P = ProtocolDecl::Create(QC.Context, AccessSpecifier::Private,
+                                        Loc, Idents.get("TruthValue"),
+                                        {}, {});
+
+         RecordDecl *BoolDecl;
+         if (auto Err = QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool)) {
+            return Query::finish(Err);
+         }
+
+         DeclarationName Name = Idents.get("truthValue");
+         DeclarationName PropName =
+            QC.Context.getDeclNameTable()
+              .getAccessorName(*Name.getIdentifierInfo(),
+                               DeclarationName::Getter);
+
+         auto *Getter = MethodDecl::Create(QC.Context,
+                                 AccessSpecifier::Public, Loc, PropName,
+                                 SourceType(QC.Context.getRecordType(BoolDecl)),
+                                 {}, {}, nullptr, false);
+
+         auto *Prop = PropDecl::Create(QC.Context, AccessSpecifier::Public,
+                                       Loc, Name, Getter->getReturnType(),
+                                       false, false, Getter, nullptr);
+
+         QC.Sema->ActOnDecl(P, Prop);
+         QC.Sema->ActOnDecl(NS, P);
 
          return finish(P);
       }
@@ -547,6 +712,13 @@ QueryResult GetBuiltinProtocolQuery::run()
          auto *SelfTy = QC.Context.getAssociatedType(
             P->getAssociatedType(Idents.get("Self")));
 
+         RecordDecl *BoolDecl;
+         if (auto Err = QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool)) {
+            llvm_unreachable("no Bool declaration!");
+         }
+
+         QualType BoolTy = QC.Context.getRecordType(BoolDecl);
+
          // def infix == (Self) -> Bool
          auto equalsName = Tbl.getInfixOperatorName(Idents.get("=="));
          auto *RHSArg = FuncArgDecl::Create(QC.Context, Loc, Loc,
@@ -555,8 +727,7 @@ QueryResult GetBuiltinProtocolQuery::run()
                                             SourceType(SelfTy), nullptr, false);
 
          auto *equals = MethodDecl::Create(QC.Context, AccessSpecifier::Public,
-                                           Loc, equalsName,
-                                           SourceType(QC.Context.getBoolTy()),
+                                           Loc, equalsName, SourceType(BoolTy),
                                            {QC.Sema->MakeSelfArg(Loc), RHSArg},
                                            {}, nullptr, false);
 
@@ -568,14 +739,12 @@ QueryResult GetBuiltinProtocolQuery::run()
                                       SourceType(SelfTy), nullptr, false);
 
          auto *nequals = MethodDecl::Create(QC.Context, AccessSpecifier::Public,
-                                            Loc, nequalsName,
-                                            SourceType(QC.Context.getBoolTy()),
+                                            Loc, nequalsName,SourceType(BoolTy),
                                             {QC.Sema->MakeSelfArg(Loc), RHSArg},
                                             {}, nullptr, false);
 
          QC.Sema->ActOnDecl(P, equals);
          QC.Sema->ActOnDecl(P, nequals);
-         Cache[this->P] = P;
 
          // Create the extension that provides a default implementation for !=.
          auto *Ext = ExtensionDecl::Create(QC.Context, AccessSpecifier::Public,
@@ -588,21 +757,22 @@ QueryResult GetBuiltinProtocolQuery::run()
                                       SourceType(SelfTy), nullptr, false);
 
          auto *defImpl = MethodDecl::Create(QC.Context, AccessSpecifier::Public,
-                                            Loc, nequalsName,
-                                            SourceType(QC.Context.getBoolTy()),
+                                            Loc, nequalsName,SourceType(BoolTy),
                                             {QC.Sema->MakeSelfArg(Loc), RHSArg},
                                             {}, nullptr, false);
 
          // Syntesize `return !(self == rhs)`
          SequenceElement CmpElements[] = {
             SequenceElement(SelfExpr::Create(QC.Context, Loc, false)),
-            SequenceElement(op::CompEQ, Loc),
+            SequenceElement(op::CompEQ,
+                            SequenceElement::Left | SequenceElement::Right,
+                            Loc),
             SequenceElement(new(QC.Context)IdentifierRefExpr(SourceRange(Loc),
                                                              Idents.get("rhs")))
          };
 
          SequenceElement NotElements[] = {
-            SequenceElement(op::UnaryNot, Loc),
+            SequenceElement(op::UnaryLNot, SequenceElement::None, Loc),
             SequenceElement(ExprSequence::Create(QC.Context, CmpElements))
          };
 
@@ -635,7 +805,56 @@ QueryResult GetBuiltinProtocolQuery::run()
          QC.Sema->ActOnDecl(P, func);
          QC.Sema->ActOnDecl(NS, P);
 
-         Cache[this->P] = P;
+         return finish(P);
+      }
+      case RawRepresentable: {
+         SourceLocation Loc = QC.CI.getMainFileLoc();
+         auto &Sema = *QC.Sema;
+
+         auto *P = ProtocolDecl::Create(QC.Context, AccessSpecifier::Private,
+                                        Loc, Idents.get("RawRepresentable"),
+                                        {}, {});
+
+         // associatedType RawType
+         auto *RawType = AssociatedTypeDecl::Create(QC.Context, Loc, nullptr,
+                                                    Sema.getIdentifier("RawType"),
+                                                    SourceType(), SourceType(),
+                                                    false);
+
+         Sema.ActOnDecl(P, RawType);
+         Sema.ActOnDecl(NS, P);
+
+         QC.PrepareDeclInterface(RawType);
+
+         SourceType T(QC.Context.getAssociatedType(RawType));
+
+         // init? (rawValue: RawType) (can't use a fallible init)
+         auto *ArgName = Sema.getIdentifier("rawValue");
+         auto *Arg = FuncArgDecl::Create(Sema.Context, Loc, Loc,
+                                         ArgName, ArgName,
+                                         ArgumentConvention::Owned,
+                                         T, nullptr, false);
+
+         auto *Init = InitDecl::Create(Sema.Context, AccessSpecifier::Public,
+                                       Loc, Arg, {}, nullptr, {}, false);
+
+         // prop rawValue: RawType { get }
+         DeclarationName PropName = Sema.Context.getDeclNameTable()
+                                        .getAccessorName(*ArgName,
+                                                         DeclarationName::Getter);
+
+         auto *Self = Sema.MakeSelfArg(Loc);
+         auto *Getter = MethodDecl::Create(Sema.Context, AccessSpecifier::Public,
+                                           Loc, PropName, T,
+                                           Self, {}, nullptr, false);
+
+         auto *Prop = PropDecl::Create(Sema.Context, AccessSpecifier::Public, Loc,
+                                       ArgName, T, false, false, Getter,
+                                       nullptr);
+
+         Sema.ActOnDecl(P, Init);
+         Sema.ActOnDecl(P, Prop);
+
          return finish(P);
       }
       default:
@@ -647,62 +866,29 @@ QueryResult GetBuiltinProtocolQuery::run()
    IdentifierInfo *II;
 
    switch (P) {
-   case Any:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("Any");
+#  define PRELUDE_RECORD(NAME)                                          \
+   case NAME:                                                           \
+      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {   \
+         return fail();                                                 \
+      }                                                                 \
+                                                                        \
+      II = sema().getIdentifier(#NAME);                                 \
       break;
-   case Equatable:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
 
-      II = sema().getIdentifier("Equatable");
-      break;
-   case Hashable:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
+   PRELUDE_RECORD(Any)
+   PRELUDE_RECORD(Hashable)
+   PRELUDE_RECORD(Equatable)
+   PRELUDE_RECORD(Copyable)
+   PRELUDE_RECORD(MoveOnly)
+   PRELUDE_RECORD(ImplicitlyCopyable)
+   PRELUDE_RECORD(StringRepresentable)
+   PRELUDE_RECORD(TruthValue)
+   PRELUDE_RECORD(RawRepresentable)
+   PRELUDE_RECORD(Persistable)
+   PRELUDE_RECORD(Dereferenceable)
+   PRELUDE_RECORD(Unwrappable)
 
-      II = sema().getIdentifier("Hashable");
-      break;
-   case Copyable:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("Copyable");
-      break;
-   case MoveOnly:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("MoveOnly");
-      break;
-   case ImplicitlyCopyable:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("ImplicitlyCopyable");
-      break;
-   case StringRepresentable:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("StringRepresentable");
-      break;
-   case Persistable:
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {
-         return fail();
-      }
-
-      II = sema().getIdentifier("Persistable");
-      break;
+#  undef PRELUDE_RECORD
    case Awaiter:
       if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Async)) {
          return fail();
@@ -724,8 +910,5 @@ QueryResult GetBuiltinProtocolQuery::run()
       return fail();
    }
 
-   auto *Res = dyn_cast<ProtocolDecl>(LookupRes);
-   Cache[P] = Res;
-
-   return finish(Res);
+   return finish(dyn_cast_or_null<ProtocolDecl>(LookupRes));
 }

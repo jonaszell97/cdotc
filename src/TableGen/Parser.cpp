@@ -1097,6 +1097,7 @@ Value* Parser::parseExpr(Type *contextualTy)
    if (currentTok().is(tok::ident)) {
       auto ident =  currentTok().getIdentifierInfo()->getIdentifier();
 
+      Value *Val;
       if (auto R = RK->lookupRecord(ident)) {
          if (peek().is(tok::period)) {
             advance();
@@ -1117,11 +1118,10 @@ Value* Parser::parseExpr(Type *contextualTy)
             return F;
          }
 
-         return new(TG) RecordVal(TG.getRecordType(R), R);
+         Val = new(TG) RecordVal(TG.getRecordType(R), R);
       }
-
       // anonymous record
-      if (auto Base = RK->lookupClass(ident)) {
+      else if (auto Base = RK->lookupClass(ident)) {
          auto BeginLoc = currentTok().getSourceLoc();
 
          llvm::SmallVector<SourceLocation, 8> locs;
@@ -1138,40 +1138,64 @@ Value* Parser::parseExpr(Type *contextualTy)
 
          finalizeRecord(*R);
 
-         return new(TG) RecordVal(TG.getRecordType(R), R);
+         Val = new(TG) RecordVal(TG.getRecordType(R), R);
       }
-
-      if (auto V = RK->lookupValueDecl(ident))
-         return V->getVal();
-
-      Type *Ty = nullptr;
-      if (currentClass) {
-         auto F = currentClass->getTemplateParameter(ident);
-         if (F)
-            Ty = F->getType();
+      else if (auto V = RK->lookupValueDecl(ident)) {
+         Val = V->getVal();
       }
+      else {
 
-      if (!Ty) {
-         TG.Diags.Diag(err_generic_error)
-            << "reference to undeclared identifier " + ident
-            << currentTok().getSourceLoc();
+         Type *Ty = nullptr;
+         if (currentClass) {
+            auto F = currentClass->getTemplateParameter(ident);
+            if (F)
+               Ty = F->getType();
+         }
 
-         abortBP();
+         if (!Ty) {
+            TG.Diags.Diag(err_generic_error)
+               << "reference to undeclared identifier " + ident
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
+
+         Val = new(TG) IdentifierVal(Ty, ident);
       }
-
-      auto Id = new(TG) IdentifierVal(Ty, ident);
 
       if (peek().is(tok::open_square)) {
          advance();
-         expect(tok::stringliteral);
+         advance();
 
-         auto key = currentTok().getText();
+         auto *KeyVal = parseExpr(TG.getStringTy());
+         if (!isa<StringLiteral>(KeyVal)) {
+            TG.Diags.Diag(err_generic_error)
+               << "dictionary key must be a string"
+               << currentTok().getSourceLoc();
+
+            abortBP();
+         }
+
          expect(tok::close_square);
 
-         return new(TG) DictAccessExpr(Id, key);
+         llvm::StringRef Key = cast<StringLiteral>(KeyVal)->getVal();
+         if (auto *DL = dyn_cast<DictLiteral>(Val)) {
+            auto *AccessedVal = DL->getValue(Key);
+            if (!AccessedVal) {
+               TG.Diags.Diag(err_generic_error)
+                  << "key '" + Key + "' does not exist in dictionary"
+                  << currentTok().getSourceLoc();
+
+               abortBP();
+            }
+
+            return AccessedVal;
+         }
+
+         return new(TG) DictAccessExpr(Val, Key);
       }
 
-      return Id;
+      return Val;
    }
 
    if (currentTok().is(tok::open_square)) {

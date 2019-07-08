@@ -1,0 +1,24 @@
+
+/// Prints \param terminator to stdout. Used as a recursion breaker for `print` below.
+@compiletime
+public def print(separator: Character = ' ', terminator: Character = '\n') {
+    // FIXME
+    _ = libc.stdio.printf("%c", terminator.ascii)
+}
+
+/// Prints \param t, and recursively \param args to stdout.
+/// \param separator is printed after each item except the last.
+/// \param terminator is printed after the last item.
+@compiletime
+public def print<T, ...Args>(_ t: T, _ args: Args...,
+                             separator: Character = ' ',
+                             terminator: Character = '\n') {
+    var s = String(_: t)
+    s.withCString {
+        _ = libc.printf("%s", $0)
+    }
+
+    // FIXME
+    _ = libc.stdio.printf("%c", separator.ascii)
+    print(args..., separator: separator, terminator: terminator)
+}

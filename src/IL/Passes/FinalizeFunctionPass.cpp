@@ -34,7 +34,7 @@ void FinalizeFunctionPass::run()
       auto Ld = Builder.CreateLoad(Assign->getDst());
       Ld->setSynthesized(true);
 
-      DefaultCleanup(Ld).Emit(ILGen);
+      DefaultCleanup(Assign->getSrc()).Emit(ILGen);
 
       if (!Assign->getDst()->getType()->isMutableReferenceType()) {
          ILGen.getSema().diagnose(diag::err_reassign_constant,

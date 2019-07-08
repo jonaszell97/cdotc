@@ -1,0 +1,101 @@
+
+module core {
+    // Make declarations compiletime by default.
+    compiletime = true
+
+    sourceFiles = [
+        "ASCII.dot",
+        "Array.dot",
+        "BidirectionalCollection.dot",
+        "Bool.dot", 
+        "Character.dot",
+        "Collection.dot",
+        "CollectionExtras.dot",
+        "FlagEnum.dot",
+        "FloatingPoint.dot",
+        "Integers.dot",
+        "Iterable.dot",
+        "Macro.dot",
+        "MutableCollection.dot",
+        "Option.dot",
+        "Policy.dot",
+        "Print.dot",
+        "Protocols.dot",
+        "RandomAccessCollection.dot",
+        "Range.dot",
+        "RangeReplaceableCollection.dot",
+        "RawRepresentable.dot",
+        "Slice.dot",
+        "String.dot",
+        "UnsafePtr.dot"
+    ]
+
+    module atomic {
+        sourceFiles = [
+            "atomic/Atomic.dot"
+        ]
+    }
+
+    // module fs {
+    //     sourceFiles = ["fs/FileSystem.dot"]
+    // }
+
+    // module io {
+    //     sourceFiles = [
+    //         "io/Console.dot",
+    //         "io/FileInputStream.dot",
+    //         "io/FileOutputStream.dot",
+    //         "io/InputStream.dot",
+    //         "io/OutputStream.dot"
+    //     ]
+    // }
+
+    module math {
+        sourceFiles = [
+            "math/Math.dot"
+        ]
+    }
+
+    module mem {
+        sourceFiles = [
+            "mem/Memory.dot"
+        ]
+    }
+
+    module rand {
+        sourceFiles = [
+            "rand/Random.dot"
+        ]
+    }
+
+    module reflect {
+        sourceFiles = [
+            "reflect/Compiler.dot",
+            "reflect/TypeTraits.dot"
+        ]
+    }
+
+    module rt {
+        sourceFiles = [
+            "rt/Exceptions.dot", 
+            "rt/MemoryManagement.dot",
+            "rt/RC.dot",
+            "rt/Shims.dot",
+            "rt/TypeInfo.dot"
+        ]
+    }
+
+    module sys {
+        sourceFiles = [
+            // "sys/Program.dot",
+            "sys/System.dot"
+        ]
+    }
+
+    // Module containg operating system specific functionality.
+    // module _sys {
+    //     sourceFiles = [
+    //         "sys/Posix.dot"
+    //     ]
+    // }
+}

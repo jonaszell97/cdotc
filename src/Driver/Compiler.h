@@ -132,6 +132,7 @@ private:
 public:
    OptimizationLevel optimizationLevel = OptimizationLevel::O2;
    unsigned maxMacroRecursionDepth = 256;
+   unsigned MaxInstantiationDepth = 0;
 
    void addInput(std::string &&file);
    void setOutput(StringRef file);

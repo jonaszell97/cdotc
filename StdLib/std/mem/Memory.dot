@@ -1,0 +1,115 @@
+
+@compiletime
+module std.mem
+
+@inline(hint)
+public def allocate(_ size: UInt, alignTo alignment: UInt = 1) -> UnsafeMutableRawPtr {
+    return rt._cdot_Malloc(size)
+}
+
+@inline(hint)
+public def allocate<T>(_ amount: UInt = 1,
+                       alignTo alignment: UInt = reflect.alignOf<T>) -> UnsafeMutablePtr<T> {
+                        __debug
+    return rt._cdot_Malloc(reflect.sizeOf<T> * amount) as! UnsafeMutablePtr<T>
+}
+
+@inline(hint)
+public def reallocate(pointer ptr: UnsafeMutableRawPtr, newAmount: UInt) -> UnsafeMutableRawPtr {
+    return rt._cdot_Realloc(ptr, newAmount)
+}
+
+@inline(hint)
+public def reallocate<T>(pointer ptr: UnsafeMutablePtr<T>, newAmount: UInt) -> UnsafeMutablePtr<T> {
+    return rt._cdot_Realloc(ptr as! UnsafeMutableRawPtr,
+                            reflect.sizeOf<T> * newAmount) as! UnsafeMutablePtr<T>
+}
+
+@inline(hint)
+public def deallocate(_ ptr: UnsafeMutableRawPtr) {
+    rt._cdot_Free(ptr)
+}
+
+@inline(hint)
+public def deallocate<T>(_ ptr: UnsafeMutablePtr<T>) {
+    rt._cdot_Free(ptr as! UnsafeMutableRawPtr)
+}
+
+@inline(hint)
+public def new<T, ...Args>(_ args: owned Args...) -> UnsafeMutablePtr<T> {
+    var mem = allocate<T>()
+    builtin.constructInPlace(to: mem, args...)
+
+    return mem
+}
+
+@inline(hint)
+public def delete<T>(_ ptr: UnsafeMutablePtr<T>) {
+    builtin.deinit(*ptr)
+    deallocate(ptr)
+}
+
+public def swap<T>(_ t: mut ref T, _ u: mut ref T) {
+    var tmp = t
+    t = u
+    u = tmp
+}
+
+public def replace<T>(_ mem: mut ref T, with: T) {
+    replace(builtin.addressOf(&mem), with)
+}
+
+public def replace<T>(_ mem: UnsafeMutablePtr<T>, with: T)
+    where reflect.IsTriviallyCopyable<T>
+{
+    builtin.storeToPointer(with, to: mem)
+}
+
+public def replace<T>(_ mem: UnsafeMutablePtr<T>, with: T) {
+    libc.memcpy(mem as! UnsafeMutableRawPtr,
+                builtin.addressOf(with) as! UnsafeRawPtr,
+                reflect.sizeOf<T>)
+}
+
+public def reverse<T>(memory ptr: UnsafeMutablePtr<T>, size: usize) {
+    for let i in 0u..(size / 2) {
+        var tmp = ptr[size - i - 1].copy()
+        ptr[size - i - 1] = ptr[i].copy()
+        ptr[i] = tmp
+    }
+}
+
+public def move(to dst: UnsafeMutableRawPtr, 
+                from src: UnsafeMutableRawPtr,
+                _ n: UInt) {
+    libc.memmove(dst, src, n)
+}
+
+public def move<T>(to dst: UnsafeMutablePtr<T>, from src: UnsafePtr<T>, _ n: UInt = 1) {
+    libc.memmove(dst as! UnsafeMutableRawPtr, src as! UnsafeRawPtr,
+                     n * reflect.sizeOf<T>)
+}
+
+public def copy(to dst: UnsafeMutableRawPtr, from src: UnsafeRawPtr, _ n: UInt) {
+    libc.memcpy(dst, src, n)
+}
+
+public def copy<T>(to dst: UnsafeMutablePtr<T>, from src: UnsafePtr<T>, _ n: UInt = 1) {
+    static if reflect.IsTriviallyCopyable<T> {
+        libc.memcpy(dst as! UnsafeMutableRawPtr, src as! UnsafeRawPtr,
+                    n * reflect.sizeOf<T>)
+    }
+    else {
+        for i in 0u..n {
+            builtin.uninitializedStore(src[i].copy(), to: dst + i)
+        }
+    }
+}
+
+public def cmp(_ lhs: UnsafeRawPtr, _ rhs: UnsafeRawPtr, _ n: UInt) -> Int {
+    return libc.memcmp(lhs, rhs, n) as Int
+}
+
+public def cmp<T>(_ lhs: UnsafePtr<T>, _ rhs: UnsafePtr<T>, _ n: UInt = 1) -> Int {
+    return libc.memcmp(lhs, rhs, n * reflect.sizeOf<T>) as Int
+}

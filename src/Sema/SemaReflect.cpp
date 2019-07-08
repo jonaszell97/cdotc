@@ -959,7 +959,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Alias->getType());
 
          return Expr;
       }
@@ -971,8 +971,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getUIntTy(),
-                                          llvm::APSInt(llvm::APInt(64, Size)));
+                                          Context.getIntTy(),
+                                          llvm::APSInt(llvm::APInt(64, Size),
+                                                       false));
    }
    else if (II == ReflectionIdents[strideOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -986,7 +987,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Alias->getType());
 
          return Expr;
       }
@@ -998,8 +999,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getUIntTy(),
-                                          llvm::APSInt(llvm::APInt(64, Stride)));
+                                          Context.getIntTy(),
+                                          llvm::APSInt(llvm::APInt(64,Stride),
+                                                       false));
    }
    else if (II == ReflectionIdents[alignOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -1013,7 +1015,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Alias->getType());
 
          return Expr;
       }
@@ -1025,8 +1027,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getUIntTy(),
-                                          llvm::APSInt(llvm::APInt(64, Align)));
+                                          Context.getIntTy(),
+                                          llvm::APSInt(llvm::APInt(64, Align),
+                                                       false));
    }
    else if (II == ReflectionIdents[line]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1035,9 +1038,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
 
       auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getUIntTy(),
+                                          Context.getIntTy(),
                                           llvm::APSInt(llvm::APInt(
-                                             64, LineAndCol.line)));
+                                             64, LineAndCol.line), false));
    }
    else if (II == ReflectionIdents[column]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1046,9 +1049,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
 
       auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
       ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getUIntTy(),
+                                          Context.getIntTy(),
                                           llvm::APSInt(llvm::APInt(
-                                             64, LineAndCol.col)));
+                                             64, LineAndCol.col), false));
    }
    else if (II == ReflectionIdents[fileName]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1086,12 +1089,15 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
+      StructDecl *Int = getIntDecl();
       auto &Builder = ILGen->Builder;
 
       il::Constant *ConstFileName = ILGen->MakeStdString(FileName);
       il::Constant *ConstLoc = Builder.GetConstantStruct(SLDecl, {
-         Builder.GetConstantInt(Context.getUIntTy(), LineAndCol.line),
-         Builder.GetConstantInt(Context.getUIntTy(), LineAndCol.col),
+         Builder.GetConstantStruct(
+            Int, Builder.GetConstantInt(Context.getIntTy(), LineAndCol.line)),
+         Builder.GetConstantStruct(
+            Int, Builder.GetConstantInt(Context.getIntTy(), LineAndCol.col)),
          ConstFileName
       });
 
@@ -1172,12 +1178,19 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
+      StructDecl *Int = getIntDecl();
+
       const cdot::TargetInfo &TI = ILGen->getTargetInfo();
       auto &Builder = ILGen->Builder;
-      auto PointerSize = Builder.GetConstantInt(Context.getUIntTy(),
-                                                TI.getPointerSizeInBytes());
-      auto PointerAlign = Builder.GetConstantInt(Context.getUIntTy(),
-                                                TI.getPointerAlignInBytes());
+      auto PointerSize =
+         Builder.GetConstantStruct(
+            Int, Builder.GetConstantInt(Context.getIntTy(),
+                                         TI.getPointerSizeInBytes()));
+
+      auto PointerAlign =
+         Builder.GetConstantStruct(
+            Int, Builder.GetConstantInt(Context.getIntTy(),
+                                         TI.getPointerAlignInBytes()));
 
       il::Constant *Endianness;
       if (TI.getTriple().isLittleEndian()) {
@@ -1248,7 +1261,11 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
    }
    else if (II == ReflectionIdents[RI_inCTFE]) {
       DoCache = true;
-      ResultExpr = StaticExpr::Create(Context, Context.getBoolTy(),
+
+      RecordDecl *BoolDecl;
+      QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool);
+
+      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(BoolDecl),
                                       Expr->getSourceRange(),
                                       ILGen->Builder.GetMagicConstant(
                                          il::MagicConstant::__ctfe));
@@ -1270,7 +1287,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Context.getUnknownAnyTy());
 
          return Expr;
       }
@@ -1302,7 +1319,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Alias->getType());
 
          return Expr;
       }
@@ -1324,7 +1341,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Alias->getType());
 
          return Expr;
       }
@@ -1345,13 +1362,14 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       QualType Ty = Alias->getTemplateArgs().front().getType();
       if (Ty->isDependentType()) {
          Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
+         Expr->setExprType(Ty);
 
          return Expr;
       }
 
       ResultExpr = BuiltinIdentExpr::Create(Context, Expr->getSourceLoc(),
                                             BuiltinIdentifier::defaultValue);
+
       ResultExpr->setExprType(Ty);
    }
 
@@ -1363,13 +1381,19 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
    }
 
    auto Res = visitExpr(ResultExpr);
+   if (!Res) {
+      Expr->setIsInvalid(true);
+      return ExprError();
+   }
+
    if (Expr->isMagicArgumentValue()) {
       Expr->setExprType(Res.getValue()->getExprType());
       return Expr;
    }
 
-   if (DoCache)
+   if (DoCache) {
       ReflectionValues.try_emplace(Alias, Res.get());
+   }
 
    return Res;
 }

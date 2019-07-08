@@ -17,24 +17,16 @@ using namespace cdot::support;
 
 QueryResult CreateILModuleQuery::run()
 {
-   // Get the typechecked modules.
-   SmallVector<ast::ModuleDecl*, 4> ModuleDecls;
-   for (StringRef File : SourceFiles) {
-      ModuleDecl *NextModule;
-      if (QC.ParseSourceFile(NextModule, File)) {
-         continue;
-      }
-
-      ModuleDecls.push_back(NextModule);
+   // Parse the source files.
+   if (auto Err = QC.ParseSourceFiles(Mod)) {
+      return Query::finish(Err);
    }
-
-   ModuleDecls.push_back(QC.CI.getCompilationModule()->getDecl());
 
    QC.PrintUsedMemory();
 
    // Typecheck the source files.
-   for (ModuleDecl *Mod : ModuleDecls) {
-      QC.TypecheckDecl(Mod);
+   if (auto Err = QC.TypeCheckDeclContext(Mod->getDecl())) {
+      return Query::finish(Err);
    }
 
    QC.PrintUsedMemory();
@@ -44,16 +36,13 @@ QueryResult CreateILModuleQuery::run()
       return fail();
    }
 
-   auto *ILMod = QC.CI.getCompilationModule()->getILModule();
-
+   auto *ILMod = Mod->getILModule();
    auto &ILGen = QC.Sema->getILGen();
    ILGen.Builder.SetModule(ILMod);
 
    // Generate IL for the source files.
-   for (ModuleDecl *Mod : ModuleDecls) {
-      if (QC.GenerateILForContext(Mod)) {
-         return fail();
-      }
+   if (auto Err = QC.GenerateILForContext(Mod->getDecl())) {
+      return Query::finish(Err);
    }
 
    return finish(ILMod);
@@ -61,6 +50,10 @@ QueryResult CreateILModuleQuery::run()
 
 QueryResult GenerateILForContextQuery::run()
 {
+   if (QC.TypeCheckDeclContext(DC)) {
+      return fail();
+   }
+
    Status S = Done;
    for (auto *D : DC->getDecls()) {
       switch (D->getKind()) {
@@ -83,6 +76,19 @@ QueryResult GenerateILForContextQuery::run()
       case Decl::GlobalVarDeclID: {
          auto *GV = cast<GlobalVarDecl>(D);
          if (QC.GenerateLazyILGlobalDefinition(GV)) {
+            S = DoneWithError;
+            continue;
+         }
+
+         break;
+      }
+      case Decl::FieldDeclID: {
+         auto *F = cast<FieldDecl>(D);
+         if (!F->isStatic()) {
+            continue;
+         }
+
+         if (QC.GenerateLazyILGlobalDefinition(F)) {
             S = DoneWithError;
             continue;
          }
@@ -139,6 +145,10 @@ QueryResult GenerateILForContextQuery::run()
 QueryResult GenerateRecordILQuery::run()
 {
    if (QC.TypecheckDecl(R)) {
+      return fail();
+   }
+
+   if (R->isInvalid()) {
       return fail();
    }
 
@@ -288,6 +298,17 @@ QueryResult GenerateILFunctionBodyQuery::run()
       return finish();
    }
 
+   // Check if we still need to instantiate the body of this function.
+   if (QC.Sema->QueuedInstantiations.remove(C)) {
+      if (auto Err = QC.InstantiateMethodBody(C)) {
+         return Query::finish(Err);
+      }
+   }
+
+   if (C->isInvalid()) {
+      return fail();
+   }
+
    if (!C->getBody()) {
       return finish();
    }
@@ -319,6 +340,16 @@ QueryResult GenerateLazyILGlobalDefinitionQuery::run()
 
 QueryResult GetBoolValueQuery::run()
 {
+   il::Constant *C = this->C;
+   if (AllowWrapperTypes && C->getType()->isRecordType()) {
+      auto *R = C->getType()->getRecord();
+      if (!QC.IsBuiltinBoolType(R)) {
+         return fail();
+      }
+
+      C = cast<il::ConstantStruct>(C)->getElements().front();
+   }
+
    auto *CI = dyn_cast<il::ConstantInt>(C);
    if (!CI) {
       return fail();
@@ -329,12 +360,22 @@ QueryResult GetBoolValueQuery::run()
 
 QueryResult GetIntValueQuery::run()
 {
+   il::Constant *C = this->C;
+   if (AllowWrapperTypes && C->getType()->isRecordType()) {
+      auto *R = C->getType()->getRecord();
+      if (!QC.IsBuiltinIntegerType(R)) {
+         return fail();
+      }
+
+      C = cast<il::ConstantStruct>(C)->getElements().front();
+   }
+
    auto *CI = dyn_cast<il::ConstantInt>(C);
    if (!CI) {
       return fail();
    }
 
-   return finish(CI->getZExtValue());
+   return finish(llvm::APSInt(CI->getValue()));
 }
 
 QueryResult GetStringValueQuery::run()

@@ -48,9 +48,23 @@ NestedNameSpecifier::NestedNameSpecifier(ast::AssociatedTypeDecl *AT,
 
 }
 
+NestedNameSpecifier::NestedNameSpecifier(ast::AliasDecl *Alias,
+                                         NestedNameSpecifier *Previous)
+   : PreviousAndKind(Previous, Kind::Alias), Data(Alias)
+{
+
+}
+
 NestedNameSpecifier::NestedNameSpecifier(cdot::Module *M,
                                          NestedNameSpecifier *Previous)
    : PreviousAndKind(Previous, Kind::Module), Data(M)
+{
+
+}
+
+NestedNameSpecifier::NestedNameSpecifier(sema::FinalTemplateArgumentList*TemplateArgs,
+                                         NestedNameSpecifier *Previous)
+   : PreviousAndKind(Previous, Kind::TemplateArgList), Data(TemplateArgs)
 {
 
 }
@@ -148,6 +162,24 @@ NestedNameSpecifier* NestedNameSpecifier::Create(DeclarationNameTable &Tbl,
 }
 
 NestedNameSpecifier* NestedNameSpecifier::Create(DeclarationNameTable &Tbl,
+                                                 ast::AliasDecl *Alias,
+                                                 NestedNameSpecifier *Previous){
+   llvm::FoldingSetNodeID ID;
+   NestedNameSpecifier::Profile(ID, NestedNameSpecifier::Alias,
+                                Previous, Alias);
+
+   auto *Set = reinterpret_cast<NameSpecSetTy*>(Tbl.NestedNameSpecifiers);
+   void *InsertPos;
+   if (auto *Name = Set->FindNodeOrInsertPos(ID, InsertPos))
+      return Name;
+
+   auto *Name = new(Tbl.Ctx) NestedNameSpecifier(Alias, Previous);
+   Set->InsertNode(Name, InsertPos);
+
+   return Name;
+}
+
+NestedNameSpecifier* NestedNameSpecifier::Create(DeclarationNameTable &Tbl,
                                                  cdot::Module *M,
                                                  NestedNameSpecifier *Previous){
    llvm::FoldingSetNodeID ID;
@@ -159,6 +191,24 @@ NestedNameSpecifier* NestedNameSpecifier::Create(DeclarationNameTable &Tbl,
       return Name;
 
    auto *Name = new(Tbl.Ctx) NestedNameSpecifier(M, Previous);
+   Set->InsertNode(Name, InsertPos);
+
+   return Name;
+}
+
+NestedNameSpecifier* NestedNameSpecifier::Create(DeclarationNameTable &Tbl,
+                                                 sema::FinalTemplateArgumentList *TemplateArgs,
+                                                 NestedNameSpecifier *Previous){
+   llvm::FoldingSetNodeID ID;
+   NestedNameSpecifier::Profile(ID, NestedNameSpecifier::TemplateArgList,
+                                Previous, TemplateArgs);
+
+   auto *Set = reinterpret_cast<NameSpecSetTy*>(Tbl.NestedNameSpecifiers);
+   void *InsertPos;
+   if (auto *Name = Set->FindNodeOrInsertPos(ID, InsertPos))
+      return Name;
+
+   auto *Name = new(Tbl.Ctx) NestedNameSpecifier(TemplateArgs, Previous);
    Set->InsertNode(Name, InsertPos);
 
    return Name;
@@ -194,7 +244,8 @@ void NestedNameSpecifier::print(llvm::raw_ostream &OS) const
 
    unsigned i = 0;
    for (auto it = Names.rbegin(), end = Names.rend(); it != end; ++it) {
-      if (i++ != 0) OS << ".";
+      if (i++ != 0 && (*it)->getKind() != TemplateArgList)
+         OS << ".";
 
       switch ((*it)->getKind()) {
       case NestedNameSpecifier::Identifier:
@@ -212,8 +263,14 @@ void NestedNameSpecifier::print(llvm::raw_ostream &OS) const
       case NestedNameSpecifier::AssociatedType:
          OS << (*it)->getAssociatedType()->getDeclName();
          break;
+      case NestedNameSpecifier::Alias:
+         OS << (*it)->getAlias()->getDeclName();
+         break;
       case NestedNameSpecifier::Module:
          OS << (*it)->getModule()->getFullName();
+         break;
+      case NestedNameSpecifier::TemplateArgList:
+         OS << *(*it)->getTemplateArgs();
          break;
       }
    }
@@ -232,7 +289,10 @@ bool NestedNameSpecifier::isDependent() const
       return false;
    }
    case NestedNameSpecifier::TemplateParam:
+   case NestedNameSpecifier::TemplateArgList:
       return true;
+   case NestedNameSpecifier::Alias:
+      return getAlias()->isTemplateOrInTemplate();
    }
 }
 
@@ -290,10 +350,22 @@ ast::AssociatedTypeDecl* NestedNameSpecifier::getAssociatedType() const
    return reinterpret_cast<ast::AssociatedTypeDecl*>(Data);
 }
 
+ast::AliasDecl* NestedNameSpecifier::getAlias() const
+{
+   assert(getKind() == Kind::Alias && "not an alias!");
+   return reinterpret_cast<ast::AliasDecl*>(Data);
+}
+
 cdot::Module* NestedNameSpecifier::getModule() const
 {
    assert(getKind() == Kind::Module && "not an associated type!");
    return reinterpret_cast<cdot::Module*>(Data);
+}
+
+sema::FinalTemplateArgumentList* NestedNameSpecifier::getTemplateArgs() const
+{
+   assert(getKind() == Kind::TemplateArgList && "not an template arg list!");
+   return reinterpret_cast<sema::FinalTemplateArgumentList*>(Data);
 }
 
 NestedNameSpecifierWithLoc::NestedNameSpecifierWithLoc(
@@ -302,6 +374,18 @@ NestedNameSpecifierWithLoc::NestedNameSpecifierWithLoc(
    : NameSpec(Name), NumSourceRanges((unsigned)Locs.size())
 {
    std::copy(Locs.begin(), Locs.end(), getTrailingObjects<SourceRange>());
+}
+
+NestedNameSpecifierWithLoc::NestedNameSpecifierWithLoc(
+                                             NestedNameSpecifierWithLoc *Prev,
+                                             NestedNameSpecifier *NewName,
+                                             SourceRange NewLoc)
+   : NameSpec(NewName),
+     NumSourceRanges(Prev->NumSourceRanges + 1)
+{
+   auto Locs = Prev->getSourceRanges();
+   std::copy(Locs.begin(), Locs.end(), getTrailingObjects<SourceRange>());
+   *(getTrailingObjects<SourceRange>() + NumSourceRanges - 1) = NewLoc;
 }
 
 NestedNameSpecifierWithLoc*
@@ -314,6 +398,18 @@ NestedNameSpecifierWithLoc::Create(DeclarationNameTable &Tbl,
                                 alignof(NestedNameSpecifierWithLoc));
 
    return new(Mem) NestedNameSpecifierWithLoc(Name, Locs);
+}
+
+NestedNameSpecifierWithLoc*
+NestedNameSpecifierWithLoc::Create(DeclarationNameTable &Tbl,
+                                   NestedNameSpecifierWithLoc *Prev,
+                                   NestedNameSpecifier *NewName,
+                                   SourceRange NewLoc) {
+   auto Locs = Prev->getSourceRanges();
+   void *Mem = Tbl.Ctx.Allocate(totalSizeToAlloc<SourceRange>(Locs.size() + 1),
+                                alignof(NestedNameSpecifierWithLoc));
+
+   return new(Mem) NestedNameSpecifierWithLoc(Prev, NewName, NewLoc);
 }
 
 SourceRange NestedNameSpecifierWithLoc::getSourceRange(unsigned i) const

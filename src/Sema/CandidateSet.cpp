@@ -6,6 +6,8 @@
 
 #include "AST/Expression.h"
 #include "AST/Decl.h"
+#include "ConstraintBuilder.h"
+#include "Query/QueryContext.h"
 #include "SemaPass.h"
 #include "Support/Casting.h"
 
@@ -18,28 +20,84 @@ using namespace cdot::support;
 
 namespace cdot {
 
+CandidateSet::Candidate::Candidate() = default;
+
+CandidateSet::Candidate::Candidate(CallableDecl *Func, unsigned Distance)
+   : CandDecl(Func), FR(None), IsAnonymousCand(false), Distance(Distance)
+{}
+
+CandidateSet::Candidate::Candidate(AliasDecl *Alias, unsigned Distance)
+   : CandDecl(Alias), FR(None), IsAnonymousCand(false), Distance(Distance)
+{}
+
+CandidateSet::Candidate::Candidate(Expression *FnExpr)
+   : CandDecl(FnExpr), FR(None), IsAnonymousCand(true), Distance(0)
+{}
+
+CandidateSet::Candidate::Candidate(NamedDecl *FnDecl)
+   : CandDecl(FnDecl), FR(None), IsAnonymousCand(true), Distance(0)
+{}
+
+CandidateSet::Candidate::~Candidate() = default;
+
+CandidateSet::Candidate::Candidate(CandidateSet::Candidate &&)
+   noexcept = default;
+
+CandidateSet::Candidate&
+CandidateSet::Candidate::operator=(CandidateSet::Candidate &&)
+   noexcept = default;
+
+CallableDecl* CandidateSet::Candidate::getFunc() const
+{
+   return cast<CallableDecl>(CandDecl.getDecl());
+}
+
+AliasDecl* CandidateSet::Candidate::getAlias() const
+{
+   return cast<AliasDecl>(CandDecl.getDecl());
+}
+
+Expression* CandidateSet::Candidate::getFuncExpr() const
+{
+   return dyn_cast_or_null<Expression>(CandDecl.asStatement());
+}
+
+NamedDecl* CandidateSet::Candidate::getFuncDecl() const
+{
+   return dyn_cast_or_null<NamedDecl>(CandDecl.asDecl());
+}
+
 FunctionType* CandidateSet::Candidate::getFunctionType() const
 {
-   if (auto fn = BuiltinCandidate.FuncTy)
-      return fn;
+   if (isAnonymousCandidate()) {
+      if (auto *E = getFuncExpr()) {
+         return E->getExprType()->stripReference()->asFunctionType();
+      }
 
-   return Func->getFunctionType();
+      return cast<VarDecl>(getFuncDecl())->getType()->stripReference()
+                                         ->asFunctionType();
+   }
+
+   return getFunc()->getFunctionType();
 }
 
 SourceLocation CandidateSet::Candidate::getSourceLoc() const
 {
-   if (!Func)
-      return SourceLocation();
+   if (isAnonymousCandidate()) {
+      if (auto *E = getFuncExpr()) {
+         return E->getSourceLoc();
+      }
 
-   return Func->getSourceLoc();
+      return getFuncDecl()->getSourceLoc();
+   }
+
+   return getFunc()->getSourceLoc();
 }
 
 ast::PrecedenceGroupDecl *CandidateSet::Candidate::getPrecedenceGroup() const
 {
-   if (isBuiltinCandidate())
-      return precedenceGroup;
-
-   return Func->getPrecedenceGroup();
+   assert(!isAnonymousCandidate());
+   return getFunc()->getPrecedenceGroup();
 }
 
 bool CandidateSet::Candidate::isAssignmentOperator()
@@ -51,18 +109,31 @@ bool CandidateSet::Candidate::isAssignmentOperator()
    return Prec->isAssignment();
 }
 
-bool CandidateSet::Candidate::isInitializerOrDeinitializer()
-{
-   return !isBuiltinCandidate()
-          && (isa<InitDecl>(Func) || isa<DeinitDecl>(Func));
-}
-
 unsigned CandidateSet::Candidate::getNumConstraints() const
 {
-   if (isBuiltinCandidate())
+   if (isAnonymousCandidate())
       return 0;
 
-   return (unsigned)Func->getConstraints().size();
+   return (unsigned)getFunc()->getConstraints().size();
+}
+
+CandidateSet::CandidateSet(CandidateSet &&Other) noexcept
+   : Status(Other.Status), IncludesSelfArgument(Other.IncludesSelfArgument),
+     InvalidCand(Other.InvalidCand), Dependent(Other.Dependent),
+     MatchIdx(Other.MatchIdx),
+     BestConversionPenalty(Other.BestConversionPenalty),
+     ResolvedArgs(move(Other.ResolvedArgs)), Candidates(move(Other.Candidates)),
+     CandidateFns(move(Other.CandidateFns))
+{
+
+}
+
+CandidateSet& CandidateSet::operator=(CandidateSet &&Other) noexcept
+{
+   this->~CandidateSet();
+   new(this) CandidateSet(move(Other));
+
+   return *this;
 }
 
 CandidateSet::Candidate*
@@ -85,6 +156,20 @@ CandidateSet::addCandidate(ast::AliasDecl *Alias, unsigned Distance)
    return &Candidates.back();
 }
 
+CandidateSet::Candidate&
+CandidateSet::addCandidate(Expression *FnExpr)
+{
+   Candidates.emplace_back(FnExpr);
+   return Candidates.back();
+}
+
+CandidateSet::Candidate&
+CandidateSet::addCandidate(NamedDecl *FnDecl)
+{
+   Candidates.emplace_back(FnDecl);
+   return Candidates.back();
+}
+
 static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
                                    Expression *Expr) {
    llvm::raw_svector_ostream sstream(Str);
@@ -101,7 +186,7 @@ static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
 static FakeSourceLocation makeFakeSourceLoc(CandidateSet &CandSet,
                                             DeclarationName funcName,
                                             CandidateSet::Candidate &Cand) {
-   assert(Cand.isBuiltinCandidate() && "not a builtin candidate!");
+   assert(Cand.isAnonymousCandidate() && "not a builtin candidate!");
 
    auto FuncTy = Cand.getFunctionType();
    llvm::SmallString<128> str;
@@ -123,11 +208,11 @@ static FakeSourceLocation makeFakeSourceLoc(CandidateSet &CandSet,
 static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
                                      llvm::ArrayRef<ast::Expression*> args) {
    unsigned idx = Cand.Data1;
-   if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
+   if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
       ++idx;
 
-   if (!Cand.isBuiltinCandidate()) {
-      auto ArgDecls = Cand.Func->getArgs();
+   if (!Cand.isAnonymousCandidate()) {
+      auto ArgDecls = Cand.getFunc()->getArgs();
 
       // variadic template arguments might create more arguments
       if (ArgDecls.size() > idx) {
@@ -158,11 +243,11 @@ static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
 static QualType getArgumentType(CandidateSet::Candidate &Cand)
 {
    unsigned idx = Cand.Data1;
-   if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
+   if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
       ++idx;
 
-   if (!Cand.isBuiltinCandidate()) {
-      auto ArgDecls = Cand.Func->getArgs();
+   if (!Cand.isAnonymousCandidate()) {
+      auto ArgDecls = Cand.getFunc()->getArgs();
 
       // variadic template arguments might create more arguments
       if (ArgDecls.size() > idx) {
@@ -178,7 +263,7 @@ static QualType getArgumentType(CandidateSet::Candidate &Cand)
 static QualType getArgumentType(CandidateSet::Candidate &Cand,
                                 ArrayRef<Expression*> args) {
    unsigned idx = Cand.Data1;
-   if (!Cand.isBuiltinCandidate() && Cand.Func->isNonStaticMethod())
+   if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
       ++idx;
 
    // variadic template arguments might create more arguments
@@ -189,496 +274,343 @@ static QualType getArgumentType(CandidateSet::Candidate &Cand,
    return args.back()->getExprType();
 }
 
-static void diagnoseConstAssignment(SemaPass &SP,
-                                    Statement *DependentExpr,
-                                    SourceLocation EqualsLoc,
-                                    Expression *LHS) {
-   VarDecl *ConstDecl = nullptr;
-   SourceRange ConstExprLoc;
-
-   auto DeclRef = LHS;
-   while (DeclRef) {
-      auto Expr = DeclRef->ignoreParensAndImplicitCasts();
-      if (auto Ident = dyn_cast<IdentifierRefExpr>(Expr)) {
-         switch (Ident->getKind()) {
-         case IdentifierKind::LocalVar:
-         case IdentifierKind::GlobalVar:
-         case IdentifierKind::Field:
-         case IdentifierKind::StaticField:
-         case IdentifierKind::FunctionArg:
-            ConstDecl = Ident->getVarDecl();
-            ConstExprLoc = Expr->getSourceRange();
-
-            break;
-         default:
-            break;
-         }
-
-         if (ConstDecl && ConstDecl->isConst())
-            break;
-
-         DeclRef = Ident->getParentExpr();
-         continue;
+static void diagnoseCandidate(SemaPass &SP,
+                              CandidateSet &CandSet,
+                              CandidateSet::Candidate &Cand,
+                              ArrayRef<Expression*> args,
+                              ArrayRef<Expression*> templateArgs,
+                              Statement *Caller) {
+   bool IncludesSelf = false;
+   if (!Cand.isAnonymousCandidate()) {
+      if (auto *I = dyn_cast<InitDecl>(Cand.getFunc())) {
+         IncludesSelf = I->isBaseInitializer();
       }
-
-      if (auto Subscript = dyn_cast<SubscriptExpr>(Expr)) {
-         DeclRef = Subscript->getParentExpr();
-         continue;
+      else if (isa<MethodDecl>(Cand.getFunc())) {
+         IncludesSelf = true;
       }
+   }
 
-      if (auto Tup = dyn_cast<TupleMemberExpr>(Expr)) {
-         DeclRef = Tup->getParentExpr();
-         continue;
+   switch (Cand.FR) {
+   case CandidateSet::None: llvm_unreachable("found a matching call!");
+   case CandidateSet::IsInvalid:
+   case CandidateSet::IsDependent:
+      // diagnostics were already emitted for the invalid decl; we don't
+      // know whether this candidate would have been valid had the
+      // declaration not contained errors
+      break;
+   case CandidateSet::TooFewArguments: {
+      auto &TemplateArgs = Cand.InnerTemplateArgs;
+
+      auto GivenArgAmt = Cand.Data1;
+      auto NeededArgAmt = Cand.Data2;
+
+      if (TemplateArgs.isInferred()) {
+         SP.diagnose(Caller, note_too_few_arguments_inferred,
+                     NeededArgAmt, GivenArgAmt,
+                     TemplateArgs.toString('\0', '\0', true),
+                     Cand.getSourceLoc());
       }
-
-      if (auto Self = dyn_cast<SelfExpr>(Expr)) {
-         if (ConstExprLoc) {
-            SP.diagnose(DependentExpr, err_cannot_assign_to_property,
-                        ConstExprLoc, EqualsLoc);
-         }
-         else {
-            SP.diagnose(DependentExpr, err_cannot_assign_to_self,
-                        Self->getSourceRange(),
-                        EqualsLoc);
-         }
-
-         SP.diagnose(note_mark_mutating, SP.getCurrentFun()->getSourceLoc());
-         return;
-      }
-
-      if (auto UnOp = dyn_cast<UnaryOperator>(Expr)) {
-         if (UnOp->getKind() == op::Deref) {
-            DeclRef = UnOp->getTarget();
-            continue;
-         }
+      else {
+         SP.diagnose(Caller, note_too_few_arguments, NeededArgAmt,
+                     GivenArgAmt, Cand.getSourceLoc(), false);
       }
 
       break;
    }
+   case CandidateSet::TooManyArguments: {
+      auto &TemplateArgs = Cand.InnerTemplateArgs;
 
-   if (!ConstDecl) {
-      SP.diagnose(DependentExpr, err_reassign_constant, LHS->getSourceRange(),
-                  EqualsLoc);
+      auto GivenArgAmt = Cand.Data1;
+      auto NeededArgAmt = Cand.Data2;
 
-      return;
-   }
-
-   SP.diagnose(DependentExpr, err_reassign_constant, ConstExprLoc,
-               EqualsLoc);
-   SP.diagnose(note_declared_const_here, ConstDecl->getDeclName(),
-               ConstDecl->getSourceLoc());
-}
-
-void CandidateSet::diagnoseFailedCandidates(ast::SemaPass &SP,
-                                            DeclarationName funcName,
-                                            llvm::ArrayRef<ast::Expression*> args,
-                                            llvm::ArrayRef<ast::Expression*> templateArgs,
-                                            ast::Statement *Caller,
-                                            bool OperatorLookup,
-                                            SourceLocation OpLoc) {
-   if (InvalidCand) {
-      Caller->setIsInvalid(true);
-      return;
-   }
-
-   bool IgnoreBuiltinCandidates = false;
-
-   if (OperatorLookup) {
-      auto Kind = funcName.getKind();
-      if (Kind == DeclarationName::InfixOperatorName) {
-         // diagnose '=' specially
-         if (funcName.getInfixOperatorName()->isStr("=")) {
-            auto LHS = args[0];
-            if (LHS->getExprType()->isReferenceType()
-                && !LHS->getExprType()->isMutableReferenceType()) {
-               diagnoseConstAssignment(SP, Caller, OpLoc, LHS);
-               IgnoreBuiltinCandidates = true;
-            }
-            else {
-               SP.diagnose(Caller, err_assign_type_mismatch,
-                           args[1]->getExprType(), args[0]->getExprType(),
-                           OpLoc ? OpLoc : Caller->getSourceLoc(),
-                           args[0]->getSourceRange(),
-                           args[1]->getSourceRange());
-            }
-         }
-         else {
-            SP.diagnose(Caller, err_binop_not_applicable,
-                        funcName.getInfixOperatorName()->getIdentifier(),
-                        args[0]->getExprType(), args[1]->getExprType(),
-                        OpLoc ? OpLoc : Caller->getSourceLoc(),
-                        args[0]->getSourceRange(), args[1]->getSourceRange());
-         }
+      if (TemplateArgs.isInferred()) {
+         SP.diagnose(Caller, note_too_many_arguments_inferred,
+                     NeededArgAmt, GivenArgAmt,
+                     TemplateArgs.toString('\0', '\0', true),
+                     Cand.getSourceLoc());
       }
       else {
-         bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
-         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix,
-                     funcName, 0, args[0]->getExprType(),
-                     OpLoc ? OpLoc : Caller->getSourceLoc(),
-                     args[0]->getSourceRange());
+         SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt,
+                     GivenArgAmt, Cand.getSourceLoc(), false);
       }
+
+      break;
    }
-   else if (funcName.getKind() == DeclarationName::ConstructorName) {
-      enum : int { Matching = 0, Accessible = 1 };
-      auto R = funcName.getConstructorType()->getRecord();
-      SP.diagnose(Caller, err_no_matching_initializer,
-                  Candidates.empty() ? Accessible : Matching,
-                  R->getSpecifierForDiagnostic(), R->getFullName(),
-                  Caller->getSourceRange());
+   case CandidateSet::IncompatibleArgument: {
+      QualType neededTy = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data3));
+
+      QualType givenTy = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data2));
+
+      SourceLocation loc = getArgumentLoc(Cand, args);
+      auto &TemplateArgs = Cand.InnerTemplateArgs;
+      SP.QC.SubstGenericTypesNonFinal(neededTy, neededTy, TemplateArgs,
+                                      Caller->getSourceRange());
+
+      auto ArgNo = Cand.Data1 + 1;
+      if (isa<MethodDecl>(Cand.getFunc()) && !Cand.getFunc()->isCompleteInitializer())
+         --ArgNo;
+
+      if (TemplateArgs.isInferred()) {
+         SP.diagnose(Caller, note_cand_no_implicit_conv_inferred,
+                     diag::opt::show_constness,
+                     givenTy, neededTy, ArgNo,
+                     TemplateArgs.toString('\0', '\0', true), loc);
+      }
+      else {
+         SP.diagnose(Caller, note_cand_no_implicit_conv,
+                     diag::opt::show_constness, givenTy, neededTy,
+                     ArgNo, false, loc);
+      }
+
+      break;
    }
-   else {
-      if (Candidates.empty()) {
-         SP.diagnose(Caller, err_func_not_found, Caller->getSourceRange(),
-                     0, funcName);
+   case CandidateSet::IncompatibleLabel: {
+      auto ArgIdx = Cand.Data1;
+      auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
 
-         return;
+      SourceLocation loc = getArgumentLoc(Cand, args);
+      auto ArgNo = ArgIdx + 1;
+      if (IncludesSelf)
+         --ArgNo;
+
+      IdentifierInfo *NeededLabel = nullptr;
+      if (!Cand.isAnonymousCandidate() && ArgIdx < Cand.getFunc()->getArgs().size()){
+         NeededLabel = Cand.getFunc()->getArgs()[ArgIdx]->getLabel();
       }
 
-      SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
-                  true, 0, funcName);
+      SP.diagnose(Caller, note_cand_label, NeededLabel, ArgNo,
+                  GivenLabel, loc);
+
+      break;
    }
+   case CandidateSet::ArgumentRequiresRef: {
+      SourceLocation loc = getArgumentLoc(Cand, args);
+      bool IsMutable = false;
+      bool IsPointer = false;
 
-   for (auto &Cand : Candidates) {
-      if (IgnoreBuiltinCandidates && Cand.isBuiltinCandidate())
-         continue;
-
-      bool IncludesSelf = false;
-      if (!Cand.isBuiltinCandidate()) {
-         if (auto *I = dyn_cast<InitDecl>(Cand.Func)) {
-            IncludesSelf = I->isBaseInitializer();
-         }
-         else if (isa<MethodDecl>(Cand.Func)) {
-            IncludesSelf = true;
-         }
+      QualType Ty = getArgumentType(Cand);
+      if (Ty->isMutablePointerType()) {
+         IsMutable = true;
+         IsPointer = true;
+      }
+      else if (!Ty->isNonMutableReferenceType()) {
+         IsMutable = true;
       }
 
-      switch (Cand.FR) {
-      case None: llvm_unreachable("found a matching call!");
-      case IsInvalid:
-      case IsDependent:
-         // diagnostics were already emitted for the invalid decl; we don't
-         // know whether this candidate would have been valid had the
-         // declaration not contained errors
-         break;
-      case TooFewArguments: {
-         auto &TemplateArgs = Cand.InnerTemplateArgs;
+      auto ArgNo = Cand.Data1 + 1;
+      if (IncludesSelf)
+         --ArgNo;
 
-         auto GivenArgAmt = Cand.Data1;
-         auto NeededArgAmt = Cand.Data2;
+      SP.diagnose(Caller, note_candidate_requires_ref, IsMutable, IsPointer,
+                  ArgNo, loc);
 
-         if (TemplateArgs.isInferred()) {
-            SP.diagnose(Caller, note_too_few_arguments_inferred,
-                        NeededArgAmt, GivenArgAmt,
-                        TemplateArgs.toString('\0', '\0', true),
-                        Cand.getSourceLoc());
-         }
-         else if (Cand.isBuiltinCandidate()) {
-            SP.diagnose(Caller, note_too_few_arguments,
-                        NeededArgAmt, GivenArgAmt, Cand.getSourceLoc(),
-                        true, makeFakeSourceLoc(*this, funcName, Cand));
-         }
-         else {
-            SP.diagnose(Caller, note_too_few_arguments, NeededArgAmt,
-                        GivenArgAmt, Cand.getSourceLoc(), false);
-         }
+      break;
+   }
+   case CandidateSet::IncompatibleReturnType: {
+      auto needed = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data1));
+      auto given = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data2));
 
-         break;
+      SP.diagnose(Caller, note_cand_invalid_return, given, needed,
+                  Cand.getSourceLoc());
+
+      break;
+   }
+   case CandidateSet::CouldNotInferArgumentType: {
+      SourceLocation loc = getArgumentLoc(Cand, args);
+      auto ArgNo = Cand.Data1 + 1;
+      if (IncludesSelf)
+         --ArgNo;
+
+      SP.diagnose(Caller, note_candidate_requires_context,
+                  ArgNo, loc);
+
+      break;
+   }
+   case CandidateSet::IncompatibleSelfArgument: {
+      auto needed = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data1));
+      auto given = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data2));
+
+      SP.diagnose(Caller, note_cand_invalid_self, needed, given,
+                  Cand.getSourceLoc());
+
+      break;
+   }
+   case CandidateSet::FailedConstraint: {
+      llvm::SmallString<128> Str;
+      auto Constraint = reinterpret_cast<ast::Expression*>(Cand.Data1);
+
+      if (!tryStringifyConstraint(Str, Constraint)) {
+         Str = "failed constraint";
       }
-      case TooManyArguments: {
-         auto &TemplateArgs = Cand.InnerTemplateArgs;
 
-         auto GivenArgAmt = Cand.Data1;
-         auto NeededArgAmt = Cand.Data2;
-
-         if (TemplateArgs.isInferred()) {
-            SP.diagnose(Caller, note_too_many_arguments_inferred,
-                        NeededArgAmt, GivenArgAmt,
-                        TemplateArgs.toString('\0', '\0', true),
-                        Cand.getSourceLoc());
-         }
-         else if (Cand.isBuiltinCandidate()) {
-            SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt,
-                        GivenArgAmt, Cand.getSourceLoc(),
-                        true, makeFakeSourceLoc(*this, funcName, Cand));
-         }
-         else {
-            SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt,
-                        GivenArgAmt, Cand.getSourceLoc(), false);
-         }
-
-         break;
+      auto &TemplateArgs = Cand.InnerTemplateArgs;
+      if (TemplateArgs.isInferred()) {
+         SP.diagnose(Caller, note_cand_failed_constraint_inferred,
+                     Str.str(),
+                     TemplateArgs.toString('\0', '\0', true),
+                     Cand.getSourceLoc());
       }
-      case IncompatibleArgument: {
-         auto FTy = Cand.getFunctionType();
-         auto neededTy = FTy->getParamTypes()[Cand.Data1];
-
-         QualType givenTy = QualType::getFromOpaquePtr(
-            reinterpret_cast<void*>(Cand.Data2));
-         SourceLocation loc = getArgumentLoc(Cand, args);
-
-         auto &TemplateArgs = Cand.InnerTemplateArgs;
-         neededTy = SP.resolveDependencies(neededTy, TemplateArgs, Caller);
-
-         auto ArgNo = Cand.Data1 + 1;
-         if (IncludesSelf)
-            --ArgNo;
-
-         if (TemplateArgs.isInferred()) {
-            SP.diagnose(Caller, note_cand_no_implicit_conv_inferred,
-                        diag::opt::show_constness,
-                        givenTy, neededTy, ArgNo,
-                        TemplateArgs.toString('\0', '\0', true), loc);
-         }
-         else if (Cand.isBuiltinCandidate()) {
-            SP.diagnose(Caller, note_cand_no_implicit_conv,
-                        diag::opt::show_constness, givenTy,
-                        neededTy, ArgNo, true,
-                        makeFakeSourceLoc(*this, funcName, Cand));
-         }
-         else {
-            SP.diagnose(Caller, note_cand_no_implicit_conv,
-                        diag::opt::show_constness, givenTy, neededTy,
-                        ArgNo, false, loc);
-         }
-
-         break;
+      else {
+         SP.diagnose(Caller, note_cand_failed_constraint, Str.str(),
+                     Cand.getSourceLoc());
       }
-      case IncompatibleLabel: {
-         auto ArgIdx = Cand.Data1;
-         auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
 
-         SourceLocation loc = getArgumentLoc(Cand, args);
-         auto ArgNo = ArgIdx + 1;
-         if (IncludesSelf)
-            --ArgNo;
+      SP.diagnose(note_constraint_here, Constraint->getSourceRange());
 
-         IdentifierInfo *NeededLabel = nullptr;
-         if (!Cand.isBuiltinCandidate() && ArgIdx < Cand.Func->getArgs().size()){
-            NeededLabel = Cand.Func->getArgs()[ArgIdx]->getLabel();
-         }
+      break;
+   }
+   case CandidateSet::MustBeStatic: {
+      SP.diagnose(Caller, note_method_must_be_static,
+                  Cand.getSourceLoc());
 
-         SP.diagnose(Caller, note_cand_label, NeededLabel, ArgNo,
-                     GivenLabel, loc);
+      break;
+   }
+   case CandidateSet::MutatingOnConstSelf: {
+      SP.diagnose(Caller, note_candidate_is_mutating, 0,
+                  Cand.getSourceLoc());
 
-         break;
-      }
-      case ArgumentRequiresRef: {
-         SourceLocation loc = getArgumentLoc(Cand, args);
-         bool IsMutable = false;
-         bool IsPointer = false;
+      break;
+   }
+   case CandidateSet::MutatingOnRValueSelf: {
+      SP.diagnose(Caller, note_candidate_is_mutating, 1,
+                  Cand.getSourceLoc());
 
-         QualType Ty = getArgumentType(Cand);
-         if (Ty->isMutablePointerType()) {
-            IsMutable = true;
-            IsPointer = true;
-         }
-         else if (!Ty->isNonMutableReferenceType()) {
-            IsMutable = true;
-         }
+      break;
+   }
+   case CandidateSet::CouldNotInferTemplateArg: {
+      auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
+      SP.diagnose(Caller, note_could_not_infer_template_arg,
+                  TP->getName(), Cand.getFunc()->getSourceLoc());
+      SP.diagnose(note_declared_here, TP->getSourceLoc());
 
-         auto ArgNo = Cand.Data1 + 1;
-         if (IncludesSelf)
-            --ArgNo;
+      break;
+   }
+   case CandidateSet::ConflictingInferredArg: {
+      auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
 
-         SP.diagnose(Caller, note_candidate_requires_ref, IsMutable, IsPointer,
-                     ArgNo, loc);
-
-         break;
-      }
-      case CouldNotInferArgumentType: {
-         SourceLocation loc = getArgumentLoc(Cand, args);
-         auto ArgNo = Cand.Data1 + 1;
-         if (IncludesSelf)
-            --ArgNo;
-
-         SP.diagnose(Caller, note_candidate_requires_context,
-                     ArgNo, loc);
-
-         break;
-      }
-      case IncompatibleSelfArgument: {
-         auto needed = QualType::getFromOpaquePtr(
+      if (Param->isTypeName()) {
+         auto conflictingTy = QualType::getFromOpaquePtr(
             reinterpret_cast<void*>(Cand.Data1));
-         auto given = QualType::getFromOpaquePtr(
-            reinterpret_cast<void*>(Cand.Data2));
-
-         SP.diagnose(Caller, note_cand_invalid_self, needed, given,
-                     Cand.getSourceLoc());
-
-         break;
-      }
-      case FailedConstraint: {
-         llvm::SmallString<128> Str;
-         auto Constraint = reinterpret_cast<ast::Expression*>(Cand.Data1);
-
-         if (!tryStringifyConstraint(Str, Constraint)) {
-            Str = "failed constraint";
-         }
-
-         auto &TemplateArgs = Cand.InnerTemplateArgs;
-         if (TemplateArgs.isInferred()) {
-            SP.diagnose(Caller, note_cand_failed_constraint_inferred,
-                        Str.str(),
-                        TemplateArgs.toString('\0', '\0', true),
-                        Cand.getSourceLoc());
-         }
-         else {
-            SP.diagnose(Caller, note_cand_failed_constraint, Str.str(),
-                        Cand.getSourceLoc());
-         }
-
-         SP.diagnose(note_constraint_here, Constraint->getSourceRange());
-
-         break;
-      }
-      case MustBeStatic: {
-         SP.diagnose(Caller, note_method_must_be_static,
-                     Cand.getSourceLoc());
-
-         break;
-      }
-      case MutatingOnConstSelf: {
-         SP.diagnose(Caller, note_candidate_is_mutating, 0,
-                     Cand.getSourceLoc());
-
-         break;
-      }
-      case MutatingOnRValueSelf: {
-         SP.diagnose(Caller, note_candidate_is_mutating, 1,
-                     Cand.getSourceLoc());
-
-         break;
-      }
-      case CouldNotInferTemplateArg: {
-         auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
-         SP.diagnose(Caller, note_could_not_infer_template_arg,
-                     TP->getName(), Cand.Func->getSourceLoc());
-         SP.diagnose(note_declared_here, TP->getSourceLoc());
-
-         break;
-      }
-      case ConflictingInferredArg: {
-         auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
-
-         if (Param->isTypeName()) {
-            auto conflictingTy = QualType::getFromOpaquePtr(
-               reinterpret_cast<void*>(Cand.Data1));
-
-            auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
-            assert(templateArg && "bad diagnostic data");
-
-            string name = Param->getName();
-            if (templateArg->isVariadic()) {
-               name += "[";
-               name += std::to_string(templateArg->getVariadicArgs().size()
-                                      - 1);
-               name += "]";
-
-               templateArg = &templateArg->getVariadicArgs().back();
-            }
-
-            SP.diagnose(Caller, note_inferred_template_arg_conflict,
-                        0 /*types*/, templateArg->getType(), conflictingTy,
-                        name, templateArg->getLoc());
-
-            SP.diagnose(Caller, note_template_parameter_here,
-                        Param->getSourceLoc());
-         }
-         else {
-            llvm_unreachable("TODO");
-         }
-
-         break;
-      }
-      case TooManyTemplateArgs: {
-         auto neededSize = Cand.Func->getTemplateParams().size();
-         auto givenSize  = templateArgs.size();
-
-         SP.diagnose(Caller, note_too_many_template_args, neededSize,
-                     givenSize, Cand.getSourceLoc());
-
-         break;
-      }
-      case IncompatibleTemplateArgKind: {
-         unsigned diagSelect = unsigned(Cand.Data1);
-         unsigned select1    = diagSelect & 0x3u;
-         unsigned select2    = (diagSelect >> 2u) & 0x3u;
-
-         auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
-         SP.diagnose(Caller, note_template_arg_kind_mismatch, select2,
-                     select1, Param->getIndex() + 1,
-                     Cand.InnerTemplateArgs.getArgForParam(Param)->getLoc());
-
-         SP.diagnose(Caller, note_template_parameter_here,
-                     Param->getSourceLoc());
-
-         break;
-      }
-      case IncompatibleTemplateArgVal: {
-         auto givenTy = QualType::getFromOpaquePtr(
-            reinterpret_cast<void*>(Cand.Data1));
-         auto P = reinterpret_cast<const TemplateParamDecl*>(Cand.Data2);
-
-         auto neededTy = P->getValueType();
-         SP.diagnose(Caller, note_template_arg_type_mismatch,
-                     neededTy, P->getIndex() + 1, givenTy,
-                     templateArgs[0]->getSourceRange());
-
-         SP.diagnose(Caller, note_template_parameter_here,
-                     P->getSourceLoc());
-
-         break;
-      }
-      case TemplateArgCovarianceError: {
-         QualType Given = QualType::getFromOpaquePtr((void*)Cand.Data1);
-         auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
 
          auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
          assert(templateArg && "bad diagnostic data");
 
-         QualType Covar = Param->getCovariance();
-         SP.diagnose(Caller, note_template_arg_covariance,
-                     Covar->isClass(), Covar,
-                     Param->getDeclName(), Given, templateArg->getLoc());
+         string name = Param->getName();
+         if (templateArg->isVariadic()) {
+            name += "[";
+            name += std::to_string(templateArg->getVariadicArgs().size()
+                                   - 1);
+            name += "]";
+
+            templateArg = &templateArg->getVariadicArgs().back();
+         }
+
+         SP.diagnose(Caller, note_inferred_template_arg_conflict,
+                     0 /*types*/, templateArg->getType(), conflictingTy,
+                     name, templateArg->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());
-
-         break;
       }
-      case RecursivelyDependent: {
-         SP.diagnose(note_generic_note,
-                     "candidate cannot be referred to here",
-                     Cand.Func->getSourceLoc());
-         break;
+      else {
+         llvm_unreachable("TODO");
       }
-      }
-   }
-}
-
-void CandidateSet::diagnoseAnonymous(SemaPass &SP,
-                                     llvm::ArrayRef<ast::Expression *> args,
-                                     Statement *Caller) {
-   assert(Candidates.size() == 1 && "not an anonymous call!");
-
-   SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
-               false);
-
-   auto &Cand = Candidates.front();
-   switch (Cand.FR) {
-   default: llvm_unreachable("should not happen on anonymous call");
-   case TooFewArguments:
-   case TooManyArguments: {
-      auto diag = Cand.FR == TooFewArguments ? err_too_few_args_for_call
-                                             : err_too_many_args_for_call;
-
-      SP.diagnose(Caller, diag,
-                  Cand.BuiltinCandidate.FuncTy->getParamTypes().size(),
-                  args.size(), Caller->getSourceRange());
 
       break;
    }
-   case ArgumentRequiresRef: {
+   case CandidateSet::TooManyTemplateArgs: {
+      auto neededSize = Cand.getFunc()->getTemplateParams().size();
+      auto givenSize  = templateArgs.size();
+
+      SP.diagnose(Caller, note_too_many_template_args, neededSize,
+                  givenSize, Cand.getSourceLoc());
+
+      break;
+   }
+   case CandidateSet::IncompatibleTemplateArgKind: {
+      unsigned diagSelect = unsigned(Cand.Data1);
+      unsigned select1    = diagSelect & 0x3u;
+      unsigned select2    = (diagSelect >> 2u) & 0x3u;
+
+      auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
+      SP.diagnose(Caller, note_template_arg_kind_mismatch, select2,
+                  select1, Param->getIndex() + 1,
+                  Cand.InnerTemplateArgs.getArgForParam(Param)->getLoc());
+
+      SP.diagnose(Caller, note_template_parameter_here,
+                  Param->getSourceLoc());
+
+      break;
+   }
+   case CandidateSet::IncompatibleTemplateArgVal: {
+      auto givenTy = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data1));
+      auto P = reinterpret_cast<const TemplateParamDecl*>(Cand.Data2);
+
+      auto neededTy = P->getValueType();
+      SP.diagnose(Caller, note_template_arg_type_mismatch,
+                  neededTy, P->getIndex() + 1, givenTy,
+                  templateArgs[0]->getSourceRange());
+
+      SP.diagnose(Caller, note_template_parameter_here,
+                  P->getSourceLoc());
+
+      break;
+   }
+   case CandidateSet::TemplateArgCovarianceError: {
+      QualType Given = QualType::getFromOpaquePtr((void*)Cand.Data1);
+      auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
+
+      auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
+      assert(templateArg && "bad diagnostic data");
+
+      QualType Covar = Param->getCovariance();
+      SP.diagnose(Caller, note_template_arg_covariance,
+                  Covar->isClass(), Covar,
+                  Param->getDeclName(), Given, templateArg->getLoc());
+
+      SP.diagnose(Caller, note_template_parameter_here,
+                  Param->getSourceLoc());
+
+      break;
+   }
+   case CandidateSet::RecursivelyDependent: {
+      SP.diagnose(note_generic_note,
+                  "candidate cannot be referred to here",
+                  Cand.getFunc()->getSourceLoc());
+      break;
+   }
+   }
+}
+
+static void diagnoseAnonymousCandidate(SemaPass &SP,
+                                       CandidateSet &CandSet,
+                                       CandidateSet::Candidate &Cand,
+                                       ArrayRef<Expression*> args,
+                                       ArrayRef<Expression*> templateArgs,
+                                       Statement *Caller) {
+   auto CandLoc = Cand.getSourceLoc();
+   switch (Cand.FR) {
+   default: llvm_unreachable("should not happen on anonymous call");
+   case CandidateSet::TooFewArguments:
+      SP.diagnose(Caller, err_too_few_args_for_call,
+                  Cand.getFunctionType()->getParamTypes().size(),
+                  args.size(), CandLoc);
+
+      break;
+   case CandidateSet::TooManyArguments:
+      SP.diagnose(Caller, err_too_many_args_for_call,
+                  Cand.getFunctionType()->getParamTypes().size(),
+                  args.size(), CandLoc);
+
+      break;
+   case CandidateSet::ArgumentRequiresRef: {
       SourceLocation loc = args[Cand.Data1]->getSourceLoc();
       bool IsMutable = false;
       bool IsPointer = false;
@@ -697,7 +629,7 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
 
       break;
    }
-   case IncompatibleLabel: {
+   case CandidateSet::IncompatibleLabel: {
       auto ArgIdx = Cand.Data1;
       auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
 
@@ -707,43 +639,144 @@ void CandidateSet::diagnoseAnonymous(SemaPass &SP,
 
       break;
    }
-   case IncompatibleArgument: {
+   case CandidateSet::IncompatibleArgument: {
       auto idx = Cand.Data1;
       auto givenTy = args[idx]->getExprType();
-      auto neededTy = Cand.BuiltinCandidate.FuncTy->getParamTypes()[idx];
+      auto neededTy = Cand.getFunctionType()->getParamTypes()[idx];
 
       SP.diagnose(Caller, err_no_implicit_conv, givenTy, neededTy,
                   args[idx]->getSourceRange());
 
       break;
    }
-   case CouldNotInferArgumentType: {
+   case CandidateSet::IncompatibleReturnType: {
+      auto needed = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data1));
+      auto given = QualType::getFromOpaquePtr(
+         reinterpret_cast<void*>(Cand.Data2));
+
+      SP.diagnose(Caller, note_cand_invalid_return, given, needed,
+                  CandLoc);
+
+      break;
+   }
+   case CandidateSet::CouldNotInferArgumentType: {
       SP.diagnose(Caller, note_candidate_requires_context, Cand.Data1 + 1,
-                  Cand.getSourceLoc());
+                  CandLoc);
 
       break;
    }
    }
 }
 
+void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
+                                            Expression *SelfVal,
+                                            ArrayRef<Expression*> args,
+                                            ArrayRef<Expression*> templateArgs,
+                                            Statement *Caller,
+                                            SourceLocation OpLoc) {
+   if (InvalidCand) {
+      Caller->setIsInvalid(true);
+      return;
+   }
+
+   DeclarationName FuncName;
+   for (auto &Cand : Candidates) {
+      if (!Cand.isAnonymousCandidate()) {
+         FuncName = Cand.getFunc()->getDeclName();
+         break;
+      }
+   }
+
+   bool Diagnosed = false;
+   if (FuncName) {
+      auto Kind = FuncName.getKind();
+      if (Kind == DeclarationName::InfixOperatorName) {
+         Diagnosed = true;
+         SP.diagnose(Caller, err_binop_not_applicable,
+                     FuncName.getInfixOperatorName()->getIdentifier(),
+                     QualType(), QualType(),
+                     OpLoc ? OpLoc : Caller->getSourceLoc());
+      }
+      else if (Kind == DeclarationName::PrefixOperatorName
+      || Kind == DeclarationName::PostfixOperatorName) {
+         Diagnosed = true;
+         bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
+         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix,
+                     FuncName, 0, QualType(),
+                     OpLoc ? OpLoc : Caller->getSourceLoc());
+      }
+      else if (Kind == DeclarationName::ConstructorName) {
+         Diagnosed = true;
+         enum : int { Matching = 0, Accessible = 1 };
+         auto R = FuncName.getConstructorType()->getRecord();
+         SP.diagnose(Caller, err_no_matching_initializer,
+                     Candidates.empty() ? Accessible : Matching,
+                     R->getSpecifierForDiagnostic(), R->getFullName(),
+                     Caller->getSourceRange());
+      }
+   }
+
+   if (!Diagnosed) {
+      if (Candidates.empty()) {
+         SP.diagnose(Caller, err_func_not_found, Caller->getSourceRange(),
+                     0, FuncName);
+
+         return;
+      }
+
+      SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
+                  true, 0, FuncName);
+   }
+
+   SmallVector<Expression*, 4> ArgsWithSelf;
+   ArgsWithSelf.reserve(args.size() + 1);
+   ArgsWithSelf.push_back(SelfVal);
+   ArgsWithSelf.append(args.begin(), args.end());
+
+   for (auto &Cand : Candidates) {
+      if (Cand.isAnonymousCandidate()) {
+         diagnoseAnonymousCandidate(SP, *this, Cand, ArgsWithSelf, templateArgs,
+                                    Caller);
+      }
+      else {
+         auto *Fn = Cand.getFunc();
+         ArrayRef<Expression*> ArgValues;
+
+         if (isa<MethodDecl>(Fn) && !Fn->isCompleteInitializer()) {
+            ArgValues = ArgsWithSelf;
+         }
+         else {
+            ArgValues = args;
+         }
+
+         diagnoseCandidate(SP, *this, Cand, ArgValues, templateArgs, Caller);
+      }
+   }
+}
+
 void
-CandidateSet::diagnoseAmbiguousCandidates(SemaPass &SP,
-                                          DeclarationName funcName,
-                                          llvm::ArrayRef<Expression*> args,
-                                          llvm::ArrayRef<Expression*> templateArgs,
-                                          Statement *Caller,
-                                          bool OperatorLookup,
-                                          SourceLocation OpLoc) {
-   SP.diagnose(Caller, err_ambiguous_call, 0, funcName,
+CandidateSet::diagnoseAmbiguousCandidates(SemaPass &SP, Statement *Caller)
+{
+   DeclarationName FuncName;
+   for (auto &Cand : Candidates) {
+      if (!Cand.isAnonymousCandidate()) {
+         FuncName = Cand.getFunc()->getDeclName();
+         break;
+      }
+   }
+
+   assert(FuncName && "unnamed call can't be ambiguous!");
+   SP.diagnose(Caller, err_ambiguous_call, 0, FuncName,
                Caller->getSourceRange());
 
    for (auto &Cand : Candidates) {
       if (!Cand || Cand.ConversionPenalty != BestConversionPenalty)
          continue;
 
-      if (Cand.isBuiltinCandidate()) {
+      if (Cand.isAnonymousCandidate()) {
          SP.diagnose(note_builtin_candidate, /*operator*/ true,
-                     makeFakeSourceLoc(*this, funcName, Cand));
+                     makeFakeSourceLoc(*this, FuncName, Cand));
       }
       else {
          SP.diagnose(Caller, note_candidate_here, Cand.getSourceLoc());
@@ -797,6 +830,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       case CouldNotInferArgumentType:
       case ArgumentRequiresRef:
       case IncompatibleLabel:
+      case IncompatibleReturnType:
          llvm_unreachable("should be impossible on alias candidate set!");
       case FailedConstraint: {
          llvm::SmallString<128> Str;
@@ -811,11 +845,11 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
             SP.diagnose(Caller, note_cand_failed_constraint_inferred,
                         Str.str(),
                         TemplateArgs.toString('\0', '\0', true),
-                        Cand.Alias->getSourceLoc());
+                        Cand.getAlias()->getSourceLoc());
          }
          else {
             SP.diagnose(Caller, note_cand_failed_constraint, Str.str(),
-                        Cand.Alias->getSourceLoc());
+                        Cand.getAlias()->getSourceLoc());
          }
 
          SP.diagnose(note_constraint_here, Constraint->getSourceRange());
@@ -831,7 +865,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       }
       case ConflictingInferredArg: {
          auto idx = Cand.Data2;
-         auto Param = Cand.Alias->getTemplateParams()[idx];
+         auto Param = Cand.getAlias()->getTemplateParams()[idx];
 
          if (Param->isTypeName()) {
             auto conflictingTy = QualType::getFromOpaquePtr(
@@ -863,7 +897,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
          break;
       }
       case TooManyTemplateArgs: {
-         auto neededSize = Cand.Alias->getTemplateParams().size();
+         auto neededSize = Cand.getAlias()->getTemplateParams().size();
          auto givenSize  = templateArgs.size();
 
          SP.diagnose(Caller, note_too_many_template_args, neededSize,
@@ -920,7 +954,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       case RecursivelyDependent: {
          SP.diagnose(note_generic_note,
                      "candidate cannot be referred to here",
-                     Cand.Alias->getSourceLoc());
+                     Cand.getAlias()->getSourceLoc());
 
          break;
       }

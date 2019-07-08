@@ -23,6 +23,7 @@ class TargetMachine;
 namespace cdot {
 namespace ast {
    class RecordDecl;
+   class SemaPass;
    class StructDecl;
 }
 
@@ -79,6 +80,7 @@ private:
    void runMandatoryPasses(llvm::Module *M);
 
    bool NeedsStructReturn(CanType Ty);
+   bool IsSmallStruct(CanType Ty);
    bool PassStructDirectly(CanType Ty);
 
    void addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal);
@@ -225,6 +227,7 @@ private:
    llvm::GlobalVariable *getOrCreateInitializedFlag(const il::Value *ForVal);
 
    CompilerInstance &CI;
+   ast::SemaPass &Sema;
    const TargetInfo &TI;
    il::Module *ILMod;
 

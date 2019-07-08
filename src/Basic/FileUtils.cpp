@@ -33,11 +33,13 @@ llvm::StringRef getPath(llvm::StringRef fullPath)
    auto period = fullPath.rfind('.');
    auto slash = fullPath.rfind(PathSeperator);
 
-   if (period == string::npos || period < slash)
+   if (period == string::npos || (period < slash && slash != string::npos)) {
       return fullPath;
+   }
 
-   if (slash == string::npos)
+   if (slash == string::npos) {
       return "";
+   }
 
    return fullPath.substr(0, slash + 1);
 }
@@ -195,22 +197,34 @@ std::vector<string> getAllFilesInDirectory(llvm::StringRef dirName,
 
 string findFileInDirectories(llvm::StringRef fileName,
                              llvm::ArrayRef<std::string> directories) {
-   if (fileName.startswith("/")) {
+   if (fileName.front() == fs::PathSeperator) {
       if (fileExists(fileName))
          return fileName;
-      
+
       return "";
    }
 
-   using iterator = llvm::sys::fs::recursive_directory_iterator;
+   auto Path = fs::getPath(fileName);
+   if (!Path.empty()) {
+      fileName = fs::getFileNameAndExtension(fileName);
+   }
+
+   using iterator = llvm::sys::fs::directory_iterator;
    using Kind = llvm::sys::fs::file_type;
 
    std::error_code ec;
    iterator end_it;
 
-   for (auto &dirName : directories) {
-      iterator it(dirName, ec);
+   for (std::string dirName : directories) {
+      if (!Path.empty()) {
+         if (dirName.back() != fs::PathSeperator) {
+            dirName += fs::PathSeperator;
+         }
 
+         dirName += Path;
+      }
+
+      iterator it(dirName, ec);
       while (it != end_it) {
          auto &entry = *it;
 

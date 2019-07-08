@@ -1,0 +1,264 @@
+
+module std.io
+
+alias ByteBuffer = [Byte]
+
+public abstract class OutputStream {
+    enum BufferKind(u8) {
+        /// The stream is not currently buffered.
+        case Unbuffered
+
+        /// The stream is buffered, and the buffer is owned by this class.
+        case Buffered
+    }
+
+    /// Default buffer size to use for a buffered stream.
+    alias DefaultBufferSize = 1024
+
+    /// The current buffer status.
+    protected var bufferKind: BufferKind
+
+    /// The buffer used to avoid writing to the stream too frequently.
+    protected var buffer: ByteBuffer
+
+    /// C'tor for subclasses. If buffered is true, the buffer is initialized with a default capacity.
+    protected init (buffered: Bool = false) {
+        bufferKind = .Unbuffered
+        buffer = ByteBuffer(withInitialCapacity: 0)
+
+        if buffered {
+            setBuffered()
+        }
+    }
+
+    /// D'tor.
+    deinit {
+        assert!(buffer.empty, "subclass should flush buffer!")
+    }
+
+    /// Returns true if the stream is currently buffered.
+    public prop buffered: Bool {
+        return bufferKind == .Buffered
+    }
+
+    /// Returns true if this class supports writing to a specified position.
+    public def virtual supportsWriteToPosition() -> Bool { return false }
+
+    /// Writes the given bytes to the specified position if supported, asserts otherwise.
+    public def pwrite(_ bytes: [Byte], pos: Int) {
+        assert!(supportsWriteToPosition(), "pwrite is not supported by this OutStream")
+        assert!(pos < tell(), "writing to out-of-bounds position")
+
+        pwriteToStream(bytes, pos)
+    }
+
+    /// Flushes the buffer to the underlying stream.
+    public def flush() {
+        if !buffer.empty {
+            flushNonEmpty()
+            buffer.clear()
+        }
+    }
+
+    /// Flushes the buffer to the underlying stream. Asserts if the buffer is empty.
+    def flushNonEmpty() {
+        assert!(!buffer.empty, "'flushNonEmpty' called on empty buffer!")
+        writeToStream(buffer)
+        buffer.clear()
+    }
+
+    /// Force the stream to be buffered, using the given capacity for the buffer.
+    public def setBuffered(bufferSize: Int = DefaultBufferSize) {
+        bufferKind = .Buffered
+        buffer.reserveCapacity(bufferSize)
+    }
+
+    /// Returns the total number of bytes written.
+    public def tell() -> Int { return currentPos() + getNumBytesInBuffer() }
+
+    /// Returns the number of bytes currently buffered.
+    def getNumBytesInBuffer() -> Int { return buffer.size }
+
+    def writeInteger(_ val: i64) {
+        append(val.toString())
+    }
+
+    def writeInteger(_ val: u64) {
+        append(val.toString())
+    }
+    
+    macro define_append_fn{
+        ($($ty:tok)*) => {
+            $(
+                public def append(_ v: $ty) {
+                    writeInteger(v)
+                }
+            )...
+        }
+    }
+
+    /// Define append functions for all integers.
+    define_append_fn!{ i1 i8 u8 i16 u16 i32 u32 i64 u64 }
+
+    /// Append the character representation of this byte to the stream.
+    public def append(ascii byte: Byte) {
+        write(byte)
+    }
+
+    /// Append the raw bytes of the string to the stream
+    public def append(_ s: String) {
+        write([Byte](elementsOf: s.ascii))
+    }
+
+    /// Convenience operator for easy chaining of several output operations.
+    @discardableResult
+    public def infix << <T>(t: T) -> Self {
+        append(t)
+        return self
+    }
+
+    /// Write the byte either to the buffer or directly to the stream.
+    def write(_ byte: Byte) {
+        if buffered {
+            if buffer.size + 1 > buffer.capacity {
+                // flush the buffer to make space.
+                flush()
+            }
+
+            buffer.push(byte)
+        }
+        else {
+            writeToStream([Byte](withSingleElement: byte))
+        }
+    }
+
+    /// Write the bytes either to the buffer or directly to the stream.
+    def write(_ bytes: [Byte]) {
+        if buffered {
+            if buffer.size + bytes.size > buffer.capacity {
+                // unlikely case: we need to write more bytes than the capacity of our buffer,
+                // in that case write as many multiples of the buffer size as possible to the
+                // stream and buffer the rest
+                if bytes.size > buffer.capacity {
+                    var amount = bytes.size % buffer.capacity
+                    writeToStream(
+                        bytes.takeFront((amount * buffer.capacity) as Int))
+
+                    var rest = bytes.size - amount * buffer.capacity
+                    if rest > 0 {
+                        write(bytes.takeBack(rest as Int))
+                    }
+
+                    return
+                }
+
+                // flush the buffer to make space.
+                flush()
+            }
+
+            buffer.append(elementsOf: bytes)
+        }
+        else {
+            writeToStream(bytes)
+        }
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Colors
+    //===--------------------------------------------------------------------===//
+
+    public enum Color with StringRepresentable {
+        case Uncolored = 0
+        case Black   = 30
+        case Red     = 31
+        case Green   = 32
+        case Yellow  = 33
+        case Blue    = 34
+        case Magenta = 35
+        case Cyan    = 36
+        case White   = 37
+
+        /// \inherit
+        def toString() -> String {
+            return "\e[${self as Int}m"
+        }
+    }
+
+    /// \return `true` iff this stream supports colors.
+    public def virtual supportsColors() -> Bool { return false }
+
+    /// Set the color of this output stream.
+    /// \param c the color to set the stream to.
+    public def setColor(_ c: Color) {
+        if !supportsColors() {
+            return
+        }
+
+        self << c.toString()
+    }
+
+    /// Reset the color of this output stream.
+    public def resetColor() {
+        if !supportsColors() {
+            return
+        }
+
+        self << Color.Uncolored.toString()
+    }
+
+    /// Set this streams color.
+    public def append(_ color: Color) {
+        setColor(color)
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Interface
+    //===--------------------------------------------------------------------===//
+
+    /// Returns the current position in the stream.
+    protected def abstract currentPos() -> Int
+
+    /// Writes the given bytes to the underlying stream.
+    protected def abstract writeToStream(_ bytes: [Byte]) -> Void
+
+    /// Writes the given bytes to the specified position if supported, asserts otherwise.
+    protected def virtual pwriteToStream(_ bytes: [Byte], pos: Int) {
+        unreachable!("pwrite is not supported by this OutStream")
+    }
+}
+
+/// An (unbuffered) output stream that writes to a string.
+public class StringOutputStream: OutputStream {
+    var str: String { get }
+    
+    /// C'tor. The stream will write to the given string.
+    public init (_ str: String = "") {
+        super.init(buffered: false)
+        self.str = str
+    }
+
+    def override currentPos() -> Int {
+        return str.size
+    }
+
+    def override writeToStream(_ bytes: [Byte]) {
+        str.append(elementsOf: bytes)
+    }
+}
+
+/// An output stream that ignores all output.
+public class NullOutputStream: OutputStream {
+    /// C'tor. The created stream will discard all output.
+    fileprivate init {
+        super.init(buffered: false)
+    }
+
+    def override currentPos() -> Int { return 0 }
+    def override writeToStream(_ bytes: [Byte]) {}
+
+    def override supportsWriteToPosition() -> Bool { return true }
+    def override pwriteToStream(_ bytes: [Byte], pos: Int) {}
+}
+
+/// A singleton instance of the NullStream that discards all output.
+public let nulls = NullOutputStream()

@@ -74,6 +74,7 @@ namespace diag {
    class DiagnosticBuilder;
 } // namespace diag
 
+class IdentifierInfo;
 class Type;
 class QualType;
 
@@ -146,7 +147,10 @@ public:
       /// This type contains a template with no specified template parameters.
       ContainsTemplate                    = 0x100,
 
-      _lastProp = ContainsRuntimeGenericParam
+      /// This type contains a type variable type.
+      ContainsTypeVariable                = 0x200,
+
+      _lastProp = ContainsTypeVariable
    };
 
    static_assert(_lastProp <= (1 << 15), "too many type properties!");
@@ -180,6 +184,7 @@ public:
    bool containsTemplate() const;
    bool containsUnexpandedParameterPack() const;
    bool containsRuntimeGenericParam() const;
+   bool containsTypeVariable() const;
 };
 
 class Type {
@@ -271,6 +276,9 @@ public:
 
    bool containsRuntimeGenericParam() const
    { return properties().containsRuntimeGenericParam(); }
+
+   bool containsTypeVariable() const
+   { return properties().containsTypeVariable(); }
 
    sema::FinalTemplateArgumentList& getTemplateArgs() const;
    bool hasTemplateArgs() const;
@@ -364,7 +372,6 @@ public:
 
    bool isOptionTy() const;
 
-   bool needsStructReturn() const;
    bool isRefcounted() const;
    bool needsCleanup() const;
 
@@ -372,8 +379,6 @@ public:
    {
       return isNumeric() || isThinFunctionTy() || isStruct();
    }
-
-   bool needsMemCpy() const;
 
    TypeProperties properties() const { return Bits.Props; }
 
@@ -573,6 +578,8 @@ public:
 
    static CanType getFromOpaquePtr(void *Ptr);
    static CanType getFromOpaquePtrUnchecked(void *Ptr);
+
+   CanType() = default;
 
    /// Constructors from types that are always canonical.
 #  define CDOT_CAN_TYPE(TYPE, PARENT)                       \
@@ -1047,11 +1054,12 @@ class FunctionType: public Type, public llvm::FoldingSetNode {
 public:
    struct ParamInfo {
       ParamInfo();
-      ParamInfo(ArgumentConvention Conv)
-         : Conv(Conv)
+      ParamInfo(ArgumentConvention Conv, IdentifierInfo *Label = nullptr)
+         : Conv(Conv), Label(Label)
       {}
 
       ArgumentConvention getConvention() const { return Conv; }
+      IdentifierInfo *getLabel() const { return Label; }
 
       void Profile(llvm::FoldingSetNodeID &ID) const;
       bool operator==(const ParamInfo &I) const;
@@ -1059,6 +1067,7 @@ public:
 
    private:
       ArgumentConvention Conv : 4;
+      IdentifierInfo *Label;
    };
 
    enum ExtFlags : unsigned {
@@ -1331,7 +1340,8 @@ class DependentRecordType: public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl *record,
                        sema::FinalTemplateArgumentList *templateArgs,
-                       QualType Parent);
+                       QualType Parent,
+                       Type *CanonicalType);
 
    QualType Parent;
    mutable sema::FinalTemplateArgumentList *templateArgs;
@@ -1542,6 +1552,26 @@ public:
 
    NestedNameSpecifierWithLoc *getNameSpecWithLoc() const { return NameSpec; }
    NestedNameSpecifier *getNameSpec() const;
+};
+
+class TypeVariableType: public Type {
+   TypeVariableType(unsigned ID);
+
+   /// The unique ID of this type variable.
+   unsigned ID;
+
+public:
+   friend class ast::ASTContext;
+
+   static bool classof(Type const* T)
+   {
+      return T->getTypeID() == TypeID::TypeVariableTypeID;
+   }
+
+   child_iterator child_begin() const { return child_iterator{}; }
+   child_iterator child_end() const { return child_iterator{}; }
+
+   unsigned getVariableID() const { return ID; }
 };
 
 template<class T> const T* Type::getAs() const

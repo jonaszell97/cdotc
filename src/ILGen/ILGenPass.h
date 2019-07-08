@@ -101,7 +101,11 @@ public:
    il::Value *visitIdentifierRefExpr(IdentifierRefExpr *Expr);
    il::Value *visitBuiltinIdentExpr(BuiltinIdentExpr *node);
    il::Value *visitSelfExpr(SelfExpr *Expr);
-   il::Value * visitSuperExpr(SuperExpr *Expr);
+   il::Value *visitSuperExpr(SuperExpr *Expr);
+
+   il::Value *visitDeclRefExpr(DeclRefExpr *Expr);
+   il::Value *visitMemberRefExpr(MemberRefExpr *Expr);
+   il::Value *visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr);
 
    il::Value *visitParenExpr(ParenExpr *node);
 
@@ -181,6 +185,7 @@ public:
    il::Value *visitUnaryOperator(UnaryOperator *UnOp);
 
    il::Value *visitCastExpr(CastExpr *Cast);
+   il::Value *visitAddrOfExpr(AddrOfExpr *Expr);
    il::Value *visitTypePredicateExpr(TypePredicateExpr *Pred);
 
    il::Value *visitTypeExpr(TypeExpr *Expr);
@@ -230,14 +235,8 @@ public:
       /// The String Storage type.
       StructDecl *StringStorage = nullptr;
 
-      /// The String Storage enum.
-      EnumDecl *StringStorageStorage = nullptr;
-
       /// The Atomic<UInt32> type.
       StructDecl *AtomicIntDecl = nullptr;
-
-      /// The String Storage direct case.
-      EnumCaseDecl *StringStorageDirectCase = nullptr;
    };
 
    void initStringInfo();

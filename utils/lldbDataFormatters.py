@@ -45,6 +45,9 @@ def __lldb_init_module(debugger, internal_dict):
                            '-l lldbDataFormatters.ExprSequenceSynthProvider '
                            '-x "^cdot::ast::ExprSequence$"')
     debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.AnonymousCallExprSynthProvider '
+                           '-x "^cdot::ast::AnonymousCallExpr"')
+    debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.CompoundStmtSynthProvider '
                            '-x "^cdot::ast::CompoundStmt$"')
     debugger.HandleCommand('type synthetic add -w llvm '
@@ -467,6 +470,42 @@ class CompoundStmtSynthProvider:
                                   # LBraceLoc, RBraceLoc
         self.numElements = self.valobj.GetChildMemberWithName(
             "numStmts").GetValueAsUnsigned(0)
+        self.update()
+
+    def num_children(self):
+        return self.normalChildCount + self.numElements
+
+    def has_children(self):
+        return True
+
+    def get_child_index(self, name):
+        return -1
+
+    def get_child_at_index(self, index):
+        if index < 0 or index >= self.num_children():
+            return None
+
+        if index < self.normalChildCount:
+            return self.valobj.GetChildAtIndex(index)
+
+        offset = self.valobj.GetType().GetPointeeType().GetByteSize() \
+                 + (index - self.normalChildCount) * self.typeSize
+
+        name = '[' + str(index - self.normalChildCount) + ']'
+        return self.valobj.CreateChildAtOffset(name, offset, self.StmtTy)
+
+    def update(self):
+        return True
+
+class AnonymousCallExprSynthProvider:
+    def __init__(self, valobj, dict):
+        self.valobj = valobj
+        self.StmtTy = self.valobj.GetFrame().GetModule().FindFirstType(
+            "cdot::ast::Expression").GetPointerType()
+        self.typeSize = self.StmtTy.GetByteSize()
+        self.normalChildCount = 5 # Expression base, parenRange, ParentExpr, FnTy, numArgs, isPrimitiveInit
+        self.numElements = self.valobj.GetChildMemberWithName(
+            "NumArgs").GetValueAsUnsigned(0)
         self.update()
 
     def num_children(self):

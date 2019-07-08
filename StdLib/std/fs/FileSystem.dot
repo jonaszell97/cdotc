@@ -1,0 +1,127 @@
+
+module std.fs
+
+enum OpenFlags(libc.int) {
+    /// Open the file for read.
+    case R      = 0x1
+
+    /// Open the file for read and write.
+    case RW     = 0x3
+
+    /// Forces the opening to fail if the file already exists.
+    case Excl   = 0x4
+
+    /// When opening a file, if it already exists append to the
+    /// existing file instead of returning an error.
+    case Append = 0x8
+
+    /// The file should be opened in text mode on platforms that make this
+    /// distinction.
+    case Text   = 0x10
+
+    /// Implement arithmetic operators for this enum.
+    enum_arithmetic!{}
+}
+
+enum SeekOrigin {
+    /// Beginning of file.
+    case SEEK_SET = 0
+
+    /// Current position of the file pointer.
+    case SEEK_CUR = 1
+
+    /// End of file.
+    case SEEK_END = 2
+}
+
+enum AccessMode {
+    /// Test for existence of file.
+    case Exists = 0
+
+    /// Test for execute or search permission.
+    case Execute = 1 << 0
+
+    /// Test for write permission.
+    case Write = 1 << 1
+
+    /// Test for read permission.
+    case Read = 1 << 2
+
+    /// Implement arithmetic operators for this enum.
+    enum_arithmetic!{}
+}
+
+/// \return the timestamp (in milliseconds) when this file was last modified.
+internal def getLastModifiedTime(of fileName: libc.CString) -> libc.long_long {
+    return rt._cdot_GetLastModifiedTime(fileName)
+}
+
+/// Attempt to delete the file with the given name.
+/// \return `true` on failure, `false` on success.
+@discardableResult
+public def deleteFile(_ fileName: String) -> Bool {
+    return sys.fs.deleteFile(fileName)
+}
+
+/// Check whether or not a file with the given name exists.
+/// \return `true` if the file exists and has the specified permissions,
+///         `false` otherwise
+public def fileExists(_ fileName: String, _ kind: AccessMode = .Exists) -> Bool {
+    return sys.fs.fileExists(fileName, kind)
+}
+
+/// Check whether or not a file exists and is executable.
+/// \return `true` if the file exists and has the specified permissions,
+///         `false` otherwise
+public def canExecute(_ fileName: String) -> Bool {
+    return sys.fs.fileExists(fileName, .Execute)
+}
+
+/// System directory for temporary files.
+public def tempDir() -> String {
+    return sys.fs.tempDir()
+}
+
+/// Generate a random temporary file name.
+public def tempFileName(withFormat template: String = "%%%%%%%%%.tmp") -> String {
+    var str = template
+    for i in 0..str.size {
+        if str[i] == '%' {
+            str[i] = string.randomAlphaNumeric()
+        }
+    }
+
+    return template
+}
+
+/// Open a new temporary file for writing.
+public def tempFile(withPrefix pref: String = "",
+                    withSuffix suffix: String = ".tmp") -> io.FileOutputStream? {
+    var path = tempDir()
+    path += tempFileName(withFormat: "$pref-%%%%%%%$suffix")
+
+    return io.FileOutputStream(path)
+}
+
+/// Systemwide separator for paths.
+public let PathSeparator = sys.fs.PathSeparator
+
+extend String {
+    /// Append to a path name.
+    public def mutating append(path: String) {
+        if !empty && last! != fs.PathSeperator {
+            self += fs.PathSeperator
+        }
+
+        self += path
+    }
+
+    /// Append to a path name.
+    /// \return a new string with @param{path} appended to it.
+    public def withAppendedPath(_ path: String) -> String {
+        var str = self.copy()
+        str.append(path: path)
+
+        return str
+    }
+}

@@ -207,10 +207,12 @@ EnumRawValueInst::EnumRawValueInst(Value *Val,
    auto rec = Val->getType()->getRecord();
    assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
 
-   type = ValueType(Val->getCtx(), cast<EnumDecl>(rec)->getRawType());
+   auto &ASTCtx = getASTCtx();
+   type = ValueType(Val->getCtx(), ASTCtx.getIntTy());
 
-   if (!LoadVal)
-      type = getASTCtx().getMutableReferenceType(type);
+   if (!LoadVal) {
+      type = ASTCtx.getMutableReferenceType(type);
+   }
 }
 
 EnumExtractInst::EnumExtractInst(Value *Val,

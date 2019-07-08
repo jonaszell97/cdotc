@@ -546,6 +546,93 @@ unsigned NumNeededArgs = 0;
       auto EndLoc = currentTok().getSourceLoc();
 Attrs.push_back(new (Context) CompileTimeAttr(SourceRange(AttrLoc, EndLoc)));
  break;}
+case AttrKind::NoDerive: {
+NoDeriveAttr::KindKind kind;
+unsigned NumNeededArgs = 1;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               case 0: {
+   if (!currentTok().is(tok::ident)) {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "noDerive ", 5 /*one of */,
+                  1, "Equatable, Copyable, _All");
+
+      break;
+   }
+
+   auto Ident = currentTok().getIdentifier();
+NoDeriveAttr::KindKind _enumKind;
+if (Ident=="Equatable") { _enumKind = NoDeriveAttr::Equatable; }
+else if (Ident=="Copyable") { _enumKind = NoDeriveAttr::Copyable; }
+else if (Ident=="_All") { _enumKind = NoDeriveAttr::_All; }
+else if (Ident=="*") { _enumKind = NoDeriveAttr::_All; }
+
+   else {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "noDerive", 5 /*one of */,
+                  1, "Equatable, Copyable, _All");
+
+      break;
+   }
+kind = _enumKind;
+break;
+}
+
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+
+         
+         while (ArgNo < 1) {
+            switch (ArgNo) {
+            default: llvm_unreachable("no default argument");
+case 0: {
+kind = NoDeriveAttr::NoDeriveAttr::KindKind::_All;
+
+ArgNo++;
+break;
+}
+
+            }
+         }
+
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) NoDeriveAttr(std::move(kind), SourceRange(AttrLoc, EndLoc)));
+ break;}
 case AttrKind::VersionDecl: {
 VersionDeclAttr::VersionKind version;
 unsigned NumNeededArgs = 1;
@@ -769,6 +856,65 @@ break;
       auto EndLoc = currentTok().getSourceLoc();
 Attrs.push_back(new (Context) _BuiltinAttr(std::move(builtinName), SourceRange(AttrLoc, EndLoc)));
  break;}
+case AttrKind::_Semantics: {
+std::string semanticsKind;
+unsigned NumNeededArgs = 1;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               case 0: {
+   if (!currentTok().is(tok::stringliteral)) {
+      SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
+                  "_semantics", 2 /*string literal */,
+                  1);
+
+      break;
+   }
+semanticsKind = prepareStringLiteral(currentTok());
+break;
+}
+
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+
+         
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) _SemanticsAttr(std::move(semanticsKind), SourceRange(AttrLoc, EndLoc)));
+ break;}
 #endif
 #undef CDOT_PARSE_ATTR_MAIN
 
@@ -807,11 +953,17 @@ SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "testa
 case AttrKind::CompileTime: {if (isa<Decl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "compiletime");
 }
+case AttrKind::NoDerive: {if (isa<RecordDecl>(D)) break;
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "noDerive");
+}
 case AttrKind::VersionDecl: {if (isa<Decl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "version");
 }
 case AttrKind::_Builtin: {if (isa<NamedDecl>(D)) break;
 SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_builtin");
+}
+case AttrKind::_Semantics: {if (isa<NamedDecl>(D)) break;
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_semantics");
 }
 default: break; 
 }

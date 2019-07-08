@@ -24,6 +24,8 @@ namespace ast {
    class ModuleDecl;
 } // namespace ast
 
+enum class AccessSpecifier : unsigned char;
+
 class Module {
    Module(IdentifierInfo *Name,
           SourceRange Loc,
@@ -40,6 +42,15 @@ class Module {
 
    /// The location this module was first encountered
    SourceRange Loc;
+
+   /// If true, this module only exports declarations.
+   bool DeclarationsOnly = false;
+
+   /// If true, declarations are compiletime-evaluable by default.
+   bool CompileTimeByDefault = false;
+
+   /// The default access specifier for declarations within this module.
+   AccessSpecifier DefaultAccess;
 
    /// The time (in milliseconds) any file in this module was last modified
    long long LastModified = 0;
@@ -60,6 +71,15 @@ class Module {
    /// All declarations of this module.
    SmallVector<ast::ModuleDecl*, 0> AllDecls;
 
+   /// Declarations that are implicitily made visible from this module.
+   SmallVector<ast::NamedDecl*, 0> ImplicitExports;
+
+   /// True iff all declarations from this module are implicitly visible.
+   bool AllImplicitlyExported = false;
+
+   /// The modules that are implicitly imported in every file of this module.
+   SmallVector<Module*, 4> ImplicitlyImportedModules;
+
    /// The corresponding IL module.
    il::Module *ILMod = nullptr;
 
@@ -73,6 +93,10 @@ class Module {
    bool ContainsNewDecls = false;
 
 public:
+   enum SourceFileLang {
+      CDot, C, CSystem, CXX,
+   };
+
    struct SourceFileInfo {
       /// The time (in milliseconds) this file was last modified
       long long LastModified = 0;
@@ -82,6 +106,15 @@ public:
 
       /// Base offset assigned during original compilation.
       unsigned OriginalOffset = 0;
+
+      /// The language of the source file.
+      SourceFileLang Lang = CDot;
+
+      /// True iff this is the main source file.
+      bool IsMainFile = false;
+
+      /// Only include this source file if it exists.
+      bool Optional = false;
    };
 
 private:
@@ -148,6 +181,30 @@ public:
 
       AllDecls.push_back(D);
    }
+
+   bool declarationsOnly() const { return DeclarationsOnly; }
+   void setDeclarationsOnly(bool b) { DeclarationsOnly = b; }
+
+   bool allImplicitlyExported() const { return AllImplicitlyExported; }
+   void setAllImplicitlyExported(bool B) { AllImplicitlyExported = B; }
+
+   void addImplicitExport(ast::NamedDecl *ND) { ImplicitExports.push_back(ND); }
+
+   bool isCompileTimeByDefault() const { return CompileTimeByDefault; }
+   void setCompileTimeByDefault(bool B) { CompileTimeByDefault = B; }
+
+   ArrayRef<Module*> getImplicitlyImportedModules() const
+   {
+      return ImplicitlyImportedModules;
+   }
+
+   void addImplicitlyImportedModule(Module *M)
+   {
+      ImplicitlyImportedModules.push_back(M);
+   }
+
+   AccessSpecifier getDefaultAccessSpec() const { return DefaultAccess; }
+   void setDefaultAccessSpec(AccessSpecifier AS) { DefaultAccess = AS; }
 
    IdentifierInfo *getModulePath() const { return ModulePath; }
    void setModulePath(IdentifierInfo *P) { ModulePath = P; }

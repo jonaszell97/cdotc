@@ -139,8 +139,9 @@ void ASTDeclWriter::visit(Decl *D)
          Record.AddIdentifierRef(
             &CI.getContext().getIdentifiers().get(ILVal->getName()));
 
-         if (ExternallyVisibleFunction)
+         if (ExternallyVisibleFunction) {
             Writer.getWriter().ILWriter.AddExternallyVisibleValue(ILVal);
+         }
       }
       else {
          Record.AddIdentifierRef(nullptr);
@@ -210,11 +211,18 @@ void ASTDeclWriter::WriteDeclConstraint(const DeclConstraint &C)
    for (auto *II : NameQual)
       Record.AddIdentifierRef(II);
 
-   if (C.getKind() == DeclConstraint::Concept) {
+   switch (C.getKind()) {
+   case DeclConstraint::Concept:
       Record.AddStmt(C.getConceptRefExpr());
-   }
-   else {
+      break;
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated:
       Record.AddTypeRef(C.getType());
+      break;
+   default:
+      break;
    }
 }
 
@@ -359,6 +367,7 @@ void ASTDeclWriter::visitPropDecl(PropDecl *D)
 
    Record.AddSourceRange(D->getSourceRange());
    Record.AddTypeRef(D->getType());
+   Record.push_back(D->isReadWrite());
 
    Record.AddDeclRef(D->getGetterMethod());
    Record.AddDeclRef(D->getSetterMethod());
@@ -634,6 +643,12 @@ void ASTDeclWriter::visitModuleDecl(ModuleDecl *D)
 
    Record.AddSourceRange(D->getSourceRange());
    Record.AddModuleRef(D->getModule());
+}
+
+void ASTDeclWriter::visitSourceFileDecl(SourceFileDecl *D)
+{
+   visitNamedDecl(D);
+   Record.AddSourceRange(D->getSourceRange());
 }
 
 void ASTDeclWriter::visitImportDecl(ImportDecl *D)

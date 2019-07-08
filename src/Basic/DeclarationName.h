@@ -77,6 +77,7 @@ public:
    }
 
    IdentifierInfo *getIdentifierInfo() const;
+   bool isAnyOperatorName() const;
 
    QualType getConstructorType() const;
    QualType getDestructorType() const
@@ -314,9 +315,9 @@ public:
                                 QualType Ty);
 
    DeclarationName getNormalIdentifier(const IdentifierInfo &II);
-   DeclarationName getConstructorName(QualType ConstructedType,
+   DeclarationName getConstructorName(CanType ConstructedType,
                                       bool IsCompleteCtor = true);
-   DeclarationName getDestructorName(QualType DestructedType);
+   DeclarationName getDestructorName(CanType DestructedType);
 
    DeclarationName getInfixOperatorName(const IdentifierInfo &II);
    DeclarationName getPrefixOperatorName(const IdentifierInfo &II);

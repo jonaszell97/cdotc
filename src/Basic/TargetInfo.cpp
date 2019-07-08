@@ -60,7 +60,7 @@ bool TargetInfo::isTriviallyCopyable(QualType Ty) const
 {
    bool Result;
    if (CI.getQueryContext().IsTriviallyCopyable(Result, Ty)) {
-      return 1;
+      return true;
    }
 
    return Result;

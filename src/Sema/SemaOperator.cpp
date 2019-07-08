@@ -177,7 +177,7 @@ ExprResult SemaPass::visitExprSequence(ExprSequence *ExprSeq)
       return ExprSeq;
    }
 
-   auto result = visitExpr(ExprSeq, Expr);
+   auto result = typecheckExpr(Expr, ExprSeq->getContextualType(), ExprSeq);
    if (!result)
       return ExprError();
 
@@ -247,19 +247,89 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    return BinOp;
 }
 
+static ExprResult checkAccessorAssignment(SemaPass &Sema, AssignExpr *Expr)
+{
+   auto Ident = dyn_cast<IdentifierRefExpr>(Expr->getLhs());
+   if (!Ident) {
+      return ExprError();
+   }
+
+   if (Ident->getKind() != IdentifierKind::Accessor) {
+      return ExprError();
+   }
+
+   auto Setter = Ident->getAccessor()->getSetterMethod();
+   if (!Setter) {
+      // Sema should have issued a diagnostic about the missing setter
+      assert(Ident->isInvalid() && "didn't complain about missing setter!");
+      return ExprError();
+   }
+
+   // Build a call to the appropriate accessor method.
+   auto *Call = Sema.CreateCall(Ident->getAccessor()->getSetterMethod(),
+                                {Expr->getLhs(), Expr->getRhs()},
+                                Expr->getEqualsLoc());
+
+   return Sema.visitExpr(Call);
+}
+
+static ExprResult checkSubscriptAssignment(SemaPass &Sema, AssignExpr *Expr)
+{
+   // the subscript will have been transformed into a call
+   auto Call = dyn_cast<CallExpr>(Expr->getLhs());
+   if (!Call) {
+      return ExprError();
+   }
+
+   auto M = dyn_cast_or_null<MethodDecl>(Call->getFunc());
+   if (!M || !M->isSubscript()) {
+      return ExprError();
+   }
+
+   // Replace the dummy default value.
+   Call->getArgs().back() = Expr->getRhs();
+   Call->setExprType(Sema.Context.getVoidType());
+
+   return Sema.visitExpr(Call);
+}
+
 ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
 {
+   // Check property setter.
    auto lhs = Expr->getLhs();
-   auto rhs = Expr->getRhs();
-
    auto LhsResult = visitExpr(Expr, lhs);
+
+   if (!LhsResult) {
+      return ExprError();
+   }
+
+   lhs = LhsResult.get();
+   Expr->setLhs(lhs);
+
+   if (auto Res = checkAccessorAssignment(*this, Expr)) {
+      return Res;
+   }
+   if (auto Res = checkSubscriptAssignment(*this, Expr)) {
+      return Res;
+   }
+
+   if (Expr->isInvalid()) {
+      return ExprError();
+   }
+   if (Expr->isTypeDependent()) {
+      Expr->setExprType(Context.getVoidType());
+      return Expr;
+   }
+
+   auto rhs = Expr->getRhs();
    auto RhsResult = visitExpr(Expr, rhs, lhs->getExprType()->stripReference());
 
-   if (!LhsResult || !RhsResult)
+   if (!RhsResult) {
       return ExprError();
+   }
 
-   Expr->setLhs(LhsResult.get());
-   Expr->setRhs(RhsResult.get());
+   rhs = RhsResult.get();
+   Expr->setRhs(rhs);
 
    if (isa<SelfExpr>(lhs) && lhs->getExprType()->stripReference()->isClass()) {
       diagnose(Expr, err_generic_error, "cannot assign to 'self' in a class",
@@ -284,8 +354,9 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
    auto TargetResult = visitExpr(UnOp, UnOp->getTarget(),
                                  UnOp->getFunctionType()->getParamTypes()[0]);
 
-   if (!TargetResult)
+   if (!TargetResult) {
       return ExprError();
+   }
 
    UnOp->setTarget(TargetResult.get());
 
@@ -315,11 +386,7 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
 
 ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
 {
-   auto CondRes = visitExpr(Expr, Expr->getCond());
-   if (!CondRes)
-      return ExprError();
-
-   Expr->setCond(implicitCastIfNecessary(CondRes.get(), Context.getBoolTy()));
+   visitIfConditions(Expr, Expr->getCond());
 
    auto TrueValRes = visitExpr(Expr, Expr->getTrueVal(),
                                Expr->getContextualType());
@@ -341,25 +408,9 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
 
 ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 {
-   // right hand side might not have been parsed as a type, check if we were
-   // actually given a meta type
-   auto TypeResult = visitSourceType(Cast, Cast->getTargetType(), true);
-   if (!TypeResult)
-      return ExprError();
+   CanType to = Cast->getTargetType()->stripMetaType();
 
-   if (TypeResult.get()->isDependentType()) {
-      Cast->setIsTypeDependent(true);
-   }
-
-   auto to = Cast->getTargetType();
-   if (!to->isMetaType()) {
-      diagnose(Cast, err_expression_in_type_position, Cast->getSourceRange());
-   }
-   else {
-      to = to->asMetaType()->getUnderlyingType();
-   }
-
-   auto Result = visitExpr(Cast, Cast->getTarget());
+   auto Result = visitExpr(Cast, Cast->getTarget(), to);
    if (!Result || Result.get()->isTypeDependent()) {
       // recover by pretending the cast worked
       Cast->setExprType(to);
@@ -459,6 +510,26 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 
    Cast->setConvSeq(ConversionSequence::Create(Context, ConvSeq));
    return Cast;
+}
+
+ExprResult SemaPass::visitAddrOfExpr(AddrOfExpr *Expr)
+{
+   auto Res = visitExpr(Expr, Expr->getTarget());
+   if (!Res) {
+      return ExprError();
+   }
+
+   Expr->setTarget(Res.get());
+
+   QualType T = Expr->getTarget()->getExprType();
+   if (!T->isMutableReferenceType()) {
+      diagnose(Expr, err_generic_error,
+               "cannot mutably borrow value of type " + T.toDiagString(),
+               Expr->getSourceRange());
+   }
+
+   Expr->setExprType(Context.getMutableBorrowType(T->stripReference()));
+   return Expr;
 }
 
 } // namespace ast

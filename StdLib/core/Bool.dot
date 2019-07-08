@@ -1,0 +1,107 @@
+
+import builtin
+
+/// The default type used for builtin boolean literals.
+public alias DefaultBooleanLiteralType = Bool
+
+/// Protocol for types that have both truthy and falsy values.
+/// Used by the compiler to determine which path to take in `if` and `while` statements.
+public protocol TruthValue {
+    /// \return a boolean representing the truth value of this instance.
+    prop truthValue: Bool { get }
+}
+
+extend TruthValue {
+    /// Return the negated truth value.
+    def prefix !() -> Bool {
+        return !truthValue
+    }
+}
+
+/// Types conforming to this protocol can be initialized via `true` and `false` literals.
+public protocol ExpressibleByBoolLiteral {
+    init (booleanLiteral value: Bool)
+}
+
+/// A boolean value that can have the values `true` and `false`.
+@_builtin @_semantics("builtin_bool_type")
+public struct Bool {
+    /// The builtin boolean value.
+    internal var value: builtin.i1
+
+    /// Default C'tor, initializes to `false`.
+    public init {
+        self.value = false
+    }
+
+    /// Internal initializer used by the compiler.
+    internal init (_ value: builtin.i1) {
+        self.value = value
+    }
+}
+
+extend Bool {
+    /// \return a new boolean value that is the negation of `self`.
+    public def prefix !() -> Self {
+        return Self(builtin.not_i1(self.value))
+    }
+
+    /// Toggle the underlying value of this Bool instance.
+    public def mutating toggle() {
+        self = !self
+    }
+
+    /// Logical and operator with short-circuiting semantics.
+    public def infix &&(@autoclosure _ rhs: Bool) -> Bool {
+        if !self {
+            return false
+        }
+
+        return rhs
+    }
+
+    /// Logical or operator with short-circuiting semantics.
+    public def infix ||(@autoclosure _ rhs: Bool) -> Bool {
+        if self {
+            return true
+        }
+
+        return rhs
+    }
+}
+
+/// Allow `Bool` to be used in `if` and `while` conditions.
+extend Bool with TruthValue {
+    /// \inherit
+    prop truthValue: Bool {
+        return self
+    }
+}
+
+/// Allow `Bool` to be initialized with boolean literals.
+extend Bool with ExpressibleByBoolLiteral {
+    public init (booleanLiteral value: Bool) {
+        self = value
+    }
+}
+
+/// Synthesize equatable and hashable conformance.
+extend Bool with Equatable, Hashable {}
+
+extend Bool with Randomizable {
+    /// \inherit
+    static def random() -> Bool {
+        let value = Int.random()
+        return value >= 0
+    }
+}
+
+// Let the compiler know that a condition is likely to be true.
+@inline(always) public def likely(_ cond: Bool) -> Bool {
+    return Bool(builtin.likely(cond.value))
+}
+
+// Let the compiler know that a condition is unlikely to be true.
+@inline(always) public def unlikely(_ cond: Bool) -> Bool {
+    return Bool(builtin.unlikely(cond.value))
+}

@@ -1,4 +1,0 @@
-
-module libc.ctype
-
-include_system_header!("ctype.h")

@@ -40,10 +40,11 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
 
    ILBuilder::SynthesizedRAII SR(Builder);
 
-   if (Val->isLvalue())
-      Val = Builder.CreateLoad(Val);
-
    if (ty->isRefcounted() || ty->isLambdaType() || ty->isBoxType()) {
+      if (Val->isLvalue()) {
+         Val = Builder.CreateLoad(Val);
+      }
+
       Builder.CreateRelease(Val);
       return;
    }
@@ -67,6 +68,18 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
          if (!ILGen.registerCalledFunction(deinit, deinit)) {
             return;
          }
+      }
+
+      if (!Val->isLvalue()) {
+         auto *Alloc = Builder.CreateAlloca(Val->getType());
+         Builder.CreateStore(Val, Alloc);
+         Val = Alloc;
+      }
+      else if (Val->getType()->isNonMutableReferenceType()) {
+         Val = Builder.CreateBitCast(
+            CastKind::BitCast, Val,
+            ILGen.getSema().Context.getMutableReferenceType(
+               Val->getType()->getReferencedType()));
       }
 
       ILGen.CreateCall(deinit, { Val });

@@ -1,0 +1,12 @@
+
+module inc.e
+
+struct Template<T> {
+    def method() {
+        print("404 I am a teapot")
+    }
+}
+
+def E() {
+    a.Unprintable().sayHello()
+}

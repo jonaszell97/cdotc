@@ -103,6 +103,9 @@ enum ModuleBlockRecordTypes {
    /// this module file.
    IMPORTS,
 
+   /// Implicitly imported modules.
+   IMPLICIT_IMPORTS,
+
    /// Files used to create this module.
    INPUT_FILES,
 

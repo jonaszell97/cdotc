@@ -1,0 +1,109 @@
+
+using fs.OpenFlags
+using fs.FileDescriptor
+
+/// The standard output file descriptor.
+public alias STDOUT_FD: FileDescriptor = 1
+
+/// The standard error file descriptor.
+public alias STDERR_FD: FileDescriptor = 2
+
+/// A buffered stream that writes to a file.
+public class FileOutputStream: OutputStream {
+    /// The file descriptor for the file we are writing to.
+    var fd: FileDescriptor
+
+    /// True if this file supports seeking, i.e. writing to a random position.
+    var supportsSeeking: Bool
+
+    /// True if we should close this file on destruction.
+    var shouldClose: Bool { get set }
+
+    /// Initialize the stream from a file descriptor that must refer to an already opened file.
+    init?(withOpenFile fd: FileDescriptor, shouldClose: Bool = true, buffered: Bool = true) {
+        super.init(buffered)
+        self.fd = fd
+        self.shouldClose = shouldClose
+
+        if self.fd < 0 {
+            return none
+        }
+
+        var off = fs.currentPosition(fd)
+        self.supportsSeeking = off != -1
+    }
+
+    /// Initialize the stream from a file name.
+    init?(_ fileName: String, flags: OpenFlags = .RW, shouldClose: Bool = true) {
+        self.init(withOpenFile: fs.openFileForWrite(fileName, flags),
+                  shouldClose, buffered: true)
+    }
+
+    /// D'tor. Flushes the stream and closes the file if shouldClose is true.
+    deinit {
+        flush()
+        if shouldClose {
+            close()
+        }
+    }
+    
+    /// Closes the file. Calling write methods will assert after this.
+    public def close() {
+        assert!(shouldClose, "file is not supposed to be closed")
+
+        var result = fs.closeFile(fd)
+        assert!(result != -1, "closing file failed")
+
+        fd = -1
+        shouldClose = false
+    }
+
+    /// Returns true if the file handle was already closed.
+    prop closed: Bool {
+        return fd < 0
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Interface Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// \inherit
+    def override currentPos() -> Int {
+        return fs.currentPosition(fd)
+    }
+
+    /// \inherit
+    def override writeToStream(_ bytes: [Byte]) {
+        precondition!(!closed, "writing to closed file")
+
+        bytes.withUnsafeBufferPtr {
+            fs.writeToFile(fd, buffer: $0, numBytes: bytes.size)
+        }
+    }
+
+    /// \inherit
+    def override supportsWriteToPosition() -> Bool { return supportsSeeking }
+
+    /// \inherit
+    def override pwriteToStream(_ bytes: [Byte], at pos: Int) {
+        precondition!(!closed, "writing to closed file")
+        precondition!(supportsSeeking, "file does not support seeking")
+
+        bytes.withUnsafeBufferPtr {
+            fs.writeToFileAtPosition(fd, buffer: $0, numBytes: bytes.size, toPosition: pos)
+        }
+    }
+
+    /// \inherit
+    public def override supportsColors() -> Bool { return true }
+}
+
+/// OutputStream that writes to stdout.
+public let stdout = FileOutputStream(withOpenFile: STDOUT_FD,
+                                     shouldClose: false,
+                                     buffered: false).unwrap(orReport: "opening stdout failed!")
+
+/// OutputStream that writes to stderr.
+public let stderr = FileOutputStream(withOpenFile: STDERR_FD,
+                                     shouldClose: false,
+                                     buffered: false).unwrap(orReport: "opening stderr failed!")

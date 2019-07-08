@@ -1,0 +1,35 @@
+
+import builtin
+import libc
+
+using builtin.ops.*
+
+/// Implemented in cdotrt
+declare C public def _cdot_GetLastModifiedTime(_ fileName: libc.cstring) -> libc.long_long
+
+macro define_int_pow_fn{
+    ($($name:tok)*) => {
+        $(
+            @extern(C)
+            public def ${_cdot_intpow_ $name}(_ base: builtin.$name, _ exp: builtin.u64)
+                    -> builtin.$name {
+                var base = base
+                var exp = exp
+                var result = 1 as builtin.$name
+
+                while exp != 0 {
+                    if (exp & 1) != 0 {
+                        result *= base
+                    }
+
+                    exp >>= 1
+                    base *= base
+                }
+
+                return result
+            }
+        )...
+    }
+}
+
+define_int_pow_fn!{ i8 u8 i16 u16 i32 u32 i64 u64 i128 u128 }

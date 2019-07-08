@@ -41,7 +41,7 @@ public:
 
    /// Import all declarations from the system header File into Mod.
    bool importSystemHeader(StringRef File, ast::DeclContext *IntoMod,
-                           SourceLocation ImportLoc);
+                           SourceLocation ImportLoc, bool Optional = false);
 };
 
 } // namespace cdot

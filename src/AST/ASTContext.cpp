@@ -668,6 +668,44 @@ RecordType* ASTContext::getRecordType(RecordDecl *R) const
    return New;
 }
 
+static bool isCanonical(const sema::TemplateArgument &Arg)
+{
+   if (!Arg.isType()) {
+      return true;
+   }
+   if (Arg.isVariadic()) {
+      for (auto &VA : Arg.getVariadicArgs()) {
+         if (!isCanonical(VA)) {
+            return false;
+         }
+      }
+   }
+
+   return Arg.getNonCanonicalType()->isCanonical();
+}
+
+static sema::TemplateArgument makeCanonical(const sema::TemplateArgument &Arg)
+{
+   if (!Arg.isType()) {
+      return Arg.clone();
+   }
+   if (Arg.isVariadic()) {
+      std::vector<sema::TemplateArgument> VariadicArgs;
+      VariadicArgs.reserve(Arg.getVariadicArgs().size());
+
+      for (auto &VA : Arg.getVariadicArgs()) {
+         VariadicArgs.emplace_back(makeCanonical(VA));
+      }
+
+      return sema::TemplateArgument(Arg.getParam(), true, move(VariadicArgs),
+                                    Arg.getLoc());
+   }
+
+   return sema::TemplateArgument(Arg.getParam(),
+                                 Arg.getNonCanonicalType()->getCanonicalType(),
+                                 Arg.getLoc());
+}
+
 DependentRecordType*
 ASTContext::getDependentRecordType(RecordDecl *R,
                                    sema::FinalTemplateArgumentList *args,
@@ -678,12 +716,45 @@ ASTContext::getDependentRecordType(RecordDecl *R,
    DependentRecordType::Profile(ID, R, args, Parent);
 
    void *insertPos = nullptr;
-   if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos))
+   if (auto *Ptr = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos)) {
       return Ptr;
+   }
 
-   auto New = new(*this, TypeAlignment) DependentRecordType(R, args, Parent);
+   bool Canonical = true;
+   for (auto &Arg : *args) {
+      if (!isCanonical(Arg)) {
+         Canonical = false;
+         break;
+      }
+   }
+
+   DependentRecordType *CanonicalType = nullptr;
+   if (!Canonical) {
+      SmallVector<sema::TemplateArgument, 4> CanonicalArgs;
+      CanonicalArgs.reserve(args->size());
+
+      for (auto &Arg : *args) {
+         CanonicalArgs.emplace_back(makeCanonical(Arg));
+      }
+
+      auto *CanonicalList = sema::FinalTemplateArgumentList::Create(
+         const_cast<ASTContext&>(*this), CanonicalArgs, true);
+
+      CanonicalType = getDependentRecordType(R, CanonicalList,
+                                             Parent
+                                                ? Parent->getCanonicalType()
+                                                : QualType());
+
+      // We need to get the insert position again since the folding set might
+      // have grown.
+      auto *NewTy = DependentRecordTypes.FindNodeOrInsertPos(ID, insertPos);
+      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+   }
+
+   auto New = new(*this, TypeAlignment) DependentRecordType(R, args, Parent,
+                                                            CanonicalType);
+
    DependentRecordTypes.InsertNode(New, insertPos);
-
    return New;
 }
 
@@ -774,6 +845,19 @@ TypedefType* ASTContext::getTypedefType(AliasDecl *TD) const
    TypedefTypes.InsertNode(New, insertPos);
 
    return New;
+}
+
+TypeVariableType* ASTContext::getTypeVariableType(unsigned ID) const
+{
+   auto It = TypeVariableTypes.find(ID);
+   if (It != TypeVariableTypes.end()) {
+      return It->getSecond();
+   }
+
+   auto *T = new(*this, TypeAlignment) TypeVariableType(ID);
+   TypeVariableTypes[ID] = T;
+
+   return T;
 }
 
 CallableDecl*

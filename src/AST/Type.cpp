@@ -17,8 +17,10 @@
 #include <sstream>
 
 using std::string;
-using namespace cdot::support;
+
+using namespace cdot;
 using namespace cdot::ast;
+using namespace cdot::support;
 
 namespace cdot {
 
@@ -57,6 +59,11 @@ bool TypeProperties::containsUnexpandedParameterPack() const
 bool TypeProperties::containsRuntimeGenericParam() const
 {
    return (Props & ContainsRuntimeGenericParam) != 0;
+}
+
+bool TypeProperties::containsTypeVariable() const
+{
+   return (Props & ContainsTypeVariable) != 0;
 }
 
 CanType::CanType(Type *T) : QualType(T)
@@ -678,41 +685,6 @@ bool Type::needsCleanup() const
    }
 }
 
-bool Type::needsStructReturn() const
-{
-   switch (getTypeID()) {
-   case TypeID::TypedefTypeID:
-      return asRealTypedefType()->getAliasedType()->needsStructReturn();
-   case TypeID::RecordTypeID: {
-      auto rec = getRecord();
-      switch (rec->getKind()) {
-         case Decl::EnumDeclID:
-            return !cast<EnumDecl>(rec)->isRawEnum();
-         case Decl::StructDeclID:
-         case Decl::UnionDeclID:
-         case Decl::ProtocolDeclID:
-            return true;
-         case Decl::ClassDeclID:
-            return false;
-         default:
-            llvm_unreachable("bad record kind!");
-      }
-   }
-   case TypeID::TupleTypeID:
-   case TypeID::ArrayTypeID:
-   case TypeID::MetaTypeID:
-   case TypeID::BoxTypeID:
-      return true;
-   default:
-      return false;
-   }
-}
-
-bool Type::needsMemCpy() const
-{
-   return needsStructReturn();
-}
-
 std::string QualType::toString() const
 {
    std::string s;
@@ -750,7 +722,7 @@ protected:
 public:
    void visitTypedefType(const TypedefType *Ty)
    {
-      OS << Ty->getAliasName();
+      OS << Ty->getTypedef()->getDeclName();
    }
 
    void visitBuiltinType(const BuiltinType *Ty)
@@ -907,22 +879,27 @@ public:
       OS << Ty->getNameSpec();
    }
 
+   void visitTypeVariableType(const TypeVariableType *Ty)
+   {
+      OS << "T" << Ty->getVariableID();
+   }
+
    void visitPointerType(const PointerType *Ty)
    {
       auto pointee = Ty->getPointeeType();
       if (pointee->isVoidType())
-         OS << "UnsafeRawPtr";
+         OS << "builtin.RawPointer";
       else
-         OS << "UnsafePtr<" << pointee << ">";
+         OS << "builtin.RawPointer<" << pointee << ">";
    }
 
    void visitMutablePointerType(const MutablePointerType *Ty)
    {
       auto pointee = Ty->getPointeeType();
       if (pointee->isVoidType())
-         OS << "UnsafeMutableRawPtr";
+         OS << "builtin.RawMutablePointer";
       else
-         OS << "UnsafeMutablePtr<" << pointee << ">";
+         OS << "builtin.RawMutablePointer<" << pointee << ">";
    }
 
    void visitReferenceType(const ReferenceType *Ty)
@@ -1226,19 +1203,25 @@ static void copyTemplateArgProps(TypeProperties &Props,
 }
 
 DependentRecordType::DependentRecordType(
-      RecordDecl *record,
-      sema::FinalTemplateArgumentList *templateArgs,
-      QualType Parent)
+                                 RecordDecl *record,
+                                 sema::FinalTemplateArgumentList *templateArgs,
+                                 QualType Parent,
+                                 Type *CanonicalType)
    : RecordType(TypeID::DependentRecordTypeID, record,
                 templateArgs->isStillDependent()),
      Parent(Parent), templateArgs(templateArgs)
 {
+   if (CanonicalType) {
+      this->CanonicalType = CanonicalType;
+   }
+
    for (auto &Arg : *templateArgs) {
       copyTemplateArgProps(Bits.Props, Arg);
    }
 
-   if (Parent)
+   if (Parent) {
       Bits.Props |= Parent->properties();
+   }
 }
 
 sema::FinalTemplateArgumentList& RecordType::getTemplateArgs() const
@@ -1396,7 +1379,7 @@ FunctionType::FunctionType(QualType returnType,
 }
 
 FunctionType::ParamInfo::ParamInfo()
-   : Conv(ArgumentConvention::Borrowed)
+   : Conv(ArgumentConvention::Borrowed), Label(nullptr)
 {
 
 }
@@ -1404,11 +1387,12 @@ FunctionType::ParamInfo::ParamInfo()
 void FunctionType::ParamInfo::Profile(llvm::FoldingSetNodeID &ID) const
 {
    ID.AddInteger((char)Conv);
+   ID.AddPointer(Label);
 }
 
 bool FunctionType::ParamInfo::operator==(const ParamInfo &I) const
 {
-   return Conv == I.Conv;
+   return Conv == I.Conv && Label == I.Label;
 }
 
 LambdaType::LambdaType(QualType returnType,
@@ -1444,7 +1428,8 @@ GenericType::GenericType(TemplateParamDecl *Param)
       Bits.Props |= TypeProperties::ContainsUnexpandedParameterPack;
    }
 
-   if (Param->isUnbounded()) {
+   // FIXME runtime-generics
+   if (Param->isUnbounded() || true) {
       Bits.Props |= TypeProperties::ContainsUnconstrainedGeneric;
    }
    else {
@@ -1538,6 +1523,31 @@ DependentNameType::DependentNameType(NestedNameSpecifierWithLoc *NameSpec)
    : Type(DependentNameTypeID, nullptr), NameSpec(NameSpec)
 {
    Bits.Props |= TypeProperties::ContainsDependentNameType;
+
+   auto *Name = NameSpec->getNameSpec();
+   while (Name) {
+      switch (Name->getKind()) {
+      case NestedNameSpecifier::TemplateParam:
+         Bits.Props |= TypeProperties::ContainsGenericType;
+         break;
+      case NestedNameSpecifier::AssociatedType:
+         Bits.Props |= TypeProperties::ContainsAssociatedType;
+         break;
+      case NestedNameSpecifier::TemplateArgList:
+         for (auto &Arg : *Name->getTemplateArgs()) {
+            copyTemplateArgProps(Bits.Props, Arg);
+         }
+
+         break;
+      case NestedNameSpecifier::Type:
+         Bits.Props |= Name->getType()->properties();
+         break;
+      default:
+         break;
+      }
+
+      Name = Name->getPrevious();
+   }
 }
 
 NestedNameSpecifier* DependentNameType::getNameSpec() const
@@ -1559,6 +1569,12 @@ void DependentNameType::Profile(llvm::FoldingSetNodeID &ID,
       ID.AddInteger(Loc.getStart().getOffset());
       ID.AddInteger(Loc.getEnd().getOffset());
    }
+}
+
+TypeVariableType::TypeVariableType(unsigned ID)
+   : Type(TypeVariableTypeID, nullptr), ID(ID)
+{
+   Bits.Props |= TypeProperties::ContainsTypeVariable;
 }
 
 } // namespace cdot

@@ -1,0 +1,176 @@
+
+; Module ID: /Users/Jonas/CDot/cmake-build-debug/test/inc/A.dot
+$inc.d.HelloSayerProtocol = protocol {}
+$"inc.e.Template<i64>" = struct { }
+$inc.a.Unprintable = struct { }
+
+@_CTINW3std7preludeE3AnyE = constant Meta[$Any]
+@_CTINW3inc1dE18HelloSayerProtocolE = constant Meta[$HelloSayerProtocol] typeinfo $HelloSayerProtocol {
+   i8* null,
+   i8* null,
+   i8* null,
+   u8* "inc.d.HelloSayerProtocol",
+   i8* null,
+   [2 x i8*] [i8* bitcast (&mut Meta[$Any] @_CTINW3std7preludeE3AnyE) to i8*, i8* null]
+}
+
+@_CTINW3inc1aE11UnprintableE = constant Meta[$Unprintable] typeinfo $Unprintable {
+   i8* null,
+   i8* null,
+   i8* null,
+   u8* "inc.a.Unprintable",
+   i8* bitcast (void($Unprintable) @_CNW3inc1aE11UnprintableD0Ev) to i8*,
+   [3 x i8*] [i8* bitcast (&mut Meta[$Any] @_CTINW3std7preludeE3AnyE) to i8*, i8* bitcast (&Meta[$HelloSayerProtocol] @_CTINW3inc1dE18HelloSayerProtocolE) to i8*, i8* null]
+}
+
+@_CTINW3inc1eE8TemplateIlEE = constant Meta[$"Template<i64>"] typeinfo $"Template<i64>" {
+   i8* null,
+   i8* null,
+   i8* null,
+   u8* "inc.e.Template<i64>",
+   i8* bitcast (void($"Template<i64>") @_CNW3inc1eE8TemplateIlED0Ev) to i8*,
+   [2 x i8*] [i8* bitcast (&mut Meta[$Any] @_CTINW3std7preludeE3AnyE) to i8*, i8* null]
+}
+
+@_CNW3inc1bE1xE = $"Template<i64>" zeroinitializer
+@_CIFNW3inc1bE1xE = u1 false
+
+define @_CNW3inc1aE1CEv() -> void {
+0:
+   ret void
+}
+
+define @_CNW3inc1aE1AEv() -> $Unprintable {
+entry:
+   call void @_CNW3inc1bE1BEv()
+   %1 = init_struct $inc.a.Unprintable, @_CNW3inc1aE11UnprintableC1Ev()
+   ret $Unprintable %1
+}
+
+define @_CNW3inc1aE2C_Ev() -> void {
+entry:
+   %0 = load &mut u1 @_CIFNW3inc1bE1xE
+   br u1 %0, label @glob.init.merge, label @glob.init
+
+; preds: label @entry, label @glob.init
+glob.init.merge:
+   %5 = load &mut $"Template<i64>" @_CNW3inc1bE1xE
+   %6 = begin_borrow &mut $"Template<i64>" @_CNW3inc1bE1xE
+   call void @_CNW3inc1eE8TemplateIlE6methodES0_L0($"Template<i64>" %5)
+   end_borrow &mut $"Template<i64>" %6
+   ret void
+
+; preds: label @entry
+glob.init:
+   call void @_CNW3inc1bE1xE.init()
+   store u1 true, &mut u1 @_CIFNW3inc1bE1xE
+   br label @glob.init.merge
+}
+
+define @_CNW3inc1bE1BEv() -> void {
+entry:
+   %0 = call $Unprintable @_CNW3inc1aE1AEv()
+   ret void
+}
+
+define @_CNW3inc1dE1DEv() -> void {
+entry:
+   ret void
+}
+
+define @_CNW3inc1dE7__helloEv() -> void {
+entry:
+   ret void
+}
+
+define @_CNW3inc1eE1EEv() -> void {
+entry:
+   %0 = init_struct $inc.a.Unprintable, @_CNW3inc1aE11UnprintableC1Ev()
+   call void @_CNW3inc1aE11Unprintable8sayHelloES_L0($Unprintable %0)
+   ret void
+}
+
+define @_CNW3inc1aE11Unprintable14__default_initES_L0([borrow] $Unprintable) -> void {
+entry(%0: $Unprintable):
+   ret void
+}
+
+define @_CNW3inc1aE11UnprintableC1Ev([borrow] $Unprintable) -> void {
+entry(%self: $Unprintable):
+   call void @_CNW3inc1aE11Unprintable14__default_initES_L0($Unprintable %self)
+   ret void
+}
+
+define @_CNW3inc1aE11UnprintableC2ES_L0([borrow] $Unprintable) -> void {
+entry(%0: $Unprintable):
+   ret void
+}
+
+define @_CNW3inc1aE11UnprintableD0Ev([borrow] $Unprintable) -> void {
+entry(%self: $Unprintable):
+   call void @_CNW3inc1aE11UnprintableD3Ev($Unprintable %self)
+   ret void
+}
+
+define @_CNW3inc1aE11Unprintable8sayHelloES_L0([borrow] $Unprintable) -> void {
+entry(%0: $Unprintable):
+   %1 = alloc_stack [let] $Unprintable
+   init $Unprintable %0, &$Unprintable %1
+   %3 = init_class $std.prelude.String, @_CNW3std7preludeE6StringC1EKPhmL0L0(u8* "hello, friend!", u64 14)
+   call void @_CNW3std7preludeE5printINW_1E6StringEJEEETvNW_1E6StringEhhL0L9separatorL10terminator($String %3, u8 32, u8 10)
+   strong_release $String %3
+   ret void
+}
+
+define @_CNW3inc1eE8TemplateIlE6methodES0_L0([borrow] $"Template<i64>") -> void {
+entry(%0: $"Template<i64>"):
+   %1 = alloc_stack [let] $"Template<i64>"
+   init $"Template<i64>" %0, &$"Template<i64>" %1
+   %3 = init_class $std.prelude.String, @_CNW3std7preludeE6StringC1EKPhmL0L0(u8* "404 I am a teapot", u64 17)
+   call void @_CNW3std7preludeE5printINW_1E6StringEJEEETvNW_1E6StringEhhL0L9separatorL10terminator($String %3, u8 32, u8 10)
+   strong_release $String %3
+   ret void
+}
+
+define @_CNW3inc1eE8TemplateIlE14__default_initES0_L0([borrow] $"Template<i64>") -> void {
+entry(%0: $"Template<i64>"):
+   ret void
+}
+
+define @_CNW3inc1eE8TemplateIlEC1Ev([borrow] $"Template<i64>") -> void {
+entry(%self: $"Template<i64>"):
+   call void @_CNW3inc1eE8TemplateIlE14__default_initES0_L0($"Template<i64>" %self)
+   ret void
+}
+
+define @_CNW3inc1eE8TemplateIlEC2ES0_L0([borrow] $"Template<i64>") -> void {
+entry(%0: $"Template<i64>"):
+   ret void
+}
+
+define @_CNW3inc1eE8TemplateIlED0Ev([borrow] $"Template<i64>") -> void {
+entry(%self: $"Template<i64>"):
+   call void @_CNW3inc1eE8TemplateIlED3Ev($"Template<i64>" %self)
+   ret void
+}
+
+define @_CNW3inc1bE1xE.init() -> void {
+entry:
+   %0 = init_struct $"inc.e.Template<i64>", @_CNW3inc1eE8TemplateIlEC1Ev()
+   init $"Template<i64>" %0, &mut $"Template<i64>" @_CNW3inc1bE1xE
+   ret void
+}
+
+define @_CNW3inc1aE11UnprintableD3Ev([owned] $Unprintable) -> void {
+entry(%0: $Unprintable):
+   ret void
+}
+
+declare @_CNW3std7preludeE5printINW_1E6StringEJEEETvNW_1E6StringEhhL0L9separatorL10terminator([borrow] $String, [borrow] u8, [borrow] u8) -> void
+
+declare @_CNW3std7preludeE6StringC1EKPhmL0L0([borrow] $String, [owned] u8*, [owned] u64) -> void
+
+define @_CNW3inc1eE8TemplateIlED3Ev([owned] $"Template<i64>") -> void {
+entry(%0: $"Template<i64>"):
+   ret void
+}

@@ -1,0 +1,153 @@
+
+/// The protocol that any type implicitly conforms to.
+public protocol Any {}
+
+/// An unpopulated enum to use as a return type of noreturn-functions.
+public enum Never {}
+
+/// The type that is returned by functions that do not specify a return type. 
+public alias Void = ()
+
+public precedenceGroup AssignmentPrecedence {
+    associativity: right
+    assignment: true
+}
+
+public precedenceGroup TernaryPrecedence {
+    associativity: right
+    higherThan: AssignmentPrecedence
+}
+
+public precedenceGroup DefaultPrecedence {
+    higherThan: TernaryPrecedence
+}
+
+public precedenceGroup LogicalDisjunctionPrecedence {
+    associativity: left
+    higherThan: TernaryPrecedence
+}
+
+public precedenceGroup LogicalConjunctionPrecedence {
+    associativity: left
+    higherThan: LogicalDisjunctionPrecedence
+}
+
+public precedenceGroup ComparisonPrecedence {
+    higherThan: LogicalConjunctionPrecedence
+}
+
+public precedenceGroup NilCoalescingPrecedence {
+    associativity: right
+    higherThan: ComparisonPrecedence
+}
+
+public precedenceGroup CastingPrecedence {
+    higherThan: NilCoalescingPrecedence
+}
+
+public precedenceGroup RangeFormationPrecedence {
+    higherThan: CastingPrecedence
+}
+
+public precedenceGroup AdditionPrecedence {
+    associativity: left
+    higherThan: RangeFormationPrecedence
+}
+
+public precedenceGroup MultiplicationPrecedence {
+    associativity: left
+    higherThan: AdditionPrecedence
+}
+
+public precedenceGroup BitwiseShiftPrecedence {
+    higherThan: MultiplicationPrecedence
+}
+
+public precedenceGroup ExponentiationPrecedence {
+    associativity: left
+    higherThan: BitwiseShiftPrecedence
+}
+
+postfix ++
+postfix --
+postfix ()
+postfix ?
+
+prefix ++
+prefix --
+prefix !
+prefix ~
+prefix +
+prefix -
+
+infix =    : AssignmentPrecedence
+infix *=   : AssignmentPrecedence
+infix &*=  : AssignmentPrecedence
+infix /=   : AssignmentPrecedence
+infix %=   : AssignmentPrecedence
+infix +=   : AssignmentPrecedence
+infix &+=  : AssignmentPrecedence
+infix -=   : AssignmentPrecedence
+infix &-=  : AssignmentPrecedence
+infix <<=  : AssignmentPrecedence
+infix &<<= : AssignmentPrecedence
+infix >>=  : AssignmentPrecedence
+infix &>>= : AssignmentPrecedence
+infix **=  : AssignmentPrecedence
+infix &=   : AssignmentPrecedence
+infix ^=   : AssignmentPrecedence
+infix |=   : AssignmentPrecedence
+
+infix ||  : LogicalDisjunctionPrecedence
+
+infix &&  : LogicalConjunctionPrecedence
+
+infix <   : ComparisonPrecedence
+infix <=  : ComparisonPrecedence
+infix >   : ComparisonPrecedence
+infix >=  : ComparisonPrecedence
+infix ==  : ComparisonPrecedence
+infix !=  : ComparisonPrecedence
+infix === : ComparisonPrecedence
+infix !== : ComparisonPrecedence
+infix ~=  : ComparisonPrecedence
+infix <=> : ComparisonPrecedence
+
+infix ??  : NilCoalescingPrecedence
+
+infix as  : CastingPrecedence
+infix as? : CastingPrecedence
+infix as! : CastingPrecedence
+
+infix ..= : RangeFormationPrecedence
+infix ..  : RangeFormationPrecedence
+
+infix +   : AdditionPrecedence
+infix &+  : AdditionPrecedence
+infix -   : AdditionPrecedence
+infix &-  : AdditionPrecedence
+infix |   : AdditionPrecedence
+infix ^   : AdditionPrecedence
+
+infix *   : MultiplicationPrecedence
+infix &*  : MultiplicationPrecedence
+infix /   : MultiplicationPrecedence
+infix %   : MultiplicationPrecedence
+infix &   : MultiplicationPrecedence
+
+infix **  : ExponentiationPrecedence
+
+infix <<  : BitwiseShiftPrecedence
+infix &<< : BitwiseShiftPrecedence
+infix >>  : BitwiseShiftPrecedence
+infix &>> : BitwiseShiftPrecedence
+
+/// Utility function to get the size of a fixed size array.
+public def elementCount<T, let V: Int>(of: [T; V]) -> Int {
+    return V
+}
+
+/// Provide matchability for all types that are equatable.
+public def infix ~= <T: Equatable>(_ lhs: T, _ rhs: T) -> Bool {
+    return lhs == rhs
+}

@@ -234,6 +234,16 @@ bool Token::isIdentifierEndingWith(llvm::StringRef str) const
    return getIdentifierInfo()->getIdentifier().endswith(str);
 }
 
+bool Token::isWhitespace() const
+{
+   switch (getKind()) {
+   case tok::space: case tok::newline:
+      return true;
+   default:
+      return false;
+   }
+}
+
 llvm::StringRef Token::getIdentifier() const
 {
    return getIdentifierInfo()->getIdentifier();

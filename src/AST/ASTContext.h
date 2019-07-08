@@ -136,6 +136,7 @@ private:
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
    mutable llvm::FoldingSet<DependentNameType> DependentNameTypes;
+   mutable llvm::DenseMap<unsigned, TypeVariableType*> TypeVariableTypes;
 
    /// Uniqued template argument lists.
    mutable llvm::FoldingSet<sema::FinalTemplateArgumentList> TemplateArgs;
@@ -323,7 +324,10 @@ public:
    PointerType *getInt8PtrTy() const { return getPointerType(i8Ty); }
 
    BuiltinType *getFloatTy() const { return &f32Ty; }
+   BuiltinType *getFloat32Ty() const { return &f32Ty; }
+
    BuiltinType *getDoubleTy() const { return &f64Ty; }
+   BuiltinType *getFloat64Ty() const { return &f64Ty; }
 
    PointerType *getPointerType(QualType pointeeType) const;
    MutablePointerType *getMutablePointerType(QualType pointeeType) const;
@@ -379,6 +383,8 @@ public:
 
    MetaType *getMetaType(QualType forType) const;
    TypedefType *getTypedefType(AliasDecl *TD) const;
+
+   TypeVariableType *getTypeVariableType(unsigned ID) const;
 
 private:
    mutable llvm::DenseMap<NamedDecl*, SmallVector<NamedDecl*, 0>> InstMap;

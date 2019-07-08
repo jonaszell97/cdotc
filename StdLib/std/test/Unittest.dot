@@ -1,0 +1,227 @@
+
+module std.test
+
+using io.OutputStream.Color
+
+@_builtin private abstract class Unittest: sys.Thread {
+    enum Status {
+        /// This test is still executing.
+        case Running
+
+        /// This test completed successfully.
+        case Success
+
+        /// This test completed with warnings.
+        case SuccessWithWarnings
+
+        /// This test completed with errors.
+        case Failure
+    }
+
+    /// The file this test is located in.
+    var file: String { get }
+
+    /// This tests status.
+    var status: Status { get } = .Success
+
+    /// C'tor.
+    protected init (_ file: String) {
+        super.init()
+        self.file = file
+    }
+
+    /// Emit a test assertion failure.
+    def assertionFailure(_ msg: String, _ loc: reflect.SourceLocation) {
+        // Update the status.
+        self.status = .Failure
+
+        // Print the assertion message.
+        // io.stdout << Color.Red << "assertion failed" << Color.Uncolored
+        // io.stdout << (if msg.empty then "" else ": $msg")
+        // io.stdout << " (${loc.fileName}:${loc.line})"
+
+        var str = ""
+        str += Color.Red.toString()
+        str += "assertion failed"
+        str += Color.Uncolored.toString()
+
+        if !msg.empty {
+            str += ": $msg"
+        }
+
+        str += " (${loc.fileName}:${loc.line})\n"
+
+        // Open the source file to print the line.
+        var maybeFile = io.FileInputStream(loc.fileName)
+        if !maybeFile {
+            return
+        }
+
+        var file = maybeFile!
+        var lineNo = loc.line
+
+        while lineNo-- > 0 {
+            _ = file.readLine()
+        }
+
+        str += file.readLine()
+        print(str)
+    }
+
+    /// Assert that the given condition is true and print an error message if it is not.
+    /// \param cond the condition to assert is true.
+    /// \param msg the message to show if the condition is not true.
+    /// \param func the current function, should not be supplied manually.
+    /// \param loc source location, should not be supplied manually.
+    protected def assert(_ cond: Bool,
+                         @autoclosure _ msg: String = "",
+                         at loc: reflect.SourceLocation = reflect.sourceLocation) {
+        if cond {
+            return
+        }
+
+        assertionFailure(msg, loc)
+    }
+
+    /// Assert that the given condition is false and print an error message if it is not.
+    /// \param cond the condition to assert is true.
+    /// \param msg the message to show if the condition is not true.
+    /// \param func the current function, should not be supplied manually.
+    /// \param loc source location, should not be supplied manually.
+    protected def assertFalse(_ cond: Bool,
+                              @autoclosure _ msg: String = "",
+                              at loc: reflect.SourceLocation = reflect.sourceLocation) {
+        if !cond {
+            return
+        }
+
+        assertionFailure(msg, loc)
+    }
+
+    /// Assert that the two values are equal and print an error message if they are not.
+    /// \param lhs the left hand side of the comparison.
+    /// \param rhs the right hand side of the comparison.
+    /// \param msg the message to show if the condition is not true.
+    /// \param func the current function, should not be supplied manually.
+    /// \param loc source location, should not be supplied manually.
+    protected def assertEqual<T>(_ lhs: T, _ rhs: T,
+                                 @autoclosure _ msg: String = "",
+                                 at loc: reflect.SourceLocation = reflect.sourceLocation) {
+        if lhs == rhs {
+            return
+        }
+
+        assertionFailure(msg, loc)
+    }
+
+    /// Assert that the two values are not equal and print an error message if they are.
+    /// \param lhs the left hand side of the comparison.
+    /// \param rhs the right hand side of the comparison.
+    /// \param msg the message to show if the condition is not true.
+    /// \param func the current function, should not be supplied manually.
+    /// \param loc source location, should not be supplied manually.
+    protected def assertNotEqual<T>(_ lhs: T, _ rhs: T,
+                                    @autoclosure _ msg: String = "",
+                                    at loc: reflect.SourceLocation = reflect.sourceLocation) {
+        if lhs != rhs {
+            return
+        }
+
+        assertionFailure(msg, loc)
+    }
+}
+
+private struct UnittestContext {
+    /// Array of tests that are running or have finished running.
+    private var tests: [Unittest]
+
+    /// The output stream to print to.
+    private var OS: io.OutputStream
+
+    /// C'tor. This should only be called by the compiler.
+    @_builtin("UnittestContext.init")
+    private init {
+        self.tests = [Unittest]()
+        self.OS = io.stdout
+    }
+
+    /// D'tor.
+    deinit {
+        // Wait for all the tests to complete.
+        for let t in tests {
+            t.join()
+        }
+
+        // Show the summary.
+        printTestSummary()
+    }
+
+    /// Add a new test.
+    @_builtin("UnittestContext.addTest")
+    def mutating addTest(_ test: Unittest) {
+        test.start()
+        tests.push(test)
+    }
+
+    /// Displays the summary of tests that were run.
+    private def printTestSummary() {
+        struct TestSummary {
+            /// Number of successful tests.
+            var numSuccessful = 0
+
+            /// Number of tests with warnings.
+            var numSuccessfulWithWarnings = 0
+
+            /// Number of failed tests.
+            var numFailed = 0
+        }
+
+        OS << "unit test summary:" << io.newline
+
+        var files = [String: Int]()
+        var successes = [String: Int]()
+        var warnings = [String: Int]()
+        var failures = [String: Int]()
+
+        for t in tests {
+            match t.status {
+                case .Running:
+                    unreachable!("test is still running!")
+                case .Success:
+                    successes[t.file] = (successes[t.file] ?? 0) + 1
+                case .SuccessWithWarnings:
+                    warnings[t.file] = (warnings[t.file] ?? 0) + 1
+                case .Failure:
+                    failures[t.file] = (failures[t.file] ?? 0) + 1
+            }
+
+            files.insert(key: t.file, value: 0)
+        }
+
+        for file in files {
+            var numSuccesses = successes[file.key] ?? 0
+            var numWarnings = warnings[file.key] ?? 0
+            var numFailures = failures[file.key] ?? 0
+
+            OS << "  ${file.key}: "
+
+            OS.setColor(.Red)
+            for let i in 0..numSuccesses {
+                OS << "."
+            }
+
+            OS.setColor(.Yellow)
+            for let i in 0..numWarnings {
+                OS << "."
+            }
+
+            OS.setColor(.Green)
+            for let i in 0..numSuccesses {
+                OS << "."
+            }
+
+            OS.resetColor()
+            OS << io.newline
+        }
+    }
+}

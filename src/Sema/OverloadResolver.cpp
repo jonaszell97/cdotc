@@ -4,6 +4,7 @@
 
 #include "OverloadResolver.h"
 
+#include "ConstraintBuilder.h"
 #include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
 
@@ -125,16 +126,19 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
                                  CandidateSet &CandSet,
                                  ConvSeqVec &Conversions,
                                  bool IsSelf, unsigned ArgNo) {
-   if (GivenTy->isErrorType()) {
+   QualType NeededNoSugar = NeededTy->stripReference()->getDesugaredType();
+   QualType GivenNoSugar = GivenTy->stripReference()->getDesugaredType();
+
+   if (GivenNoSugar->isErrorType() || NeededNoSugar->isErrorType()) {
       return false;
    }
 
-   if (NeededTy->isUnknownAnyType()) {
+   if (NeededNoSugar->isUnknownAnyType()) {
       // Conversion operators have 'UnknownAny' as their right-hand side type.
-      assert((SP.isInDependentContext() || Cand.isBuiltinCandidate())
+      assert((SP.isInDependentContext() || Cand.isAnonymousCandidate())
              && "argument of UnknownAny type in non-dependent context!");
 
-      if (!Cand.isBuiltinCandidate()) {
+      if (!Cand.isAnonymousCandidate()) {
          Cand.setIsDependent();
          CandSet.Dependent = true;
       }
@@ -142,7 +146,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
       return false;
    }
 
-   if (GivenTy->isDependentType() || NeededTy->isDependentType()) {
+   if (GivenNoSugar->isDependentType() || NeededNoSugar->isDependentType()) {
       Cand.setIsDependent();
       CandSet.Dependent = true;
 
@@ -156,7 +160,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
    // Allow implicit conversion from mutable reference to mutable
    // borrow for self argument.
    if (IsSelf
-       && Cand.Func->isNonStaticMethod()
+       && Cand.getFunc()->isNonStaticMethod()
        && NeededTy->isMutableBorrowType()
        && GivenTy->isMutableReferenceType()) {
       GivenTy = SP.getContext().getMutableBorrowType(
@@ -285,12 +289,19 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
 
    SP.getConversionSequence(ConvSeq, GivenTy, NeededTy);
 
+   if (ConvSeq.isDependent()) {
+      Cand.setIsDependent();
+      CandSet.Dependent = true;
+
+      return false;
+   }
+
    if (!ConvSeq.isImplicit()) {
       if (IsSelf) {
          Cand.setHasIncompatibleSelfArgument(NeededTy, GivenTy);
       }
       else {
-         Cand.setHasIncompatibleArgument(ArgNo, GivenTy);
+         Cand.setHasIncompatibleArgument(ArgNo, GivenTy, NeededTy);
       }
 
       return true;
@@ -340,6 +351,205 @@ static bool isVariadic(QualType Ty)
    return Ty->isGenericType() && Ty->asGenericType()->isVariadic();
 }
 
+static bool resolveContextualArgument(SemaPass &SP,
+                                      unsigned i,
+                                      FuncArgDecl *ArgDecl,
+                                      Expression *ArgVal,
+                                      MultiLevelTemplateArgList *TemplateArgs,
+                                      CandidateSet &CandSet,
+                                      CandidateSet::Candidate &Cand,
+                                      ConvSeqVec &Conversions,
+                                      SmallVectorImpl<StmtOrDecl> &ArgExprs) {
+   QualType NeededTy = ArgDecl->getType();
+   SourceLocation ArgLoc = ArgVal->getSourceLoc();
+
+   if (TemplateArgs && NeededTy->isDependentType()) {
+      if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+                                          *TemplateArgs, ArgLoc)) {
+         return true;
+      }
+   }
+
+   // Handle closures specially.
+   if (auto LE = dyn_cast<LambdaExpr>(ArgVal)) {
+      auto LambdaTy = SP.ResolveContextualLambdaExpr(LE, NeededTy);
+      if (!LambdaTy) {
+         if (LE->isInvalid()) {
+            Cand.setIsInvalid();
+            CandSet.InvalidCand = true;
+         }
+         else if (auto Def = SP.GetDefaultExprType(LE)) {
+            Cand.setHasIncompatibleArgument(i, Def, NeededTy);
+         }
+         else {
+            Cand.setCouldNotInferArgumentType(i);
+         }
+
+         return true;
+      }
+
+      if (TemplateArgs) {
+         TemplateArgs->inferFromType(LambdaTy, NeededTy, false);
+      }
+
+      Conversions.emplace_back(
+         ConversionSequenceBuilder::MakeNoop(NeededTy));
+
+      ArgExprs.emplace_back(ArgVal);
+      return false;
+   }
+
+   // Check if the expression would be able to return a value of
+   // that type.
+   int CanReturn = SP.ExprCanReturn(ArgVal, NeededTy);
+   if (CanReturn == -1) {
+      if (ArgVal->isInvalid()) {
+         Cand.setIsInvalid();
+         CandSet.InvalidCand = true;
+      }
+      else {
+         if (auto Def = SP.GetDefaultExprType(ArgVal)) {
+            Cand.setHasIncompatibleArgument(i, Def, NeededTy);
+         }
+         else {
+            Cand.setCouldNotInferArgumentType(i);
+         }
+      }
+
+      return false;
+   }
+
+   QualType ArgValType;
+   if (NeededTy->containsGenericType()) {
+      // We can't infer a context dependent expression from a
+      // dependent type.
+      auto DefaultType = SP.GetDefaultExprType(ArgVal);
+      if (DefaultType) {
+         if (TemplateArgs && NeededTy->containsGenericType()) {
+            if (!TemplateArgs->inferFromType(DefaultType,
+                                             NeededTy, false)) {
+               Cand.setHasIncompatibleArgument(i, DefaultType,
+                                               NeededTy);
+
+               return false;
+            }
+
+            if (isVariadic(NeededTy)) {
+               NeededTy = DefaultType;
+            }
+            else if (SP.QC.SubstGenericTypesNonFinal(NeededTy,
+                                                     NeededTy,
+                                                     *TemplateArgs,
+                                                     ArgLoc)) {
+               return true;
+            }
+         }
+
+         ArgValType = DefaultType;
+      }
+      else if (NeededTy->containsGenericType()) {
+         ArgValType = NeededTy;
+      }
+      else {
+         if (ArgVal->isInvalid()) {
+            Cand.setIsInvalid();
+            CandSet.InvalidCand = true;
+            return true;
+         }
+
+         Cand.setCouldNotInferArgumentType(i);
+         return true;
+      }
+
+      if (NeededTy->isDependentType()) {
+         Cand.setIsDependent();
+         return true;
+      }
+
+      if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
+                               {ArgDecl->getConvention()},
+                               Cand, CandSet, Conversions,
+                               ArgDecl->isSelf(), i)) {
+         return true;
+      }
+   }
+   else {
+      Cand.ConversionPenalty += CanReturn;
+      Conversions.emplace_back(
+         ConversionSequenceBuilder::MakeNoop(NeededTy));
+   }
+
+   ArgExprs.push_back(ArgVal);
+   return false;
+}
+
+static bool resolveSingleArgument(SemaPass &SP,
+                                  unsigned i,
+                                  FuncArgDecl *ArgDecl,
+                                  Expression *ArgVal,
+                                  MultiLevelTemplateArgList *TemplateArgs,
+                                  CandidateSet &CandSet,
+                                  CandidateSet::Candidate &Cand,
+                                  ConvSeqVec &Conversions,
+                                  SmallVectorImpl<StmtOrDecl> &ArgExprs) {
+   // If the argument's type is context depentent, we need to some extra
+   // checking.
+   if (ArgVal->isContextDependent()) {
+      return resolveContextualArgument(SP, i, ArgDecl, ArgVal, TemplateArgs,
+                                       CandSet, Cand, Conversions, ArgExprs);
+   }
+
+   QualType NeededTy = ArgDecl->getType();
+   SourceLocation ArgLoc = ArgVal->getSourceLoc();
+
+   if (TemplateArgs && NeededTy->isDependentType()) {
+      if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+                                          *TemplateArgs, ArgLoc)) {
+         return true;
+      }
+   }
+
+   auto ArgValType = ArgVal->getExprType();
+   if (TemplateArgs && NeededTy->containsGenericType()) {
+      if (!TemplateArgs->inferFromType(ArgValType, NeededTy,
+                                       false)) {
+
+         Cand.setHasIncompatibleArgument(i, ArgValType, NeededTy);
+         return true;
+      }
+
+      if (isVariadic(NeededTy)) {
+         // Never infer reference types for template arguments.
+         NeededTy = ArgValType->stripReference();
+      }
+      else if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+                                               *TemplateArgs,
+                                               ArgLoc)) {
+         return true;
+      }
+   }
+
+   if (NeededTy->isDependentType()) {
+      if (ArgValType->isDependentType() || NeededTy->containsAssociatedType()) {
+         Cand.setIsDependent();
+         return true;
+      }
+
+      Cand.setHasIncompatibleArgument(i, ArgValType, NeededTy);
+      return true;
+   }
+
+   if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
+                            {ArgDecl->getConvention()},
+                            Cand, CandSet, Conversions,
+                            ArgDecl->isSelf(), i)) {
+      return true;
+   }
+
+   ArgExprs.emplace_back(ArgVal);
+   return false;
+}
+
 static bool resolveContextDependentArgs(SemaPass &SP,
                                         Statement *Caller,
                                         CallableDecl *CD,
@@ -381,7 +591,8 @@ static bool resolveContextDependentArgs(SemaPass &SP,
       if (Label && !Label->isStr("_")) {
          bool FoundLabel = false;
          for (auto *ArgDecl : ArgDecls) {
-            if (ArgDecl->getLabel() == Label) {
+            if (ArgDecl->getLabel() == Label
+            || ArgDecl->isVariadicArgPackExpansion()) {
                FoundLabel = true;
                DeclArgMap[ArgDecl].push_back(ArgVal);
                break;
@@ -432,225 +643,155 @@ static bool resolveContextDependentArgs(SemaPass &SP,
       DeclArgMap[ArgDecl].push_back(ArgVal);
       ++i;
    }
-   
-   // Now resolve types of context dependent arguments.
-   i = 0;
-   for (FuncArgDecl *ArgDecl : ArgDecls) {
-      // If no argument is given, check if there is a default one.
-      auto It = DeclArgMap.find(ArgDecl);
-      if (It == DeclArgMap.end()) {
-         if (ArgDecl->isVariadicArgPackExpansion()) {
-            ++i;
-            continue;
-         }
-         if (!ArgDecl->getValue()) {
-            Cand.setHasTooFewArguments(NumGivenArgs, CD->getArgs().size());
-            return false;
-         }
 
-         auto DefaultVal = ArgDecl->getDefaultVal();
-         if (DefaultVal->isMagicArgumentValue()) {
-            auto Alias = cast<IdentifierRefExpr>(DefaultVal)->getAlias();
-            auto Result = SP.HandleReflectionAlias(Alias,
-                                                   cast<Expression>(Caller));
-
-            if (Result) {
-               ArgExprs.emplace_back(Result.getValue());
-            }
-            else {
-               ArgExprs.emplace_back(DefaultVal);
-            }
-         }
-         else if (CD->isTemplate() || CD->isInitializerOfTemplate()
-               || CD->isCaseOfTemplatedEnum()) {
-            ArgExprs.emplace_back(ArgDecl);
-         }
-         else {
-            ArgExprs.emplace_back(DefaultVal);
-         }
-
-         Conversions.emplace_back(ConversionSequenceBuilder::MakeNoop());
-         ++i;
-
-         continue;
-      }
-
-      for (Expression *ArgVal : DeclArgMap[ArgDecl]) {
-         QualType NeededTy = ArgDecl->getType();
-         SourceLocation ArgLoc = ArgVal->getSourceLoc();
-
-         if (TemplateArgs && NeededTy->isDependentType()) {
-            if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
-                                                *TemplateArgs, ArgLoc)) {
-               continue;
-            }
-         }
-
-         // If the arguments type is context depentent, we need to some extra
-         // checking.
-         if (ArgVal->isContextDependent()) {
-            // Handle closures specially.
-            if (auto LE = dyn_cast<LambdaExpr>(ArgVal)) {
-               auto LambdaTy = SP.ResolveContextualLambdaExpr(LE, NeededTy);
-               if (!LambdaTy) {
-                  if (LE->isInvalid()) {
-                     Cand.setIsInvalid();
-                     CandSet.InvalidCand = true;
-                  }
-                  else if (auto Def = SP.GetDefaultExprType(LE)) {
-                     Cand.setHasIncompatibleArgument(i, Def);
-                  }
-                  else {
-                     Cand.setCouldNotInferArgumentType(i);
-                  }
-
-                  return false;
-               }
-
-               if (TemplateArgs) {
-                  TemplateArgs->inferFromType(LambdaTy, NeededTy, false);
-               }
-
-               Conversions.emplace_back(ConversionSequenceBuilder::MakeNoop());
-               ArgExprs.emplace_back(ArgVal);
-
-               continue;
-            }
-
-            // Check if the expression would be able to return a value of
-            // that type.
-            int CanReturn = SP.ExprCanReturn(ArgVal, NeededTy);
-            if (CanReturn == -1) {
-               if (ArgVal->isInvalid()) {
-                  Cand.setIsInvalid();
-                  CandSet.InvalidCand = true;
-               }
-               else {
-                  if (auto Def = SP.GetDefaultExprType(ArgVal)) {
-                     Cand.setHasIncompatibleArgument(i, Def);
-                  }
-                  else {
-                     Cand.setCouldNotInferArgumentType(i);
-                  }
-               }
-
-               return false;
-            }
-
-            QualType ArgValType;
-            if (NeededTy->containsGenericType()) {
-               // We can't infer a context dependent expression from a
-               // dependent type.
-               auto DefaultType = SP.GetDefaultExprType(ArgVal);
-               if (DefaultType) {
-                  if (TemplateArgs && NeededTy->containsGenericType()) {
-                     if (!TemplateArgs->inferFromType(DefaultType,
-                                                      NeededTy, false)) {
-                        Cand.setHasIncompatibleArgument(i, DefaultType);
-                        return false;
-                     }
-
-                     if (isVariadic(NeededTy)) {
-                        NeededTy = DefaultType;
-                     }
-                     else if (SP.QC.SubstGenericTypesNonFinal(NeededTy,
-                                                              NeededTy,
-                                                              *TemplateArgs,
-                                                              ArgLoc)) {
-                        continue;
-                     }
-                  }
-
-                  ArgValType = DefaultType;
-               }
-               else if (NeededTy->containsGenericType()) {
-                  ArgValType = NeededTy;
-               }
-               else {
-                  if (ArgVal->isInvalid()) {
-                     Cand.setIsInvalid();
-                     CandSet.InvalidCand = true;
-                     return false;
-                  }
-
-                  Cand.setCouldNotInferArgumentType(i);
-                  return false;
-               }
-
-               if (NeededTy->isDependentType()) {
-                  Cand.setIsDependent();
-                  return true;
-               }
-
-               if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
-                                        {ArgDecl->getConvention()},
-                                        Cand, CandSet, Conversions,
-                                        ArgDecl->isSelf(), i)) {
-                  return false;
-               }
-            }
-            else {
-               Cand.ConversionPenalty += CanReturn;
-               Conversions.emplace_back(ConversionSequenceBuilder::MakeNoop());
-            }
-         }
-         else {
-            auto ArgValType = ArgVal->getExprType();
-            if (TemplateArgs && NeededTy->containsGenericType()) {
-               if (!TemplateArgs->inferFromType(ArgValType, NeededTy,
-                                                false)) {
-
-                  Cand.setHasIncompatibleArgument(i, ArgValType);
-                  return false;
-               }
-
-               if (isVariadic(NeededTy)) {
-                  // Never infer reference types for template arguments.
-                  NeededTy = ArgValType->stripReference();
-               }
-               else if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
-                                                        *TemplateArgs,
-                                                        ArgLoc)) {
-                  continue;
-               }
-            }
-
-            if (NeededTy->isDependentType()) {
-               Cand.setIsDependent();
-               return true;
-            }
-
-            if (getConversionPenalty(SP, ArgVal, NeededTy, ArgValType,
-                                     {ArgDecl->getConvention()},
-                                     Cand, CandSet, Conversions,
-                                     ArgDecl->isSelf(), i)) {
-               return false;
-            }
-         }
-
-         ArgExprs.emplace_back(ArgVal);
-      }
-
-      ++i;
-   }
-
-   auto VariadicArgIt = DeclArgMap.find(nullptr);
-   if (VariadicArgIt != DeclArgMap.end()) {
-      for (auto *E : VariadicArgIt->getSecond()) {
-         // Apply standard c-style vararg conversion.
-         ConversionSequenceBuilder ConvSeq;
-         if (E->isLValue()) {
-            ConvSeq.addStep(CastKind::LValueToRValue,
-                            E->getExprType()->stripReference());
-         }
-         else {
-            ConvSeq.addStep(CastKind::NoOp, QualType());
-         }
-
-         Conversions.emplace_back(move(ConvSeq));
-         ArgExprs.emplace_back(E);
-      }
-   }
+//   SmallVector<ConstraintSystem::Solution, 4> Solutions;
+//   ConstraintSystem::SolutionBindings Bindings;
+//
+//   ConstraintSystem Sys(SP.QC);
+//   ConstraintBuilder Builder(Sys, Bindings);
+//
+//   for (auto *Param : CD->getTemplateParams()) {
+//      Builder.registerTemplateParam(Param);
+//   }
+//
+//   // Now resolve types of context dependent arguments.
+//   i = 0;
+//   for (FuncArgDecl *ArgDecl : ArgDecls) {
+//      // If no argument is given, check if there is a default one.
+//      auto It = DeclArgMap.find(ArgDecl);
+//      if (It == DeclArgMap.end()) {
+//         if (ArgDecl->isVariadicArgPackExpansion()) {
+//            ++i;
+//            continue;
+//         }
+//         if (!ArgDecl->getValue()) {
+//            Cand.setHasTooFewArguments(NumGivenArgs, CD->getArgs().size());
+//            return false;
+//         }
+//
+//         if (SP.QC.TypecheckDecl(ArgDecl)) {
+//            Cand.setIsInvalid();
+//            return false;
+//         }
+//
+//         auto DefaultVal = ArgDecl->getDefaultVal();
+//         if (DefaultVal->isMagicArgumentValue()) {
+//            auto Alias = cast<IdentifierRefExpr>(DefaultVal)->getAlias();
+//            auto Result = SP.HandleReflectionAlias(Alias,
+//                                                   cast<Expression>(Caller));
+//
+//            if (Result) {
+//               ArgExprs.emplace_back(Result.getValue());
+//            }
+//            else {
+//               ArgExprs.emplace_back(DefaultVal);
+//            }
+//         }
+//         else if (CD->isTemplate() || CD->isInitializerOfTemplate()
+//                  || CD->isCaseOfTemplatedEnum()) {
+//            ArgExprs.emplace_back(ArgDecl);
+//         }
+//         else {
+//            ArgExprs.emplace_back(DefaultVal);
+//         }
+//
+//         Conversions.emplace_back(
+//            ConversionSequenceBuilder::MakeNoop(DefaultVal->getExprType()));
+//
+//         ++i;
+//         continue;
+//      }
+//
+//      for (Expression *ArgVal : DeclArgMap[ArgDecl]) {
+//         QualType NeededTy = ArgDecl->getType();
+//
+//         auto GenRes = Builder.generateConstraints(ArgVal, SourceType(NeededTy));
+//         switch (GenRes) {
+//         case ConstraintBuilder::Dependent:
+//            Cand.setIsDependent();
+//            return true;
+//         case ConstraintBuilder::Failure:
+//            Cand.setIsInvalid();
+//            return true;
+//         case ConstraintBuilder::Success:
+//            break;
+//         }
+//
+//         ArgExprs.push_back(ArgVal);
+//      }
+//
+//      ++i;
+//   }
+//
+//   auto Res = Sys.solve(Solutions);
+//   switch (Res) {
+//   case ConstraintSystem::Dependent:
+//      Cand.setIsDependent();
+//      return true;
+//   case ConstraintSystem::Error:
+//      Cand.setIsInvalid();
+//      CandSet.InvalidCand = true;
+//      return true;
+//   case ConstraintSystem::Failure:
+//      Cand.setIsInvalid();
+//      CandSet.InvalidCand = true;
+//      SP.diagnose(diag::err_generic_error, "call does not typecheck",
+//                  Caller->getSourceRange());
+//
+//      return true;
+//   case ConstraintSystem::Success:
+//      break;
+//   }
+//
+//   unsigned BestScore = -1;
+//   ConstraintSystem::Solution *BestSolution = nullptr;
+//
+//   for (auto &S : Solutions) {
+//      if (S.Score < BestScore) {
+//         BestScore = S.Score;
+//         BestSolution = &S;
+//      }
+//      else if (S.Score == BestScore) {
+//         // FIXME
+//         SP.diagnose(diag::note_generic_note, "ambiguous assignment",
+//                     Caller->getSourceRange());
+//      }
+//   }
+//
+//   assert(BestSolution && "no solution!");
+//
+//   // Check the template parameter bindings.
+//   if (TemplateArgs) {
+//      for (auto &B : Bindings.ParamBindings) {
+//         QualType ParamTy = SP.Context.getTemplateArgType(B.getFirst());
+//         QualType AssignedTy = BestSolution->AssignmentMap[B.getSecond()];
+//
+//         TemplateArgs->inferFromType(AssignedTy, ParamTy);
+//      }
+//   }
+//
+////   for (auto &ExprAssignment : Bindings.ExprBindings) {
+////      Cand.TypeAssignmentMap[ExprAssignment.getFirst()]
+////         = BestSolution->AssignmentMap[ExprAssignment.getSecond()];
+////   }
+//
+//   auto VariadicArgIt = DeclArgMap.find(nullptr);
+//   if (VariadicArgIt != DeclArgMap.end()) {
+//      for (auto *E : VariadicArgIt->getSecond()) {
+//         // Apply standard c-style vararg conversion.
+//         ConversionSequenceBuilder ConvSeq;
+//         if (E->isLValue()) {
+//            ConvSeq.addStep(CastKind::LValueToRValue,
+//                            E->getExprType()->stripReference());
+//         }
+//         else {
+//            ConvSeq.addStep(CastKind::NoOp, QualType());
+//         }
+//
+//         Conversions.emplace_back(move(ConvSeq));
+//         ArgExprs.emplace_back(E);
+//      }
+//   }
 
    return true;
 }
@@ -665,8 +806,8 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                                         CandidateSet &CandSet,
                                         ConvSeqVec &Conversions,
                                         MultiLevelTemplateArgList*TemplateArgs){
-   if (!Cand.isBuiltinCandidate()) {
-      return resolveContextDependentArgs(SP, Caller, Cand.Func, SelfVal, labels,
+   if (!Cand.isAnonymousCandidate()) {
+      return resolveContextDependentArgs(SP, Caller, Cand.getFunc(), SelfVal, labels,
                                          UnorderedArgs, ArgExprs, Cand, CandSet,
                                          Conversions, TemplateArgs);
    }
@@ -700,7 +841,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
                   CandSet.InvalidCand = true;
                }
                else if (auto Def = SP.GetDefaultExprType(LE)) {
-                  Cand.setHasIncompatibleArgument(i, Def);
+                  Cand.setHasIncompatibleArgument(i, Def, NeededTy);
                }
                else {
                   Cand.setCouldNotInferArgumentType(i);
@@ -721,7 +862,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
             }
             else {
                if (auto Def = SP.GetDefaultExprType(ArgVal)) {
-                  Cand.setHasIncompatibleArgument(i, Def);
+                  Cand.setHasIncompatibleArgument(i, Def, NeededTy);
                }
                else {
                   Cand.setCouldNotInferArgumentType(i);
@@ -812,7 +953,10 @@ public:
 
    bool visitSelfExpr(SelfExpr *E)
    {
-      E->setCaptureIndex(LE->addCapture(C, E->getSelfArg()));
+      if (!E->isUppercase()) {
+         E->setCaptureIndex(LE->addCapture(C, E->getSelfArg()));
+      }
+
       return true;
    }
 
@@ -833,8 +977,9 @@ static bool applyConversions(SemaPass &SP,
                              Statement *Caller) {
    auto &Cand = CandSet.getBestMatch();
    ArrayRef<FuncArgDecl*> ArgDecls;
-   if (!Cand.isBuiltinCandidate()) {
-      if (Cand.Func->isInvalid()) {
+   if (!Cand.isAnonymousCandidate()) {
+      auto *Func = Cand.getFunc();
+      if (Func->isInvalid()) {
          Cand.setIsInvalid();
          CandSet.Status = CandidateSet::NoMatch;
          CandSet.InvalidCand = true;
@@ -842,17 +987,33 @@ static bool applyConversions(SemaPass &SP,
          return true;
       }
 
-      ArgDecls = Cand.Func->getArgs();
+      ArgDecls = Func->getArgs();
    }
 
-   auto ParamTys = Cand.getFunctionType()->getParamTypes();
+//   for (auto &Assignment : Cand.TypeAssignmentMap) {
+//      Assignment.getFirst()->setContextualType(Assignment.getSecond());
+//   }
 
+   auto ParamTys = Cand.getFunctionType()->getParamTypes();
    unsigned i = 0;
    for (auto &SOD : ArgExprs) {
       if (auto *Decl = SOD.asDecl()) {
          // Get the instantiated default value.
-         SOD = Cand.Func->lookupSingle<FuncArgDecl>(
-            cast<FuncArgDecl>(Decl)->getDeclName())->getDefaultVal();
+         auto *Inst = Cand.getFunc()->lookupSingle<FuncArgDecl>(
+            cast<FuncArgDecl>(Decl)->getDeclName());
+
+         if (Inst != Decl) {
+            if (SP.QC.TypecheckDecl(Inst)) {
+               ++i;
+               CandSet.InvalidCand = true;
+               CandSet.ResolvedArgs.push_back(
+                  cast<FuncArgDecl>(Decl)->getDefaultVal());
+
+               continue;
+            }
+         }
+
+         SOD = Inst->getDefaultVal();
       }
 
       auto *E = cast<Expression>(SOD.getStatement());
@@ -862,19 +1023,16 @@ static bool applyConversions(SemaPass &SP,
          ArgDecl = ArgDecls[i];
       }
 
-      if (E->isContextDependent()) {
-         if (ParamTys.size() > i)
-            E->setContextualType(ParamTys[i]);
-
-         auto Result = SP.visitExpr(Caller, E);
-         if (!Result) {
-            ++i;
-            continue;
-         }
-
-         E = Result.get();
+      auto Result = SP.visitExpr(Caller, E);
+      if (!Result) {
+         ++i;
+         CandSet.ResolvedArgs.push_back(E);
+         continue;
       }
-      else if (E->getExprType()->isVoidType()) {
+
+      E = Result.get();
+
+      if (E->getExprType()->isVoidType()) {
          SP.diagnose(E, diag::err_vararg_cannot_pass_void, E->getSourceRange());
       }
       else if (ArgDecl &&ArgDecl->getConvention() == ArgumentConvention::Owned){
@@ -887,16 +1045,8 @@ static bool applyConversions(SemaPass &SP,
          }
       }
 
-      // Apply conversion.
-      if (i < Conversions.size()) {
-         auto &ConvSeq = Conversions[i];
-         if (!ConvSeq.isNoOp()) {
-            auto *Seq = ConversionSequence::Create(SP.getContext(), ConvSeq);
-            E = ImplicitCastExpr::Create(SP.getContext(), E, Seq);
-
-            auto Res = SP.visitExpr(E); (void) Res;
-            assert(Res && "bad implicit cast sequence!");
-         }
+      if (i < ParamTys.size()) {
+         E = SP.implicitCastIfNecessary(E, ParamTys[i]);
       }
 
       // Handle @autoclosure
@@ -913,6 +1063,8 @@ static bool applyConversions(SemaPass &SP,
       }
 
       SOD = E;
+      CandSet.ResolvedArgs.push_back(E);
+
       ++i;
    }
 
@@ -942,23 +1094,24 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
    for (unsigned i = 0; i < NumCandidates; ++i) {
       CandidateSet::Candidate &Cand = CandSet.Candidates[i];
 
-      if (Cand.Func && SP.QC.PrepareDeclInterface(Cand.Func)) {
+      if (!Cand.isAnonymousCandidate()
+      && SP.QC.PrepareDeclInterface(Cand.getFunc())) {
          Cand.setIsInvalid();
          CandSet.InvalidCand = true;
          continue;
       }
 
-      assert(Cand.isBuiltinCandidate() || Cand.Func->isTemplate()
-             || Cand.Func->getFunctionType()
+      assert(Cand.isAnonymousCandidate() || Cand.getFunc()->isTemplate()
+             || Cand.getFunc()->getFunctionType()
                 && "function without function type");
 
       // Drop self argument for self.init() calls.
       SmallVector<ConversionSequenceBuilder, 4> Conversions;
       SmallVector<StmtOrDecl, 4> ArgExprs;
 
-      if (Cand.isBuiltinCandidate()
-            || Cand.Func->isCompleteInitializer()
-            || !SelfArg) {
+      if (Cand.isAnonymousCandidate()
+      || Cand.getFunc()->isCompleteInitializer()
+      || !SelfArg) {
          resolve(CandSet, Cand, ArgRef.drop_front(1), Conversions, ArgExprs);
       }
       else {
@@ -1027,9 +1180,6 @@ void OverloadResolver::resolve(CandidateSet &CandSet)
                            Caller)) {
          return;
       }
-
-      for (auto &Arg : BestMatchArgExprs)
-         CandSet.ResolvedArgs.push_back(cast<Expression>(Arg.getStatement()));
    }
 }
 
@@ -1055,10 +1205,10 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
    SmallVector<QualType, 8> resolvedGivenArgs;
 
    // FIXME runtime-generics
-   bool IsTemplate = !Cand.isBuiltinCandidate()
-                     && (Cand.Func->isTemplate()
-                         || Cand.Func->isInitializerOfTemplate()
-                         || Cand.Func->isCaseOfTemplatedEnum());
+   bool IsTemplate = !Cand.isAnonymousCandidate()
+                     && (Cand.getFunc()->isTemplate()
+                         || Cand.getFunc()->isInitializerOfTemplate()
+                         || Cand.getFunc()->isCaseOfTemplatedEnum());
 
    if (!IsTemplate) {
       if (!givenTemplateArgs.empty()) {
@@ -1080,11 +1230,11 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
                             : givenTemplateArgs.front()->getSourceLoc();
 
    bool NeedOuterTemplateParams
-      = (isa<InitDecl>(Cand.Func) || isa<EnumCaseDecl>(Cand.Func))
-        && Cand.Func->getRecord()->isTemplate();
+      = (isa<InitDecl>(Cand.getFunc()) || isa<EnumCaseDecl>(Cand.getFunc()))
+        && Cand.getFunc()->getRecord()->isTemplate();
 
    Cand.InnerTemplateArgs = TemplateArgList(
-      SP, Cand.Func,
+      SP, Cand.getFunc(),
       // if we have an initializer or enum case, the given template
       // arguments will be passed to the record parameter list
       NeedOuterTemplateParams ? llvm::ArrayRef<Expression*>()
@@ -1097,7 +1247,7 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
    // initializers and enum cases also need their containing records
    // template arguments specified (or inferred)
    if (NeedOuterTemplateParams) {
-      OuterTemplateArgs = TemplateArgList(SP, Cand.Func->getRecord(),
+      OuterTemplateArgs = TemplateArgList(SP, Cand.getFunc()->getRecord(),
                                           givenTemplateArgs, listLoc);
 
       TemplateArgs.addOuterList(OuterTemplateArgs);
@@ -1138,6 +1288,10 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
       return;
    }
 
+   if (Cand.FR == CandidateSet::IsDependent) {
+      return;
+   }
+
    // If the template argument list is itself dependent, we have to delay
    // the overload resolution until instantiation time.
    if (TemplateArgs.isStillDependent()) {
@@ -1170,8 +1324,8 @@ void OverloadResolver::resolve(CandidateSet &CandSet,
 
    // Check the constraints here to take the resolved
    // template arguments into account
-   if (!Cand.Func->getConstraints().empty()) {
-      auto Res = SP.checkConstraints(Caller, Cand.Func,
+   if (!Cand.getFunc()->getConstraints().empty()) {
+      auto Res = SP.checkConstraints(Caller, Cand.getFunc(),
                                      TemplateArgs.outermost());
 
       if (auto C = Res.getFailedConstraint()) {

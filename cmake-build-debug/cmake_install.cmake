@@ -45,7 +45,7 @@ file(INSTALL DESTINATION "/usr/local/lib" TYPE SHARED_LIBRARY FILES "/usr/local/
   if(EXISTS "$ENV{DESTDIR}/usr/local/lib/libcdotrt.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}/usr/local/lib/libcdotrt.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
-      execute_process(COMMAND "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip" "$ENV{DESTDIR}/usr/local/lib/libcdotrt.dylib")
+      execute_process(COMMAND "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip" -x "$ENV{DESTDIR}/usr/local/lib/libcdotrt.dylib")
     endif()
   endif()
 endif()

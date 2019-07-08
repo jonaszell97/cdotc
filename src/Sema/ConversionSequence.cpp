@@ -20,12 +20,13 @@ QualType ConversionStep::getResultType() const
 
 ConversionSequence*
 ConversionSequence::Create(ast::ASTContext &C,
-                           const ConversionSequenceBuilder &Builder) {
+                           const ConversionSequenceBuilder &Builder,
+                           QualType finalType) {
    void *Mem = C.Allocate(totalSizeToAlloc<ConversionStep>(
                              Builder.getSteps().size()),
                           alignof(ConversionSequence));
 
-   return new(Mem) ConversionSequence(Builder);
+   return new(Mem) ConversionSequence(Builder, finalType);
 }
 
 ConversionSequence* ConversionSequence::Create(ast::ASTContext &C,
@@ -37,13 +38,18 @@ ConversionSequence* ConversionSequence::Create(ast::ASTContext &C,
    return new(Mem) ConversionSequence(Strength, Steps);
 }
 
-ConversionSequence::ConversionSequence(const ConversionSequenceBuilder &Builder)
+ConversionSequence::ConversionSequence(const ConversionSequenceBuilder &Builder,
+                                       QualType finalType)
    : Strength(Builder.getStrength()), NumSteps(0)
 {
    auto Steps = Builder.getSteps();
    NumSteps = (unsigned)Steps.size();
 
    std::copy(Steps.begin(), Steps.end(), getTrailingObjects<ConversionStep>());
+
+   if (finalType) {
+      Steps.back().setResultType(finalType);
+   }
 }
 
 ConversionSequence::ConversionSequence(CastStrength Strength,

@@ -47,6 +47,36 @@ llvm::raw_ostream &cdot::operator<<(llvm::raw_ostream &OS, LookupOpts Opts)
    return OS;
 }
 
+TypeCapability::TypeCapability(QualType T, QualType CT, Kind K)
+   : K(K), T(T), TypeVal(CT)
+{
+   assert(K == Equality || K == Inequality);
+}
+
+TypeCapability::TypeCapability(QualType T, ast::ProtocolDecl *P, Kind K)
+   : K(K), T(T), ProtoVal(P)
+{
+   assert(K == Conformance || K == NonConformance);
+}
+
+TypeCapability::TypeCapability(QualType T, ast::ClassDecl *C, Kind K)
+   : K(K), T(T), ClassVal(C)
+{
+   assert(K == SubClass || K == NotSubClass);
+}
+
+TypeCapability::TypeCapability(QualType T, ast::AliasDecl *A)
+   : K(Concept), T(T), ConceptVal(A)
+{
+
+}
+
+TypeCapability::TypeCapability(QualType T, Kind K)
+   : K(K), T(T)
+{
+   assert(K == Class || K == Enum || K == Struct);
+}
+
 void QueryResult::update(ResultKind &Previous, ResultKind New)
 {
    switch (New) {

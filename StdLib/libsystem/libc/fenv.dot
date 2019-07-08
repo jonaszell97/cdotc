@@ -1,4 +1,0 @@
-
-module libc.fenv
-
-include_system_header!("fenv.h")

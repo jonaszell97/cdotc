@@ -9,6 +9,7 @@
 #include "IL/Module.h"
 #include "ILGen/ILGenPass.h"
 #include "Sema/SemaPass.h"
+#include "Query/QueryContext.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -50,8 +51,9 @@ void ModuleFile::PerformExternalLookup(DeclContext &Ctx, DeclarationName Name)
 
    for (auto ID : IDs) {
       auto ReadDecl = Reader.ASTReader.GetDecl(ID);
-      if (ReadDecl)
+      if (ReadDecl) {
          LoadedDecl(Ctx, ReadDecl);
+      }
    }
 }
 
@@ -116,7 +118,7 @@ void ModuleFile::LoadedDecl(DeclContext &Ctx, Decl *ReadDecl, bool IgnoreInst)
                                              Inst->getTemplateArgs());
 
       if (InstResult) {
-         (void)Sema.declareStmt(InstResult.get());
+         Sema.QC.PrepareDeclInterface(InstResult.get());
       }
 
       return;

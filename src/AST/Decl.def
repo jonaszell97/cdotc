@@ -39,6 +39,8 @@
       CDOT_NAMED_DECL(MacroDecl)
 
       CDOT_NAMED_DECL(ModuleDecl)
+      CDOT_NAMED_DECL(SourceFileDecl)
+
       CDOT_NAMED_DECL(ImportDecl)
       CDOT_NAMED_DECL(UsingDecl)
 
@@ -75,6 +77,7 @@ CDOT_ABSTRACT(_lastDecl)
 
 #ifdef CDOT_DECL_CONTEXT
    CDOT_DECL_CONTEXT(ModuleDecl)
+   CDOT_DECL_CONTEXT(SourceFileDecl)
    CDOT_DECL_CONTEXT(ImportDecl)
 
    CDOT_DECL_CONTEXT(CompoundDecl)

@@ -27,14 +27,25 @@ void Statement::printFlags(llvm::raw_ostream &OS) const
       << (containsUnexpandedParameterPack() ? "true" : "false") << "\n";
 }
 
+bool Statement::isTypeDependent() const
+{
+   return false;
+}
+
+bool Statement::isValueDependent() const
+{
+   return false;
+}
+
 bool Statement::needsInstantiation() const
 {
-   static constexpr unsigned Mask =
-      Statement::ContainsGenericParam
-      | Statement::ContainsAssociatedType
-      | Statement::TypeDependent
-      | Statement::ValueDependent;
+//   static constexpr unsigned Mask =
+//      Statement::ContainsGenericParam
+//      | Statement::ContainsAssociatedType
+//      | Statement::TypeDependent
+//      | Statement::ValueDependent;
 
+   static constexpr unsigned Mask = Statement::NeedsInstantiation;
    return (SubclassData & Mask) != 0;
 }
 
@@ -46,7 +57,8 @@ void Statement::copyStatusFlags(Statement *Stmt)
       | HadError
       | ContainsGenericParam
       | ContainsAssociatedType
-      | ContainsUnexpandedPack;
+      | ContainsUnexpandedPack
+      | NeedsInstantiation;
 
    // if any sub statement is dependent or had an error, this stmt is also
    // dependent (or had an error)

@@ -203,12 +203,6 @@ public:
    char *getUntypedPtr()       { return buffer; }
    char *getUntypedPtr() const { return buffer; }
 
-   Value load(QualType Ty) const
-   {
-      return Ty->needsStructReturn() ? *this
-                                     : Value(getValuePtr()->getBuffer());
-   }
-
    Value *getValuePtr()  { return reinterpret_cast<Value*>(buffer); }
    std::string getString() const;
 };

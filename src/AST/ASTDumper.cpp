@@ -145,6 +145,11 @@ bool DumperImpl::visitDeclStmt(DeclStmt *stmt)
    return true;
 }
 
+bool DumperImpl::visitSourceFileDecl(SourceFileDecl *decl)
+{
+   return true;
+}
+
 bool DumperImpl::visitCompoundStmt(CompoundStmt* stmt)
 {
    return true;
@@ -554,6 +559,23 @@ bool DumperImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
    return true;
 }
 
+bool DumperImpl::visitDeclRefExpr(DeclRefExpr *expr)
+{
+   out << "[" << expr->getDecl()->getFullName() << "]";
+   return true;
+}
+
+bool DumperImpl::visitMemberRefExpr(MemberRefExpr *expr)
+{
+   out << "[" << expr->getMemberDecl()->getFullName() << "]";
+   return true;
+}
+
+bool DumperImpl::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *expr)
+{
+   return true;
+}
+
 bool DumperImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *expr)
 {
    return true;
@@ -653,6 +675,11 @@ bool DumperImpl::visitCastExpr(CastExpr *expr)
          llvm_unreachable("not an explicit cast");
    }
 
+   return true;
+}
+
+bool DumperImpl::visitAddrOfExpr(AddrOfExpr *expr)
+{
    return true;
 }
 

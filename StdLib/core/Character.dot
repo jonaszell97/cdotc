@@ -1,0 +1,82 @@
+
+alias DefaultCharacterLiteralType = Character
+
+public protocol ExpressibleByCharacterLiteral {
+    init (characterLiteral c: Character)
+}
+
+public protocol ExpressibleByUnicodeCodePointLiteral {
+    init (codePointLiteral c: Character)
+}
+
+public protocol ExpressibleByASCIILiteral {
+    init (asciiLiteral c: UInt8)
+}
+
+@_builtin public struct Character {
+    /// The character value.
+    internal var value: UInt32 { get }
+
+    /// Default C'tor. Initializes to ascii `'\0'`.
+    init {
+        self.value = 0
+    }
+
+    /// C'tor. Initialize an ascii character.
+    init (ascii: Byte) {
+        self.value = UInt32(ascii)
+    }
+
+    /// \return `true` iff this character is ascii representable.
+    prop isAscii: Bool {
+        return self.value < 128
+    }
+
+    /// \return the ascii representation of this character.
+    prop ascii: Byte {
+        // assert!(self.isAscii, "not an ascii character!")
+        return Byte(truncatingIfNeeded: self.value)
+    }
+
+    /// \return the number of code points in this character.
+    prop size: Int {
+        // FIXME
+        return 1
+    }
+}
+
+extend Character with ExpressibleByCharacterLiteral {
+    /// \inherit
+    init (characterLiteral value: Character) {
+        self = value
+    }
+}
+
+/// Characters are trivially copyable.
+extend Character with Copyable, ImplicitlyCopyable {}
+
+// extend Character with StringRepresentable {
+//     /// \inherit
+//     def toString() -> String {
+//         if isAscii {
+//             return String(ascii: ascii)
+//         }
+
+//         unreachable!("nah")
+//     }
+// }
+
+extend Character with Comparable {
+    /// \inherit
+    def infix <=>(rhs: Character) -> Int {
+        return value <=> rhs.value
+    }
+}
+
+// extend String {
+//     /// Initialize from a single character.
+//     init (_ char: Character) {
+//         self.init(rawBytes: builtin.addressOf(char.value) as! UnsafePtr<Byte>,
+//                   size: char.size)
+//     }
+// }

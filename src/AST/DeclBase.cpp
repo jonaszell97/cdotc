@@ -808,6 +808,26 @@ DeclContext::AddDeclResultKind DeclContext::makeDeclAvailable(NamedDecl *decl)
    return makeDeclAvailable(decl->getDeclName(), decl);
 }
 
+static bool shouldAddToOuterContext(DeclContext *This, NamedDecl *Decl)
+{
+   // 'using' and 'import' declarations are private to the source file.
+   if (!isa<SourceFileDecl>(This)) {
+      return true;
+   }
+
+   switch (Decl->getKind()) {
+   case Decl::ImportDeclID:
+   case Decl::UsingDeclID:
+      return false;
+   case Decl::MacroDeclID:
+      // fileprivate macros are not visible in any other file.
+      return Decl->getAccess() != AccessSpecifier::FilePrivate
+         && Decl->getAccess() != AccessSpecifier::Private;
+   default:
+      return true;
+   }
+}
+
 DeclContext::AddDeclResultKind
 DeclContext::makeDeclAvailable(DeclarationName Name,
                                NamedDecl *decl) {
@@ -836,7 +856,7 @@ DeclContext::makeDeclAvailable(DeclarationName Name,
       it->getSecond().appendDecl(decl);
    }
 
-   if (isTransparent()) {
+   if (isTransparent() && shouldAddToOuterContext(this, decl)) {
       return parentCtx->makeDeclAvailable(Name, decl);
    }
 
@@ -850,6 +870,8 @@ bool DeclContext::isTransparent() const
       return cast<NamespaceDecl>(this)->isAnonymousNamespace();
    case Decl::CompoundDeclID:
       return cast<CompoundDecl>(this)->isTransparent();
+   case Decl::SourceFileDeclID:
+      return true;
    default:
       return false;
    }
@@ -1034,6 +1056,7 @@ bool DeclContext::isGlobalDeclContext() const
       case Decl::ModuleDeclID:
       case Decl::CompoundDeclID:
       case Decl::NotDecl:
+      case Decl::SourceFileDeclID:
          break;
       default:
          return false;

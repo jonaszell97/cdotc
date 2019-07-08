@@ -27,7 +27,7 @@ struct remove_reference<T&&> { using type = T; };
 } // namespace detail
 
 template<class T>
-Optional<T> Some(T &&t)
+Optional<typename detail::remove_reference<T>::type> Some(T &&t)
 {
    return Optional<typename detail::remove_reference<T>::type>(
       std::forward<T&&>(t));

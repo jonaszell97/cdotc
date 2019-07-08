@@ -180,6 +180,35 @@ void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr *A)
    }
 }
 
+void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
+{
+   StringRef K = A->getSemanticsKind();
+   if (K == "builtin_integer_type") {
+      const RecordMetaInfo *Info;
+      if (QC.GetRecordMeta(Info, cast<RecordDecl>(D), false)) {
+         return;
+      }
+
+      Info->IsBuiltinIntegerType = true;
+   }
+   else if (K == "builtin_bool_type") {
+      const RecordMetaInfo *Info;
+      if (QC.GetRecordMeta(Info, cast<RecordDecl>(D), false)) {
+         return;
+      }
+
+      Info->IsBuiltinBoolType = true;
+   }
+   else if (K == "builtin_fp_type") {
+      const RecordMetaInfo *Info;
+      if (QC.GetRecordMeta(Info, cast<RecordDecl>(D), false)) {
+         return;
+      }
+
+      Info->IsBuiltinFloatingPointType = true;
+   }
+}
+
 //void SemaPass::checkTemplateAttr(Decl *D, TemplateAttr *A)
 //{
 //   auto *ND = cast<NamedDecl>(D);

@@ -1,0 +1,244 @@
+
+@version(POSIX)
+module std.sys.posix
+
+fileprivate def RedirectIO_PS(_ Path: UnsafePtr<String>, _ FD: libc.int,
+                              _ FileActions: UnsafeMutablePtr<posix_spawn_file_actions_t>) -> Bool {
+    if !Path {
+        return false
+    }
+
+    var File: CString
+    if Path->empty {
+        File = "/dev/null"
+    }
+    else {
+        // Definitive initialization analysis will not know that this is
+        // intialized in the closure.
+        File = ""
+
+        var Path = Path
+        var PathStr = builtin.loadFromPointer(&Path)
+
+        PathStr.withCString {
+            File = $0
+        }
+    }
+
+    var flags: OpenFlags
+    if FD == 0 {
+        flags = .O_RDONLY
+    }
+    else {
+        flags = .O_WRONLY | .O_CREAT
+    }
+
+    var Err = posix_spawn_file_actions_addopen(FileActions, FD, File,
+                                               flags as libc.int, 0666)
+    return Err != 0
+}
+
+fileprivate def RedirectIO(_ Path: String?, _ FD: libc.int) -> Bool {
+    if !Path {
+        return false
+    }
+
+    var Path = Path!
+    var File: CString
+
+    if Path.empty {
+        File = "/dev/null"
+    }
+    else {
+        File = Path.unsafeCString
+    }
+
+    var flags: OpenFlags
+    if FD == 0 {
+        flags = .O_RDONLY
+    }
+    else {
+        flags = .O_WRONLY | .O_CREAT
+    }
+
+    var InFD = open(File, flags as libc.int, 0666)
+    if InFD == -1 {
+        return true
+    }
+
+    if dup2(InFD, FD) != 0 {
+        _ = close(InFD)
+        return true
+    }
+
+    _ = close(InFD)
+    return false
+}
+
+internal def _execute(_ program: String,
+                      _ args: [String],
+                      _ env: [String]? = none,
+                      _ redirects: [String?] = [String?](),
+                      _ memoryLimit: UInt = 0) -> (Bool, pid_t) {
+    var argv: UnsafePtr<CString>
+    var envp: UnsafePtr<CString>
+
+    var argArray = [CString]()
+    for let arg in args {
+        argArray.push(arg.unsafeCString)
+    }
+
+    argv = argArray.unsafeBuffer
+
+    if case .Some(let env) = env {
+        var envArray = [CString]()
+        for let arg in env {
+            envArray.push(arg.unsafeCString)
+        }
+
+        envp = envArray.unsafeBuffer
+    }
+    else {
+        envp = __nullptr
+    }
+
+    // Use posix_spawn if there's no memory limit.
+    if memoryLimit == 0 {
+        var FileActionsStore = (posix_spawn_file_actions_t)()
+        var FileActions = (UnsafeMutablePtr<posix_spawn_file_actions_t>)()
+
+        // If we call posix_spawn_file_actions_addopen we have to make sure the
+        // c strings we pass to it stay alive until the call to posix_spawn,
+        // so we copy any StringRefs into this variable.
+        var RedirectsStorage = [String; 3]()
+
+        if !redirects.empty {
+            assert!(redirects.size == 3, "expected 3 redirects")
+
+            var RedirectsStr = [UnsafeMutablePtr<String>; 3]()
+            for i in 0..3 {
+                if case .Some(let redir) = redirects[i] {
+                    RedirectsStorage[i] = redir
+                    RedirectsStr[i] = builtin.addressOf(&RedirectsStorage[i])
+                }
+            }
+
+            FileActions = builtin.addressOf(&FileActionsStore)
+            _ = posix_spawn_file_actions_init(FileActions)
+
+            // Redirect stdin/stdout.
+            if (RedirectIO_PS(RedirectsStr[0], 0, FileActions)
+                    || RedirectIO_PS(RedirectsStr[1], 1, FileActions)) {
+                return (false, 0)
+            }
+
+            // Check if stdout and stderr go to the same place.
+            var redirectStderr = false
+            if case .Some(let stdoutRedir) = redirects[1] {
+                if case .Some(let stderrRedir) = redirects[2] {
+                    redirectStderr = stdoutRedir != stderrRedir
+                }
+            }
+
+            if redirectStderr {
+                // Just redirect stderr
+                if RedirectIO_PS(RedirectsStr[2], 2, FileActions) {
+                    return (false, 0)
+                }
+            }
+            else {
+                // If stdout and stderr should go to the same place, redirect stderr
+                // to the FD already open for stdout.
+                var Err = posix_spawn_file_actions_adddup2(FileActions, 1, 2)
+                if Err != 0 {
+                    return (false, 0)
+                }
+            }
+        }
+
+        if !env {
+            // FIXME environ
+        }
+
+        var PID: pid_t = 0
+        var Err = posix_spawn(builtin.addressOf(&PID), program.unsafeCString,
+                              FileActions, __nullptr, argv, envp)
+
+        if FileActions {
+            _ = posix_spawn_file_actions_destroy(FileActions)
+        }
+
+        if Err != 0 {
+            return (false, 0)
+        }
+
+        return (true, PID)
+    }
+
+    var child = fork()
+    match child {
+    case -1i32:
+        return (false, 0)
+    case 0i32:
+        // Child process.
+        // Redirect file descriptors...
+        if !redirects.empty {
+            if RedirectIO(redirects[0], 0) {
+                return (false, 0)
+            }
+            if RedirectIO(redirects[1], 1) {
+                return (false, 0)
+            }
+
+            // Check if stdout and stderr go to the same place.
+            var redirectStderr = false
+            if case .Some(let stdoutRedir) = redirects[1] {
+                if case .Some(let stderrRedir) = redirects[2] {
+                    redirectStderr = stdoutRedir != stderrRedir
+                }
+            }
+
+            if redirectStderr {
+                if RedirectIO(redirects[2], 2) {
+                    return (false, 0)
+                }
+            }
+            else if dup2(1, 2) == -1 {
+                return (false, 0)
+            }
+        }
+
+        if memoryLimit != 0 {
+            // sys.setMemoryLimit(memoryLimit)
+        }
+
+        var program = program
+        program.withCString {
+            if envp {
+                _ = posix.execve($0, argv, envp)
+            }
+            else {
+                _ = posix.execv($0, argv)
+            }
+        }
+
+        // If the execve() failed, we should exit. Follow Unix protocol and
+        // return 127 if the executable was not found, and 126 otherwise.
+        // Use _exit rather than exit so that atexit functions and static
+        // object destructors cloned from the parent process aren't
+        // redundantly run, and so that any data buffered in stdio buffers
+        // cloned from the parent aren't redundantly written out.
+        // _exit(errno == ENOENT ? 127 : 126)
+        exit(126)
+    default:
+        break
+    }
+
+    return (true, child)
+}
+
+/// Implemented in cdotrt
+declare C public def _cdot_Wait(pid: pid_t,
+                                secondsToWait: libc.unsigned,
+                                waitUntilEnd: Bool) -> libc.int
+

@@ -218,7 +218,7 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
    KEYWORD(try);
    KEYWORD_ID(typename);
    KEYWORD_ID(typeid);
-   KEYWORD(using);
+   KEYWORD_ID(using);
    KEYWORD_ID(virtual);
    KEYWORD_ID(wchar_t);
 

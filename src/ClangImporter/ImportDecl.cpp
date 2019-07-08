@@ -8,6 +8,7 @@
 #include "AST/Decl.h"
 #include "Driver/Compiler.h"
 #include "Module/Module.h"
+#include "Query/QueryContext.h"
 #include "Sema/Builtin.h"
 #include "Sema/SemaPass.h"
 
@@ -183,7 +184,7 @@ StructDecl *ImporterImpl::importStruct(clang::RecordDecl *ClangRec)
    for (clang::FieldDecl *F : ClangRec->fields()) {
       if (F->isBitField()) {
          // Import as an opaque structure.
-         Rec->addAttribute(new(Ctx) OpaqueAttr);
+         Ctx.addAttribute(Rec, new(Ctx) OpaqueAttr);
          break;
       }
 
@@ -299,13 +300,13 @@ EnumDecl *ImporterImpl::importEnum(clang::EnumDecl *ClangE)
 
 static CompoundStmt *CreateUnionGetterBody(SemaPass &SP, ASTContext &Ctx,
                                            QualType FieldTy,
+                                           FieldDecl *Storage,
                                            SourceLocation Loc) {
    // Create a reference to 'self'.
    auto *SelfRef = SelfExpr::Create(Ctx, Loc, false);
 
    // Create a reference to 'self._storage'.
-   auto *StorageRef = new(Ctx) IdentifierRefExpr(Loc, SelfRef,
-                                                 SP.getIdentifier("_storage"));
+   auto *StorageRef = MemberRefExpr::Create(Ctx, SelfRef, Storage, Loc);
 
    // Cast '_storage' to a pointer.
    ConversionSequenceBuilder Builder;
@@ -349,13 +350,13 @@ static CompoundStmt *CreateUnionGetterBody(SemaPass &SP, ASTContext &Ctx,
 
 static CompoundStmt *CreateUnionSetterBody(SemaPass &SP, ASTContext &Ctx,
                                            QualType FieldTy,
+                                           FieldDecl *Storage,
                                            SourceLocation Loc) {
    // Create a reference to 'self'.
    auto *SelfRef = SelfExpr::Create(Ctx, Loc, false);
 
    // Create a reference to 'self._storage'.
-   auto *StorageRef = new(Ctx) IdentifierRefExpr(Loc, SelfRef,
-                                                 SP.getIdentifier("_storage"));
+   auto *StorageRef = MemberRefExpr::Create(Ctx, SelfRef, Storage, Loc);
 
    // Cast '_storage' to a pointer.
    ConversionSequenceBuilder Builder;
@@ -390,13 +391,15 @@ static CompoundStmt *CreateUnionSetterBody(SemaPass &SP, ASTContext &Ctx,
 static PropDecl *CreateUnionAccessor(SemaPass &SP, ASTContext &Ctx,
                                      QualType FieldTy,
                                      DeclarationName Name,
+                                     FieldDecl *Storage,
                                      SourceLocation Loc,
                                      bool Const) {
-   CompoundStmt *GetterBody = CreateUnionGetterBody(SP, Ctx, FieldTy, Loc);
+   CompoundStmt *GetterBody = CreateUnionGetterBody(SP, Ctx, FieldTy,
+                                                    Storage, Loc);
    CompoundStmt *SetterBody = nullptr;
 
    if (!Const) {
-      SetterBody = CreateUnionSetterBody(SP, Ctx, FieldTy, Loc);
+      SetterBody = CreateUnionSetterBody(SP, Ctx, FieldTy, Storage, Loc);
    }
 
    SourceType Type(FieldTy);
@@ -425,25 +428,25 @@ static PropDecl *CreateUnionAccessor(SemaPass &SP, ASTContext &Ctx,
 
       FuncArgDecl *Args[] { SP.MakeSelfArg(Loc), NewValArg };
       SetterMethod = MethodDecl::Create(Ctx, AccessSpecifier::Public,
-                                        Loc, DN, Type, Args, { },
-                                        SetterBody, false);
+                                        Loc, DN, SourceType(Ctx.getVoidType()),
+                                        Args, { }, SetterBody, false);
    }
 
    return PropDecl::Create(Ctx, AccessSpecifier::Public, Loc, Name,
-                           SourceType(FieldTy), false, GetterMethod,
+                           SourceType(FieldTy), false, false, GetterMethod,
                            SetterMethod);
 }
 
 static InitDecl *CreateUnionInit(SemaPass &SP, ASTContext &Ctx,
                                  QualType FieldTy,
                                  DeclarationName Name,
+                                 FieldDecl *Storage,
                                  SourceLocation Loc) {
    // Create a reference to 'self'.
    auto *SelfRef = SelfExpr::Create(Ctx, Loc, false);
 
    // Create a reference to 'self._storage'.
-   auto *StorageRef = new(Ctx) IdentifierRefExpr(Loc, SelfRef,
-                                                 SP.getIdentifier("_storage"));
+   auto *StorageRef = MemberRefExpr::Create(Ctx, SelfRef, Storage, Loc);
 
    // Initialize with a default value to keep definitive initialization
    // analysis happy.
@@ -471,8 +474,15 @@ static InitDecl *CreateUnionInit(SemaPass &SP, ASTContext &Ctx,
                                     {Ctx.getPointerType(FieldTy)});
    auto *Deref = UnaryOperator::Create(Ctx, Loc, op::Deref, FnTy, Cast, true);
 
+   // Create the argument.
+   auto *ArgDecl = FuncArgDecl::Create(Ctx, Loc, Loc, Name,
+                                       Name.getIdentifierInfo(),
+                                       ArgumentConvention::Owned,
+                                       SourceType(FieldTy),
+                                       nullptr, false, false, false);
+
    // Create a reference to the argument.
-   auto *NewValRef = new(Ctx) IdentifierRefExpr(Loc, nullptr, Name);
+   auto *NewValRef = DeclRefExpr::Create(Ctx, ArgDecl, Loc);
 
    // Store the pointer.
    auto *Assign = AssignExpr::Create(Ctx, Loc, Deref, NewValRef, false);
@@ -480,13 +490,6 @@ static InitDecl *CreateUnionInit(SemaPass &SP, ASTContext &Ctx,
    // Create the body.
    auto *Body = CompoundStmt::Create(Ctx, { DefaultAssign,Assign }, false,
                                      Loc, Loc);
-
-   // Create the argument.
-   auto *ArgDecl = FuncArgDecl::Create(Ctx, Loc, Loc, Name,
-                                       Name.getIdentifierInfo(),
-                                       ArgumentConvention::Owned,
-                                       SourceType(FieldTy),
-                                       nullptr, false, false, false);
 
    // Create the initializer.
    return InitDecl::Create(Ctx, AccessSpecifier::Public, Loc, ArgDecl, {},
@@ -526,10 +529,17 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl *ClangU)
    unsigned MaxSize = 0;
    unsigned MaxAlign = 1;
 
+   // Create the union storage
+   auto *Storage = FieldDecl::Create(Ctx, AccessSpecifier::Private,
+                                     Rec->getSourceLoc(), Rec->getSourceLoc(),
+                                     Sema.getIdentifier("_storage"),
+                                     SourceType(),
+                                     false, false, nullptr);
+
    for (clang::FieldDecl *F : ClangU->fields()) {
       if (F->isBitField()) {
          // Import as an opaque structure.
-         Rec->addAttribute(new(Ctx) OpaqueAttr);
+         Ctx.addAttribute(Rec, new(Ctx) OpaqueAttr);
          break;
       }
 
@@ -544,14 +554,6 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl *ClangU)
          continue;
       }
 
-      if (FieldTy->isRecordType()) {
-         if (!CI.getSema().ensureDeclared(FieldTy->getRecord())) {
-            continue;
-         }
-
-         CI.getSema().calculateRecordSize(FieldTy->getRecord());
-      }
-
       auto Size = TI.getSizeOfType(FieldTy);
       auto Align = TI.getAlignOfType(FieldTy);
 
@@ -564,7 +566,8 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl *ClangU)
 
       SourceLocation FieldLoc = getSourceLoc(F->getLocStart());
       auto *Prop = CreateUnionAccessor(CI.getSema(), Ctx, FieldTy,
-                                       getName(F->getDeclName()), FieldLoc,
+                                       getName(F->getDeclName()),
+                                       Storage, FieldLoc,
                                        F->getType().isConstQualified());
 
       Prop->setImportedFromClang(true);
@@ -572,20 +575,14 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl *ClangU)
       DeclMap[F] = Prop;
 
       auto *Init = CreateUnionInit(CI.getSema(), Ctx, FieldTy,
-                                   Prop->getDeclName(), FieldLoc);
+                                   Prop->getDeclName(), Storage, FieldLoc);
 
       Init->setImportedFromClang(true);
       Sema.ActOnDecl(Rec, Init);
    }
 
-   // Create the union storage
-   auto *Storage = FieldDecl::Create(Ctx, AccessSpecifier::Private,
-                                     Rec->getSourceLoc(), Rec->getSourceLoc(),
-                                     Sema.getIdentifier("_storage"),
-                                     SourceType(
-                                        Ctx.getArrayType(Ctx.getUInt8Ty(),
-                                                         MaxSize)),
-                                     false, false, nullptr);
+   Storage->getType().setResolvedType(Ctx.getArrayType(Ctx.getUInt8Ty(),
+                                                       MaxSize));
 
    Storage->setImportedFromClang(true);
    Sema.ActOnDecl(Rec, Storage);
@@ -739,14 +736,5 @@ void ImporterImpl::importDecls(clang::ASTContext &C, DeclContext *DC)
          continue;
 
       importDecl(ClangDecl);
-   }
-
-   auto &Sema = CI.getSema();
-   if (isa<CallableDecl>(DC)) {
-      for (auto *D : DC->getDecls()) {
-         Sema.ensureVisited(D);
-      }
-
-      Sema.finalizeRecordDecls();
    }
 }

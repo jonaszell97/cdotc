@@ -159,6 +159,11 @@ void ILWriter::writeModule(const il::Module &M)
       if (!G.isExternallyVisible())
          continue;
 
+      // Must be written before the IL value.
+      if (auto *ND = ILGen.getDeclForValue(&G)) {
+         (void) Writer.GetDeclRef(ND);
+      }
+
       GlobalValues.push_back(&G);
       (void)GetOrCreateValueID(&G);
    }
@@ -166,6 +171,11 @@ void ILWriter::writeModule(const il::Module &M)
    for (auto &Fn : M.getFuncList()) {
       if (!Fn.isExternallyVisible())
          continue;
+
+      // Must be written before the IL value.
+      if (auto *ND = ILGen.getDeclForValue(&Fn)) {
+         (void) Writer.GetDeclRef(ND);
+      }
 
       GlobalValues.push_back(&Fn);
       (void)GetOrCreateValueID(&Fn);

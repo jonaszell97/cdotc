@@ -1,0 +1,73 @@
+
+public struct CollectionOfOne<T> {
+    /// The element value.
+    var element: T
+
+    /// Memberwise initializer.
+    memberwise init
+}
+
+extend CollectionOfOne with Collection {
+    /// \inherit
+    associatedType Element = T
+
+    /// \inherit
+    prop startIndex: Int {
+        return 0
+    }
+
+    /// \inherit
+    prop endIndex: Int {
+        return 1
+    }
+
+    /// \inherit
+    prop size: Int {
+        return 1
+    }
+
+    /// \inherit
+    prop empty: Bool {
+        return false
+    }
+
+    /// \inherit
+    subscript (position: Index) -> T {
+        _checkIndex(position)
+        return element
+    }
+}
+
+public struct EmptyCollection {
+}
+
+extend EmptyCollection with Collection {
+    /// \inherit
+    associatedType Element = Void
+
+    /// \inherit
+    prop startIndex: Int {
+        return 0
+    }
+
+    /// \inherit
+    prop endIndex: Int {
+        return 0
+    }
+
+    /// \inherit
+    prop size: Int {
+        return 0
+    }
+
+    /// \inherit
+    prop empty: Bool {
+        return true
+    }
+
+    /// \inherit
+    subscript (position: Index) -> T {
+        _checkIndex(position)
+        unreachable!("EmptyCollection does not have a valid index!")
+    }
+}

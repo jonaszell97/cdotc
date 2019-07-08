@@ -1,4 +1,0 @@
-
-module libc.time
-
-include_system_header!("time.h")

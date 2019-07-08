@@ -167,13 +167,22 @@ DeclConstraint* ASTDeclReader::ReadDeclConstraint()
    while (NameQualSize--)
       NameQual.push_back(Record.getIdentifierInfo());
 
-   if (Kind == DeclConstraint::Concept) {
+   switch (Kind) {
+   case DeclConstraint::Concept: {
       auto *E = cast<IdentifierRefExpr>(Record.readExpr());
       return DeclConstraint::Create(Reader.getContext(), SR, NameQual, E);
    }
-
-   auto Ty = Record.readSourceType();
-   return DeclConstraint::Create(Reader.getContext(), Kind, SR, NameQual, Ty);
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated: {
+      auto Ty = Record.readSourceType();
+      return DeclConstraint::Create(Reader.getContext(), Kind, SR, NameQual,
+                                    Ty);
+   }
+   default:
+      return DeclConstraint::Create(Reader.getContext(), Kind, SR, NameQual);
+   }
 }
 
 void ASTDeclReader::visitNamedDecl(NamedDecl *ND)
@@ -339,6 +348,7 @@ void ASTDeclReader::visitPropDecl(PropDecl *D)
 
    D->setLoc(ReadSourceRange());
    D->setType(Record.readSourceType());
+   D->setReadWrite(Record.readBool());
 
    unsigned GetterMethodID = Record.readDeclID();
    unsigned SetterMethodID = Record.readDeclID();
@@ -706,6 +716,12 @@ void ASTDeclReader::visitModuleDecl(ModuleDecl *D)
    else {
       D->setPrimaryCtx(M->getDecl());
    }
+}
+
+void ASTDeclReader::visitSourceFileDecl(SourceFileDecl *S)
+{
+   visitNamedDecl(S);
+   S->setSourceRange(ReadSourceRange());
 }
 
 void ASTDeclReader::visitImportDecl(ImportDecl *D)
@@ -1234,6 +1250,7 @@ void ASTReader::addDeclToContext(Decl *D, DeclContext *Ctx)
    case Decl::ModuleDeclID:
    case Decl::OperatorDeclID:
    case Decl::PrecedenceGroupDeclID:
+   case Decl::TemplateParamDeclID:
       // these decls are immediately made visible
       Sema.addDeclToContext(*Ctx, cast<NamedDecl>(D));
       break;
@@ -1282,7 +1299,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
    case DECL_EXTERNAL: {
       auto *ModName = Record.getIdentifierInfo();
       auto *Mod = this->Reader.CI.getModuleMgr()
-                      .LookupModule({}, {}, ModName);
+                      .LookupModule(CurrentImportLoc, CurrentImportLoc, ModName);
 
       auto DeclID = Record.readDeclID();
       auto *ModReader = this->Reader.CI.getModuleMgr()
@@ -1306,6 +1323,9 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
       ReadingDecl = PrevReadingDecl;
       return D;
    }
+   case DECL_SourceFileDecl:
+      D = SourceFileDecl::CreateEmpty(C);
+      break;
    case DECL_StaticAssertDecl:
       D = StaticAssertDecl::CreateEmpty(C);
       break;
@@ -1525,7 +1545,7 @@ Decl *ASTReader::ReadDeclRecord(unsigned ID)
 
    switch (D->getKind()) {
    case Decl::ImportDeclID:
-      Sema.declareScoped(D);
+      llvm_unreachable("handle this!");
       break;
    case Decl::ExtensionDeclID:
       Sema.makeExtensionVisible(cast<ExtensionDecl>(D));

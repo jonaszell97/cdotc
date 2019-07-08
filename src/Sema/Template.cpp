@@ -2,6 +2,7 @@
 // Created by Jonas Zell on 04.01.18.
 //
 
+#include <Basic/NestedNameSpecifier.h>
 #include "Template.h"
 
 #include "AST/Expression.h"
@@ -160,6 +161,40 @@ TemplateArgument TemplateArgument::clone(bool Canonicalize, bool Freeze,
 
    Result.Runtime = Runtime;
    return Result;
+}
+
+bool TemplateArgument::operator==(const TemplateArgument &RHS) const
+{
+   if (isVariadic()) {
+      if (!RHS.isVariadic()) {
+         return false;
+      }
+
+      unsigned N1 = VariadicArgs.size();
+      unsigned N2 = RHS.VariadicArgs.size();
+
+      if (N1 != N2) {
+         return false;
+      }
+
+      for (unsigned i = 0; i < N1; ++i) {
+         if (VariadicArgs[i] != RHS.VariadicArgs[i]) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+   if (isType()) {
+      if (!RHS.isType()) {
+         return false;
+      }
+
+      return getType() == RHS.getType();
+   }
+
+   return getValueExpr() == RHS.getValueExpr();
 }
 
 std::string TemplateArgument::toString() const
@@ -383,11 +418,56 @@ public:
       }
    }
 
+   bool setParamValue(TemplateParamDecl *P,
+                      TemplateArgument &&NewVal) {
+      auto Idx = getIndexFor(P);
+      assert(Idx != -1 && "bad template parameter");
+
+      auto &Val = ResolvedArgs[Idx];
+      if (!Val.isNull()
+      && (!Val.isVariadic() && !Val.isFrozen() && Val.getVariadicArgs().empty())) {
+         if (Val != NewVal) {
+            Res.setHasConflict(Val.getType(), P);
+            return true;
+         }
+
+         return false;
+      }
+
+      if (P->isVariadic()) {
+         if (!NewVal.isVariadic()) {
+            Res.setHasIncompatibleKind(0, P);
+            return true;
+         }
+      }
+
+      if (P->isTypeName()) {
+         if (!NewVal.isType()) {
+            Res.setHasIncompatibleKind(0, P);
+            return true;
+         }
+
+         if (NewVal.isVariadic()) {
+            for (auto &VA : NewVal.getVariadicArgs()) {
+               checkCovariance(P, VA.getType());
+               checkDependentType(VA.getType());
+            }
+         }
+         else {
+            checkCovariance(P, NewVal.getType());
+            checkDependentType(NewVal.getType());
+         }
+      }
+
+      Val = move(NewVal);
+      return false;
+   }
+
    bool makeSingleArgument(TemplateParamDecl *P,
                            TemplateArgument &Out,
                            Expression *TA) {
       auto res = SP.visitExpr(TA);
-      StillDependent |= TA->isTypeDependent();
+      StillDependent |= TA->isTypeDependent() || TA->containsAssociatedType();
 
       if (!res) {
          HadError = true;
@@ -451,7 +531,7 @@ public:
             return false;
          }
 
-         if (StatExp->isDependent()) {
+         if (StatExp->isDependent() || StatExp->containsAssociatedType()) {
             StillDependent = true;
          }
          else if (StatExp->getExprType() != P->getValueType()) {
@@ -589,7 +669,9 @@ private:
 
    TemplateArgListResult Res;
 
-   bool inferTemplateArg(CanType given, QualType needed);
+   bool inferTemplateArg(QualType givenNonCanon, QualType needed);
+   bool inferTemplateArg(const FinalTemplateArgumentList &GivenList,
+                         ArrayRef<TemplateParamDecl*> NeededParams);
 
    template<class ...Args>
    std::pair<size_t, bool> emplace(TemplateParamDecl *Decl, Args&&... args)
@@ -665,9 +747,14 @@ private:
    bool resolveDefault(TemplateArgument &Arg)
    {
       auto Param = Arg.getParam();
+      if (SP.QC.PrepareDeclInterface(Param)) {
+         return true;
+      }
+
       auto Def = Param->getDefaultValue();
-      if (!Def)
+      if (!Def) {
          return false;
+      }
 
       assert(!Param->isVariadic() && "variadics cannot have a default value!");
 
@@ -743,20 +830,23 @@ TemplateArgListImpl::inferFromArgList(llvm::ArrayRef<QualType> givenArgs,
    }
 }
 
-bool TemplateArgListImpl::inferTemplateArg(CanType given, QualType needed)
-{
-   if (given->isDependentType()) {
+bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
+                                           QualType neededNonCanon) {
+   if (givenNonCanon->isDependentType()) {
       StillDependent = true;
       return true;
    }
 
+   CanType given = givenNonCanon;
    given = given->getDesugaredType();
+
+   CanType needed = neededNonCanon->getDesugaredType();
 
    if (isa<ReferenceType>(given) && !needed->isReferenceType()) {
       given = cast<ReferenceType>(given)->getReferencedType();
    }
 
-   if (GenericType *neededGen = dyn_cast<GenericType>(needed)) {
+   if (GenericType *neededGen = dyn_cast<GenericType>(neededNonCanon)) {
       auto parameters = getParameters();
       auto idx = getIndexFor(neededGen->getParam());
 
@@ -948,7 +1038,6 @@ bool TemplateArgListImpl::inferTemplateArg(CanType given, QualType needed)
       if (given->hasTemplateArgs() && needed->hasTemplateArgs()) {
          auto &givenConcrete = given->getTemplateArgs();
          auto &neededConcrete = needed->getTemplateArgs();
-         auto &Context = SP.getContext();
 
          unsigned i = 0;
          for (auto &NeededArg : neededConcrete) {
@@ -960,8 +1049,7 @@ bool TemplateArgListImpl::inferTemplateArg(CanType given, QualType needed)
                continue;
             }
 
-            QualType NeededTy =
-               Context.getTemplateArgType(NeededArg.getParam());
+            QualType NeededTy = NeededArg.getType();
 
             bool IsVariadic = NeededArg.isVariadic();
             if (IsVariadic) {
@@ -993,49 +1081,11 @@ bool TemplateArgListImpl::inferTemplateArg(CanType given, QualType needed)
 
       // Otherwise, try to infer from unconstrained template parameters.
       if (given->hasTemplateArgs() && needed->getRecord()->isTemplate()) {
-         auto &givenConcrete = given->getTemplateArgs();
-         auto &neededParams = needed->getRecord()->getTemplateParams();
-         auto &Context = SP.getContext();
+         const auto &givenConcrete = given->getTemplateArgs();
+         ArrayRef<TemplateParamDecl*> neededParams = needed->getRecord()
+            ->getTemplateParams();
 
-         unsigned i = 0;
-         for (auto *NeededArg : neededParams) {
-            if (!NeededArg->isTypeName()) {
-               if (NeededArg->isVariadic())
-                  break;
-
-               ++i;
-               continue;
-            }
-
-            QualType NeededTy =
-               Context.getTemplateArgType(NeededArg);
-
-            bool IsVariadic = NeededArg->isVariadic();
-            if (IsVariadic) {
-               while (i < givenConcrete.size()) {
-                  auto &ConcreteArg = givenConcrete[i++];
-                  if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
-                     return false;
-
-                  if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
-                     return false;
-               }
-
-               auto *Arg = getArgForParam(NeededArg);
-               Arg->freeze();
-
-               return true;
-            }
-
-            auto &ConcreteArg = givenConcrete[i++];
-            if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
-               return false;
-
-            if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
-               return false;
-         }
-
-         return true;
+         return inferTemplateArg(givenConcrete, neededParams);
       }
 
       return true;
@@ -1076,6 +1126,107 @@ bool TemplateArgListImpl::inferTemplateArg(CanType given, QualType needed)
       }
 
       return true;
+   }
+
+   if (auto *DN = needed->asDependentNameType()) {
+      auto *Name = DN->getNameSpec();
+      if (Name->getKind() != NestedNameSpecifier::TemplateArgList
+      || Name->depth() != 2) {
+         return true;
+      }
+
+      ArrayRef<TemplateParamDecl*> NeededParams;
+
+      auto *Prev = Name->getPrevious();
+      switch (Prev->getKind()) {
+      case NestedNameSpecifier::Alias: {
+         if (!givenNonCanon->isTypedefType()) {
+            return true;
+         }
+
+         auto *NeededAlias = Prev->getAlias();
+         auto *GivenAlias = givenNonCanon->asTypedefType()->getTypedef();
+
+         if (!GivenAlias->isInstantiation()
+         || GivenAlias->getSpecializedTemplate() != NeededAlias) {
+            return true;
+         }
+
+         NeededParams = NeededAlias->getTemplateParams();
+         break;
+      }
+      case NestedNameSpecifier::Type: {
+         if (!givenNonCanon->isRecordType()) {
+            return true;
+         }
+
+         QualType NeededT = Prev->getType();
+         if (!NeededT->isRecordType()) {
+            return true;
+         }
+
+         auto *NeededRec = NeededT->getRecord();
+         auto *GivenRec = givenNonCanon->getRecord();
+
+         if (!GivenRec->isInstantiation()
+             || GivenRec->getSpecializedTemplate() != NeededRec) {
+            return true;
+         }
+
+         NeededParams = NeededRec->getTemplateParams();
+         break;
+      }
+      default:
+         return true;
+      }
+
+      return inferTemplateArg(*Name->getTemplateArgs(), NeededParams);
+   }
+
+   return true;
+}
+
+bool TemplateArgListImpl::inferTemplateArg(
+                                    const FinalTemplateArgumentList &GivenList,
+                                    ArrayRef<TemplateParamDecl*> NeededParams) {
+   auto &Context = SP.getContext();
+
+   unsigned i = 0;
+   for (auto *NeededArg : NeededParams) {
+      if (!NeededArg->isTypeName()) {
+         if (NeededArg->isVariadic())
+            break;
+
+         ++i;
+         continue;
+      }
+
+      QualType NeededTy =
+         Context.getTemplateArgType(NeededArg);
+
+      bool IsVariadic = NeededArg->isVariadic();
+      if (IsVariadic) {
+         while (i < GivenList.size()) {
+            auto &ConcreteArg = GivenList[i++];
+            if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
+               return false;
+
+            if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
+               return false;
+         }
+
+         auto *Arg = getArgForParam(NeededArg);
+         Arg->freeze();
+
+         return true;
+      }
+
+      auto &ConcreteArg = GivenList[i++];
+      if (!ConcreteArg.isType() || ConcreteArg.isVariadic())
+         return false;
+
+      if (!inferTemplateArg(ConcreteArg.getType(), NeededTy))
+         return false;
    }
 
    return true;
@@ -1239,6 +1390,12 @@ void TemplateArgList::Profile(llvm::FoldingSetNodeID &ID,
    ID.AddInteger(list.size());
    for (auto &arg : list)
       arg.Profile(ID);
+}
+
+bool TemplateArgList::setParamValue(TemplateParamDecl *Param,
+                                    TemplateArgument &&Arg) {
+   assert(pImpl && "incomplete argument list!");
+   return pImpl->setParamValue(Param, move(Arg));
 }
 
 bool TemplateArgList::inferFromType(QualType contextualType,

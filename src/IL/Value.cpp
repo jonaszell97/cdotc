@@ -216,11 +216,11 @@ void Value::addUse(Value *User)
       uses = new Use(User); return;
    }
 
-   uses->addUseAtEnd(new Use(User));
-
 #ifndef NDEBUG
    uses->verify();
 #endif
+
+   uses->addUseAtEnd(new Use(User));
 }
 
 void Value::removeUser(Value *User)

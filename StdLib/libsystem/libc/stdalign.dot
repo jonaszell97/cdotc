@@ -1,4 +1,0 @@
-
-module libc.stdalign
-
-// include_system_header!("stdalign.h")

@@ -21,6 +21,44 @@ namespace llvm {
       }
    };
 
+   // Provide DenseMapInfo for unsigned chars.
+   template<> struct DenseMapInfo<::cdot::Module*> {
+      static inline ::cdot::Module* getEmptyKey()
+      {
+         uintptr_t Val = static_cast<uintptr_t>(-1);
+         return (::cdot::Module*)Val;
+      }
+
+      static inline ::cdot::Module* getTombstoneKey()
+      {
+         uintptr_t Val = static_cast<uintptr_t>(-2);
+         return (::cdot::Module*)Val;
+      }
+
+      static unsigned getHashValue(const ::cdot::Module* Val)
+      {
+         return (int)(uintptr_t)Val;
+      }
+
+      static bool isEqual(const ::cdot::Module* LHS, const ::cdot::Module* RHS)
+      {
+         return LHS == RHS;
+      }
+   };
+
+   template<>
+   struct PointerLikeTypeTraits<::cdot::il::Constant*> {
+   public:
+      static inline void *getAsVoidPointer(::cdot::il::Constant* P) { return P; }
+
+      static inline ::cdot::il::Constant *getFromVoidPointer(void *P)
+      {
+         return static_cast<::cdot::il::Constant*>(P);
+      }
+
+      enum { NumLowBitsAvailable = 0 };
+   };
+
    ENUM_DENSE_MAP_INFO(::cdot::ast::ImplicitConformanceKind);
 } // namespace llvm
 

@@ -59,6 +59,8 @@ class TemplateArgsParam<name: string, defaultVal: string = "", exclude: i1 = fal
 class MultiLevelTemplateArgsParam<name: string, exclude: i1 = false> :
     QueryParam<name, "sema::MultiLevelFinalTemplateArgList", "", exclude>
 
+class FunctionRefParam<name: string, type: string, defaultVal: string = "", exclude: i1 = false> : QueryParam<name, type, defaultVal, exclude>
+
 class ILConstantParam<name: string, exclude: i1 = false> :
     QueryParam<name, "il::Constant*", "", exclude>
 
@@ -87,6 +89,9 @@ class Query<let type: string> {
     /// True iff this query never has any dependencies.
     let pure: i1 = false
 
+    /// True iff this query can never fail.
+    let infallible: i1 = false
+
     /// True iff the result value should be moved.
     let shouldMoveResult: i1 = false
 
@@ -101,6 +106,9 @@ class Query<let type: string> {
 
     /// If not empty, code for a custom get method.
     let customGet: code = {}
+
+    /// If not empty, code for custom assigning from the cached value.
+    let customAssign: code = {}
 
     /// Custom code to insert into the 'finish' method.
     let customFinish: code = {}
@@ -128,6 +136,9 @@ class Query<let type: string> {
 
     /// A condition that indicates whether or not a query should be refreshed.
     let refreshCondition: code = {}
+
+    /// The trailing object types that this query inherits from.
+    let trailingObjects: list<string> = []
 }
 
 class VoidQuery : Query<"void">
@@ -144,9 +155,24 @@ def CompileModule : VoidQuery {
     description = "compiling module ${QC.CI.getCompilationModule()->getName()->getIdentifier()}"
 }
 
-/// Parse a source file into a ModuleDecl.
-def ParseSourceFile : Query<"ast::ModuleDecl*"> {
+/// Parse the module file.
+def ParseModuleFile : Query<"Module*"> {
     parameters = [
+        StringParam<"FileName">
+    ]
+}
+
+/// Create a default module for a compilation without a module file.
+def CreateDefaultModule : Query<"Module*"> {
+    parameters = []
+}
+
+/// Parse a source file into a SourceFileDecl.
+def ParseSourceFile : Query<"ast::SourceFileDecl*"> {
+    parameters = [
+        // The base module of the compilation.
+        QueryParam<"Mod", "Module*">,
+
         // Filename of the source file to parse.
         StringParam<"FileName">
     ]
@@ -154,11 +180,32 @@ def ParseSourceFile : Query<"ast::ModuleDecl*"> {
     description = "parsing source file $FileName"
 }
 
+/// Parse the main source file into a SourceFileDecl.
+def ParseMainSourceFile : Query<"ast::SourceFileDecl*"> {
+    parameters = [
+        // The base module of the compilation.
+        QueryParam<"Mod", "Module*">,
+
+        // Filename of the source file to parse.
+        StringParam<"FileName">
+    ]
+
+    description = "parsing source file $FileName"
+}
+
+/// Parse the source files contained in this module.
+def ParseSourceFiles : VoidQuery {
+    parameters = [
+        // The base module of the compilation.
+        QueryParam<"Mod", "Module*">
+    ]
+}
+
 /// Create an IL Module from a typechecked AST.
 def CreateILModule : Query<"il::Module*"> {
     parameters = [
-        // Array of source files to include in the module.
-        ArrayParam<"SourceFiles", "StringRef">
+        // The base module of the compilation.
+        QueryParam<"Mod", "Module*">
     ]
 
     description = "creating IL module"
@@ -178,8 +225,8 @@ def SetupIRGen : Query<"std::unique_ptr<il::IRGen>"> {
 /// Create an LLVM module from an IL module.
 def CreateLLVMModule : Query<"llvm::Module*"> {
     parameters = [
-        // Array of source files to include in the module.
-        ArrayParam<"SourceFiles", "StringRef">
+        // The base module of the compilation.
+        QueryParam<"Mod", "Module*">
     ]
 
     description = "creating LLVM module"
@@ -188,9 +235,6 @@ def CreateLLVMModule : Query<"llvm::Module*"> {
 /// Create an object file from an LLVM module.
 def CreateObject : VoidQuery {
     parameters = [
-        // Array of source files to include in the object.
-        ArrayParam<"SourceFiles", "StringRef">,
-
         // Stream that the object should be written to.
         StreamParam<"OS">
     ]
@@ -202,9 +246,6 @@ def CreateObject : VoidQuery {
 /// Create a static library from one or more object files.
 def CreateStaticLib : VoidQuery {
     parameters = [
-        // Array of source files to include in the library.
-        ArrayParam<"SourceFiles", "StringRef">,
-
         // File of the output static library.
         StringParam<"OutFile">
     ]
@@ -216,9 +257,6 @@ def CreateStaticLib : VoidQuery {
 /// Create a dynamic library from one or more object files.
 def CreateDynamicLib : VoidQuery {
     parameters = [
-        // Array of source files to include in the library.
-        ArrayParam<"SourceFiles", "StringRef">,
-
         // File of the output dynamic library.
         StringParam<"OutFile">
     ]
@@ -230,9 +268,6 @@ def CreateDynamicLib : VoidQuery {
 /// Create an executable file from an LLVM module.
 def CreateExecutable : VoidQuery {
     parameters = [
-        // Array of source files to include in the executable.
-        ArrayParam<"SourceFiles", "StringRef">,
-
         // File of the output executable.
         StringParam<"OutFile">
     ]
@@ -244,9 +279,6 @@ def CreateExecutable : VoidQuery {
 /// Emit an IL module containing the passed source file.
 def EmitIL : VoidQuery {
     parameters = [
-        // Array of source files to include in the executable.
-        ArrayParam<"SourceFiles", "StringRef">,
-
         // Stream to write the module to.
         StreamParam<"OS">
     ]
@@ -258,9 +290,6 @@ def EmitIL : VoidQuery {
 /// Emit an IR module containing the passed source file.
 def EmitIR : VoidQuery {
     parameters = [
-        // Array of source files to include in the executable.
-        ArrayParam<"SourceFiles", "StringRef">,
-
         // Stream to write the module to.
         StreamParam<"OS">
     ]
@@ -308,6 +337,44 @@ def IsTriviallyCopyable : TypeMetaQuery
 def NeedsRetainOrRelease : TypeMetaQuery
 def NeedsDeinitilization : TypeMetaQuery
 def NeedsStructReturn : TypeMetaQuery
+def ContainsAssociatedTypeConstraint : TypeMetaQuery
+
+def IsImplicitlyConvertible : BoolQuery {
+    parameters = [
+        TypeParam<"From">,
+        TypeParam<"To">
+    ]
+
+    simpleQuery = true
+    canBeDependent = true
+}
+
+def GetConversionSequence : Query<"ConversionSequence*"> {
+    parameters = [
+        TypeParam<"From">,
+        TypeParam<"To">
+    ]
+
+    simpleQuery = true
+    canBeDependent = true
+}
+
+/// Substitute all type variable types within a type.
+def SubstTypeVariables : Query<"QualType"> {
+    parameters = [
+        // The type potentially containing type variables.
+        TypeParam<"T">,
+
+        // The map of concrete type assignments.
+        QueryParam<"ReplacementMap", "const llvm::DenseMap<TypeVariableType*, QualType>&", "", true>,
+
+        // The location where the substitution was requested.
+        QueryParam<"SR", "SourceRange", "", /*exclude=*/true>
+    ]
+
+    simpleQuery = true
+    canBeCached = false
+}
 
 /// Substitute all protocol associated types within a type to concrete ones.
 def SubstAssociatedTypes : Query<"QualType"> {
@@ -361,6 +428,31 @@ def SubstGenericTypesNonFinal : Query<"QualType"> {
     simpleQuery = true
 }
 
+/// Check the capabilities of a context that are added via constraints.
+def CheckTypeCapabilities : Query<"std::vector<TypeCapability>"> {
+    parameters = [
+        // The context to check.
+        NamedDeclParam<"ND">
+    ]
+
+    getReturnType = "ArrayRef<TypeCapability>"
+    shouldMoveResult = true
+    simpleQuery = true
+}
+
+/// Apply the capabilities that are added in a context to a type.
+def ApplyCapabilites : Query<"QualType"> {
+    parameters = [
+        // The type to apply the capabilities to.
+        TypeParam<"T">,
+
+        // The context to check.
+        DeclContextParam<"DC">
+    ]
+
+    simpleQuery = true
+}
+
 /// *** Builtin declaration lookup queries. ****
 
 def GetBuiltinModule : Query<"Module*"> {
@@ -410,10 +502,64 @@ def GetBuiltinFunc : Query<"ast::CallableDecl*"> {
     customKeyType = "char"
 }
 
+def GetBuiltinAlias : Query<"ast::AliasDecl*"> {
+    customHeaderCode = {
+    public:
+        enum AliasKind: uint8_t {
+            /// The default type for signed integer literals.
+            DefaultSignedIntegerLiteralType,
+
+            /// The default type for unsigned integer literals.
+            DefaultUnsignedIntegerLiteralType,
+
+            /// The default type for floating point literals.
+            DefaultFloatingPointLiteralType,
+
+            /// The default type for boolean literals.
+            DefaultBooleanLiteralType,
+
+            /// The default type for character literals.
+            DefaultCharacterLiteralType,
+
+            /// The default type for string literals.
+            DefaultStringLiteralType,
+
+            /// The default type for array literals.
+            DefaultArrayLiteralType,
+
+            /// The default type for dictionary literals.
+            DefaultDictionaryLiteralType,
+        };
+    }
+
+    parameters = [
+        // The function to lookup.
+        InnerTypeQueryParam<"K", "AliasKind">,
+
+        // The context to look up in.
+        DeclContextParam<"DC", "nullptr", false, true>
+    ]
+
+    customKeyType = "uint8_t"
+}
+
 def GetBuiltinRecord : Query<"ast::RecordDecl*"> {
     customHeaderCode = {
     public:
-        enum RecordKind : char {
+        enum RecordKind: uint32_t {
+            Bool,
+            Character,
+            Int8, UInt8,
+            Int16, UInt16,
+            Int32, UInt32,
+            Int64, UInt64,
+            Int128, UInt128,
+            Float, Double,
+
+            UnsafePtr, UnsafeMutablePtr,
+            UnsafeRawPtr, UnsafeMutableRawPtr,
+            UnsafeBufferPtr, UnsafeMutableBufferPtr,
+
             Array,
             Dictionary,
             String,
@@ -428,9 +574,6 @@ def GetBuiltinRecord : Query<"ast::RecordDecl*"> {
             ProtocolConformance,
             ExistentialContainer,
         };
-
-    private:
-        llvm::DenseMap<char, ast::RecordDecl*> Cache;
     }
 
     parameters = [
@@ -438,7 +581,7 @@ def GetBuiltinRecord : Query<"ast::RecordDecl*"> {
         InnerTypeQueryParam<"R", "RecordKind">
     ]
 
-    customKeyType = "char"
+    customKeyType = "uint32_t"
 }
 
 def GetBuiltinProtocol : Query<"ast::ProtocolDecl*"> {
@@ -455,10 +598,11 @@ def GetBuiltinProtocol : Query<"ast::ProtocolDecl*"> {
             Persistable,
             Awaiter,
             Awaitable,
+            TruthValue,
+            RawRepresentable,
+            Dereferenceable,
+            Unwrappable,
         };
-
-    private:
-        llvm::DenseMap<char, ast::ProtocolDecl*> Cache;
     }
 
     parameters = [
@@ -493,9 +637,6 @@ def FindOperator : Query<"ast::OperatorDecl*"> {
     parameters = [
         // Name of the operator.
         DeclNameParam<"Name">,
-
-        // The context to lookup in.
-        DeclContextParam<"DC">,
 
         // If true, a diagnostic will be issued if the operator was not found.
         BoolParam<"DiagOnError", "true">,
@@ -631,6 +772,40 @@ def ExpandMacros : VoidQuery {
     ]
 }
 
+/// Import an external header.
+def ImportExternalSourceFile : VoidQuery {
+    parameters = [
+        /// The file name of the header.
+        StringParam<"FileName">,
+
+        /// The header kind.
+        QueryParam<"Kind", "ImportExternalSourceFileQuery::HeaderKind">,
+
+        /// The context to import the declarations into.
+        DeclContextParam<"DC">,
+
+        /// The location where the header was imported.
+        SourceLocParam<"Loc">
+
+        /// Whether or not the file is optional.
+        BoolParam<"Optional", "false">
+    ]
+
+    customHeaderCode = {
+    public:
+        enum HeaderKind {
+            /// A C header.
+            C,
+
+            /// A C++ header.
+            CXX,
+
+            /// A C system header.
+            CSystem,
+        };
+    }
+}
+
 /// Assign all extensions to the type they extend.
 def FindExtensions : VoidQuery {
     parameters = [
@@ -748,7 +923,7 @@ def ResolveConformanceToProtocol : Query<"ast::ProtocolDecl*"> {
         TypeParam<"T">,
 
         // The type of the conformance as it appeared in the source.
-        SourceTypeParam<"Conf">
+        QueryParam<"Conf", "const ast::SourceType&">
     ]
 
     description = "resolving conformance of '${T.toDiagString()}'"
@@ -792,7 +967,10 @@ def AddSingleConformance : VoidQuery {
         QueryParam<"Kind", "ConformanceKind">,
 
         // If true, recursively add conformances of this conformance.
-        BoolParam<"AddRecursiveConformances", "true">
+        BoolParam<"AddRecursiveConformances", "true">,
+
+        // Closure called on every new conformance.
+        FunctionRefParam<"Callback", "void(ast::ProtocolDecl*)", "{}", true>
     ]
 
     canBeDependent = true
@@ -1077,15 +1255,30 @@ def CalculateRecordSize : Query<"unsigned"> {
     }
 }
 
-/// Get the full meta info for a record. This calls PrepareDeclInterface on the record.
+/// Get the full meta info for a record. This calls PrepareDeclInterface on the record if Initialize is true.
 def GetRecordMeta : Query<"const RecordMetaInfo*"> {
     parameters = [
-        RecordDeclParam<"R">
+        RecordDeclParam<"R">,
+        BoolParam<"Initialize", "true">
     ]
 
     simpleQuery = true
     canBeCached = false
 }
+
+/// Helper class for trivial record related queries.
+class RecordMetaQuery : BoolQuery {
+    override parameters = [
+        RecordDeclParam<"R">
+    ]
+
+    override simpleQuery = true
+    override infallible = true
+}
+
+def IsBuiltinIntegerType : RecordMetaQuery
+def IsBuiltinFloatingPointType : RecordMetaQuery
+def IsBuiltinBoolType : RecordMetaQuery
 
 /// Register an implicit conformance for a record.
 def AddImplicitConformance : Query<"ast::MethodDecl*"> {
@@ -1279,6 +1472,13 @@ def DeclareMemberwiseInit : VoidQuery {
 def DeclareImplicitDefaultDeinit : VoidQuery {
     parameters = [
         QueryParam<"S", "ast::RecordDecl*">
+    ]
+}
+
+/// Resolve the raw type of an enum.
+def ResolveRawType : VoidQuery {
+    parameters = [
+        QueryParam<"E", "ast::EnumDecl*">
     ]
 }
 
@@ -1564,6 +1764,13 @@ def InstantiateFields : VoidQuery {
      ]
 }
 
+/// Instantiate the cases of an enum instantiation.
+def InstantiateCases : VoidQuery {
+     parameters = [
+        QueryParam<"E", "ast::EnumDecl*">
+     ]
+}
+
 /// Get an associated type by name.
 def GetAssociatedType : Query<"ast::AssociatedTypeDecl*"> {
     parameters = [
@@ -1607,7 +1814,9 @@ def InstantiateProtocolDefaultImpl : Query<"ast::NamedDecl*"> {
         NamedDeclParam<"Impl">,
 
         /// The 'Self' type we are instantiating the declaration for.
-        TypeParam<"Self">
+        TypeParam<"Self">,
+
+        BoolParam<"ActOnDecl", "true">
     ]
 }
 
@@ -1715,6 +1924,17 @@ def InstantiateMethodBody : VoidQuery {
     parameters = [
         /// The template to instantiate.
         CallableDeclParam<"Inst">
+    ]
+}
+
+/// Instantiates any declaration.
+def InstantiateDecl : Query<"ast::Decl*"> {
+    parameters = [
+        /// The declaration to instantiate.
+        DeclParam<"Template">,
+
+        /// The template argument list to instantiate with.
+        MultiLevelTemplateArgsParam<"TemplateArgs">
     ]
 }
 
@@ -1875,17 +2095,28 @@ def CreateILRecordTypeInfo : Query<"il::Constant*"> {
 
 /// *** IL boundary queries. ***
 
-foreach type in ["Bool", "Int", "String"] {
+let il_query_types = ["Bool": "bool" "String": "llvm::StringRef"]
+foreach type in ["Bool", "String"] {
     /// Return the boolean value of an IL constant.
-    def !str_concat("Get", $(type), "Value") : !str_concat($(type), "Query") {
+    def !str_concat("Get", $(type), "Value") : Query<il_query_types[$(type)]> {
         parameters = [
-            ILConstantParam<"C">
+            ILConstantParam<"C">,
+            BoolParam<"AllowWrapperTypes", "true">
         ]
 
         pure = true
-        customKeyType = "void*"
         simpleQuery = true
     }
+}
+
+def GetIntValue : Query<"llvm::APSInt"> {
+    parameters = [
+        ILConstantParam<"C">,
+        BoolParam<"AllowWrapperTypes", "true">
+    ]
+
+    simpleQuery = true
+    shouldMoveResult = true
 }
 
 /// *** Utility queries. ***

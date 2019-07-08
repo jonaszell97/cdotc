@@ -53,6 +53,20 @@ Lexer::Lexer(IdentifierTable &Idents,
    LookaheadIdx = 1;
 }
 
+void Lexer::reset(llvm::ArrayRef<Token> Tokens)
+{
+   assert(IsTokenLexer && "can't reset non-token lexer");
+
+   LookaheadVec.clear();
+   LookaheadVec.append(Tokens.begin(), Tokens.end());
+
+   if (LookaheadVec.empty() || !LookaheadVec.back().is(tok::eof))
+      LookaheadVec.emplace_back(tok::eof);
+
+   CurTok = LookaheadVec.front();
+   LookaheadIdx = 1;
+}
+
 Token Lexer::makeEOF()
 {
    auto Offset = std::max<unsigned long>(1, BufEnd - BufStart + offset - 1);
@@ -672,7 +686,8 @@ void Lexer::lexStringInterpolation()
             }
          }
          else {
-            Toks.push_back(lexNextToken());
+            TokBegin = CurPtr;
+            Toks.push_back(lexIdentifier(tok::ident, false));
          }
 
          Toks.emplace_back(tok::interpolation_end, getSourceLoc());
@@ -909,8 +924,48 @@ Token Lexer::lexNumericLiteral()
    // hexadecimal literal
    if (first == '0' && (next == 'x' || next == 'X')) {
       ++CurPtr;
-      while (::ishexnumber(*CurPtr) || *CurPtr == '_')
-         ++CurPtr;
+
+      bool IsDecimal = false;
+      bool FoundExponent = false;
+
+      bool done = false;
+      while (!done) {
+         switch (*CurPtr) {
+         case '0': case '1': case '2': case '3': case '4':
+         case '5': case '6': case '7': case '8': case '9':
+         case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+         case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+         case '_':
+            ++CurPtr;
+            break;
+         case '.':
+            if (IsDecimal || FoundExponent) {
+               break;
+            }
+
+            IsDecimal = true;
+            ++CurPtr;
+
+            break;
+         case 'p': case 'P':
+            if (FoundExponent) {
+               break;
+            }
+            if (*CurPtr++ == '-') {
+               ++CurPtr;
+            }
+
+            FoundExponent = true;
+            break;
+         default:
+            done = true;
+            break;
+         }
+      }
+
+      if (IsDecimal) {
+         return makeToken(TokBegin, CurPtr - TokBegin, tok::fpliteral);
+      }
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
    }
@@ -918,8 +973,9 @@ Token Lexer::lexNumericLiteral()
    // binary literal
    if (first == '0' && (next == 'b' || next == 'B')) {
       ++CurPtr;
-      while ((*CurPtr == '0' || *CurPtr == '1') || *CurPtr == '_')
+      while ((*CurPtr == '0' || *CurPtr == '1') || *CurPtr == '_') {
          ++CurPtr;
+      }
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
    }
@@ -1029,31 +1085,72 @@ static bool isMacroInvocation(const char *CurPtr)
    if (*CurPtr != '!')
       return false;
 
-   switch (CurPtr[1]) {
-   case '(': case '[': case '{':
-      return true;
-   default:
-      return false;
+   // Allow an identifier to appear before the delimiter.
+   auto Ptr = CurPtr + 1;
+   while (true) {
+      switch (*Ptr++) {
+      case '+':
+      case '-':
+      case '*':
+      case '/':
+      case '.':
+      case '=':
+      case '<':
+      case '>':
+      case '&':
+      case '|':
+      case '!':
+      case '~':
+      case '^':
+      case ',':
+      case ')':
+      case ';':
+      case ']':
+      case '}':
+      case '\\':
+      case '@':
+      case '`':
+      case ':':
+      case '?':
+      case '\'':
+      case '"':
+      case '\n':
+      case '\r':
+      case '\0':
+      case '$':
+      case '#':
+         return false;
+      case '(': case '[': case '{':
+         return true;
+      default:
+         break;
+      }
    }
 }
 
-Token Lexer::lexIdentifier(tok::TokenType identifierKind)
+Token Lexer::lexIdentifier(tok::TokenType identifierKind, bool AllowMacro)
 {
    while (isIdentifierContinuationChar(*CurPtr)) {
       ++CurPtr;
    }
 
-   if (identifierKind == tok::ident && isMacroInvocation(CurPtr)) {
+   bool IsKeyword = false;
+   auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });
+
+   if (II.getKeywordTokenKind() != tok::sentinel) {
+      identifierKind = II.getKeywordTokenKind();
+      IsKeyword = true;
+   }
+
+   if (identifierKind == tok::ident
+         && !IsKeyword && AllowMacro
+         && isMacroInvocation(CurPtr)) {
       auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });
       ++CurPtr;
 
       return Token(&II, SourceLocation(TokBegin - BufStart + offset),
                    tok::macro_name);
    }
-
-   auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });
-   if (II.getKeywordTokenKind() != tok::sentinel)
-      identifierKind = II.getKeywordTokenKind();
 
    return Token(&II, SourceLocation(TokBegin - BufStart + offset),
                 identifierKind);

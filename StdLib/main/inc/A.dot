@@ -1,0 +1,13 @@
+
+module inc.a
+
+public struct Unprintable with d.HelloSayerProtocol {}
+
+def A() -> Unprintable {
+    b.B()
+    return Unprintable();
+}
+
+public def C_() {
+    b.x.method()
+}

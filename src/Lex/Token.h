@@ -158,6 +158,8 @@ struct Token {
       return oneOf(tok::newline, tok::semicolon, tok::eof);
    }
 
+   bool isWhitespace() const;
+
    IdentifierInfo *getIdentifierInfo() const
    {
       if (!Ptr || Data) return nullptr;

@@ -25,8 +25,10 @@
    CDOT_DECL_ATTR(Escaping, escaping)
    CDOT_DECL_ATTR(Testable, testable)
    CDOT_DECL_ATTR(CompileTime, compiletime)
+   CDOT_DECL_ATTR(NoDerive, noDerive)
    CDOT_DECL_ATTR(VersionDecl, version)
    CDOT_DECL_ATTR(_Builtin, _builtin)
+   CDOT_DECL_ATTR(_Semantics, _semantics)
    CDOT_ABSTRACT_ATTR(_lastDeclAttr)
 #endif
 #undef CDOT_DECL_ATTR

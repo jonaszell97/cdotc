@@ -76,10 +76,12 @@ template<class T>
 struct InstantiationInfo {
    InstantiationInfo(const SourceLocation &instantiatedFrom,
                      sema::FinalTemplateArgumentList *templateArgs,
-                     T *specializedTemplate)
+                     T *specializedTemplate,
+                     unsigned Depth = 0)
       : instantiatedFrom(instantiatedFrom),
-        templateArgs(std::move(templateArgs)),
-        specializedTemplate(specializedTemplate)
+        templateArgs(templateArgs),
+        specializedTemplate(specializedTemplate),
+        Depth(Depth)
    { }
 
    InstantiationInfo() = default;
@@ -87,7 +89,7 @@ struct InstantiationInfo {
    SourceLocation instantiatedFrom;
    mutable sema::FinalTemplateArgumentList *templateArgs;
    T *specializedTemplate = nullptr;
-   NamedDecl *instantiatedWithin = nullptr;
+   unsigned Depth = 0;
 };
 
 template <class T>
@@ -105,6 +107,7 @@ public:
       TypePredicate, TypePredicateNegated,
       TypeEquality, TypeInequality,
       Concept,
+      Enum, Class, Struct,
    };
 
    static DeclConstraint *Create(ASTContext &C,
@@ -117,6 +120,11 @@ public:
                                  SourceRange SR,
                                  ArrayRef<IdentifierInfo*> NameQual,
                                  IdentifierRefExpr *ConceptRef);
+
+   static DeclConstraint *Create(ASTContext &C,
+                                 Kind K,
+                                 SourceRange SR,
+                                 ArrayRef<IdentifierInfo*> NameQual);
 
    Kind getKind() const { return K; }
    SourceRange getSourceRange() const { return SR; }
@@ -162,6 +170,10 @@ private:
                   ArrayRef<IdentifierInfo*> NameQual,
                   IdentifierRefExpr *ConceptRef);
 
+   DeclConstraint(SourceRange SR,
+                  ArrayRef<IdentifierInfo*> NameQual,
+                  Kind K);
+
    Kind K;
    SourceRange SR;
    QualType ConstrainedType;
@@ -172,7 +184,6 @@ private:
       SourceType Type;
       IdentifierRefExpr *ConceptRef;
    };
-
 };
 
 class UsingDecl final: public NamedDecl,
@@ -626,6 +637,29 @@ public:
 
    SourceRange getSourceRange() const { return Loc; }
    void setSourceRange(SourceRange SR) { Loc = SR; }
+};
+
+class SourceFileDecl final: public NamedDecl, public DeclContext {
+   SourceFileDecl(SourceRange FileRange,
+                  DeclarationName FileName);
+
+   /// The source range that covers this file.
+   SourceRange FileRange;
+
+public:
+   static bool classofKind(DeclKind kind) { return kind == SourceFileDeclID; }
+   static bool classof(Decl const *T) { return classofKind(T->getKind()); }
+
+   static SourceFileDecl *Create(ASTContext &C,
+                                 SourceRange FileRange,
+                                 DeclarationName FileName);
+
+   static SourceFileDecl *CreateEmpty(ASTContext &C);
+
+   friend class ASTContext;
+
+   SourceRange getSourceRange() const { return FileRange; }
+   void setSourceRange(SourceRange SR) { FileRange = SR; }
 };
 
 class GlobalDeclContext: public DeclContext {
@@ -1331,7 +1365,7 @@ protected:
    SourceRange BraceRange;
 
    unsigned lastMethodID = 1;
-   bool ExplicitMemberwiseInit = false;
+   bool ExplicitMemberwiseInit : 1;
 
    ASTVector<SourceType> conformanceTypes;
    ASTVector<TemplateParamDecl*> templateParams;
@@ -2171,6 +2205,7 @@ class PropDecl: public NamedDecl, public DefaultImplementable<PropDecl> {
             DeclarationName Name,
             SourceType type,
             bool isStatic,
+            bool IsReadWrite,
             MethodDecl *GetterMethod,
             MethodDecl *SetterMethod);
 
@@ -2178,6 +2213,8 @@ class PropDecl: public NamedDecl, public DefaultImplementable<PropDecl> {
 
    SourceRange Loc;
    SourceType type;
+
+   bool IsReadWrite;
 
    MethodDecl *getterMethod = nullptr;
    MethodDecl *setterMethod = nullptr;
@@ -2191,6 +2228,7 @@ public:
                            DeclarationName Name,
                            SourceType type,
                            bool isStatic,
+                           bool IsReadWrite,
                            MethodDecl *GetterMethod,
                            MethodDecl *SetterMethod);
 
@@ -2204,6 +2242,9 @@ public:
 
    void setLoc(const SourceRange &Loc) { PropDecl::Loc = Loc; }
    void setType(const SourceType &type) { PropDecl::type = type; }
+
+   bool isReadWrite() const { return IsReadWrite; }
+   void setReadWrite(bool RW) { IsReadWrite = RW; }
 
    bool hasGetter() const { return getterMethod != nullptr; }
    bool hasSetter() const { return setterMethod != nullptr; }

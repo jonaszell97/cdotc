@@ -15,6 +15,7 @@
 #include "ModuleReader.h"
 #include "Module/Module.h"
 #include "Module/ModuleManager.h"
+#include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
 
 #include <llvm/ADT/StringExtras.h>
@@ -471,6 +472,10 @@ QualType ASTReader::readTypeRecord(unsigned ID)
 
       return Ty;
    }
+   case Type::TypeVariableTypeID: {
+      auto ID = Record[Idx++];
+      return Context.getTypeVariableType(ID);
+   }
    }
 }
 
@@ -836,10 +841,10 @@ void ASTReader::ReadDeclsEager(ArrayRef<unsigned> Decls)
    for (auto ID : Decls) {
       auto *NextDecl = GetDecl(ID);
       if (auto Op = dyn_cast<OperatorDecl>(NextDecl)) {
-         Sema.ActOnOperatorDecl(Op);
+         Sema.ActOnOperatorDecl(&Sema.getDeclContext(), Op);
       }
       else if (auto PG = dyn_cast<PrecedenceGroupDecl>(NextDecl)) {
-         Sema.ActOnPrecedenceGroupDecl(PG);
+         Sema.ActOnPrecedenceGroupDecl(&Sema.getDeclContext(), PG);
       }
       else if (auto *DC = dyn_cast<DeclContext>(NextDecl)) {
          auto *MF = DC->getModFile();
@@ -866,13 +871,13 @@ void ASTReader::ReadOperatorPrecedenceGroups()
       NextDecl->setDeclared(false);
 
       if (auto Op = dyn_cast<OperatorDecl>(NextDecl)) {
-         Sema.ActOnOperatorDecl(Op);
+         Sema.ActOnOperatorDecl(&Sema.getDeclContext(), Op);
       }
       else if (auto PG = dyn_cast<PrecedenceGroupDecl>(NextDecl)) {
-         Sema.ActOnPrecedenceGroupDecl(PG);
+         Sema.ActOnPrecedenceGroupDecl(&Sema.getDeclContext(), PG);
       }
       else {
-         Sema.declareImportDecl(cast<ImportDecl>(NextDecl));
+         Sema.QC.PrepareDeclInterface(NextDecl);
       }
    }
 }
@@ -1113,6 +1118,14 @@ NestedNameSpecifier *ASTReader::ReadNestedNameSpec(const RecordData &Record,
       Name = NestedNameSpecifier::Create(
          Tbl, ReadDeclAs<AssociatedTypeDecl>(Record, Idx), Previous);
       break;
+   case NestedNameSpecifier::Alias:
+      Name = NestedNameSpecifier::Create(
+         Tbl, ReadDeclAs<AliasDecl>(Record, Idx), Previous);
+      break;
+   case NestedNameSpecifier::TemplateArgList:
+      Name = NestedNameSpecifier::Create(
+         Tbl, ReadTemplateArgumentList(Record, Idx), Previous);
+      break;
    case NestedNameSpecifier::Module:
       Name = NestedNameSpecifier::Create(Tbl, GetModule(Record[Idx++]),
                                          Previous);
@@ -1258,14 +1271,16 @@ std::string ASTReader::ReadString(const RecordData &Record, unsigned &Idx)
 
 ASTReader::ASTReader(ModuleReader &Reader)
    : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
-     FileMgr(*Sema.getDiags().getFileMgr())
+     FileMgr(*Sema.getDiags().getFileMgr()),
+     CurrentImportLoc(Reader.ImportLoc)
 {
 
 }
 
 ASTReader::ASTReader(ModuleReader &Reader, ASTReader &DeclReader)
    : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
-     FileMgr(*Sema.getDiags().getFileMgr()), DeclReader(&DeclReader)
+     FileMgr(*Sema.getDiags().getFileMgr()), DeclReader(&DeclReader),
+     CurrentImportLoc(Reader.ImportLoc)
 {
 
 }

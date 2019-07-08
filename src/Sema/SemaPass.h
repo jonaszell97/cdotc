@@ -31,6 +31,7 @@
 #include "TemplateInstantiator.h"
 
 #include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallPtrSet.h>
 
 #include <queue>
@@ -87,21 +88,11 @@ public:
    // be used in diagnostics
    int signaturesCompatible(CallableDecl *C1, CallableDecl *C2);
 
-   bool doDeclarations();
-   bool doSema();
-   bool doILGen();
-
-   DeclResult visitScoped(Decl *D);
-   DeclResult declareScoped(Decl *D);
-
    ILGenPass &getILGen() { return *ILGen.get(); }
 
    Statement *getParent(Statement *Child) const;
    void updateParent(Statement *Child, Statement *Parent) const;
    void createParentMap(Statement *Stmt) const;
-
-   void updateParentMapForTemplateInstantiation(Statement *Template,
-                                                Statement *Inst) const;
 
    void diagnoseRedeclaration(DeclContext &Ctx,
                               DeclContext::AddDeclResultKind ResKind,
@@ -122,33 +113,6 @@ public:
 
    void makeDeclsAvailableIn(DeclContext &Dst, DeclContext &Src,
                              bool IgnoreRedecl = false);
-
-   MultiLevelLookupResult MultiLevelLookup(DeclContext &Ctx,
-                                           DeclarationName Name,
-                                           bool ExternalLookup = true,
-                                           bool LocalLookup = true,
-                                           bool LookInExtensions = true);
-
-   SingleLevelLookupResult Lookup(DeclContext &Ctx,
-                                  DeclarationName Name,
-                                  bool ExternalLookup = true,
-                                  bool LookInExtensions = true);
-
-   DeclContextLookupResult LookupOwn(DeclContext &Ctx,
-                                     DeclarationName Name,
-                                     bool ExternalLookup = true,
-                                     bool LookInExtensions = true);
-
-   template <class T>
-   T *LookupSingle(DeclContext &Ctx,
-                   DeclarationName Name,
-                   bool ExternalLookup = true) {
-      auto Result = MultiLevelLookup(Ctx, Name, ExternalLookup);
-      if (Result.empty() || Result.front().size() != 1)
-         return nullptr;
-
-      return support::dyn_cast<T>(Result.front().front());
-   }
 
    [[nodiscard]]
    ExprResult visitExpr(StmtOrDecl DependentStmt, Expression *E)
@@ -178,10 +142,7 @@ public:
       if (!res)
          return ExprError();
 
-      auto Cast = castToRValue(res.get());
-      assert(Cast->getExprType() && "lvalue to rvalue cast introduced error");
-
-      return Cast;
+      return castToRValue(res.get());
    }
 
    [[nodiscard]]
@@ -237,29 +198,6 @@ public:
    }
 
    [[nodiscard]]
-   DeclResult visitStmt(StmtOrDecl DependentStmt, Decl *D)
-   {
-      auto res = visit(D, true);
-      if (res) {
-         DependentStmt.copyStatusFlags(res.get());
-      }
-      else {
-         DependentStmt.copyStatusFlags(D);
-      }
-
-      return res;
-   }
-
-   [[nodiscard]]
-   DeclResult declareStmt(StmtOrDecl DependentStmt, Decl *Decl)
-   {
-      auto res = declare(Decl, true);
-      DependentStmt.copyStatusFlags(Decl);
-
-      return res;
-   }
-
-   [[nodiscard]]
    ExprResult visitExpr(Expression *E)
    {
       return visit(E, true);
@@ -271,116 +209,37 @@ public:
       return visit(Stmt, true);
    }
 
-   [[nodiscard]]
-   DeclResult visitDecl(Decl *D)
-   {
-      return visit(D, true);
-   }
-
-   [[nodiscard]]
-   DeclResult declareStmt(Decl *Decl)
-   {
-      return declare(Decl, true);
-   }
-
    // Initial Declarations during parsing
-   void ActOnDecl(DeclContext *Ctx, Decl *D, bool Global = false);
-   void ActOnImportDecl(ImportDecl *D, bool Global = false);
-   void ActOnUsingDecl(UsingDecl *D, bool Global = false);
+   void ActOnDecl(DeclContext *DC, Decl *D);
+   void ActOnImportDecl(DeclContext *DC, ImportDecl *D);
+   void ActOnUsingDecl(DeclContext *DC, UsingDecl *D);
 
-   void ActOnRecordDecl(RecordDecl* R);
-   void ActOnStructDecl(StructDecl *S);
-   void ActOnProtoDecl(ProtocolDecl *P);
-   void ActOnEnumDecl(EnumDecl *E);
-   void ActOnUnionDecl(UnionDecl *U);
-   void ActOnExtensionDecl(ExtensionDecl* Ext);
+   void ActOnRecordDecl(DeclContext *DC, RecordDecl* R);
+   void ActOnStructDecl(DeclContext *DC, StructDecl *S);
+   void ActOnProtoDecl(DeclContext *DC, ProtocolDecl *P);
+   void ActOnEnumDecl(DeclContext *DC, EnumDecl *E);
+   void ActOnUnionDecl(DeclContext *DC, UnionDecl *U);
+   void ActOnExtensionDecl(DeclContext *DC, ExtensionDecl* Ext);
 
-   void ActOnOperatorDecl(OperatorDecl* Op);
-   void ActOnPrecedenceGroupDecl(PrecedenceGroupDecl* PG);
+   void ActOnOperatorDecl(DeclContext *DC, OperatorDecl* Op);
+   void ActOnPrecedenceGroupDecl(DeclContext *DC, PrecedenceGroupDecl* PG);
 
-   void ActOnFunctionDecl(FunctionDecl *F);
-   void ActOnTypedefDecl(TypedefDecl *TD);
-   void ActOnAliasDecl(AliasDecl *Alias);
+   void ActOnFunctionDecl(DeclContext *DC, FunctionDecl *F);
+   void ActOnTypedefDecl(DeclContext *DC, TypedefDecl *TD);
+   void ActOnAliasDecl(DeclContext *DC, AliasDecl *Alias);
 
-   void ActOnFieldDecl(FieldDecl *F);
-   void ActOnMethodDecl(MethodDecl *M);
-   void ActOnInitDecl(InitDecl *I);
-   void ActOnDeinitDecl(DeinitDecl *D);
-   void ActOnSubscriptDecl(SubscriptDecl *D);
+   void ActOnFieldDecl(DeclContext *DC, FieldDecl *F);
+   void ActOnMethodDecl(DeclContext *DC, MethodDecl *M);
+   void ActOnInitDecl(DeclContext *DC, InitDecl *I);
+   void ActOnDeinitDecl(DeclContext *DC, DeinitDecl *D);
+   void ActOnSubscriptDecl(DeclContext *DC, SubscriptDecl *D);
 
-   void ActOnTemplateParamDecl(DeclContext &Ctx, TemplateParamDecl *P);
+   void ActOnTemplateParamDecl(DeclContext *DC,  TemplateParamDecl *P);
 
-   void ActOnMacroExpansionDecl(MacroExpansionDecl *Decl, bool Global = false);
-   void ActOnStaticIfDecl(StaticIfDecl *D, bool Global = false);
-   void ActOnStaticForDecl(StaticForDecl *D, bool Global = false);
-   void ActOnMixinDecl(MixinDecl *D, bool Global = false);
-   
-   // Declaration pass
-
-   bool declareDeclContext(DeclContext *Ctx);
-   void declareImmediateDecls(RecordDecl *R,
-                              DependencyGraph<NamedDecl*> &LayoutDependency);
-
-   void visitDeclContext(DeclContext *Ctx);
-
-   void transferDecls(DeclContext *From, DeclContext *To);
-
-   DeclResult declareDebugDecl(DebugDecl *D);
-
-   DeclResult declareImportDecl(ImportDecl *Decl);
-   DeclResult declareModuleDecl(ModuleDecl *Decl);
-
-   DeclResult declareCompoundDecl(CompoundDecl *Compound);
-
-   DeclResult declareMacroDecl(MacroDecl *Decl) { return Decl; }
-   DeclResult declareMacroExpansionDecl(MacroExpansionDecl *Decl);
-
-   DeclResult declarePrecedenceGroupDecl(PrecedenceGroupDecl *Decl);
-   DeclResult declareOperatorDecl(OperatorDecl *Decl);
-
-   DeclResult declareNamespaceDecl(NamespaceDecl *NS);
-   DeclResult declareUnittestDecl(UnittestDecl *D);
-   DeclResult declareUsingDecl(UsingDecl *UD);
-
-   DeclResult declareTemplateParamDecl(TemplateParamDecl *decl);
-
-   DeclResult declareCallableDecl(CallableDecl *C);
-   DeclResult declareFunctionDecl(FunctionDecl *F);
-   DeclResult declareFuncArgDecl(FuncArgDecl *Decl);
-
-   DeclResult declareLocalVarDecl(LocalVarDecl *Decl) { return Decl; }
-   DeclResult declareGlobalVarDecl(GlobalVarDecl *Decl);
-   DeclResult declareDestructuringDecl(DestructuringDecl *Decl) { return Decl; }
-
-   DeclResult declareRecordDecl(RecordDecl *node);
-
-   DeclResult declareStructDecl(StructDecl *node);
-   DeclResult declareClassDecl(ClassDecl *node);
-   DeclResult declareProtocolDecl(ProtocolDecl *node);
-   DeclResult declareExtensionDecl(ExtensionDecl *Ext);
-   DeclResult declareUnionDecl(UnionDecl *node);
-   DeclResult declareEnumDecl(EnumDecl *node);
-
-   DeclResult declareFieldDecl(FieldDecl *F);
-   DeclResult declareFieldDeclImmediate(
-      FieldDecl *F,
-      DependencyGraph<NamedDecl*> *LayoutDependency = nullptr);
-
-   DeclResult declarePropDecl(PropDecl *Decl);
-   DeclResult declareSubscriptDecl(SubscriptDecl *Decl);
-   DeclResult declareAssociatedTypeDecl(AssociatedTypeDecl *Decl);
-
-   DeclResult declareEnumCaseDecl(EnumCaseDecl *node);
-   DeclResult declareEnumCaseDeclImmediate(
-      EnumCaseDecl *node,
-      DependencyGraph<NamedDecl*> &LayoutDependency);
-
-   DeclResult declareMethodDecl(MethodDecl *M);
-   DeclResult declareInitDecl(InitDecl *Init);
-   DeclResult declareDeinitDecl(DeinitDecl *Deinit);
-
-   DeclResult declareTypedefDecl(TypedefDecl *Decl);
-   DeclResult declareAliasDecl(AliasDecl *Decl);
+   void ActOnMacroExpansionDecl(DeclContext *DC, MacroExpansionDecl *Decl);
+   void ActOnStaticIfDecl(DeclContext *DC, StaticIfDecl *D);
+   void ActOnStaticForDecl(DeclContext *DC, StaticForDecl *D);
+   void ActOnMixinDecl(DeclContext *DC, MixinDecl *D);
 
    StmtResult declareDebugStmt(DebugStmt *Stmt);
 
@@ -400,21 +259,36 @@ public:
 
 #  include "AST/Attributes.def"
 
-   DeclResult declareMixinDecl(MixinDecl *Decl);
-   void parseMixinExpr(Expression *E, llvm::StringRef Str,
-                       llvm::SmallVectorImpl<Statement*> &Stmts);
+   ExprResult typecheckExpr(Expression *Expr,
+                            SourceType RequiredType,
+                            Statement *DependentStmt) {
+      auto Result = typecheckExpr(Expr, RequiredType);
+      if (Result) {
+         DependentStmt->copyStatusFlags(Result.get());
+      }
+      else {
+         DependentStmt->copyStatusFlags(Expr);
+      }
 
-   DeclResult declareStaticIfDecl(StaticIfDecl *Stmt);
-   DeclResult declareStaticAssertDecl(StaticAssertDecl *Stmt);
-   DeclResult declareStaticPrintDecl(StaticPrintDecl *Stmt);
-   DeclResult declareStaticForDecl(StaticForDecl *node);
-   
-   // Sema pass
+      return Result;
+   }
 
-   DeclResult visitDebugDecl(DebugDecl *D);
+   ExprResult typecheckExpr(Expression *Expr,
+                            SourceType RequiredType,
+                            Decl *DependentDecl) {
+      auto Result = typecheckExpr(Expr, RequiredType);
+      if (Result) {
+         DependentDecl->copyStatusFlags(Result.get());
+      }
+      else {
+         DependentDecl->copyStatusFlags(Expr);
+      }
 
-   DeclResult visitNamespaceDecl(NamespaceDecl *node);
-   DeclResult visitUnittestDecl(UnittestDecl *D);
+      return Result;
+   }
+
+   ExprResult typecheckExpr(Expression *Expr,
+                            SourceType RequiredType = ast::SourceType());
 
    StmtResult visitCompoundStmt(CompoundStmt *Stmt);
 
@@ -422,40 +296,18 @@ public:
    ExprResult visitAttributedExpr(AttributedExpr *Expr);
 
    StmtResult visitDeclStmt(DeclStmt *Stmt);
-   DeclResult visitUsingDecl(UsingDecl *UD);
-
-   DeclResult visitCompoundDecl(CompoundDecl *D);
-
    bool visitVarDecl(VarDecl *Decl);
    DeclResult visitLocalVarDecl(LocalVarDecl *Decl);
    DeclResult visitGlobalVarDecl(GlobalVarDecl *Decl);
 
    DeclResult visitDestructuringDecl(DestructuringDecl *D);
 
-   DeclResult visitFunctionDecl(FunctionDecl *F);
-   DeclResult visitCallableDecl(CallableDecl *CD);
-
-   DeclResult visitRecordCommon(RecordDecl *node);
-   DeclResult visitRecordDecl(RecordDecl *R);
-
-   DeclResult visitClassDecl(ClassDecl *C);
-   DeclResult visitStructDecl(StructDecl *S);
-   DeclResult visitExtensionDecl(ExtensionDecl *Ext);
-   DeclResult visitEnumDecl(EnumDecl *E);
-   DeclResult visitUnionDecl(UnionDecl *U);
-   DeclResult visitProtocolDecl(ProtocolDecl *P);
-
-   DeclResult visitFieldDecl(FieldDecl *FD);
-   DeclResult visitPropDecl(PropDecl *PD);
-   DeclResult visitSubscriptDecl(SubscriptDecl *SD);
-   DeclResult visitAssociatedTypeDecl(AssociatedTypeDecl *ATDecl);
-
-   DeclResult visitMethodDecl(MethodDecl *M);
-   DeclResult visitInitDecl(InitDecl *Init);
-   DeclResult visitDeinitDecl(DeinitDecl *Deinit);
-
    ExprResult visitIdentifierRefExpr(IdentifierRefExpr *Ident,
                                    TemplateArgListExpr *TemplateArgs = nullptr);
+
+   ExprResult visitDeclRefExpr(DeclRefExpr *Expr);
+   ExprResult visitMemberRefExpr(MemberRefExpr *Expr);
+   ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr);
 
    ExprResult visitParenExpr(ParenExpr *Expr);
    ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr *node);
@@ -521,6 +373,7 @@ public:
    ExprResult visitIfExpr(IfExpr *Expr);
 
    ExprResult visitCastExpr(CastExpr *Cast);
+   ExprResult visitAddrOfExpr(AddrOfExpr *Expr);
 
    StmtResult visitDoStmt(DoStmt *Stmt);
    StmtResult visitThrowStmt(ThrowStmt *Stmt);
@@ -547,15 +400,8 @@ public:
    ExprResult visitExistentialTypeExpr(ExistentialTypeExpr *Expr);
 
    StmtResult visitNullStmt(NullStmt *stmt);
-   DeclResult visitModuleDecl(ModuleDecl *Mod);
-   DeclResult visitImportDecl(ImportDecl *stmt);
-   DeclResult visitEnumCaseDecl(EnumCaseDecl *stmt);
-   DeclResult visitTypedefDecl(TypedefDecl *stmt);
-   DeclResult visitTemplateParamDecl(TemplateParamDecl *stmt);
 
    StmtResult visitDebugStmt(DebugStmt *Stmt);
-
-   DeclResult visitAliasDecl(AliasDecl *Alias);
 
    StmtResult visitStaticIfStmt(StaticIfStmt *Stmt);
    StmtResult visitStaticForStmt(StaticForStmt *Stmt);
@@ -568,8 +414,8 @@ public:
 
    ExprResult visitMixinExpr(MixinExpr *Expr);
    StmtResult visitMixinStmt(MixinStmt *Stmt);
-   DeclResult visitMixinDecl(MixinDecl *Decl);
 
+   Expression *resolveMacroExpansionExpr(MacroExpansionExpr *Expr);
    ExprResult visitMacroExpansionExpr(MacroExpansionExpr *Expr);
    StmtResult visitMacroExpansionStmt(MacroExpansionStmt *Stmt);
 
@@ -578,26 +424,6 @@ public:
    TypeResult visitSourceType(Statement *S, const SourceType &Ty,
                               bool WantMeta = false);
    TypeResult visitSourceType(const SourceType &Ty, bool WantMeta = false);
-
-   using ConformanceSet = SmallPtrSetImpl<ProtocolDecl*>;
-
-   void registerExplicitConformances(
-      RecordDecl *Rec,
-      ConformanceSet *AddedConformances = nullptr);
-
-   void registerExplicitConformances(
-      RecordDecl *Rec,
-      ArrayRef<SourceType> ConfTypes,
-      ConformanceSet *AddedConformances = nullptr);
-
-   void registerImplicitAndInheritedConformances(
-      RecordDecl *Rec,
-      ConformanceSet *AddedConformances = nullptr);
-
-   void registerImplicitAndInheritedConformances(
-      RecordDecl *Rec,
-      ArrayRef<SourceType> ConfTypes,
-      ConformanceSet *AddedConformances = nullptr);
 
    // disallow passing an rvalue as second parameter
    template<class T>
@@ -642,8 +468,10 @@ public:
    StaticExprResult evalStaticExpr(StmtOrDecl DependentStmt, Expression *expr);
    StaticExprResult evaluateAs(StmtOrDecl DependentStmt, Expression *expr,
                                QualType Ty);
-   StaticExprResult evaluateAsBool(StmtOrDecl DependentStmt, Expression *expr);
 
+   Optional<bool> evaluateAsBool(StmtOrDecl DependentStmt, Expression *expr);
+
+   QualType getTypeForDecl(NamedDecl *ND);
 
    // returns the index of the failed constraint, or -1 if all are successful
    // or dependent
@@ -735,16 +563,6 @@ public:
 
    void checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl);
 
-   bool resolvePrecedenceGroups();
-   bool visitDelayedDeclsAfterParsing();
-   bool visitDelayedDeclsAfterDeclaration();
-   bool visitProtocolImplementations();
-   bool visitDelayedInstantiations();
-
-   bool calculateRecordSizes(ArrayRef<RecordDecl*> Decls);
-   MethodDecl *addImplicitConformance(RecordDecl *R,
-                                      ImplicitConformanceKind kind);
-
    IdentifierRefExpr *wouldBeValidIdentifier(SourceLocation Loc,
                                              IdentifierInfo *maybeIdent,
                                              bool LHSOfAssignment = false);
@@ -757,20 +575,6 @@ public:
 
    std::pair<DeclContext*, bool> getAsContext(QualType Ty);
    NamedDecl *getTypeDecl(QualType Ty);
-
-   QualType resolveDependencies(QualType Ty,
-                                const MultiLevelTemplateArgList& TAs,
-                                StmtOrDecl PointOfInstantiation);
-
-   QualType resolveDependencies(QualType Ty,
-                                const sema::MultiLevelFinalTemplateArgList& TAs,
-                                StmtOrDecl PointOfInstantiation);
-
-   /// Check whether we have additional information about a type in the
-   /// current context, and return the adapted type.
-   Expression *checkCurrentTypeCapabilities(Expression *E);
-   QualType checkCurrentTypeCapabilities(QualType T,
-                                         ExtensionDecl *Ext = nullptr);
 
    bool warnOnUnusedResult(Expression *E) const;
 
@@ -830,16 +634,6 @@ public:
                                   sema::TemplateArgListResult &Cand);
 
    bool equivalent(TemplateParamDecl *p1, TemplateParamDecl *p2);
-
-   void visitRecordInstantiation(StmtOrDecl DependentStmt, RecordDecl *Inst);
-   void declareRecordInstantiation(StmtOrDecl DependentStmt, RecordDecl *Inst);
-   void finalizeRecordInstantiation(RecordDecl *Inst);
-
-   void visitFunctionInstantiation(StmtOrDecl DependentStmt,
-                                   CallableDecl *Inst);
-
-   void registerDelayedInstantiation(NamedDecl *Inst, StmtOrDecl POI);
-   void registerTemplateParamWithDefaultVal(TemplateParamDecl *TD);
 
    void registerInstantiation(NamedDecl *Inst, NamedDecl *Scope)
    {
@@ -1088,43 +882,6 @@ public:
       GlobalVarDecl *Prev;
    };
 
-   struct AssociatedTypeSubstRAII {
-      AssociatedTypeSubstRAII(SemaPass &SP, RecordDecl *R)
-         : SP(SP), Prev(SP.AssociatedTypeSubst)
-      {
-         SP.AssociatedTypeSubst = R;
-      }
-
-      ~AssociatedTypeSubstRAII()
-      {
-         SP.AssociatedTypeSubst = Prev;
-      }
-
-   private:
-      SemaPass &SP;
-      RecordDecl *Prev;
-   };
-
-   struct InstantiationRAII {
-      InstantiationRAII(SemaPass &SP,
-                        DeclContext *Ctx,
-                        NamedDecl *Template)
-         : SP(SP), DeclRAII(SP, Ctx), ScopeRAII(SP)
-      {
-         SP.pushInstantiationContext(Template);
-      }
-
-      ~InstantiationRAII()
-      {
-         SP.popInstantiationContext();
-      }
-
-   private:
-      SemaPass &SP;
-      DeclScopeRAII DeclRAII;
-      ScopeResetRAII ScopeRAII;
-   };
-
    struct EnterCtfeScope {
       explicit EnterCtfeScope(SemaPass &SP) : SP(SP), previous(SP.Bits.InCTFE)
       {
@@ -1213,13 +970,8 @@ private:
    bool RuntimeGenerics = false;
 
 public:
-   /// Dependency graph that tracks struct / enum / tuple layouts and finds
-   /// circular dependencies.
-   DependencyGraph<NamedDecl*> LayoutDependency;
-
-   /// Dependency graph for protocol conformances. Detects circular
-   /// conformances.
-   DependencyGraph<ProtocolDecl*> ConformanceDependency;
+   /// Functions whose body is queued for instantiation.
+   llvm::SetVector<CallableDecl*> QueuedInstantiations;
 
 private:
    struct UnresolvedPredecenceGroup {
@@ -1264,17 +1016,6 @@ private:
    std::vector<bool> TryScopeStack;
 
 public:
-   struct TypeMeta {
-      llvm::Optional<bool> Persistable;
-      llvm::Optional<bool> MoveOnly;
-      llvm::Optional<bool> ImplicitlyCopyable;
-      llvm::Optional<bool> SelfEquatable;
-      llvm::Optional<bool> NeedsRetainOrRelease;
-      llvm::Optional<bool> NeedsDeinitilization;
-      llvm::Optional<bool> NeedsStructReturn;
-      llvm::Optional<bool> ContainsAssociatedTypeConstraint;
-   };
-
    struct TryScopeRAII {
       explicit TryScopeRAII(SemaPass &SP) : SP(SP)
       {
@@ -1381,14 +1122,8 @@ public:
    void collectCoroutineInfo(QualType Ty, StmtOrDecl D);
 
 private:
-   /// Additional information about types that is lazily built.
-   llvm::DenseMap<QualType, TypeMeta> TypeMetaMap;
-
    /// Information about a particular type's coroutine implementation.
    llvm::DenseMap<QualType, CoroutineInfo> CoroutineInfoMap;
-
-   /// Stack of current instantiations.
-   std::vector<NamedDecl*> InstantiationStack;
 
    /// Global declarations that we visited.
    llvm::SmallPtrSet<Decl*, 8> VisitedGlobalDecls;
@@ -1407,10 +1142,6 @@ private:
 
    /// True when we encountered any error.
    bool EncounteredError   : 1;
-
-   /// True if we need to track declarations per file (i.e. if we're doing
-   /// incremential compilation
-   bool TrackDeclsPerFile : 1;
 
    struct StateBits {
       bool InCTFE                       : 1;
@@ -1442,7 +1173,8 @@ private:
 
 public:
    enum class InitializableByKind {
-      Integer = 0, Float, Char, Bool, String, Array, _Last
+      Integer = 0, Float, GraphemeCluster, ASCII, CodePoint,
+      Bool, String, Array, Dictionary, None, _Last
    };
 
 private:
@@ -1487,6 +1219,35 @@ public:
    ClassDecl *getFutureDecl();
    StructDecl *getCoroutineHandleDecl();
 
+   StructDecl *getIntDecl();
+   StructDecl *getUIntDecl();
+
+   StructDecl *getInt8Decl();
+   StructDecl *getUInt8Decl();
+   StructDecl *getInt16Decl();
+   StructDecl *getUInt16Decl();
+   StructDecl *getInt32Decl();
+   StructDecl *getUInt32Decl();
+   StructDecl *getInt64Decl();
+   StructDecl *getUInt64Decl();
+   StructDecl *getInt128Decl();
+   StructDecl *getUInt128Decl();
+
+   StructDecl *getFloatDecl();
+   StructDecl *getDoubleDecl();
+
+   StructDecl *getUnsafePtrDecl();
+   StructDecl *getUnsafeMutablePtrDecl();
+
+   StructDecl *getUnsafeRawPtrDecl();
+   StructDecl *getUnsafeMutableRawPtrDecl();
+
+   StructDecl *getUnsafeBufferPtrDecl();
+   StructDecl *getUnsafeMutableBufferPtrDecl();
+
+   StructDecl *getBoolDecl();
+   StructDecl *getCharacterDecl();
+
    StructDecl *getTypeInfoDecl();
    StructDecl *getValueWitnessTableDecl();
    StructDecl *getProtocolConformanceDecl();
@@ -1503,6 +1264,7 @@ public:
    ProtocolDecl *getMoveOnlyDecl();
    ProtocolDecl *getImplicitlyCopyableDecl();
    ProtocolDecl *getStringRepresentableDecl();
+   ProtocolDecl *getRawRepresentableDecl();
    ProtocolDecl *getPersistableDecl();
    ProtocolDecl *getAwaiterDecl();
    ProtocolDecl *getAwaitableDecl();
@@ -1520,36 +1282,14 @@ public:
 
    QualType getOptionOf(QualType Ty, StmtOrDecl DependentStmt);
 
-   bool trackDeclsPerFile() const { return TrackDeclsPerFile; }
-   void setTrackDeclsPerFile(bool V) { TrackDeclsPerFile = V; }
-
    ExprResult visit(Expression *Expr, bool);
    StmtResult visit(Statement *node, bool);
-   DeclResult visit(Decl *D, bool);
-
-   DeclResult declare(Decl *Decl, bool);
 
    RecordDecl *getCurrentRecordCtx();
    bool inTemplate();
    bool inUnboundedTemplate();
    bool isInDependentContext();
 
-   void pushInstantiationContext(NamedDecl *Decl)
-   {
-      InstantiationStack.push_back(Decl);
-   }
-
-   void popInstantiationContext()
-   {
-      InstantiationStack.pop_back();
-   }
-
-   bool stopEvaluating(Expression *Expr);
-   bool stopEvaluating(Statement *Stmt);
-
-   void checkConformances();
-   void checkConformances(DeclContext *Ctx);
-   void checkProtocolConformance(RecordDecl *R);
    void checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P);
 
    bool IsEquatableType(QualType Ty);
@@ -1567,7 +1307,6 @@ public:
    int inferLambdaArgumentTypes(LambdaExpr *LE, QualType fromTy);
 
    NamedDecl *getCurrentDecl() const;
-   NamedDecl *getCurrentInstantiationScope();
 
    QualType getStaticForValue(IdentifierInfo *name) const;
 
@@ -1575,21 +1314,8 @@ public:
    // CTFE
    //===-------------------------------------------------------===//
 
-   bool ensureSizeKnown(QualType Ty, StmtOrDecl SOD);
-   bool ensureSizeKnown(RecordDecl *R, StmtOrDecl SOD);
-
-   bool ensureDeclared(Decl *D);
-   bool ensureContextDeclared(DeclContext *DC);
-   bool ensureVisited(Decl *D);
-
-   bool ensureDeclared(Module *M);
-   bool ensureVisited(Module *M);
-
    bool prepareGlobalForCtfe(VarDecl *Decl);
 
-   DeclResult declareAndVisit(Decl *D);
-
-   void registerExtension(ExtensionDecl *D);
    void makeExtensionVisible(ExtensionDecl *D);
 
    void addProtocolImplementation(MethodDecl *Impl)
@@ -1707,26 +1433,9 @@ public:
    CandidateSet
    lookupFunction(DeclContext *Ctx,
                   DeclarationName name,
-                  ArrayRef<Expression*> args,
-                  ArrayRef<Expression*> templateArgs = {},
-                  ArrayRef<IdentifierInfo*> labels = {},
-                  Statement *Caller = nullptr,
-                  bool suppressDiags = false);
-
-   CandidateSet
-   lookupFunction(DeclContext *Ctx,
-                  DeclarationName name,
                   Expression *SelfArg,
                   ArrayRef<Expression*> args,
                   ArrayRef<Expression*> templateArgs = {},
-                  ArrayRef<IdentifierInfo*> labels = {},
-                  Statement *Caller = nullptr,
-                  bool suppressDiags = false);
-
-   CandidateSet
-   lookupFunction(DeclarationName name,
-                  llvm::ArrayRef<Expression*> args,
-                  llvm::ArrayRef<Expression*> templateArgs = {},
                   ArrayRef<IdentifierInfo*> labels = {},
                   Statement *Caller = nullptr,
                   bool suppressDiags = false);
@@ -1789,7 +1498,12 @@ public:
    MethodDecl *getEquivalentMethod(MethodDecl *Orig,
                                    RecordDecl *Inst);
 
+   void CheckReturnedSelfType(QualType ParentType, Expression *E);
+
    void maybeInstantiate(CandidateSet &CandSet, Statement *Caller);
+   void maybeInstantiate(CandidateSet::Candidate &Cand,
+                         Statement *Caller);
+
    bool maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                const TemplateArgList &templateArgs,
                                Statement *Caller);
@@ -1804,7 +1518,9 @@ public:
                                                  NamedDecl *Member);
 
    CallableDecl *maybeInstantiateMemberFunction(CallableDecl *M,
-                                               StmtOrDecl Caller);
+                                                StmtOrDecl Caller,
+                                                bool NeedImmediateInstantiation
+                                                   = false);
 
    MethodDecl *InstantiateMethod(RecordDecl *R, StringRef Name, StmtOrDecl SOD);
    MethodDecl *InstantiateProperty(RecordDecl *R, StringRef Name,
@@ -1818,43 +1534,8 @@ public:
                                  RecordDecl *R,
                                  const sema::TemplateArgList &TemplateArgs);
 
-   void declareMemberwiseInitializer(StructDecl *S,
-                                     InitDecl *ExplicitDecl = nullptr);
-
-   void declareDefaultInitializer(StructDecl *S);
-   void declareDefaultDeinitializer(RecordDecl *R);
-
-   bool inGlobalDeclContext() const;
-
    void checkDuplicateFunctionDeclaration(CallableDecl *C,
                                           llvm::StringRef fnKind);
-
-   bool alreadyVisited(Statement *stmt)
-   {
-      bool prev = stmt->isSemanticallyChecked();
-      stmt->setSemanticallyChecked(true);
-
-      return prev;
-   }
-
-   bool alreadyVisited(Decl *D)
-   {
-      bool prev = D->isSemanticallyChecked();
-      D->setSemanticallyChecked(true);
-
-      return prev;
-   }
-
-   bool alreadyDeclared(Decl *D)
-   {
-      bool prev = D->wasDeclared();
-      D->setDeclared(true);
-
-      return prev;
-   }
-
-   bool isDeclared(Decl *D) { return D->wasDeclared(); }
-   bool isVisited(Decl *D) { return D->isSemanticallyChecked(); }
 
    Expression *implicitCastIfNecessary(Expression* Expr,
                                        QualType destTy,
@@ -1890,6 +1571,18 @@ public:
                                  const MultiLevelLookupResult &MultiLevelResult,
                                  llvm::ArrayRef<Expression*> templateArgs);
 
+   CallableDecl* checkFunctionReference(Expression *E,
+                                        CallableDecl *CD,
+                                        ArrayRef<Expression*> templateArgs);
+
+   RecordDecl* checkRecordReference(Expression *E,
+                                    RecordDecl *R,
+                                    ArrayRef<Expression*> templateArgs);
+
+   AliasDecl* checkAliasReference(Expression *E,
+                                  AliasDecl *Alias,
+                                  ArrayRef<Expression*> templateArgs);
+
    struct AliasResult {
       explicit AliasResult(AliasDecl *Alias)
          : TypeDependent(false), ValueDependent(false), HadError(false),
@@ -1905,31 +1598,17 @@ public:
          : TypeDependent(false), ValueDependent(false), HadError(true)
       {}
 
-      AliasResult(bool typeDependent, bool valueDependent)
+      AliasResult(bool typeDependent, bool valueDependent,
+                  AliasDecl *Alias = nullptr)
          : TypeDependent(typeDependent), ValueDependent(valueDependent),
-           HadError(true)
+           HadError(true), Result(Alias)
       {}
 
-      bool isTypeDependent() const
-      {
-         return TypeDependent;
-      }
+      bool isTypeDependent() const { return TypeDependent; }
+      bool isValueDependent() const{ return ValueDependent; }
 
-      bool isValueDependent() const
-      {
-         return ValueDependent;
-      }
-
-      AliasDecl *getAlias()
-      {
-         assert(!HadError && !TypeDependent && !ValueDependent);
-         return Result;
-      }
-
-      CandidateSet &getCandSet()
-      {
-         return CandSet;
-      }
+      AliasDecl *getAlias() { return Result; }
+      CandidateSet &getCandSet() { return CandSet; }
 
       operator bool() const
       {
@@ -1953,7 +1632,7 @@ public:
 
    // checks whether the parent expression of the given expression refers to
    // a namespace rather than a value and adjusts the expression appropriately
-   NestedNameSpecifier *checkNamespaceRef(Expression *Expr);
+   NestedNameSpecifierWithLoc *checkNamespaceRef(Expression *Expr);
    bool refersToNamespace(Expression *E);
 
    ExprResult checkNamespaceRef(MacroExpansionExpr *Expr);
@@ -1966,27 +1645,34 @@ private:
    ExprResult HandleBuiltinTypeMember(IdentifierRefExpr *Expr, QualType Ty);
    ExprResult HandleStaticTypeMember(IdentifierRefExpr *Expr, QualType Ty);
 
-   ExprResult HandleFieldAccess(IdentifierRefExpr *Ident,
-                                MutableArrayRef<Expression*> TemplateArgs,
-                                FieldDecl *F);
+   QualType HandleFieldAccess(Expression *Expr, FieldDecl *F);
+   QualType HandlePropAccess(Expression *Expr, PropDecl *P);
+   ExprResult HandleEnumCase(Expression *Expr, EnumCaseDecl *Case);
 
-   ExprResult HandlePropAccess(IdentifierRefExpr *Ident, PropDecl *P);
-
-   ExprResult HandleEnumCase(IdentifierRefExpr *node, EnumDecl *E);
+   Expression *checkDeref(Expression *E, QualType T);
 
    // CallExpr
 
    ExprResult HandleStaticTypeCall(CallExpr *Call,
                                    TemplateArgListExpr *ArgExpr,
-                                   CanType Ty);
+                                   CanType Ty,
+                                   bool AllowProtocol = true);
 
    ExprResult HandleConstructorCall(CallExpr *Call,
                                     TemplateArgListExpr *ArgExpr,
-                                    RecordDecl *R,
+                                    QualType T,
+                                    const MultiLevelLookupResult *LookupRes =
+                                       nullptr,
                                     TemplateParamDecl *Param = nullptr,
-                                    AssociatedTypeDecl *AT = nullptr);
+                                    AssociatedTypeDecl *AT = nullptr,
+                                    bool AllowProtocol = true);
 
 public:
+   CallExpr *CreateCall(CallableDecl *C, ArrayRef<Expression*> Args,
+                        SourceLocation Loc);
+   CallExpr *CreateCall(CallableDecl *C, ASTVector<Expression*> &&Args,
+                        SourceLocation Loc);
+
    void diagnoseMemberNotFound(DeclContext *Ctx,
                                StmtOrDecl Subject,
                                DeclarationName memberName,
@@ -2061,7 +1747,9 @@ private:
 public:
    ExprResult HandleReflectionAlias(AliasDecl *Al, Expression *Expr);
    ExprResult HandleReflectionCall(CallableDecl *C);
+
    ExprResult HandleBuiltinAlias(AliasDecl *Al, Expression *Expr);
+   void SetBuiltinAliasType(AliasDecl *A);
 
    NamespaceDecl *getPrivateNamespace();
 

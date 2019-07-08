@@ -481,7 +481,7 @@ class ImplicitCastExpr: public Expression {
 public:
    static ImplicitCastExpr *Create(ASTContext &C,
                                    Expression* target,
-                                   ConversionSequence *ConvSeq);
+                                   const ConversionSequence *ConvSeq);
 
    ImplicitCastExpr(EmptyShell Empty);
 
@@ -490,10 +490,10 @@ public:
 
 private:
    ImplicitCastExpr(Expression* target,
-                    ConversionSequence *ConvSeq);
+                    const ConversionSequence *ConvSeq);
 
    Expression* target;
-   ConversionSequence *ConvSeq = nullptr;
+   const ConversionSequence *ConvSeq = nullptr;
 
 public:
    SourceRange getSourceRange() const { return target->getSourceRange(); }
@@ -501,15 +501,19 @@ public:
    const ConversionSequence &getConvSeq() const { return *ConvSeq; }
 
    void setTarget(Expression *target) { ImplicitCastExpr::target = target; }
-   void setConvSeq(ConversionSequence *Seq) { ConvSeq = Seq; }
+   void setConvSeq(const ConversionSequence *Seq) { ConvSeq = Seq; }
 };
 
 class SequenceElement {
 public:
    explicit SequenceElement(Expression* expr);
+
    SequenceElement(IdentifierInfo *possibleOp,
+                   uint8_t whitespace,
                    SourceLocation loc);
+
    SequenceElement(op::OperatorKind opKind,
+                   uint8_t whitespace,
                    SourceLocation loc);
 
    SequenceElement(const SequenceElement&) = delete;
@@ -558,6 +562,16 @@ public:
                           : op->getIdentifier();
    }
 
+   enum WhitespacePos: uint8_t {
+      None  = 0,
+      Left  = 1,
+      Right = 2,
+   };
+
+   bool hasLeftWhiteSpace() const { return (whitespace & Left) != 0; }
+   bool hasRightWhiteSpace() const { return (whitespace & Right) != 0; }
+   uint8_t getWhitespace() const { return whitespace; }
+
 protected:
    union {
       mutable Expression* expr;
@@ -566,6 +580,7 @@ protected:
    };
 
    Kind kind;
+   uint8_t whitespace;
    SourceLocation loc;
 };
 
@@ -813,6 +828,31 @@ public:
    void setConvSeq(ConversionSequence *Seq) { ConvSeq = Seq; }
 };
 
+class AddrOfExpr: public Expression {
+   AddrOfExpr(SourceLocation AmpLoc, Expression* Target);
+
+   SourceLocation AmpLoc;
+   Expression* Target;
+
+public:
+   static bool classofKind(NodeType kind) { return kind == AddrOfExprID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+
+   static AddrOfExpr *Create(ASTContext &C,
+                             SourceLocation AmpLoc,
+                             Expression* Target);
+
+   AddrOfExpr(EmptyShell Empty);
+
+   SourceLocation getAmpLoc() const { return AmpLoc; }
+   void setAmpLoc(SourceLocation Loc) { AmpLoc = Loc; }
+
+   SourceRange getSourceRange() const;
+
+   Expression* getTarget() const { return Target; }
+   void setTarget(Expression *T) { Target = T; }
+};
+
 class IfExpr: public Expression {
    IfExpr(SourceLocation IfLoc,
           Expression *Cond,
@@ -821,7 +861,7 @@ class IfExpr: public Expression {
 
    SourceLocation IfLoc;
 
-   Expression *Cond;
+   IfCondition Cond;
    Expression *TrueVal;
    Expression *FalseVal;
 
@@ -844,11 +884,11 @@ public:
       return SourceRange(IfLoc, FalseVal->getSourceRange().getEnd());
    }
 
-   Expression *getCond()     const { return Cond; }
+   IfCondition &getCond() { return Cond; }
    Expression *getTrueVal()  const { return TrueVal; }
    Expression *getFalseVal() const { return FalseVal; }
 
-   void setCond(Expression *C) { Cond = C; }
+   void setCond(IfCondition C) { Cond = C; }
    void setTrueVal(Expression *Val) { TrueVal = Val; }
    void setFalseVal(Expression *Val) { FalseVal = Val; }
 };
@@ -1666,7 +1706,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    IdentifierKind kind = IdentifierKind::Unknown;
    Expression *ParentExpr = nullptr;
    DeclContext *DeclCtx = nullptr;
-   NestedNameSpecifier *NameSpec = nullptr;
+   NestedNameSpecifierWithLoc *NameSpec = nullptr;
 
    union {
       Type *builtinType = nullptr;
@@ -1692,13 +1732,15 @@ class IdentifierRefExpr : public IdentifiedExpr {
 
    bool staticLookup    : 1;
    bool pointerAccess   : 1;
-   bool FoundResult     : 1;
+   bool OnlyForLookup     : 1;
    bool InTypePosition  : 1;
    bool IsSynthesized   : 1;
    bool IsCapture       : 1;
+   bool called          : 1;
    bool IsSelf          : 1;
    bool AllowIncompleteTemplateArgs : 1;
    bool AllowNamespaceRef : 1;
+   bool AllowOverloadRef : 1;
    bool LeadingDot      : 1;
    bool IssueDiag       : 1;
 
@@ -1748,6 +1790,9 @@ public:
 
    bool isSelf() const { return IsSelf; }
    void setSelf(bool V) { IsSelf = V; }
+
+   bool isCalled() const { return called; }
+   void setCalled(bool b) { called = b; }
 
    AliasDecl *getAlias() const { return Alias; }
    void setAlias(AliasDecl *Alias) { IdentifierRefExpr::Alias = Alias; }
@@ -1826,14 +1871,14 @@ public:
    TemplateParamDecl *getTemplateParam() const { return templateParam; }
    void setTemplateParam(TemplateParamDecl *P) { templateParam = P; }
 
-   NestedNameSpecifier *getNameSpec() const { return NameSpec; }
-   void setNameSpec(NestedNameSpecifier *V) { NameSpec = V; }
+   NestedNameSpecifierWithLoc *getNameSpec() const { return NameSpec; }
+   void setNameSpec(NestedNameSpecifierWithLoc *V) { NameSpec = V; }
 
    bool isStaticLookup() const { return staticLookup; }
    void setStaticLookup(bool SL) { staticLookup = SL; }
 
-   bool foundResult() const { return FoundResult; }
-   void setFoundResult(bool found) { FoundResult = found; }
+   bool isOnlyForLookup() const { return OnlyForLookup; }
+   void setOnlyForLookup(bool B) { OnlyForLookup = B; }
 
    bool isPointerAccess() const { return pointerAccess; }
    void setIsPointerAccess(bool pointer) { pointerAccess = pointer; }
@@ -1849,6 +1894,9 @@ public:
    {
       AllowIncompleteTemplateArgs = allow;
    }
+
+   bool allowOverloadRef() const { return AllowOverloadRef; }
+   void setAllowOverloadRef(bool V) { AllowOverloadRef = V; }
 
    bool allowNamespaceRef() const { return AllowNamespaceRef; }
    void setAllowNamespaceRef(bool V) { AllowNamespaceRef = V; }
@@ -1875,6 +1923,130 @@ public:
 
    size_t getCaptureIndex() const { return captureIndex; }
    void setCaptureIndex(size_t CI) { captureIndex = CI; }
+};
+
+class DeclRefExpr: public Expression {
+   DeclRefExpr(NamedDecl *Decl, SourceRange SR);
+
+   /// The referenced declaration.
+   NamedDecl *Decl;
+
+   /// The source range of the expression the reference comes from.
+   SourceRange SR;
+
+   /// The index of the capture, if any.
+   unsigned CaptureIdx : 28;
+
+   /// True iff this declaration is allowed to refer to a namespace (or module).
+   bool AllowModuleRef : 1;
+
+public:
+   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classofKind(NodeType kind) { return kind == DeclRefExprID; }
+
+   static DeclRefExpr *Create(ASTContext &C, NamedDecl *Decl, SourceRange SR);
+   explicit DeclRefExpr(EmptyShell Empty);
+
+   NamedDecl *getDecl() const { return Decl; }
+   void setDecl(NamedDecl *ND) { Decl = ND; }
+
+   SourceRange getSourceRange() const { return SR; }
+   void setSourceRange(SourceRange SR) { this->SR = SR; }
+
+   unsigned getCaptureIndex() const { return CaptureIdx; }
+   void setCaptureIndex(unsigned Idx) { CaptureIdx = Idx; }
+
+   bool allowModuleRef() const { return AllowModuleRef; }
+   void setAllowModuleRef(bool B) { AllowModuleRef = B; }
+
+   bool isCapture() const;
+};
+
+class MemberRefExpr: public Expression {
+   MemberRefExpr(Expression *ParentExpr, NamedDecl *MemberDecl, SourceRange SR);
+
+   /// The expression the member is accessed on.
+   Expression *ParentExpr;
+
+   /// The referenced declaration.
+   NamedDecl *MemberDecl;
+
+   /// The source range of the expression the reference comes from.
+   SourceRange SR;
+
+   /// Set to true iff this expression is called directly.
+   bool called = false;
+
+public:
+   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classofKind(NodeType kind) { return kind == MemberRefExprID; }
+
+   static MemberRefExpr *Create(ASTContext &C, Expression *ParentExpr,
+                                NamedDecl *MemberDecl, SourceRange SR);
+
+   explicit MemberRefExpr(EmptyShell Empty);
+
+   Expression *getParentExpr() const { return ParentExpr; }
+   void setParentExpr(Expression *PE) { ParentExpr = PE; }
+
+   NamedDecl *getMemberDecl() const { return MemberDecl; }
+   void setMemberDecl(NamedDecl *ND) { MemberDecl = ND; }
+
+   SourceRange getSourceRange() const { return SR; }
+   void setSourceRange(SourceRange SR) { this->SR = SR; }
+
+   bool isCalled() const { return called; }
+   void setCalled(bool b) { called = b; }
+};
+
+class OverloadedDeclRefExpr final: public Expression,
+                                   TrailingObjects<OverloadedDeclRefExpr,
+                                                   NamedDecl*> {
+   OverloadedDeclRefExpr(ArrayRef<NamedDecl*> Decls, SourceRange SR,
+                         Expression *ParentExpr);
+
+   OverloadedDeclRefExpr(unsigned N);
+
+   /// The number of overloads.
+   unsigned NumOverloads;
+
+   /// The source range of the expression the reference comes from.
+   SourceRange SR;
+
+   /// The expression the member is accessed on.
+   Expression *ParentExpr = nullptr;
+
+public:
+   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classofKind(NodeType kind)
+   { return kind == OverloadedDeclRefExprID; }
+
+   static OverloadedDeclRefExpr *Create(ASTContext &C,
+                                        ArrayRef<NamedDecl*> Decls,
+                                        SourceRange SR,
+                                        Expression *ParentExpr = nullptr);
+
+   static OverloadedDeclRefExpr *CreateEmpty(ASTContext &C, unsigned N);
+
+   friend TrailingObjects;
+
+   unsigned getNumOverloads() const { return NumOverloads; }
+
+   ArrayRef<NamedDecl*> getOverloads() const
+   {
+      return { getTrailingObjects<NamedDecl*>(), NumOverloads };
+   }
+
+   MutableArrayRef<NamedDecl*> getOverloads()
+   {
+      return { getTrailingObjects<NamedDecl*>(), NumOverloads };
+   }
+
+   Expression *getParentExpr() const { return ParentExpr; }
+   void setParentExpr(Expression *PE) { ParentExpr = PE; }
+
+   SourceRange getSourceRange() const { return SR; }
+   void setSourceRange(SourceRange SR) { this->SR = SR; }
 };
 
 class SelfExpr: public Expression {
@@ -2073,6 +2245,7 @@ enum class CallKind: unsigned {
    Unknown,
    Builtin,
    NamedFunctionCall,
+   DependentFunctionCall,
    MethodCall,
    UnionInitializer,
    InitializerCall,
@@ -2103,8 +2276,10 @@ class CallExpr final: public Expression,
             bool IsDotInit = false,
             bool IsDotDeinit = false);
 
-   CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,
-            ASTVector<Expression* > &&args, CallableDecl *C);
+   CallExpr(SourceLocation IdentLoc,
+            SourceRange ParenRange,
+            ASTVector<Expression*> &&args,
+            CallableDecl *C, CallKind K, QualType ExprType);
 
    CallExpr(EmptyShell Empty, unsigned N);
 
@@ -2156,7 +2331,8 @@ public:
 
    static CallExpr *Create(ASTContext &C,
                            SourceLocation IdentLoc, SourceRange ParenRange,
-                           ASTVector<Expression*> &&args, CallableDecl *CD);
+                           ASTVector<Expression*> &&args,
+                           CallableDecl *Fn, CallKind K, QualType ExprType);
 
    static CallExpr *CreateEmpty(ASTContext &C, unsigned N);
 
@@ -2266,7 +2442,7 @@ public:
 
    static AnonymousCallExpr *CreateEmpty(ASTContext &C, unsigned N);
 
-   SourceRange getSourceRange() const { return ParenRange; }
+   SourceRange getSourceRange() const;
    SourceRange getParenRange() const { return ParenRange; }
 
    void setParenRange(SourceRange SR) { ParenRange = SR; }
@@ -2539,6 +2715,11 @@ struct TraitsArgument {
       return str;
    }
 
+   void setStmt(Statement *S) { stmt = S; }
+   void setExpr(Expression *E) { expr = E; }
+   void setType(SourceType T) { Ty = T; }
+   void setStr(string &&str) { this->str = move(str); }
+
 private:
    Kind kind;
 
@@ -2634,6 +2815,11 @@ public:
    void setKind(Kind K) { kind = K; }
 
    llvm::ArrayRef<TraitsArgument> getArgs() const
+   {
+      return { getTrailingObjects<TraitsArgument>(), NumArgs };
+   }
+
+   llvm::MutableArrayRef<TraitsArgument> getArgs()
    {
       return { getTrailingObjects<TraitsArgument>(), NumArgs };
    }

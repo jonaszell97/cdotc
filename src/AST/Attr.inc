@@ -228,6 +228,34 @@ public:
    {}
 };
 
+class NoDeriveAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::NoDerive; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   NoDeriveAttr *clone(ast::ASTContext &Ctx) const;
+
+
+   enum KindKind {
+      Equatable,
+      Copyable,
+      _All
+   };
+
+private:
+   KindKind kind;
+
+public:
+   KindKind getKind() const { return kind; }
+
+public:
+   explicit NoDeriveAttr(KindKind kind = _All, SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::NoDerive, SR), kind(kind)
+   {}
+};
+
 class VersionDeclAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -311,6 +339,28 @@ public:
       : DeclAttr(AttrKind::_Builtin, SR), builtinName(builtinName)
    {}
 };
+
+class _SemanticsAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::_Semantics; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   _SemanticsAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+   std::string semanticsKind;
+
+public:
+   llvm::StringRef getSemanticsKind() const { return semanticsKind; }
+
+public:
+   explicit _SemanticsAttr(llvm::StringRef semanticsKind, SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::_Semantics, SR), semanticsKind(semanticsKind)
+   {}
+};
 #endif
 #undef CDOT_ATTR_DECL
 
@@ -321,16 +371,18 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::Align:
       return AfterSema;
-   case AttrKind::Thin:
-   case AttrKind::_Builtin:
-      return Immediate;
    case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
    case AttrKind::Escaping:
    case AttrKind::Testable:
    case AttrKind::CompileTime:
+   case AttrKind::NoDerive:
       return Never;
+   case AttrKind::Thin:
+   case AttrKind::_Builtin:
+   case AttrKind::_Semantics:
+      return Immediate;
    case AttrKind::Inline:
    case AttrKind::Implicit:
       return AfterDeclaration;
@@ -345,34 +397,38 @@ public:
    bool Attr::isInherited() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::_Builtin:
+         case AttrKind::_Semantics:
       return false;
    case AttrKind::VersionStmt:
       return false;
+   case AttrKind::NoDerive:
+      return false;
+   case AttrKind::_Builtin:
+      return false;
+   case AttrKind::CompileTime:
+      return true;
    case AttrKind::VersionDecl:
-      return false;
-   case AttrKind::Align:
-      return false;
-   case AttrKind::Opaque:
-      return false;
-   case AttrKind::Escaping:
       return false;
    case AttrKind::AutoClosure:
       return false;
    case AttrKind::DiscardableResult:
       return true;
-   case AttrKind::Extern:
-      return false;
    case AttrKind::Testable:
       return false;
    case AttrKind::Thin:
       return false;
-   case AttrKind::CompileTime:
-      return true;
+   case AttrKind::Opaque:
+      return false;
    case AttrKind::Implicit:
       return false;
    case AttrKind::Inline:
       return true;
+   case AttrKind::Escaping:
+      return false;
+   case AttrKind::Align:
+      return false;
+   case AttrKind::Extern:
+      return false;
 
       }
    }
@@ -522,6 +578,25 @@ CompileTimeAttr *CompileTimeAttr::clone(ast::ASTContext &Ctx) const {
 
 
 
+void NoDeriveAttr::printPretty(llvm::raw_ostream &out) const {
+llvm::StringRef kindStr;
+switch (kind) {
+   case Equatable: kindStr = "Equatable"; break;
+   case Copyable: kindStr = "Copyable"; break;
+   case _All: kindStr = "_All"; break;
+
+}
+   out << "@" << getSpelling();
+out << '(' << kindStr << ')';
+
+}
+
+NoDeriveAttr *NoDeriveAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) NoDeriveAttr(kind, SourceLoc);
+}
+
+
+
 void VersionDeclAttr::printPretty(llvm::raw_ostream &out) const {
 llvm::StringRef versionStr;
 switch (version) {
@@ -578,6 +653,19 @@ _BuiltinAttr *_BuiltinAttr::clone(ast::ASTContext &Ctx) const {
 }
 
 
+
+void _SemanticsAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+out << '(' << semanticsKind << ')';
+
+}
+
+_SemanticsAttr *_SemanticsAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) _SemanticsAttr(semanticsKind, SourceLoc);
+}
+
+
 #endif
 #undef CDOT_ATTR_IMPL
 
@@ -590,6 +678,7 @@ void SemaPass::checkAutoClosureAttr(Decl*, AutoClosureAttr*) {}
 void SemaPass::checkEscapingAttr(Decl*, EscapingAttr*) {}
 void SemaPass::checkTestableAttr(Decl*, TestableAttr*) {}
 void SemaPass::checkCompileTimeAttr(Decl*, CompileTimeAttr*) {}
+void SemaPass::checkNoDeriveAttr(Decl*, NoDeriveAttr*) {}
 
 #endif
 #undef CDOT_ATTR_SEMA

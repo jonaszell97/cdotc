@@ -1,0 +1,6 @@
+
+module cdot_policy {
+    sourceFiles = ["Policy.dot"]
+    declarationsOnly = true
+    defaultAccess = public
+}

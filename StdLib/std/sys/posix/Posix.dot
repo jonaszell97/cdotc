@@ -1,0 +1,449 @@
+
+@version(POSIX)
+module std.sys.posix
+
+using libc.{ size_t, ssize_t, time_t, int, unsigned, long, off_t, CString }
+
+enum Signal(i32) {
+    case SIGABRT = 6,
+    SIGFPE = 8,
+    SIGILL = 4,
+    SIGINT = 2,
+    SIGSEGV = 11,
+    SIGKILL = 9
+}
+
+enum SysConfVariable {
+    case _SC_PAGESIZE = 29
+}
+
+/// The sysconf() function provides a method for the application to determine the current value of a 
+/// configurable system limit or option (variable). The implementation shall support all of the 
+/// variables listed in the following table and may support others.
+declare C def sysconf(_ name: SysConfVariable) -> long
+
+/// The write() function shall attempt to write nbyte bytes from the buffer 
+/// pointed to by buf to the file associated with the open file descriptor, fildes.
+declare C def write(_ fd: int, _ buf: CString, _ n: size_t) -> ssize_t
+
+/// The pwrite() function shall be equivalent to write(), except that it writes 
+/// into a given position without changing the file pointer. The first three arguments 
+/// to pwrite() are the same as write() with the addition of a fourth argument 
+/// offset for the desired position inside the file.
+declare C def pwrite(_ fd: int, _ buf: CString, _ n: size_t, _ pos: off_t) -> ssize_t
+
+/// The read() function shall attempt to read nbyte bytes from the file associated 
+/// with the open file descriptor, fildes, into the buffer pointed to by buf. 
+/// The behavior of multiple concurrent reads on the same pipe, FIFO, or terminal device 
+/// is unspecified.
+declare C def read(_ fd: int, _ buf: CString, _ n: size_t) -> ssize_t
+
+/// The pread() function shall be equivalent to read(), except that it shall read from 
+/// a given position in the file without changing the file pointer. The first three 
+/// arguments to pread() are the same as read() with the addition of a fourth argument 
+/// offset for the desired position inside the file. An attempt to perform a pread() 
+/// on a file that is incapable of seeking shall result in an error.
+declare C def pread(_ fd: int, _ buf: CString, _ n: size_t, _ pos: off_t) -> ssize_t
+
+enum OpenFlags(int) {
+    /// Open for reading only.
+    case O_RDONLY = 0x0
+
+    /// Open for writing only.
+    case O_WRONLY = 0x1
+
+    /// Open for reading and writing.
+    case O_RDWR = 0x2
+
+    /// Mask for above modes.
+    case O_ACCMODE = 0x3
+
+    /// No delay.
+    case O_NONBLOCK = 0x4
+
+    /// Set append mode.
+    case O_APPEND = 0x8
+
+    /// Open with shared file lock.
+    case O_SHLOCK = 0x10
+
+    /// Open with exclusive file lock.
+    case O_EXLOCK = 0x20
+
+    /// Signal pgrp when data ready.
+    case O_ASYNC = 0x40
+
+    /// Sync I/O file integrity.
+    case O_SYNC = 0x80
+
+    /// Don't follow symlinks.
+    case O_NOFOLLOW = 0x100
+
+    /// Create if nonexistant.
+    case O_CREAT = 0x200
+
+    /// Truncate to zero length.
+    case O_TRUNC = 0x400
+
+    /// Error if already exists.
+    case O_EXCL = 0x800
+
+    /// Implicitly set FD_CLOEXEC.
+    // @version(Darwin)
+    case O_CLOEXEC = 0x1000000
+
+    /// Implement arithmetic operations for this enum.
+    enum_arithmetic!{}
+}
+
+/// The open() function shall establish the connection between a file and a file descriptor. 
+/// It shall create an open file description that refers to a file and a file descriptor 
+/// that refers to that open file description. The file descriptor is used by other 
+/// I/O functions to refer to that file. The path argument points to a pathname 
+/// naming the file.
+declare C def open(_ path: CString, _ oflag: OpenFlags, ...) -> int
+
+/// The close() function shall deallocate the file descriptor indicated by fildes. 
+/// To deallocate means to make the file descriptor available for return by subsequent calls 
+/// to open() or other functions that allocate file descriptors. All outstanding record 
+/// locks owned by the process on the file associated with the file descriptor shall be 
+/// removed (that is, unlocked).
+/// If close() is interrupted by a signal that is to be caught, it shall return -1 with errno 
+/// set to [EINTR] and the state of fildes is unspecified. If an I/O error occurred while 
+/// reading from or writing to the file system during close(), it may return -1 with errno set 
+/// to [EIO]; if this error is returned, the state of fildes is unspecified.
+declare C def close(_ fd: int) -> int
+
+/// The lseek() function shall set the file offset for the open file description associated 
+/// with the file descriptor fildes, as follows:
+///   If whence is SEEK_SET, the file offset shall be set to offset bytes.
+///   If whence is SEEK_CUR, the file offset shall be set to its current location plus offset.
+///   If whence is SEEK_END, the file offset shall be set to the size of the file plus offset.
+/// Upon successful completion, the resulting offset, as measured in bytes from the beginning 
+/// of the file, shall be returned. Otherwise, (off_t)-1 shall be returned, errno shall be 
+/// set to indicate the error, and the file offset shall remain unchanged.
+@discardableResult
+declare C def lseek(_ fd: int, _ offset: off_t, _ whence: sys.fs.SeekOrigin) -> off_t
+
+/// The remove() function shall cause the file named by the pathname pointed to by path to be no 
+/// longer accessible by that name. A subsequent attempt to open that file using that name shall 
+/// fail, unless it is created anew.
+declare C def remove(_ path: CString) -> int
+
+enum AccessMode {
+    /// Test for existence of file.
+    case F_OK = 0
+
+    /// Test for execute or search permission.
+    case X_OK = 1 << 0
+
+    /// Test for write permission.
+    case W_OK = 1 << 1
+
+    /// Test for read permission.
+    case R_OK = 1 << 2
+
+    /// Implement arithmetic operators for this enum.
+    enum_arithmetic!{}
+}
+
+/// The access() function shall check the file named by the pathname pointed to by the path 
+/// argument for accessibility according to the bit pattern contained in amode. The checks for 
+/// accessibility (including directory permissions checked during pathname resolution) shall be 
+/// performed using the real user ID in place of the effective user ID and the real group ID in 
+/// place of the effective group ID.
+declare C def access(_ path: CString, _ amode: AccessMode) -> int
+
+/// Native pthread handle. This is a pointer on all supported systems.
+alias pthread_t = UnsafeMutableRawPtr
+
+/// Size of the opaque value of an pthread_attr struct
+alias __PTHREAD_ATTR_SIZE__ = 56
+
+/// pthread attributes.
+struct pthread_attr_t {
+    var __sig: long = 0
+    var __opaque: [u8; __PTHREAD_ATTR_SIZE__] = [u8; __PTHREAD_ATTR_SIZE__]()
+}
+
+/// Size of the opaque value of an pthread_cond struct
+alias __PTHREAD_COND_SIZE__ = 40
+
+/// pthread cond.
+struct pthread_cond_t {
+    var __sig: long = 0
+    var __opaque: [u8; __PTHREAD_COND_SIZE__] = [u8; __PTHREAD_COND_SIZE__]()
+}
+
+/// Size of the opaque value of an pthread_cond_attr struct
+alias __PTHREAD_CONDATTR_SIZE__ = 8
+
+/// pthread cond.
+struct pthread_condattr_t {
+    var __sig: long = 0
+    var __opaque: [u8; __PTHREAD_CONDATTR_SIZE__] = [u8; __PTHREAD_CONDATTR_SIZE__]()
+}
+
+/// Size of the opaque value of an pthread_mutex struct
+alias __PTHREAD_MUTEX_SIZE__ = 56
+
+/// pthread mutex.
+struct pthread_mutex_t {
+    var __sig: long = 0
+    var __opaque: [u8; __PTHREAD_MUTEX_SIZE__] = [u8; __PTHREAD_MUTEX_SIZE__]()
+}
+
+/// Size of the opaque value of an pthread_mutexattr struct
+alias __PTHREAD_MUTEXATTR_SIZE__ = 8
+
+/// pthread mutex.
+struct pthread_mutexattr_t {
+    var __sig: long = 0
+    var __opaque: [u8; __PTHREAD_MUTEXATTR_SIZE__] = [u8; __PTHREAD_MUTEXATTR_SIZE__]()
+}
+
+/// The pthread_attr_destroy() function shall destroy a thread attributes object. An implementation 
+/// may cause pthread_attr_destroy() to set attr to an implementation-defined invalid value. A 
+/// destroyed attr attributes object can be reinitialized using pthread_attr_init(); the results of 
+/// otherwise referencing the object after it has been destroyed are undefined.
+declare C def pthread_attr_destroy(_ attr: UnsafeMutablePtr<pthread_attr_t>) -> int
+
+/// The pthread_attr_init() function shall initialize a thread attributes object attr with the 
+/// default value for all of the individual attributes used by a given implementation.
+declare C def pthread_attr_init(_ attr: UnsafeMutablePtr<pthread_attr_t>) -> int
+
+/// Scheduling policy to be passed to pthread_attr_setschedpolicy.
+enum SchedulingPolicy(int) {
+    /// the standard round-robin time-sharing policy.
+    case SCHED_OTHER = 1
+
+    /// a round-robin policy.
+    case SCHED_RR    = 2
+
+    /// a first-in, first-out policy.
+    case SCHED_FIFO  = 4
+}
+
+/// The pthread_attr_setschedpolicy() function sets the scheduling policy
+/// attribute of the thread attributes object referred to by attr to the
+/// value specified in policy.  This attribute determines the scheduling
+/// policy of a thread created using the thread attributes object attr.
+declare C def pthread_attr_setschedpolicy(_ attr: UnsafeMutablePtr<pthread_attr_t>,
+                                          _ policy: SchedulingPolicy) -> int
+
+/// The pthread_attr_getschedpolicy() returns the scheduling policy
+/// attribute of the thread attributes object attr in the buffer pointed
+/// to by policy.
+declare C def pthread_attr_getschedpolicy(_ attr: UnsafePtr<pthread_attr_t>,
+                                          _ policy: UnsafePtr<SchedulingPolicy>) -> int
+
+
+alias __SCHED_PARAM_SIZE__ = 4
+struct sched_param {
+    var sched_priority: int = 0
+    var __opaque: [u8; __SCHED_PARAM_SIZE__] = [u8; __SCHED_PARAM_SIZE__]()
+}
+
+/// The pthread_getschedparam() and pthread_setschedparam() functions shall, respectively, get and 
+/// set the scheduling policy and parameters of individual threads within a multi-threaded process 
+/// to be retrieved and set. For SCHED_FIFO and SCHED_RR, the only required member of the 
+/// sched_param structure is the priority sched_priority. For SCHED_OTHER, the affected scheduling 
+/// parameters are implementation-defined.
+declare C def pthread_getschedparam(thread: pthread_t,
+                                    policy: UnsafeMutablePtr<SchedulingPolicy>,
+                                    param: UnsafeMutablePtr<sched_param>) -> int
+
+/// The pthread_getschedparam() function shall retrieve the scheduling policy and scheduling 
+/// parameters for the thread whose thread ID is given by thread and shall store those values in 
+/// policy and param, respectively. The priority value returned from pthread_getschedparam() shall 
+/// be the value specified by the most recent pthread_setschedparam(), pthread_setschedprio(), or 
+/// pthread_create() call affecting the target thread. It shall not reflect any temporary 
+/// adjustments to its priority as a result of any priority inheritance or ceiling functions. The 
+/// pthread_setschedparam() function shall set the scheduling policy and associated scheduling 
+/// parameters for the thread whose thread ID is given by thread to the policy and associated 
+/// parameters provided in policy and param, respectively.
+declare C def pthread_setschedparam(thread: pthread_t,
+                                    policy: SchedulingPolicy,
+                                    param: UnsafeMutablePtr<sched_param>) -> int
+
+/// The sched_get_priority_max() and sched_get_priority_min() functions shall return the appropriate 
+/// maximum or minimum, respectively, for the scheduling policy specified by policy.
+declare C def sched_get_priority_max(_ policy: SchedulingPolicy) -> int
+declare C def sched_get_priority_min(_ policy: SchedulingPolicy) -> int
+
+/// Function type for the routine a pthread executes.
+alias pthread_routine_t = @thin (UnsafeMutableRawPtr) -> Void
+
+/// The pthread_create() function shall create a new thread, with attributes specified by attr, 
+/// within a process. If attr is NULL, the default attributes shall be used. If the attributes 
+/// specified by attr are modified later, the thread's attributes shall not be affected. Upon 
+/// successful completion, pthread_create() shall store the ID of the created thread in the location 
+/// referenced by thread.
+declare C def pthread_create(thread: UnsafeMutablePtr<pthread_t>,
+                             attr: UnsafePtr<pthread_attr_t>,
+                             start_routine: pthread_routine_t,
+                             arg: UnsafeMutableRawPtr) -> int
+
+/// The pthread_join() function shall suspend execution of the calling thread until the target 
+/// thread terminates, unless the target thread has already terminated. On return from a successful 
+/// pthread_join() call with a non-NULL value_ptr argument, the value passed to pthread_exit() by 
+/// the terminating thread shall be made available in the location referenced by value_ptr. When a 
+/// pthread_join() returns successfully, the target thread has been terminated. The results of 
+/// multiple simultaneous calls to pthread_join() specifying the same target thread are undefined. 
+/// If the thread calling pthread_join() is canceled, then the target thread shall not be detached.
+declare C def pthread_join(_ thread: pthread_t,
+                           _ value_ptr: UnsafeMutablePtr<UnsafeMutableRawPtr> = __nullptr) -> int
+
+/// The pthread_exit() function shall terminate the calling thread and make the value value_ptr 
+/// available to any successful join with the terminating thread. Any cancellation cleanup handlers 
+/// that have been pushed and not yet popped shall be popped in the reverse order that they were 
+/// pushed and then executed. After all cancellation cleanup handlers have been executed, if the 
+/// thread has any thread-specific data, appropriate destructor functions shall be called in an 
+/// unspecified order. Thread termination does not release any application visible process resources,
+///  including, but not limited to, mutexes and file descriptors, nor does it perform any 
+/// process-level cleanup actions, including, but not limited to, calling any atexit() routines that 
+/// may exist.
+declare C def pthread_exit(_ value_ptr: UnsafeMutableRawPtr = __nullptr) -> Never
+
+/// The pthread_kill() function shall request that a signal be delivered to the specified thread.
+/// @return Upon successful completion, the function shall return a value of zero. Otherwise, the 
+/// function shall return an error number. If the pthread_kill() function fails, no signal shall be 
+/// sent.
+declare C def pthread_kill(_ thread: pthread_t, _ sig: Signal) -> int
+
+/// The pthread_self() function shall return the thread ID of the calling thread.
+declare C def pthread_self() -> pthread_t
+
+/// The pthread_mutex_destroy() function shall destroy the mutex object referenced by mutex; the 
+/// mutex object becomes, in effect, uninitialized. An implementation may cause 
+/// pthread_mutex_destroy() to set the object referenced by mutex to an invalid value.
+/// If successful, the pthread_mutex_destroy() and pthread_mutex_init() functions shall return zero; 
+/// otherwise, an error number shall be returned to indicate the error.
+declare C def pthread_mutex_destroy(_ mutex: UnsafeMutablePtr<pthread_mutex_t>) -> int
+
+/// The pthread_mutex_init() function shall initialize the mutex referenced by mutex with attributes 
+/// specified by attr. If attr is NULL, the default mutex attributes are used; the effect shall be 
+/// the same as passing the address of a default mutex attributes object. Upon successful 
+/// initialization, the state of the mutex becomes initialized and unlocked.
+/// If successful, the pthread_mutex_destroy() and pthread_mutex_init() functions shall return zero; 
+/// otherwise, an error number shall be returned to indicate the error.
+declare C def pthread_mutex_init(_ mutex: UnsafeMutablePtr<pthread_mutex_t>,
+                                 _ attr: UnsafePtr<pthread_mutexattr_t> = __nullptr) -> int
+
+/// The mutex object referenced by mutex shall be locked by a call to pthread_mutex_lock() that 
+/// returns zero or [EOWNERDEAD]. If the mutex is already locked by another thread, the calling 
+/// thread shall block until the mutex becomes available. This operation shall return with the mutex 
+/// object referenced by mutex in the locked state with the calling thread as its owner. If a thread 
+/// attempts to relock a mutex that it has already locked, pthread_mutex_lock() shall behave as 
+/// described in the Relock column of the following table. If a thread attempts to unlock a mutex 
+/// that it has not locked or a mutex which is unlocked, pthread_mutex_unlock() shall behave as 
+/// described in the Unlock When Not Owner column of the following table.
+/// If successful, the pthread_mutex_lock(), pthread_mutex_trylock(), and pthread_mutex_unlock() functions shall return zero; otherwise, an error number shall be returned to indicate the error.
+declare C def pthread_mutex_lock(_ mutex: UnsafeMutablePtr<pthread_mutex_t>) -> int
+
+/// The pthread_mutex_trylock() function shall be equivalent to pthread_mutex_lock(), except that if the mutex object referenced by mutex is currently locked (by any thread, including the current thread), the call shall return immediately. If the mutex type is PTHREAD_MUTEX_RECURSIVE and the mutex is currently owned by the calling thread, the mutex lock count shall be incremented by one and the pthread_mutex_trylock() function shall immediately return success.
+declare C def pthread_mutex_trylock(_ mutex: UnsafeMutablePtr<pthread_mutex_t>) -> int
+
+/// The pthread_mutex_unlock() function shall release the mutex object referenced by mutex. The manner in which a mutex is released is dependent upon the mutex's type attribute. If there are threads blocked on the mutex object referenced by mutex when pthread_mutex_unlock() is called, resulting in the mutex becoming available, the scheduling policy shall determine which thread shall acquire the mutex.
+declare C def pthread_mutex_unlock(_ mutex: UnsafeMutablePtr<pthread_mutex_t>) -> int
+
+/// The pthread_cond_destroy() function shall destroy the given condition variable specified by cond; the object becomes, in effect, uninitialized. An implementation may cause pthread_cond_destroy() to set the object referenced by cond to an invalid value. A destroyed condition variable object can be reinitialized using pthread_cond_init(); the results of otherwise referencing the object after it has been destroyed are undefined.
+declare C def pthread_cond_destroy(_ cond: UnsafeMutablePtr<pthread_cond_t>) -> int
+
+/// The pthread_cond_init() function shall initialize the condition variable referenced by cond with attributes referenced by attr. If attr is NULL, the default condition variable attributes shall be used; the effect is the same as passing the address of a default condition variable attributes object. Upon successful initialization, the state of the condition variable shall become initialized.
+declare C def pthread_cond_init(_ cond: UnsafeMutablePtr<pthread_cond_t>,
+                                _ attr: UnsafePtr<pthread_condattr_t> = __nullptr) -> int
+
+/// The pthread_cond_timedwait() and pthread_cond_wait() functions shall block on a condition variable. The application shall ensure that these functions are called with mutex locked by the calling thread; otherwise, an error (for PTHREAD_MUTEX_ERRORCHECK and robust mutexes) or undefined behavior (for other mutexes) results. These functions atomically release mutex and cause the calling thread to block on the condition variable cond; atomically here means "atomically with respect to access by another thread to the mutex and then the condition variable". That is, if another thread is able to acquire the mutex after the about-to-block thread has released it, then a subsequent call to pthread_cond_broadcast() or pthread_cond_signal() in that thread shall behave as if it were issued after the about-to-block thread has blocked.
+declare C def pthread_cond_timedwait(_ cond: UnsafeMutablePtr<pthread_cond_t>,
+                                     _ mutex: UnsafeMutablePtr<pthread_mutex_t>,
+                                     _ abstime: UnsafePtr<timespec>) -> int
+declare C def pthread_cond_wait(_ cond: UnsafeMutablePtr<pthread_cond_t>,
+                                _ mutex: UnsafeMutablePtr<pthread_mutex_t>) -> int
+
+/// The pthread_cond_broadcast() function shall unblock all threads currently blocked on the 
+/// specified condition variable cond.
+/// @return If successful, the pthread_cond_broadcast() and pthread_cond_signal() functions shall 
+/// return zero; otherwise, an error number shall be returned to indicate the error.
+declare C def pthread_cond_broadcast(_ cond: UnsafeMutablePtr<pthread_cond_t>) -> int
+
+/// The pthread_cond_signal() function shall unblock at least one of the threads that are blocked on 
+/// the specified condition variable cond (if any threads are blocked on cond).
+/// @return If successful, the pthread_cond_broadcast() and pthread_cond_signal() functions shall 
+/// return zero; otherwise, an error number shall be returned to indicate the error.
+declare C def pthread_cond_signal(_ cond: UnsafeMutablePtr<pthread_cond_t>) -> int
+
+/// The sleep() function shall cause the calling thread to be suspended from execution until either 
+/// the number of realtime seconds specified by the argument seconds has elapsed or a signal is 
+/// delivered to the calling thread and its action is to invoke a signal-catching function or to 
+/// terminate the process. The suspension time may be longer than requested due to the scheduling of 
+/// other activity by the system.
+declare C def sleep(seconds: unsigned) -> unsigned
+
+struct timespec {
+    var tv_sec: time_t
+    var tv_nsec: long
+}
+
+/// The nanosleep() function shall cause the current thread to be suspended from execution until 
+/// either the time interval specified by the rqtp argument has elapsed or a signal is delivered to 
+/// the calling thread, and its action is to invoke a signal-catching function or to terminate the 
+/// process. The suspension time may be longer than requested because the argument value is rounded 
+/// up to an integer multiple of the sleep resolution or because of the scheduling of other activity 
+/// by the system. But, except for the case of being interrupted by a signal, the suspension time 
+/// shall not be less than the time specified by rqtp, as measured by the system clock 
+/// CLOCK_REALTIME.
+declare C def nanosleep(_ rqtp: UnsafePtr<timespec>,
+                        _ rmtp: UnsafeMutablePtr<timespec> = __nullptr) -> int
+
+/// Opaque types for use with posix_spawn() family functions.  Internals are
+/// not defined, and should not be accessed directly.  Types are defined as
+/// mandated by POSIX.
+alias posix_spawn_file_actions_t = UnsafeMutableRawPtr
+alias posix_spawnattr_t = UnsafeMutableRawPtr
+
+alias pid_t = i32
+alias mode_t = u16
+
+/// The posix_spawn() and posix_spawnp() functions shall create a new process (child process) from 
+/// the specified process image. The new process image shall be constructed from a regular 
+/// executable file called the new process image file.
+declare C def posix_spawn(_ pid: UnsafeMutablePtr<pid_t>, _ path: CString,
+                          _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>,
+                          _ attrp: UnsafePtr<posix_spawnattr_t>,
+                          _ argv: UnsafePtr<CString>, envp: UnsafePtr<CString>) -> int
+
+declare C def posix_spawnp(_ pid: UnsafeMutablePtr<pid_t>, file: CString,
+                           _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>,
+                           _ attrp: UnsafePtr<posix_spawnattr_t>,
+                           _ argv: UnsafePtr<CString>, envp: UnsafePtr<CString>) -> int
+
+/// The posix_spawn_file_actions_destroy() function shall destroy the object referenced by file_actions; the object becomes, in effect, uninitialized. An implementation may cause posix_spawn_file_actions_destroy() to set the object referenced by file_actions to an invalid value. A destroyed spawn file actions object can be reinitialized using posix_spawn_file_actions_init(); the results of otherwise referencing the object after it has been destroyed are undefined.
+declare C def posix_spawn_file_actions_destroy(
+    _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>) -> int
+
+/// The posix_spawn_file_actions_init() function shall initialize the object referenced by file_actions to contain no file actions for posix_spawn() or posix_spawnp() to perform.
+declare C def posix_spawn_file_actions_init(
+    _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>) -> int
+
+/// The posix_spawn_file_actions_adddup2() function shall add a dup2() action to the object referenced by file_actions that shall cause the file descriptor fildes to be duplicated as newfildes (as if dup2(fildes, newfildes) had been called) when a new process is spawned using this file actions object.
+declare C def posix_spawn_file_actions_adddup2(
+    _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>,
+    _ fildes: int, _ newfildes: int) -> int
+
+declare C def posix_spawn_file_actions_addclose(
+    _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>,
+    _ fildes: int) -> int
+
+declare C def posix_spawn_file_actions_addopen(
+    _ file_actions: UnsafeMutablePtr<posix_spawn_file_actions_t>,
+    _ fildes: int, _ path: CString, _ oflag: int, _ mode: mode_t) -> int
+
+declare C def dup2(_ fildes: int, _ fildes2: int) -> int
+
+/// The fork() function shall create a new process. The new process (child process) shall be an exact copy of the calling process (parent process) except as detailed below:
+declare C def fork() -> pid_t
+
+declare C def execv(_ path: CString, _ argv: UnsafePtr<CString>) -> int
+declare C def execve(_ path: CString, _ argv: UnsafePtr<CString>, _ envp: UnsafePtr<CString>)  -> int
+declare C def execvp(_ file: CString, _ argv: UnsafePtr<CString>)  -> int

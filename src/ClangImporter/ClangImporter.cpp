@@ -36,12 +36,15 @@ namespace {
 /// Custom handler for diagnostics emitted from clang.
 class ClangDiagnosticConsumer: public clang::DiagnosticConsumer {
    ImporterImpl &Importer;
+   bool Optional = false;
 
 public:
    ClangDiagnosticConsumer(ImporterImpl &Importer) : Importer(Importer) {}
 
    void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
                          const clang::Diagnostic &Info) override;
+
+   void setOptional(bool b) { Optional = b; }
 };
 
 /// Handler for macro declarations.
@@ -106,6 +109,10 @@ void ClangDiagnosticConsumer::HandleDiagnostic(
    case clang::DiagnosticsEngine::Fatal:
       Kind = diag::err_generic_error;
       break;
+   }
+
+   if (Optional && OutBuf.find("file not found") != string::npos) {
+      Kind = diag::warn_generic_warn;
    }
 
    Importer.CI.getSema().diagnose(Kind, OutBuf.str(),
@@ -316,10 +323,13 @@ bool ImporterImpl::importModule(StringRef File,
                                 DeclContext *IntoMod,
                                 clang::FrontendInputFile &InputFile,
                                 SourceLocation ImportLoc,
-                                bool IsCXX) {
+                                bool IsCXX,
+                                bool Optional) {
    support::Timer Timer(CI, "Clang Importer");
-
    clang::PreprocessorOptions &ppOpts = Invocation->getPreprocessorOpts();
+
+   static_cast<ClangDiagnosticConsumer*>(ClangDiags->getClient())
+      ->setOptional(Optional);
 
    if (InputFile.isFile()) {
       ppOpts.addRemappedFile(DummyFileName, InputFile.getFile());
@@ -367,8 +377,9 @@ bool ImporterImpl::importModule(StringRef File,
    Instance.getTarget().adjust(Instance.getLangOpts());
 
    bool canBegin = action->BeginSourceFile(Instance, InputFile);
-   if (!canBegin)
+   if (!canBegin) {
       return true; // there was an error related to the compiler arguments.
+   }
 
    if (InputFile.isFile()) {
       auto FileInfo = CI.getFileMgr().openFile(InputFile.getFile());
@@ -439,7 +450,8 @@ bool ClangImporter::importCXXModule(StringRef File,
 
 bool ClangImporter::importSystemHeader(StringRef File,
                                        DeclContext *IntoMod,
-                                       SourceLocation ImportLoc) {
+                                       SourceLocation ImportLoc,
+                                       bool Optional) {
    std::string buf;
    llvm::raw_string_ostream OS(buf);
 
@@ -448,6 +460,7 @@ bool ClangImporter::importSystemHeader(StringRef File,
    auto MemBuf = llvm::MemoryBuffer::getMemBuffer(OS.str());
    clang::FrontendInputFile InputFile(MemBuf.release(), clang::InputKind::C);
 
-   return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false);
+   return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false,
+                              Optional);
 }
 

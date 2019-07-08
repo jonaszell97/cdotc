@@ -531,18 +531,56 @@ void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr *S)
    uint64_t Flags = Record.readInt();
    S->setStaticLookup((Flags & 1) != 0);
    S->setIsPointerAccess((Flags & (1 << 1)) != 0);
-   S->setFoundResult((Flags & (1 << 2)) != 0);
+   S->setOnlyForLookup((Flags & (1 << 2)) != 0);
    S->setInTypePos((Flags & (1 << 3)) != 0);
    S->setIsSynthesized((Flags & (1 << 4)) != 0);
    S->setIsCapture((Flags & (1 << 5)) != 0);
    S->setSelf((Flags & (1 << 6)) != 0);
    S->setAllowIncompleteTemplateArgs((Flags & (1 << 7)) != 0);
    S->setAllowNamespaceRef((Flags & (1 << 8)) != 0);
-   S->setLeadingDot((Flags & (1 << 9)) != 0);
+   S->setAllowOverloadRef((Flags & (1 << 9)) != 0);
+   S->setLeadingDot((Flags & (1 << 10)) != 0);
+   S->setCalled((Flags & (1 << 11)) != 0);
 
    S->setCaptureIndex(Record.readInt());
    S->setParentExpr(Record.readSubExpr());
    S->setDeclCtx(Record.readDeclAs<DeclContext>());
+}
+
+void ASTStmtReader::visitDeclRefExpr(DeclRefExpr *S)
+{
+   visitExpr(S);
+
+   S->setDecl(Record.readDeclAs<NamedDecl>());
+   S->setSourceRange(Record.readSourceRange());
+
+   uint64_t Flags = Record.readInt();
+   S->setAllowModuleRef((Flags & 1) != 0);
+}
+
+void ASTStmtReader::visitMemberRefExpr(MemberRefExpr *S)
+{
+   visitExpr(S);
+
+   S->setParentExpr(Record.readSubExpr());
+   S->setMemberDecl(Record.readDeclAs<NamedDecl>());
+   S->setSourceRange(Record.readSourceRange());
+   S->setCalled(Record.readBool());
+}
+
+void ASTStmtReader::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *S)
+{
+   visitExpr(S);
+
+   unsigned NumOverloads = Record.readInt();
+   auto *Ptr = S->getOverloads().data();
+
+   while (NumOverloads--) {
+      *Ptr++ = Record.readDeclAs<NamedDecl>();
+   }
+
+   S->setSourceRange(Record.readSourceRange());
+   S->setParentExpr(Record.readSubExpr());
 }
 
 void ASTStmtReader::visitEnumCaseExpr(EnumCaseExpr *S)
@@ -760,11 +798,15 @@ void ASTStmtReader::visitExprSequence(ExprSequence *S)
          break;
       }
       case SequenceElement::EF_PossibleOperator: {
-         new (Ptr++) SequenceElement(Record.getIdentifierInfo(), SR);
+         uint8_t whitespace = (uint8_t)Record.readInt();
+         new (Ptr++) SequenceElement(Record.getIdentifierInfo(), whitespace,
+                                     SR);
          break;
       }
       case SequenceElement::EF_Operator: {
-         new (Ptr++) SequenceElement(Record.readEnum<op::OperatorKind>(), SR);
+         uint8_t whitespace = (uint8_t)Record.readInt();
+         new (Ptr++) SequenceElement(Record.readEnum<op::OperatorKind>(),
+                                     whitespace, SR);
          break;
       }
       }
@@ -840,11 +882,12 @@ IfCondition ASTStmtReader::ReadIfCondition()
    case IfCondition::Binding: {
       auto *D = Record.readDeclAs<LocalVarDecl>();
 
-      ConversionSequence *Seq = nullptr;
-      if (Record.readBool())
-         Seq = ReadConvSeq();
+      CallableDecl *Fn = nullptr;
+      if (Record.readBool()) {
+         Fn = Record.readDeclAs<CallableDecl>();
+      }
 
-      return IfCondition(D, Seq);
+      return IfCondition(D, Fn);
    }
    case IfCondition::Pattern: {
       auto *Pat = cast<PatternExpr>(Record.readExpr());
@@ -864,6 +907,14 @@ void ASTStmtReader::visitCastExpr(CastExpr *S)
    S->setTarget(Record.readSubExpr());
    S->setTargetType(Record.readSourceType());
    S->setConvSeq(ReadConvSeq());
+}
+
+void ASTStmtReader::visitAddrOfExpr(AddrOfExpr *S)
+{
+   visitExpr(S);
+
+   S->setAmpLoc(ReadSourceLocation());
+   S->setTarget(Record.readSubExpr());
 }
 
 void ASTStmtReader::visitTypePredicateExpr(TypePredicateExpr *S)
@@ -886,7 +937,7 @@ void ASTStmtReader::visitIfExpr(IfExpr *S)
    visitExpr(S);
 
    S->setIfLoc(ReadSourceLocation());
-   S->setCond(Record.readSubExpr());
+   S->setCond(ReadIfCondition());
    S->setTrueVal(Record.readSubExpr());
    S->setFalseVal(Record.readSubExpr());
 }
@@ -1300,6 +1351,16 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
       case Statement::TupleMemberExprID:
          S = new(C) TupleMemberExpr(Empty);
          break;
+      case Statement::DeclRefExprID:
+         S = new(C) DeclRefExpr(Empty);
+         break;
+      case Statement::MemberRefExprID:
+         S = new(C) MemberRefExpr(Empty);
+         break;
+      case Statement::OverloadedDeclRefExprID:
+         S = OverloadedDeclRefExpr::CreateEmpty(
+            Context, Record[ASTStmtReader::NumExprFields]);
+         break;
       case Statement::SelfExprID:
          S = new(C) SelfExpr(Empty);
          break;
@@ -1332,6 +1393,9 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          break;
       case Statement::CastExprID:
          S = new(C) CastExpr(Empty);
+         break;
+      case Statement::AddrOfExprID:
+         S = new(C) AddrOfExpr(Empty);
          break;
       case Statement::TypePredicateExprID:
          S = new(C) TypePredicateExpr(Empty);

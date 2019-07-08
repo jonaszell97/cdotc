@@ -13,7 +13,8 @@ namespace ast {
 static void getConversionSequence(SemaPass &SP,
                                   CanType fromTy,
                                   CanType toTy,
-                                  ConversionSequenceBuilder &Seq);
+                                  ConversionSequenceBuilder &Seq,
+                                  bool MetaConversion = false);
 
 bool SemaPass::implicitlyCastableTo(CanType fromTy, CanType toTy)
 {
@@ -162,7 +163,7 @@ static void FromThinFn(SemaPass &SP, CanType from, CanType to,
    if (!to->isFunctionType()) {
       // Function pointer -> Void*
       if (to->isPointerType() && to->getPointeeType()->isVoidType()) {
-         return Seq.addStep(CastKind::BitCast, to, CastStrength::Normal);
+         return Seq.addStep(CastKind::BitCast, to, CastStrength::Implicit);
       }
 
       // Function Pointer -> Bool
@@ -174,6 +175,8 @@ static void FromThinFn(SemaPass &SP, CanType from, CanType to,
       if (to->isIntegerType()) {
          return Seq.addStep(CastKind::PtrToInt, to, CastStrength::Force);
       }
+
+      return Seq.invalidate();
    }
 
    auto ToFn = to->asFunctionType();
@@ -208,38 +211,21 @@ static void FromMeta(SemaPass &SP, CanType from, CanType to,
    if (!to->isMetaType())
       return Seq.invalidate();
 
-   auto From = from->stripMetaType();
-   auto To = to->stripMetaType();
+   CanType From = from->stripMetaType()->getDesugaredType();
+   CanType To = to->stripMetaType()->getDesugaredType();
 
-   if (!From->isRecordType() || !To->isRecordType())
-      return Seq.invalidate();
+   ConversionSequenceBuilder ConvSeq;
+   ast::getConversionSequence(SP, From, To, ConvSeq, true);
 
-   auto FromRec = From->getRecord();
-   auto ToRec = To->getRecord();
-
-   if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
-      bool ConformsTo;
-      if (SP.QC.ConformsTo(ConformsTo, from, P)) {
-         return Seq.addStep(CastKind::NoOp, to);
-      }
-      if (ConformsTo) {
-         return Seq.addStep(CastKind::MetaTypeCast, to, CastStrength::Implicit);
-      }
-
+   if (!ConvSeq.isImplicit()) {
       return Seq.invalidate();
    }
 
-   if (auto FromClass = dyn_cast<ClassDecl>(FromRec)) {
-      auto ToClass = dyn_cast<ClassDecl>(ToRec);
-      if (!ToClass)
-         return Seq.invalidate();
-
-      if (ToClass->isBaseClassOf(FromClass))
-         return Seq.addStep(CastKind::MetaTypeCast, to, CastStrength::Implicit);
-
-      return Seq.invalidate();
-   }
+   return Seq.addStep(CastKind::MetaTypeCast, to, CastStrength::Implicit);
 }
+
+static void FromExistential(SemaPass &SP, CanType from, CanType to,
+                            ConversionSequenceBuilder &Seq);
 
 static void FromReference(SemaPass &SP,
                           CanType from, CanType to,
@@ -269,12 +255,21 @@ static void FromReference(SemaPass &SP,
       return Seq.addStep(CastKind::NoOp, to);
    }
 
+   if (FromTy->isExistentialType() && ToTy->isRecordType()) {
+      ConversionSequenceBuilder InnerSeq;
+      FromExistential(SP, FromTy, ToTy, InnerSeq);
+
+      if (InnerSeq.isImplicit()) {
+         return Seq.addStep(CastKind::BitCast, to);
+      }
+   }
+
    if (FromTy->isClass() && ToTy->isClass()) {
       auto FromClass = cast<ClassDecl>(FromTy->getRecord());
       auto ToClass = cast<ClassDecl>(ToTy->getRecord());
 
       if (ToClass->isBaseClassOf(FromClass)) {
-         return Seq.addStep(CastKind::NoOp, to);
+         return Seq.addStep(CastKind::BitCast, to);
       }
    }
 
@@ -284,16 +279,16 @@ static void FromReference(SemaPass &SP,
 static void FromRecord(SemaPass &SP, CanType from, CanType to,
                        ConversionSequenceBuilder &Seq) {
    auto FromRec = from->getRecord();
-   if (SP.QC.PrepareDeclInterface(FromRec)) {
-      Seq.addStep(CastKind::NoOp, to);
-      return;
-   }
-
    auto OpName = SP.getContext().getDeclNameTable()
                    .getConversionOperatorName(to);
 
-   auto *ConvOp = SP.LookupSingle<CallableDecl>(*FromRec, OpName);
+   auto *ConvOp = SP.QC.LookupSingleAs<CallableDecl>(FromRec, OpName);
    if (ConvOp) {
+      if (SP.QC.PrepareDeclInterface(ConvOp)) {
+          Seq = ConversionSequenceBuilder::MakeNoop(to);
+          return;
+      }
+
       Seq.addStep(ConvOp, ConvOp->hasAttribute<ImplicitAttr>()
                            ? CastStrength::Implicit
                            : CastStrength::Normal);
@@ -363,12 +358,6 @@ static void FromGenericRecord(SemaPass &SP, CanType from, CanType to,
 
 static void FromProtocol(SemaPass &SP, CanType from, CanType to,
                          ConversionSequenceBuilder &Seq) {
-   auto FromRec = cast<ProtocolDecl>(from->getRecord());
-   if (SP.QC.PrepareDeclInterface(FromRec)) {
-      Seq.addStep(CastKind::NoOp, to);
-      return;
-   }
-
    if (!to->isRecordType()) {
       return Seq.invalidate();
    }
@@ -399,11 +388,6 @@ static void FromExistential(SemaPass &SP, CanType from, CanType to,
    if (auto *Proto = dyn_cast<ProtocolDecl>(ToRec)) {
       for (auto P : from->asExistentialType()->getExistentials()) {
          auto FromRec = cast<ProtocolDecl>(P->getRecord());
-         if (SP.QC.PrepareDeclInterface(FromRec)) {
-            Seq.addStep(CastKind::NoOp, to);
-            return;
-         }
-
          if (FromRec == ToRec) {
             Seq.addStep(CastKind::NoOp, to);
             return;
@@ -471,10 +455,90 @@ static void FromArray(SemaPass &SP,
    return Seq.invalidate();
 }
 
+static bool lookupImplicitInitializer(SemaPass &SP,
+                                      CanType from,
+                                      CanType to,
+                                      ConversionSequenceBuilder &Seq,
+                                      bool IsMetaConversion) {
+   auto *R = to->getRecord();
+   if (auto *P = dyn_cast<ProtocolDecl>(R)) {
+      if (P->isAny()) {
+         Seq.addStep(CastKind::ExistentialInit, to, CastStrength::Implicit);
+         return true;
+      }
+   }
+
+   if (IsMetaConversion) {
+      return false;
+   }
+
+   // Load all external declarations.
+   auto DN = SP.getContext().getDeclNameTable().getConstructorName(to);
+
+   const MultiLevelLookupResult *Initializers;
+   if (SP.QC.MultiLevelLookup(Initializers, R, DN)) {
+      Seq = ConversionSequenceBuilder::MakeNoop(to);
+      return true;
+   }
+
+   for (auto *D : Initializers->allDecls()) {
+      auto *I = cast<InitDecl>(D);
+      if (!I->hasAttribute<ImplicitAttr>()) {
+         continue;
+      }
+
+      if (SP.QC.PrepareDeclInterface(I)) {
+         Seq = ConversionSequenceBuilder::MakeNoop(to);
+         return true;
+      }
+
+      assert(I->getArgs().size() == 1 && "invalid implicit attribute");
+
+      CanType NeededTy = I->getArgs().front()->getType();
+      if (NeededTy == from) {
+         Seq.addStep(I, CastStrength::Implicit);
+         return true;
+      }
+      else if (!I->isTemplate() && !NeededTy->isDependentType()) {
+         return false;
+      }
+
+      sema::TemplateArgList Args(SP, I);
+      Args.inferFromType(from, NeededTy);
+
+      if (Args.isStillDependent()) {
+         return false;
+      }
+      if (!Args.checkCompatibility()) {
+         return false;
+      }
+
+      // Instantiate the initializer.
+      auto *FinalList = sema::FinalTemplateArgumentList::Create(SP.Context,
+                                                                Args);
+
+      MethodDecl *Inst;
+      if (SP.QC.InstantiateMethod(Inst, I, FinalList, I->getSourceLoc())) {
+         Seq = ConversionSequenceBuilder::MakeNoop(to);
+         return true;
+      }
+      if (SP.QC.PrepareDeclInterface(Inst)) {
+         Seq = ConversionSequenceBuilder::MakeNoop(to);
+         return true;
+      }
+
+      Seq.addStep(Inst, CastStrength::Implicit);
+      return true;
+   }
+
+   return false;
+}
+
 static void getConversionSequence(SemaPass &SP,
                                   CanType fromTy,
                                   CanType toTy,
-                                  ConversionSequenceBuilder &Seq) {
+                                  ConversionSequenceBuilder &Seq,
+                                  bool MetaConversion) {
    // Implicit lvalue -> rvalue
    if (fromTy->isReferenceType() && !toTy->isReferenceType()) {
       fromTy = fromTy->stripReference()->getCanonicalType();
@@ -489,7 +553,10 @@ static void getConversionSequence(SemaPass &SP,
 
    // We call this here to preserve associated types / generic types for
    // the above implicit conversions.
-   CanType from = SP.checkCurrentTypeCapabilities(fromTy)->getDesugaredType();
+   SP.QC.ApplyCapabilites(fromTy, fromTy, &SP.getDeclContext());
+   SP.QC.ApplyCapabilites(toTy, toTy, &SP.getDeclContext());
+
+   CanType from = fromTy->getDesugaredType();
    CanType to = toTy->getDesugaredType();
 
    if (to->isUnknownAnyType() && isa<AssociatedType>(toTy)) {
@@ -500,11 +567,13 @@ static void getConversionSequence(SemaPass &SP,
       return;
    }
 
-   assert(!from->isDependentType() && !to->isDependentType()
-          && "don't call this on dependent types!");
-
-   if (from == to || from->isUnknownAnyType() || to->isUnknownAnyType()) {
+   if (from == to) {
       Seq.addStep(CastKind::NoOp, to);
+      return;
+   }
+
+   if (from->isDependentType() || to->isDependentType()) {
+      Seq.setDependent(true);
       return;
    }
 
@@ -520,10 +589,15 @@ static void getConversionSequence(SemaPass &SP,
       return;
    }
 
-   // expr -> MetaType<decltype(expr)>
-   if (to->isMetaType() && to->asMetaType()->getUnderlyingType() == from) {
-      Seq.addStep(CastKind::ToMetaType, to, CastStrength::Implicit);
-      return;
+   // expr -> MetaType<type(of: expr)>
+   if (to->isMetaType() && !from->isMetaType()) {
+      CanType toMeta = to->asMetaType()->getUnderlyingType()
+                         ->getDesugaredType();
+
+      auto ConvSeq = SP.getConversionSequence(from, toMeta);
+      if (ConvSeq.isImplicit()) {
+         return Seq.addStep(CastKind::ToMetaType, to, CastStrength::Implicit);
+      }
    }
 
    // Any type -> Existential
@@ -544,35 +618,9 @@ static void getConversionSequence(SemaPass &SP,
    }
 
    // Look for an implicit initializer.
-   if (to->isRecordType()) {
-      auto *R = to->getRecord();
-      if (auto *P = dyn_cast<ProtocolDecl>(R)) {
-         if (P->isAny()) {
-            Seq.addStep(CastKind::ExistentialInit, to, CastStrength::Implicit);
-            return;
-         }
-      }
-
-      // Load all external declarations.
-      auto DN = SP.getContext().getDeclNameTable().getConstructorName(to);
-
-      const MultiLevelLookupResult *Initializers;
-      if (SP.QC.MultiLevelLookup(Initializers, R, DN)) {
-         Seq = ConversionSequenceBuilder::MakeNoop();
-         return;
-      }
-
-      for (auto *D : Initializers->allDecls()) {
-         auto *I = cast<InitDecl>(D);
-         if (!I->hasAttribute<ImplicitAttr>())
-            continue;
-
-         assert(I->getArgs().size() == 1 && "invalid implicit attribute");
-         if (I->getArgs().front()->getType() == from) {
-            Seq.addStep(I, CastStrength::Implicit);
-            return;
-         }
-      }
+   if (to->isRecordType()
+   && lookupImplicitInitializer(SP, from, to, Seq, MetaConversion)) {
+      return;
    }
 
    switch (from->getTypeID()) {

@@ -1,0 +1,12 @@
+
+; Module ID: /Users/Jonas/CDot/cmake-build-debug/test/main2.dot
+define @_CNW4testE5funkyEv() -> void {
+entry:
+   debug_loc { line: 6, col: 9, file: 1 }
+   debug_loc { line: 6, col: 21, file: 1 }
+   debug_loc { line: 7, col: 18, file: 1 }
+   call void @_CNW11hello_worldE8sayHelloEv()
+   ret void
+}
+
+declare @_CNW11hello_worldE8sayHelloEv() -> void

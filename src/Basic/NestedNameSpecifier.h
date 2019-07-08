@@ -13,6 +13,10 @@ namespace cdot {
 
 class Module;
 
+namespace sema {
+   class FinalTemplateArgumentList;
+} // namespace sema
+
 class LLVM_ALIGNAS(8) NestedNameSpecifier: public llvm::FoldingSetNode {
 public:
    enum Kind : uint8_t {
@@ -31,8 +35,14 @@ public:
       /// \brief An associated type.
       AssociatedType,
 
+      /// \brief A dependent alias.
+      Alias,
+
       /// \brief A module reference.
       Module,
+
+      /// \brief A dependent template argument list.
+      TemplateArgList,
    };
 
 private:
@@ -63,7 +73,15 @@ private:
                        NestedNameSpecifier *Previous);
 
    /// \brief get or create a uniqued name specifier.
+   NestedNameSpecifier(ast::AliasDecl *Alias,
+                       NestedNameSpecifier *Previous);
+
+   /// \brief get or create a uniqued name specifier.
    NestedNameSpecifier(cdot::Module *M,
+                       NestedNameSpecifier *Previous);
+
+   /// \brief get or create a uniqued name specifier.
+   NestedNameSpecifier(sema::FinalTemplateArgumentList *TemplateArgs,
                        NestedNameSpecifier *Previous);
 
 public:
@@ -94,7 +112,17 @@ public:
 
    /// \brief get or create a uniqued name specifier.
    static NestedNameSpecifier *Create(DeclarationNameTable &Tbl,
+                                      ast::AliasDecl *Alias,
+                                      NestedNameSpecifier *Previous = nullptr);
+
+   /// \brief get or create a uniqued name specifier.
+   static NestedNameSpecifier *Create(DeclarationNameTable &Tbl,
                                       cdot::Module *M,
+                                      NestedNameSpecifier *Previous = nullptr);
+
+   /// \brief get or create a uniqued name specifier.
+   static NestedNameSpecifier *Create(DeclarationNameTable &Tbl,
+                                      sema::FinalTemplateArgumentList *TemplateArgs,
                                       NestedNameSpecifier *Previous = nullptr);
 
    /// \brief Profile a name specifier to the given ID.
@@ -145,14 +173,24 @@ public:
    /// \return the associated type.
    ast::AssociatedTypeDecl *getAssociatedType() const;
 
+   /// \return the alias.
+   ast::AliasDecl *getAlias() const;
+
    /// \return the module ref.
    cdot::Module *getModule() const;
+
+   /// \return the template argument list.
+   sema::FinalTemplateArgumentList *getTemplateArgs() const;
 };
 
 class NestedNameSpecifierWithLoc final:
                      TrailingObjects<NestedNameSpecifierWithLoc, SourceRange> {
    NestedNameSpecifierWithLoc(NestedNameSpecifier *Name,
                               ArrayRef<SourceRange> Locs);
+
+   NestedNameSpecifierWithLoc(NestedNameSpecifierWithLoc *Prev,
+                              NestedNameSpecifier *NewName,
+                              SourceRange NewLoc);
 
    /// The nested name specifier.
    NestedNameSpecifier *NameSpec;
@@ -164,6 +202,11 @@ public:
    static NestedNameSpecifierWithLoc *Create(DeclarationNameTable &Tbl,
                                              NestedNameSpecifier *Name,
                                              ArrayRef<SourceRange> Locs);
+
+   static NestedNameSpecifierWithLoc *Create(DeclarationNameTable &Tbl,
+                                             NestedNameSpecifierWithLoc *Prev,
+                                             NestedNameSpecifier *NewName,
+                                             SourceRange NewLoc);
 
    friend TrailingObjects;
 

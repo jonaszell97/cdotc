@@ -1,0 +1,6 @@
+
+module std
+
+_ = async.Task {
+    return 0
+}

@@ -1,0 +1,154 @@
+
+module std.prelude
+
+public protocol Equatable {
+    /// \return `true` iff the two values are equal, `false` otherwise.
+    def infix == (Self) -> Bool
+
+    /// \return `true` iff the two values are not equal, `false` otherwise.
+    def infix != (s: Self) -> Bool
+}
+
+extend Equatable {
+    /// Default implementation of `!=` as the negation of `==`.
+    default def infix != (s: Self) -> Bool {
+        return !(self == s)
+    }
+}
+
+public protocol Comparable with Equatable {
+    /// \return `0` if the two values are equal, a value bigger than zero if `self > rhs`,
+    ///         a value smaller than zero otherwise.
+    def infix <=> (Self) -> Int
+    
+    /// \return `true` iff the two values are equal, `false` otherwise.
+    def infix ==(rhs: Self) -> Bool
+
+    /// \return `true` iff the two values are not equal, `false` otherwise.
+    def infix !=(rhs: Self) -> Bool
+
+    /// \return `true` iff `self` is smaller than rhs, `false` otherwise.
+    def infix < (rhs: Self) -> Bool
+
+    /// \return `true` iff `self` is smaller than or equal to rhs, `false` otherwise.
+    def infix <=(rhs: Self) -> Bool
+
+    /// \return `true` iff `self` is greater than rhs, `false` otherwise.
+    def infix > (rhs: Self) -> Bool
+
+    /// \return `true` iff `self` is greater than or equal to rhs, `false` otherwise.
+    def infix >=(rhs: Self) -> Bool
+}
+
+extend Comparable {
+    /// Default implementation using `<=>`.
+    default def infix ==(rhs: Self) -> Bool {
+        return (self <=> rhs) == 0
+    }
+
+    /// Default implementation using `<=>`.
+    default def infix !=(rhs: Self) -> Bool {
+        return (self <=> rhs) != 0
+    }
+
+    /// Default implementation using `<=>`.
+    default def infix <(rhs: Self) -> Bool {
+        return (self <=> rhs) < 0
+    }
+
+    /// Default implementation using `<=>`.
+    default def infix <=(rhs: Self) -> Bool {
+        return (self <=> rhs) <= 0
+    }
+
+    /// Default implementation using `<=>`.
+    default def infix >(rhs: Self) -> Bool {
+        return (self <=> rhs) > 0
+    }
+
+    /// Default implementation using `<=>`.
+    default def infix >=(rhs: Self) -> Bool {
+        return (self <=> rhs) >= 0
+    }
+}
+
+public protocol Hashable with Equatable {
+    def hashValue() -> UInt64
+}
+
+public def hashValue<T>(_ t: T) -> UInt64 where IsIntegral<T> {
+    return t as UInt64
+}
+
+public protocol Copyable {
+    def copy() -> Self
+}
+
+public protocol ImplicitlyCopyable: Copyable {}
+public protocol MoveOnly {}
+
+public protocol Strideable with Comparable {
+    /// \return the value advance by `by`.
+    def advanced(by: Int) -> Self
+
+    /// \return the next value in the sequence.
+    def next() -> Self
+
+    /// \return the next value in the sequence.
+    def previous() -> Self
+}
+
+extend Strideable {
+    /// \return the next value in the sequence.
+    default def next() -> Self {
+        return advanced(by: 1)
+    }
+
+    /// \return the next value in the sequence.
+    default def previous() -> Self {
+        return advanced(by: -1)
+    }
+}
+
+public protocol Randomizable {
+    static def random() -> Self
+}
+
+public protocol IntegerProtocol with Number {
+    def infix << (Self) -> Self
+    def infix >> (Self) -> Self
+
+    def infix & (Self) -> Self
+    def infix | (Self) -> Self
+    def infix ^ (Self) -> Self
+
+    def prefix ~() -> Self
+}
+
+public protocol Number with Equatable, Comparable, Hashable, StringRepresentable{
+    static let MAX: Self
+    static let MIN: Self
+
+    def prefix +() -> Self
+
+    def prefix ++() -> Self
+    def prefix --() -> Self
+
+    def postfix ++() -> Self
+    def postfix --() -> Self
+
+    def infix + (Self) -> Self
+    def infix - (Self) -> Self
+
+    def infix * (Self) -> Self
+    def infix / (Self) -> Double
+    def infix % (Self) -> Self
+}
+
+public protocol SignedNumber with Number {
+    def prefix -() -> Self
+}
+
+public protocol Throwable {
+    prop description: String { get }
+}

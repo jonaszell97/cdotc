@@ -1,4 +1,0 @@
-
-module libc.setjmp
-
-include_system_header!("setjmp.h")

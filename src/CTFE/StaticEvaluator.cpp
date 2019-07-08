@@ -54,14 +54,14 @@ public:
       case Statement::OptionTypeExprID:
       case Statement::PointerTypeExprID:
       case Statement::ParenExprID:
-         return visitChildren(Stmt);
+         return RecursiveASTVisitor::visit(Stmt);
       case Statement::IdentifierRefExprID: {
          auto Ident = cast<IdentifierRefExpr>(Stmt);
 
          switch (Ident->getKind()) {
          case IdentifierKind::MetaType:
          case IdentifierKind::Namespace:
-            return visitChildren(Ident);
+            return RecursiveASTVisitor::visit(Ident);
          default:
             break;
          }
@@ -88,7 +88,7 @@ public:
             case KnownFunction::llvm_floor_f32:
             case KnownFunction::llvm_ceil_f64:
             case KnownFunction::llvm_ceil_f32:
-               return visitChildren(Call);
+               return RecursiveASTVisitor::visit(Call);
             default:
                break;
             }
@@ -138,10 +138,10 @@ public:
          return StaticExprResult(Expr->isTypeDependent(),
                                  Expr->isValueDependent());
 
-      EvaluationMethodDecider Decider;
-      Decider.visit(Expr);
+//      EvaluationMethodDecider Decider;
+//      Decider.visit(Expr);
 
-      if (Decider.UseCTFE) {
+      if (true /* Decider.UseCTFE */) {
          auto res = SP.getILGen().evaluateStaticExpr(Expr);
          if (!res)
             return StaticExprResult();
@@ -518,7 +518,7 @@ Variant EvaluatorImpl::visitTypePredicateExpr(TypePredicateExpr *Expr)
 
 Variant EvaluatorImpl::visitIfExpr(IfExpr *Expr)
 {
-   auto Cond = visit(Expr->getCond());
+   auto Cond = visit(Expr->getCond().ExprData.Expr);
    if (Cond.getAPSInt().getBoolValue()) {
       return visit(Expr->getTrueVal());
    }

@@ -89,6 +89,10 @@ private:
    /// Identifier IDs of modules that were imported by the module we're reading
    SmallVector<unsigned, 0> ImportedModuleIdents;
 
+
+   /// Identifier IDs of modules that were imported by the module we're reading
+   SmallVector<SmallVector<unsigned, 0>, 0> ImplicitlyImportedModuleIdents;
+
    /// Map from modules to their AST decl IDs.
    llvm::DenseMap<Module*, unsigned> ModuleDeclMap;
 

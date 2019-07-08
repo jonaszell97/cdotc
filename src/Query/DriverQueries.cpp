@@ -6,6 +6,7 @@
 
 #include "AST/Decl.h"
 #include "Basic/FileUtils.h"
+#include "ClangImporter/ClangImporter.h"
 #include "IL/Module.h"
 #include "IRGen/IRGen.h"
 #include "Lex/Lexer.h"
@@ -27,29 +28,92 @@ using namespace cdot::support;
 
 QueryResult CompileModuleQuery::run()
 {
-   auto &Opts = QC.CI.getOptions();
+   StringRef ModuleFile = QC.CI.getOptions()
+                            .getInputFiles(InputKind::ModuleFile).front();
 
-   // Get all input source files.
-   SmallString<128> MainFile;
-   SmallVector<StringRef, 8> SourceFiles;
-
-   for (auto &File : Opts.getInputFiles(InputKind::SourceFile)) {
-      if (MainFile.empty())
-         MainFile = File;
-
-      SourceFiles.push_back(File);
+   // Parse the module file.
+   Module *Mod;
+   if (auto Err = QC.ParseModuleFile(Mod, ModuleFile)) {
+      return Query::finish(Err);
    }
 
    // Create the LLVM module.
    llvm::Module *LLVMMod;
-   if (QC.CreateLLVMModule(LLVMMod, SourceFiles)) {
+   if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
    // Emit the module.
    QC.CI.getModuleMgr().EmitModule(QC.CI.getCompilationModule());
-
    return finish();
+}
+
+QueryResult ParseModuleFileQuery::run()
+{
+   auto File = QC.CI.getFileMgr().openFile(FileName);
+   if (!File.Buf) {
+      QC.Sema->diagnose(diag::err_generic_error,
+                        "could not open file " + FileName);
+
+      return fail();
+   }
+
+   SourceLocation Start(File.BaseOffset);
+   QC.CI.setMainFileLoc(Start);
+
+   Lexer lex(QC.Context.getIdentifiers(), QC.Sema->getDiags(),
+             File.Buf, File.SourceId, File.BaseOffset);
+
+   Parser parser(QC.Context, &lex, *QC.Sema);
+   auto *Mod = parser.parseModuleFile();
+
+   if (!Mod) {
+      return fail();
+   }
+
+   QC.CI.setCompilationModule(Mod);
+
+   // If the user asked not to import core, import cdot_policy so operators
+   // and precedence groups are still available.
+   auto &Opts = QC.CI.getOptions();
+   if (Opts.noPrelude() && !Opts.isStdLib()) {
+      QC.CI.getModuleMgr().LookupModule(
+         Start, Start, QC.Sema->getIdentifier("cdot_policy"));
+   }
+
+   return finish(Mod);
+}
+
+QueryResult CreateDefaultModuleQuery::run()
+{
+   auto Inputs = QC.CI.getOptions().getInputFiles(InputKind::SourceFile);
+   StringRef MainFile = Inputs.front();
+
+   auto File = QC.CI.getFileMgr().openFile(MainFile);
+   if (!File.Buf) {
+      QC.Sema->diagnose(diag::err_generic_error,
+                        "error opening file " + MainFile);
+
+      return fail();
+   }
+
+   std::string ModName = support::toCamelCase(fs::getFileName(MainFile));
+
+   auto *DefaultModuleName = &QC.Context.getIdentifiers().get(ModName);
+   auto *Mod = QC.CI.getModuleMgr().CreateModule(
+      SourceLocation(File.BaseOffset), DefaultModuleName);
+
+   Module::SourceFileInfo MainInfo;
+   MainInfo.Lang = Module::SourceFileLang::CDot;
+   MainInfo.IsMainFile = true;
+   Mod->addSourceFile(MainFile, MainInfo);
+
+   for (auto &File : Inputs.drop_front(1)) {
+      Mod->addSourceFile(File, {});
+   }
+
+   QC.CI.setCompilationModule(Mod);
+   return finish(Mod);
 }
 
 QueryResult ParseSourceFileQuery::run()
@@ -57,10 +121,46 @@ QueryResult ParseSourceFileQuery::run()
    auto &CI = QC.CI;
    auto &Sema = CI.getSema();
    auto &Context = CI.getContext();
-   auto &ModuleMgr = CI.getModuleMgr();
+   auto &Idents = Context.getIdentifiers();
+   auto &DeclNames = Context.getDeclNameTable();
 
-   Context.getIdentifiers().addKeywords();
-   Sema.setDeclContext(CI.getGlobalDeclCtx());
+   auto AbsolutePath = fs::findFileInDirectories(
+      FileName, CI.getOptions().getIncludeDirs());
+
+   auto File = CI.getFileMgr().openFile(AbsolutePath);
+   if (!File.Buf) {
+      Sema.diagnose(diag::err_generic_error,
+                    "error opening file " + FileName);
+
+      return fail();
+   }
+
+   SourceLocation Start(File.BaseOffset);
+   SourceLocation End(File.BaseOffset + File.Buf->getBufferSize());
+   SourceRange FileRange(Start, End);
+
+   auto FileNameDN = DeclNames.getNormalIdentifier(Idents.get(FileName));
+   auto *FileDecl = SourceFileDecl::Create(Context, FileRange, FileNameDN);
+
+   QC.Sema->ActOnDecl(Mod->getDecl(), FileDecl);
+   FileDecl->setParentCtx(Mod->getDecl());
+
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, FileDecl);
+   Lexer lex(Context.getIdentifiers(), Sema.getDiags(),
+             File.Buf, File.SourceId, File.BaseOffset);
+   Parser parser(Context, &lex, Sema);
+
+   parser.parse();
+   return finish(FileDecl);
+}
+
+QueryResult ParseMainSourceFileQuery::run()
+{
+   auto &CI = QC.CI;
+   auto &Sema = CI.getSema();
+   auto &Context = CI.getContext();
+   auto &Idents = Context.getIdentifiers();
+   auto &DeclNames = Context.getDeclNameTable();
 
    auto File = CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {
@@ -70,68 +170,125 @@ QueryResult ParseSourceFileQuery::run()
       return fail();
    }
 
-   bool ParseMainFile = false;
-   if (!CI.getMainFileLoc()) {
-      CI.setMainFileLoc(SourceLocation(File.BaseOffset));
-      ParseMainFile = CI.getOptions().output() == OutputKind::Executable;
+   SourceLocation Start(File.BaseOffset);
+   CI.setMainFileLoc(Start);
+
+   /// If the user asked not to import core, import cdot_policy so operators
+   // and precedence groups are still available.
+   auto &Opts = QC.CI.getOptions();
+   if (Opts.noPrelude() && !Opts.isStdLib()) {
+      QC.CI.getModuleMgr().LookupModule(
+         Start, Start, QC.Sema->getIdentifier("cdot_policy"));
    }
+
+   SourceLocation End(File.BaseOffset + File.Buf->getBufferSize());
+   SourceRange FileRange(Start, End);
+
+   auto FileNameDN = DeclNames.getNormalIdentifier(Idents.get(FileName));
+   auto *FileDecl = SourceFileDecl::Create(Context, FileRange, FileNameDN);
+
+   QC.Sema->ActOnDecl(Mod->getDecl(), FileDecl);
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, FileDecl);
 
    Lexer lex(Context.getIdentifiers(), Sema.getDiags(),
              File.Buf, File.SourceId, File.BaseOffset);
    Parser parser(Context, &lex, Sema);
 
-   bool IgnoreSourceFile;
-   auto *ModDecl = parser.parseModule(IgnoreSourceFile);
+   parser.parseMainFile();
+   return finish(FileDecl);
+}
 
-   if (IgnoreSourceFile) {
-      ModDecl->setIgnored(true);
-      return finish(ModDecl);
-   }
+QueryResult ParseSourceFilesQuery::run()
+{
+   SmallVector<Module*, 4> Worklist;
+   Worklist.push_back(Mod);
 
-   Module *Mod = nullptr;
-   if (ModDecl)
-      Mod = ModDecl->getModule();
+   QueryResult::ResultKind RK = QueryResult::Success;
 
-   if (!Mod) {
-      std::string ModName = support::toCamelCase(fs::getFileName(FileName));
+   unsigned i = 0;
+   while (i < Worklist.size()) {
+      auto *Mod = Worklist[i++];
+      auto *ModDecl = Mod->getDecl();
 
-      auto *DefaultModuleName = &Context.getIdentifiers().get(ModName);
-      ModDecl = ModuleMgr.GetOrCreateModule(SourceLocation(File.BaseOffset),
-                                            DefaultModuleName);
+      Worklist.append(Mod->getSubModules().begin(), Mod->getSubModules().end());
 
-      Mod = ModDecl->getModule();
-   }
+      SemaPass::DeclScopeRAII DSR(*QC.Sema, ModDecl);
+      for (auto &SF : Mod->getSourceFiles()) {
+         switch (SF.getValue().Lang) {
+         case Module::CDot: {
+            SourceFileDecl *FileDecl;
+            if (SF.getValue().IsMainFile) {
+               if (auto Err = QC.ParseMainSourceFile(FileDecl, Mod,
+                                                     SF.getKey())) {
+                  QueryResult::update(RK, Err.K);
+               }
+            }
+            else {
+               if (auto Err = QC.ParseSourceFile(FileDecl, Mod, SF.getKey())) {
+                  QueryResult::update(RK, Err.K);
+               }
+            }
 
-   if (!CI.getCompilationModule()) {
-      CI.setCompilationModule(Mod->getBaseModule());
+            break;
+         }
+         case Module::C:
+         case Module::CXX:
+         case Module::CSystem: {
+            ImportExternalSourceFileQuery::HeaderKind K;
+            switch (SF.getValue().Lang) {
+            case Module::C:
+               K = ImportExternalSourceFileQuery::C;
+               break;
+            case Module::CXX:
+               K = ImportExternalSourceFileQuery::CXX;
+               break;
+            case Module::CSystem:
+               K = ImportExternalSourceFileQuery::CSystem;
+               break;
+            default:
+               llvm_unreachable("handled elsewhere");
+            }
 
-      if (!CI.getOptions().noPrelude() && !CI.getOptions().isStdLib()) {
-         ModuleMgr.ImportPrelude(Mod->getBaseModule());
+            if (auto Err = QC.ImportExternalSourceFile(SF.getKey(), K, ModDecl,
+                                                       Mod->getSourceLoc(),
+                                                       SF.getValue().Optional)){
+               QueryResult::update(RK, Err.K);
+            }
+
+            break;
+         }
+         }
       }
    }
-   else if (Mod->getBaseModule() != CI.getCompilationModule()->getBaseModule()){
-      auto Name1 = CI.getCompilationModule()->getBaseModule()->getName();
-      auto Name2 = Mod->getBaseModule()->getName();
 
-      Sema.diagnose(diag::err_multiple_modules, Mod->getSourceLoc(),
-                    Name1, Name2);
+   return finish(QueryResult(RK));
+}
 
-      return fail();
+QueryResult ImportExternalSourceFileQuery::run()
+{
+   auto &Importer = QC.CI.getClangImporter();
+   switch (Kind) {
+   case C:
+      if (Importer.importCModule(FileName, DC, Loc)) {
+         return fail();
+      }
+
+      break;
+   case CSystem:
+      if (Importer.importSystemHeader(FileName, DC, Loc, Optional)) {
+         return fail();
+      }
+
+      break;
+   case CXX:
+      if (Importer.importCXXModule(FileName, DC, Loc)) {
+         return fail();
+      }
+
+      break;
    }
 
-   SemaPass::DeclContextRAII declContextRAII(Sema, ModDecl);
-
-   CI.addModuleSource(File.SourceId, ModDecl);
-   ModuleMgr.addSourceFileToModule(File, Mod);
-
-   if (ParseMainFile) {
-      parser.parseMainFile();
-   }
-   else {
-      parser.parse();
-   }
-
-   return finish(ModDecl);
+   return finish();
 }
 
 QueryResult SetupIRGenQuery::run()
@@ -145,7 +302,7 @@ QueryResult CreateLLVMModuleQuery::run()
 {
    // Create the IL module.
    il::Module *ILMod;
-   if (QC.CreateILModule(ILMod, SourceFiles)) {
+   if (QC.CreateILModule(ILMod, Mod)) {
       return fail();
    }
 
@@ -160,8 +317,14 @@ QueryResult CreateLLVMModuleQuery::run()
 
 QueryResult CreateObjectQuery::run()
 {
+   // Create a default module for the compilation.
+   Module *Mod;
+   if (auto Err = QC.CreateDefaultModule(Mod)) {
+      return Query::finish(Err);
+   }
+
    llvm::Module *LLVMMod;
-   if (QC.CreateLLVMModule(LLVMMod, SourceFiles)) {
+   if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
@@ -176,8 +339,14 @@ QueryResult CreateObjectQuery::run()
 
 QueryResult CreateStaticLibQuery::run()
 {
+   // Create a default module for the compilation.
+   Module *Mod;
+   if (auto Err = QC.CreateDefaultModule(Mod)) {
+      return Query::finish(Err);
+   }
+
    llvm::Module *LLVMMod;
-   if (QC.CreateLLVMModule(LLVMMod, SourceFiles)) {
+   if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
@@ -192,8 +361,14 @@ QueryResult CreateStaticLibQuery::run()
 
 QueryResult CreateDynamicLibQuery::run()
 {
+   // Create a default module for the compilation.
+   Module *Mod;
+   if (auto Err = QC.CreateDefaultModule(Mod)) {
+      return Query::finish(Err);
+   }
+
    llvm::Module *LLVMMod;
-   if (QC.CreateLLVMModule(LLVMMod, SourceFiles)) {
+   if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
@@ -208,8 +383,14 @@ QueryResult CreateDynamicLibQuery::run()
 
 QueryResult CreateExecutableQuery::run()
 {
+   // Create a default module for the compilation.
+   Module *Mod;
+   if (auto Err = QC.CreateDefaultModule(Mod)) {
+      return Query::finish(Err);
+   }
+
    llvm::Module *LLVMMod;
-   if (QC.CreateLLVMModule(LLVMMod, SourceFiles)) {
+   if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
@@ -226,9 +407,12 @@ QueryResult CreateExecutableQuery::run()
 
 QueryResult EmitILQuery::run()
 {
+   Module *Mod = QC.CI.getCompilationModule();
+   assert(Mod && "no module declared!");
+
    // Create the IL module.
    il::Module *ILMod;
-   if (QC.CreateILModule(ILMod, SourceFiles)) {
+   if (QC.CreateILModule(ILMod, Mod)) {
       return fail();
    }
 
@@ -238,8 +422,11 @@ QueryResult EmitILQuery::run()
 
 QueryResult EmitIRQuery::run()
 {
+   Module *Mod = QC.CI.getCompilationModule();
+   assert(Mod && "no module declared!");
+
    llvm::Module *LLVMMod;
-   if (QC.CreateLLVMModule(LLVMMod, SourceFiles)) {
+   if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 

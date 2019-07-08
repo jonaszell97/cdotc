@@ -13,6 +13,7 @@
 
 using namespace cdot::builtin;
 using namespace cdot::diag;
+using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
@@ -52,16 +53,19 @@ void SemaPass::initBuiltinIdents()
    BuiltinIdents[builtin::TokenType] = &Idents.get("TokenType");
    BuiltinIdents[builtin::CVoid] = &Idents.get("CVoid");
    BuiltinIdents[builtin::RawPointer] = &Idents.get("RawPointer");
-   BuiltinIdents[builtin::Int8] = &Idents.get("Int8");
-   BuiltinIdents[builtin::UInt8] = &Idents.get("UInt8");
-   BuiltinIdents[builtin::Int16] = &Idents.get("Int16");
-   BuiltinIdents[builtin::UInt16] = &Idents.get("UInt16");
-   BuiltinIdents[builtin::Int32] = &Idents.get("Int32");
-   BuiltinIdents[builtin::UInt32] = &Idents.get("UInt32");
-   BuiltinIdents[builtin::Int64] = &Idents.get("Int64");
-   BuiltinIdents[builtin::UInt64] = &Idents.get("UInt64");
-   BuiltinIdents[builtin::Int128] = &Idents.get("Int128");
-   BuiltinIdents[builtin::UInt128] = &Idents.get("UInt128");
+   BuiltinIdents[builtin::Int1] = &Idents.get("i1");
+   BuiltinIdents[builtin::Int8] = &Idents.get("i8");
+   BuiltinIdents[builtin::UInt8] = &Idents.get("u8");
+   BuiltinIdents[builtin::Int16] = &Idents.get("i16");
+   BuiltinIdents[builtin::UInt16] = &Idents.get("u16");
+   BuiltinIdents[builtin::Int32] = &Idents.get("i32");
+   BuiltinIdents[builtin::UInt32] = &Idents.get("u32");
+   BuiltinIdents[builtin::Int64] = &Idents.get("i64");
+   BuiltinIdents[builtin::UInt64] = &Idents.get("u64");
+   BuiltinIdents[builtin::Int128] = &Idents.get("i128");
+   BuiltinIdents[builtin::UInt128] = &Idents.get("u128");
+   BuiltinIdents[builtin::Float32] = &Idents.get("f32");
+   BuiltinIdents[builtin::Float64] = &Idents.get("f64");
 
    BuiltinIdents[builtin::undefValue] = &Idents.get("undefValue");
 
@@ -73,16 +77,20 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
    if (!BuiltinIdentsInitialized)
       initBuiltinIdents();
 
+   auto *Fn = C->getFunc();
+   if (!isa<FunctionDecl>(Fn) || Fn->willHaveDefinition()) {
+      return C;
+   }
+
    const IdentifierInfo *II;
-   if (C->getFunc()->getDeclName().isSimpleIdentifier()) {
+   if (Fn->getDeclName().isSimpleIdentifier()) {
       II = C->getFunc()->getDeclName().getIdentifierInfo();
    }
+   else if (Fn->getDeclName().getKind() == DeclarationName::InstantiationName) {
+      II = Fn->getDeclName().getInstantiationName().getIdentifierInfo();
+   }
    else {
-      assert(C->getFunc()->getDeclName().getKind()
-             == DeclarationName::InstantiationName);
-
-      II = C->getFunc()->getDeclName().getInstantiationName()
-            .getIdentifierInfo();
+      return C;
    }
 
    unsigned i = 0;
@@ -111,9 +119,6 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
    case llvm_intrinsic:
       assert(support::isa<StringLiteral>(C->getArgs().front()));
       break;
-   case NoBuiltin:
-      C->setKind(CallKind::NamedFunctionCall);
-      return C;
    default:
       break;
    }
@@ -164,23 +169,23 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
       return ExprError();
    }
 
-   bool DoCache = true;
+//   bool DoCache = true;
    Expression *ResultExpr = nullptr;
 
    if (II == BuiltinIdents[builtin::TokenType]) {
       ResultExpr = new(Context) IdentifierRefExpr(
          Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getTokenType()));
+         Context.getMetaType(Context.getTypedefType(Alias)));
    }
    else if (II == BuiltinIdents[builtin::CVoid]) {
       ResultExpr = new(Context) IdentifierRefExpr(
          Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getVoidType()));
+         Context.getMetaType(Context.getTypedefType(Alias)));
    }
    else if (II == BuiltinIdents[builtin::RawPointer] && !Alias->isInstantiation()) {
       ResultExpr = new(Context) IdentifierRefExpr(
          Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getVoidType()->getPointerTo(Context)));
+         Context.getMetaType(Context.getTypedefType(Alias)));
    }
    else if (II == BuiltinIdents[builtin::RawPointer]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -191,24 +196,17 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
-      QualType Ty = Alias->getTemplateArgs().front().getType();
-      if (Ty->isDependentType()) {
-         Expr->setIsTypeDependent(true);
-         Expr->setExprType(Context.getUIntTy());
-
-         return Expr;
-      }
-
       ResultExpr = new(Context) IdentifierRefExpr(
          Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Ty->getPointerTo(Context)));
+         Context.getMetaType(Context.getTypedefType(Alias)));
    }
 #  define CDOT_BUILTIN_TYPE(NAME)                                              \
    else if (II == BuiltinIdents[builtin::NAME]) {                              \
       ResultExpr = new(Context) IdentifierRefExpr(                             \
          Expr->getSourceRange(), IdentifierKind::MetaType,                     \
-         Context.getMetaType(Context.get##NAME##Ty()));                        \
+         Context.getMetaType(Context.getTypedefType(Alias)));                  \
    }
+   CDOT_BUILTIN_TYPE(Int1)
    CDOT_BUILTIN_TYPE(Int8)
    CDOT_BUILTIN_TYPE(UInt8)
    CDOT_BUILTIN_TYPE(Int16)
@@ -219,6 +217,8 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    CDOT_BUILTIN_TYPE(UInt64)
    CDOT_BUILTIN_TYPE(Int128)
    CDOT_BUILTIN_TYPE(UInt128)
+   CDOT_BUILTIN_TYPE(Float32)
+   CDOT_BUILTIN_TYPE(Float64)
 #  undef CDOT_BUILTIN_TYPE
    else if (II == BuiltinIdents[builtin::undefValue]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -249,10 +249,60 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    }
 
    auto Res = visitExpr(ResultExpr);
-   if (DoCache)
-      ReflectionValues.try_emplace(Alias, Res.get());
+
+   // FIXME can't cache because of source locations
+//   if (DoCache)
+//      ReflectionValues.try_emplace(Alias, Res.get());
 
    return Res;
+}
+
+void SemaPass::SetBuiltinAliasType(AliasDecl *A)
+{
+   if (!BuiltinIdentsInitialized)
+      initBuiltinIdents();
+
+   auto *II = A->getDeclName().getIdentifierInfo();
+   if (II == BuiltinIdents[builtin::TokenType]) {
+      A->setType(SourceType(Context.getMetaType(Context.getTokenType())));
+   }
+   else if (II == BuiltinIdents[builtin::CVoid]) {
+      A->setType(SourceType(Context.getMetaType(Context.getVoidType())));
+   }
+   else if (II == BuiltinIdents[builtin::RawPointer] && !A->isInstantiation()) {
+      A->setType(SourceType(Context.getMetaType(
+         Context.getVoidType()->getPointerTo(Context))));
+   }
+   else if (II == BuiltinIdents[builtin::RawPointer]) {
+      if (!A->isInstantiation() || A->getTemplateArgs().size() != 1
+      || !A->getTemplateArgs().front().isType()) {
+         diagnose(err_compiler_ns_bad_def, A->getDeclName(),
+                  A->getSourceRange());
+
+         return;
+      }
+
+      QualType Ty = A->getTemplateArgs().front().getType();
+      A->setType(SourceType(Context.getMetaType(Ty->getPointerTo(Context))));
+   }
+#  define CDOT_BUILTIN_TYPE(NAME)                                              \
+   else if (II == BuiltinIdents[builtin::NAME]) {                              \
+      A->setType(SourceType(Context.getMetaType(Context.get##NAME##Ty())));    \
+   }
+   CDOT_BUILTIN_TYPE(Int1)
+   CDOT_BUILTIN_TYPE(Int8)
+   CDOT_BUILTIN_TYPE(UInt8)
+   CDOT_BUILTIN_TYPE(Int16)
+   CDOT_BUILTIN_TYPE(UInt16)
+   CDOT_BUILTIN_TYPE(Int32)
+   CDOT_BUILTIN_TYPE(UInt32)
+   CDOT_BUILTIN_TYPE(Int64)
+   CDOT_BUILTIN_TYPE(UInt64)
+   CDOT_BUILTIN_TYPE(Int128)
+   CDOT_BUILTIN_TYPE(UInt128)
+   CDOT_BUILTIN_TYPE(Float32)
+   CDOT_BUILTIN_TYPE(Float64)
+#  undef CDOT_BUILTIN_TYPE
 }
 
 } // namespace ast

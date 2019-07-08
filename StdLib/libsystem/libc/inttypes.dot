@@ -1,4 +1,0 @@
-
-module libc.inttypes
-
-include_system_header!("inttypes.h")

@@ -8,6 +8,7 @@
 #include "AST/Expression.h"
 #include "AST/Statement.h"
 #include "AST/Decl.h"
+#include "Sema/ActionResult.h"
 
 namespace cdot {
 namespace ast {
@@ -92,9 +93,6 @@ public:
             bool Cont = static_cast<SubClass*>(this)                       \
                ->visit##Name(static_cast<Name*>(node),                     \
                              std::forward<ParamTys>(params)...);           \
-            if (Cont)                                                      \
-               RecursiveASTVisitor::visit##Name(static_cast<Name*>(node),  \
-                                       std::forward<ParamTys>(params)...); \
                                                                            \
             return Cont;                                                   \
          }
@@ -113,9 +111,6 @@ public:
             bool Cont = static_cast<SubClass*>(this)                       \
                ->visit##Name(static_cast<Name*>(node),                     \
                              std::forward<ParamTys>(params)...);           \
-            if (Cont)                                                      \
-               RecursiveASTVisitor::visit##Name(static_cast<Name*>(node),  \
-                                       std::forward<ParamTys>(params)...); \
                                                                            \
             return Cont;                                                   \
          }
@@ -127,31 +122,6 @@ public:
    }
 
 protected:
-   bool visitChildren(Statement *S, ParamTys... params)
-   {
-      switch (S->getTypeID()) {
-#     define CDOT_STMT(Name)                                                  \
-         case AstNode::Name##ID: {                                            \
-            return RecursiveASTVisitor::visit##Name(static_cast<Name*>(S),    \
-                                       std::forward<ParamTys>(params)...);    \
-         }
-#     include "AST/AstNode.def"
-
-      default:
-         llvm_unreachable("bad node kind!");
-      }
-   }
-
-   bool visitDestructuringDecl(DestructuringDecl *D)
-   {
-      for (auto S : D->getDecls()) {
-         if (!visit(S))
-            break;
-      }
-
-      return true;
-   }
-
    bool visitCompoundStmt(CompoundStmt* Stmt)
    {
       for (auto S : Stmt->getStatements()) {
@@ -567,6 +537,12 @@ protected:
       return true;
    }
 
+   bool visitAddrOfExpr(AddrOfExpr* Stmt)
+   {
+      visit(Stmt->getTarget());
+      return true;
+   }
+
    bool visitImplicitCastExpr(ImplicitCastExpr* Stmt)
    {
       visit(Stmt->getTarget());
@@ -575,8 +551,23 @@ protected:
 
    bool visitIfExpr(IfExpr* Stmt)
    {
-      if (!visit(Stmt->getCond()))
-         return true;
+      auto &C = Stmt->getCond();
+      switch (C.K) {
+      case IfCondition::Expression:
+         if (!visit(C.ExprData.Expr))
+            return true;
+
+         break;
+      case IfCondition::Binding:
+         break;
+      case IfCondition::Pattern:
+         if (!visit(C.PatternData.Pattern))
+            return true;
+         if (!visit(C.PatternData.Expr))
+            return true;
+
+         break;
+      }
 
       if (!visit(Stmt->getTrueVal()))
          return true;
@@ -725,6 +716,929 @@ protected:
    bool visitMacroExpansionExpr(MacroExpansionExpr*) { return true; }
    bool visitMacroVariableExpr(MacroVariableExpr*) { return true; }
    bool visitMacroExpansionStmt(MacroExpansionStmt*) { return true; }
+
+   bool visitDeclRefExpr(DeclRefExpr*) { return true; }
+   bool visitMemberRefExpr(MemberRefExpr*) { return true; }
+   bool visitOverloadedDeclRefExpr(OverloadedDeclRefExpr*) { return true; }
+};
+
+template<class SubClass>
+class StmtBuilder {
+protected:
+   StmtBuilder() = default;
+
+   void visitType(const SourceType &T)
+   {
+      if (auto *E = T.getTypeExpr()) {
+         if (auto Result = visitExpr(E)) {
+            T.setTypeExpr(E);
+         }
+      }
+   }
+
+   StmtResult visitCompoundStmt(CompoundStmt* Stmt)
+   {
+      for (auto &S : Stmt->getStatements()) {
+         auto Result = visitStmt(S);
+         if (Result) {
+            S = Result.get();
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitBreakStmt(BreakStmt *Stmt)
+   {
+      return Stmt;
+   }
+
+   StmtResult visitContinueStmt(ContinueStmt *Stmt)
+   {
+      return Stmt;
+   }
+
+   StmtResult visitReturnStmt(ReturnStmt* Stmt)
+   {
+      if (auto RetVal = Stmt->getReturnValue()) {
+         auto Result = visitExpr(RetVal);
+         if (Result) {
+            Stmt->setReturnValue(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitDiscardAssignStmt(DiscardAssignStmt *Stmt)
+   {
+      if (auto Val = Stmt->getRHS()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setRHS(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitCaseStmt(CaseStmt* Stmt)
+   {
+      if (auto Val = Stmt->getPattern()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setPattern(support::cast<PatternExpr>(Result.get()));
+         }
+      }
+
+      if (auto Val = Stmt->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setBody(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitForStmt(ForStmt* Stmt)
+   {
+      if (auto Val = Stmt->getInitialization()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setInitialization(Result.get());
+         }
+      }
+
+      if (auto Val = Stmt->getTermination()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setTermination(Result.get());
+         }
+      }
+
+      if (auto Val = Stmt->getIncrement()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setIncrement(Result.get());
+         }
+      }
+
+      if (auto Val = Stmt->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setBody(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   void visitIfCondition(IfCondition &C)
+   {
+      switch (C.K) {
+      case IfCondition::Expression:
+         if (auto Val = C.ExprData.Expr) {
+            auto Result = visitExpr(Val);
+            if (Result) {
+               C.ExprData.Expr = Result.get();
+            }
+         }
+
+         break;
+      case IfCondition::Binding:
+         break;
+      case IfCondition::Pattern:
+         if (auto Val = C.PatternData.Pattern) {
+            auto Result = visitExpr(Val);
+            if (Result) {
+               C.PatternData.Pattern = support::cast<PatternExpr>(Result.get());
+            }
+         }
+         if (auto Val = C.PatternData.Expr) {
+            auto Result = visitExpr(Val);
+            if (Result) {
+               C.PatternData.Expr = Result.get();
+            }
+         }
+
+         break;
+      }
+   }
+
+   StmtResult visitIfStmt(IfStmt* Stmt)
+   {
+      for (auto &C : Stmt->getConditions()) {
+         visitIfCondition(C);
+      }
+
+      if (auto Val = Stmt->getIfBranch()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setIfBranch(Result.get());
+         }
+      }
+
+      if (auto Val = Stmt->getElseBranch()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setElseBranch(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitWhileStmt(WhileStmt* Stmt)
+   {
+      for (auto &C : Stmt->getConditions()) {
+         visitIfCondition(C);
+      }
+
+      if (auto Val = Stmt->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setBody(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitForInStmt(ForInStmt* Stmt)
+   {
+      if (auto Val = Stmt->getRangeExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setRangeExpr(Result.get());
+         }
+      }
+
+      if (auto Val = Stmt->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setBody(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitMatchStmt(MatchStmt* Stmt)
+   {
+      if (auto Val = Stmt->getSwitchValue()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setSwitchValue(Result.get());
+         }
+      }
+
+      for (auto &C : Stmt->getCases()) {
+         auto Result = visitStmt(C);
+         if (Result) {
+            C = support::cast<CaseStmt>(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitDoStmt(DoStmt* Stmt)
+   {
+      if (auto Val = Stmt->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setBody(Result.get());
+         }
+      }
+
+      for (auto &CB : Stmt->getCatchBlocks()) {
+         auto Result = visitStmt(CB.Body);
+         if (Result) {
+            CB.Body = Result.get();
+         }
+
+         if (auto &Cond = CB.Condition) {
+            auto Result = visitExpr(Cond);
+            if (Result) {
+               Cond = Result.get();
+            }
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitDebugStmt(DebugStmt *Stmt)
+   {
+      return Stmt;
+   }
+
+   StmtResult visitNullStmt(NullStmt *Stmt)
+   {
+      return Stmt;
+   }
+
+   StmtResult visitStaticIfStmt(StaticIfStmt* Stmt)
+   {
+      if (auto Val = Stmt->getCondition()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setCondition(support::cast<StaticExpr>(Result.get()));
+         }
+      }
+
+      if (auto Val = Stmt->getIfBranch()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setIfBranch(Result.get());
+         }
+      }
+
+      if (auto Val = Stmt->getElseBranch()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setElseBranch(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitStaticForStmt(StaticForStmt* Stmt)
+   {
+      if (auto Val = Stmt->getRange()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setRange(support::cast<StaticExpr>(Result.get()));
+         }
+      }
+
+      if (auto Val = Stmt->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setBody(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitMixinStmt(MixinStmt* Stmt)
+   {
+      if (auto Val = Stmt->getMixinExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setMixinExpr(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
+   {
+      return Stmt;
+   }
+
+   StmtResult visitDeclStmt(DeclStmt *Stmt)
+   {
+      return Stmt;
+   }
+
+   StmtResult visitAttributedStmt(AttributedStmt* Stmt)
+   {
+      if (auto Val = Stmt->getStatement()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Stmt->setStatement(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   StmtResult visitThrowStmt(ThrowStmt* Stmt)
+   {
+      if (auto Val = Stmt->getThrownVal()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Stmt->setThrownVal(Result.get());
+         }
+      }
+
+      return Stmt;
+   }
+
+   ExprResult visitTryExpr(TryExpr* Expr)
+   {
+      if (auto Val = Expr->getExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitAwaitExpr(AwaitExpr* Expr)
+   {
+      if (auto Val = Expr->getExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitParenExpr(ParenExpr* Expr)
+   {
+      if (auto Val = Expr->getParenthesizedExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParenthesizedExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitIntegerLiteral(IntegerLiteral *Expr) { return Expr; }
+   ExprResult visitFPLiteral(FPLiteral *Expr) { return Expr; }
+   ExprResult visitBoolLiteral(BoolLiteral *Expr) { return Expr; }
+   ExprResult visitCharLiteral(CharLiteral *Expr) { return Expr; }
+   ExprResult visitNoneLiteral(NoneLiteral *Expr) { return Expr; }
+   ExprResult visitStringLiteral(StringLiteral *Expr) { return Expr; }
+
+   ExprResult visitStringInterpolation(StringInterpolation* Stmt)
+   {
+      for (auto &Val : Stmt->getSegments()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Stmt;
+   }
+
+   ExprResult visitLambdaExpr(LambdaExpr* Expr)
+   {
+      if (auto Val = Expr->getBody()) {
+         auto Result = visitStmt(Val);
+         if (Result) {
+            Expr->setBody(Result.get());
+         }
+      }
+
+      for (auto &Arg : Expr->getArgs()) {
+         visitType(Arg->getType());
+      }
+
+      visitType(Expr->getReturnType());
+      return Expr;
+   }
+
+   ExprResult visitDictionaryLiteral(DictionaryLiteral* Expr)
+   {
+      for (auto &Val : Expr->getValues()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      for (auto &Val : Expr->getKeys()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitArrayLiteral(ArrayLiteral* Expr)
+   {
+      for (auto &Val : Expr->getValues()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitTupleLiteral(TupleLiteral* Expr)
+   {
+      for (auto &Val : Expr->getElements()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitIdentifierRefExpr(IdentifierRefExpr* Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr *Expr) { return Expr; }
+   ExprResult visitSelfExpr(SelfExpr *Expr) { return Expr; }
+   ExprResult visitSuperExpr(SuperExpr *Expr) { return Expr; }
+
+   ExprResult visitTupleMemberExpr(TupleMemberExpr* Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitCallExpr(CallExpr* Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      for (auto &Val : Expr->getArgs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitAnonymousCallExpr(AnonymousCallExpr* Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      for (auto &Val : Expr->getArgs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitEnumCaseExpr(EnumCaseExpr* Expr)
+   {
+      for (auto &Val : Expr->getArgs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitSubscriptExpr(SubscriptExpr* Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      for (auto &Val : Expr->getIndices()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitTemplateArgListExpr(TemplateArgListExpr *Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      for (auto &Val : Expr->getExprs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitBuiltinExpr(BuiltinExpr *Expr) { return Expr; }
+
+   ExprResult visitExpressionPattern(ExpressionPattern* Expr)
+   {
+      if (auto Val = Expr->getExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitCasePattern(CasePattern* Expr)
+   {
+      for (auto &C : Expr->getArgs()) {
+         visitIfCondition(C);
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitIsPattern(IsPattern* Expr)
+   {
+      visitType(Expr->getIsType());
+      return Expr;
+   }
+
+   ExprResult visitExprSequence(ExprSequence* Expr)
+   {
+      for (auto &Frag : Expr->getFragments()) {
+         if (Frag.isExpression()) {
+            auto Result = visitExpr(Frag.getExpr());
+            if (Result) {
+               Frag.setExpr(Result.get());
+            }
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitUnaryOperator(UnaryOperator* Expr)
+   {
+      if (auto Val = Expr->getTarget()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setTarget(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitBinaryOperator(BinaryOperator* Expr)
+   {
+      if (auto Val = Expr->getLhs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setLhs(Result.get());
+         }
+      }
+
+      if (auto Val = Expr->getRhs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setRhs(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitAssignExpr(AssignExpr* Expr)
+   {
+      if (auto Val = Expr->getLhs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setLhs(Result.get());
+         }
+      }
+
+      if (auto Val = Expr->getRhs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setRhs(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitTypePredicateExpr(TypePredicateExpr* Expr)
+   {
+      if (auto Val = Expr->getLHS()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setLHS(Result.get());
+         }
+      }
+
+      if (auto Val = Expr->getRHS()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setRHS(support::cast<ConstraintExpr>(Result.get()));
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitCastExpr(CastExpr* Expr)
+   {
+      if (auto Val = Expr->getTarget()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setTarget(Result.get());
+         }
+      }
+
+      visitType(Expr->getTargetType());
+      return Expr;
+   }
+
+   ExprResult visitAddrOfExpr(AddrOfExpr* Expr)
+   {
+      if (auto Val = Expr->getTarget()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setTarget(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitImplicitCastExpr(ImplicitCastExpr* Expr)
+   {
+      if (auto Val = Expr->getTarget()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setTarget(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitIfExpr(IfExpr* Expr)
+   {
+      auto &C = Expr->getCond();
+      visitIfCondition(C);
+
+      if (auto Val = Expr->getTrueVal()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setTrueVal(Result.get());
+         }
+      }
+
+      if (auto Val = Expr->getFalseVal()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setFalseVal(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitStaticExpr(StaticExpr* Expr)
+   {
+      if (auto Val = Expr->getExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitConstraintExpr(ConstraintExpr* Expr)
+   {
+      return Expr;
+   }
+
+   ExprResult visitTraitsExpr(TraitsExpr* Expr)
+   {
+      for (auto &arg : Expr->getArgs()) {
+         switch (arg.getKind()) {
+         case TraitsArgument::Type:
+            visitType(arg.getType());
+            break;
+         case TraitsArgument::Stmt:
+            if (auto Result = visitStmt(arg.getStmt())) {
+               arg.setStmt(Result.get());
+            }
+
+            break;
+         case TraitsArgument::Expr:
+            if (auto Result = visitExpr(arg.getExpr())) {
+               arg.setExpr(Result.get());
+            }
+
+            break;
+         default:
+            break;
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitMixinExpr(MixinExpr* Expr)
+   {
+      if (auto Val = Expr->getMixinExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setMixinExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitAttributedExpr(AttributedExpr* Expr)
+   {
+      if (auto Val = Expr->getExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitFunctionTypeExpr(FunctionTypeExpr* Expr)
+   {
+      for (auto &Arg : Expr->getArgTypes()) {
+         visitType(Arg);
+      }
+
+      visitType(Expr->getReturnType());
+      return Expr;
+   }
+
+   ExprResult visitTupleTypeExpr(TupleTypeExpr* Expr)
+   {
+      for (auto &Arg : Expr->getContainedTypes()) {
+         visitType(Arg);
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitExistentialTypeExpr(ExistentialTypeExpr* Expr)
+   {
+      for (auto &Arg : Expr->getExistentials()) {
+         visitType(Arg);
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitArrayTypeExpr(ArrayTypeExpr* Expr)
+   {
+      visitType(Expr->getElementTy());
+      return Expr;
+   }
+
+   ExprResult visitDeclTypeExpr(DeclTypeExpr* Expr)
+   {
+      return Expr;
+   }
+
+   ExprResult visitReferenceTypeExpr(ReferenceTypeExpr* Expr)
+   {
+      visitType(Expr->getSubType());
+      return Expr;
+   }
+
+   ExprResult visitPointerTypeExpr(PointerTypeExpr* Expr)
+   {
+      visitType(Expr->getSubType());
+      return Expr;
+   }
+
+   ExprResult visitOptionTypeExpr(OptionTypeExpr* Expr)
+   {
+      visitType(Expr->getSubType());
+      return Expr;
+   }
+
+   ExprResult visitMacroExpansionExpr(MacroExpansionExpr *Expr) { return Expr; }
+   ExprResult visitMacroVariableExpr(MacroVariableExpr *Expr) { return Expr; }
+
+   ExprResult visitDeclRefExpr(DeclRefExpr *Expr) { return Expr; }
+   ExprResult visitMemberRefExpr(MemberRefExpr *Expr) { return Expr; }
+   ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr)
+   { return Expr; }
+
+public:
+   ExprResult visitExpr(Expression *E)
+   {
+      switch (E->getTypeID()) {
+#     define CDOT_EXPR(NAME)                                            \
+         case AstNode::NAME##ID:                                        \
+            return static_cast<SubClass*>(this)                         \
+               ->visit##NAME(static_cast<NAME*>(E));
+#     include "AST/AstNode.def"
+
+      default:
+         llvm_unreachable("not an expression!");
+      }
+   }
+
+   StmtResult visitStmt(Statement *S)
+   {
+      switch (S->getTypeID()) {
+#     define CDOT_EXPR(NAME)                                            \
+         case AstNode::NAME##ID: {                                      \
+            auto Res = static_cast<SubClass*>(this)                     \
+               ->visit##NAME(static_cast<NAME*>(S));                    \
+            return Res ? StmtResult(Res.get()) : StmtError();           \
+         }
+#     define CDOT_STMT(NAME)                                            \
+         case AstNode::NAME##ID:                                        \
+            return static_cast<SubClass*>(this)                         \
+               ->visit##NAME(static_cast<NAME*>(S));
+#     include "AST/AstNode.def"
+
+      default:
+         llvm_unreachable("not an expression!");
+      }
+   }
 };
 
 template<class SubClass>
@@ -762,6 +1676,11 @@ protected:
 
       for (auto *D : DC->getDecls())
          visit(D);
+   }
+
+   void visitSourceFileDecl(SourceFileDecl *D)
+   {
+
    }
 
    void visitDebugDecl(DebugDecl *D)

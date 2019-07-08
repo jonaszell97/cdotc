@@ -61,6 +61,8 @@ public:
 #endif
    ~Lexer() = default;
 
+   void reset(llvm::ArrayRef<Token> Tokens);
+
    void lexDiagnostic();
    void lexStringInterpolation();
 
@@ -202,7 +204,7 @@ protected:
    Token lexCharLiteral();
 
    bool isIdentifierContinuationChar(char c);
-   Token lexIdentifier(tok::TokenType = tok::ident);
+   Token lexIdentifier(tok::TokenType = tok::ident, bool AllowMacro = true);
 
    Token lexClosureArgumentName();
 

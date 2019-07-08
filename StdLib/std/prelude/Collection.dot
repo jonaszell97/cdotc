@@ -1,0 +1,976 @@
+
+module std.prelude
+
+import { Slice, View } from std.collection
+
+/// \return the distance between the two ordered values.
+public def distance<T>(from: T, to: T) -> T where IsIntegral<T> {
+    return to - from
+}
+
+public protocol IteratorProtocol {
+    /// The type of elements in the sequence.
+    associatedType Element
+    
+    /// Return the next element in the sequence, or none if the end has been reached.
+    public def mutating next() -> Element?
+}
+
+// FIXME find some other way to avoid infinite recursion here.
+fileprivate protocol _ReverseIterator {}
+
+public struct ReverseIterator<Base: RandomAccessCollection> {
+    /// The sequence we are reverse iterating.
+    var base: Base
+
+    /// The current index.
+    var index: Base.Index
+
+    /// C'tor.
+    init (_ base: Base) {
+        self.base = base
+        self.index = self.base.endIndex
+
+        if !base.empty {
+            self.index = self.base.index(before: self.index)
+        }
+    }
+}
+
+extend ReverseIterator with Iterable, IteratorProtocol {
+    /// The element type.
+    associatedType Element = Base.Element
+
+    /// The iterator type.
+    associatedType It = Self
+
+    /// Return the next element in the sequence, or `none` if the end has been reached.
+    public def mutating next() -> Element? {
+        if index == base.endIndex {
+            return none
+        }
+        if index == base.startIndex {
+            var el = base[index]
+            index = base.endIndex
+
+            return .Some(el)
+        }
+
+        var el = base[index]
+        index = base.index(before: index)
+
+        return .Some(el)
+    }
+}
+
+extend ReverseIterator with _ReverseIterator {}
+
+// FIXME find some other way to avoid infinite recursion here.
+fileprivate protocol _EnumeratedSequence {}
+
+public struct EnumeratedSequence<Base: Iterable> {
+    /// The sequence we are enumerating.
+    var base: Base
+
+    /// Memberwise C'tor.
+    public memberwise init
+
+    public struct EnumeratedIterator with IteratorProtocol {
+        /// Iterator of the collection we're enumerating.
+        var it: Base.It
+
+        /// The current enumerator.
+        var i: Int
+
+        /// C'tor.
+        init (_ base: Base) {
+            self.it = base.getIterator()
+            self.i = 0
+        }
+
+        /// The element type.
+        associatedType Element = (Int, Base.Element)
+
+        /// \return the next element in the sequence, or `none` if the end has been reached.
+        public def mutating next() -> Element? {
+            var nextEl = it.next()
+            if !nextEl {
+                return none
+            }
+
+            return .Some((i++, nextEl!))
+        }
+    }
+}
+
+extend EnumeratedSequence with Iterable {
+    /// \inherit
+    associatedType Element = EnumeratedIterator.Element
+
+    /// \inherit
+    associatedType It = EnumeratedIterator
+
+    /// \inherit
+    public def getIterator() -> It {
+        return EnumeratedIterator(base.copy())
+    }
+
+    /// \inherit
+    // associatedType Enumeration = Self
+
+    /// \inherit
+    // public def enumerated() -> Enumeration {
+    //     return EnumeratedSequence(base: base.copy())
+    // }
+}
+
+extend EnumeratedSequence with _EnumeratedSequence {}
+
+public protocol Iterable with /* FIXME */ Copyable {
+    /// The type of elements in the sequence.
+    associatedType Element
+
+    /// The iterator type of this sequence.
+    associatedType It: IteratorProtocol
+        where It.Element == Element
+
+    /// \return an iterator over this sequence.
+    public def getIterator() -> It
+
+    /// The type of elements in the sequence.
+    // associatedType Enumeration = EnumeratedSequence<Self>
+
+    /// \return an enumerated iterator over this sequence.
+    // def enumerated() -> Enumeration
+}
+
+extend Iterable where It == Self {
+    /// \return an iterator over this sequence.
+    default def getIterator() -> It {
+        return self
+    }
+}
+
+// extend Iterable where Self !is _EnumeratedSequence
+//                 where Enumeration == EnumeratedSequence<Self> {
+//     /// \inherit
+//     default def enumerated() -> Enumeration {
+//         return EnumeratedSequence(base: self.copy())
+//     }
+// }
+
+extend Iterable {
+    /// \return the minimum element in the sequence.
+    def min(_ isSmallerThan: (Element, Element) -> Bool) -> Element? {
+        var it = getIterator()
+        var minVal: Element? = none
+
+        loop {
+            var next = it.next()
+            if !next {
+                return minVal
+            }
+
+            if !minVal || isSmallerThan(next!, minVal!) {
+                minVal = next
+            }
+        }
+
+        unreachable!("")
+    }
+
+    /// \return the maximum element in the sequence.
+    def max(_ isGreaterThan: (Element, Element) -> Bool) -> Element? {
+        var it = getIterator()
+        var maxVal: Element? = none
+
+        loop {
+            var next = it.next()
+            if !next {
+                return maxVal
+            }
+
+            if !maxVal || isGreaterThan(next!, maxVal!) {
+                maxVal = next
+            }
+        }
+
+        unreachable!("")
+    }
+
+    /// \return `true` iff any element in the sequence satisfies the given predicate.
+    def anySatisfy(_ predicate: (Element) -> Bool) -> Bool {
+        for el in self {
+            if predicate(el) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// \return `true` iff no element in the sequence satisfies the given predicate.
+    def noneSatisfy(_ predicate: (Element) -> Bool) -> Bool {
+        return !anySatisfy(predicate)
+    }
+
+    /// \return `true` iff all elements in the sequence satisfy the given predicate.
+    def allSatisfy(_ predicate: (Element) -> Bool) -> Bool {
+        for el in self {
+            if !predicate(el) {
+                return false
+            }
+        }
+
+        return true
+    }
+}
+
+extend Iterable where Element is Equatable {
+    /// \return `true` iff the element is contained in the sequence.
+    def contains(_ value: Element) -> Bool {
+        for el in self {
+            if el == value {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// \param el the element to compare with.
+    /// \return `true` iff all elements in the sequence are equal to `el`.
+    def allEqual(to otherEl: Element) -> Bool {
+        for el in self {
+            if el != otherEl {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /// \param el the element to compare with.
+    /// \return `true` iff none of the elements in the sequence are equal to `el`.
+    def noneEqual(to otherEl: Element) -> Bool {
+        for el in self {
+            if el == otherEl {
+                return false
+            }
+        }
+
+        return true
+    }
+}
+
+extend Iterable where Element is Comparable {
+    /// \return the minimum element in the sequence.
+    def min() -> Element? {
+        return min {
+            return $0 < $1
+        }
+    }
+
+    /// \return the maximum element in the sequence.
+    def max() -> Element? {
+        return max {
+            return $0 > $1
+        }
+    }
+}
+
+extend Iterable {
+    /// Call a function on each element in a sequence.
+    def forEach(_ callback: (Element) -> Void) {
+        for el in self {
+            callback(el)
+        }
+    }
+
+    /// Return an array with each element in the sequence mapped to a new value.
+    def map<T>(_ callback: (Element) -> T) -> [T] {
+        var arr = [T]()
+        for el in self {
+            arr.push(callback(el))
+        }
+
+        return arr
+    }
+
+    /// Reduce the elements of this sequence by accumulating them in a value.
+    def reduce<T>(initial: T, callback: (Element, T) -> T) -> T {
+        var curr = initial
+        for el in self {
+            curr = callback(el, curr)
+        }
+
+        return curr
+    }
+}
+
+public protocol Collection with Iterable, /* FIXME */ Copyable {
+    /// The element type of the collection.
+    associatedType Element
+
+    /// All collections need to have an empty initializer.
+    init
+
+    /// \return the number of elements currently stored in the collection.
+    prop size: Int { get }
+
+    /// \return the number of elements that the collection can store without resizing.
+    prop capacity: Int { get }
+
+    /// \return @code{true} iff the collection contains no elements.
+    prop empty: Bool { get }
+
+    /// \return the first element in the collection, or @code{none} if the collection
+    /// is empty.
+    prop first: Element? { get }
+
+    /// The type this collection is indexed by.
+    associatedType Index: ? = Int
+
+    /// \return the first index in the collection.
+    prop startIndex: Index { get }
+
+    /// \return the last index in the collection.
+    prop endIndex: Index { get }
+
+    /// \return the element at the given index.
+    subscript (idx: Index) -> Element { get }
+
+    /// \return the index after the given one.
+    def index(after: Index) -> Index
+
+    /// \return the index after the given one.
+    def index(before: Index) -> Index
+
+    /// \return \param idx advanced by \param advancedBy.
+    def index(_ idx: Index, advancedBy n: Int) -> Index
+
+    /// Verify that an index is in bounds.
+    def _checkIndex(_ index: Index)
+}
+
+extend Collection {
+    /// \return the number of elements that the collection can store without resizing.
+    default prop capacity: Int {
+        return size
+    }
+
+    /// \return `true` iff the collection contains no elements.
+    default prop empty: Bool {
+        return size == 0
+    }
+
+    /// \return the first element in the collection, or `none` if the collection
+    /// is empty.
+    default prop first: Element? {
+        var it = getIterator()
+        return it.next()
+    }
+}
+
+extend Collection /* where Index == Int */ {
+    /// \return the index after the given one.
+    default def index(after idx: Index) -> Index {
+        return idx + 1
+    }
+
+    /// \return the index after the given one.
+    default def index(before idx: Index) -> Index {
+        return idx - 1
+    }
+
+    /// \return \param idx advanced by \param advancedBy.
+    default def index(_ idx: Index, advancedBy n: Int) -> Index {
+        return idx + (n as Index)
+    }
+
+    /// \inherit
+    default def _checkIndex(_ index: Index) {
+        precondition!(index < endIndex, "collection index out of bounds!")
+    }
+}
+
+alias IsEquatable<T> = T is Equatable || IsIntegral<T> || IsFloating<T>
+alias IsStringRepresentable<T> = T is StringRepresentable || IsIntegral<T> || IsFloating<T>
+alias IsComparable<T> = T is Comparable || IsIntegral<T> || IsFloating<T>
+
+// FIXME primitive-types
+extend Collection with StringRepresentable
+        where IsStringRepresentable<Element>
+        /* where Element is StringRepresentable */ {
+    /// \inherit
+    default def toString() -> String {
+        var s = "["
+        var i = 0
+
+        for el in self {
+            if i++ != 0 {
+                s += ", "
+            }
+
+            s += el.toString()
+        }
+
+        s += "]"
+        return s
+    }
+}
+
+// FIXME primitive-types
+extend Collection with Equatable where IsEquatable<Element> /*where Element is Equatable*/ {
+    /// \inherit
+    default def infix ==(rhs: Self) -> Bool {
+        var size = self.size
+        if size != rhs.size {
+            return false
+        }
+
+        var index = self.startIndex
+        for _ in 0..size {
+            if self[index] != rhs[index] {
+                return false
+            }
+
+            index = self.index(after: index)
+        }
+
+        return true
+    }
+}
+
+// FIXME primitive-types
+extend Collection with Comparable
+        where IsComparable<Element>
+        /* where Element is Comparable */ {
+    /// \inherit
+    default def infix <=>(rhs: Self) -> Int {
+        var size = self.size
+        if size != rhs.size {
+            return (size - rhs.size) as Int
+        }
+
+        var index = self.startIndex
+        for _ in 0..size {
+            var result = self[index] <=> rhs[index]
+            if result != 0 {
+                return result
+            }
+
+            index = self.index(after: index)
+        }
+
+        return 0
+    }
+}
+
+public protocol RandomAccessCollection with Collection {
+    /// \return the index of the first occurence of this value, or @code{none}
+    ///         iff the element is not in the collection.
+    def firstIndex(of: Element) -> Index
+
+    /// \return the index of the last occurence of this value, or @code{none}
+    ///         iff the element is not in the collection.
+    def lastIndex(of: Element) -> Index
+
+    /// \return the index of the first element that satisfied the predicate \param predicate.
+    def firstIndex(where predicate: (Element) -> Bool) -> Index
+
+    /// \return the index of the last element that satisfied the predicate \param predicate.
+    def lastIndex(where predicate: (Element) -> Bool) -> Index
+
+    /// \return the last element in the collection, or @code{none} if the collection
+    ///         is empty.
+    prop last: Element? { get }
+
+    /// The type of a reverse iterator over this collection.
+    // associatedType ReverseCollection = ReverseIterator<Self>
+
+    /// \return a reversed version of this sequence.
+    // def reversed() -> ReverseCollection
+
+    /// The type of sub sequences of this collection.
+    associatedType SubSequence: RandomAccessCollection = Slice<Self>
+        where SubSequence.Element == Element
+        where SubSequence.Index == Index
+
+    /// \return a subsequence of this collection with the specified range.
+    subscript (_ range: Range<Index>) -> SubSequence { get }
+
+    /// Check the range for a subsequence access.
+    def _checkRange(_ range: Range<Index>)
+}
+
+extend RandomAccessCollection {
+    /// \inherit
+    default prop size: Int {
+        return distance<Index>(from: startIndex, to: endIndex) as Int
+    }
+
+    /// \inherit
+    default prop last: Element? {
+        if startIndex == endIndex {
+            return none
+        }
+
+        return .Some(self[endIndex.advanced(by: -1)])
+    }
+
+    /// \inherit
+    default def _checkRange(_ range: Range<Index>) {
+        precondition!(range.startIndex >= startIndex, "Range start index out of bounds")
+        precondition!(range.endIndex < endIndex, "Range end index out of bounds")
+    }
+}
+
+// extend RandomAccessCollection where Self !is _ReverseIterator
+//                               where ReverseCollection == ReverseIterator<Self> {
+//     /// \inherit
+//     default def reversed() -> ReverseCollection {
+//         return ReverseIterator(self.copy())
+//     }
+// }
+
+extend RandomAccessCollection where Self !is collection._Slice
+                              where SubSequence == Slice<Self> {
+    /// \return a subsequence of this collection with the specified range.
+    default subscript (_ range: Range<Index>) -> SubSequence {
+        _checkRange(range)
+        return Slice(base: self.copy(),
+                     baseIndex: range.startIndex,
+                     length: range.size)
+    }
+}
+
+extend RandomAccessCollection {
+    /// \return a subsequence with the first `n` elements removed.
+    def dropFront(_ n: Int) -> SubSequence {
+        var firstIndex = index(startIndex, advancedBy: n)
+        return self[firstIndex..endIndex]
+    }
+
+    /// \return a subsequence of the first `n` elements.
+    def takeFront(_ n: Int) -> SubSequence {
+        var lastIndex = index(startIndex, advancedBy: n)
+        return self[startIndex..lastIndex]
+    }
+
+    /// \return a subsequence with the first element removed.
+    def dropFirst() -> SubSequence {
+        return dropFront(1)
+    }
+
+    /// \return a subsequence with the last `n` elements removed.
+    def dropBack(_ n: Int) -> SubSequence {
+        var lastIndex = index(startIndex, advancedBy: size - n)
+        return self[startIndex..lastIndex]
+    }
+
+    /// \return a subsequence of the last `n` elements.
+    def takeBack(_ n: Int) -> SubSequence {
+        var firstIndex = index(startIndex, advancedBy: size - n)
+        return self[firstIndex..endIndex]
+    }
+
+    /// \return a subsequence with the last element removed.
+    def dropLast() -> SubSequence {
+        return dropBack(1)
+    }
+}
+
+extend RandomAccessCollection where Self.Element is Equatable {
+    /// \return the index of the first occurence of this value.
+    default def firstIndex(of: Element) -> Index {
+        var idx = startIndex
+        for el in self {
+            if el == of {
+                return idx
+            }
+
+            idx = index(after: idx)
+        }
+
+        return endIndex
+    }
+
+    /// \return the index of the last occurence of this value.
+    default def lastIndex(of: Element) -> Index {
+        if empty {
+            return endIndex
+        }
+
+        var idx = index(before: endIndex)
+        while idx != startIndex {
+            if self[idx] == of {
+                return idx
+            }
+
+            idx = index(before: idx)
+        }
+
+        return endIndex
+    }
+}
+
+extend RandomAccessCollection where Element !is Equatable {
+    /// \return the index of the first occurence of this value.
+    default def firstIndex(of: Element) -> Index {
+        return endIndex
+    }
+
+    /// \return the index of the last occurence of this value.
+    default def lastIndex(of: Element) -> Index {
+        return endIndex
+    }
+}
+
+extend RandomAccessCollection {
+    /// \return the index of the first element that satisfied the predicate \param predicate.
+    default def firstIndex(where predicate: (Element) -> Bool) -> Index {
+        var index = startIndex
+        while index != endIndex {
+            if predicate(self[index]) {
+                return index
+            }
+
+            index = self.index(after: index)
+        }
+
+        return index
+    }
+
+    /// \return the index of the last element that satisfied the predicate \param predicate.
+    default def lastIndex(where predicate: (Element) -> Bool) -> Index {
+        if empty {
+            return endIndex
+        }
+
+        var index = self.index(before: endIndex)
+        loop {
+            if predicate(self[index]) {
+                return index
+            }
+
+            if index == startIndex {
+                return endIndex
+            }
+
+            index = self.index(before: index)
+        }
+
+        return endIndex
+    }
+}
+
+/// An iterator over an indexed collection.
+@compiletime
+public struct IndexedIterator<Coll: Collection> with IteratorProtocol {
+    /// The element type.
+    associatedType Element = Coll.Element
+
+    /// The current index.
+    var idx: Coll.Index
+
+    /// The collection we're iterating over.
+    var coll: Coll
+
+    /// C'tor.
+    init (_ coll: Coll) {
+        self.idx = coll.startIndex
+        self.coll = coll
+    }
+
+    /// \return the next element in the collection, or `none` if we reached
+    /// the end of the collection.
+    def mutating next() -> Element? {
+        if idx == coll.endIndex {
+            return none
+        }
+
+        var next: Element? = .Some(self.coll[idx])
+        idx = idx.advanced(by: 1)
+
+        return next
+    }
+}
+
+extend RandomAccessCollection {
+    /// The default iterator type for a RandomAccessCollection.
+    default associatedType It = IndexedIterator<Self>
+}
+
+extend RandomAccessCollection where It == IndexedIterator<Self> {
+    /// \return an iterator over the values of this collection.
+    default def getIterator() -> It { return It(self.copy()) }
+}
+
+public protocol MutableCollection with RandomAccessCollection {
+    /// Initialize from any sequence.
+    // init <S: Iterable>(elementsOf s: S) where S.Element == Element
+
+    /// Remove all elements from the collection.
+    def mutating clear()
+
+    /// Insert \param el into the collection at \param position.
+    def mutating insert(_ el: owned Element, at position: Index)
+
+    /// Append the contents of \param s to the collection.
+    // def mutating append<S: Iterable>(elementsOf s: S) where S.Element == Element
+
+    /// Insert \param el at the end of the collection.
+    def mutating push(_ el: owned Element)
+
+    /// Insert \param el at the beginning of the collection.
+    def mutating pushFront(_ el: owned Element)
+
+    /// Remove an element from the collection at \param position.
+    /// \return the removed element.
+    /// \precondition \param el is a valid index of the collection.
+    @discardableResult
+    def mutating remove(at position: Index) -> Element
+
+    /// Remove \param n elements following \param position from the collection.
+    /// \precondition \param el is a valid index of the collection, and at least \param n
+    ///               elements follow it.
+    def mutating remove(count n: Int, at position: Index)
+
+    /// Remove an element from the collection.
+    /// \return true iff the element was in the collection.
+    def mutating remove(_ el: Element) -> Element?
+
+    /// Remove all elements that equal \param{el} from the collection.
+    /// \return true iff the element was in the collection.
+    def mutating removeAll(_ el: Element)
+
+    /// Remove \param n elements from the back of this collection.
+    def mutating removeBack(count: Int)
+
+    /// Remove \param n elements from the front of this collection.
+    def mutating removeFront(count: Int)
+
+    /// Extend the required subscript to include a setter.
+    subscript (idx: Index) -> Element { set }
+
+    /// Replace all occurences of \param value with \param replacement.
+    def mutating replace(_ value: Element, with replacement: Element)
+
+    /// Replace all occurences of \param value with \param replacement.
+    def mutating replace(_ value: Element, withGeneratedValue replacement: () -> Element)
+
+    /// Swap the elements at indices \param i and \param j.
+    def mutating swapAt(_ i: Index, _ j: Index)
+
+    /// Partition this collection using the predicate \param belongsInSecondPartition.
+    /// \return an index where all elements smaller than the index do not satisfy the predicate,
+    ///         and all equal to or after the index do satisfy it.
+    def mutating partition(by belongsInSecondPartition: (Element) -> Bool) -> Index
+}
+
+extend MutableCollection {
+    /// Initialize from any sequence.
+    init <S: Iterable>(elementsOf s: S) where S.Element == Element {
+        self.init()
+
+        for val in s {
+            push(val)
+        }
+    }
+
+    /// Initialize from a single element.
+    init (withSingleElement el: Element) {
+        self.init()
+        self.push(el)
+    }
+
+    /// Initialize from a repeated element.
+    init (repeat value: Element, count: Int) {
+        self.init()
+        for _ in 0..count {
+            push(value.copy())
+        }
+    }
+
+    /// Append the contents of \param s to the collection.
+    def mutating append<S: Iterable>(elementsOf s: S) where S.Element == Element {
+        for val in s {
+            push(val)
+        }
+    }
+
+    /// Insert an element at the end of the collection.
+    default def mutating push(_ el: owned Element) {
+        insert(el, at: endIndex)
+    }
+
+    /// Insert an element at the beginning of the collection.
+    default def mutating pushFront(_ el: owned Element) {
+        insert(el, at: startIndex)
+    }
+
+    /// Remove \param n elements following \param position from the collection.
+    /// \return `true` iff the element was in the collection.
+    default def mutating remove(count n: Int, at position: Index) {
+        _checkRange(position..(self.index(position, advancedBy: n)))
+        for _ in 0..n {
+            remove(at: position)
+        }
+    }
+
+    /// Remove an element from the collection via its index.
+    /// \return `true` iff the element was in the collection.
+    default def mutating remove(_ el: Element) -> Element? {
+        var index = firstIndex(of: el)
+        if index == endIndex {
+            return none
+        }
+
+        return remove(at: index)
+    }
+
+    /// Remove all elements that equal \param el from the collection.
+    /// \return `true` iff the element was in the collection.
+    default def mutating removeAll(_ el: Element) {
+        var idx = firstIndex(of: el)
+        while idx != endIndex {
+            remove(at: idx)
+            idx = firstIndex(of: el)
+        }
+    }
+
+    /// Remove \param n elements from the back of this collection.
+    default def mutating removeBack(count: Int = 1) {
+        var count = count
+        if count > size {
+            count = size
+        }
+
+        _checkRange((size - count)..size)
+        for i in 0..count {
+            self.remove(at: self.index(before: self.endIndex))
+        }
+    }
+
+    /// Remove \param n elements from the front of this collection.
+    default def mutating removeFront(count: Int = 1) {
+        var count = count
+        if count > size {
+            count = size
+        }
+
+        _checkRange(0..count)
+        for i in 0..count {
+            self.remove(at: self.startIndex)
+        }
+    }
+
+    /// Swap the elements at indices \param i and \param j.
+    default def mutating swapAt(_ i: Index, _ j: Index) {
+        _checkIndex(i)
+        _checkIndex(j)
+
+        if i == j {
+            return
+        }
+
+        var tmp = self[i]
+        self[i] = self[j]
+        self[j] = tmp
+    }
+
+    /// \inherit
+    default def mutating partition(by belongsInSecondPartition: (Element) -> Bool) -> Index {
+        var i = firstIndex(where: belongsInSecondPartition)
+        if i == endIndex {
+            return i
+        }
+
+        var j = index(after: i)
+        while j != endIndex {
+            if !belongsInSecondPartition(self[j]) {
+                swapAt(i, j)
+                i = self.index(after: i) 
+            }
+
+            j = self.index(after: j) 
+        }
+
+        return i
+    }
+}
+
+extend MutableCollection where Element is Equatable {
+    /// Replace all occurences of \param value with \param replacement.
+    default def mutating replace(_ value: Element, with replacement: Element) {
+        var index = self.startIndex
+        while index != self.endIndex {
+            if self[index] == value {
+                self[index] = replacement
+            }
+
+            index = self.index(after: index)
+        }
+    }
+
+    /// Replace all occurences of \param value with \param replacement.
+    default def mutating replace(_ value: Element, withGeneratedValue replacement: () -> Element) {
+        var index = self.startIndex
+        while index != self.endIndex {
+            if self[index] == value {
+                self[index] = replacement()
+            }
+
+            index = self.index(after: index)
+        }
+    }
+}
+
+extend MutableCollection where Element !is Equatable {
+    /// Replace all occurences of \param value with \param replacement.
+    default def mutating replace(_ value: Element, with replacement: Element) {
+    }
+
+    /// Replace all occurences of \param value with \param replacement.
+    default def mutating replace(_ value: Element, withGeneratedValue replacement: () -> Element) {
+    }
+}
+
+extend MutableCollection {
+    /// Add the elements of \param seq to this collection.
+    /*def mutating infix += <S: Iterable>(seq: S) {
+        for el in seq {
+            push(el)
+        }
+    }*/
+
+    /// Append \param el to this collection.
+    def mutating infix += (el: owned Element) {
+        push(el)
+    }
+
+    /// Fill the collection up to its capacity with the value \param t.
+    def mutating fillToCapacity(with value: Element) {
+        while size < capacity {
+            push(value.copy())
+        }
+    }
+
+    /// Resize the collection to \param size elements, growing or shrinking as necessary.
+    def mutating resize(to size: Int, fillWith value: Element) {
+        var cmp = size <=> self.size
+        if cmp == 0 {
+            return
+        }
+
+        if cmp < 0 {
+            self.removeBack(count: self.size - size)
+            return
+        }
+
+        for i in 0..(size - self.size) {
+            push(value.copy())
+        }
+    }
+}

@@ -88,7 +88,8 @@ public:
    bool importModule(StringRef File, ast::DeclContext *IntoMod,
                      clang::FrontendInputFile &InputFile,
                      SourceLocation ImportLoc,
-                     bool IsCXX);
+                     bool IsCXX,
+                     bool Optional = false);
 
    /// Import the currently parsed macros.
    void importMacros(ast::DeclContext *DC);

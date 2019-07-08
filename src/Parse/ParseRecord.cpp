@@ -466,12 +466,13 @@ ParseResult Parser::parseConstrDecl()
       return ParseError();
    }
 
+   bool IsFallible = lookahead().is(tok::question);
+   if (IsFallible) {
+      advance();
+   }
+
    auto params = tryParseTemplateParameters();
    advance();
-
-   bool IsFallible = currentTok().is(tok::question);
-   if (IsFallible)
-      advance();
 
    SourceLocation varargLoc;
    auto args = parseFuncArgs(varargLoc);
@@ -499,6 +500,8 @@ ParseResult Parser::parseConstrDecl()
       }
 
       DeclContextRAII declContextRAII(*this, Init);
+      EnterFunctionScope EF(*this);
+
       body = parseCompoundStmt().tryGetStatement();
    }
 
@@ -531,6 +534,8 @@ ParseResult Parser::parseDestrDecl()
    Statement* body = nullptr;
    if (lexer->lookahead().is(tok::open_brace)) {
       DeclContextRAII declContextRAII(*this, Deinit);
+      EnterFunctionScope EF(*this);
+
       body = parseCompoundStmt().tryGetStatement();
    }
 
@@ -593,7 +598,7 @@ ParseResult Parser::parseFieldDecl()
 
       auto prop =
          PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
-                          typeref, CurDeclAttrs.StaticLoc,
+                          typeref, CurDeclAttrs.StaticLoc, false,
                           Info.GetterMethod, Info.SetterMethod);
 
       prop->setSynthesized(true);
@@ -632,11 +637,38 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
 
             AS = tokenToAccessSpec(next.getKind());
             break;
+         case tok::semicolon:
+            advance();
+            next = lookahead();
+            continue;
          default:
             break;
          }
 
-         if (next.is(Ident_set)) {
+         bool NonMutating = false;
+         if (next.is(Ident_nonmutating)) {
+            NonMutating = true;
+            advance();
+
+            next = lookahead();
+
+            if (!next.oneOf(Ident_get, Ident_read, Ident_set, Ident_write)) {
+               SP.diagnose(err_generic_error,
+                           "expected 'get', 'set' or 'read' after 'nonmutating'",
+                           next.getSourceLoc());
+            }
+         }
+
+         if (next.oneOf(Ident_set, Ident_write)) {
+            if (next.is(Ident_write)) {
+               Info.IsReadWrite = true;
+            }
+            else if (Info.IsReadWrite) {
+               SP.diagnose(err_generic_error,
+                           "expected 'write' to go along with 'read'",
+                           next.getSourceLoc());
+            }
+
             auto SetLoc = consumeToken();
             if (Info.SetterMethod) {
                SP.diagnose(err_duplicate_getter_setter,
@@ -703,6 +735,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                                                    Args, {}, nullptr, IsStatic);
 
             Info.SetterMethod->setSynthesized(true);
+            Info.SetterMethod->setMutating(!NonMutating);
 
             if (lexer->lookahead().is(tok::open_brace)) {
                if (ParsingProtocol) {
@@ -711,11 +744,22 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                }
 
                DeclContextRAII DCR(*this, Info.SetterMethod);
+               EnterFunctionScope EF(*this);
+
                Info.SetterMethod->setBody(
                   parseCompoundStmt().tryGetStatement());
             }
          }
-         else if (next.is(Ident_get)) {
+         else if (next.oneOf(Ident_get, Ident_read)) {
+            if (next.is(Ident_read)) {
+               Info.IsReadWrite = true;
+            }
+            else if (Info.IsReadWrite) {
+               SP.diagnose(err_generic_error,
+                           "expected 'read' to go along with 'write'",
+                           next.getSourceLoc());
+            }
+
             auto GetLoc = consumeToken();
             if (Info.GetterMethod) {
                SP.diagnose(err_duplicate_getter_setter,
@@ -748,6 +792,8 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                }
 
                DeclContextRAII DCR(*this, Info.GetterMethod);
+               EnterFunctionScope EF(*this);
+
                Info.GetterMethod->setBody(
                   parseCompoundStmt().tryGetStatement());
             }
@@ -778,6 +824,8 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
             Info.GetterMethod->setSynthesized(true);
 
             DeclContextRAII DCR(*this, Info.GetterMethod);
+            EnterFunctionScope EF(*this);
+
             Info.GetterMethod->setBody(
                parseCompoundStmt().tryGetStatement());
 
@@ -793,8 +841,9 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
          AS = AccessSpecifier::Default;
       }
 
-      if (SawGetOrSet)
+      if (SawGetOrSet) {
          advance();
+      }
    }
 }
 
@@ -828,14 +877,15 @@ ParseResult Parser::parsePropDecl()
    parseAccessor(BeginLoc, fieldName, typeref, CurDeclAttrs.StaticLoc.isValid(),
                  Args, Info, true);
 
-   if (!Info.GetterMethod && !Info.SetterMethod) {
-      SP.diagnose(err_prop_must_have_get_or_set, BeginLoc, 0 /*property*/);
-   }
-
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
    auto prop = PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
                                 typeref, CurDeclAttrs.StaticLoc,
+                                Info.IsReadWrite,
                                 Info.GetterMethod, Info.SetterMethod);
+
+   if (!Info.GetterMethod && !Info.SetterMethod) {
+      SP.diagnose(prop, err_prop_must_have_get_or_set, BeginLoc, 0/*property*/);
+   }
 
    return ActOnDecl(prop);
 }
@@ -1131,6 +1181,8 @@ ParseResult Parser::parseMethodDecl()
       }
 
       DeclContextRAII declContextRAII(*this, methodDecl);
+      EnterFunctionScope EF(*this);
+
       body = parseCompoundStmt().tryGetStatement<CompoundStmt>();
 
       if (IsAbstract)

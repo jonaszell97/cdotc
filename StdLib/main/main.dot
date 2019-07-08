@@ -1,0 +1,4 @@
+
+var s = S()
+s.func()
+s.clunk()

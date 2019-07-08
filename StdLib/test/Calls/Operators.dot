@@ -1,0 +1,29 @@
+
+import { u8 } from builtin
+
+struct X {
+    def infix +(rhs: u8) {}
+    def prefix ~() {}
+    static def prefix !(lhs: Self) {}
+    static def infix -(lhs: Self, rhs: u8) {}
+}
+
+def infix *(_ lhs: X, _ rhs: u8) {
+}
+
+_ = X() + 3
+_ = X() - 3
+_ = X.infix +(X(), 3)
+_ = X.infix -(X(), 3)
+_ = X().infix +(3)
+
+_ = ~X()
+_ = !X()
+_ = X.prefix ~(X())
+_ = X.prefix !(X())
+
+_ = X() * 3
+_ = infix *(X(), 3)
+
+// expect-error: no matching call to operator '+' found 
+_ = X.infix +(3, 3, 3)

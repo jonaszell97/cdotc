@@ -25,4 +25,8 @@
 #  define CDOT_LLDB_STEP_OVER
 #endif
 
+#define ASSERT_NOEXCEPT_MOVE_CONSTRUCTIBLE(TYPE)                  \
+static_assert(std::is_nothrow_move_constructible<TYPE>::value,    \
+              #TYPE " should be noexcept move constructible")
+
 #endif //CDOT_CONFIG_H

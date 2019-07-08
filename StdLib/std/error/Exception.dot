@@ -1,0 +1,10 @@
+
+module std.error
+
+struct InvalidArgumentException {
+    var argName: String
+
+    prop description: String {
+        return "invalid value passed for argument '$argName'"
+    }
+}

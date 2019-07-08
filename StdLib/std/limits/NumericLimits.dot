@@ -1,0 +1,19 @@
+
+module std.limits
+
+/// Returns the bitwidth of the given type.
+alias bitwidth<T> = __traits(bitwidth_of, T) as T where IsIntegral<T>
+alias bitwidth<T> = 32                            where T is f32
+alias bitwidth<T> = 64                            where T is f64
+
+/// Maximum value of the given unsigned integral type.
+alias max<T> = ~0 as T where IsIntegral<T> where IsUnsigned<T>
+
+/// Minimum value of the given unsigned integral type.
+alias min<T> = 0 as T where IsIntegral<T> where IsUnsigned<T>
+
+/// Maximum value of the given signed integral type.
+alias max<T> = ~((1 as T) << bitwidth<T>) where IsIntegral<T> where IsSigned<T>
+
+/// Minimum value of the given signed integral type.
+alias min<T> = ~0 as T where IsIntegral<T> where IsSigned<T>

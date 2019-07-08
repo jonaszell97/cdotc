@@ -241,6 +241,8 @@ public:
    void parse();
    void parseMainFile();
 
+   Module *parseModuleFile(Module *ParentMod = nullptr);
+
    ParseResult parseFunctionDecl();
    ParseResult parseGlobalCtor();
    ParseResult parseGlobalDtor();
@@ -348,13 +350,6 @@ public:
                                   llvm::ArrayRef<lex::Token> Tokens,
                                   ExpansionKind Kind);
 
-   static std::pair<ParseResult, bool>
-   checkBuiltinMacro(SemaPass &SP,
-                     DeclarationName DN,
-                     StmtOrDecl SOD,
-                     llvm::ArrayRef<lex::Token> Tokens,
-                     ExpansionKind Kind);
-
    ParseResult parseWithKind(SourceLocation Loc, ExpansionKind Kind,
                              bool IsIncludeMacro = false);
 
@@ -370,6 +365,7 @@ private:
    unsigned source_id;
 
    bool InRecordScope = false;
+   bool InFunctionScope = false;
    bool ParsingProtocol = false;
    bool AllowPattern = false;
 
@@ -425,6 +421,10 @@ private:
    IdentifierInfo *Ident___builtin_void;
    IdentifierInfo *Ident___mangled_func;
    IdentifierInfo *Ident___ctfe;
+
+#  define CDOT_SOFT_KEYWORD(NAME)              \
+   IdentifierInfo *Ident_##NAME;
+#  include "Lex/Tokens.def"
 
    struct ClosureScope {
       llvm::DenseMap<unsigned, SourceLocation> ArgLocs;
@@ -513,7 +513,7 @@ private:
    };
 
    struct RecordScopeRAII {
-      RecordScopeRAII(Parser &P, bool AtRecordScope)
+      RecordScopeRAII(Parser &P, bool AtRecordScope = true)
          : P(P), Prev(P.InRecordScope)
       {
          P.InRecordScope = AtRecordScope;
@@ -522,6 +522,23 @@ private:
       ~RecordScopeRAII()
       {
          P.InRecordScope = Prev;
+      }
+
+   private:
+      Parser &P;
+      bool Prev;
+   };
+
+   struct EnterFunctionScope {
+      EnterFunctionScope(Parser &P, bool InFunctionScope = true)
+         : P(P), Prev(P.InFunctionScope)
+      {
+         P.InFunctionScope = InFunctionScope;
+      }
+
+      ~EnterFunctionScope()
+      {
+         P.InFunctionScope = Prev;
       }
 
    private:
@@ -754,6 +771,7 @@ private:
    ParseResult parseDestrDecl();
 
    struct AccessorInfo {
+      bool IsReadWrite = false;
       MethodDecl *GetterMethod = nullptr;
       MethodDecl *SetterMethod = nullptr;
    };
@@ -847,6 +865,7 @@ private:
    Expression *parseFloatingPointLiteral();
    Expression *parseIntegerLiteral();
    Expression *parseCharacterLiteral();
+
 };
 
 } // namespace Parse

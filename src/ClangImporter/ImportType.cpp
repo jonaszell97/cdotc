@@ -108,6 +108,18 @@ QualType ImporterImpl::getType(clang::QualType Ty)
          // import any char* as UnsafePtr<UInt8>
          return Ctx.getUInt8PtrTy();
       }
+      if (Ty->getPointeeType()->isVoidType()) {
+         // import any void* as UnsafeRawPtr
+         if (Ty.isConstQualified()) {
+            return Ctx.getPointerType(Ctx.getVoidType());
+         }
+
+         return Ctx.getMutablePointerType(Ctx.getVoidType());
+      }
+      // Import function pointers as thin function types.
+      if (Ty->getPointeeType()->isFunctionType()) {
+         return getType(Ty->getPointeeType());
+      }
 
       auto Pointee = getType(Ty->getPointeeType());
       if (!Pointee) {

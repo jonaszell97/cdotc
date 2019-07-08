@@ -1,0 +1,20 @@
+
+module inc.d
+
+protocol HelloSayerProtocol {
+    def sayHello() -> Void
+}
+
+extend HelloSayerProtocol {
+    def sayHello() {
+        print("hello, friend!")
+    }
+}
+
+def D() {
+
+}
+
+def __hello() {
+
+}

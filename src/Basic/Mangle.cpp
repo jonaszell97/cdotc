@@ -833,11 +833,15 @@ void ItaniumLikeMangler::mangleBareFunctionType(SemaPass &SP,
                                                 bool MangleReturnType,
                                                 const CallableDecl *C,
                                                 const FinalTemplateArgumentList &TemplateArgs) {
-   MultiLevelFinalTemplateArgList Args(TemplateArgs);
-   auto *Ty = cast<FunctionType>(
-      SP.resolveDependencies(FT, Args, const_cast<CallableDecl*>(C)));
-
-   return mangleBareFunctionType(Ty, MangleReturnType, C);
+   llvm_unreachable("needed?");
+//   MultiLevelFinalTemplateArgList Args(TemplateArgs);
+//
+//   QualType Ty;
+//   if (SP.QC.Subs)
+//   auto *Ty = cast<FunctionType>(
+//      SP.resolveDependencies(FT, Args, const_cast<CallableDecl*>(C)));
+//
+//   return mangleBareFunctionType(Ty, MangleReturnType, C);
 }
 
 void ItaniumLikeMangler::mangleType(const RecordType *T)
@@ -885,6 +889,11 @@ void ItaniumLikeMangler::mangleType(const DependentNameType *T)
    }
 
    this->OS << "Dt" << str.size() << str;
+}
+
+void ItaniumLikeMangler::mangleType(const TypeVariableType *)
+{
+   llvm_unreachable("should never be mangled!");
 }
 
 void ItaniumLikeMangler::mangleType(const PointerType *T)

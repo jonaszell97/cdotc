@@ -1,0 +1,217 @@
+
+module std.io
+
+using std.sys.fs.FileDescriptor
+
+/// The standard input file descriptor.
+public alias STDIN_FD: FileDescriptor = 0
+
+public class FileInputStream: BufferedInputStream {
+    /// The file descriptor for the file we are reading from.
+    var fd: FileDescriptor
+
+    /// True if this file supports seeking, i.e. reading from a random position.
+    var supportsSeeking: Bool
+
+    /// True if we should close this file on destruction.
+    var shouldClose: Bool { get set }
+
+    /// Initialize from an open file descriptor.
+    public init?(withOpenFile fd: FileDescriptor, shouldClose: Bool = true) {
+        super.init(buffered: true)
+        self.fd = fd
+        self.shouldClose = shouldClose
+
+        if self.fd < 0 {
+            return none
+        }
+
+        var off = sys.fs.currentPosition(fd)
+        self.supportsSeeking = off != -1
+    }
+
+    /// Initialize from a file name.
+    public init?(_ fileName: String) {
+        var fd = fs.openFileForRead(fileName)
+        self.init(withOpenFile: fd, shouldClose: true)
+    }
+
+    /// D'tor. Closes the file if shouldClose is true.
+    deinit {
+        if shouldClose {
+            close()
+        }
+    }
+    
+    /// Closes the file. Calling read methods will assert after this.
+    public def override close() {
+        assert!(shouldClose, "file is not supposed to be closed")
+
+        var result = sys.fs.closeFile(fd)
+        assert!(result != -1, "closing file failed")
+
+        fd = -1
+        shouldClose = false
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// @inherit
+    public def override refillBuffer() throws {
+        var numRead = fs.readFromFile(fd, self.bufferStart, DefaultBufferSize)
+        if numRead == -1 {
+            throw EndOfStreamError()
+        }
+
+        self.bufferEnd = self.bufferStart + (numRead as UInt)
+    }
+
+    /// @inherit
+    public def override available() -> Int {
+        if fd == STDIN_FD {
+            return limits.max<Int>
+        }
+
+        var minAvailable = self.bufferEnd - self.bufferCur
+        if minAvailable == 0 && supportsSeeking {
+            return (sys.fs.getFileSize(fd) - (sys.fs.currentPosition(fd) as UInt)) as Int
+        }
+
+        return minAvailable as Int
+    }
+}
+
+/// InputStream that reads from standard input.
+public let stdin = FileInputStream(withOpenFile: STDIN_FD,
+                                   shouldClose: false).unwrap(orReport: "opening stdin failed!")
+
+public class MemoryBuffer: InputStream {
+    /// Pointer to the beginning of the streamed memory.
+    private var bufferStart: UnsafePtr<Byte> { get }
+
+    /// Pointer to the end of the streamed memory.
+    private var bufferEnd: UnsafePtr<Byte> { get }
+
+    /// Pointer to the current position in the stream.
+    private var bufferCur: UnsafePtr<Byte> { get }
+
+    /// True if the file was mmap'ed, not allocated.
+    private var wasMemoryMapped: Bool
+
+    /// Initialize from an open file descriptor.
+    public init?(withOpenFile fd: FileDescriptor) {
+        // allocate a large enough buffer to hold the whole file.
+        var fileSize = fs.getFileSize(fd)
+        var bufPtr = mem.allocate<Byte>(fileSize)
+
+        // save starting position
+        self.bufferStart = bufPtr
+        self.bufferCur = self.bufferStart
+        self.bufferEnd = self.bufferStart + fileSize
+        self.wasMemoryMapped = false
+
+        // copy over the memory.
+        var bytesLeft = fileSize
+        while bytesLeft != 0 {
+            var numRead = fs.readFromFile(fd, bufPtr, bytesLeft)
+            if numRead == -1 {
+                // read failed
+                return none
+            }
+
+            bytesLeft -= numRead as UInt
+            bufPtr += numRead as UInt
+        }
+    }
+
+    /// Initialize from a file name.
+    public init?(_ fileName: String) {
+        var fd = fs.openFileForRead(fileName)
+        self.init(withOpenFile: fd)
+        fs.closeFile(fd)
+    }
+
+    /// D'tor. Free the allocated memory, if necessary.
+    deinit {
+        if !wasMemoryMapped {
+            mem.deallocate(self.bufferStart)
+        }
+    }
+
+    @version(POSIX)
+    private def useMmap(withFileSize fileSize: UInt,
+                        _ volatile: Bool,
+                        _ requiresNullTerminator: Bool) -> Bool {
+        // mmap may leave the buffer without null terminator if the file size changed
+        // by the time the last page is mapped in, so avoid it if the file size is
+        // likely to change.
+        if volatile {
+            return false
+        }
+
+        // We don't use mmap for small files because this can severely fragment our
+        // address space.
+        alias MinMmapSize = 4u * 4096
+        var pageSize = sys.getPageSize()
+        if fileSize < MinMmapSize || fileSize < pageSize {
+            return false
+        }
+        
+        // Otherwise if we don't need a NUL terminator, use mmap.
+        if !requiresNullTerminator {
+            return true
+        }
+
+        // Don't try to map files that are exactly a multiple of the system page size
+        // if we need a null terminator.
+        if fileSize & (pageSize - 1) == 0 {
+            return false
+        }
+
+        return true
+    }
+
+    @version(Windows)
+    private def useMmap(withFileSize fileSize: UInt) -> Bool {
+        return false
+    }
+
+    //===--------------------------------------------------------------------===//
+    // Subclass Implementation
+    //===--------------------------------------------------------------------===//
+
+    /// @inherit
+    public def override readByte() throws -> Byte {
+        if bufferCur > bufferEnd {
+            throw EndOfStreamError()
+        }
+
+        // allow reading one past the end.
+        if bufferCur == bufferEnd {
+            ++bufferCur
+            return '\0'
+        }
+
+        return builtin.loadFromPointer(bufferCur++)
+    }
+
+    /// @inherit
+    public def override available() -> Int {
+        return (self.bufferEnd - self.bufferCur) as Int
+    }
+
+    /// @inherit
+    public def override isRewindable() -> Bool { return true }
+
+    /// @inherit
+    public def override rewind(to pos: Int) {
+        self.bufferCur = self.bufferStart + (pos as UInt)
+    }
+
+    /// @inherit
+    public def override currentPosition() -> Int {
+        return (self.bufferCur - self.bufferStart) as Int
+    }
+}

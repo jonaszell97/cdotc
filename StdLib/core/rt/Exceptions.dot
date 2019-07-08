@@ -1,0 +1,29 @@
+
+import builtin
+
+struct ErrorObj {
+    let typeInfo: UnsafePtr<TypeInfo>
+    let deinit: @thin (UnsafeMutableRawPtr) -> Void
+    var objPtr: Byte
+}
+
+@extern(C)
+public def _cdot_PrintException(_ err: UnsafePtr<ErrorObj>) -> Never {
+    sys.reportFatalError("uncaught exception of type '${err->typeInfo->name}'")
+}
+
+@extern(C)
+public def _cdot_CleanupException(_ err: UnsafeMutablePtr<ErrorObj>) {
+    if Int(builtin.ptrtoint(err->deinit) as builtin.i64) != 0 {
+        err->withReference {
+            err->deinit(UnsafeMutableRawPtr(rawPointer: builtin.addressOf($0.objPtr)))
+        }
+    }
+
+    err.deallocate()
+}
+
+@extern(C)
+public def _cdot_PureVirtual() -> Never {
+    sys.reportFatalError("pure virtual function called")
+}

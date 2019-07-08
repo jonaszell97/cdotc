@@ -24,6 +24,9 @@ void ASTAttrWriter::visitTestableAttr(TestableAttr *A) {
 }
 void ASTAttrWriter::visitCompileTimeAttr(CompileTimeAttr *A) {
 }
+void ASTAttrWriter::visitNoDeriveAttr(NoDeriveAttr *A) {
+   Record.push_back((uint64_t)A->getKind());
+}
 void ASTAttrWriter::visitVersionDeclAttr(VersionDeclAttr *A) {
    Record.push_back((uint64_t)A->getVersion());
 }
@@ -32,6 +35,9 @@ void ASTAttrWriter::visitVersionStmtAttr(VersionStmtAttr *A) {
 }
 void ASTAttrWriter::visit_BuiltinAttr(_BuiltinAttr *A) {
    Record.AddIdentifierRef(&Idents.get(A->getBuiltinName()));
+}
+void ASTAttrWriter::visit_SemanticsAttr(_SemanticsAttr *A) {
+   Record.AddIdentifierRef(&Idents.get(A->getSemanticsKind()));
 }
 #endif
 #ifdef CDOT_ATTR_DESERIALIZE
@@ -71,6 +77,10 @@ TestableAttr *ASTAttrReader::readTestableAttr(SourceRange SR) {
 CompileTimeAttr *ASTAttrReader::readCompileTimeAttr(SourceRange SR) {
    return new(C) CompileTimeAttr(SR);
 }
+NoDeriveAttr *ASTAttrReader::readNoDeriveAttr(SourceRange SR) {
+   auto kind = Record.readEnum<NoDeriveAttr::KindKind>();
+   return new(C) NoDeriveAttr(std::move(kind), SR);
+}
 VersionDeclAttr *ASTAttrReader::readVersionDeclAttr(SourceRange SR) {
    auto version = Record.readEnum<VersionDeclAttr::VersionKind>();
    return new(C) VersionDeclAttr(std::move(version), SR);
@@ -82,6 +92,10 @@ VersionStmtAttr *ASTAttrReader::readVersionStmtAttr(SourceRange SR) {
 _BuiltinAttr *ASTAttrReader::read_BuiltinAttr(SourceRange SR) {
    auto builtinName = Record.getIdentifierInfo()->getIdentifier();
    return new(C) _BuiltinAttr(std::move(builtinName), SR);
+}
+_SemanticsAttr *ASTAttrReader::read_SemanticsAttr(SourceRange SR) {
+   auto semanticsKind = Record.getIdentifierInfo()->getIdentifier();
+   return new(C) _SemanticsAttr(std::move(semanticsKind), SR);
 }
 #endif
 #undef CDOT_ATTR_SERIALIZE
