@@ -1177,6 +1177,23 @@ IsImplicitlyConvertibleQueries[Key] = Result;
 return QueryResult(QueryResult::Success);
 }
 
+QueryResult QueryContext::IsValidParameterValue(bool &Result, QualType givenType, QualType paramType)
+
+{
+   auto Key = std::make_pair(givenType, paramType);
+   auto It = IsValidParameterValueQueries.find(Key);
+   if (It != IsValidParameterValueQueries.end()) {
+      Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
+IsValidParameterValueQuery _Q(*this, givenType, paramType);
+
+auto MaybeErr = _Q.run();
+if (MaybeErr.isErr()) return MaybeErr;
+
+Result = _Q.get();
+IsValidParameterValueQueries[Key] = Result;
+return QueryResult(QueryResult::Success);
+}
+
 QueryResult QueryContext::GetConversionSequence(ConversionSequence* &Result, QualType From, QualType To)
 
 {

@@ -2202,7 +2202,9 @@ QueryResult PrepareAliasInterfaceQuery::run()
    }
 
    D->setAliasExpr(cast<StaticExpr>(ExprRes.get()));
-   D->getType().setResolvedType(ExprRes.get()->getExprType());
+
+   QualType valueType = ExprRes.get()->getExprType();
+   D->getType().setResolvedType(valueType);
 
    return finish();
 }

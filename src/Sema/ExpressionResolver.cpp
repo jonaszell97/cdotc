@@ -262,7 +262,7 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
                                 .getPrefixOperatorName(*OpName);
 
          auto *Ident = new(SP.Context) IdentifierRefExpr(Loc, Target, DN);
-         Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, Target, {});
+         Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, {}, {});
       }
    }
 
@@ -304,8 +304,7 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
                                    .getPostfixOperatorName(*OpName);
 
             auto *Ident = new(SP.Context) IdentifierRefExpr(Loc, Target, DN);
-            Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, Target,
-                                               {});
+            Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, {}, {});
 
             advance();
             break;

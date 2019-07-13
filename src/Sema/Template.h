@@ -279,7 +279,7 @@ public:
                        TemplateArgList const& list);
 
    bool setParamValue(TemplateParamDecl *Param,
-                      TemplateArgument &&Arg);
+                      TemplateArgument &&Arg) const;
 
    bool inferFromType(QualType contextualType, QualType returnType,
                       bool IsLastVariadicParam = false) const;
@@ -477,6 +477,9 @@ public:
 
       return nullptr;
    }
+
+   bool setParamValue(ast::TemplateParamDecl *Param,
+                      TemplateArgument &&Arg);
 
    bool inferFromType(QualType contextualType, QualType returnType,
                       bool IsLastVariadicParam = false);

@@ -996,6 +996,22 @@ void ASTWriter::WriteDeclAbbrevs()
 
 void ASTWriter::WriteDecl(ASTContext &Context, Decl *D)
 {
+#ifndef NDEBUG
+   if (D->isInvalid()) {
+      if (auto *ND = dyn_cast<NamedDecl>(D)) {
+         Writer.CI.getSema().diagnose(diag::err_generic_error,
+                                      "serializing invalid decl '"
+                                         + ND->getFullName() + "'",
+                                      D->getSourceLoc());
+      }
+      else {
+         Writer.CI.getSema().diagnose(diag::err_generic_error,
+                                      "serializing invalid decl",
+                                      D->getSourceLoc());
+      }
+   }
+#endif
+
    auto ID = DeclIDMap[D];
    assert(ID && "decl without an ID!");
 

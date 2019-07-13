@@ -424,8 +424,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
    // Check if this expressions parent expr refers to a namespace.
    auto *NameSpec = checkNamespaceRef(Ident);
-   if (Ident->isInvalid())
+   if (Ident->isInvalid()) {
       return ExprError();
+   }
 
    if (NameSpec && NameSpec->getNameSpec()->isAnyNameDependent()) {
       return makeNestedNameSpec(*this, Context, Ident, NameSpec,
@@ -455,8 +456,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
    auto *PE = Ident->getParentExpr();
    if (PE && !refersToNamespace(PE)) {
       auto ParentRes = visitExpr(Ident, PE);
-      if (!ParentRes)
+      if (!ParentRes) {
          return ExprError();
+      }
 
       PE = ParentRes.get();
       Ident->setParentExpr(PE);
@@ -715,6 +717,10 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
                                           TemplateArgs);
 
          if (!Inst) {
+            if (Ident->needsInstantiation() && Ident->getExprType()) {
+               return Ident;
+            }
+
             continue;
          }
 
@@ -727,10 +733,16 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
       case Decl::EnumDeclID:
       case Decl::ClassDeclID:
       case Decl::ProtocolDeclID: {
+         assert(LookupResult->unique() && "overloaded record!");
+
          auto *Inst = checkRecordReference(Ident, cast<RecordDecl>(ND),
                                            TemplateArgs);
 
          if (!Inst) {
+            if (Ident->needsInstantiation() && Ident->getExprType()) {
+               return Ident;
+            }
+
             continue;
          }
 
@@ -742,7 +754,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
       }
 
       // Check if this is an invalid template reference.
-      if (ND->isTemplate() && !Ident->allowIncompleteTemplateArgs()) {
+      if (ND->isTemplate()
+      && !Ident->allowIncompleteTemplateArgs()
+      && !Ident->needsInstantiation()) {
          TemplateArgList Args(*this, ND, TemplateArgs,
                               Ident->getSourceLoc());
 
@@ -926,6 +940,10 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr *Expr)
       }
 
       ResultType = cast<AliasDecl>(ND)->getType();
+      if (ResultType->isMetaType()) {
+         ResultType = Context.getMetaType(Context.getTypedefType(cast<AliasDecl>(ND)));
+      }
+
       break;
    }
    case Decl::AssociatedTypeDeclID: {
@@ -1157,14 +1175,25 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr *Ident)
 
    switch (Ident->getIdentifierKind()) {
    default: llvm_unreachable("bad builtin ident!");
-   case BuiltinIdentifier::defaultValue:
-      if (Ident->getContextualType()) {
-         assert(hasDefaultValue(Ident->getContextualType()));
-         Ident->setExprType(Ident->getContextualType());
+   case BuiltinIdentifier::defaultValue: {
+      if (Ident->getExprType()) {
+         return Ident;
       }
 
-      assert(Ident->getExprType());
+      QualType ctx = Ident->getContextualType();
+      if (!ctx) {
+         diagnose(Ident, err_generic_error,
+                  "cannot use 'default' expresssion without a contextual type",
+                  Ident->getSourceRange());
+
+         return Ident;
+      }
+
+      Ident->setExprType(ctx);
+      Ident->setIsTypeDependent(ctx->isDependentType());
+
       return Ident;
+   }
    case BuiltinIdentifier::NULLPTR: {
       if (Ident->getContextualType().isNull()) {
          if (Ident->isDependent()) {
@@ -1417,9 +1446,16 @@ RecordDecl* SemaPass::checkRecordReference(Expression *E,
       return nullptr;
    }
 
+   if (TemplateArgs.empty()) {
+      return R;
+   }
+
    TemplateArgList ArgList(*this, R, TemplateArgs, E->getSourceLoc());
    if (ArgList.isStillDependent()) {
-      E->setIsTypeDependent(true);
+      E->setNeedsInstantiation(true);
+      E->setExprType(Context.getDependentRecordType(
+         R, FinalTemplateArgumentList::Create(Context, ArgList)));
+
       return nullptr;
    }
 
@@ -1450,7 +1486,20 @@ AliasDecl* SemaPass::checkAliasReference(Expression *E,
 
    TemplateArgList ArgList(*this, Alias, TemplateArgs, E->getSourceLoc());
    if (ArgList.isStillDependent()) {
-      E->setIsTypeDependent(true);
+      auto &Tbl = Context.getDeclNameTable();
+      auto *aliasNameSpec = NestedNameSpecifier::Create(Tbl, Alias);
+
+      auto *FinalList = FinalTemplateArgumentList::Create(Context, ArgList);
+      auto *templateNameSpec = NestedNameSpecifier::Create(Tbl, FinalList, aliasNameSpec);
+
+      auto *nameSpecWithLoc = NestedNameSpecifierWithLoc::Create(Tbl, templateNameSpec, {
+         Alias->getSourceRange(),
+         !TemplateArgs.empty() ? TemplateArgs.front()->getSourceRange() : SourceRange()
+      });
+
+      E->setExprType(Context.getDependentNameType(nameSpecWithLoc));
+      E->setNeedsInstantiation(true);
+
       return nullptr;
    }
 
@@ -1891,7 +1940,7 @@ QualType SemaPass::HandleFieldAccess(Expression *Expr, FieldDecl *F)
          BeingInitialized = Init->getRecord() == F->getRecord();
       }
 
-      Expr->setParentExpr(castToRValue(Expr->getParentExpr()));
+//      Expr->setParentExpr(castToRValue(Expr->getParentExpr()));
    }
 
    // if the expression that we're accessing the field on or the field itself
@@ -1986,8 +2035,8 @@ QualType SemaPass::HandlePropAccess(Expression *Expr, PropDecl *P)
                   Expr->getSourceLoc());
       }
       else {
-         Expr->setParentExpr(implicitCastIfNecessary(Expr->getParentExpr(),
-                                                      SelfType));
+         Expr->setParentExpr(
+            implicitCastIfNecessary(Expr->getParentExpr(), SelfType));
       }
    }
    else {

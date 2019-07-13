@@ -1231,6 +1231,114 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl *M,
    }
 }
 
+void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl *R)
+{
+   const RecordMetaInfo *meta;
+   if (SP.QC.GetRecordMeta(meta, R, false)) {
+      llvm_unreachable("cannot fail!");
+   }
+
+   MethodDecl *getter = meta->GetRawValueFn;
+   InitDecl *rawValueInit = meta->FromRawValueInit;
+
+   assert(getter && rawValueInit && "incomplete RawRepresentable conformance!");
+
+   {
+      auto fun = getFunc(getter);
+      if (!fun->isDeclared())
+         return;
+
+      InsertPointRAII insertPointRAII(*this);
+
+      fun->addDefinition();
+      fun->setVerified(true);
+      fun->setCanonicalized(true);
+
+      Builder.SetInsertPoint(fun->getEntryBlock(), false);
+
+      CleanupRAII CR(*this);
+
+      if (emitDI) {
+         Builder.SetDebugLoc(getter->getSourceLoc());
+      }
+
+      auto Self = fun->getEntryBlock()->getBlockArg(0);
+      fun->setSelf(Self);
+
+      Builder.CreateRet(Builder.CreateEnumRawValue(Self));
+   }
+
+   {
+      auto fun = getFunc(rawValueInit);
+      if (!fun->isDeclared())
+         return;
+
+      InsertPointRAII insertPointRAII(*this);
+
+      fun->addDefinition();
+      fun->setVerified(true);
+      fun->setCanonicalized(true);
+
+      Builder.SetInsertPoint(fun->getEntryBlock(), false);
+
+      CleanupRAII CR(*this);
+
+      if (emitDI) {
+         Builder.SetDebugLoc(rawValueInit->getSourceLoc());
+      }
+
+      auto Self = fun->getEntryBlock()->getBlockArg(0);
+      fun->setSelf(Self);
+
+      auto Val = fun->getEntryBlock()->getBlockArg(1);
+
+      auto *failureBB = Builder.CreateBasicBlock("init.failure");
+      auto *sw = Builder.CreateSwitch(Val, failureBB);
+
+      for (auto *Case : R->getCases()) {
+         auto *rawVal = Builder.GetConstantInt(R->getRawType(), Case->getRawValue());
+         if (!Case->getArgs().empty()) {
+            sw->addCase(rawVal, failureBB);
+            continue;
+         }
+
+         auto *caseBB = Builder.CreateBasicBlock("init.case." + Case->getDeclName().toString());
+         Builder.SetInsertPoint(caseBB);
+
+         sw->addCase(rawVal, caseBB);
+         auto enumVal = Builder.CreateEnumInit(R, Case, {});
+
+         auto *enumAlloc = Builder.CreateAlloca(enumVal->getType());
+         Builder.CreateStore(enumVal, enumAlloc);
+
+         Value *Size = Builder.GetConstantInt(
+            Context.getUInt64Ty(),
+            Context.getTargetInfo().getAllocSizeOfType(Self->getType()));
+
+         Builder.CreateIntrinsicCall(Intrinsic::memcpy, { Self, enumAlloc, Size });
+         Builder.CreateRetVoid();
+      }
+
+      {
+         Builder.SetInsertPoint(failureBB);
+
+         Value *ZeroVal = Builder.GetConstantInt(Context.getUInt8Ty(), 0);
+         Value *Size = Builder.GetConstantInt(
+            Context.getUInt64Ty(),
+            Context.getTargetInfo().getAllocSizeOfType(Self->getType()));
+
+         auto *SelfVal = Builder.CreateLoad(
+            cast<il::Method>(getCurrentFn())->getSelf());
+
+         Builder.CreateDealloc(SelfVal, SelfVal->getType()->isClass());
+         Builder.CreateIntrinsicCall(Intrinsic::memset, { Self, ZeroVal, Size });
+
+         auto Ret = Builder.CreateRetVoid();
+         Ret->setIsFallibleInitNoneRet(true);
+      }
+   }
+}
+
 il::GlobalVariable* ILGenPass::GetTypeInfo(QualType ty)
 {
    auto it = TypeInfoMap.find(ty);

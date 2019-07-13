@@ -782,6 +782,7 @@ public:
 
 QualType ConstraintSystem::getConcreteType(QualType T,
                                            TypeVariableType *ConstrainedType) {
+   QualType originalType = T;
    if (T->containsTypeVariable()) {
       auto Idx = getVariadicParamIdx(ConstrainedType);
       if (Idx != -1 && T->isTypeVariableType()
@@ -798,6 +799,10 @@ QualType ConstraintSystem::getConcreteType(QualType T,
       else {
          T = TypeVariableSubstVisitor(*QC.Sema, *this, CG,SourceRange())
             .visit(T);
+      }
+
+      if (T != originalType && T->containsTypeVariable()) {
+         return getConcreteType(T, nullptr);
       }
    }
 

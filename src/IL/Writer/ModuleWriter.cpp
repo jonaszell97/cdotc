@@ -28,8 +28,8 @@ namespace {
 
 class ModuleWriterImpl: public WriterBase<ModuleWriterImpl> {
 public:
-   ModuleWriterImpl(llvm::raw_ostream &out, bool NoDebug = false)
-      : WriterBase(out), NoDebug(NoDebug)
+   ModuleWriterImpl(llvm::raw_ostream &out, NameProvider *nameProvider, bool NoDebug = false)
+      : WriterBase(out), nameProvider(nameProvider), NoDebug(NoDebug)
    {
 
    }
@@ -45,6 +45,7 @@ public:
    void WriteRecordDecl(ast::RecordDecl *R);
 
 private:
+   NameProvider *nameProvider;
    llvm::DenseMap<ast::RecordDecl*, std::string> RecordNameCache;
    bool NoDebug;
 
@@ -637,6 +638,13 @@ void ModuleWriterImpl::WriteArgumentNoName(const Argument &Arg)
 
 void ModuleWriterImpl::WriteGlobal(const GlobalVariable *G)
 {
+   if (nameProvider) {
+      auto unmangledName = nameProvider->getUnmangledName(G);
+      if (!unmangledName.empty()) {
+         out << "; " << unmangledName << "\n";
+      }
+   }
+
    WriteName(G->getName(), ValPrefix::Constant);
    out << " = ";
 
@@ -1357,6 +1365,13 @@ void ModuleWriterImpl::WriteBasicBlock(const BasicBlock *BB, bool first,
 
 void ModuleWriterImpl::WriteFunction(const Function *F, bool onlyDecl)
 {
+   if (nameProvider) {
+      auto unmangledName = nameProvider->getUnmangledName(F);
+      if (!unmangledName.empty()) {
+         out << "; " << unmangledName << "\n";
+      }
+   }
+
    if (F->isDeclared()) {
       out << "declare ";
    }
@@ -1476,26 +1491,27 @@ void ModuleWriterImpl::Write(Module const* M)
 
 } // anonymous namespace
 
-ModuleWriter::ModuleWriter(Function const* F)
-   : kind(Kind::Function), M(F->getParent()), F(F)
+ModuleWriter::ModuleWriter(Function const* F, NameProvider *nameProvider)
+   : kind(Kind::Function), M(F->getParent()), nameProvider(nameProvider), F(F)
 {}
 
-ModuleWriter::ModuleWriter(GlobalVariable const* G)
-   : kind(Kind::GlobalVariable), M(G->getParent()), G(G)
+ModuleWriter::ModuleWriter(GlobalVariable const* G, NameProvider *nameProvider)
+   : kind(Kind::GlobalVariable), M(G->getParent()), nameProvider(nameProvider), G(G)
 {}
 
-ModuleWriter::ModuleWriter(Instruction const* I)
-   : kind(Kind::Instruction), M(I->getParent()->getParent()->getParent()), I(I)
+ModuleWriter::ModuleWriter(Instruction const* I, NameProvider *nameProvider)
+   : kind(Kind::Instruction), M(I->getParent()->getParent()->getParent()),
+     nameProvider(nameProvider), I(I)
 {}
 
-ModuleWriter::ModuleWriter(BasicBlock const* BB)
-   : kind(Kind::BasicBlock), M(BB->getParent()->getParent()), BB(BB)
+ModuleWriter::ModuleWriter(BasicBlock const* BB, NameProvider *nameProvider)
+   : kind(Kind::BasicBlock), M(BB->getParent()->getParent()), nameProvider(nameProvider), BB(BB)
 {}
 
 void ModuleWriter::WriteTo(llvm::raw_ostream &out)
 {
    bool NoDebug = M->getContext().getCompilation().getOptions().noDebugIL();
-   ModuleWriterImpl Writer(out, NoDebug);
+   ModuleWriterImpl Writer(out, nameProvider, NoDebug);
 
    switch (kind) {
    case Kind::Module:
@@ -1521,7 +1537,7 @@ void ModuleWriter::WriteFunctionDeclTo(llvm::raw_ostream &out)
    assert(kind == Kind::Function);
 
    bool NoDebug = M->getContext().getCompilation().getOptions().noDebugIL();
-   ModuleWriterImpl(out, NoDebug).WriteFunction(F, true);
+   ModuleWriterImpl(out, nameProvider, NoDebug).WriteFunction(F, true);
 }
 
 void ModuleWriter::WriteBasicBlockDeclTo(llvm::raw_ostream &out)
@@ -1529,7 +1545,7 @@ void ModuleWriter::WriteBasicBlockDeclTo(llvm::raw_ostream &out)
    assert(kind == Kind::BasicBlock);
 
    bool NoDebug = M->getContext().getCompilation().getOptions().noDebugIL();
-   ModuleWriterImpl(out, NoDebug).WriteBasicBlock(BB, true, true);
+   ModuleWriterImpl(out, nameProvider, NoDebug).WriteBasicBlock(BB, true, true);
 }
 
 } // namespace il

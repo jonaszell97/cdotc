@@ -14,10 +14,10 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-SourceRange SourceType::getSourceRange() const
+SourceRange SourceType::getSourceRange(SourceRange defaultVal) const
 {
    if (!TypeExpr) {
-      return SourceRange();
+      return defaultVal;
    }
 
    return TypeExpr->getSourceRange();

@@ -93,6 +93,10 @@ private:   llvm::DenseMap<std::pair<QualType, QualType>, bool> IsImplicitlyConve
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::DenseMap<std::pair<QualType, QualType>, bool> IsValidParameterValueQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::DenseMap<std::pair<QualType, QualType>, ConversionSequence*> GetConversionSequenceQueries;
 
 

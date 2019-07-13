@@ -61,14 +61,23 @@ void IRGen::finalize(const CompilerInstance &CU)
    auto isInvalid = llvm::verifyModule(*M, &llvmOut);
 
    if (isInvalid||true) {
-      std::error_code EC;
-      llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error.ll",
-                              EC, llvm::sys::fs::F_RW);
+      {
+         std::error_code EC;
+         llvm::raw_fd_ostream fd(
+            "/Users/Jonas/CDotProjects/ex/stdlib/_error.ll",
+            EC, llvm::sys::fs::F_RW);
 
-      llvm::AssemblyAnnotationWriter AAW;
+         llvm::AssemblyAnnotationWriter AAW;
+         M->print(fd, &AAW);
+      }
+      {
+         std::error_code EC;
+         llvm::raw_fd_ostream fd(
+            "/Users/Jonas/CDotProjects/ex/stdlib/_error.cdotil",
+            EC, llvm::sys::fs::F_RW);
 
-      M->print(fd, &AAW);
-      fd.flush();
+         CU.getCompilationModule()->getILModule()->writeTo(fd);
+      }
 
       if (isInvalid)
          llvm::report_fatal_error("invalid LLVM module");

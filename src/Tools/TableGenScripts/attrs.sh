@@ -1,4 +1,4 @@
-tblgen=/Users/Jonas/CDot/cmake-build-debug/cdot-tblgen
+tblgen=tblgen
 
 $tblgen ../../Basic/Attributes.tg -attribute-defs /Users/Jonas/CDot/cmake-build-debug/libcdotc-tblgens.dylib > /Users/Jonas/CDot/src/AST/Attributes.def
 

@@ -3,7 +3,7 @@ module builtin {
     sourceFiles = ["Builtin.dot"]
 
     // This module does not contain any code, so just export the declarations.
-    declarationsOnly = true
+    // declarationsOnly = true
 
     // Make declarations accessible by default.
     defaultAccess = public

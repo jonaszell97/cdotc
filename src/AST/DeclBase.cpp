@@ -253,12 +253,29 @@ void Decl::addAttribute(Attr *A) const
 
 void Decl::copyStatusFlags(Statement *D)
 {
+#ifndef NDEBUG
+   if (D->isInvalid()) {
+      setIsInvalid(true);
+   }
+#endif
+
    flags |= (D->getSubclassData() & StatusFlags);
 }
 
 void Decl::copyStatusFlags(Decl *D)
 {
+#ifndef NDEBUG
+   if (D->isInvalid()) {
+      setIsInvalid(true);
+   }
+#endif
+
    flags |= (D->flags & StatusFlags);
+}
+
+void Decl::setIsInvalid(bool error)
+{
+   setDeclFlag(DF_IsInvalid, error);
 }
 
 bool Decl::isInExtension() const

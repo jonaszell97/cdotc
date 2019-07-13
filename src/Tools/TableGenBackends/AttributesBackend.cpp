@@ -1127,15 +1127,18 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
    }
 
    out << R"__(
-   if (!currentTok().is(tok::ident)) {
+   StringRef Ident;
+   if (currentTok().is(tok::times)) {
+      Ident = "*";
+   } else if (currentTok().is(tok::ident)) {
+      Ident = currentTok().getIdentifier();
+   } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__" << ArgInfo.AttrName << R"__( ", 5 /*one of */,
                   )__" << ArgInfo.ArgNo << ", \"" << DiagStr << R"__(");
 
       break;
    }
-
-   auto Ident = currentTok().getIdentifier();
 )__";
 
    out << ArgInfo.TypeAndName.first << " _enumKind;\n";

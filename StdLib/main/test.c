@@ -1,4 +1,8 @@
 
-#include <time.h>
+#include <stdio.h>
 
-#define VARIADIC(...) __VA_ARGS__
+int main()
+{
+    float f = 5.0f;
+    printf("hello %f\n", f);
+}

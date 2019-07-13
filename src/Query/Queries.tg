@@ -349,6 +349,16 @@ def IsImplicitlyConvertible : BoolQuery {
     canBeDependent = true
 }
 
+def IsValidParameterValue : BoolQuery {
+    parameters = [
+        TypeParam<"givenType">,
+        TypeParam<"paramType">
+    ]
+
+    simpleQuery = true
+    canBeDependent = true
+}
+
 def GetConversionSequence : Query<"ConversionSequence*"> {
     parameters = [
         TypeParam<"From">,

@@ -24,7 +24,7 @@ enum Builtin : unsigned {
    printCTFEStacktrace,
 
    memcpy, memset,
-
+   likely, unlikely,
    llvm_intrinsic,
 
    atomic_load, atomic_store, atomic_cmpxchg, atomic_rmw,

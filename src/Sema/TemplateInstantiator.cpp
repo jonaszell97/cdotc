@@ -119,6 +119,18 @@ public:
       return cast_or_null<AliasDecl>(visit(Decl));
    }
 
+   Statement *instantiateFunctionBody(CallableDecl *inst)
+   {
+      auto *Template = inst->getBodyTemplate();
+
+      int i = 0;
+      for (auto *paramDecl : Template->getArgs()) {
+         instantiationMap.try_emplace(paramDecl, inst->getArgAt(i++));
+      }
+
+      return instantiateStatement(Template->getBody());
+   }
+
    Statement *instantiateStatement(Statement *Stmt)
    {
       return visit(Stmt);
@@ -282,6 +294,14 @@ private:
 
    Decl *visit(Decl *D)
    {
+      auto *inst = visitImpl(D);
+      instantiationMap.try_emplace(D, inst);
+
+      return inst;
+   }
+
+   Decl *visitImpl(Decl *D)
+   {
       if (auto ND = dyn_cast<NamedDecl>(D))
          return visit(ND);
 
@@ -418,6 +438,17 @@ public:
    }
 
 private:
+   Decl *getInstantiation(const Decl *D)
+   {
+      return instantiationMap[D];
+   }
+
+   template<class T>
+   T *getInstantiation(const Decl *D)
+   {
+      return cast<T>(instantiationMap[D]);
+   }
+
    SourceType visitOrAuto(const SourceType &Ty)
    {
       auto Result = visit(Ty);
@@ -465,7 +496,7 @@ private:
       llvm_unreachable("module should not be instantiated!");
    }
 
-   DeclRefExpr *visitDeclRefExpr(DeclRefExpr *Expr);
+   Expression *visitDeclRefExpr(DeclRefExpr *Expr);
    MemberRefExpr *visitMemberRefExpr(MemberRefExpr *Expr);
 
    OverloadedDeclRefExpr *visitOverloadedDeclRefExpr(OverloadedDeclRefExpr*)
@@ -659,6 +690,9 @@ private:
    /// Map from template parameter names to variadic template arguments.
    llvm::StringMap<TemplateArgument*> VariadicTemplateArgs;
 
+   /// Map from templates to instantiated declarations.
+   llvm::DenseMap<const Decl*, Decl*> instantiationMap;
+
    /// True iff we're currently in an unevaluated scope.
    bool InUnevaluatedScope = false;
 
@@ -806,6 +840,10 @@ private:
       return templateArgs.getNamedArg(P->getDeclName());
    }
 
+   QualType instantiateConversionStep(ConversionSequenceBuilder &builder,
+                                      const ConversionStep &step,
+                                      QualType currentType);
+
    IfCondition visitIfCondition(const IfCondition &C);
 
    Expression *makeLiteralExpr(Expression *Expr,
@@ -915,6 +953,7 @@ private:
       for (auto &P : OriginalParams) {
          if (!hasTemplateArg(P)) {
             Params.push_back(P, Context);
+            instantiationMap[P] = P;
          }
       }
 
@@ -1412,10 +1451,10 @@ MethodDecl* InstantiatorImpl::visitMethodDecl(MethodDecl *M)
                                           templateArgs.innermost());
    }
 
+   auto templateParams = copyTemplateParameters(M);
+
    SmallVector<FuncArgDecl*, 4> Args;
    copyArgListAndFindVariadic(M, Args);
-
-   auto templateParams = copyTemplateParameters(M);
 
    MethodDecl *Inst;
    if (M->isConversionOp()) {
@@ -1477,16 +1516,18 @@ AliasDecl* InstantiatorImpl::visitAliasDecl(AliasDecl *Alias)
    bool IsMainTemplate = Alias == Template;
 
    DeclarationName Name = Alias->getDeclName();
-   if (Alias->isTemplate() && IsMainTemplate)
+   if (Alias->isTemplate() && IsMainTemplate) {
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Alias->getDeclName(),
                                           templateArgs.innermost());
+   }
 
+   auto templateParams = copyTemplateParameters(Alias);
    auto Inst = AliasDecl::Create(Context, Alias->getSourceLoc(),
                                  Alias->getAccess(), Name,
                                  visitOrAuto(Alias->getType()),
                                  copyOrNull(Alias->getAliasExpr()),
-                                 copyTemplateParameters(Alias));
+                                 templateParams);
 
    Context.setConstraints(Inst, cloneVector(Alias->getConstraints()));
    return Inst;
@@ -1549,10 +1590,11 @@ InitDecl* InstantiatorImpl::visitInitDecl(InitDecl *Decl)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Name, templateArgs.innermost());
 
+   auto templateParams = copyTemplateParameters(Decl);
+
    SmallVector<FuncArgDecl*, 4> Args;
    copyArgListAndFindVariadic(Decl, Args);
 
-   auto templateParams = copyTemplateParameters(Decl);
    auto Inst = InitDecl::Create(Context, Decl->getAccess(),
                                 Decl->getSourceLoc(), Args,
                                 move(templateParams), nullptr,
@@ -1591,10 +1633,11 @@ FunctionDecl* InstantiatorImpl::visitFunctionDecl(FunctionDecl *F)
       Name = Context.getDeclNameTable()
                     .getInstantiationName(Name, templateArgs.innermost());
 
+   auto templateParams = copyTemplateParameters(F);
+
    SmallVector<FuncArgDecl*, 4> Args;
    copyArgListAndFindVariadic(F, Args);
 
-   auto templateParams = copyTemplateParameters(F);
    auto Inst = FunctionDecl::Create(Context, F->getAccess(), F->getDefLoc(),
                                     Name, Args, visit(F->getReturnType()),
                                     nullptr, move(templateParams));
@@ -1692,24 +1735,37 @@ InstantiatorImpl::visitExistentialTypeExpr(ExistentialTypeExpr *Expr)
                                       Expr->isMeta());
 }
 
+QualType InstantiatorImpl::instantiateConversionStep(ConversionSequenceBuilder &builder,
+                                                     const ConversionStep &step,
+                                                     QualType currentType) {
+   switch (step.getKind()) {
+   case CastKind::LValueToRValue:
+      builder.addStep(CastKind::LValueToRValue, currentType->stripReference(),
+                      CastStrength::Implicit);
+
+      break;
+   default:
+      builder.addStep(step.getKind(), visit(step.getResultType()),
+                      CastStrength::Implicit);
+
+      break;
+   }
+
+   return builder.getSteps().back().getResultType();
+}
+
 Expression* InstantiatorImpl::visitImplicitCastExpr(ImplicitCastExpr *node)
 {
    auto *expr = visit(node->getTarget());
-   auto fromType = visit(node->getTarget()->getExprType());
-   auto toType = visit(node->getExprType());
+   QualType currentType = visit(node->getTarget()->getExprType());
 
-//   ConversionSequenceBuilder builder;
-//   for (auto &step : node->getConvSeq().getSteps()) {
-//      switch (step.getKind()) {
-//      case CastKind::LValueToRValue:
-//
-//      }
-//   }
+   ConversionSequenceBuilder builder;
+   for (auto &step : node->getConvSeq().getSteps()) {
+      currentType = instantiateConversionStep(builder, step, currentType);
+   }
 
-   auto ConvSeq = SP.getConversionSequence(fromType, toType);
    return ImplicitCastExpr::Create(
-      Context, expr,
-      ConversionSequence::Create(Context, ConvSeq));
+      Context, expr, ConversionSequence::Create(Context, builder));
 }
 
 CompoundDecl* InstantiatorImpl::visitCompoundDecl(CompoundDecl *D)
@@ -1748,7 +1804,10 @@ void InstantiatorImpl::copyArgListAndFindVariadic(
    auto argList = C->getArgs();
    for (auto arg : argList) {
       if (!arg->isVariadicArgPackExpansion()) {
-         Variadics.push_back(clone(arg));
+         auto *argInst = clone(arg);
+         Variadics.push_back(argInst);
+         instantiationMap.try_emplace(arg, argInst);
+
       }
       else {
          expandVariadicDecl(arg, Variadics);
@@ -2156,7 +2215,7 @@ Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
    return Inst;
 }
 
-DeclRefExpr* InstantiatorImpl::visitDeclRefExpr(DeclRefExpr *Expr)
+Expression* InstantiatorImpl::visitDeclRefExpr(DeclRefExpr *Expr)
 {
    auto *decl = Expr->getDecl();
    switch (decl->getKind()) {
@@ -2174,10 +2233,25 @@ DeclRefExpr* InstantiatorImpl::visitDeclRefExpr(DeclRefExpr *Expr)
       return DeclRefExpr::Create(Context, inst, Expr->getSourceRange());
    }
    case Decl::TemplateParamDeclID: {
-      llvm_unreachable("todo!");
+      auto *param = cast<TemplateParamDecl>(decl);
+      if (const TemplateArgument *arg = hasTemplateArg(param)) {
+         assert(!arg->isVariadic() && "should have been substituted");
+
+         if (arg->isValue()) {
+            return StaticExpr::Create(Context, arg->getValueType(),
+                                      Expr->getSourceRange(), arg->getValue());
+         }
+
+         return new(Context) IdentifierRefExpr(
+            Expr->getSourceRange(), IdentifierKind::MetaType,
+            Context.getMetaType(arg->getType()));
+      }
+
+      LLVM_FALLTHROUGH;
    }
    default:
-      llvm_unreachable("should never be dependent");
+      return DeclRefExpr::Create(Context, getInstantiation<NamedDecl>(decl),
+                                 Expr->getSourceRange());
    }
 }
 
@@ -2242,11 +2316,8 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
    copyArgumentList(node->getArgs(), node->getLabels(), ArgVec, Labels);
 
    auto *func = node->getFunc();
-   if (auto *PE = node->getParentExpr()) {
-      if (!isa<InitDecl>(func)) {
-         auto *memExpr = cast<MemberRefExpr>(PE);
-         PE = memExpr->getParentExpr();
-      }
+   if (Expression *PE = dyn_cast_or_null<MemberRefExpr>(node->getParentExpr())) {
+      PE = PE->getParentExpr();
 
       QualType lookupType = visit(SourceType(PE->getExprType()->stripReference()));
       NamedDecl *decl;
@@ -3671,9 +3742,7 @@ QueryResult InstantiateMethodBodyQuery::run()
    InstantiatorImpl Instantiator(*QC.Sema, move(ArgList), StmtOrDecl(), Inst,
                                  {}, Self);
 
-   auto BodyInst = Instantiator.instantiateStatement(Inst->getBodyTemplate()
-                                                         ->getBody());
-
+   auto BodyInst = Instantiator.instantiateFunctionBody(Inst);
    Inst->setBody(BodyInst);
 
    Status S = Done;

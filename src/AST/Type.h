@@ -1438,7 +1438,6 @@ public:
 };
 
 namespace ast {
-   class TypedefDecl;
    class AliasDecl;
    class NamespaceDecl;
 } // namespace ast
@@ -1525,6 +1524,39 @@ private:
    explicit TypedefType(ast::AliasDecl *td);
 
    ast::AliasDecl *td;
+};
+
+class DependentTypedefType: public TypedefType {
+protected:
+   DependentTypedefType(ast::AliasDecl *td,
+                        sema::FinalTemplateArgumentList *templateArgs,
+                        QualType Parent,
+                        Type *CanonicalType);
+
+   QualType Parent;
+   mutable sema::FinalTemplateArgumentList *templateArgs;
+
+public:
+   void Profile(llvm::FoldingSetNodeID &ID)
+   {
+      Profile(ID, getTypedef(), templateArgs, Parent);
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       ast::AliasDecl *td,
+                       sema::FinalTemplateArgumentList* templateArgs,
+                       QualType Parent);
+
+   static bool classof (Type const* T)
+   {
+      return T->getTypeID() == TypeID::DependentTypedefTypeID;
+   }
+
+   friend class ast::ASTContext;
+
+   QualType getParent() const { return Parent; }
+   sema::FinalTemplateArgumentList& getTemplateArgs() const { return *templateArgs; }
+   bool hasTemplateArgs() const { return true; }
 };
 
 class DependentNameType: public Type, public llvm::FoldingSetNode {

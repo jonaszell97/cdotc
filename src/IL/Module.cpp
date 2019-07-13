@@ -143,9 +143,9 @@ void Module::dump() const
    writeTo(llvm::errs());
 }
 
-void Module::writeTo(llvm::raw_ostream &out) const
+void Module::writeTo(llvm::raw_ostream &out, NameProvider *nameProvider) const
 {
-   ModuleWriter Writer(this);
+   ModuleWriter Writer(this, nameProvider);
    Writer.WriteTo(out);
 }
 

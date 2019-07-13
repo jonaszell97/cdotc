@@ -437,8 +437,8 @@ public:
          : Expr(Expr), Value(V), HadError(false)
       {}
 
-      StaticExprResult(Expression *Expr = nullptr)
-         : Expr(Expr), HadError(true)
+      StaticExprResult(Expression *Expr = nullptr, bool typeDependent = false)
+         : Expr(Expr), HadError(!typeDependent)
       {}
 
       il::Constant *getValue()
@@ -457,7 +457,12 @@ public:
          return HadError;
       }
 
-      operator bool() const { return !hadError(); }
+      bool isDependent() const
+      {
+         return !Value && !HadError;
+      }
+
+      operator bool() const { return !hadError() && !isDependent(); }
 
    private:
       Expression *Expr = nullptr;
@@ -1540,11 +1545,11 @@ public:
    Expression *implicitCastIfNecessary(Expression* Expr,
                                        QualType destTy,
                                        bool ignoreError = false,
-                                       diag::MessageKind msg
-                                                    =
-                                       diag::err_type_mismatch,
+                                       diag::MessageKind msg =
+                                          diag::err_type_mismatch,
                                        SourceLocation DiagLoc = {},
-                                       SourceRange DiagRange = {});
+                                       SourceRange DiagRange = {},
+                                       bool *hadError = nullptr);
 
    void checkDeclaredVsGivenType(Decl *DependentDecl,
                                  Expression *&val,

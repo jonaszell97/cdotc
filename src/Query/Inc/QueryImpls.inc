@@ -30,6 +30,7 @@ bool Query::isPure() const
    case NeedsStructReturnQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
+   case IsValidParameterValueQueryID: return false;
    case GetConversionSequenceQueryID: return false;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
@@ -239,6 +240,7 @@ bool Query::canBeCached() const
    case NeedsStructReturnQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
+   case IsValidParameterValueQueryID: return true;
    case GetConversionSequenceQueryID: return true;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return true;
@@ -448,6 +450,7 @@ bool Query::canBeSerialized() const
    case NeedsStructReturnQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
+   case IsValidParameterValueQueryID: return false;
    case GetConversionSequenceQueryID: return false;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
@@ -657,6 +660,7 @@ bool Query::canBeDependent() const
    case NeedsStructReturnQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
+   case IsValidParameterValueQueryID: return true;
    case GetConversionSequenceQueryID: return true;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
@@ -2033,6 +2037,58 @@ void IsImplicitlyConvertibleQuery::Profile(llvm::FoldingSetNodeID &ID, QualType 
 {
    ID.AddPointer(From.getAsOpaquePtr());
    ID.AddPointer(To.getAsOpaquePtr());
+}
+
+IsValidParameterValueQuery::IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType) : Query(IsValidParameterValueQueryID, QC), givenType(givenType), paramType(paramType) {
+
+}
+
+bool IsValidParameterValueQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string IsValidParameterValueQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "IsValidParameterValue";
+   return s;
+}
+
+std::string IsValidParameterValueQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[IsValidParameterValue]"
+;   OS << " givenType = ";
+OS << "'" << givenType << "'";
+   OS << ',';
+   OS << " paramType = ";
+OS << "'" << paramType << "'";
+;
+
+   return OS.str();
+}
+
+QueryResult IsValidParameterValueQuery::finish(bool Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, givenType, paramType);
+}
+
+void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType)
+{
+   ID.AddPointer(givenType.getAsOpaquePtr());
+   ID.AddPointer(paramType.getAsOpaquePtr());
 }
 
 GetConversionSequenceQuery::GetConversionSequenceQuery(QueryContext &QC, QualType From, QualType To) : Query(GetConversionSequenceQueryID, QC), From(From), To(To) {

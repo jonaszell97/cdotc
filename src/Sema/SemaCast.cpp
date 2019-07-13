@@ -3,6 +3,8 @@
 //
 
 #include "SemaPass.h"
+
+#include "AST/TypeVisitor.h"
 #include "Query/QueryContext.h"
 
 using namespace cdot::support;

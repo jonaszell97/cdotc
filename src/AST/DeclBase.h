@@ -239,7 +239,7 @@ public:
    }
 
    bool isInvalid() const { return declFlagSet(DF_IsInvalid); }
-   void setIsInvalid(bool error) { setDeclFlag(DF_IsInvalid, error); }
+   void setIsInvalid(bool error);
 
    bool isSemanticallyChecked() const
    {

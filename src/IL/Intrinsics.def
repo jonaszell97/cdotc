@@ -3,6 +3,8 @@
    CDOT_INTRINSIC(memcpy, "__builtin_memcpy")
    CDOT_INTRINSIC(memset, "__builtin_memset")
    CDOT_INTRINSIC(memcmp, "__builtin_memcmp")
+   CDOT_INTRINSIC(likely, "__builtin_likely")
+   CDOT_INTRINSIC(unlikely, "__builtin_unlikely")
    CDOT_INTRINSIC(lifetime_begin, "__builtin_lifetime_begin")
    CDOT_INTRINSIC(lifetime_end, "__builtin_lifetime_end")
    CDOT_INTRINSIC(__ctfe_stacktrace, "__ctfe_stacktrace")

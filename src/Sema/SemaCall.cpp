@@ -205,12 +205,12 @@ void SemaPass::lookupFunction(CandidateSet &CandSet,
                               ArrayRef<IdentifierInfo*> labels,
                               Statement *Expr,
                               bool suppressDiags) {
-   OverloadResolver Resolver(*this, name, SelfArg, args, templateArgs,
-                             labels, Expr);
+   auto *BestCand = sema::resolveCandidateSet(*this, CandSet, SelfArg, args,
+                                              labels, templateArgs,
+                                              SourceType(), Expr,
+                                              !suppressDiags);
 
-   Resolver.resolve(CandSet);
-
-   if (!CandSet) {
+   if (!BestCand) {
       if (CandSet.isDependent()) {
          for (auto &Cand : CandSet.Candidates) {
             checkIfCalledFromTemplate(*this, Cand.getFunc());
@@ -219,8 +219,9 @@ void SemaPass::lookupFunction(CandidateSet &CandSet,
          return;
       }
 
-      if (suppressDiags)
+      if (suppressDiags) {
          return;
+      }
 
       return CandSet.diagnose(*this, SelfArg, args, templateArgs, Expr);
    }
@@ -271,6 +272,10 @@ MethodDecl *SemaPass::getEquivalentMethod(MethodDecl *Orig,
 bool SemaPass::maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                       const TemplateArgList &templateArgs,
                                       Statement *Caller) {
+   if (templateArgs.isStillDependent()) {
+      return true;
+   }
+
    auto F = Cand.getFunc();
    Cand.OuterTemplateArgs = FinalTemplateArgumentList::Create(Context,
                                                               templateArgs);
@@ -553,6 +558,64 @@ static ExprResult CreateAnonymousCall(SemaPass &Sema, CallExpr *Call,
 
 ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
 {
+   CallableDecl *C = Call->getFunc();
+   C = maybeInstantiateMemberFunction(C, Call);
+
+   if (QC.PrepareDeclInterface(C)) {
+      Call->setIsInvalid(true);
+      return Call;
+   }
+
+   QualType ExprType;
+   if (auto F = dyn_cast<FunctionDecl>(C)) {
+      ExprType = F->getReturnType();
+   }
+   else {
+      auto M = cast<MethodDecl>(C);
+      if (M->isCompleteInitializer()) {
+         ExprType = Context.getRecordType(M->getRecord());
+      }
+      else if (M->isStatic()) {
+         ExprType = M->getReturnType();
+      }
+      else {
+         ExprType = M->getReturnType();
+      }
+   }
+
+   Call->setExprType(ExprType);
+
+   unsigned i = 0;
+   MutableArrayRef<FuncArgDecl*> params = C->getArgs();
+
+   for (Expression *&argVal : Call->getArgs()) {
+      FuncArgDecl *param;
+      if (i < params.size()) {
+         param = params[i];
+      }
+      else {
+         param = params.back();
+      }
+
+      auto typecheckResult = typecheckExpr(argVal, param->getType(), Call);
+      if (!typecheckResult) {
+         Call->setIsInvalid(true);
+         ++i;
+
+         continue;
+      }
+
+      argVal = implicitCastIfNecessary(argVal, param->getType());
+      ++i;
+   }
+
+   if (isInBuiltinModule(C)) {
+      HandleBuiltinCall(Call);
+   }
+
+   return Call;
+
+   /*
    MutableArrayRef<Expression*> TemplateArgs;
    if (ArgExpr)
       TemplateArgs = ArgExpr->getExprs();
@@ -1026,6 +1089,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
    }
 
    return ResultExpr;
+    */
 }
 
 LLVM_ATTRIBUTE_UNUSED
@@ -1433,38 +1497,25 @@ CallExpr *SemaPass::CreateCall(CallableDecl *C,
 CallExpr *SemaPass::CreateCall(CallableDecl *C,
                                ASTVector<Expression*> &&Args,
                                SourceLocation Loc) {
-   QualType ExprType;
    CallKind K;
-
    if (auto F = dyn_cast<FunctionDecl>(C)) {
-      ExprType = F->getReturnType();
       K = CallKind::NamedFunctionCall;
    }
    else {
       auto M = cast<MethodDecl>(C);
       if (M->isCompleteInitializer()) {
          K = CallKind::InitializerCall;
-         ExprType = Context.getRecordType(M->getRecord());
       }
       else if (M->isStatic()) {
          K = CallKind::StaticMethodCall;
-         ExprType = M->getReturnType();
       }
       else {
          K = CallKind::MethodCall;
-         ExprType = M->getReturnType();
       }
    }
 
-   auto *Call = CallExpr::Create(Context, Loc, SourceRange(Loc), move(Args),
-                                 C, K, ExprType);
-
-
-   if (isInBuiltinModule(C)) {
-      HandleBuiltinCall(Call);
-   }
-
-   return Call;
+   return CallExpr::Create(Context, Loc, SourceRange(Loc), move(Args),
+                           C, K, QualType());
 }
 
 ExprResult SemaPass::visitAnonymousCallExpr(AnonymousCallExpr *Call)

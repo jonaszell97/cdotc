@@ -28,6 +28,7 @@ class CompilerInstance;
 
 namespace il {
 
+class NameProvider;
 class ConstantString;
 class Context;
 
@@ -83,7 +84,7 @@ public:
    Context &getContext() const;
 
    void dump() const;
-   void writeTo(llvm::raw_ostream &out) const;
+   void writeTo(llvm::raw_ostream &out, NameProvider *nameProvider = nullptr) const;
    void writeToFile(const char *FileName) const;
 
    bool linkInModule(std::unique_ptr<Module> &&M,

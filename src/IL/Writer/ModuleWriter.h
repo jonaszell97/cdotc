@@ -19,6 +19,12 @@ class Function;
 class GlobalVariable;
 class Instruction;
 class BasicBlock;
+class GlobalObject;
+
+class NameProvider {
+public:
+   virtual std::string getUnmangledName(const GlobalObject *obj) = 0;
+};
 
 class ModuleWriter {
 public:
@@ -30,14 +36,15 @@ public:
       BasicBlock
    };
 
-   explicit ModuleWriter(Module const* M)
-      : kind(Kind::Module), M(M), F(nullptr)
+   explicit ModuleWriter(Module const* M,
+                         NameProvider *nameProvider = nullptr)
+      : kind(Kind::Module), M(M), nameProvider(nameProvider), F(nullptr)
    {}
 
-   explicit ModuleWriter(Function const* F);
-   explicit ModuleWriter(GlobalVariable const* G);
-   explicit ModuleWriter(Instruction const* I);
-   explicit ModuleWriter(BasicBlock const* BB);
+   explicit ModuleWriter(Function const* F, NameProvider *nameProvider = nullptr);
+   explicit ModuleWriter(GlobalVariable const* G, NameProvider *nameProvider = nullptr);
+   explicit ModuleWriter(Instruction const* I, NameProvider *nameProvider = nullptr);
+   explicit ModuleWriter(BasicBlock const* BB, NameProvider *nameProvider = nullptr);
 
 
    void WriteTo(llvm::raw_ostream &out);
@@ -48,6 +55,8 @@ protected:
    Kind kind;
 
    Module const* M;
+   NameProvider *nameProvider;
+
    union {
       Function const* F;
       GlobalVariable const* G;

@@ -35,7 +35,7 @@ alias IsBuiltinFloatingPoint<T> = __traits(is_floating_point, T)
 
 /// Returns the meta type of the given expression.
 /// The passed expression will not be evaluated at runtime.
-@_builtin def decltype<T>(of t: T) -> MetaType<T>
+@_builtin def type<T>(of t: T) -> MetaType<T>
 
 /// Allocate \param size bytes on the stack.
 def allocStack(bytes: u64) -> RawPointer
@@ -60,7 +60,7 @@ def allocStack(bytes: u64) -> RawPointer
                                               _ args: owned Args...) {
     // This is never actually executed, just used to verify that the type is
     // constructible with the given arguments.
-    _ = T(_: args...)
+    // _ = T(_: args...)
 }
 
 /// Move a value instead of copying it.
@@ -89,22 +89,16 @@ def allocStack(bytes: u64) -> RawPointer
 def printCTFEStacktrace() -> ()
 
 /// Lowers to a call to `llvm.memcpy`.
-def memcpy(dst: RawPointer, src: RawPointer,
-           size: u64, align: u64 = 1) -> ()
+def memcpy(dst: RawPointer, src: RawPointer, size: u64, align: u64 = 1) -> ()
 
 /// Lowers to a call to `llvm.memset`.
-def memset(memory dst: RawPointer,
-           value: u8, size: u64) -> ()
+def memset(memory dst: RawPointer, value: u8, size: u64) -> ()
 
 /// Tell the optimizer that the given condition is likely to be true.
-def likely(_ cond: i1) -> i1 {
-    return llvm_intrinsic("llvm.expect.i1", cond, true as i1)
-}
+def likely(_ cond: i1) -> i1
 
 /// Tell the optimizer that the given condition is unlikely to be true.
-def unlikely(_ cond: i1) -> i1 {
-    return llvm_intrinsic("llvm.expect.i1", cond, false as i1)
-}
+def unlikely(_ cond: i1) -> i1
 
 /// Expands to a call to an arbitrary llvm intrinsic.
 @_builtin
@@ -157,9 +151,9 @@ macro fp_ops {
             return val
         }
 
-        def ${canonicalize_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.canonicalize."$type), val)
-        }
+        // def ${canonicalize_ $type}(_ val: $type) -> $type {
+        //     return llvm_intrinsic(stringify!("llvm.canonicalize."$type), val)
+        // }
 
         def ${log10_ $type}(_ val: $type) -> $type {
             return llvm_intrinsic(stringify!("llvm.log10."$type), val)
@@ -269,10 +263,6 @@ macro integer_ops {
             return llvm_intrinsic(stringify!("llvm.bitreverse."$argType), val)
         }
 
-        def ${bswap_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.bswap."$argType), val)
-        }
-
         def ${not_ $type}(_ val: $type) -> $type {
             return ${xor_ $type}(0 as $type, val)
         }
@@ -338,6 +328,14 @@ macro integer_ops {
     )... }
 }
 
+macro even_bytecnt_integer_ops {
+    ($(($type:tok, $argType:tok))*) => { $(
+        def ${bswap_ $type}(_ val: $type) -> $type {
+            return llvm_intrinsic(stringify!("llvm.bswap."$argType), val)
+        }
+    )... }
+}
+
 fp_ops!{
     f32 f64
 }
@@ -345,6 +343,11 @@ fp_ops!{
 integer_ops!{
     (i1, i1) (i8, i8) (i16, i16) (i32, i32) (i64, i64) (i128, i128)
     (u8, i8) (u16, i16) (u32, i32) (u64, i64) (u128, i128)
+}
+
+even_bytecnt_integer_ops!{
+    (i16, i16) (i32, i32) (i64, i64) (i128, i128)
+    (u16, i16) (u32, i32) (u64, i64) (u128, i128)
 }
 
 // Pointer operations.
@@ -497,7 +500,7 @@ def atomic_cmpxchg<T>(_ ptr: RawPointer<T>, _ cmp: T, _ newVal: T,
 /// the descriptions, 'p' is the pointer to the instruction's memory location,
 /// 'old' is the initial value of *p, and 'v' is the other value passed to the
 /// instruction.  These instructions always return 'old'.
-@noDerive(_All)
+@noDerive(*)
 internal enum AtomicRMWBinOp {
     /// *p = v
     case Xchg = 0,

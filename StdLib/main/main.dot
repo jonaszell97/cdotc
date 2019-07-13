@@ -1,4 +1,20 @@
 
-var s = S()
-s.func()
-s.clunk()
+import libc
+
+// struct Template<T> {}
+// struct Template2<T> {}
+// alias Template<T> = T
+
+// protocol Nephew {}
+// extend builtin.i64 with Nephew {}
+
+// def funky<U: Nephew>(_ val: Template<U>) {}
+
+// var x = 0 as Template<builtin.i64>
+// funky(x)
+
+// var a = Atomic(weirdValue: 0)
+// __debug
+// _ = a.load()
+
+// _ = libc.stdio.printf("value: %d\n", a.load())

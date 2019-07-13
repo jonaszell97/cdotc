@@ -59,16 +59,32 @@ public:
 
    ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr)
    {
-      auto It = Bindings.ExprBindings.find(Expr);
-      assert(It != Bindings.ExprBindings.end() && "");
+      NamedDecl *Decl;
 
-      QualType TypeVar = It->getSecond();
-      auto ChoiceIt = S.OverloadChoices.find(TypeVar->asTypeVariableType());
-      assert(ChoiceIt != S.OverloadChoices.end() && "");
+      auto directBindingIt = Bindings.OverloadChoices.find(Expr);
+      if (directBindingIt != Bindings.OverloadChoices.end()) {
+         Decl = Expr->getOverloads()[directBindingIt->getSecond().ChosenIndex];
+      }
+      else {
 
-      auto *Decl = Expr->getOverloads()[ChoiceIt->getSecond().ChosenIndex];
+         auto It = Bindings.ExprBindings.find(Expr);
+         assert(It != Bindings.ExprBindings.end() && "");
+
+         QualType TypeVar = It->getSecond();
+
+         auto ChoiceIt = S.OverloadChoices.find(TypeVar->asTypeVariableType());
+         assert(ChoiceIt != S.OverloadChoices.end() && "");
+
+         Decl = Expr->getOverloads()[ChoiceIt->getSecond().ChosenIndex];
+      }
+
       if (auto *EC = dyn_cast<EnumCaseDecl>(Decl)) {
          return new(Sys.QC.Context) EnumCaseExpr(Expr->getSourceLoc(), EC);
+      }
+
+      if (auto *PE = Expr->getParentExpr()) {
+         return MemberRefExpr::Create(Sys.QC.Context, PE, Decl,
+                                      Expr->getSourceRange());
       }
 
       return DeclRefExpr::Create(Sys.QC.Context, Decl, Expr->getSourceRange());
@@ -115,7 +131,13 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
 
       if (Expr->needsInstantiation()) {
          callExpr->setNeedsInstantiation(true);
-         callExpr->setParentExpr(Expr->getParentExpr());
+
+         if (auto *Ovl = dyn_cast_or_null<OverloadedDeclRefExpr>(Expr->getParentExpr())) {
+            callExpr->setParentExpr(visitExpr(Ovl).getValue());
+         }
+         else {
+            callExpr->setParentExpr(Expr->getParentExpr());
+         }
       }
 
       return callExpr;

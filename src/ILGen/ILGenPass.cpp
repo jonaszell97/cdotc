@@ -1306,6 +1306,10 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    ModuleRAII MR(*this, getModuleFor(CD));
    il::Function *func = getFunc(CD);
 
+   if (func->getName()=="_CNW4mainE6AtomicIlEC2ES0_lL0L10weirdValue") {
+       int i=3; //CBP
+   }
+
    if (!func->isDeclared())
       return;
 
@@ -1735,6 +1739,10 @@ bool ILGenPass::CanSynthesizeFunction(CallableDecl *C)
       }
       if (M == Meta->ToStringFn) {
          DefineImplicitStringRepresentableConformance(M, R);
+         return true;
+      }
+      if (M == Meta->GetRawValueFn || M == Meta->FromRawValueInit) {
+         DefineImplicitRawRepresentableConformance(cast<EnumDecl>(R));
          return true;
       }
    }
@@ -3673,6 +3681,10 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr *Expr)
    switch (ND->getKind()) {
    case Decl::FieldDeclID: {
       auto *F = cast<FieldDecl>(ND);
+      if (ParentVal->isLvalue()) {
+         ParentVal = Builder.CreateLoad(ParentVal);
+      }
+
       if (ParentVal->getType()->isDependentRecordType()) {
          ParentVal = Builder.CreateIntrinsicCall(Intrinsic::generic_value,
                                                  ParentVal);
@@ -4453,9 +4465,14 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
       args[0] = Builder.CreateLoad(Builder.CreatePtrToLvalue(args[0]));
       return CreateCall(Init, args, node);
    }
+   case Builtin::likely:
+      return Builder.CreateIntrinsicCall(Intrinsic::likely, { args[0] });
+   case Builtin::unlikely:
+      return Builder.CreateIntrinsicCall(Intrinsic::unlikely, { args[0] });
    case Builtin::llvm_intrinsic: {
-      auto *Name = &SP.getContext().getIdentifiers()
-                           .get(cast<ConstantString>(args.front())->getValue());
+      auto *Name = &SP.getContext().getIdentifiers().get(
+         cast<StringLiteral>(node->getArgs().front()
+                                 ->ignoreParensAndImplicitCasts())->getValue());
 
       return Builder.CreateLLVMIntrinsicCall(
          Name, node->getReturnType(),
@@ -5599,8 +5616,6 @@ void ILGenPass::visitReturnStmt(ReturnStmt *Stmt)
 
       if (Stmt->getReturnValue()) {
          // make 'self' none
-         auto &Context = SP.getContext();
-
          Value *Dst = OptVal;
          Value *Val = Builder.GetConstantInt(Context.getUInt8Ty(), 0);
          Value *Size = Builder.GetConstantInt(

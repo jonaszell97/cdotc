@@ -134,7 +134,7 @@ public:
    static ConstantFloat* get(ValueType Ty, llvm::APFloat &&APF);
 
    double getDoubleVal() const { return Val.convertToDouble(); }
-   float getFloatVal() const { return Val.convertToFloat(); }
+   float getFloatVal() const { return (float)Val.convertToDouble(); }
 
    const llvm::APFloat getValue() const { return Val; }
 

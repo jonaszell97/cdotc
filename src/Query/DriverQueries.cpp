@@ -8,6 +8,8 @@
 #include "Basic/FileUtils.h"
 #include "ClangImporter/ClangImporter.h"
 #include "IL/Module.h"
+#include "IL/Writer/ModuleWriter.h"
+#include "ILGen/ILGenPass.h"
 #include "IRGen/IRGen.h"
 #include "Lex/Lexer.h"
 #include "Module/ModuleManager.h"
@@ -416,7 +418,26 @@ QueryResult EmitILQuery::run()
       return fail();
    }
 
-   ILMod->writeTo(OS);
+   class SemaNameProvider : public il::NameProvider {
+      ILGenPass &ILGen;
+
+   public:
+      explicit SemaNameProvider(ILGenPass &ILGen) : ILGen(ILGen) {}
+
+      std::string getUnmangledName(const il::GlobalObject *obj) override
+      {
+         auto *decl = ILGen.getDeclForValue(obj);
+         if (decl) {
+            return decl->getFullName();
+         }
+
+         return "";
+      }
+   };
+
+   SemaNameProvider nameProvider(QC.CI.getILGen());
+   ILMod->writeTo(OS, &nameProvider);
+
    return finish();
 }
 

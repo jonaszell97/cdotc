@@ -45,11 +45,11 @@ ConversionSequence::ConversionSequence(const ConversionSequenceBuilder &Builder,
    auto Steps = Builder.getSteps();
    NumSteps = (unsigned)Steps.size();
 
-   std::copy(Steps.begin(), Steps.end(), getTrailingObjects<ConversionStep>());
-
    if (finalType) {
       Steps.back().setResultType(finalType);
    }
+
+   std::copy(Steps.begin(), Steps.end(), getTrailingObjects<ConversionStep>());
 }
 
 ConversionSequence::ConversionSequence(CastStrength Strength,

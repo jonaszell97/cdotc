@@ -408,7 +408,7 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
 
 ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 {
-   CanType to = Cast->getTargetType()->stripMetaType();
+   QualType to = Cast->getTargetType()->stripMetaType();
 
    auto Result = visitExpr(Cast, Cast->getTarget(), to);
    if (!Result || Result.get()->isTypeDependent()) {

@@ -915,11 +915,12 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
       return llvm::StructType::get(Ctx, argTypes);
    }
    case Type::RecordTypeID: {
-      if (Ty->isClass())
+      if (Ty->isClass()) {
          return getStructTy(Ty)->getPointerTo();
-
-      if (Ty->isRawEnum())
-         return WordTy;
+      }
+      if (Ty->isRawEnum()) {
+         return getLlvmTypeImpl(cast<ast::EnumDecl>(Ty->getRecord())->getRawType());
+      }
 
       return getStructTy(Ty);
    }
@@ -2911,6 +2912,22 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
 
       return Builder.CreateMemSet(Args[0], Args[1], Args[2], 1);
    }
+   case Intrinsic::likely: {
+      auto *Val = I.getArgs().front();
+      auto *LLVMVal = getLlvmValue(Val);
+
+      return Builder.CreateCall(getIntrinsic(
+         llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
+         { LLVMVal, Builder.getTrue() });
+   }
+   case Intrinsic::unlikely: {
+      auto *Val = I.getArgs().front();
+      auto *LLVMVal = getLlvmValue(Val);
+
+      return Builder.CreateCall(
+         getIntrinsic(llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
+         { LLVMVal, Builder.getFalse() });
+   }
    case Intrinsic::lifetime_begin: {
       auto *Val = I.getArgs().front();
       auto *LLVMVal = getLlvmValue(Val);
@@ -3139,13 +3156,13 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    }
 }
 
-llvm::Function* IRGen::getIntrinsic(llvm::Intrinsic::ID ID)
-{
+llvm::Function* IRGen::getIntrinsic(llvm::Intrinsic::ID ID,
+                                    llvm::ArrayRef<llvm::Type*> Tys) {
    auto It = IntrinsicDecls.find(ID);
    if (It != IntrinsicDecls.end())
       return It->getSecond();
 
-   auto *D = llvm::Intrinsic::getDeclaration(M, ID);
+   auto *D = llvm::Intrinsic::getDeclaration(M, ID, Tys);
    IntrinsicDecls[ID] = D;
 
    return D;

@@ -1232,6 +1232,17 @@ bool TemplateArgListImpl::inferTemplateArg(
    return true;
 }
 
+bool MultiLevelTemplateArgList::setParamValue(TemplateParamDecl *Param,
+                                              TemplateArgument &&Arg) {
+   for (auto &list : *this) {
+      if (list->getArgForParam(Param)) {
+         return list->setParamValue(Param, move(Arg));
+      }
+   }
+
+   return false;
+}
+
 bool MultiLevelTemplateArgList::inferFromType(QualType contextualType,
                                               QualType returnType,
                                               bool IsLastVariadicParam) {
@@ -1393,7 +1404,7 @@ void TemplateArgList::Profile(llvm::FoldingSetNodeID &ID,
 }
 
 bool TemplateArgList::setParamValue(TemplateParamDecl *Param,
-                                    TemplateArgument &&Arg) {
+                                    TemplateArgument &&Arg) const {
    assert(pImpl && "incomplete argument list!");
    return pImpl->setParamValue(Param, move(Arg));
 }

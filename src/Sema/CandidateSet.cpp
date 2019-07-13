@@ -695,7 +695,8 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
          Diagnosed = true;
          SP.diagnose(Caller, err_binop_not_applicable,
                      FuncName.getInfixOperatorName()->getIdentifier(),
-                     QualType(), QualType(),
+                     SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
+                     SelfVal ? args[0]->getExprType() : args[1]->getExprType(),
                      OpLoc ? OpLoc : Caller->getSourceLoc());
       }
       else if (Kind == DeclarationName::PrefixOperatorName
@@ -703,7 +704,8 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
          Diagnosed = true;
          bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
          SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix,
-                     FuncName, 0, QualType(),
+                     FuncName, 0,
+                     SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
                      OpLoc ? OpLoc : Caller->getSourceLoc());
       }
       else if (Kind == DeclarationName::ConstructorName) {

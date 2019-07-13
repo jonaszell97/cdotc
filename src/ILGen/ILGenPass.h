@@ -483,6 +483,7 @@ public:
    void DefineImplicitEquatableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitHashableConformance(MethodDecl *M, RecordDecl *R);
    void DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R);
+   void DefineImplicitRawRepresentableConformance(EnumDecl *R);
    void DefineImplicitStringRepresentableConformance(MethodDecl *M,
                                                      RecordDecl *R);
 

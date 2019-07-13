@@ -88,14 +88,15 @@ struct RecordMetaInfo {
    bool IsImplicitlyHashable : 1;
    bool IsImplicitlyCopyable : 1;
    bool IsImplicitlyStringRepresentable : 1;
-   bool IsImplicitlyRawRepresentable : 1;
+   mutable bool IsImplicitlyRawRepresentable : 1;
 
    ast::MethodDecl *OperatorEquals = nullptr;
    ast::MethodDecl *HashCodeFn = nullptr;
    ast::MethodDecl *ToStringFn = nullptr;
    ast::MethodDecl *CopyFn = nullptr;
-   ast::MethodDecl *GetRawValueFn = nullptr;
-   ast::InitDecl *FromRawValueInit = nullptr;
+
+   mutable ast::MethodDecl *GetRawValueFn = nullptr;
+   mutable ast::InitDecl *FromRawValueInit = nullptr;
 };
 
 /// Represents additional capabilities that a type has at a point in the

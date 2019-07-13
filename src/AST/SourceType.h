@@ -64,7 +64,7 @@ struct SourceType {
       return ResolvedType;
    }
 
-   SourceRange getSourceRange() const;
+   SourceRange getSourceRange(SourceRange defaultVal = {}) const;
 
    Expression *getTypeExpr()  const { return TypeExpr; }
    QualType getResolvedType() const { return ResolvedType; }

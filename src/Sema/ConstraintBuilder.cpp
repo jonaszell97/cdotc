@@ -73,7 +73,28 @@ public:
 
    ExprResult visitLambdaExpr(LambdaExpr *Expr)
    {
-      // Don't visit these for now.
+      // Don't rebuild these for now.
+      return Expr;
+   }
+
+   ExprResult visitAnonymousCallExpr(AnonymousCallExpr *Expr)
+   {
+      if (auto Val = Expr->getParentExpr()) {
+         if (!isa<IdentifierRefExpr>(Val)) {
+            auto Result = visitExpr(Val);
+            if (Result) {
+               Expr->setParentExpr(Result.get());
+            }
+         }
+      }
+
+      for (auto &Val : Expr->getArgs()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Val = Result.get();
+         }
+      }
+
       return Expr;
    }
 
@@ -136,11 +157,6 @@ public:
       default:
          llvm_unreachable("bad template arg list expression");
       }
-   }
-
-   ExprResult visitAnonymousCallExpr(AnonymousCallExpr *Expr)
-   {
-      return Expr;
    }
 };
 
@@ -207,7 +223,13 @@ public:
 ExprResult ConstraintBuilder::rebuildExpression(ast::SemaPass &Sema,
                                                 Expression *E) {
    ExprRebuilder ExprBuilder(Sema);
-   return ExprBuilder.visitExpr(E);
+
+   auto Result = ExprBuilder.visitExpr(E);
+   if (!Result || ExprBuilder.EncounteredError) {
+      return ExprError();
+   }
+
+   return Result;
 }
 
 ExprResult ConstraintBuilder::rebuildExpression(Expression *E)
@@ -314,6 +336,11 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
       TypeDependent |= T->isUnknownAnyType();
       EncounteredError |= Expr->isInvalid();
 
+      if (RequiredType && RequiredType->containsGenericType()) {
+         TypeParamBinder Binder(Sys, Bindings);
+         Binder.visit(RequiredType->stripReference(), T->stripReference());
+      }
+
       return T;
    }
 
@@ -328,7 +355,7 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
       llvm_unreachable("not an expression!");
    }
 
-   if (!T) {
+   if (!T || Expr->isInvalid() || T->isErrorType()) {
       EncounteredError = true;
       Expr->setIsInvalid(true);
 
@@ -358,6 +385,10 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
          TypeParamBinder Binder(Sys, Bindings);
          Binder.visit(RequiredType, DirectBinding);
       }
+      else {
+         TypeParamBinder Binder(Sys, Bindings);
+         Binder.visit(RequiredType, T);
+      }
    }
    else {
       DesugaredTy = RequiredType;
@@ -368,8 +399,7 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
          Expr, PathElement::contextualType(RequiredType.getSourceRange()));
    }
 
-   Sys.newConstraint<ImplicitConversionConstraint>(Var, DesugaredTy,
-                                                   Locator);
+   Sys.newConstraint<ImplicitConversionConstraint>(Var, DesugaredTy, Locator);
 
    if (!DesugaredTy->containsTypeVariable()) {
       Sys.setPreferredBinding(Var, DesugaredTy);
@@ -1113,6 +1143,7 @@ static bool addCandidateType(CandidateSet &CandSet,
 QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
                                                    SourceType T) {
    Expression *ParentExpr = Call->getParentExpr()->ignoreParens();
+   OverloadedDeclRefExpr *overloadExpr = nullptr;
 
    IdentifierRefExpr *Ident;
    if (auto *TemplateArgs = dyn_cast<TemplateArgListExpr>(ParentExpr)) {
@@ -1141,6 +1172,7 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
    }
    else if (auto *Ovl = dyn_cast<OverloadedDeclRefExpr>(ParentExpr)) {
       ParentResult = Ovl;
+      overloadExpr = Ovl;
    }
    else {
       if (auto *MemRef = dyn_cast<MemberRefExpr>(ParentExpr)) {
@@ -1213,6 +1245,7 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
 
       assert(!Decls.empty() && "should have been diagnosed before!");
       Name = Decls.front()->getDeclName();
+      overloadExpr = Ovl;
    }
    else {
       TypeDependent |= ParentExpr->isDependent();
@@ -1260,6 +1293,11 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
    if (!Cand) {
       EncounteredError = true;
       return Sema.ErrorTy;
+   }
+
+   if (overloadExpr) {
+      Bindings.OverloadChoices.try_emplace(
+         overloadExpr, OverloadChoice(CandSet.MatchIdx));
    }
 
    QualType ReturnType;
@@ -1392,12 +1430,18 @@ QualType ConstraintBuilder::visitAssignExpr(AssignExpr *Expr, SourceType T)
 
 QualType ConstraintBuilder::visitTypePredicateExpr(TypePredicateExpr *Expr, SourceType T)
 {
-   return nullptr;
+   auto result = Sema.visitTypePredicateExpr(Expr);
+   if (!result) {
+      EncounteredError = true;
+      return QualType();
+   }
+
+   return Expr->getExprType();
 }
 
 QualType ConstraintBuilder::visitExprSequence(ExprSequence* Expr, SourceType T)
 {
-   return nullptr;
+   llvm_unreachable("should never appear here");
 }
 
 QualType ConstraintBuilder::visitCastExpr(CastExpr *Cast, SourceType T)
@@ -1417,7 +1461,7 @@ QualType ConstraintBuilder::visitCastExpr(CastExpr *Cast, SourceType T)
    auto to = Cast->getTargetType();
    if (!to->isMetaType()) {
       Sema.diagnose(Cast, err_expression_in_type_position,
-                    Cast->getSourceRange());
+                    Cast->getTargetType().getSourceRange(Cast->getSourceRange()));
    }
 
    (void) visitExpr(Cast->getTarget());
@@ -1445,8 +1489,13 @@ QualType ConstraintBuilder::visitAddrOfExpr(AddrOfExpr *Expr, SourceType T)
 
 QualType ConstraintBuilder::visitImplicitCastExpr(ImplicitCastExpr* Expr,
                                                   SourceType T) {
-   (void) visitExpr(Expr->getTarget(), T);
-   return nullptr;
+   auto result = Sema.visitImplicitCastExpr(Expr);
+   if (!result) {
+      EncounteredError = true;
+      return QualType();
+   }
+
+   return Expr->getExprType();
 }
 
 QualType ConstraintBuilder::visitIfExpr(IfExpr *Expr, SourceType T)
@@ -1475,12 +1524,18 @@ QualType ConstraintBuilder::visitStaticExpr(StaticExpr* Expr, SourceType T)
 
 QualType ConstraintBuilder::visitConstraintExpr(ConstraintExpr* Expr, SourceType T)
 {
-   return nullptr;
+   llvm_unreachable("should never be called");
 }
 
 QualType ConstraintBuilder::visitTraitsExpr(TraitsExpr* Expr, SourceType T)
 {
-   return nullptr;
+   auto result = Sema.visitTraitsExpr(Expr);
+   if (!result) {
+      EncounteredError = true;
+      return QualType();
+   }
+
+   return Expr->getExprType();
 }
 
 QualType ConstraintBuilder::visitMixinExpr(MixinExpr *Expr, SourceType T)

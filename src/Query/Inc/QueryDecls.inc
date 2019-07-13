@@ -782,6 +782,37 @@ public:
 
 };
 
+class IsValidParameterValueQuery: public Query {
+public:
+   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
+   static bool classofKind(Kind K) { return K == Kind::IsValidParameterValueQueryID; }
+
+   using result_type = bool;
+
+   std::string description() const;
+   std::string summary() const;
+
+   bool get() const;
+
+   friend class Query; // for run().
+   friend class QueryContext; // for C'tor.
+
+private:
+   QueryResult run();
+
+   IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType);
+
+   QueryResult finish(bool Result, Status St = Done);
+
+   QualType givenType;
+   QualType paramType;
+   llvm::Optional<bool> Result;
+public:
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+   static void Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType);
+
+};
+
 class GetConversionSequenceQuery: public Query {
 public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }

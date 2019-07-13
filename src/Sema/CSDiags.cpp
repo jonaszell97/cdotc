@@ -329,16 +329,16 @@ static bool checkIncompleteInformation(ConstraintSystem &Sys,
 
 static bool diagnoseFailureImpl(ConstraintSystem &Sys,
                                 OverloadCandidate *Cand = nullptr) {
+   // Check if there was incomplete contextual information for a constraint.
+   if (checkIncompleteInformation(Sys, Cand)) {
+      return true;
+   }
+   if (checkUninferrableTemplateParam(Sys, Cand)) {
+      return true;
+   }
+   
    auto *FailedConstraint = Sys.FailedConstraint;
    if (!FailedConstraint) {
-      // Check if there was incomplete contextual information for a constraint.
-      if (checkIncompleteInformation(Sys, Cand)) {
-         return true;
-      }
-      if (checkUninferrableTemplateParam(Sys, Cand)) {
-         return true;
-      }
-
       return false;
    }
 

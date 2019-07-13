@@ -259,6 +259,9 @@ QueryResult GenerateRecordILQuery::run()
    if (Meta->IsImplicitlyStringRepresentable) {
       ILGen.DefineImplicitStringRepresentableConformance(Meta->ToStringFn, R);
    }
+   if (Meta->IsImplicitlyRawRepresentable) {
+      ILGen.DefineImplicitRawRepresentableConformance(cast<EnumDecl>(R));
+   }
 
    return finish();
 }

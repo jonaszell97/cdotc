@@ -12,15 +12,18 @@ unsigned NumNeededArgs = 1;
             while (!currentTok().is(tok::close_paren)) {
                switch (ArgNo++) {
                case 0: {
-   if (!currentTok().is(tok::ident)) {
+   StringRef Ident;
+   if (currentTok().is(tok::times)) {
+      Ident = "*";
+   } else if (currentTok().is(tok::ident)) {
+      Ident = currentTok().getIdentifier();
+   } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   "extern ", 5 /*one of */,
                   1, "C, CXX");
 
       break;
    }
-
-   auto Ident = currentTok().getIdentifier();
 ExternAttr::LangKind _enumKind;
 if (Ident=="C") { _enumKind = ExternAttr::C; }
 else if (Ident=="CXX") { _enumKind = ExternAttr::CXX; }
@@ -86,15 +89,18 @@ unsigned NumNeededArgs = 1;
             while (!currentTok().is(tok::close_paren)) {
                switch (ArgNo++) {
                case 0: {
-   if (!currentTok().is(tok::ident)) {
+   StringRef Ident;
+   if (currentTok().is(tok::times)) {
+      Ident = "*";
+   } else if (currentTok().is(tok::ident)) {
+      Ident = currentTok().getIdentifier();
+   } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   "inline ", 5 /*one of */,
                   1, "always, never, hint");
 
       break;
    }
-
-   auto Ident = currentTok().getIdentifier();
 InlineAttr::LevelKind _enumKind;
 if (Ident=="always") { _enumKind = InlineAttr::always; }
 else if (Ident=="never") { _enumKind = InlineAttr::never; }
@@ -559,25 +565,31 @@ unsigned NumNeededArgs = 1;
             while (!currentTok().is(tok::close_paren)) {
                switch (ArgNo++) {
                case 0: {
-   if (!currentTok().is(tok::ident)) {
+   StringRef Ident;
+   if (currentTok().is(tok::times)) {
+      Ident = "*";
+   } else if (currentTok().is(tok::ident)) {
+      Ident = currentTok().getIdentifier();
+   } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   "noDerive ", 5 /*one of */,
-                  1, "Equatable, Copyable, _All");
+                  1, "Equatable, Copyable, Hashable, RawRepresentable, StringRepresentable, _All");
 
       break;
    }
-
-   auto Ident = currentTok().getIdentifier();
 NoDeriveAttr::KindKind _enumKind;
 if (Ident=="Equatable") { _enumKind = NoDeriveAttr::Equatable; }
 else if (Ident=="Copyable") { _enumKind = NoDeriveAttr::Copyable; }
+else if (Ident=="Hashable") { _enumKind = NoDeriveAttr::Hashable; }
+else if (Ident=="RawRepresentable") { _enumKind = NoDeriveAttr::RawRepresentable; }
+else if (Ident=="StringRepresentable") { _enumKind = NoDeriveAttr::StringRepresentable; }
 else if (Ident=="_All") { _enumKind = NoDeriveAttr::_All; }
 else if (Ident=="*") { _enumKind = NoDeriveAttr::_All; }
 
    else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   "noDerive", 5 /*one of */,
-                  1, "Equatable, Copyable, _All");
+                  1, "Equatable, Copyable, Hashable, RawRepresentable, StringRepresentable, _All");
 
       break;
    }
@@ -646,15 +658,18 @@ unsigned NumNeededArgs = 1;
             while (!currentTok().is(tok::close_paren)) {
                switch (ArgNo++) {
                case 0: {
-   if (!currentTok().is(tok::ident)) {
+   StringRef Ident;
+   if (currentTok().is(tok::times)) {
+      Ident = "*";
+   } else if (currentTok().is(tok::ident)) {
+      Ident = currentTok().getIdentifier();
+   } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   "version ", 5 /*one of */,
                   1, "None, Windows, Darwin, macOS, Linux, POSIX");
 
       break;
    }
-
-   auto Ident = currentTok().getIdentifier();
 VersionDeclAttr::VersionKind _enumKind;
 if (Ident=="None") { _enumKind = VersionDeclAttr::None; }
 else if (Ident=="Windows") { _enumKind = VersionDeclAttr::Windows; }
@@ -722,15 +737,18 @@ unsigned NumNeededArgs = 1;
             while (!currentTok().is(tok::close_paren)) {
                switch (ArgNo++) {
                case 0: {
-   if (!currentTok().is(tok::ident)) {
+   StringRef Ident;
+   if (currentTok().is(tok::times)) {
+      Ident = "*";
+   } else if (currentTok().is(tok::ident)) {
+      Ident = currentTok().getIdentifier();
+   } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   "version ", 5 /*one of */,
                   1, "None, Windows, Darwin, macOS, Linux, POSIX");
 
       break;
    }
-
-   auto Ident = currentTok().getIdentifier();
 VersionStmtAttr::VersionKind _enumKind;
 if (Ident=="None") { _enumKind = VersionStmtAttr::None; }
 else if (Ident=="Windows") { _enumKind = VersionStmtAttr::Windows; }

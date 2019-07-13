@@ -2530,6 +2530,9 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
 
       return Value::getInt(uint64_t(res));
    }
+   case Intrinsic::likely:
+   case Intrinsic::unlikely:
+      return getCtfeValue(I.getArgs()[0]);
    case Intrinsic::lifetime_begin:
    case Intrinsic::lifetime_end:
    case Intrinsic::begin_unsafe:

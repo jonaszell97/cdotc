@@ -1,71 +1,73 @@
 
-import builtin
-declare C def printf(builtin.RawPointer<builtin.u8>, ...) -> builtin.i32
+// import builtin
+// declare C def printf(builtin.RawPointer<builtin.u8>, ...) -> builtin.i32
 
-protocol Initializable {
-    init()
-}
+// protocol Initializable {
+//     init()
+// }
 
-protocol Shape {
-    prop area: builtin.f32 { get }
-}
+// protocol Shape {
+//     prop area: builtin.f32 { get }
+// }
 
-protocol P with Initializable {
-    associatedType A
-    associatedType B: Initializable = X
-    associatedType C: Shape
+// protocol P with Initializable {
+//     associatedType A
+//     associatedType B: Initializable = X
+//     associatedType C: Shape
 
-    def func()
-    def produce() -> A
-    def consume(_ a: A)
+//     def func()
+//     def produce() -> A
+//     def consume(_ a: A)
 
-    def makeShape() -> C
+//     def makeShape() -> C
 
-    prop heehee: builtin.i32 { get }
-}
+//     prop heehee: builtin.i32 { get }
+// }
 
-extend P {
-    default def func() {
-        _ = Self()
-        __debug
-        self.consume(self.produce())
-        _ = self.heehee
-    }
+// extend P {
+//     default def func() {
+//         // _ = Self()
+//         self.consume(self.produce())
+//         _ = self.heehee
+//     }
 
-    def clunk() {
-        _ = B()
+//     def clunk() {
+//         // _ = B()
 
-        var s = makeShape()
-        _ = printf("area: %f\n", s.area)
-    }
-}
+//         var s = makeShape()
+//         _ = printf("area: %f\n", s.area)
+//     }
+// }
 
-struct X with Initializable {
+// struct X with Initializable {
     
-}
+// }
 
-struct Circle with Shape {
-    var r: builtin.f32
-    prop area: builtin.f32 {
-        return builtin.fmul_f32(3.141, builtin.fmul_f32(r, r))
-    }
-}
+// struct Circle with Shape {
+//     var r: builtin.f32
+//     var padding: [builtin.i32; 15] = default
 
-struct S with P {
-    associatedType A = builtin.u8
-    associatedType C = Circle
+//     prop area: builtin.f32 {
+//         _ = printf("calculating splines... %f\n", r)
+//         return builtin.fmul_f32(3.141, builtin.fmul_f32(r, r))
+//     }
+// }
+
+// struct S with P {
+//     associatedType A = builtin.u8
+//     associatedType C = Circle
     
-    def produce() -> builtin.u8 {
-        return 49
-    }
+//     def produce() -> builtin.u8 {
+//         return 49
+//     }
 
-    def consume(_ x: builtin.u8) {
-        _ = printf("henlo %c\n", x)
-    }
+//     def consume(_ x: builtin.u8) {
+//         _ = printf("henlo %i\n", x)
+//     }
 
-    def makeShape() -> C {
-        return Circle(r: 5.0)
-    }
+//     def makeShape() -> C {
+//         return Circle(r: 5.0)
+//     }
 
-    prop heehee: builtin.i32 { return 3 }
-}
+//     prop heehee: builtin.i32 { return 3 }
+// }

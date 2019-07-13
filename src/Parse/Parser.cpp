@@ -2007,6 +2007,10 @@ ParseResult Parser::parseUnaryExpr()
 
       Expr = parseIdentifierExpr(false, false, OpName, Loc);
    }
+   else if (currentTok().is(Ident_default)) {
+      Expr = BuiltinIdentExpr::Create(Context, currentTok().getSourceLoc(),
+                                      BuiltinIdentifier::defaultValue);
+   }
    else if (currentTok().is(tok::ident)) {
       // single argument lambda
       if (lookahead().is(tok::arrow_double)) {
@@ -6218,8 +6222,9 @@ void Parser::parseMainFile()
    {
       DeclContextRAII DCR(*this, Fn);
       while (true) {
-         skipWhitespace();
-
+         while (currentTok().oneOf(tok::semicolon, tok::newline, tok::space)) {
+            advance();
+         }
          if (currentTok().getKind() == tok::eof) {
             break;
          }

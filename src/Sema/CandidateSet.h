@@ -287,6 +287,12 @@ struct CandidateSet {
          BestConversionPenalty = Penalty;
    }
 
+   void foundMatch(unsigned MatchIdx)
+   {
+      Status = Success;
+      this->MatchIdx = MatchIdx;
+   }
+
    bool isAmbiguous() const
    {
       return Status == Ambiguous;

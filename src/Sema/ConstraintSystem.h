@@ -18,6 +18,12 @@ namespace cdot {
 
 class QueryContext;
 
+namespace ast {
+
+class OverloadedDeclRefExpr;
+
+} // namespace ast
+
 namespace sema {
 
 class ConstraintSystem;
@@ -853,6 +859,7 @@ public:
    struct SolutionBindings {
       ExprMapTy ExprBindings;
       ParamMapTy ParamBindings;
+      llvm::DenseMap<ast::OverloadedDeclRefExpr*, OverloadChoice> OverloadChoices;
    };
 
    /// A viable solution to the constraint system.

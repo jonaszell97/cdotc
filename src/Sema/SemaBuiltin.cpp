@@ -49,6 +49,8 @@ void SemaPass::initBuiltinIdents()
 
    BuiltinIdents[builtin::memset] = &Idents.get("memset");
    BuiltinIdents[builtin::memcpy] = &Idents.get("memcpy");
+   BuiltinIdents[builtin::likely] = &Idents.get("likely");
+   BuiltinIdents[builtin::unlikely] = &Idents.get("unlikely");
 
    BuiltinIdents[builtin::TokenType] = &Idents.get("TokenType");
    BuiltinIdents[builtin::CVoid] = &Idents.get("CVoid");
@@ -117,7 +119,7 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
       break;
    }
    case llvm_intrinsic:
-      assert(support::isa<StringLiteral>(C->getArgs().front()));
+      assert(support::isa<StringLiteral>(C->getArgs().front()->ignoreParensAndImplicitCasts()));
       break;
    default:
       break;

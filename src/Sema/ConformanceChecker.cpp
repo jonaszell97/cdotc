@@ -209,11 +209,6 @@ void ConformanceCheckerImpl::checkConformance()
       return;
    }
 
-
-   if (Rec->getFullName()=="core.String") {
-      int i=3; //CBP
-   }
-
    SemaPass::DeclScopeRAII declScopeRAII(SP, Rec);
 
    // Make sure all associated types of this record have been resolved.
@@ -648,6 +643,28 @@ void ConformanceCheckerImpl::inheritAttributes(NamedDecl *Req, NamedDecl *Impl)
          Context.addAttribute(Impl, Attr);
       }
    }
+}
+
+static bool shouldAddStringRepresentableConformance(RecordDecl *R)
+{
+   auto *Attr = R->getAttribute<NoDeriveAttr>();
+   if (!Attr) {
+      return true;
+   }
+
+   return Attr->getKind() != NoDeriveAttr::StringRepresentable
+          && Attr->getKind() != NoDeriveAttr::_All;
+}
+
+static bool shouldAddHashableConformance(RecordDecl *R)
+{
+   auto *Attr = R->getAttribute<NoDeriveAttr>();
+   if (!Attr) {
+      return true;
+   }
+
+   return Attr->getKind() != NoDeriveAttr::Hashable
+          && Attr->getKind() != NoDeriveAttr::_All;
 }
 
 void ConformanceCheckerImpl::addProtocolImpl(RecordDecl *R, NamedDecl *Req,
@@ -1192,13 +1209,15 @@ NamedDecl *ConformanceCheckerImpl::checkSingleDeclImpl(RecordDecl *Rec,
                                       MethodImpl);
       }
       else if (Proto == SP.getStringRepresentableDecl()
-               && Method->getDeclName().isStr("toString")) {
+               && Method->getDeclName().isStr("toString")
+               && shouldAddStringRepresentableConformance(Rec)) {
          SP.QC.AddImplicitConformance(MethodImpl, Rec,
                                       ImplicitConformanceKind::StringRepresentable,
                                       MethodImpl);
       }
       else if (Proto == SP.getHashableDecl()
-               && Method->getDeclName().isStr("hashValue")) {
+               && Method->getDeclName().isStr("hashValue")
+               && shouldAddHashableConformance(Rec)) {
          SP.QC.AddImplicitConformance(MethodImpl, Rec,
                                       ImplicitConformanceKind::Hashable,
                                       MethodImpl);

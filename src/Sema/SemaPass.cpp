@@ -827,7 +827,8 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
                                               bool ignoreError,
                                               diag::MessageKind msg,
                                               SourceLocation DiagLoc,
-                                              SourceRange DiagRange) {
+                                              SourceRange DiagRange,
+                                              bool *hadError) {
    auto originTy = Expr->getExprType();
    if (originTy->isDependentType() || destTy->isDependentType())
       return Expr;
@@ -840,13 +841,18 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
    }
 
    if (!ConvSeq.isValid()) {
-      if (!destTy->isReferenceType())
+      if (!destTy->isReferenceType()) {
          originTy = originTy->stripReference();
+      }
 
-      if (!ignoreError)
+      if (!ignoreError) {
          diagnose(Expr, msg, Expr->getSourceRange(), DiagLoc, DiagRange,
                   diag::opt::show_constness,
                   originTy, destTy);
+      }
+      else if (hadError) {
+         *hadError = true;
+      }
 
       Expr->setExprType(destTy);
       return Expr;
@@ -857,20 +863,27 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
    }
 
    if (ConvSeq.getStrength() != CastStrength::Implicit) {
-      if (!ignoreError)
+      if (!ignoreError) {
          diagnose(Expr, err_cast_requires_op, DiagLoc, DiagRange,
                   diag::opt::show_constness,
                   destTy->stripReference(), originTy->stripReference(),
-                  (int)ConvSeq.getStrength() - 1, Expr->getSourceRange());
+                  (int) ConvSeq.getStrength() - 1, Expr->getSourceRange());
+      }
+      else if (hadError) {
+         *hadError = true;
+      }
 
       Expr->setExprType(destTy);
       return Expr;
    }
 
-   for (auto &Step : ConvSeq.getSteps())
-      if (Step.getKind() == CastKind::ConversionOp)
-         if (auto M = dyn_cast<MethodDecl>(Step.getConversionOp()))
+   for (auto &Step : ConvSeq.getSteps()) {
+      if (Step.getKind() == CastKind::ConversionOp) {
+         if (auto M = dyn_cast<MethodDecl>(Step.getConversionOp())) {
             maybeInstantiateMemberFunction(M, Expr);
+         }
+      }
+   }
 
    auto *Seq = ConversionSequence::Create(Context, ConvSeq, destTy);
    auto Cast = ImplicitCastExpr::Create(Context, Expr, Seq);
@@ -3225,7 +3238,7 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern *Expr,
    auto matchType = MatchVal->getExprType();
    Expr->getExpr()->setContextualType(matchType);
 
-   auto result = typecheckExpr(Expr->getExpr(), SourceType(), Expr);
+   auto result = typecheckExpr(Expr->getExpr(), matchType, Expr);
    if (!result)
       return ExprError();
 
@@ -4201,6 +4214,11 @@ ExprResult SemaPass::visitStaticExpr(StaticExpr *Expr)
    if (auto NewExpr = StaticExprRes.getExpr()) {
       Expr->setExpr(NewExpr);
       Expr->setExprType(Expr->getExpr()->getExprType());
+
+      if (NewExpr->needsInstantiation()) {
+         Expr->setNeedsInstantiation(true);
+         return Expr;
+      }
    }
 
    if (!StaticExprRes) {
@@ -4236,7 +4254,7 @@ SemaPass::StaticExprResult SemaPass::evalStaticExpr(StmtOrDecl DependentStmt,
       expr = SemaRes.get();
 
       if (SemaRes.get()->needsInstantiation()) {
-         return StaticExprResult(expr);
+         return StaticExprResult(expr, true);
       }
 
       if ((!expr->getContextualType()

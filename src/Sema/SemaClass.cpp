@@ -374,8 +374,7 @@ static bool mustProvideValue(QueryContext &QC, QualType RawType)
 
 static void synthesizeValue(SemaPass &Sema, EnumCaseDecl *Case,
                             QualType RawType, int64_t RawVal) {
-   Case->setILValue(Sema.getILGen().Builder.GetConstantInt(
-      Sema.Context.getIntTy(), RawVal));
+   Case->setILValue(Sema.getILGen().Builder.GetConstantInt(RawType, RawVal));
 }
 
 QueryResult PrepareEnumInterfaceQuery::run()
@@ -775,9 +774,12 @@ QueryResult CreateBaseInitQuery::run()
 
    BaseD->setCompleteInit(D);
    BaseD->setSynthesized(true);
-   BaseD->setBodyTemplate(D->getBodyTemplate());
    BaseD->setIsInstantiation(D->isInstantiation());
    BaseD->setInstantiationInfo(D->getInstantiationInfo());
+
+   if (auto *init = dyn_cast_or_null<InitDecl>(D->getBodyTemplate())) {
+      BaseD->setBodyTemplate(init->getBaseInit());
+   }
 
    QC.Sema->ActOnDecl(D->getDeclContext(), BaseD);
    QC.PrepareInitInterface(BaseD);
@@ -1325,6 +1327,17 @@ static bool shouldAddCopyableConformance(RecordDecl *R)
       && Attr->getKind() != NoDeriveAttr::_All;
 }
 
+static bool shouldAddRawRepresentableConformance(RecordDecl *R)
+{
+   auto *Attr = R->getAttribute<NoDeriveAttr>();
+   if (!Attr) {
+      return true;
+   }
+
+   return Attr->getKind() != NoDeriveAttr::RawRepresentable
+          && Attr->getKind() != NoDeriveAttr::_All;
+}
+
 static void checkCopyableConformances(SemaPass &SP, RecordDecl *S,
                                       bool AllCopyable,
                                       bool AllImplicitlyCopyable) {
@@ -1424,6 +1437,15 @@ static void addRawRepresentableConformance(SemaPass &Sema, EnumDecl *E)
    Sema.ActOnDecl(E, RawType);
    Sema.ActOnDecl(E, Init);
    Sema.ActOnDecl(E, Prop);
+
+   const RecordMetaInfo *meta;
+   if (Sema.QC.GetRecordMeta(meta, E, false)) {
+      return;
+   }
+
+   meta->IsImplicitlyRawRepresentable = true;
+   meta->FromRawValueInit = Init;
+   meta->GetRawValueFn = Getter;
 }
 
 QueryResult CheckBuiltinConformancesQuery::run()
@@ -1550,7 +1572,7 @@ QueryResult CheckBuiltinConformancesQuery::run()
          }
       }
 
-      if (AddRawRepresentable) {
+      if (AddRawRepresentable && shouldAddRawRepresentableConformance(R)) {
          ProtocolDecl *RawRep;
          if (QC.GetBuiltinProtocol(RawRep,
                                    GetBuiltinProtocolQuery::RawRepresentable)) {

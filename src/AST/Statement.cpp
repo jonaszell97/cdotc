@@ -29,11 +29,13 @@ void Statement::printFlags(llvm::raw_ostream &OS) const
 
 bool Statement::isTypeDependent() const
 {
+//   return (SubclassData & TypeDependent) != 0;
    return false;
 }
 
 bool Statement::isValueDependent() const
 {
+//   return (SubclassData & ValueDependent) != 0;
    return false;
 }
 

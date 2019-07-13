@@ -634,6 +634,11 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value *> args)
       assert(isPointerLike(args[0]) && isPointerLike(args[1]));
       assert(args[2]->getType()->isIntegerType());
       break;
+   case Intrinsic::likely:
+   case Intrinsic::unlikely:
+      assert(args.size() == 1);
+      assert(args[0]->getType()->isInt1Ty());
+      break;
    case Intrinsic::__ctfe_stacktrace:
       assert(args.empty());
    case Intrinsic::get_lambda_env:
@@ -771,6 +776,9 @@ QualType getIntrinsicReturnType(ast::ASTContext &Ctx,
    case Intrinsic::end_unsafe:
    case Intrinsic::deinit_existential:
       return Ctx.getVoidType();
+   case Intrinsic::likely:
+   case Intrinsic::unlikely:
+      return Ctx.getInt1Ty();
    case Intrinsic::memcmp:
       return Ctx.getInt32Ty();
    case Intrinsic::get_lambda_env:

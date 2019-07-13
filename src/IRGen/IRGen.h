@@ -210,7 +210,8 @@ private:
 
    llvm::StructType *getEnumCaseTy(ast::EnumCaseDecl *Decl);
 
-   llvm::Function *getIntrinsic(llvm::Intrinsic::ID ID);
+   llvm::Function *getIntrinsic(llvm::Intrinsic::ID ID,
+                                llvm::ArrayRef<llvm::Type*> Tys = {});
 
    template<class ...Args>
    void debugPrint(const llvm::Twine &str, Args&&... args)

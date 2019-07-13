@@ -121,8 +121,18 @@ def CompileTime : DeclAttr<"compiletime", [Decl]> {
 
 def NoDerive : DeclAttr<"noDerive", [RecordDecl]> {
     Visit = Never
-    Args = [EnumArg<"kind", ["Equatable", "Copyable", "_All"], true, "_All",
-                    [EnumArgAlias<"*", "_All">]>]
+    Args = [
+        EnumArg<
+            "kind",
+            [
+                "Equatable", "Copyable", "Hashable",
+                "RawRepresentable", "StringRepresentable",
+                "_All"
+            ],
+            true, "_All",
+            [EnumArgAlias<"*", "_All">]
+        >
+    ]
 }
 
 def VersionDecl : DeclAttr<"version", [Decl]> {

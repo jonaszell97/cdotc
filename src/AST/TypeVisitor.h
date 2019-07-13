@@ -257,15 +257,25 @@ public:
       }
    }
 
+   bool compare(QualType LHS, QualType RHS)
+   {
+      return static_cast<SubClass*>(this)->compareImpl(LHS, RHS);
+   }
+
 protected:
+   bool compareImpl(QualType LHS, QualType RHS)
+   {
+      return LHS == RHS;
+   }
+
    bool visitBuiltinType(BuiltinType *LHS, QualType RHS)
    {
-      return RHS->getCanonicalType() == LHS->getCanonicalType();
+      return compare(RHS->getCanonicalType(), LHS->getCanonicalType());
    }
 
    bool visitTokenType(TokenType *LHS, QualType RHS)
    {
-      return RHS->getCanonicalType() == LHS->getCanonicalType();
+      return compare(RHS->getCanonicalType(), LHS->getCanonicalType());
    }
 
    bool visitPointerType(PointerType *LHS, QualType RHS)
@@ -431,7 +441,7 @@ protected:
 
    bool visitRecordType(RecordType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }
 
    bool visitTemplateArg(const sema::TemplateArgument &LHS,
@@ -467,15 +477,8 @@ protected:
       return visit(LHS.getNonCanonicalType(), RHS.getNonCanonicalType());
    }
 
-   bool visitDependentRecordType(DependentRecordType *LHS, QualType RHS)
-   {
-      if (!RHS->hasTemplateArgs()) {
-         return false;
-      }
-
-      auto &LHSArgs = LHS->getTemplateArgs();
-      auto &RHSArgs = RHS->getTemplateArgs();
-
+   bool compareTemplateArgLists(const sema::FinalTemplateArgumentList &LHSArgs,
+                                const sema::FinalTemplateArgumentList &RHSArgs) {
       auto N1 = LHSArgs.size();
       auto N2 = RHSArgs.size();
 
@@ -487,6 +490,22 @@ protected:
          if (!visitTemplateArg(LHSArgs[i], RHSArgs[i])) {
             return false;
          }
+      }
+
+      return true;
+   }
+
+   bool visitDependentRecordType(DependentRecordType *LHS, QualType RHS)
+   {
+      if (!RHS->hasTemplateArgs()) {
+         return false;
+      }
+
+      auto &LHSArgs = LHS->getTemplateArgs();
+      auto &RHSArgs = RHS->getTemplateArgs();
+
+      if (!compareTemplateArgLists(LHSArgs, RHSArgs)) {
+         return false;
       }
 
       ast::RecordDecl *RHSRec;
@@ -502,32 +521,81 @@ protected:
 
    bool visitGenericType(GenericType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
+   }
+
+   bool visitNestedNameSpecifier(
+               NestedNameSpecifier *Name, QualType RHS,
+               const sema::FinalTemplateArgumentList *templateArgs = nullptr) {
+      if (!Name) {
+         return false;
+      }
+
+      switch (Name->getKind()) {
+      case NestedNameSpecifier::Type:
+         return compare(Name->getType()->getCanonicalType(), RHS->getCanonicalType());
+      case NestedNameSpecifier::TemplateArgList:
+         return visitNestedNameSpecifier(
+            Name->getPrevious(), RHS, Name->getTemplateArgs());
+      case NestedNameSpecifier::Alias: {
+         auto *alias = Name->getAlias();
+         if (auto *td = RHS->asTypedefType()) {
+            auto *otherTd = td->getTypedef();
+            if (alias == otherTd && !templateArgs) {
+               return true;
+            }
+            if (!otherTd->isInstantiation() || otherTd->getSpecializedTemplate() != alias) {
+               return false;
+            }
+            if (!templateArgs) {
+               return false;
+            }
+            if (!compareTemplateArgLists(*templateArgs, otherTd->getTemplateArgs())) {
+               return false;
+            }
+
+            return true;
+         }
+
+         if (templateArgs) {
+            return false;
+         }
+
+         return compare(alias->getType()->getCanonicalType(), RHS->getCanonicalType());
+      }
+      case NestedNameSpecifier::Identifier:
+      case NestedNameSpecifier::Namespace:
+      case NestedNameSpecifier::Module:
+      case NestedNameSpecifier::TemplateParam:
+      case NestedNameSpecifier::AssociatedType:
+         llvm_unreachable("FIXME: when can this happen?");
+      }
    }
 
    bool visitDependentNameType(DependentNameType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      assert(LHS->getNameSpec()->depth() <= 2 && "cannot handle this yet!");
+      return visitNestedNameSpecifier(LHS->getNameSpec(), RHS);
    }
 
    bool visitTypeVariableType(TypeVariableType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }
 
    bool visitAssociatedType(AssociatedType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }
 
    bool visitTypedefType(TypedefType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }
 
    bool visitBoxType(BoxType *LHS, QualType RHS)
    {
-      return LHS->getCanonicalType() == RHS->getCanonicalType();
+      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }
 };
 

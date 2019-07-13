@@ -731,7 +731,7 @@ protected:
    {
       if (auto *E = T.getTypeExpr()) {
          if (auto Result = visitExpr(E)) {
-            T.setTypeExpr(E);
+            T.setTypeExpr(Result.get());
          }
       }
    }

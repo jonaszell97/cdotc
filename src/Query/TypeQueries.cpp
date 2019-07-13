@@ -868,6 +868,17 @@ public:
          DC = Self->getRecord();
       }
 
+      bool conforms;
+      if (this->SP.QC.ConformsTo(conforms, this->SP.Context.getRecordType(DC),
+                                 cast<ProtocolDecl>(T->getDecl()->getRecord()))) {
+         return T;
+      }
+
+      // Don't substitute unrelated associated types.
+      if (!conforms) {
+         return T;
+      }
+
       QueryContext &QC = this->SP.QC;
       AssociatedTypeDecl *AT;
 
@@ -1377,8 +1388,17 @@ public:
 
 QueryResult CheckTypeEquivalenceQuery::run()
 {
-   RHS = AssociatedTypeSubstVisitor(sema(), Self, {}).visit(RHS);
-   LHS = AssociatedTypeSubstVisitor(sema(), Self, {}).visit(LHS);
+   AssociatedTypeSubstVisitor substVisitor(sema(), Self, {});
+   RHS = substVisitor.visit(RHS);
+   LHS = substVisitor.visit(LHS);
+
+   if (Self->isRecordType() && Self->getRecord()->isInstantiation()) {
+      GenericTypeSubstVisitor genericTypeSubstVisitor(
+         sema(), Self->getRecord()->getTemplateArgs(), {});
+
+      RHS = genericTypeSubstVisitor.visit(RHS);
+      LHS = genericTypeSubstVisitor.visit(LHS);
+   }
 
    return finish(TypeEquivalenceChecker().visit(LHS, RHS));
 }
@@ -1753,4 +1773,69 @@ QueryResult GetConversionSequenceQuery::run()
    }
 
    return finish(ConversionSequence::Create(QC.Context, Builder));
+}
+
+
+namespace {
+
+class GenericTypeComparer: public TypeComparer<GenericTypeComparer> {
+   SemaPass &Sema;
+
+public:
+   bool typeDependent = false;
+
+   explicit GenericTypeComparer(SemaPass &Sema) : Sema(Sema) {}
+
+   bool compareImpl(QualType LHS, QualType RHS)
+   {
+      auto Builder = Sema.getConversionSequence(LHS, RHS);
+      if (Builder.isDependent()) {
+         typeDependent = true;
+      }
+
+      return Builder.isValid();
+   }
+
+   bool visitGenericType(GenericType *LHS, QualType RHS)
+   {
+      bool covariant;
+      if (Sema.QC.IsCovariant(covariant, RHS, LHS->getParam()->getCovariance())) {
+         return true;
+      }
+
+      return covariant;
+   }
+};
+
+} // anonymous namespace
+
+QueryResult IsValidParameterValueQuery::run()
+{
+   if (!paramType->containsGenericType()) {
+      bool implicitlyConvertible;
+      if (auto err = QC.IsImplicitlyConvertible(implicitlyConvertible,
+                                                givenType, paramType)) {
+         return err;
+      }
+
+      return finish(implicitlyConvertible);
+   }
+
+   QualType givenType = this->givenType;
+   QualType paramType = this->paramType;
+
+   // Implicit lvalue -> rvalue
+   if (givenType->isReferenceType() && !paramType->isReferenceType()) {
+      givenType = givenType->stripReference();
+   }
+
+   // Implicit rvalue -> const reference
+   if (!givenType->isReferenceType() && paramType->isNonMutableReferenceType()) {
+      givenType = QC.Sema->Context.getReferenceType(givenType);
+   }
+
+   GenericTypeComparer comparer(*QC.Sema);
+
+   bool result = comparer.visit(paramType, givenType);
+   return finish(result);
 }
