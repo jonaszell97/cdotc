@@ -996,6 +996,9 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr *Expr)
       if (QC.PrepareDeclInterface(ND)) {
          return ExprError();
       }
+      if (ND->isTemplateOrInTemplate()) {
+         Expr->setNeedsInstantiation(true);
+      }
 
       auto *Var = cast<VarDecl>(ND);
       if (isa<GlobalVarDecl>(ND)) {

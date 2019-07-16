@@ -161,7 +161,7 @@ public:
    }
 };
 
-class TypeParamRemover: public TypeBuilder<TypeParamRemover> {
+class TypeParamSubstVisitor: public TypeBuilder<TypeParamSubstVisitor> {
    /// Reference to the constraint builder.
    ConstraintBuilder &Builder;
 
@@ -169,7 +169,7 @@ class TypeParamRemover: public TypeBuilder<TypeParamRemover> {
    ConstraintSystem::SolutionBindings &Bindings;
 
 public:
-   TypeParamRemover(SemaPass &Sema,
+   TypeParamSubstVisitor(SemaPass &Sema,
                     SourceRange SR,
                     ConstraintBuilder &Builder,
                     ConstraintSystem::SolutionBindings &Bindings)
@@ -194,6 +194,47 @@ public:
    }
 };
 
+class TemplateParamRemover: public TypeBuilder<TemplateParamRemover> {
+   /// The template parameter bindings.
+   ConstraintBuilder &builder;
+
+public:
+   TemplateParamRemover(SemaPass &Sema,
+                        SourceRange SR,
+                        ConstraintBuilder &builder)
+      : TypeBuilder(Sema, SR),
+        builder(builder)
+   { }
+
+   bool shouldGenerateConversionConstraint = true;
+
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &VariadicTys)
+   {
+      VariadicTys.push_back(visitTemplateParamType(T));
+   }
+
+   QualType visitTemplateParamType(TemplateParamType *T)
+   {
+      auto *Param = T->getParam();
+      auto *builder = &this->builder;
+
+      bool first = true;
+      while (builder) {
+         auto It = builder->Bindings.ParamBindings.find(Param);
+         if (It != builder->Bindings.ParamBindings.end()) {
+            shouldGenerateConversionConstraint = false;
+            assert(first && "can this happen?");
+            break;
+         }
+
+         builder = builder->outerBuilder;
+         first = false;
+      }
+
+      return T;
+   }
+};
+
 class TypeParamBinder: public TypeComparer<TypeParamBinder> {
    /// Reference to the constraint system.
    ConstraintSystem &Sys;
@@ -201,19 +242,36 @@ class TypeParamBinder: public TypeComparer<TypeParamBinder> {
    /// The template parameter bindings.
    ConstraintSystem::SolutionBindings &Bindings;
 
+   /// The outer constraint builder.
+   ConstraintBuilder *outerBuilder;
+
 public:
    TypeParamBinder(ConstraintSystem &Sys,
-                   ConstraintSystem::SolutionBindings &Bindings)
-      : Sys(Sys), Bindings(Bindings)
+                   ConstraintSystem::SolutionBindings &Bindings,
+                   ConstraintBuilder *outerBuilder)
+      : Sys(Sys), Bindings(Bindings), outerBuilder(outerBuilder)
    { }
 
    bool visitTemplateParamType(TemplateParamType *GT, QualType RHS)
    {
+      QualType binding = RHS->removeReference();
+      if (auto *rhsParam = binding->asTemplateParamType()) {
+         ConstraintBuilder *builder = outerBuilder;
+         while (builder) {
+            auto It = builder->Bindings.ParamBindings.find(rhsParam->getParam());
+            if (It != builder->Bindings.ParamBindings.end()) {
+               return true;
+            }
+
+            builder = builder->outerBuilder;
+         }
+      }
+
       // Give a hint to the solver to try the actual type as the value of
       // the generic type to prevent the covariance from always being chosen.
       Sys.newConstraint<DefaultableConstraint>(
          Bindings.ParamBindings[GT->getParam()],
-         RHS->removeReference(), Locator());
+         binding, Locator());
 
       return true;
    }
@@ -257,8 +315,11 @@ ConstraintBuilder::generateConstraints(Expression *E,
 ConstraintBuilder::GenerationResult
 ConstraintBuilder::generateArgumentConstraints(Expression *&E,
                                                SourceType RequiredType,
-                                               ConstraintLocator *Locator) {
+                                               ConstraintLocator *Locator,
+                                               ConstraintBuilder *outerBuilder) {
    auto SAR = support::saveAndRestore(GeneratingArgConstraints, true);
+   auto SAR2 = support::saveAndRestore(this->outerBuilder, outerBuilder);
+
    auto Result = generateConstraints(E, RequiredType, Locator);
    if (InvalidArg) {
       Result.Kind = InvalidArgument;
@@ -292,6 +353,12 @@ void ConstraintBuilder::registerTemplateParam(TemplateParamDecl *Param)
 
    // Remember this binding.
    Bindings.ParamBindings[Param] = ParamType;
+}
+
+void ConstraintBuilder::addTemplateParamBinding(QualType Param, QualType Binding)
+{
+   TypeParamBinder Binder(Sys, Bindings, outerBuilder);
+   Binder.visit(Param->removeReference(), Binding->removeReference());
 }
 
 Locator ConstraintBuilder::makeLocator(Expression *E,
@@ -338,18 +405,32 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
       EncounteredError |= Expr->isInvalid();
 
       if (RequiredType && RequiredType->containsTemplateParamType()) {
-         TypeParamBinder Binder(Sys, Bindings);
+         TypeParamBinder Binder(Sys, Bindings, outerBuilder);
          Binder.visit(RequiredType->removeReference(), T->removeReference());
       }
 
       return T;
    }
 
+   QualType contextualType;
+   bool shouldGenerateConversionConstraint = true;
+
+   if (RequiredType) {
+      if (GeneratingArgConstraints) {
+         TemplateParamRemover remover(Sema, { }, *this);
+         remover.visit(RequiredType);
+
+         shouldGenerateConversionConstraint = remover.shouldGenerateConversionConstraint;
+      }
+
+      contextualType = RequiredType;
+   }
+
    QualType T;
    switch (Expr->getTypeID()) {
 #  define CDOT_EXPR(NAME)                                            \
    case Expression::NAME##ID:                                        \
-      T = visit##NAME(static_cast<NAME*>(Expr), RequiredType);       \
+      T = visit##NAME(static_cast<NAME*>(Expr), contextualType);     \
       break;
 #  include "AST/AstNode.def"
    default:
@@ -379,15 +460,15 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
    // required type.
    CanType DesugaredTy;
    if (RequiredType->containsTemplateParamType()) {
-      TypeParamRemover Builder(Sema, Expr->getSourceRange(), *this, Bindings);
+      TypeParamSubstVisitor Builder(Sema, Expr->getSourceRange(), *this, Bindings);
       DesugaredTy = Builder.visit(RequiredType)->getDesugaredType();
 
       if (auto DirectBinding = Sys.getConstrainedBinding(Var)) {
-         TypeParamBinder Binder(Sys, Bindings);
+         TypeParamBinder Binder(Sys, Bindings, outerBuilder);
          Binder.visit(RequiredType, DirectBinding);
       }
       else {
-         TypeParamBinder Binder(Sys, Bindings);
+         TypeParamBinder Binder(Sys, Bindings, outerBuilder);
          Binder.visit(RequiredType, T);
       }
    }
@@ -400,7 +481,10 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
          Expr, PathElement::contextualType(RequiredType.getSourceRange()));
    }
 
-   Sys.newConstraint<ImplicitConversionConstraint>(Var, DesugaredTy, Locator);
+   if (shouldGenerateConversionConstraint) {
+      Sys.newConstraint<ImplicitConversionConstraint>(Var, DesugaredTy,
+                                                      Locator);
+   }
 
    if (!DesugaredTy->containsTypeVariable()) {
       Sys.setPreferredBinding(Var, DesugaredTy);
@@ -1141,10 +1225,12 @@ static bool addCandidateType(CandidateSet &CandSet,
    return true;
 }
 
-QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
-                                                   SourceType T) {
+bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr *Call, SourceType T,
+                                          DeclarationName &Name,
+                                          Expression *&SelfVal,
+                                          OverloadedDeclRefExpr *&overloadExpr,
+                                          SmallVectorImpl<NamedDecl*> &Decls) {
    Expression *ParentExpr = Call->getParentExpr()->ignoreParens();
-   OverloadedDeclRefExpr *overloadExpr = nullptr;
 
    IdentifierRefExpr *Ident;
    if (auto *TemplateArgs = dyn_cast<TemplateArgListExpr>(ParentExpr)) {
@@ -1161,14 +1247,13 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
       Ident->setCalled(true);
 
       if (Ident->hasLeadingDot() && !Ident->getContextualType()) {
-         // Resolve the contextual member first.
-         return visitExpr(Ident, T);
+         Ident->setContextualType(T);
       }
 
       ParentResult = Sema.getRValue(Call, ParentExpr);
       if (!ParentResult) {
          EncounteredError = true;
-         return Sema.ErrorTy;
+         return true;
       }
    }
    else if (auto *Ovl = dyn_cast<OverloadedDeclRefExpr>(ParentExpr)) {
@@ -1183,17 +1268,17 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
       ParentResult = Sema.typecheckExpr(ParentExpr, SourceType(), Call);
       if (!ParentResult) {
          EncounteredError = true;
-         return Sema.ErrorTy;
+         return true;
       }
 
       ParentResult = Sema.getRValue(Call, ParentResult.get());
       if (!ParentResult) {
          EncounteredError = true;
-         return Sema.ErrorTy;
+         return true;
       }
    }
 
-   Expression *SelfVal = ParentExpr->getParentExpr();
+   SelfVal = ParentExpr->getParentExpr();
 
    ParentExpr = ParentResult.get();
    Call->setParentExpr(ParentExpr);
@@ -1210,8 +1295,6 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
       UnresolvedCalls.try_emplace(Call).first->getSecond();
 
    CandidateSet &CandSet = Data.CandSet;
-   DeclarationName Name;
-   SmallVector<NamedDecl*, 2> Decls;
 
    if (auto *TemplateArgs = dyn_cast<TemplateArgListExpr>(ParentExpr)) {
       ParentExpr = TemplateArgs->getParentExpr();
@@ -1262,13 +1345,31 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
 
          Sema.diagnose(Call, err_cannot_call_type, Call->getSourceLoc(),
                        ParentType, false);
+
+         return true;
       }
    }
 
+   return false;
+}
+
+QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
+                                                   SourceType T) {
+   DeclarationName Name;
+   Expression *SelfVal = nullptr;
+   SmallVector<NamedDecl*, 2> Decls;
+   OverloadedDeclRefExpr *overloadExpr = nullptr;
+
+   if (buildCandidateSet(Call, T, Name, SelfVal, overloadExpr, Decls)) {
+      return Sema.ErrorTy;
+   }
+
+   auto &Data = UnresolvedCalls[Call];
+   CandidateSet &CandSet = Data.CandSet;
+
    if (CandSet.Candidates.empty()) {
       EncounteredError = true;
-      Sema.diagnose(Call, err_no_matching_call, 0, Name,
-                    Call->getSourceRange());
+      Sema.diagnose(Call, err_no_matching_call, 0, Name, Call->getSourceRange());
 
       for (auto *ND : Decls) {
          Sema.diagnose(
@@ -1289,7 +1390,9 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
    auto *Cand = sema::resolveCandidateSet(Sema, CandSet, SelfVal,
                                           Call->getArgs(), Call->getLabels(),
                                           {}, T, Call,
-                                          !GeneratingArgConstraints);
+                                          !GeneratingArgConstraints,
+                                          GeneratingArgConstraints,
+                                          this);
 
    if (!Cand) {
       if (GeneratingArgConstraints) {

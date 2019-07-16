@@ -90,7 +90,7 @@ public:
    }
 
    bool needsInstantiation() const;
-   void setNeedsInstantiation(bool b) { setFlag(NeedsInstantiation, b); }
+   void setNeedsInstantiation(bool b) { setFlag(TypeDependent, b); }
 
    bool containsGenericParam() const { return flagIsSet(ContainsGenericParam); }
    void setContainsGenericParam(bool b) { setFlag(ContainsGenericParam, b); }

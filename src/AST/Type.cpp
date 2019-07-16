@@ -479,6 +479,8 @@ sema::FinalTemplateArgumentList& Type::getTemplateArgs() const
    switch (getTypeID()) {
    case TypeID::RecordTypeID:
       return this->uncheckedAsRecordType()->getTemplateArgs();
+   case TypeID::TypedefTypeID:
+      return cast<TypedefType>(this)->getTemplateArgs();
    case TypeID::DependentRecordTypeID:
       return cast<DependentRecordType>(this)->getTemplateArgs();
    case TypeID::DependentTypedefTypeID:
@@ -493,6 +495,8 @@ bool Type::hasTemplateArgs() const
    switch (getTypeID()) {
    case TypeID::RecordTypeID:
       return this->uncheckedAsRecordType()->hasTemplateArgs();
+   case TypeID::TypedefTypeID:
+      return cast<TypedefType>(this)->hasTemplateArgs();
    case TypeID::DependentRecordTypeID:
    case TypeID::DependentTypedefTypeID:
       return true;
@@ -1544,6 +1548,16 @@ void TypedefType::setCanonicalType(QualType CanonicalType)
 {
    this->CanonicalType = CanonicalType;
    Bits.Props |= CanonicalType->properties();
+}
+
+sema::FinalTemplateArgumentList& TypedefType::getTemplateArgs() const
+{
+   return td->getTemplateArgs();
+}
+
+bool TypedefType::hasTemplateArgs() const
+{
+   return td->isInstantiation();
 }
 
 QualType TypedefType::getAliasedType() const

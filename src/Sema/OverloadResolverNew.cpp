@@ -433,7 +433,8 @@ static bool createParamConstraints(ConstraintSystem &Sys,
                                    MultiLevelTemplateArgList &templateArgs,
                                    ConstraintBuilder &Builder,
                                    SemaPass &Sema,
-                                   Statement *Caller) {
+                                   Statement *Caller,
+                                   ConstraintBuilder *outerBuilder) {
    auto *CD = Cand.getFunc();
 
    // If no argument is given, check if there is a default one.
@@ -608,8 +609,8 @@ static bool createParamConstraints(ConstraintSystem &Sys,
 
          QualType NeededTy = ArgDecl->getType();
          Sema.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
-                                           templateArgs,
-                                           ArgVal->getSourceRange());
+                                                 templateArgs,
+                                                 ArgVal->getSourceRange());
 
          auto Result = Builder.generateConstraints(ArgVal, NeededTy, Loc);
          switch (Result.Kind) {
@@ -639,11 +640,11 @@ static bool createParamConstraints(ConstraintSystem &Sys,
       QualType NeededTy = ArgDecl->getType();
       if (Cand.getFunc()->isTemplate()) {
          Sema.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
-                                           templateArgs,
-                                           ArgVal->getSourceRange());
+                                                 templateArgs,
+                                                 ArgVal->getSourceRange());
       }
 
-      auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc);
+      auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc, outerBuilder);
       switch (Result.Kind) {
       case ConstraintBuilder::Success:
          break;
@@ -918,6 +919,14 @@ static bool compatibleReturnType(SemaPass &Sema,
       ReturnType = Cand.getFunctionType()->getReturnType();
    }
 
+   if (ReturnType->containsTemplateParamType()) {
+      assert(Cand.getFunc()->isTemplate() && "function not correctly instantiated!");
+
+      if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType, Cand.InnerTemplateArgs, {})) {
+         return true;
+      }
+   }
+
    bool Convertible;
    if (Sema.QC.IsImplicitlyConvertible(Convertible, ReturnType, RequiredType)) {
       return true;
@@ -970,7 +979,9 @@ static bool resolveCandidate(SemaPass &Sema,
                         CandidateSet::Candidate *&BestCandidate,
                         std::vector<StmtOrDecl> &BestMatchArgExprs,
                         bool &FoundAmbiguity,
-                        Statement *Caller) {
+                        Statement *Caller,
+                        bool isFunctionArgument,
+                        ConstraintBuilder *outerBuilder) {
    if (Sema.QC.PrepareDeclInterface(Cand.getFunc()) || Cand.getFunc()->isInvalid()) {
       Cand.setIsInvalid();
       CandSet.InvalidCand = true;
@@ -998,17 +1009,15 @@ static bool resolveCandidate(SemaPass &Sema,
 
    // Check if the returned type is viable.
    QualType ReturnType = Cand.getFunctionType()->getReturnType();
-   bool DependentReturnType = ReturnType->isDependentType();
+   bool DependentReturnType = ReturnType->containsTemplateParamType();
 
-   if (RequiredType) {
-      if (DependentReturnType) {
-         templateArgList.inferFromType(RequiredType, ReturnType);
-      }
-      else if (!compatibleReturnType(Sema, Cand, RequiredType)) {
+   if (RequiredType && !DependentReturnType) {
+      if (!compatibleReturnType(Sema, Cand, RequiredType)) {
          return false;
       }
    }
 
+   // Check if the parameter amounts and labels match up.
    if (!matchingLabels(Sema, CandSet, Cand, UnorderedArgs, Labels, DeclArgMap)) {
       return false;
    }
@@ -1021,7 +1030,7 @@ static bool resolveCandidate(SemaPass &Sema,
    bool Valid = true;
    TemplateParamSet VariadicParams;
 
-   // Register the template parameters.
+   // Register template parameters for the function itself.
    if (Cand.getFunc()->isTemplate()) {
       for (auto *Param : Cand.getFunc()->getTemplateParams()) {
          if (!Param->isVariadic()
@@ -1030,6 +1039,8 @@ static bool resolveCandidate(SemaPass &Sema,
          }
       }
    }
+
+   // Register template parameters for the initialized record or enum.
    if (isTemplateInitializer) {
       for (auto *Param : Cand.getFunc()->getRecord()->getTemplateParams()) {
          if (!Param->isVariadic()
@@ -1039,12 +1050,21 @@ static bool resolveCandidate(SemaPass &Sema,
       }
    }
 
+   // Check dependent return types.
+   if (RequiredType && DependentReturnType) {
+      if (!RequiredType->containsTemplateParamType() || !isFunctionArgument) {
+         templateArgList.inferFromType(RequiredType, ReturnType);
+         Cand.Builder->addTemplateParamBinding(ReturnType, RequiredType);
+      }
+   }
+
    unsigned i = 0;
    for (auto *ArgDecl : Cand.getFunc()->getArgs()) {
       if (createParamConstraints(Sys, DeclArgMap, Cand, ArgDecl,
                                  NumGivenArgs, i++, ArgExprs, VariadicParams,
                                  templateArgList,
-                                 *Cand.Builder, Sema, Caller)) {
+                                 *Cand.Builder, Sema, Caller,
+                                 outerBuilder)) {
          Valid = false;
          break;
       }
@@ -1115,7 +1135,7 @@ static bool resolveCandidate(SemaPass &Sema,
    Sema.maybeInstantiate(Cand, Caller);
 
    // Check the return type again in case it was dependent.
-   if (RequiredType && DependentReturnType) {
+   if (RequiredType && DependentReturnType && !isFunctionArgument) {
       if (!compatibleReturnType(Sema, Cand, RequiredType)) {
          return false;
       }
@@ -1314,7 +1334,9 @@ sema::resolveCandidateSet(SemaPass &Sema,
                           ArrayRef<Expression*> TemplateArgExprs,
                           SourceType RequiredType,
                           Statement *Caller,
-                          bool DiagnoseFailure) {
+                          bool DiagnoseFailure,
+                          bool isFunctionArgument,
+                          ConstraintBuilder *outerBuilder) {
    unsigned NumGivenArgs = UnorderedArgs.size();
 
    std::vector<StmtOrDecl> ArgExprs;
@@ -1367,7 +1389,8 @@ sema::resolveCandidateSet(SemaPass &Sema,
          if (resolveCandidate(Sema, ArgExprs, Solutions, CandSet, Cand,
                              RequiredType, ArgValues, Labels, NumGivenArgs + 1,
                              BestSolution, BestCandidate, BestMatchArgExprs,
-                             FoundAmbiguity, Caller)) {
+                             FoundAmbiguity, Caller, isFunctionArgument,
+                             outerBuilder)) {
             bestMatchIdx = i;
          }
       }

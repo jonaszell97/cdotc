@@ -26,6 +26,9 @@ public:
    /// Map of assigned type variables to the expressions they represent.
    ConstraintSystem::SolutionBindings Bindings;
 
+   /// Builder for the enclosing constraint system.
+   ConstraintBuilder *outerBuilder = nullptr;
+
 private:
    /// Reference to the Sema instance.
    ast::SemaPass &Sema;
@@ -94,6 +97,11 @@ private:
                             ast::SourceType RequiredType = ast::SourceType());
 #  include "AST/AstNode.def"
 
+   bool buildCandidateSet(ast::AnonymousCallExpr *Call, ast::SourceType T,
+                          DeclarationName &Name, ast::Expression *&SelfVal,
+                          ast::OverloadedDeclRefExpr *&overloadExpr,
+                          SmallVectorImpl<ast::NamedDecl*> &Decls);
+
 public:
    /// Generate constraints for an expression.
    QualType visitExpr(ast::Expression *Expr,
@@ -140,6 +148,10 @@ public:
    /// Register a required template parameter for the expression.
    void registerTemplateParam(ast::TemplateParamDecl *Param);
 
+   /// Give a hint to the constraint system that a template parameter can be
+   /// defaulted to a particular value.
+   void addTemplateParamBinding(QualType Param, QualType Binding);
+
    /// Apply a solution given a set of expression and parameter bindings.
    bool applySolution(const ConstraintSystem::Solution &S,
                       MutableArrayRef<ast::Expression*> Exprs);
@@ -159,7 +171,8 @@ public:
    [[nodiscard]]
    GenerationResult generateArgumentConstraints(ast::Expression *&E,
                                                 ast::SourceType RequiredType,
-                                                ConstraintLocator *Locator);
+                                                ConstraintLocator *Locator,
+                                                ConstraintBuilder *outerBuilder = nullptr);
 
    /// \return true iff all expressions are unambiguously typed.
    bool allUnambiguouslyTyped() const { return AllUnambiguous; }

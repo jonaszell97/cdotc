@@ -52,13 +52,7 @@ bool Statement::isValueDependent() const
 
 bool Statement::needsInstantiation() const
 {
-//   static constexpr unsigned Mask =
-//      Statement::ContainsGenericParam
-//      | Statement::ContainsAssociatedType
-//      | Statement::TypeDependent
-//      | Statement::ValueDependent;
-
-   static constexpr unsigned Mask = Statement::NeedsInstantiation;
+   static constexpr unsigned Mask = Statement::TypeDependent;
    return (SubclassData & Mask) != 0;
 }
 

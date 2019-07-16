@@ -574,11 +574,6 @@ static void getConversionSequence(SemaPass &SP,
       return;
    }
 
-   if (from->isDependentType() || to->isDependentType()) {
-      Seq.setDependent(true);
-      return;
-   }
-
    // Any type -> void
    if (to->isVoidType()) {
       Seq.addStep(CastKind::ToVoid, to, CastStrength::Normal);
@@ -617,6 +612,14 @@ static void getConversionSequence(SemaPass &SP,
             return;
          }
       }
+   }
+
+   // Any type -> template parameter type
+   if (fromTy->isTemplateParamType() || to->isTemplateParamType()) {
+      Seq.setDependent(true);
+      Seq.addStep(CastKind::NoOp, to);
+
+      return;
    }
 
    // Look for an implicit initializer.

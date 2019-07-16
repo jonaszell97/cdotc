@@ -97,7 +97,6 @@ class SmallVectorSynthProvider:
 
         self.data_type = the_type.GetTemplateArgumentType(0)
         self.type_size = self.data_type.GetByteSize()
-        assert self.type_size != 0
 
 class ArrayRefSynthProvider:
     """ Provider for llvm::ArrayRef """

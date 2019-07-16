@@ -4403,7 +4403,14 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
                                    node->getReturnType());
    }
    case Builtin::addressOf: {
-      return Builder.CreateAddrOf(LookThroughLoad(args[0]));
+      auto *val = LookThroughLoad(args[0]);
+      if (!val->getType()->isMutableBorrowType()) {
+         val =  Builder.CreateBitCast(
+            CastKind::BitCast, val,
+            SP.getContext().getReferenceType(val->getType()->getReferencedType()));
+      }
+
+      return Builder.CreateAddrOf(val);
    }
    case Builtin::reinterpretCast:
       return Builder.CreateBitCast(CastKind::BitCast, args[0],

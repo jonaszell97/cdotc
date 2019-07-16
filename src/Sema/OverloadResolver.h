@@ -69,7 +69,9 @@ resolveCandidateSet(ast::SemaPass &Sema,
                     ArrayRef<ast::Expression*> TemplateArgExprs,
                     ast::SourceType RequiredType,
                     ast::Statement *Caller,
-                    bool DiagnoseFailure = true);
+                    bool DiagnoseFailure = true,
+                    bool isFunctionArgument = false,
+                    ConstraintBuilder *outerBuilder = nullptr);
 
 } // namespace sema
 } // namespace cdot

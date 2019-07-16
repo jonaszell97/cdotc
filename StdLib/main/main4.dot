@@ -1,8 +1,8 @@
 
 import builtin
+import builtin.ops
 
 public def infix ~= <T>(_ lhs: T, _ rhs: T) -> builtin.i1 {
-    __debug
     var v1: builtin.i64 = builtin.loadFromPointer(builtin.reinterpretCast(builtin.addressOf(lhs)))
     var v2: builtin.i64 = builtin.loadFromPointer(builtin.reinterpretCast(builtin.addressOf(rhs)))
 
@@ -69,6 +69,7 @@ public struct Atomic<T> {
         case .Acquire:
         case .AcquireRelease:
         case .NotAtomic:
+            _ = libc.stdio.printf("memory order %d is not valid for store\n", memoryOrder)
             // sys.reportFatalError("memory order $memoryOrder is invalid for a store")
             break
         }
@@ -91,14 +92,13 @@ public struct Atomic<T> {
     def load(memoryOrder: MemoryOrder = .SequentiallyConsistent) -> T {
         checkValidLoadOrder(memoryOrder)
         let addr = builtin.addressOf(self.value)
-        return builtin.atomic_load(addr,
-                                   memoryOrder.rawValue)
+        return builtin.atomic_load(addr, memoryOrder.rawValue)
     }
 
     /// Store `storeVal` to the underyling memory address.
     def mutating store(_ storeVal: owned T,
                        memoryOrder: MemoryOrder = .SequentiallyConsistent) {
-        // checkValidStoreOrder(memoryOrder)
+        checkValidStoreOrder(memoryOrder)
         let addr = builtin.addressOf(&self.value)
         return builtin.atomic_store(storeVal, addr, memoryOrder.rawValue)
     }

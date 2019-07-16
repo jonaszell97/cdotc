@@ -1523,6 +1523,9 @@ public:
 
    ast::AliasDecl *getTypedef() const { return td; }
 
+   sema::FinalTemplateArgumentList& getTemplateArgs() const;
+   bool hasTemplateArgs() const;
+
    QualType getAliasedType() const;
    llvm::StringRef getAliasName() const;
 

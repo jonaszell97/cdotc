@@ -199,6 +199,10 @@ bool TemplateArgument::operator==(const TemplateArgument &RHS) const
 
 std::string TemplateArgument::toString() const
 {
+   if (isNull()) {
+      return "<null>";
+   }
+
    if (isVariadic()) {
       string s = "(";
       size_t i = 0;
