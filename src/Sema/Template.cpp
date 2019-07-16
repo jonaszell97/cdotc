@@ -26,7 +26,7 @@ TemplateArgument::TemplateArgument(TemplateParamDecl *Param,
                                    QualType type,
                                    SourceLocation loc) noexcept
    : IsType(true), IsVariadic(false), IsNull(false),
-     Dependent(type->isDependentType() || type->containsAssociatedType()),
+     Dependent(type->isDependentType() || type->containsAssociatedType() || type->containsTypeVariable()),
      Frozen(false), Runtime(type->containsRuntimeGenericParam()),
      ManuallySpecifiedVariadicArgs(0),
      Param(Param), Type(type), Loc(loc)
@@ -834,19 +834,16 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
                                            QualType neededNonCanon) {
    if (givenNonCanon->isDependentType()) {
       StillDependent = true;
-      return true;
    }
 
    CanType given = givenNonCanon;
-   given = given->getDesugaredType();
-
-   CanType needed = neededNonCanon->getDesugaredType();
+   CanType needed = neededNonCanon;
 
    if (isa<ReferenceType>(given) && !needed->isReferenceType()) {
       given = cast<ReferenceType>(given)->getReferencedType();
    }
 
-   if (GenericType *neededGen = dyn_cast<GenericType>(neededNonCanon)) {
+   if (TemplateParamType *neededGen = dyn_cast<TemplateParamType>(neededNonCanon)) {
       auto parameters = getParameters();
       auto idx = getIndexFor(neededGen->getParam());
 
@@ -858,7 +855,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
       assert(Param->isTypeName()
              && "allowed Value parameter to be used as argument type!");
 
-      if (auto *G = dyn_cast<GenericType>(given)) {
+      if (auto *G = dyn_cast<TemplateParamType>(given)) {
          if (!cast<NamedDecl>(G->getParam()->getDeclContext())
                ->isUnboundedTemplate()) {
             HasRuntimeParam = true;
@@ -970,7 +967,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
       unsigned i = 0;
       for (auto &NeededTy : neededArgs) {
          bool IsVariadic = false;
-         if (auto *TA = NeededTy->asGenericType()) {
+         if (auto *TA = NeededTy->asTemplateParamType()) {
             IsVariadic = TA->isVariadic();
          }
 
@@ -980,7 +977,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
                   return false;
             }
 
-            auto *Arg = getArgForParam(NeededTy->asGenericType()->getParam());
+            auto *Arg = getArgForParam(NeededTy->asTemplateParamType()->getParam());
             Arg->freeze();
 
             return true;
@@ -1007,7 +1004,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
       unsigned i = 0;
       for (auto &NeededTy : neededTys) {
          bool IsVariadic = false;
-         if (auto *TA = NeededTy->asGenericType()) {
+         if (auto *TA = NeededTy->asTemplateParamType()) {
             IsVariadic = TA->isVariadic();
          }
 
@@ -1017,7 +1014,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
                   return false;
             }
 
-            auto *Arg = getArgForParam(NeededTy->asGenericType()->getParam());
+            auto *Arg = getArgForParam(NeededTy->asTemplateParamType()->getParam());
             Arg->freeze();
 
             return true;
@@ -1062,7 +1059,7 @@ bool TemplateArgListImpl::inferTemplateArg(QualType givenNonCanon,
                      return false;
                }
 
-               auto *Arg = getArgForParam(NeededTy->asGenericType()->getParam());
+               auto *Arg = getArgForParam(NeededTy->asTemplateParamType()->getParam());
                Arg->freeze();
 
                return true;

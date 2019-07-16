@@ -97,7 +97,7 @@ static bool diagnoseConversionFailure(ConstraintSystem &Sys,
       auto *ParmDecl = Elements.back().getParamDecl();
       if (ParmDecl->isSelf()) {
          if (BoundTy->isMetaType() && !RHSTy->isMetaType()
-         && BoundTy->stripMetaType() == RHSTy) {
+         && BoundTy->removeMetaType() == RHSTy) {
             Cand->setMustBeStatic();
          }
          else {
@@ -441,6 +441,33 @@ bool ConstraintSystem::diagnoseAmbiguity(const Solution &S1, const Solution &S2)
    if (diagnoseAmbiguousOverloadChoice(*this, S1, S2)) {
       return true;
    }
+
+#ifndef NDEBUG
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      printConstraints(OS);
+   }
+
+   QC.Sema->diagnose(err_generic_error, "ambiguous solution for system:\n" + s, Loc);
+
+   std::string s1;
+   std::string s2;
+
+   {
+      llvm::raw_string_ostream OS(s1);
+      printSolution(S1, OS);
+   }
+   {
+      llvm::raw_string_ostream OS(s2);
+      printSolution(S2, OS);
+   }
+
+   QC.Sema->diagnose(note_generic_note, "possible assignment:\n" + s1);
+   QC.Sema->diagnose(note_generic_note, "possible assignment:\n" + s2);
+
+   return true;
+#endif
 
    return false;
 }

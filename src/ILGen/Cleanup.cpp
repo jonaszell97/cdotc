@@ -29,7 +29,7 @@ void DefaultCleanup::Emit(ast::ILGenPass &ILGen)
 void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
                                        il::Value *Val) {
    auto &Builder = ILGen.Builder;
-   auto ty = Val->getType()->stripReference();
+   auto ty = Val->getType()->removeReference();
 
    if (Val->isLvalue())
       Builder.CreateLifetimeEnd(Val);

@@ -134,6 +134,7 @@ public:
 
    /// Create a new ConstraintBuilder for an existing system.
    explicit ConstraintBuilder(QueryContext &QC,
+                              SourceRange Loc = SourceRange(),
                               llvm::raw_ostream *LogStream = nullptr);
 
    /// Register a required template parameter for the expression.

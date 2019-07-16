@@ -394,12 +394,20 @@ void ASTTypeWriter::visitDependentRecordType(const DependentRecordType *Ty)
 {
    Record.AddDeclRef(Ty->getRecord());
    Record.AddTemplateArgumentList(Ty->getTemplateArgs());
+   Record.AddTypeRef(Ty->getParent());
 }
 
 void ASTTypeWriter::visitDependentSizeArrayType(const DependentSizeArrayType *Ty)
 {
    Record.AddStmt(Ty->getSizeExpr());
    Record.AddTypeRef(Ty->getElementType());
+}
+
+void ASTTypeWriter::visitDependentTypedefType(const DependentTypedefType *Ty)
+{
+   Record.AddDeclRef(Ty->getTypedef());
+   Record.AddTemplateArgumentList(Ty->getTemplateArgs());
+   Record.AddTypeRef(Ty->getParent());
 }
 
 void ASTTypeWriter::visitDependentNameType(const DependentNameType *Ty)
@@ -430,7 +438,7 @@ void ASTTypeWriter::visitFunctionType(const FunctionType *Ty)
    Record.push_back(Ty->getRawFlags());
 }
 
-void ASTTypeWriter::visitGenericType(const GenericType *Ty)
+void ASTTypeWriter::visitTemplateParamType(const TemplateParamType *Ty)
 {
    Record.AddDeclRef(Ty->getParam());
 }

@@ -189,7 +189,7 @@ void IRGen::visitModule(Module& ILMod)
    GetProtocolVTableFn = nullptr;
 
    GetGenericArgumentFn = nullptr;
-   GetGenericTypeValueFn = nullptr;
+   GetTemplateParamTypeValueFn = nullptr;
 
    DynamicDownCastFn = nullptr;
    RuntimeFunctions.clear();
@@ -661,18 +661,18 @@ llvm::Constant* IRGen::getGetGenericArgumentFn()
    return GetGenericArgumentFn;
 }
 
-llvm::Constant* IRGen::getGetGenericTypeValueFn()
+llvm::Constant* IRGen::getGetTemplateParamTypeValueFn()
 {
-   if (!GetGenericTypeValueFn) {
-      GetGenericTypeValueFn =
-         M->getOrInsertFunction("_cdot_GetGenericTypeValue",
+   if (!GetTemplateParamTypeValueFn) {
+      GetTemplateParamTypeValueFn =
+         M->getOrInsertFunction("_cdot_GetTemplateParamTypeValue",
                                 llvm::FunctionType::get(Int8PtrTy,
                                                         {
                                                            Int8PtrTy
                                                         }, false));
    }
 
-   return GetGenericTypeValueFn;
+   return GetTemplateParamTypeValueFn;
 }
 
 llvm::Constant* IRGen::getDynamicDownCastFn()
@@ -928,7 +928,7 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
       return ExistentialContainerTy;
    case Type::MetaTypeID:
       return TypeInfoTy;
-   case Type::GenericTypeID:
+   case Type::TemplateParamTypeID:
    case Type::AssociatedTypeID:
       return getLlvmTypeImpl(Ty->getDesugaredType());
    default:
@@ -2030,8 +2030,8 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    if (auto GEP = dyn_cast<ConstantGEPInst>(C)) {
       auto val = getConstantVal(GEP->getTarget());
 
-      if (GEP->getTarget()->getType()->stripReference()->isRecordType()) {
-         auto R = GEP->getTarget()->getType()->stripReference()->getRecord();
+      if (GEP->getTarget()->getType()->removeReference()->isRecordType()) {
+         auto R = GEP->getTarget()->getType()->removeReference()->getRecord();
 
          unsigned idx = cast<ConstantInt>(GEP->getIdx())->getU32();
          if (isa<ClassDecl>(R))
@@ -2379,8 +2379,8 @@ llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
 {
    auto val = getLlvmValue(I.getVal());
 
-   if (I.getVal()->getType()->stripReference()->isRecordType()) {
-      auto R = I.getVal()->getType()->stripReference()->getRecord();
+   if (I.getVal()->getType()->removeReference()->isRecordType()) {
+      auto R = I.getVal()->getType()->removeReference()->getRecord();
       assert(isa<ConstantInt>(I.getIndex()));
 
       unsigned idx = cast<ConstantInt>(I.getIndex())->getU32();
@@ -2478,6 +2478,12 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
 llvm::Value *IRGen::visitLoadInst(LoadInst const& I)
 {
    auto val = getLlvmValue(I.getTarget());
+   if (auto *singleUser = dyn_cast_or_null<FieldRefInst>(I.getSingleUser())) {
+      if (val->getType()->isPointerTy() && val->getType()->getPointerElementType()->isStructTy()) {
+         return val;
+      }
+   }
+
    if (NeedsStructReturn(I.getType())) {
       return val;
    }
@@ -2857,7 +2863,7 @@ llvm::Value* IRGen::getVirtualMethod(il::Value *CalleeVal, il::Value *Offset)
       llvm::Value *Conf = Builder.CreateCall(getGetConformanceFn(), {
          toInt8Ptr(Callee),
          toInt8Ptr(getLlvmValue(
-            CI.getILGen().GetOrCreateTypeInfo(CalleeType->stripMetaType())))
+            CI.getILGen().GetOrCreateTypeInfo(CalleeType->removeMetaType())))
       });
 
       Conf = Builder.CreateBitCast(Conf, ProtocolConformanceTy->getPointerTo());
@@ -2931,7 +2937,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::lifetime_begin: {
       auto *Val = I.getArgs().front();
       auto *LLVMVal = getLlvmValue(Val);
-      QualType Ty = Val->getType()->stripReference();
+      QualType Ty = Val->getType()->removeReference();
 
       if (Ty->isClass()) {
          LLVMVal = Builder.CreateLoad(LLVMVal);
@@ -2944,7 +2950,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::lifetime_end: {
       auto *Val = I.getArgs().front();
       auto *LLVMVal = getLlvmValue(Val);
-      QualType Ty = Val->getType()->stripReference();
+      QualType Ty = Val->getType()->removeReference();
 
       if (Ty->isClass()) {
          LLVMVal = Builder.CreateLoad(LLVMVal);
@@ -2980,7 +2986,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       return Builder.CreateCall(getGetGenericArgumentFn(), {Ptr, Depth, Idx});
    }
    case Intrinsic::generic_type_value: {
-      return Builder.CreateCall(getGetGenericTypeValueFn(),
+      return Builder.CreateCall(getGetTemplateParamTypeValueFn(),
                                 getLlvmValue(I.getArgs()[0]));
    }
    case Intrinsic::existential_ref: {
@@ -3294,7 +3300,7 @@ llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
       llvm::Value *Conf = Builder.CreateCall(getGetConformanceFn(), {
          toInt8Ptr(Callee),
          toInt8Ptr(getLlvmValue(
-            CI.getILGen().GetOrCreateTypeInfo(CalleeType->stripMetaType())))
+            CI.getILGen().GetOrCreateTypeInfo(CalleeType->removeMetaType())))
       });
 
       Conf = Builder.CreateBitCast(Conf, ProtocolConformanceTy->getPointerTo());

@@ -37,6 +37,15 @@ enum LogKind : uint64_t {
    /// \brief Log template instantiations.
    Instantiations = 0x20,
 
+   /// \brief Log local variable declarations.
+   LocalVariables = 0x40,
+
+   /// \brief Log global variable declarations.
+   GlobalVariables = 0x80,
+
+   /// \brief Log variable declarations,
+   Variables = LocalVariables | GlobalVariables,
+
    /// \brief Log everything.
    All = uint64_t(-1),
 };

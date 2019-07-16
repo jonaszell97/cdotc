@@ -634,7 +634,14 @@ void ASTStmtWriter::visitCallExpr(CallExpr *S)
 
    Record.AddDeclRef(S->getFunc());
    Record.AddStmt(S->getParentExpr());
-   Record.AddDeclRef(support::cast_or_null<Decl>(S->getContext()));
+
+   if (auto *templateArgs = S->getTemplateArgs()) {
+      Record.push_back(true);
+      Record.AddTemplateArgumentList(*templateArgs);
+   }
+   else {
+      Record.push_back(false);
+   }
 }
 
 void ASTStmtWriter::visitAnonymousCallExpr(AnonymousCallExpr *S)

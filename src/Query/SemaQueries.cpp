@@ -891,10 +891,10 @@ QueryResult GetConstrainedTypeQuery::run()
          return Query::finish(Err);
       }
    }
-   if (ConstrainedType->containsGenericType()
+   if (ConstrainedType->containsTemplateParamType()
          && Self->isRecordType()
          && Self->getRecord()->isInstantiation()) {
-      if (auto Err = QC.SubstGenericTypes(ConstrainedType, ConstrainedType,
+      if (auto Err = QC.SubstTemplateParamTypes(ConstrainedType, ConstrainedType,
                                           Self->getRecord()->getTemplateArgs(),
                                           SR)) {
          return Query::finish(Err);
@@ -2234,6 +2234,6 @@ QueryResult TypecheckAliasQuery::run()
                                      D->getType(), GivenType, true,
                                      D->getSourceLoc());
 
-   D->getAliasExpr()->setExpr(Val);
+   D->setAliasExpr(cast<StaticExpr>(Val));
    return finish();
 }

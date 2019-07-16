@@ -997,12 +997,12 @@ public:
 
    }
 
-   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
    {
-      Types.push_back(visitGenericType(T));
+      Types.push_back(visitTemplateParamType(T));
    }
 
-   QualType visitGenericType(GenericType *T)
+   QualType visitTemplateParamType(TemplateParamType *T)
    {
       // Template argument types do not need to be equal, just equivalent.
       auto *Param = T->getParam();
@@ -1366,7 +1366,7 @@ ExprResult SemaPass::visitDeclTypeExpr(DeclTypeExpr *Expr)
    if (!ExprRes)
       ResultTy = UnknownAnyTy;
    else
-      ResultTy = ExprRes.get()->getExprType()->stripReference();
+      ResultTy = ExprRes.get()->getExprType()->removeReference();
 
    Expr->setExprType(Context.getMetaType(ResultTy));
    return visitTypeExpr(Expr);
@@ -1976,6 +1976,10 @@ bool SemaPass::isInStdModule(Decl *D)
 
 bool SemaPass::isInBuiltinModule(Decl *D)
 {
+   if (!getCompilationUnit().getModuleMgr().IsModuleLoaded(getIdentifier("builtin"))) {
+      return false;
+   }
+
    return D->getModule()->getModule() == getBuiltinModule();
 }
 

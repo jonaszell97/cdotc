@@ -1177,14 +1177,14 @@ IsImplicitlyConvertibleQueries[Key] = Result;
 return QueryResult(QueryResult::Success);
 }
 
-QueryResult QueryContext::IsValidParameterValue(bool &Result, QualType givenType, QualType paramType)
+QueryResult QueryContext::IsValidParameterValue(bool &Result, QualType givenType, QualType paramType, uint8_t isSelf)
 
 {
-   auto Key = std::make_pair(givenType, paramType);
+   auto Key = std::make_pair(givenType, std::make_pair(paramType, isSelf));
    auto It = IsValidParameterValueQueries.find(Key);
    if (It != IsValidParameterValueQueries.end()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
-IsValidParameterValueQuery _Q(*this, givenType, paramType);
+IsValidParameterValueQuery _Q(*this, givenType, paramType, isSelf);
 
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
@@ -1269,24 +1269,24 @@ QueryResult QueryContext::SubstAssociatedTypes(QualType &Result, QualType T, Qua
 
 }
 
-template<> SubstGenericTypesQuery *QueryContext::getQuery<SubstGenericTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs)
+template<> SubstTemplateParamTypesQuery *QueryContext::getQuery<SubstTemplateParamTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs)
 {
    llvm::FoldingSetNodeID ID;
-   SubstGenericTypesQuery::Profile(ID, T, TemplateArgs);
+   SubstTemplateParamTypesQuery::Profile(ID, T, TemplateArgs);
    void *InsertPos;
-   return SubstGenericTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
+   return SubstTemplateParamTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::SubstGenericTypes(QualType &Result, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR)
+QueryResult QueryContext::SubstTemplateParamTypes(QualType &Result, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR)
 
 {
    llvm::FoldingSetNodeID ID;
-   SubstGenericTypesQuery::Profile(ID, T, TemplateArgs);
+   SubstTemplateParamTypesQuery::Profile(ID, T, TemplateArgs);
    void *InsertPos;
-   auto *_Q = SubstGenericTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
+   auto *_Q = SubstTemplateParamTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) SubstGenericTypesQuery(*this, T, std::move(TemplateArgs), SR);
-      SubstGenericTypesQueries.InsertNode(_Q, InsertPos);
+      _Q = new(*this) SubstTemplateParamTypesQuery(*this, T, std::move(TemplateArgs), SR);
+      SubstTemplateParamTypesQueries.InsertNode(_Q, InsertPos);
    }
    switch (_Q->status()) {
    case Query::Running:
@@ -1315,10 +1315,10 @@ QueryResult QueryContext::SubstGenericTypes(QualType &Result, QualType T, sema::
 
 }
 
-QueryResult QueryContext::SubstGenericTypesNonFinal(QualType &Result, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR)
+QueryResult QueryContext::SubstTemplateParamTypesNonFinal(QualType &Result, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR)
 
 {
-SubstGenericTypesNonFinalQuery _Q(*this, T, TemplateArgs, SR);
+SubstTemplateParamTypesNonFinalQuery _Q(*this, T, TemplateArgs, SR);
 
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;

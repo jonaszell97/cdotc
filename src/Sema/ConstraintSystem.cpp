@@ -568,8 +568,9 @@ void ConditionalConstraint::print(llvm::raw_ostream &OS) const
 }
 
 ConstraintSystem::ConstraintSystem(QueryContext &QC,
+                                   SourceRange Loc,
                                    llvm::raw_ostream *LogStream)
-   : QC(QC), CG(*this), LogStream(LogStream)
+   : QC(QC), Loc(Loc), CG(*this), LogStream(LogStream)
 {
 
 }
@@ -854,7 +855,7 @@ void ConstraintSystem::updateStatus(unsigned Status)
 {
    switch (static_cast<QueryResult::ResultKind>(Status)) {
    case QueryResult::Dependent:
-      TypeDependent = true;
+//      TypeDependent = true;
       break;
    case QueryResult::Error:
       EncounteredError = true;
@@ -890,8 +891,8 @@ bool ConstraintSystem::isSatisfied(TypeBindingConstraint *C)
 bool ConstraintSystem::isSatisfied(TypeEqualityConstraint *C)
 {
    auto *TypeVar = C->getConstrainedType();
-   CanType LHS = getConcreteType(C->getConstrainedType())->stripReference();
-   CanType RHS = getConcreteType(C->getType(), TypeVar)->stripReference();
+   CanType LHS = getConcreteType(C->getConstrainedType())->removeReference();
+   CanType RHS = getConcreteType(C->getType(), TypeVar)->removeReference();
 
    if (LHS->containsTypeVariable() || RHS->containsTypeVariable()) {
       // Can't tell right now, assume it's satisfied.
@@ -948,10 +949,10 @@ bool ConstraintSystem::isSatisfied(FunctionParamTypeConstraint *C)
 
    auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS);
    if (!ConvSeq.isValid()) {
-      if (ConvSeq.isDependent()) {
-         TypeDependent = true;
-         return true;
-      }
+//      if (ConvSeq.isDependent()) {
+//         TypeDependent = true;
+//         return true;
+//      }
 
       return false;
    }
@@ -984,10 +985,10 @@ bool ConstraintSystem::isSatisfied(CovarianceConstraint *C)
 
       auto ConvSeq = QC.Sema->getConversionSequence(Ty, RHS);
       if (!ConvSeq.isValid()) {
-         if (ConvSeq.isDependent()) {
-            TypeDependent = true;
-            continue;
-         }
+//         if (ConvSeq.isDependent()) {
+//            TypeDependent = true;
+//            continue;
+//         }
 
          return false;
       }
@@ -1068,10 +1069,10 @@ bool ConstraintSystem::isSatisfied(ImplicitConversionConstraint *C)
 
    auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS);
    if (!ConvSeq.isValid()) {
-      if (ConvSeq.isDependent()) {
-         TypeDependent = true;
-         return true;
-      }
+//      if (ConvSeq.isDependent()) {
+//         TypeDependent = true;
+//         return true;
+//      }
 
       return false;
    }
@@ -1084,10 +1085,10 @@ static bool isExpressibleBy(SemaPass &Sema,
                             SemaPass::InitializableByKind K,
                             bool &Dependent,
                             bool &EncounteredError) {
-   if (Ty->isDependentType()) {
-      Dependent = true;
-      return true;
-   }
+//   if (Ty->isDependentType()) {
+//      Dependent = true;
+//      return true;
+//   }
 
    CanType Desugared = Ty->getDesugaredType();
 
@@ -1259,17 +1260,17 @@ bool ConstraintSystem::isSatisfied(MemberConstraint *C)
       }
 
       CanType DeclTy = NonCanon;
-      if (DeclTy->isUnknownAnyType()) {
-         TypeDependent = true;
-         return true;
-      }
+//      if (DeclTy->isUnknownAnyType()) {
+//         TypeDependent = true;
+//         return true;
+//      }
       if (DeclTy->isErrorType()) {
          EncounteredError = true;
          return true;
       }
 
       if (!MemberType->isReferenceType()) {
-         DeclTy = DeclTy->stripReference();
+         DeclTy = DeclTy->removeReference();
       }
 
       if (DeclTy == MemberType) {
@@ -1716,7 +1717,7 @@ void ConstraintSystem::printSolution(const Solution &S, llvm::raw_ostream &OS)
    OS << "viable solution (score " << S.Score << "):\n";
 
    for (auto &AS : S.AssignmentMap) {
-      OS << *AS.getFirst() << " = " << AS.getSecond() << "\n";
+      OS << *AS.getFirst() << " = " << AS.getSecond().toDiagString() << "\n";
    }
 }
 

@@ -102,7 +102,7 @@ GEPInst::GEPInst(il::Value *val, size_t idx, bool IsLet, il::BasicBlock *parent)
                                         idx), nullptr, parent),
     Offset(0)
 {
-   QualType valTy = val->getType()->stripReference();
+   QualType valTy = val->getType()->removeReference();
 
    assert(valTy->isRecordType() && "struct GEP on non-record type!");
    auto R = cast<StructDecl>(valTy->getRecord());
@@ -121,10 +121,10 @@ GEPInst::GEPInst(il::Value *val, size_t idx, bool IsLet, il::BasicBlock *parent)
 
    GEPBits.IsLet = IsLet;
    if (IsLet) {
-      type = getASTCtx().getReferenceType(type->stripReference());
+      type = getASTCtx().getReferenceType(type->removeReference());
    }
    else {
-      type = getASTCtx().getMutableReferenceType(type->stripReference());
+      type = getASTCtx().getMutableReferenceType(type->removeReference());
    }
 }
 
@@ -800,9 +800,9 @@ GlobalVariable* ExistentialInitInst::getProtocolTypeInfo() const
 
 GenericInitInst::GenericInitInst(il::Value *Val,
                                  il::Value *GenericEnvironment,
-                                 QualType GenericType,
+                                 QualType TemplateParamType,
                                  il::BasicBlock *Parent)
-   : BinaryInstruction(GenericInitInstID, Val, GenericEnvironment, GenericType,
+   : BinaryInstruction(GenericInitInstID, Val, GenericEnvironment, TemplateParamType,
                        Parent)
 {
 

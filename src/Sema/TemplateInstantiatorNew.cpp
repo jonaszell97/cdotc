@@ -33,7 +33,7 @@ static constexpr uint16_t GenericMask =
    | TypeProperties::ContainsDependentSizeArrayType
    | TypeProperties::ContainsUnconstrainedGeneric
    | TypeProperties::ContainsUnknownAny
-   | TypeProperties::ContainsGenericType
+   | TypeProperties::ContainsTemplateParamType
    | TypeProperties::ContainsTemplate;
 
 static constexpr uint16_t DependentMask =
@@ -349,7 +349,7 @@ public:
             }
 
             if ((Props & GenericMask) != 0) {
-               if (SP.QC.SubstGenericTypes(Inst, Inst, templateArgs, POI)) {
+               if (SP.QC.SubstTemplateParamTypes(Inst, Inst, templateArgs, POI)) {
                   return Ty;
                }
             }
@@ -2904,7 +2904,7 @@ static unsigned getDepth(const TemplateArgument &Arg)
       return Max;
    }
 
-   QualType T = Arg.getType()->stripReference()->stripMetaType();
+   QualType T = Arg.getType()->removeReference()->removeMetaType();
    if (!T->isRecordType()) {
       return 0;
    }

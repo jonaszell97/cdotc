@@ -129,7 +129,14 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
       auto *callExpr = Sys.QC.Sema->CreateCall(Fn, Data.CandSet.ResolvedArgs,
                                                Expr->getSourceLoc());
 
-      if (Expr->needsInstantiation()) {
+      if (Fn->isTemplate()) {
+         auto *templateArgs = FinalTemplateArgumentList::Create(
+            Sys.QC.Context, Cand.InnerTemplateArgs);
+
+         callExpr->setTemplateArgs(templateArgs);
+      }
+
+      if (Expr->needsInstantiation() || Fn->isTemplateOrInTemplate()) {
          callExpr->setNeedsInstantiation(true);
 
          if (auto *Ovl = dyn_cast_or_null<OverloadedDeclRefExpr>(Expr->getParentExpr())) {

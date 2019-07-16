@@ -34,8 +34,8 @@ bool Query::isPure() const
    case GetConversionSequenceQueryID: return false;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
-   case SubstGenericTypesQueryID: return false;
-   case SubstGenericTypesNonFinalQueryID: return false;
+   case SubstTemplateParamTypesQueryID: return false;
+   case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return false;
    case ApplyCapabilitesQueryID: return false;
    case GetBuiltinModuleQueryID: return false;
@@ -244,8 +244,8 @@ bool Query::canBeCached() const
    case GetConversionSequenceQueryID: return true;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return true;
-   case SubstGenericTypesQueryID: return true;
-   case SubstGenericTypesNonFinalQueryID: return false;
+   case SubstTemplateParamTypesQueryID: return true;
+   case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return true;
    case ApplyCapabilitesQueryID: return true;
    case GetBuiltinModuleQueryID: return true;
@@ -454,8 +454,8 @@ bool Query::canBeSerialized() const
    case GetConversionSequenceQueryID: return false;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
-   case SubstGenericTypesQueryID: return false;
-   case SubstGenericTypesNonFinalQueryID: return false;
+   case SubstTemplateParamTypesQueryID: return false;
+   case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return false;
    case ApplyCapabilitesQueryID: return false;
    case GetBuiltinModuleQueryID: return false;
@@ -664,8 +664,8 @@ bool Query::canBeDependent() const
    case GetConversionSequenceQueryID: return true;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
-   case SubstGenericTypesQueryID: return false;
-   case SubstGenericTypesNonFinalQueryID: return false;
+   case SubstTemplateParamTypesQueryID: return false;
+   case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return false;
    case ApplyCapabilitesQueryID: return false;
    case GetBuiltinModuleQueryID: return false;
@@ -2039,7 +2039,7 @@ void IsImplicitlyConvertibleQuery::Profile(llvm::FoldingSetNodeID &ID, QualType 
    ID.AddPointer(To.getAsOpaquePtr());
 }
 
-IsValidParameterValueQuery::IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType) : Query(IsValidParameterValueQueryID, QC), givenType(givenType), paramType(paramType) {
+IsValidParameterValueQuery::IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType, uint8_t isSelf) : Query(IsValidParameterValueQueryID, QC), givenType(givenType), paramType(paramType), isSelf(isSelf) {
 
 }
 
@@ -2068,6 +2068,9 @@ OS << "'" << givenType << "'";
    OS << ',';
    OS << " paramType = ";
 OS << "'" << paramType << "'";
+   OS << ',';
+   OS << " isSelf = ";
+OS << isSelf;
 ;
 
    return OS.str();
@@ -2082,13 +2085,14 @@ QueryResult IsValidParameterValueQuery::finish(bool Result, Status St)
 
 void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, givenType, paramType);
+   Profile(ID, givenType, paramType, isSelf);
 }
 
-void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType)
+void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType, uint8_t isSelf)
 {
    ID.AddPointer(givenType.getAsOpaquePtr());
    ID.AddPointer(paramType.getAsOpaquePtr());
+   ID.AddInteger(isSelf);
 }
 
 GetConversionSequenceQuery::GetConversionSequenceQuery(QueryContext &QC, QualType From, QualType To) : Query(GetConversionSequenceQueryID, QC), From(From), To(To) {
@@ -2235,17 +2239,17 @@ void SubstAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, 
    ID.AddPointer(Self.getAsOpaquePtr());
 }
 
-SubstGenericTypesQuery::SubstGenericTypesQuery(QueryContext &QC, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR) : Query(SubstGenericTypesQueryID, QC), T(T), TemplateArgs(std::move(TemplateArgs)), SR(SR) {
+SubstTemplateParamTypesQuery::SubstTemplateParamTypesQuery(QueryContext &QC, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR) : Query(SubstTemplateParamTypesQueryID, QC), T(T), TemplateArgs(std::move(TemplateArgs)), SR(SR) {
 
 }
 
-QualType SubstGenericTypesQuery::get() const
+QualType SubstTemplateParamTypesQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
    return Result.getValue();
 }
 
-std::string SubstGenericTypesQuery::description() const
+std::string SubstTemplateParamTypesQuery::description() const
 {
    std::string s;
    s += "substituting ";
@@ -2255,12 +2259,12 @@ std::string SubstGenericTypesQuery::description() const
    return s;
 }
 
-std::string SubstGenericTypesQuery::summary() const
+std::string SubstTemplateParamTypesQuery::summary() const
 {
    std::string s;
    llvm::raw_string_ostream OS(s);
 
-   OS << "[SubstGenericTypes]"
+   OS << "[SubstTemplateParamTypes]"
 ;   OS << " T = ";
 OS << "'" << T << "'";
    OS << ',';
@@ -2271,35 +2275,35 @@ TemplateArgs.print(OS);
    return OS.str();
 }
 
-QueryResult SubstGenericTypesQuery::finish(QualType Result, Status St)
+QueryResult SubstTemplateParamTypesQuery::finish(QualType Result, Status St)
 {
    this->Result = Result;
 
    return Query::finish(St);
 }
 
-void SubstGenericTypesQuery::Profile(llvm::FoldingSetNodeID &ID) const
+void SubstTemplateParamTypesQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
    Profile(ID, T, TemplateArgs);
 }
 
-void SubstGenericTypesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs)
+void SubstTemplateParamTypesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs)
 {
    ID.AddPointer(T.getAsOpaquePtr());
    TemplateArgs.Profile(ID);
 }
 
-SubstGenericTypesNonFinalQuery::SubstGenericTypesNonFinalQuery(QueryContext &QC, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR) : Query(SubstGenericTypesNonFinalQueryID, QC), T(T), TemplateArgs(TemplateArgs), SR(SR) {
+SubstTemplateParamTypesNonFinalQuery::SubstTemplateParamTypesNonFinalQuery(QueryContext &QC, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR) : Query(SubstTemplateParamTypesNonFinalQueryID, QC), T(T), TemplateArgs(TemplateArgs), SR(SR) {
 
 }
 
-QualType SubstGenericTypesNonFinalQuery::get() const
+QualType SubstTemplateParamTypesNonFinalQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
    return Result.getValue();
 }
 
-std::string SubstGenericTypesNonFinalQuery::description() const
+std::string SubstTemplateParamTypesNonFinalQuery::description() const
 {
    std::string s;
    s += "substituting ";
@@ -2309,12 +2313,12 @@ std::string SubstGenericTypesNonFinalQuery::description() const
    return s;
 }
 
-std::string SubstGenericTypesNonFinalQuery::summary() const
+std::string SubstTemplateParamTypesNonFinalQuery::summary() const
 {
    std::string s;
    llvm::raw_string_ostream OS(s);
 
-   OS << "[SubstGenericTypesNonFinal]"
+   OS << "[SubstTemplateParamTypesNonFinal]"
 ;   OS << " T = ";
 OS << "'" << T << "'";
    OS << ',';
@@ -2325,7 +2329,7 @@ OS << &TemplateArgs;
    return OS.str();
 }
 
-QueryResult SubstGenericTypesNonFinalQuery::finish(QualType Result, Status St)
+QueryResult SubstTemplateParamTypesNonFinalQuery::finish(QualType Result, Status St)
 {
    this->Result = Result;
 

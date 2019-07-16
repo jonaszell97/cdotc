@@ -1561,9 +1561,9 @@ ExistentialInitInst* ILBuilder::CreateExistentialInit(il::Value *target,
 
 GenericInitInst* ILBuilder::CreateGenericInit(il::Value *Val,
                                               il::Value *GenericEnvironment,
-                                              QualType GenericType,
+                                              QualType TemplateParamType,
                                               StringRef Name) {
-   auto *inst = new GenericInitInst(Val, GenericEnvironment, GenericType,
+   auto *inst = new GenericInitInst(Val, GenericEnvironment, TemplateParamType,
                                     getInsertBlock());
 
    insertInstruction(inst, Name);

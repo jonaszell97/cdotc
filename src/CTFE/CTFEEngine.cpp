@@ -2785,12 +2785,12 @@ ctfe::Value EngineImpl::visitLambdaCallInst(LambdaCallInst const& I)
 
 ctfe::Value EngineImpl::visitStructInitInst(StructInitInst const& I)
 {
-   auto Val = getNullValue(I.getType()->stripReference());
+   auto Val = getNullValue(I.getType()->removeReference());
    ctfe::Value ArgVal = Val;
 
-//   if (I.getType()->stripReference()->isClass()) {
+//   if (I.getType()->removeReference()->isClass()) {
 //      Value Ref(Allocate(sizeof(void*), alignof(void*)));
-//      storeValue(Ref, Val, I.getType()->stripReference());
+//      storeValue(Ref, Val, I.getType()->removeReference());
 //
 //      ArgVal = Ref;
 //   }

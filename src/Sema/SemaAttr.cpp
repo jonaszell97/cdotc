@@ -221,6 +221,11 @@ void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
 //   ND->setUnboundedTemplate(true);
 //}
 
+void SemaPass::checkStrongAttr(Decl *D, StrongAttr*)
+{
+   cast<AliasDecl>(D)->setStrong(true);
+}
+
 void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*)
 {
 

@@ -45,7 +45,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
    bool IsDirectType = true;
    bool CompileTimeCheck = true;
 
-   if (lhs->containsGenericType() || lhs->isDependentType()) {
+   if (lhs->containsTemplateParamType() || lhs->isDependentType()) {
       if (PredExpr->getKind() == ConstraintExpr::Type) {
          (void) visitSourceType(Pred->getRHS(),
                                 Pred->getRHS()->getTypeConstraint());
@@ -64,7 +64,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
    }
    else {
       IsDirectType = false;
-      TypeToCheck = lhs->stripReference();
+      TypeToCheck = lhs->removeReference();
    }
 
    Pred->getRHS()->setSemanticallyChecked(true);
@@ -78,7 +78,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          return ExprError();
 
       auto rhs = RhsResult.get();
-      if (rhs->containsGenericType() || rhs->isDependentType()) {
+      if (rhs->containsTemplateParamType() || rhs->isDependentType()) {
          Pred->setIsTypeDependent(true);
          return Pred;
       }
@@ -322,7 +322,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
    }
 
    auto rhs = Expr->getRhs();
-   auto RhsResult = visitExpr(Expr, rhs, lhs->getExprType()->stripReference());
+   auto RhsResult = visitExpr(Expr, rhs, lhs->getExprType()->removeReference());
 
    if (!RhsResult) {
       return ExprError();
@@ -331,7 +331,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
    rhs = RhsResult.get();
    Expr->setRhs(rhs);
 
-   if (isa<SelfExpr>(lhs) && lhs->getExprType()->stripReference()->isClass()) {
+   if (isa<SelfExpr>(lhs) && lhs->getExprType()->removeReference()->isClass()) {
       diagnose(Expr, err_generic_error, "cannot assign to 'self' in a class",
                Expr->getSourceRange());
    }
@@ -408,7 +408,7 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
 
 ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
 {
-   QualType to = Cast->getTargetType()->stripMetaType();
+   QualType to = Cast->getTargetType()->removeMetaType();
 
    auto Result = visitExpr(Cast, Cast->getTarget(), to);
    if (!Result || Result.get()->isTypeDependent()) {
@@ -465,7 +465,7 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
       else {
          diagnose(Cast, err_cast_requires_op,
                   Cast->getAsLoc(), LHSRange, RHSRange,
-                  from->stripReference(), to->stripReference(),
+                  from->removeReference(), to->removeReference(),
                   (int)ConvSeq.getStrength() - 1);
       }
    }
@@ -528,7 +528,7 @@ ExprResult SemaPass::visitAddrOfExpr(AddrOfExpr *Expr)
                Expr->getSourceRange());
    }
 
-   Expr->setExprType(Context.getMutableBorrowType(T->stripReference()));
+   Expr->setExprType(Context.getMutableBorrowType(T->removeReference()));
    return Expr;
 }
 

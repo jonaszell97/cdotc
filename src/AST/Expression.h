@@ -2291,9 +2291,9 @@ class CallExpr final: public Expression,
 
    CallKind kind = CallKind::Unknown;
    Expression *ParentExpr = nullptr;
-   DeclContext *Context = nullptr;
 
    ASTVector<Expression*> args;
+   sema::FinalTemplateArgumentList *templateArgs = nullptr;
 
    bool PointerAccess   : 1;
    bool IsUFCS          : 1;
@@ -2366,11 +2366,11 @@ public:
    Expression *getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression *E) { ParentExpr = E; }
 
-   DeclContext *getContext() const { return Context; }
-   void setContext(DeclContext *C) { Context = C; }
-
    ASTVector<Expression*> &getArgs() { return args; }
    llvm::ArrayRef<Expression*> getArgs() const { return args; }
+
+   sema::FinalTemplateArgumentList *getTemplateArgs() const { return templateArgs; }
+   void setTemplateArgs(sema::FinalTemplateArgumentList *templateArgs) { this->templateArgs = templateArgs; }
 
    CallableDecl *getFunc() const { return func; }
    void setFunc(CallableDecl *func) { this->func = func; }

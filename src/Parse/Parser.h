@@ -40,7 +40,7 @@ namespace lex {
 
 class Type;
 class RecordType;
-class GenericType;
+class TemplateParamType;
 enum class AccessSpecifier : unsigned char;
 
 enum class FixKind : unsigned char;

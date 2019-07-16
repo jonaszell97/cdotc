@@ -213,8 +213,8 @@ static void FromMeta(SemaPass &SP, CanType from, CanType to,
    if (!to->isMetaType())
       return Seq.invalidate();
 
-   CanType From = from->stripMetaType()->getDesugaredType();
-   CanType To = to->stripMetaType()->getDesugaredType();
+   CanType From = from->removeMetaType()->getDesugaredType();
+   CanType To = to->removeMetaType()->getDesugaredType();
 
    ConversionSequenceBuilder ConvSeq;
    ast::getConversionSequence(SP, From, To, ConvSeq, true);
@@ -250,8 +250,8 @@ static void FromReference(SemaPass &SP,
       return Seq.invalidate();
    }
 
-   QualType FromTy = from->stripReference()->getDesugaredType();
-   QualType ToTy = to->stripReference()->getDesugaredType();
+   QualType FromTy = from->removeReference()->getDesugaredType();
+   QualType ToTy = to->removeReference()->getDesugaredType();
 
    if (FromTy == ToTy) {
       return Seq.addStep(CastKind::NoOp, to);
@@ -543,7 +543,7 @@ static void getConversionSequence(SemaPass &SP,
                                   bool MetaConversion) {
    // Implicit lvalue -> rvalue
    if (fromTy->isReferenceType() && !toTy->isReferenceType()) {
-      fromTy = fromTy->stripReference()->getCanonicalType();
+      fromTy = fromTy->removeReference()->getCanonicalType();
       Seq.addStep(CastKind::LValueToRValue, fromTy);
    }
 

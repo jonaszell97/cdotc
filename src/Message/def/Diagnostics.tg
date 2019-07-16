@@ -258,16 +258,16 @@ def err_dot_init_bad_type : Error<"cannot call '.init' on type '$0'">
 def err_dot_init_outside_initializer : Error<"'self.init' cannot be called outside of an initializer">
 
 def note_cand_no_implicit_conv : Note<"candidate not viable: no implicit conversion from '$0' to '$1' for ${ 2 | ordinal } argument${ 3 | if( (builtin operator candidate)) }">
-def note_cand_no_implicit_conv_inferred : Note<"candidate not viable: no implicit conversion from '$0' to '$1' for ${ 2 | ordinal } argument (with template arguments inferred as [$3])">
+def note_cand_no_implicit_conv_inferred : Note<"candidate not viable: no implicit conversion from '$0' to '$1' for ${ 2 | ordinal } argument (with template arguments inferred as <$3>)">
 def note_cand_failed_constraint : Note<"candidate not viable because of failed constraint: $0">
-def note_cand_failed_constraint_inferred : Note<"candidate not viable because of failed constraint: $0 (with template arguments inferred as [$1])">
+def note_cand_failed_constraint_inferred : Note<"candidate not viable because of failed constraint: $0 (with template arguments inferred as <$1>)">
 def note_cand_invalid_self : Note<"candidate not viable: 'self' argument has type '$0', '$1' given">
 def note_cand_invalid_return : Note<"candidate not viable: return type is '$0', need '$1'">
 def note_cand_label : Note<"candidate not viable: expected ${ 0 | select(no label, label '$0')} for ${ 1 | ordinal } argument, ${ 2 | select(none, label '$2')} given">
 def note_too_few_arguments : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
 def note_too_many_arguments : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given${ 2 | if( (builtin operator candidate)) }">
-def note_too_few_arguments_inferred : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as [$2])">
-def note_too_many_arguments_inferred : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as [$2])">
+def note_too_few_arguments_inferred : Note<"candidate not viable: requires at least $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as <$2>)">
+def note_too_many_arguments_inferred : Note<"candidate not viable: requires at most $0 ${ 0 | plural_s(argument) }, $1 given (with template arguments inferred as <$2>)">
 def note_candidate_requires_context : Note<"candidate not viable: could not infer type of ${ 0 | ordinal } argument">
 
 def note_could_not_infer_template_arg : Note<"candidate not viable: could not infer template argument $0">
@@ -307,7 +307,7 @@ def err_does_not_name_template_parm : Error<"$0 does not name a ${ 1 | if(variad
 /* TEMPLATES */
 def err_non_type_param_used_as_type : Error<"non-type template parameter $0 cannot be used as a type">
 
-def note_instantiation_of : Note<"in instantiation of ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace) } '$1'${ 2 | if( with template arguments [$3]) }">
+def note_instantiation_of : Note<"in instantiation of ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace) } '$1'${ 2 | if( with template arguments <$3>) }">
 
 def err_protocol_template_params : Error<"protocols may not be templated, use associated types instead">
 def err_invalid_pack_expansion : Error<"cannot apply pack expansion operator '...' to expression that does not contain a variadic template parameter or argument">

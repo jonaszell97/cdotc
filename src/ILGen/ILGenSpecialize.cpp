@@ -92,7 +92,7 @@ void Specializer::addSubstitutions(NamedDecl *ND)
 }
 
 static bool findGenericParam(il::Value *Val,
-                             const GenericType *&GenericTy,
+                             const TemplateParamType *&GenericTy,
                              ProtocolDecl *&Covar) {
    if (!Val->getType()->isProtocol())
       return false;
@@ -103,7 +103,7 @@ static bool findGenericParam(il::Value *Val,
       Val = Cast->getOperand(0);
    }
 
-   GenericTy = dyn_cast<GenericType>(Val->getType().get());
+   GenericTy = dyn_cast<TemplateParamType>(Val->getType().get());
    return GenericTy != nullptr;
 }
 
@@ -133,7 +133,7 @@ static il::Value *eraseExistentialCasts(il::Value *Val)
 il::Value* Specializer::visitVirtualCallInst(const VirtualCallInst &I)
 {
    auto *Callee = I.getCallee();
-   const GenericType *GenericTy;
+   const TemplateParamType *GenericTy;
    ProtocolDecl *Covar;
 
    if (!findGenericParam(Callee, GenericTy, Covar))
@@ -181,12 +181,12 @@ public:
         ILGen(ILGen)
    {}
 
-   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
    {
-      Types.push_back(visitGenericType(T));
+      Types.push_back(visitTemplateParamType(T));
    }
 
-   QualType visitGenericType(GenericType *T)
+   QualType visitTemplateParamType(TemplateParamType *T)
    {
       auto *Subst = ILGen.getSubstitution(T->getParam());
       if (!Subst || Subst->isVariadic() || Subst->isValue())

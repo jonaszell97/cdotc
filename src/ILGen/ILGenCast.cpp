@@ -108,7 +108,7 @@ il::Value *ILGenPass::applySingleConversionStep(const ConversionStep &Step,
       Val = Builder.CreateLoad(Val);
       Value *Ref = Builder.CreateIntrinsicCall(Intrinsic::existential_ref, Val);
       if (getSema().NeedsStructReturn(
-            ResTy->stripReference())) {
+            ResTy->removeReference())) {
          Ref = Builder.CreateLoad(Ref);
       }
 

@@ -244,6 +244,9 @@ static void addModuleLib(IRGen &IRG,
    if (!Visited.insert(BaseMod).second)
       return;
 
+   if (!Mod->getILModule()->hasExternallyVisibleSymbols() || Mod->declarationsOnly())
+      return;
+
    auto StaticLibBlob = BaseMod->getDecl()->getModFile()->getLibraryBlob();
    if (StaticLibBlob.empty()) {
       std::string lib = "-lcdot";

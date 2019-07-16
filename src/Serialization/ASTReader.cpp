@@ -335,8 +335,9 @@ QualType ASTReader::readTypeRecord(unsigned ID)
    case Type::DependentRecordTypeID: {
       auto *R = ReadDeclAs<RecordDecl>(Record, Idx);
       auto *Args = ReadTemplateArgumentList(Record, Idx);
+      auto Parent = readType(Record, Idx);
 
-      return Context.getDependentRecordType(R, Args);
+      return Context.getDependentRecordType(R, Args, Parent);
    }
    case Type::DependentSizeArrayTypeID: {
       auto *SizeExpr = ReadExpr();
@@ -344,6 +345,13 @@ QualType ASTReader::readTypeRecord(unsigned ID)
 
       return Context.getValueDependentSizedArrayType(ElementTy,
                                                      cast<StaticExpr>(SizeExpr));
+   }
+   case Type::DependentTypedefTypeID: {
+      auto *Alias = ReadDeclAs<AliasDecl>(Record, Idx);
+      auto *Args = ReadTemplateArgumentList(Record, Idx);
+      auto Parent = readType(Record, Idx);
+
+      return Context.getDependentTypedefType(Alias, Args, Parent);
    }
    case Type::DependentNameTypeID: {
       auto *NameSpec = ReadNestedNameSpecWithLoc(Record, Idx);
@@ -366,7 +374,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       return Context.getFunctionType(RetTy, Params, ParamInfo, RawFlags,
                                      TypeID == Type::LambdaTypeID);
    }
-   case Type::GenericTypeID: {
+   case Type::TemplateParamTypeID: {
       if (Record.size() != 1) {
          Error("bad generic type encoding");
          return QualType();

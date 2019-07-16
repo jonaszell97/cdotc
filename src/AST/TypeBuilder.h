@@ -23,9 +23,9 @@ protected:
 
    void visit(QualType T, SmallVectorImpl<QualType> &VariadicTypes)
    {
-      if (auto *G = T->asGenericType()) {
+      if (auto *G = T->asTemplateParamType()) {
          static_cast<SubClass*>(this)
-            ->visitGenericType(G, VariadicTypes);
+            ->visitTemplateParamType(G, VariadicTypes);
 
          return;
       }
@@ -207,6 +207,30 @@ public:
       return T;
    }
 
+   QualType visitTypedefTypeCommon(QualType T, ast::AliasDecl *td,
+                                  const sema::FinalTemplateArgumentList &TemplateArgs) {
+      SmallVector<sema::TemplateArgument, 0> Args;
+
+      bool Dependent = false;
+      for (auto &Arg : TemplateArgs) {
+         VisitTemplateArg(Arg, Args, Dependent);
+      }
+
+      auto FinalList = sema::FinalTemplateArgumentList::Create(
+         SP.getContext(), Args, !Dependent);
+
+      if (Dependent)
+         return Ctx.getDependentTypedefType(td, FinalList);
+
+      auto *Template = td->isTemplate() ? td : td->getSpecializedTemplate();
+      auto Inst = SP.InstantiateAlias(SR.getStart(), Template, FinalList);
+
+      if (Inst)
+         return Ctx.getTypedefType(Inst);
+
+      return T;
+   }
+
    QualType visitRecordType(RecordType *T)
    {
       auto  R = T->getRecord();
@@ -223,15 +247,20 @@ public:
       return visitRecordTypeCommon(T, T->getRecord(), T->getTemplateArgs());
    }
 
-   QualType visitGenericType(GenericType *T)
+   QualType visitDependentTypedefType(DependentTypedefType *T)
+   {
+      return visitTypedefTypeCommon(T, T->getTypedef(), T->getTemplateArgs());
+   }
+
+   QualType visitTemplateParamType(TemplateParamType *T)
    {
       SmallVector<QualType, 1> Args;
-      visitGenericType(T, Args);
+      visitTemplateParamType(T, Args);
 
       return Args.empty() ? QualType(T) : Args.front();
    }
 
-   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Args)
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Args)
    {
       Args.emplace_back(T);
    }
@@ -308,6 +337,12 @@ public:
 
    QualType visitTypedefType(TypedefType *T)
    {
+      auto  td = T->getTypedef();
+      if (td->isInstantiation()) {
+         return visitTypedefTypeCommon(T, td->getSpecializedTemplate(),
+                                       td->getTemplateArgs());
+      }
+
       return T;
    }
 

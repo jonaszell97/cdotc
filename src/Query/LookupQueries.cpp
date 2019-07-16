@@ -343,7 +343,7 @@ MatchNominalType(MatchExtensionTypeQuery::ResultKind &Result,
          return true;
       }
 
-      if (GivenTy == Alias->getType()->stripMetaType()) {
+      if (GivenTy == Alias->getType()->removeMetaType()) {
          Result = MatchExtensionTypeQuery::AppliesDirectly;
       }
       else if (Alias->getType()->isDependentType()) {
@@ -1575,7 +1575,7 @@ QueryResult MultiLevelLookupQuery::run()
 QueryResult MultiLevelTypeLookupQuery::run()
 {
    MultiLevelLookupResult Result;
-   T = T->stripMetaType()->getDesugaredType();
+   T = T->removeMetaType()->getDesugaredType();
 
    if (auto *R = T->asRecordType()) {
       const MultiLevelLookupResult *Lookup;

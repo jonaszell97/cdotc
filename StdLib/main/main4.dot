@@ -1,7 +1,13 @@
 
-// public def infix ~= <T>(_ lhs: T, _ rhs: T) -> builtin.i1 {
-//     return lhs == rhs
-// }
+import builtin
+
+public def infix ~= <T>(_ lhs: T, _ rhs: T) -> builtin.i1 {
+    __debug
+    var v1: builtin.i64 = builtin.loadFromPointer(builtin.reinterpretCast(builtin.addressOf(lhs)))
+    var v2: builtin.i64 = builtin.loadFromPointer(builtin.reinterpretCast(builtin.addressOf(rhs)))
+
+    return v1 == v2
+}
 
 public enum MemoryOrder(builtin.i32) {
     case NotAtomic              = 0
@@ -21,14 +27,7 @@ public enum MemoryOrder(builtin.i32) {
 
     /// store-release load-acquire
     case SequentiallyConsistent = 6
-
-    def infix ~= (rhs: MemoryOrder) -> builtin.i1 {
-        return builtin.icmp_eq_i64(self.rawValue, rhs.rawValue)
-    }
 }
-
-def func(v1: builtin.i64) {}
-def func(v2: builtin.i64) {}
 
 /// Derived StringRepresentable conformance.
 // extend MemoryOrder with StringRepresentable {}
@@ -55,6 +54,7 @@ public struct Atomic<T> {
         case .Release:
         case .AcquireRelease:
         case .NotAtomic:
+            _ = libc.stdio.printf("memory order %d is not valid for load\n", memoryOrder)
             // sys.reportFatalError("memory order $memoryOrder is invalid for a load")
             break
         }
@@ -90,18 +90,18 @@ public struct Atomic<T> {
     /// Load the value with the given memory order.
     def load(memoryOrder: MemoryOrder = .SequentiallyConsistent) -> T {
         checkValidLoadOrder(memoryOrder)
-        __debug
-        return builtin.atomic_load(builtin.addressOf(self.value),
+        let addr = builtin.addressOf(self.value)
+        return builtin.atomic_load(addr,
                                    memoryOrder.rawValue)
     }
 
     /// Store `storeVal` to the underyling memory address.
-    // def mutating store(_ storeVal: owned T,
-    //                    memoryOrder: MemoryOrder = .SequentiallyConsistent) {
-    //     checkValidStoreOrder(memoryOrder)
-    //     return builtin.atomic_store(storeVal, builtin.addressOf(&self.value),
-    //                                 memoryOrder.rawValue)
-    // }
+    def mutating store(_ storeVal: owned T,
+                       memoryOrder: MemoryOrder = .SequentiallyConsistent) {
+        // checkValidStoreOrder(memoryOrder)
+        let addr = builtin.addressOf(&self.value)
+        return builtin.atomic_store(storeVal, addr, memoryOrder.rawValue)
+    }
 
     /// Expands to an instruction that atomically checks whether a specified value 
     /// is in a memory location, and, if it is, stores a new value.

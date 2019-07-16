@@ -709,7 +709,7 @@ ConstantGEPInst::ConstantGEPInst(Constant *Target,
    Target->addUse(this);
    ConstBits.ContainsConstantEnum |= Target->containsConstantEnum();
 
-   QualType valTy = Target->getType()->stripReference();
+   QualType valTy = Target->getType()->removeReference();
 
    assert(valTy->isRecordType() && "struct GEP on non-record type!");
    auto R = support::cast<ast::StructDecl>(valTy->getRecord());

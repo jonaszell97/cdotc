@@ -271,9 +271,15 @@ void SemaPass::SetBuiltinAliasType(AliasDecl *A)
    else if (II == BuiltinIdents[builtin::CVoid]) {
       A->setType(SourceType(Context.getMetaType(Context.getVoidType())));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer] && !A->isInstantiation()) {
+   else if (II == BuiltinIdents[builtin::RawPointer]
+   && !A->isInstantiation()
+   && !A->isTemplate()) {
       A->setType(SourceType(Context.getMetaType(
          Context.getVoidType()->getPointerTo(Context))));
+   }
+   else if (II == BuiltinIdents[builtin::RawPointer] && A->isTemplate()) {
+      QualType Ty = Context.getTemplateArgType(A->getTemplateParams().front());
+      A->setType(SourceType(Context.getMetaType(Ty->getPointerTo(Context))));
    }
    else if (II == BuiltinIdents[builtin::RawPointer]) {
       if (!A->isInstantiation() || A->getTemplateArgs().size() != 1

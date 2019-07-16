@@ -98,15 +98,15 @@ void SemaPass::CheckReturnedSelfType(QualType ParentType, Expression *E)
    bool IsMeta = ExprType->isMetaType();
 
    if (IsMeta) {
-      ExprType = ExprType->stripMetaType();
+      ExprType = ExprType->removeMetaType();
    }
 
-   auto *AT = ExprType->stripReference()->asAssociatedType();
+   auto *AT = ExprType->removeReference()->asAssociatedType();
    if (!AT || AT->getDecl()->isImplementation()) {
       return;
    }
 
-   CanType ParentTy = ParentType->stripReference()->stripMetaType();
+   CanType ParentTy = ParentType->removeReference()->removeMetaType();
    const MultiLevelLookupResult *Result;
    if (QC.MultiLevelTypeLookup(Result, ParentTy, AT->getDecl()->getDeclName())){
       E->setIsInvalid(true);
@@ -177,7 +177,7 @@ Expression *SemaPass::UnwrapExistential(QualType ParentType, Expression *Expr)
 //   if (!ParentType->isDependentRecordType())
 //      return Expr;
 //
-//   if (!Expr->getExprType()->containsGenericType())
+//   if (!Expr->getExprType()->containsTemplateParamType())
 //      return Expr;
 //
 //   QualType Ty = resolveDependencies(Expr->getExprType(),
@@ -463,12 +463,12 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
       PE = ParentRes.get();
       Ident->setParentExpr(PE);
 
-      ParentType = PE->getExprType()->stripReference();
+      ParentType = PE->getExprType()->removeReference();
       if (QC.ApplyCapabilites(ParentType, ParentType, &getDeclContext())) {
          Ident->setIsInvalid(true);
       }
 
-      QualType NoSugar = ParentType->stripReference()->getDesugaredType();
+      QualType NoSugar = ParentType->removeReference()->getDesugaredType();
       if (NoSugar->isUnknownAnyType()) {
          return makeNestedNameSpec(*this, Context, Ident, NameSpec,
                                    Ident->getIdentInfo(), ArgExpr, true);
@@ -506,7 +506,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
          Ident->setStaticLookup(true);
       }
 
-      ParentTypeNoRef = ParentType->stripReference();
+      ParentTypeNoRef = ParentType->removeReference();
       NoSugar = ParentTypeNoRef->getDesugaredType();
 
       if (auto *R = NoSugar->asRecordType()) {
@@ -1095,7 +1095,7 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr)
    QualType ResultType;
    switch (ND->getKind()) {
    case Decl::AssociatedTypeDeclID: {
-      CanType ParentTypeNoRef = PE->getExprType()->stripReference();
+      CanType ParentTypeNoRef = PE->getExprType()->removeReference();
       AssociatedType *OuterAT = nullptr;
 
       if (ParentTypeNoRef && ParentTypeNoRef->isAssociatedType()) {
@@ -1486,19 +1486,15 @@ AliasDecl* SemaPass::checkAliasReference(Expression *E,
 
    TemplateArgList ArgList(*this, Alias, TemplateArgs, E->getSourceLoc());
    if (ArgList.isStillDependent()) {
-      auto &Tbl = Context.getDeclNameTable();
-      auto *aliasNameSpec = NestedNameSpecifier::Create(Tbl, Alias);
-
-      auto *FinalList = FinalTemplateArgumentList::Create(Context, ArgList);
-      auto *templateNameSpec = NestedNameSpecifier::Create(Tbl, FinalList, aliasNameSpec);
-
-      auto *nameSpecWithLoc = NestedNameSpecifierWithLoc::Create(Tbl, templateNameSpec, {
-         Alias->getSourceRange(),
-         !TemplateArgs.empty() ? TemplateArgs.front()->getSourceRange() : SourceRange()
-      });
-
-      E->setExprType(Context.getDependentNameType(nameSpecWithLoc));
       E->setNeedsInstantiation(true);
+
+      if (Alias->getType()->isMetaType()) {
+         E->setExprType(Context.getDependentTypedefType(
+            Alias, FinalTemplateArgumentList::Create(Context, ArgList)));
+      }
+      else {
+         E->setExprType(Alias->getType());
+      }
 
       return nullptr;
    }
@@ -1767,7 +1763,7 @@ static NestedNameSpecifierWithLoc *checkNamespaceRefCommon(SemaPass &SP, T *Expr
       Ident->setDeclCtx(Ctx);
    }
    else if (auto Call = dyn_cast<CallExpr>(Expr)) {
-      Call->setContext(Ctx);
+//      Call->setContext(Ctx);
    }
    else {
       Expr->copyStatusFlags(ParentExpr);
@@ -1928,7 +1924,7 @@ QualType SemaPass::HandleFieldAccess(Expression *Expr, FieldDecl *F)
       // field access in non mutating methods of a class returns a mutable
       // reference
       if (auto Self = dyn_cast<SelfExpr>(Expr->getParentExpr())) {
-         ParentIsConst &= !Self->getExprType()->stripReference()->isClass();
+         ParentIsConst &= !Self->getExprType()->removeReference()->isClass();
       }
 
       // if we're in this records initializer, return a mutable reference for
@@ -2024,7 +2020,7 @@ QualType SemaPass::HandlePropAccess(Expression *Expr, PropDecl *P)
    // Field access in non mutating methods of a class returns a mutable
    // reference.
    if (auto Self = dyn_cast<SelfExpr>(Expr->getParentExpr())) {
-      ParentIsConst &= !Self->getExprType()->stripReference()->isClass();
+      ParentIsConst &= !Self->getExprType()->removeReference()->isClass();
    }
 
    if (!SelfType->isDependentType() && !ResultTy->isDependentType()) {
@@ -2056,14 +2052,14 @@ ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr *Expr)
    ParentExpr = ParentResult.get();
    Expr->setParentExpr(ParentExpr);
 
-   if (ParentExpr->getExprType()->stripReference()->isUnknownAnyType()) {
+   if (ParentExpr->getExprType()->removeReference()->isUnknownAnyType()) {
       Expr->setIsTypeDependent(true);
       Expr->setExprType(UnknownAnyTy);
 
       return Expr;
    }
 
-   TupleType *tup = ParentExpr->getExprType()->stripReference()->asTupleType();
+   TupleType *tup = ParentExpr->getExprType()->removeReference()->asTupleType();
    if (!tup) {
       diagnose(Expr, err_not_tuple, Expr->getSourceLoc(),
                ParentExpr->getExprType());
@@ -2086,7 +2082,7 @@ ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr *Expr)
    // field access in non mutating methods of a class returns a mutable
    // reference
    if (auto Self = dyn_cast<SelfExpr>(Expr->getParentExpr())) {
-      ParentIsConst &= !Self->getExprType()->stripReference()->getRecord()
+      ParentIsConst &= !Self->getExprType()->removeReference()->getRecord()
                             ->isClass();
    }
 
@@ -2119,7 +2115,7 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
          return ExprError();
       }
 
-      ty = ty->stripReference();
+      ty = ty->removeReference();
 
       if (!ty->isRecordType()) {
          diagnose(Expr, err_value_is_not_enum, Expr->getSourceLoc(), ty);
@@ -2212,7 +2208,7 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
       Expr->setIsInvalid(true);
    }
 
-   QualType SubscriptedTy = ParentTy->stripReference()->getDesugaredType();
+   QualType SubscriptedTy = ParentTy->removeReference()->getDesugaredType();
    if (SubscriptedTy->isRecordType() || SubscriptedTy->isExistentialType()) {
       auto DeclName = Context.getDeclNameTable().getSubscriptName(
          DeclarationName::SubscriptKind::General);
@@ -2277,7 +2273,7 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
 
    if (!Expr->getIndices().empty()) {
       auto &idx = Expr->getIndices().front();
-      auto IdxTy = idx->getExprType()->stripReference();
+      auto IdxTy = idx->getExprType()->removeReference();
 
       // allow signed and unsigned subscript indices
       if (IdxTy->isIntegerType()) {
@@ -2290,7 +2286,7 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
       }
    }
 
-   bool IsMutablePtr = ParentExpr->getExprType()->stripReference()
+   bool IsMutablePtr = ParentExpr->getExprType()->removeReference()
                                  ->isMutablePointerType();
 
    bool ParentIsConst = !Expr->getParentExpr()->getExprType()

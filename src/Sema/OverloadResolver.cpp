@@ -126,8 +126,8 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
                                  CandidateSet &CandSet,
                                  ConvSeqVec &Conversions,
                                  bool IsSelf, unsigned ArgNo) {
-   QualType NeededNoSugar = NeededTy->stripReference()->getDesugaredType();
-   QualType GivenNoSugar = GivenTy->stripReference()->getDesugaredType();
+   QualType NeededNoSugar = NeededTy->removeReference()->getDesugaredType();
+   QualType GivenNoSugar = GivenTy->removeReference()->getDesugaredType();
 
    if (GivenNoSugar->isErrorType() || NeededNoSugar->isErrorType()) {
       return false;
@@ -164,7 +164,7 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
        && NeededTy->isMutableBorrowType()
        && GivenTy->isMutableReferenceType()) {
       GivenTy = SP.getContext().getMutableBorrowType(
-         GivenTy->stripReference())->getCanonicalType();
+         GivenTy->removeReference())->getCanonicalType();
 
       ConvSeq.addStep(CastKind::BitCast, GivenTy);
    }
@@ -216,13 +216,13 @@ static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
       if (Cand.isAssignmentOperator() && ArgNo == 0) {
          if (!NeededTy->isMutableReferenceType()) {
             NeededTy = SP.getContext()
-                         .getMutableReferenceType(NeededTy->stripReference())
+                         .getMutableReferenceType(NeededTy->removeReference())
                          ->getCanonicalType();
          }
       }
       else if (!NeededTy->isMutableBorrowType()) {
          NeededTy = SP.getContext()
-                      .getMutableBorrowType(NeededTy->stripReference())
+                      .getMutableBorrowType(NeededTy->removeReference())
                       ->getCanonicalType();
       }
       else if (!GivenTy->isMutableBorrowType()) {
@@ -348,7 +348,7 @@ static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
 
 static bool isVariadic(QualType Ty)
 {
-   return Ty->isGenericType() && Ty->asGenericType()->isVariadic();
+   return Ty->isTemplateParamType() && Ty->asTemplateParamType()->isVariadic();
 }
 
 static bool resolveContextualArgument(SemaPass &SP,
@@ -364,7 +364,7 @@ static bool resolveContextualArgument(SemaPass &SP,
    SourceLocation ArgLoc = ArgVal->getSourceLoc();
 
    if (TemplateArgs && NeededTy->isDependentType()) {
-      if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+      if (SP.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
                                           *TemplateArgs, ArgLoc)) {
          return true;
       }
@@ -420,12 +420,12 @@ static bool resolveContextualArgument(SemaPass &SP,
    }
 
    QualType ArgValType;
-   if (NeededTy->containsGenericType()) {
+   if (NeededTy->containsTemplateParamType()) {
       // We can't infer a context dependent expression from a
       // dependent type.
       auto DefaultType = SP.GetDefaultExprType(ArgVal);
       if (DefaultType) {
-         if (TemplateArgs && NeededTy->containsGenericType()) {
+         if (TemplateArgs && NeededTy->containsTemplateParamType()) {
             if (!TemplateArgs->inferFromType(DefaultType,
                                              NeededTy, false)) {
                Cand.setHasIncompatibleArgument(i, DefaultType,
@@ -437,7 +437,7 @@ static bool resolveContextualArgument(SemaPass &SP,
             if (isVariadic(NeededTy)) {
                NeededTy = DefaultType;
             }
-            else if (SP.QC.SubstGenericTypesNonFinal(NeededTy,
+            else if (SP.QC.SubstTemplateParamTypesNonFinal(NeededTy,
                                                      NeededTy,
                                                      *TemplateArgs,
                                                      ArgLoc)) {
@@ -447,7 +447,7 @@ static bool resolveContextualArgument(SemaPass &SP,
 
          ArgValType = DefaultType;
       }
-      else if (NeededTy->containsGenericType()) {
+      else if (NeededTy->containsTemplateParamType()) {
          ArgValType = NeededTy;
       }
       else {
@@ -503,14 +503,14 @@ static bool resolveSingleArgument(SemaPass &SP,
    SourceLocation ArgLoc = ArgVal->getSourceLoc();
 
    if (TemplateArgs && NeededTy->isDependentType()) {
-      if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+      if (SP.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
                                           *TemplateArgs, ArgLoc)) {
          return true;
       }
    }
 
    auto ArgValType = ArgVal->getExprType();
-   if (TemplateArgs && NeededTy->containsGenericType()) {
+   if (TemplateArgs && NeededTy->containsTemplateParamType()) {
       if (!TemplateArgs->inferFromType(ArgValType, NeededTy,
                                        false)) {
 
@@ -520,9 +520,9 @@ static bool resolveSingleArgument(SemaPass &SP,
 
       if (isVariadic(NeededTy)) {
          // Never infer reference types for template arguments.
-         NeededTy = ArgValType->stripReference();
+         NeededTy = ArgValType->removeReference();
       }
-      else if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+      else if (SP.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
                                                *TemplateArgs,
                                                ArgLoc)) {
          return true;
@@ -782,7 +782,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 //         ConversionSequenceBuilder ConvSeq;
 //         if (E->isLValue()) {
 //            ConvSeq.addStep(CastKind::LValueToRValue,
-//                            E->getExprType()->stripReference());
+//                            E->getExprType()->removeReference());
 //         }
 //         else {
 //            ConvSeq.addStep(CastKind::NoOp, QualType());
@@ -825,7 +825,7 @@ static bool resolveContextDependentArgs(SemaPass &SP,
 
       QualType NeededTy = neededArgs[i];
       if (TemplateArgs && NeededTy->isDependentType()) {
-         if (SP.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+         if (SP.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
                                              *TemplateArgs,
                                              ArgVal->getSourceLoc())) {
             continue;

@@ -693,7 +693,7 @@ QueryResult GetTypeStrideQuery::run()
       return finish(size);
    }
    case Type::ExistentialTypeID:
-   case Type::GenericTypeID: {
+   case Type::TemplateParamTypeID: {
       RecordDecl *EC;
       if (auto Err = QC.GetBuiltinRecord(EC,
                                  GetBuiltinRecordQuery::ExistentialContainer)) {
@@ -772,7 +772,7 @@ QueryResult GetTypeAlignmentQuery::run()
       return finish(align);
    }
    case Type::ExistentialTypeID:
-   case Type::GenericTypeID: {
+   case Type::TemplateParamTypeID: {
       RecordDecl *EC;
       if (auto Err = QC.GetBuiltinRecord(EC,
                                  GetBuiltinRecordQuery::ExistentialContainer)) {
@@ -920,25 +920,25 @@ QueryResult SubstAssociatedTypesQuery::run()
 namespace {
 
 template<class TemplateArgList>
-class GenericTypeSubstVisitor:
-      public TypeBuilder<GenericTypeSubstVisitor<TemplateArgList>> {
+class TemplateParamTypeSubstVisitor:
+      public TypeBuilder<TemplateParamTypeSubstVisitor<TemplateArgList>> {
    /// The template arguments we are substituting with.
    const TemplateArgList &TemplateArgs;
 
 public:
-   GenericTypeSubstVisitor(SemaPass &SP,
+   TemplateParamTypeSubstVisitor(SemaPass &SP,
                            const TemplateArgList &TemplateArgs,
                            SourceRange SR)
-      : TypeBuilder<GenericTypeSubstVisitor<TemplateArgList>>(SP, SR),
+      : TypeBuilder<TemplateParamTypeSubstVisitor<TemplateArgList>>(SP, SR),
         TemplateArgs(TemplateArgs)
    {}
 
-   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
    {
-      Types.push_back(visitGenericType(T));
+      Types.push_back(visitTemplateParamType(T));
    }
 
-   QualType visitGenericType(GenericType *T)
+   QualType visitTemplateParamType(TemplateParamType *T)
    {
       const TemplateArgument *Arg = TemplateArgs.getArgForParam(T->getParam());
       if (!Arg || Arg->isNull()) {
@@ -1147,7 +1147,7 @@ public:
       unsigned i = 0;
 
       for (QualType Ty : T->getParamTypes()) {
-         auto *TA = Ty->asGenericType();
+         auto *TA = Ty->asTemplateParamType();
          if (!TA || !TA->isVariadic()) {
             ParamTys.push_back(this->visit(Ty));
             Info.push_back(GivenInfo[i++]);
@@ -1183,7 +1183,7 @@ public:
    {
       SmallVector<QualType, 4> ResolvedTys;
       for (QualType Ty : T->getContainedTypes()) {
-         auto *TA = Ty->asGenericType();
+         auto *TA = Ty->asTemplateParamType();
          if (!TA || !TA->isVariadic()) {
             ResolvedTys.push_back(this->visit(Ty));
             continue;
@@ -1219,7 +1219,7 @@ public:
          }
 
          auto Ty = Arg.getNonCanonicalType();
-         auto *TA = Ty->asGenericType();
+         auto *TA = Ty->asTemplateParamType();
          if (!TA || !TA->isVariadic()) {
             auto Copy = this->VisitTemplateArg(Arg);
             Dependent |= Copy.isStillDependent();
@@ -1261,6 +1261,23 @@ public:
 
       if (Inst)
          return this->Ctx.getRecordType(Inst);
+
+      return T;
+   }
+
+   QualType visitTypedefTypeCommon(
+                        QualType T, AliasDecl *td,
+                        const sema::FinalTemplateArgumentList &TemplateArgs) {
+      auto *FinalList = copyTemplateArgs(&TemplateArgs);
+      if (FinalList->isStillDependent())
+         return this->Ctx.getDependentTypedefType(td, FinalList);
+
+      auto *Template = td->isTemplate() ? td : td->getSpecializedTemplate();
+      auto Inst = this->SP.InstantiateAlias(this->SR.getStart(), Template,
+                                            FinalList);
+
+      if (Inst)
+         return this->Ctx.getTypedefType(Inst);
 
       return T;
    }
@@ -1315,6 +1332,14 @@ public:
       return this->visitRecordTypeCommon(T, R, TemplateArgs);
    }
 
+   QualType visitDependentTypedefType(DependentTypedefType *T)
+   {
+      auto  td = T->getTypedef();
+      auto &TemplateArgs = T->getTemplateArgs();
+
+      return this->visitTypedefTypeCommon(T, td, TemplateArgs);
+   }
+
    QualType visitAssociatedType(AssociatedType *T)
    {
       if (T->getDecl()->isImplementation())
@@ -1326,18 +1351,18 @@ public:
 
 } // anonymous namespace
 
-QueryResult SubstGenericTypesQuery::run()
+QueryResult SubstTemplateParamTypesQuery::run()
 {
-   GenericTypeSubstVisitor<MultiLevelFinalTemplateArgList> Visitor(*QC.Sema,
+   TemplateParamTypeSubstVisitor<MultiLevelFinalTemplateArgList> Visitor(*QC.Sema,
                                                                    TemplateArgs,
                                                                    SR);
 
    return finish(Visitor.visit(T));
 }
 
-QueryResult SubstGenericTypesNonFinalQuery::run()
+QueryResult SubstTemplateParamTypesNonFinalQuery::run()
 {
-   GenericTypeSubstVisitor<MultiLevelTemplateArgList> Visitor(*QC.Sema,
+   TemplateParamTypeSubstVisitor<MultiLevelTemplateArgList> Visitor(*QC.Sema,
                                                               TemplateArgs,
                                                               SR);
 
@@ -1348,9 +1373,9 @@ namespace {
 
 class TypeEquivalenceChecker: public TypeComparer<TypeEquivalenceChecker> {
 public:
-   bool visitGenericType(GenericType *LHS, QualType RHS)
+   bool visitTemplateParamType(TemplateParamType *LHS, QualType RHS)
    {
-      if (auto *Param = RHS->asGenericType()) {
+      if (auto *Param = RHS->asTemplateParamType()) {
          return visit(LHS->getCovariance(), Param->getCovariance());
       }
 
@@ -1393,11 +1418,11 @@ QueryResult CheckTypeEquivalenceQuery::run()
    LHS = substVisitor.visit(LHS);
 
    if (Self->isRecordType() && Self->getRecord()->isInstantiation()) {
-      GenericTypeSubstVisitor genericTypeSubstVisitor(
+      TemplateParamTypeSubstVisitor TemplateParamTypeSubstVisitor(
          sema(), Self->getRecord()->getTemplateArgs(), {});
 
-      RHS = genericTypeSubstVisitor.visit(RHS);
-      LHS = genericTypeSubstVisitor.visit(LHS);
+      RHS = TemplateParamTypeSubstVisitor.visit(RHS);
+      LHS = TemplateParamTypeSubstVisitor.visit(LHS);
    }
 
    return finish(TypeEquivalenceChecker().visit(LHS, RHS));
@@ -1653,7 +1678,7 @@ QueryResult ApplyCapabilitesQuery::run()
       applyCapabilities(QC, Capabilities, Existentials, Stripped, NewTy,
                         done);
    }
-   else if (auto *GT = Stripped->asGenericType()) {
+   else if (auto *GT = Stripped->asTemplateParamType()) {
       auto *Param = GT->getParam();
       if (QC.PrepareDeclInterface(Param)) {
          return finish(T);
@@ -1778,13 +1803,13 @@ QueryResult GetConversionSequenceQuery::run()
 
 namespace {
 
-class GenericTypeComparer: public TypeComparer<GenericTypeComparer> {
+class TemplateParamTypeComparer: public TypeComparer<TemplateParamTypeComparer> {
    SemaPass &Sema;
 
 public:
    bool typeDependent = false;
 
-   explicit GenericTypeComparer(SemaPass &Sema) : Sema(Sema) {}
+   explicit TemplateParamTypeComparer(SemaPass &Sema) : Sema(Sema) {}
 
    bool compareImpl(QualType LHS, QualType RHS)
    {
@@ -1796,7 +1821,7 @@ public:
       return Builder.isValid();
    }
 
-   bool visitGenericType(GenericType *LHS, QualType RHS)
+   bool visitTemplateParamType(TemplateParamType *LHS, QualType RHS)
    {
       bool covariant;
       if (Sema.QC.IsCovariant(covariant, RHS, LHS->getParam()->getCovariance())) {
@@ -1811,7 +1836,16 @@ public:
 
 QueryResult IsValidParameterValueQuery::run()
 {
-   if (!paramType->containsGenericType()) {
+   QualType givenType = this->givenType;
+   QualType paramType = this->paramType;
+
+   // Implicit mut ref -> mut borrow for self argument
+   if (isSelf && paramType->isMutableBorrowType()
+       && givenType->getTypeID() == Type::MutableReferenceTypeID) {
+      givenType = QC.Sema->Context.getMutableBorrowType(givenType->getReferencedType());
+   }
+
+   if (!paramType->containsTemplateParamType()) {
       bool implicitlyConvertible;
       if (auto err = QC.IsImplicitlyConvertible(implicitlyConvertible,
                                                 givenType, paramType)) {
@@ -1821,12 +1855,9 @@ QueryResult IsValidParameterValueQuery::run()
       return finish(implicitlyConvertible);
    }
 
-   QualType givenType = this->givenType;
-   QualType paramType = this->paramType;
-
    // Implicit lvalue -> rvalue
    if (givenType->isReferenceType() && !paramType->isReferenceType()) {
-      givenType = givenType->stripReference();
+      givenType = givenType->removeReference();
    }
 
    // Implicit rvalue -> const reference
@@ -1834,7 +1865,7 @@ QueryResult IsValidParameterValueQuery::run()
       givenType = QC.Sema->Context.getReferenceType(givenType);
    }
 
-   GenericTypeComparer comparer(*QC.Sema);
+   TemplateParamTypeComparer comparer(*QC.Sema);
 
    bool result = comparer.visit(paramType, givenType);
    return finish(result);

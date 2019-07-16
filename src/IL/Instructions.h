@@ -1323,7 +1323,7 @@ class GenericInitInst: public BinaryInstruction {
 public:
    GenericInitInst(Value *Val,
                    Value *GenericEnvironment,
-                   QualType GenericType,
+                   QualType TemplateParamType,
                    BasicBlock *Parent);
 
    Value *getValue() const { return Operands[0]; }
@@ -1609,6 +1609,9 @@ public:
 
    MemoryOrder getMemoryOrder() const { return LoadBits.memoryOrder; }
    void setMemoryOrder(MemoryOrder V) { LoadBits.memoryOrder = V; }
+
+   bool isFieldAccessLoad() const { return LoadBits.IsFieldAccessLoad;  }
+   void setFieldAccessLoad(bool b) { LoadBits.IsFieldAccessLoad = b; }
 
    Value *getTarget() const { return Operand; }
 

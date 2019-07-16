@@ -588,10 +588,10 @@ public:
       : Params(Params)
    { }
 
-   bool visitGenericType(const GenericType *T)
+   bool visitTemplateParamType(const TemplateParamType *T)
    {
       for (auto P : Params) {
-         if (P->getName() == T->getGenericTypeName()) {
+         if (P->getName() == T->getTemplateParamTypeName()) {
             Params.erase(P);
          }
       }
@@ -776,6 +776,7 @@ QueryResult CreateBaseInitQuery::run()
    BaseD->setSynthesized(true);
    BaseD->setIsInstantiation(D->isInstantiation());
    BaseD->setInstantiationInfo(D->getInstantiationInfo());
+   BaseD->setMutating(true);
 
    if (auto *init = dyn_cast_or_null<InitDecl>(D->getBodyTemplate())) {
       BaseD->setBodyTemplate(init->getBaseInit());

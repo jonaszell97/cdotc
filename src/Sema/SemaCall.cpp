@@ -110,8 +110,8 @@ SemaPass::lookupFunction(DeclarationName name,
                          bool suppressDiags) {
    DeclContext *DC = nullptr;
    if (SelfArg) {
-      CanType SelfTy = SelfArg->getExprType()->stripReference()
-                              ->stripMetaType()->getDesugaredType();
+      CanType SelfTy = SelfArg->getExprType()->removeReference()
+                              ->removeMetaType()->getDesugaredType();
 
       if (auto *RT = SelfTy->asRecordType()) {
          DC = RT->getRecord();
@@ -504,6 +504,17 @@ RecordDecl *SemaPass::InstantiateRecord(SourceLocation POI,
    return Inst;
 }
 
+AliasDecl *SemaPass::InstantiateAlias(SourceLocation POI,
+                                      AliasDecl *td,
+                                      FinalTemplateArgumentList *TemplateArgs) {
+   AliasDecl *Inst;
+   if (QC.InstantiateAlias(Inst, td, TemplateArgs, POI)) {
+      return nullptr;
+   }
+
+   return Inst;
+}
+
 RecordDecl *SemaPass::InstantiateRecord(SourceLocation POI,
                                         RecordDecl *R,
                                         const TemplateArgList &TemplateArgs) {
@@ -543,17 +554,18 @@ static ExprResult CreateAnonymousCall(SemaPass &Sema, CallExpr *Call,
    // like a normal function call, i.e.
    //  `let fn = () => {}; fn()` is semantically equivalent to
    //  `(fn)()`
-   auto ID = new(Sema.Context) IdentifierRefExpr(Call->getSourceRange(),
-                                                 Call->getDeclName(), { },
-                                                 Call->getContext());
-
-   ID->setParentExpr(Call->getParentExpr());
-
-   auto Anon = AnonymousCallExpr::Create(Sema.Context, Call->getParenRange(),
-                                         ID, Call->getArgs(),
-                                         Call->getLabels());
-
-   return Sema.visitExpr(Call, Anon);
+//   auto ID = new(Sema.Context) IdentifierRefExpr(Call->getSourceRange(),
+//                                                 Call->getDeclName(), { },
+//                                                 Call->getContext());
+//
+//   ID->setParentExpr(Call->getParentExpr());
+//
+//   auto Anon = AnonymousCallExpr::Create(Sema.Context, Call->getParenRange(),
+//                                         ID, Call->getArgs(),
+//                                         Call->getLabels());
+//
+//   return Sema.visitExpr(Call, Anon);
+   llvm_unreachable("don't do it!");
 }
 
 ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
@@ -583,6 +595,14 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
       }
    }
 
+   if (C->isTemplate()) {
+      if (QC.SubstTemplateParamTypes(ExprType, ExprType,
+                                     *Call->getTemplateArgs(),
+                                     Call->getSourceRange())) {
+         Call->setIsInvalid(true);
+      }
+   }
+
    Call->setExprType(ExprType);
 
    unsigned i = 0;
@@ -592,6 +612,9 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
       FuncArgDecl *param;
       if (i < params.size()) {
          param = params[i];
+      }
+      else if (C->isCstyleVararg()) {
+         break;
       }
       else {
          param = params.back();
@@ -680,7 +703,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
       Call->setParentExpr(ParentExpr);
 
       ParentType = ParentExpr->getExprType()->getCanonicalType()
-                             ->stripReference();
+                             ->removeReference();
 
       if (QC.ApplyCapabilites(ParentType, ParentType, &getDeclContext())) {
          Call->setIsInvalid(true);
@@ -700,7 +723,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
          Call->setParentExpr(ParentExpr);
 
          ParentType = ParentExpr->getExprType()->getCanonicalType()
-                                ->stripReference();
+                                ->removeReference();
          ParentTypeNoSugar = ParentType->getDesugaredType();
       }
 
@@ -736,7 +759,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
                Context.getDeclNameTable().getConstructorName(
                   ParentExpr->getExprType()
                             ->getCanonicalType()
-                            ->stripReference()
+                            ->removeReference()
                             ->getDesugaredType()));
          }
       }
@@ -747,7 +770,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
       Call->setDirectCall(isa<SuperExpr>(ParentExpr)
                             || ContextAndIsStatic.second);
 
-      ParentType = ParentType->stripMetaType();
+      ParentType = ParentType->removeMetaType();
       ParentTypeNoSugar = ParentType->getDesugaredType();
    }
    else if (Call->isPointerAccess()) {
@@ -985,7 +1008,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
       if (ParentType) {
          if (ParentType->isMetaType()) {
             diagnose(Call, err_method_not_found, Call->getDeclName(), false,
-                     ParentType->stripMetaType(), Call->getSourceLoc());
+                     ParentType->removeMetaType(), Call->getSourceLoc());
          }
          else {
             diagnose(Call, err_method_not_found, Call->getDeclName(), true,
@@ -1164,7 +1187,7 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
 
       Ty = Covar;
    }
-   else if (auto *PT = Ty->asGenericType()) {
+   else if (auto *PT = Ty->asTemplateParamType()) {
       auto *P = PT->getParam();
       Call->setContainsGenericParam(true);
 
@@ -1514,8 +1537,11 @@ CallExpr *SemaPass::CreateCall(CallableDecl *C,
       }
    }
 
-   return CallExpr::Create(Context, Loc, SourceRange(Loc), move(Args),
-                           C, K, QualType());
+   auto *callExpr = CallExpr::Create(Context, Loc, SourceRange(Loc), move(Args),
+                                     C, K, QualType());
+
+   callExpr->setIsDotInit(C->isBaseInitializer());
+   return callExpr;
 }
 
 ExprResult SemaPass::visitAnonymousCallExpr(AnonymousCallExpr *Call)
@@ -1773,11 +1799,11 @@ static bool ArgTypesAreCompatible(QualType Given, QualType Needed)
    if (Given == Needed || Needed->isUnknownAnyType())
       return true;
 
-   if (!isa<GenericType>(Needed))
+   if (!isa<TemplateParamType>(Needed))
       return false;
 
    return ArgTypesAreCompatible(Given,
-                                cast<GenericType>(Needed)->getCovariance());
+                                cast<TemplateParamType>(Needed)->getCovariance());
 }
 
 QualType SemaPass::ResolveContextualLambdaExpr(LambdaExpr *LE, QualType Ty)
@@ -1813,7 +1839,7 @@ QualType SemaPass::ResolveContextualLambdaExpr(LambdaExpr *LE, QualType Ty)
       if (ArgTy->isAutoType()) {
          Arg->setConvention(Conv);
 
-         if (NeededTy->containsGenericType()) {
+         if (NeededTy->containsTemplateParamType()) {
             AllArgsResolved = false;
          }
          else {

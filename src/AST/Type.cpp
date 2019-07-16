@@ -36,9 +36,9 @@ bool TypeProperties::isDependent() const
    return (Props & DependentMask) != 0;
 }
 
-bool TypeProperties::containsGenericType() const
+bool TypeProperties::containsTemplateParamType() const
 {
-   return (Props & ContainsGenericType) != 0;
+   return (Props & ContainsTemplateParamType) != 0;
 }
 
 bool TypeProperties::containsAssociatedType() const
@@ -377,7 +377,7 @@ QualType Type::getBoxedType() const
    return this->uncheckedAsBoxType()->getBoxedType();
 }
 
-QualType Type::stripReference() const
+QualType Type::removeReference() const
 {
    if (auto *Ref = dyn_cast<ReferenceType>(this))
       return Ref->getReferencedType();
@@ -385,7 +385,7 @@ QualType Type::stripReference() const
    return const_cast<Type*>(this);
 }
 
-QualType Type::stripMetaType() const
+QualType Type::removeMetaType() const
 {
    if (auto *Meta = dyn_cast<MetaType>(this))
       return Meta->getUnderlyingType();
@@ -453,8 +453,12 @@ TypedefType const* Type::asRealTypedefType() const
 QualType Type::getDesugaredType() const
 {
    switch (getTypeID()) {
-   case Type::GenericTypeID:
-      return cast<GenericType>(this)->getCovariance();
+   case Type::TypedefTypeID:
+   case Type::DependentTypedefTypeID:
+      return asTypedefType()->getTypedef()->getType()->asMetaType()
+         ->getUnderlyingType()->getCanonicalType();
+   case Type::TemplateParamTypeID:
+      return cast<TemplateParamType>(this)->getCovariance();
    case Type::AssociatedTypeID: {
       auto *AT = cast<AssociatedType>(this)->getDecl();
       if (!AT->isImplementation()) {
@@ -472,27 +476,34 @@ QualType Type::getDesugaredType() const
 
 sema::FinalTemplateArgumentList& Type::getTemplateArgs() const
 {
-   assert(isRecordType() && "not an object");
-   if (auto Inconcrete = this->asDependentRecordType())
-      return Inconcrete->getTemplateArgs();
-
-   return this->asRecordType()->getTemplateArgs();
+   switch (getTypeID()) {
+   case TypeID::RecordTypeID:
+      return this->uncheckedAsRecordType()->getTemplateArgs();
+   case TypeID::DependentRecordTypeID:
+      return cast<DependentRecordType>(this)->getTemplateArgs();
+   case TypeID::DependentTypedefTypeID:
+      return cast<DependentTypedefType>(this)->getTemplateArgs();
+   default:
+      llvm_unreachable("type has no template args!");
+   }
 }
 
 bool Type::hasTemplateArgs() const
 {
-   if (!isRecordType())
+   switch (getTypeID()) {
+   case TypeID::RecordTypeID:
+      return this->uncheckedAsRecordType()->hasTemplateArgs();
+   case TypeID::DependentRecordTypeID:
+   case TypeID::DependentTypedefTypeID:
+      return true;
+   default:
       return false;
-
-   if (auto Inconcrete = this->asDependentRecordType())
-      return Inconcrete->hasTemplateArgs();
-
-   return this->asRecordType()->hasTemplateArgs();
+   }
 }
 
 ast::RecordDecl *Type::getRecord() const
 {
-   if (auto Gen = dyn_cast<GenericType>(this)) {
+   if (auto Gen = dyn_cast<TemplateParamType>(this)) {
       return Gen->getCovariance()->getRecord();
    }
 
@@ -787,6 +798,22 @@ public:
       OS << ">";
    }
 
+   void visitDependentTypedefType(const DependentTypedefType *Ty)
+   {
+      auto td = Ty->getTypedef();
+      OS << td->getFullName() << "<";
+
+      auto &Args = cast<DependentTypedefType>(Ty)->getTemplateArgs();
+      unsigned i = 0;
+
+      for (auto &Arg : Args) {
+         if (i++ != 0) OS << ", ";
+         visitTemplateArg(Arg);
+      }
+
+      OS << ">";
+   }
+
    void visitExistentialType(const ExistentialType *T)
    {
       unsigned i = 0;
@@ -862,7 +889,7 @@ public:
       OS << "MetaType<" << Ty->getUnderlyingType() << ">";
    }
 
-   void visitGenericType(const GenericType *Ty)
+   void visitTemplateParamType(const TemplateParamType *Ty)
    {
       OS << Ty->getParam()->getDeclName();
       if (Ty->isVariadic())
@@ -936,14 +963,16 @@ public:
       : TypePrinterBase(OS)
    { }
 
-   void visitGenericType(const GenericType *Ty)
+   void visitTemplateParamType(const TemplateParamType *Ty)
    {
-      auto Cov = cast<GenericType>(Ty)->getCovariance();
-      OS << Ty->getGenericTypeName();
+      auto Cov = cast<TemplateParamType>(Ty)->getCovariance();
+      OS << Ty->getTemplateParamTypeName() << ": ";
 
       if (!Cov->isUnknownAnyType()) {
-         OS << ": ";
          visit(Cov);
+      }
+      else {
+         OS << "?";
       }
    }
 
@@ -965,11 +994,6 @@ public:
       else {
          OS << AT->getFullName();
       }
-
-//      if (AT->isSelf()) {
-//         OS << AT->getActualType().getResolvedType();
-//         return;
-//      }
 
       if (AT->isImplementation()) {
          OS << " (aka ";
@@ -1043,7 +1067,11 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, QualType Ty)
       OS << "<null>";
    }
    else {
+#ifndef NDEBUG
+      DiagTypePrinter(OS).visit(Ty);
+#else
       TypePrinter(OS).visit(Ty);
+#endif
    }
 
    return OS;
@@ -1253,7 +1281,7 @@ size_t RecordType::getSize() const
 void RecordType::setDependent(bool dep)
 {
    if (dep) {
-      Bits.Props |= TypeProperties::ContainsGenericType;
+      Bits.Props |= TypeProperties::ContainsTemplateParamType;
    }
 }
 
@@ -1418,11 +1446,11 @@ TupleType::TupleType(llvm::ArrayRef<QualType> containedTypes,
    Bits.Props = Props;
 }
 
-GenericType::GenericType(TemplateParamDecl *Param)
-   : Type(GenericTypeID, nullptr),
+TemplateParamType::TemplateParamType(TemplateParamDecl *Param)
+   : Type(TemplateParamTypeID, nullptr),
      P(Param)
 {
-   Bits.Props |= TypeProperties::ContainsGenericType;
+   Bits.Props |= TypeProperties::ContainsTemplateParamType;
 
    if (Param->isVariadic()) {
       Bits.Props |= TypeProperties::ContainsUnexpandedParameterPack;
@@ -1437,27 +1465,27 @@ GenericType::GenericType(TemplateParamDecl *Param)
    }
 }
 
-llvm::StringRef GenericType::getGenericTypeName() const
+llvm::StringRef TemplateParamType::getTemplateParamTypeName() const
 {
    return P->getName();
 }
 
-QualType GenericType::getCovariance() const
+QualType TemplateParamType::getCovariance() const
 {
    return P->getCovariance();
 }
 
-QualType GenericType::getContravariance() const
+QualType TemplateParamType::getContravariance() const
 {
    return P->getContravariance();
 }
 
-unsigned GenericType::getIndex() const
+unsigned TemplateParamType::getIndex() const
 {
    return P->getIndex();
 }
 
-bool GenericType::isVariadic() const
+bool TemplateParamType::isVariadic() const
 {
    return P->isVariadic();
 }
@@ -1499,8 +1527,17 @@ TypedefType::TypedefType(AliasDecl *td)
    : Type(TypedefTypeID, nullptr),
      td(td)
 {
-   CanonicalType = td->getType()->asMetaType()->getUnderlyingType();
-   Bits.Props |= CanonicalType->properties();
+   if (!td->isStrong()) {
+      CanonicalType = td->getType()->asMetaType()->getUnderlyingType()->getCanonicalType();
+      Bits.Props |= CanonicalType->properties();
+   }
+}
+
+TypedefType::TypedefType(TypeID typeID, AliasDecl *td, bool Dependent)
+   : Type(typeID, nullptr),
+     td(td)
+{
+
 }
 
 void TypedefType::setCanonicalType(QualType CanonicalType)
@@ -1519,6 +1556,37 @@ StringRef TypedefType::getAliasName() const
    return td->getName();
 }
 
+DependentTypedefType::DependentTypedefType(AliasDecl *td,
+                                           sema::FinalTemplateArgumentList *templateArgs,
+                                           QualType Parent,
+                                           Type *CanonicalType)
+   : TypedefType(TypeID::DependentTypedefTypeID, td,
+                templateArgs->isStillDependent()),
+     Parent(Parent), templateArgs(templateArgs)
+{
+   if (CanonicalType) {
+      this->CanonicalType = CanonicalType;
+   }
+
+   for (auto &Arg : *templateArgs) {
+      copyTemplateArgProps(Bits.Props, Arg);
+   }
+
+   if (Parent) {
+      Bits.Props |= Parent->properties();
+   }
+}
+
+void DependentTypedefType::Profile(llvm::FoldingSetNodeID &ID,
+                                   AliasDecl *td,
+                                   sema::FinalTemplateArgumentList *templateArgs,
+                                   QualType Parent)
+{
+   ID.AddPointer(td);
+   ID.AddPointer(Parent.getAsOpaquePtr());
+   templateArgs->Profile(ID);
+}
+
 DependentNameType::DependentNameType(NestedNameSpecifierWithLoc *NameSpec)
    : Type(DependentNameTypeID, nullptr), NameSpec(NameSpec)
 {
@@ -1528,7 +1596,7 @@ DependentNameType::DependentNameType(NestedNameSpecifierWithLoc *NameSpec)
    while (Name) {
       switch (Name->getKind()) {
       case NestedNameSpecifier::TemplateParam:
-         Bits.Props |= TypeProperties::ContainsGenericType;
+         Bits.Props |= TypeProperties::ContainsTemplateParamType;
          break;
       case NestedNameSpecifier::AssociatedType:
          Bits.Props |= TypeProperties::ContainsAssociatedType;

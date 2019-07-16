@@ -33,7 +33,7 @@ static constexpr uint16_t GenericMask =
    | TypeProperties::ContainsDependentSizeArrayType
    | TypeProperties::ContainsUnconstrainedGeneric
    | TypeProperties::ContainsUnknownAny
-   | TypeProperties::ContainsGenericType
+   | TypeProperties::ContainsTemplateParamType
    | TypeProperties::ContainsTemplate;
 
 static constexpr uint16_t DependentMask =
@@ -371,7 +371,7 @@ public:
             }
 
             if ((Props & GenericMask) != 0) {
-               if (SP.QC.SubstGenericTypes(Inst, Inst, templateArgs, POI)) {
+               if (SP.QC.SubstTemplateParamTypes(Inst, Inst, templateArgs, POI)) {
                   return Ty;
                }
             }
@@ -839,6 +839,13 @@ private:
 
       return templateArgs.getNamedArg(P->getDeclName());
    }
+
+   sema::FinalTemplateArgumentList *instantiateTemplateArgs(
+      sema::FinalTemplateArgumentList *templateArgs,
+      NamedDecl *Template);
+
+   void instantiateTemplateArgument(const TemplateArgument &TA,
+                                    TemplateArgList &list);
 
    QualType instantiateConversionStep(ConversionSequenceBuilder &builder,
                                       const ConversionStep &step,
@@ -1740,7 +1747,7 @@ QualType InstantiatorImpl::instantiateConversionStep(ConversionSequenceBuilder &
                                                      QualType currentType) {
    switch (step.getKind()) {
    case CastKind::LValueToRValue:
-      builder.addStep(CastKind::LValueToRValue, currentType->stripReference(),
+      builder.addStep(CastKind::LValueToRValue, currentType->removeReference(),
                       CastStrength::Implicit);
 
       break;
@@ -2261,7 +2268,7 @@ MemberRefExpr *InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *Expr)
                             ->ignoreParensAndImplicitCasts()
                             ->getExprType();
 
-   assert((parentType->containsGenericType()
+   assert((parentType->containsTemplateParamType()
          || parentType->containsAssociatedType())
       && "should not be instantiated");
 
@@ -2272,7 +2279,7 @@ MemberRefExpr *InstantiatorImpl::visitMemberRefExpr(MemberRefExpr *Expr)
       return nullptr;
    }
 
-   QualType lookupType = instantiatedType->stripReference();
+   QualType lookupType = instantiatedType->removeReference();
    NamedDecl *decl;
 
    if (SP.QC.FindEquivalentDecl(decl, Expr->getMemberDecl(),
@@ -2305,6 +2312,39 @@ EnumCaseExpr* InstantiatorImpl::visitEnumCaseExpr(EnumCaseExpr *node)
    return Inst;
 }
 
+FinalTemplateArgumentList*
+InstantiatorImpl::instantiateTemplateArgs(FinalTemplateArgumentList *templateArgs,
+                                          NamedDecl *Template) {
+   TemplateArgList realTemplateArgs(SP, Template);
+   for (const auto &TA : *templateArgs) {
+      instantiateTemplateArgument(TA, realTemplateArgs);
+   }
+
+   return FinalTemplateArgumentList::Create(SP.Context, realTemplateArgs);
+}
+
+void InstantiatorImpl::instantiateTemplateArgument(const TemplateArgument &TA,
+                                                   TemplateArgList &list) {
+   if (TA.isVariadic()) {
+      for (const auto &VA : TA.getVariadicArgs()) {
+         instantiateTemplateArgument(VA, list);
+      }
+
+      return;
+   }
+
+   if (TA.isValue()) {
+      auto *valueExpr = cast<StaticExpr>(visit(TA.getValueExpr()));
+      list.setParamValue(TA.getParam(),
+                         TemplateArgument(TA.getParam(), valueExpr, TA.getLoc()));
+   }
+   else {
+      auto type = visit(TA.getType());
+      list.setParamValue(TA.getParam(),
+                         TemplateArgument(TA.getParam(), type, TA.getLoc()));
+   }
+}
+
 Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 {
    SmallVector<Expression*, 4> ArgVec;
@@ -2319,7 +2359,7 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
    if (Expression *PE = dyn_cast_or_null<MemberRefExpr>(node->getParentExpr())) {
       PE = PE->getParentExpr();
 
-      QualType lookupType = visit(SourceType(PE->getExprType()->stripReference()));
+      QualType lookupType = visit(SourceType(PE->getExprType()->removeReference()));
       NamedDecl *decl;
 
       if (SP.QC.FindEquivalentDecl(decl, func,
@@ -2330,6 +2370,20 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
 
       assert(decl && "no instantiated decl!");
       func = cast<CallableDecl>(decl);
+   }
+
+   if (auto *templateArgs = node->getTemplateArgs()) {
+      auto *instTemplateArgs = instantiateTemplateArgs(templateArgs, func);
+      if (instTemplateArgs->isStillDependent()) {
+         auto *callInst = SP.CreateCall(func, ArgVec, node->getSourceLoc());
+         callInst->setTemplateArgs(instTemplateArgs);
+
+         return callInst;
+      }
+
+      if (SP.QC.InstantiateCallable(func, func, instTemplateArgs, POI.getStart())) {
+         return node;
+      }
    }
 
    return SP.CreateCall(func, ArgVec, node->getSourceLoc());
@@ -3054,7 +3108,7 @@ static unsigned getDepth(const TemplateArgument &Arg)
       return Max;
    }
 
-   QualType T = Arg.getType()->stripReference()->stripMetaType();
+   QualType T = Arg.getType()->removeReference()->removeMetaType();
    if (!T->isRecordType()) {
       return 0;
    }

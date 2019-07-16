@@ -253,7 +253,7 @@ LocalVariable *DefinitiveInitializationPass::getLocal(il::Value *Val)
    if (!Loc)
       return nullptr;
 
-   auto Var = getLocal(Val, Loc, Val->getType()->stripReference());
+   auto Var = getLocal(Val, Loc, Val->getType()->removeReference());
    if (!Var)
       return nullptr;
 
@@ -399,7 +399,7 @@ static void verifyMove(Function &F, il::MoveInst &I, ast::ILGenPass &ILGen)
    if (isa<GlobalVariable>(FieldRef->getOperand(0))) {
       diagIdx = 0;
    }
-   else if (FieldRef->getOperand(0)->getType()->stripReference()->isClass()) {
+   else if (FieldRef->getOperand(0)->getType()->removeReference()->isClass()) {
       diagIdx = 1;
    }
 
@@ -503,7 +503,7 @@ void DefinitiveInitializationPass::prepareInitializer(ast::CallableDecl *FnDecl,
    if (!Loc)
       return;
 
-   SelfVal = getLocal(Val, Loc, Val->getType()->stripReference(), false);
+   SelfVal = getLocal(Val, Loc, Val->getType()->removeReference(), false);
    bool IsFallibleInit = FnDecl->isFallibleInit();
 
    // mark fields with default values as initialized
@@ -641,7 +641,7 @@ void DefinitiveInitializationPass::run()
             continue;
 
          auto S = cast<ast::StructDecl>(
-            SelfVal->Val->getType()->stripReference()->getRecord());
+            SelfVal->Val->getType()->removeReference()->getRecord());
 
          if (S->getStoredFields().empty())
             continue;

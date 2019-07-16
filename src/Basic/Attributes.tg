@@ -135,6 +135,10 @@ def NoDerive : DeclAttr<"noDerive", [RecordDecl]> {
     ]
 }
 
+def Strong : DeclAttr<"strong", [AliasDecl]> {
+    Visit = BeforeDeclaration
+}
+
 def VersionDecl : DeclAttr<"version", [Decl]> {
     Visit = BeforeDeclaration
     Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]

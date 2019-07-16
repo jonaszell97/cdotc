@@ -25,6 +25,22 @@
 #  define CDOT_LLDB_STEP_OVER
 #endif
 
+#ifndef NDEBUG
+#  if defined(__clang__)
+#     define NO_OP asm("nop")
+#     define BREAKPOINT asm("int 3")
+#  elif defined(__GNUC__) || defined(__GNUG__)
+#     define NO_OP __asm("nop")
+#      define BREAKPOINT __asm("int 3")
+#  elif defined(_MSC_VER)
+#     define NO_OP __asm nop
+#     define BREAKPOINT __asm int 3
+#  endif
+#elif
+#  define NO_OP static_assert(false, "NO_OP used in production build!");
+#  define BREAKPOINT static_assert(false, "BREAKPOINT used in production build!");
+#endif
+
 #define ASSERT_NOEXCEPT_MOVE_CONSTRUCTIBLE(TYPE)                  \
 static_assert(std::is_nothrow_move_constructible<TYPE>::value,    \
               #TYPE " should be noexcept move constructible")

@@ -38,7 +38,7 @@ CDOT_TYPE(MetaType, Type)
 CDOT_TYPE(TypedefType, Type)
 
 // Dependent Types
-CDOT_DEPENDENT_TYPE(GenericType, Type)
+CDOT_DEPENDENT_TYPE(TemplateParamType, Type)
 CDOT_DEPENDENT_TYPE(DependentSizeArrayType, ArrayType)
 CDOT_CAN_DEPENDENT_TYPE(DependentRecordType, RecordType)
 CDOT_DEPENDENT_TYPE(DependentTypedefType, TypedefType)

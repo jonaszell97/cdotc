@@ -20,7 +20,7 @@ template<> NeedsDeinitilizationQuery *QueryContext::getQuery<NeedsDeinitilizatio
 template<> NeedsStructReturnQuery *QueryContext::getQuery<NeedsStructReturnQuery>(CanType T);
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T);
 template<> SubstAssociatedTypesQuery *QueryContext::getQuery<SubstAssociatedTypesQuery>(QualType T, QualType Self);
-template<> SubstGenericTypesQuery *QueryContext::getQuery<SubstGenericTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs);
+template<> SubstTemplateParamTypesQuery *QueryContext::getQuery<SubstTemplateParamTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs);
 template<> GetBuiltinModuleQuery *QueryContext::getQuery<GetBuiltinModuleQuery>(GetBuiltinModuleQuery::ModuleKind Mod);
 template<> GetBuiltinFuncQuery *QueryContext::getQuery<GetBuiltinFuncQuery>(GetBuiltinFuncQuery::FunctionKind Fn);
 template<> GetBuiltinAliasQuery *QueryContext::getQuery<GetBuiltinAliasQuery>(GetBuiltinAliasQuery::AliasKind K, ast::DeclContext* DC);

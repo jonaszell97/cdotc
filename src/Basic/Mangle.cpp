@@ -857,6 +857,14 @@ void ItaniumLikeMangler::mangleType(const DependentRecordType *T)
    OS << 'E';
 }
 
+void ItaniumLikeMangler::mangleType(const DependentTypedefType *T)
+{
+   OS << 'T';
+   mangleTemplatePrefix(T->getTypedef());
+   mangleTemplateArgs(T->getTemplateArgs());
+   OS << 'E';
+}
+
 void ItaniumLikeMangler::mangleType(const ArrayType *T)
 {
    // <type>       ::= <array-type>
@@ -961,7 +969,7 @@ void ItaniumLikeMangler::mangleType(const LambdaType *T)
    mangleType((FunctionType*)T);
 }
 
-void ItaniumLikeMangler::mangleType(const GenericType *T)
+void ItaniumLikeMangler::mangleType(const TemplateParamType *T)
 {
    OS << 'G';
    mangleTemplateParameter(T->getIndex());

@@ -1,12 +1,13 @@
 
 ; Module ID: /Users/Jonas/CDot/StdLib/main/main.dot
-$"main.<private name>.ExistentialContainer" = struct { %value: UnsafeMutableRawPtr, %typeInfo: UnsafePtr<$"main.<private name>.TypeInfo">, %conformance: UnsafePtr<$"main.<private name>.ProtocolConformance"> }
+$main.MemoryOrder = enum { i32, %NotAtomic = i32 0, %Relaxed = i32 1, %Consume = i32 2, %Acquire = i32 3, %Release = i32 4, %AcquireRelease = i32 5, %SequentiallyConsistent = i32 6 }
+$"main.Atomic<i64>" = struct { %value: i64 }
+$"main.<private name>.Int64" = struct { %value: i64 }
 $"main.<private name>.ValueWitnessTable" = struct { %copyFn: $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, %deinit: $(UnsafeMutableRawPtr) -> void }
 $"main.<private name>.TypeInfo" = struct { %baseClass: UnsafePtr<$"main.<private name>.TypeInfo">, %vtable: UnsafePtr<UnsafeRawPtr>, %deinit: $(UnsafeMutableRawPtr) -> void, %name: UnsafePtr<u8>, %valueWitnessTable: UnsafePtr<$"main.<private name>.ValueWitnessTable">, %conformances: UnsafePtr<$"main.<private name>.ProtocolConformance">, %size: u64, %alignment: u64, %stride: u64 }
+$"main.<private name>.ExistentialContainer" = struct { %value: UnsafeMutableRawPtr, %typeInfo: UnsafePtr<$"main.<private name>.TypeInfo">, %conformance: UnsafePtr<$"main.<private name>.ProtocolConformance"> }
 $"main.<private name>.Bool" = struct { %value: u1 }
 $"main.<private name>.ProtocolConformance" = struct { %typeInfo: UnsafePtr<$"main.<private name>.TypeInfo">, %vtable: UnsafePtr<UnsafeRawPtr> }
-$main.MemoryOrder = enum { i32, %NotAtomic = i32 0, %Relaxed = i32 1, %Consume = i32 2, %Acquire = i32 3, %Release = i32 4, %AcquireRelease = i32 5, %SequentiallyConsistent = i32 6 }
-$"main.<private name>.Int64" = struct { %value: i64 }
 
 @_CTINW4mainE11MemoryOrderE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$main.MemoryOrder>) -> void @_CNW4mainE11MemoryOrderD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.MemoryOrder", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@0: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@1: Ref<$[6 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 4 }, struct $"main.<private name>.Int64" { i64 4 }, struct $"main.<private name>.Int64" { i64 4 } }
 @0 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($($main.MemoryOrder) -> $main.MemoryOrder @_CNW4mainE11MemoryOrder4copyES_L0) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$main.MemoryOrder>) -> void @_CNW4mainE11MemoryOrderD0Ev) to $(UnsafeMutableRawPtr) -> void }
@@ -21,44 +22,66 @@ $"main.<private name>.Int64" = struct { %value: i64 }
 @_CTINW4mainE18ImplicitlyCopyableE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void null, UnsafePtr<u8> "main.<private name>.ImplicitlyCopyable", UnsafePtr<$"main.<private name>.ValueWitnessTable"> null, UnsafePtr<$"main.<private name>.ProtocolConformance"> null, struct $"main.<private name>.Int64" { i64 24 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 24 } }
 @_CTPNW4mainE11MemoryOrderENW_0E18ImplicitlyCopyableE = constant $[0 x UnsafeRawPtr] []
 @1 = constant $[6 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE11MemoryOrderENW_0E3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE9EquatableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE11MemoryOrderENW_0E9EquatableE: Ref<$[2 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE16RawRepresentableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE11MemoryOrderENW_0E16RawRepresentableE: Ref<$[2 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE8CopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE11MemoryOrderENW_0E8CopyableE: Ref<$[1 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE18ImplicitlyCopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE11MemoryOrderENW_0E18ImplicitlyCopyableE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
-@_CTINW4mainE4BoolE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Bool">) -> void @_CNW4mainE4BoolD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.Bool", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@2: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@3: Ref<$[4 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 1 }, struct $"main.<private name>.Int64" { i64 1 }, struct $"main.<private name>.Int64" { i64 1 } }
-@2 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($($"main.<private name>.Bool") -> $"main.<private name>.Bool" @_CNW4mainE4Bool4copyES0_L0) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Bool">) -> void @_CNW4mainE4BoolD0Ev) to $(UnsafeMutableRawPtr) -> void }
+@_CTINW4mainE6AtomicIlEE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.Atomic<i64>">) -> void @_CNW4mainE6AtomicIlED0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.Atomic<i64>", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@2: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@3: Ref<$[4 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 8 } }
+@2 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($($"main.Atomic<i64>") -> $"main.Atomic<i64>" @_CNW4mainE6AtomicIlE4copyES0_L0) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.Atomic<i64>">) -> void @_CNW4mainE6AtomicIlED0Ev) to $(UnsafeMutableRawPtr) -> void }
+@_CTPNW4mainE6AtomicIlEENW_0E3AnyE = constant $[0 x UnsafeRawPtr] []
+@_CTPNW4mainE6AtomicIlEENW_0E8CopyableE = constant $[1 x UnsafeRawPtr] [UnsafeRawPtr bitcast ($($"main.Atomic<i64>") -> $"main.Atomic<i64>" @_CNW4mainE6AtomicIlE4copyES0_L0) to UnsafeRawPtr]
+@_CTPNW4mainE6AtomicIlEENW_0E18ImplicitlyCopyableE = constant $[0 x UnsafeRawPtr] []
+@3 = constant $[4 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE6AtomicIlEENW_0E3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE8CopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE6AtomicIlEENW_0E8CopyableE: Ref<$[1 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE18ImplicitlyCopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE6AtomicIlEENW_0E18ImplicitlyCopyableE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@4 = private unnamed_addr MetaType<$"main.Atomic<i64>"> undef
+@_CTINW4mainE4BoolE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Bool">) -> void @_CNW4mainE4BoolD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.Bool", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@5: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@6: Ref<$[4 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 1 }, struct $"main.<private name>.Int64" { i64 1 }, struct $"main.<private name>.Int64" { i64 1 } }
+@5 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($($"main.<private name>.Bool") -> $"main.<private name>.Bool" @_CNW4mainE4Bool4copyES0_L0) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Bool">) -> void @_CNW4mainE4BoolD0Ev) to $(UnsafeMutableRawPtr) -> void }
 @_CTPNW4mainE4BoolENS_3AnyE = constant $[0 x UnsafeRawPtr] []
 @_CTPNW4mainE4BoolENS_8CopyableE = constant $[1 x UnsafeRawPtr] [UnsafeRawPtr bitcast ($($"main.<private name>.Bool") -> $"main.<private name>.Bool" @_CNW4mainE4Bool4copyES0_L0) to UnsafeRawPtr]
 @_CTPNW4mainE4BoolENS_18ImplicitlyCopyableE = constant $[0 x UnsafeRawPtr] []
-@3 = constant $[4 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE4BoolENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE8CopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE4BoolENS_8CopyableE: Ref<$[1 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE18ImplicitlyCopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE4BoolENS_18ImplicitlyCopyableE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
-@_CTINW4mainE17ValueWitnessTableE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ValueWitnessTable">) -> void @_CNW4mainE17ValueWitnessTableD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.ValueWitnessTable", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@4: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@5: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 16 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 16 } }
-@4 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ValueWitnessTable">) -> void @_CNW4mainE17ValueWitnessTableD0Ev) to $(UnsafeMutableRawPtr) -> void }
+@6 = constant $[4 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE4BoolENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE8CopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE4BoolENS_8CopyableE: Ref<$[1 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE18ImplicitlyCopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE4BoolENS_18ImplicitlyCopyableE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@_CTINW4mainE17ValueWitnessTableE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ValueWitnessTable">) -> void @_CNW4mainE17ValueWitnessTableD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.ValueWitnessTable", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@7: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@8: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 16 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 16 } }
+@7 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ValueWitnessTable">) -> void @_CNW4mainE17ValueWitnessTableD0Ev) to $(UnsafeMutableRawPtr) -> void }
 @_CTPNW4mainE17ValueWitnessTableENS_3AnyE = constant $[0 x UnsafeRawPtr] []
-@5 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE17ValueWitnessTableENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
-@_CTINW4mainE19ProtocolConformanceE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ProtocolConformance">) -> void @_CNW4mainE19ProtocolConformanceD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.ProtocolConformance", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@6: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@7: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 16 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 16 } }
-@6 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ProtocolConformance">) -> void @_CNW4mainE19ProtocolConformanceD0Ev) to $(UnsafeMutableRawPtr) -> void }
+@8 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE17ValueWitnessTableENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@_CTINW4mainE19ProtocolConformanceE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ProtocolConformance">) -> void @_CNW4mainE19ProtocolConformanceD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.ProtocolConformance", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@9: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@10: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 16 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 16 } }
+@9 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ProtocolConformance">) -> void @_CNW4mainE19ProtocolConformanceD0Ev) to $(UnsafeMutableRawPtr) -> void }
 @_CTPNW4mainE19ProtocolConformanceENS_3AnyE = constant $[0 x UnsafeRawPtr] []
-@7 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE19ProtocolConformanceENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
-@_CTINW4mainE8TypeInfoE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.TypeInfo">) -> void @_CNW4mainE8TypeInfoD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.TypeInfo", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@8: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@9: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 72 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 72 } }
-@8 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.TypeInfo">) -> void @_CNW4mainE8TypeInfoD0Ev) to $(UnsafeMutableRawPtr) -> void }
+@10 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE19ProtocolConformanceENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@_CTINW4mainE8TypeInfoE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.TypeInfo">) -> void @_CNW4mainE8TypeInfoD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.TypeInfo", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@11: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@12: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 72 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 72 } }
+@11 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.TypeInfo">) -> void @_CNW4mainE8TypeInfoD0Ev) to $(UnsafeMutableRawPtr) -> void }
 @_CTPNW4mainE8TypeInfoENS_3AnyE = constant $[0 x UnsafeRawPtr] []
-@9 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE8TypeInfoENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
-@_CTINW4mainE5Int64E = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Int64">) -> void @_CNW4mainE5Int64D0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.Int64", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@10: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@11: Ref<$[4 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 8 } }
-@10 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($($"main.<private name>.Int64") -> $"main.<private name>.Int64" @_CNW4mainE5Int644copyES0_L0) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Int64">) -> void @_CNW4mainE5Int64D0Ev) to $(UnsafeMutableRawPtr) -> void }
+@12 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE8TypeInfoENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@_CTINW4mainE5Int64E = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Int64">) -> void @_CNW4mainE5Int64D0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.Int64", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@13: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@14: Ref<$[4 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 8 } }
+@13 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($($"main.<private name>.Int64") -> $"main.<private name>.Int64" @_CNW4mainE5Int644copyES0_L0) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.Int64">) -> void @_CNW4mainE5Int64D0Ev) to $(UnsafeMutableRawPtr) -> void }
 @_CTPNW4mainE5Int64ENS_3AnyE = constant $[0 x UnsafeRawPtr] []
 @_CTPNW4mainE5Int64ENS_8CopyableE = constant $[1 x UnsafeRawPtr] [UnsafeRawPtr bitcast ($($"main.<private name>.Int64") -> $"main.<private name>.Int64" @_CNW4mainE5Int644copyES0_L0) to UnsafeRawPtr]
 @_CTPNW4mainE5Int64ENS_18ImplicitlyCopyableE = constant $[0 x UnsafeRawPtr] []
-@11 = constant $[4 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE5Int64ENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE8CopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE5Int64ENS_8CopyableE: Ref<$[1 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE18ImplicitlyCopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE5Int64ENS_18ImplicitlyCopyableE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
-@_CTINW4mainE20ExistentialContainerE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ExistentialContainer">) -> void @_CNW4mainE20ExistentialContainerD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.ExistentialContainer", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@12: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@13: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 24 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 24 } }
-@12 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ExistentialContainer">) -> void @_CNW4mainE20ExistentialContainerD0Ev) to $(UnsafeMutableRawPtr) -> void }
+@14 = constant $[4 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE5Int64ENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE8CopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE5Int64ENS_8CopyableE: Ref<$[1 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE18ImplicitlyCopyableE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE5Int64ENS_18ImplicitlyCopyableE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@_CTINW4mainE20ExistentialContainerE = constant struct $"main.<private name>.TypeInfo" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafeRawPtr> null, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ExistentialContainer">) -> void @_CNW4mainE20ExistentialContainerD0Ev) to $(UnsafeMutableRawPtr) -> void, UnsafePtr<u8> "main.<private name>.ExistentialContainer", UnsafePtr<$"main.<private name>.ValueWitnessTable"> addr_of (@15: Ref<$"main.<private name>.ValueWitnessTable">), UnsafePtr<$"main.<private name>.ProtocolConformance"> bitcast (@16: Ref<$[2 x $"main.<private name>.ProtocolConformance"]>) to UnsafePtr<$"main.<private name>.ProtocolConformance">, struct $"main.<private name>.Int64" { i64 24 }, struct $"main.<private name>.Int64" { i64 8 }, struct $"main.<private name>.Int64" { i64 24 } }
+@15 = constant struct $"main.<private name>.ValueWitnessTable" { $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void bitcast ($(UnsafeMutableRawPtr, UnsafeRawPtr) -> void null) to $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, $(UnsafeMutableRawPtr) -> void bitcast ($(MutRef<$"main.<private name>.ExistentialContainer">) -> void @_CNW4mainE20ExistentialContainerD0Ev) to $(UnsafeMutableRawPtr) -> void }
 @_CTPNW4mainE20ExistentialContainerENS_3AnyE = constant $[0 x UnsafeRawPtr] []
-@13 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE20ExistentialContainerENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
+@16 = constant $[2 x $"main.<private name>.ProtocolConformance"] [struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> addr_of (@_CTINW4mainE3AnyE: Ref<$"main.<private name>.TypeInfo">), UnsafePtr<UnsafePtr<i8>> bitcast (@_CTPNW4mainE20ExistentialContainerENS_3AnyE: Ref<$[0 x UnsafeRawPtr]>) to UnsafePtr<UnsafePtr<i8>> }, struct $"main.<private name>.ProtocolConformance" { UnsafePtr<$"main.<private name>.TypeInfo"> null, UnsafePtr<UnsafePtr<i8>> null }]
 
 ; main._start()
 define @_CNW4mainE6_startEv() -> void {
 entry:
-   %x = alloc_stack i64
-   init i64 0, %x: MutRef<i64>
-   call intrinsic void "lifetime_begin" (%x: MutRef<i64>)
-   %10 = load %x: MutRef<i64>
-   %12 = call $() @_CZNW4mainE6_startEvE5funkyIlETvlL0(%10: i64)
-   call intrinsic void "lifetime_end" (%x: MutRef<i64>)
+   %5 = init_struct $"main.Atomic<i64>", @_CNW4mainE6AtomicIlEC1ElL10weirdValue(i64 12)
+   %a = alloc_stack $"main.Atomic<i64>"
+   init %5: $"main.Atomic<i64>", %a: MutRef<$"main.Atomic<i64>">
+   call intrinsic void "lifetime_begin" (%a: MutRef<$"main.Atomic<i64>">)
+   %12 = init_enum $main.MemoryOrder, %SequentiallyConsistent
+   %13 = begin_mut_borrow %a: MutRef<$"main.Atomic<i64>">
+   %15 = call $() @_CNW4mainE6AtomicIlE5storeERS0_lNW_0E11MemoryOrderEL0L0L11memoryOrder(%a: MutRef<$"main.Atomic<i64>">, i64 69, %12: $main.MemoryOrder)
+   end_mut_borrow %13: MutRef<$"main.Atomic<i64>">
+   %19 = load %a: MutRef<$"main.Atomic<i64>">
+   %21 = init_enum $main.MemoryOrder, %AcquireRelease
+   %22 = begin_mut_borrow %a: MutRef<$"main.Atomic<i64>">
+   %24 = call i64 @_CNW4mainE6AtomicIlE4loadES0_NW_0E11MemoryOrderEL0L11memoryOrder(%19: $"main.Atomic<i64>", %21: $main.MemoryOrder)
+   end_mut_borrow %22: MutRef<$"main.Atomic<i64>">
+   %x = alloc_stack [let] i64
+   init %24: i64, %x: Ref<i64>
+   call intrinsic void "lifetime_begin" (%x: Ref<i64>)
+   %32 = load %x: Ref<i64>
+   %34 = call i32 @printf(UnsafePtr<u8> "value: %llu\0A", %32: i64)
+   call intrinsic void "lifetime_end" (%x: Ref<i64>)
+   call intrinsic void "lifetime_end" (%a: MutRef<$"main.Atomic<i64>">)
+   call void @_CNW4mainE6AtomicIlED0Ev(%a: MutRef<$"main.Atomic<i64>">)
    ret void
 }
 
@@ -68,12 +91,139 @@ entry:
    ret i32 0
 }
 
-; main._start().funky<i64>(_ val: Template<i64>)
-define @_CZNW4mainE6_startEvE5funkyIlETvlL0([borrow] i64) -> $() {
-entry(%0: i64):
-   %val = alloc_stack [let] i64
-   init %0: i64, %val: Ref<i64>
+; main.Atomic<i64>.init(weirdValue: owned i64)
+define @_CNW4mainE6AtomicIlEC1ElL10weirdValue([mut ref] MutRef<$"main.Atomic<i64>">, [owned] i64) -> void {
+entry(%self: MutRef<$"main.Atomic<i64>">, %1: i64):
+   %2 = load %self: MutRef<$"main.Atomic<i64>">
+   call void @_CNW4mainE6AtomicIlE14__default_initES0_L0(%2: $"main.Atomic<i64>")
+   %weirdValue = alloc_stack i64
+   init %1: i64, %weirdValue: MutRef<i64>
+   %10 = load %weirdValue: MutRef<i64>
+   call void @_CNW4mainE6AtomicIlEC2ERS0_lL0L5value(%self: MutRef<$"main.Atomic<i64>">, %10: i64)
+   call intrinsic void "lifetime_end" (%weirdValue: MutRef<i64>)
+   ret void
+}
+
+; main.Atomic<i64>.store(_ self: mut ref &mut main.Atomic<i64>, _ storeVal: owned i64, memoryOrder: main.MemoryOrder)
+define @_CNW4mainE6AtomicIlE5storeERS0_lNW_0E11MemoryOrderEL0L0L11memoryOrder([mut ref] MutRef<$"main.Atomic<i64>">, [owned] i64, [borrow] $main.MemoryOrder) -> $() {
+entry(%0: MutRef<$"main.Atomic<i64>">, %1: i64, %2: $main.MemoryOrder):
+   %storeVal = alloc_stack i64
+   init %1: i64, %storeVal: MutRef<i64>
+   %memoryOrder = alloc_stack [let] $main.MemoryOrder
+   init %2: $main.MemoryOrder, %memoryOrder: Ref<$main.MemoryOrder>
+   %11 = load %0: MutRef<$"main.Atomic<i64>">
+   %12 = field_ref MutRef<i64> $"main.Atomic<i64>"::value, %11: $"main.Atomic<i64>"
+   %13 = bitcast %12: MutRef<i64> to MutRef<i64>
+   %14 = load %13: MutRef<i64>
+   %15 = addr_of %13: MutRef<i64>
+   %addr = alloc_stack [let] UnsafeMutablePtr<i64>
+   init %15: UnsafeMutablePtr<i64>, %addr: Ref<UnsafeMutablePtr<i64>>
+   call intrinsic void "lifetime_begin" (%addr: Ref<UnsafeMutablePtr<i64>>)
+   %20 = load %storeVal: MutRef<i64>
+   %21 = load %addr: Ref<UnsafeMutablePtr<i64>>
+   %22 = load %memoryOrder: Ref<$main.MemoryOrder>
+   %23 = call i32 @_CNW4mainE11MemoryOrderGa8rawValueES_L0(%22: $main.MemoryOrder)
+   %24 = bitcast %21: UnsafeMutablePtr<i64> to MutRef<i64>
+   switch %23: i32, default label @unreachable [
+      case i32 2, label @atomic.store.relaxed
+      case i32 5, label @atomic.store.release
+      case i32 7, label @atomic.store.seq_cst
+   ]
+
+; preds: label @entry
+unreachable:
+   unreachable
+
+; preds: label @entry
+atomic.store.relaxed:
+   store atomic [relaxed] %20: i64, %24: MutRef<i64>
+   br label @atomic.store.merge
+
+; preds: label @atomic.store.relaxed, label @atomic.store.release, label @atomic.store.seq_cst
+atomic.store.merge:
+   call intrinsic void "lifetime_end" (%addr: Ref<UnsafeMutablePtr<i64>>)
+   call intrinsic void "lifetime_end" (%storeVal: MutRef<i64>)
    ret $() undef
+
+; preds: label @entry
+atomic.store.release:
+   store atomic [release] %20: i64, %24: MutRef<i64>
+   br label @atomic.store.merge
+
+; preds: label @entry
+atomic.store.seq_cst:
+   store atomic [seq_cst] %20: i64, %24: MutRef<i64>
+   br label @atomic.store.merge
+}
+
+; main.Atomic<i64>.load(_ self: main.Atomic<i64>.Self (aka main.Atomic<i64>), memoryOrder: main.MemoryOrder)
+define @_CNW4mainE6AtomicIlE4loadES0_NW_0E11MemoryOrderEL0L11memoryOrder([borrow] $"main.Atomic<i64>", [borrow] $main.MemoryOrder) -> i64 {
+entry(%0: $"main.Atomic<i64>", %1: $main.MemoryOrder):
+   %3 = alloc_stack [let] $"main.Atomic<i64>"
+   init %0: $"main.Atomic<i64>", %3: Ref<$"main.Atomic<i64>">
+   %memoryOrder = alloc_stack [let] $main.MemoryOrder
+   init %1: $main.MemoryOrder, %memoryOrder: Ref<$main.MemoryOrder>
+   %10 = load @4: MutRef<MetaType<$"main.Atomic<i64>">>
+   %12 = load %memoryOrder: Ref<$main.MemoryOrder>
+   %13 = begin_mut_borrow @4: MutRef<MetaType<$"main.Atomic<i64>">>
+   %15 = call $() @_CNW4mainE6AtomicIlE19checkValidLoadOrderEMS0_NW_0E11MemoryOrderEL0L0(%10: MetaType<$"main.Atomic<i64>">, %12: $main.MemoryOrder)
+   end_mut_borrow %13: MutRef<MetaType<$"main.Atomic<i64>">>
+   %18 = load %3: Ref<$"main.Atomic<i64>">
+   %19 = field_ref [let] Ref<i64> $"main.Atomic<i64>"::value, %18: $"main.Atomic<i64>"
+   %20 = load %19: Ref<i64>
+   %21 = addr_of %19: Ref<i64>
+   %addr = alloc_stack [let] UnsafePtr<i64>
+   init %21: UnsafePtr<i64>, %addr: Ref<UnsafePtr<i64>>
+   call intrinsic void "lifetime_begin" (%addr: Ref<UnsafePtr<i64>>)
+   %26 = load %addr: Ref<UnsafePtr<i64>>
+   %27 = load %memoryOrder: Ref<$main.MemoryOrder>
+   %28 = call i32 @_CNW4mainE11MemoryOrderGa8rawValueES_L0(%27: $main.MemoryOrder)
+   %29 = bitcast %26: UnsafePtr<i64> to Ref<i64>
+   switch %28: i32, default label @unreachable [
+      case i32 2, label @atomic.load.relaxed
+      case i32 3, label @atomic.load.consume
+      case i32 4, label @atomic.load.acquire
+      case i32 7, label @atomic.load.seq_cst
+   ]
+
+; preds: label @entry
+unreachable:
+   unreachable
+
+; preds: label @entry
+atomic.load.relaxed:
+   %33 = load atomic [relaxed] %29: Ref<i64>
+   br label @atomic.load.merge(%33: i64)
+
+; preds: label @atomic.load.relaxed, label @atomic.load.consume, label @atomic.load.acquire, label @atomic.load.seq_cst
+atomic.load.merge(%30: i64):
+   call intrinsic void "lifetime_end" (%addr: Ref<UnsafePtr<i64>>)
+   ret %30: i64
+
+; preds: label @entry
+atomic.load.consume:
+   %35 = load atomic [consume] %29: Ref<i64>
+   br label @atomic.load.merge(%35: i64)
+
+; preds: label @entry
+atomic.load.acquire:
+   %37 = load atomic [acquire] %29: Ref<i64>
+   br label @atomic.load.merge(%37: i64)
+
+; preds: label @entry
+atomic.load.seq_cst:
+   %39 = load atomic [seq_cst] %29: Ref<i64>
+   br label @atomic.load.merge(%39: i64)
+}
+
+; libc.stdio.printf(_ <invalid name>: builtin.RawPointer<u8>)
+declare @printf([borrow] UnsafePtr<u8>, ...) -> i32
+
+; main.Atomic<i64>.deinit()
+define @_CNW4mainE6AtomicIlED0Ev([mut ref] MutRef<$"main.Atomic<i64>">) -> void {
+entry(%self: MutRef<$"main.Atomic<i64>">):
+   call void @_CNW4mainE6AtomicIlED3Ev(%self: MutRef<$"main.Atomic<i64>">)
+   ret void
 }
 
 ; main.MemoryOrder.deinit()
@@ -83,13 +233,13 @@ entry(%self: MutRef<$main.MemoryOrder>):
    ret void
 }
 
-; main.MemoryOrder.copy(_ self: main.MemoryOrder.Self)
+; main.MemoryOrder.copy(_ self: main.MemoryOrder.Self (aka main.MemoryOrder))
 define @_CNW4mainE11MemoryOrder4copyES_L0([borrow] $main.MemoryOrder) -> $main.MemoryOrder {
 entry(%0: $main.MemoryOrder):
    ret %0: $main.MemoryOrder
 }
 
-; main.MemoryOrder.infix ==(_ self: main.MemoryOrder.Self, _ that: main.MemoryOrder)
+; main.MemoryOrder.infix ==(_ self: main.MemoryOrder.Self (aka main.MemoryOrder), _ that: main.MemoryOrder)
 define @"_CNW4mainE11MemoryOrderXi2==ES_S_L0L0"([borrow] $main.MemoryOrder, [borrow] $main.MemoryOrder) -> $"main.<private name>.Bool" {
 entry(%0: $main.MemoryOrder, %1: $main.MemoryOrder):
    %3 = enum_value %0: $main.MemoryOrder
@@ -102,7 +252,7 @@ entry(%0: $main.MemoryOrder, %1: $main.MemoryOrder):
    ret %7: $"main.<private name>.Bool"
 }
 
-; main.MemoryOrder.infix !=(_ self: main.MemoryOrder.Self, _ rhs: main.MemoryOrder.Self)
+; main.MemoryOrder.infix !=(_ self: main.MemoryOrder.Self (aka main.MemoryOrder), _ rhs: main.MemoryOrder.Self (aka main.MemoryOrder))
 define @"_CNW4mainE11MemoryOrderXi2!=ES_S_L0L0"([borrow] $main.MemoryOrder, [borrow] $main.MemoryOrder) -> $"main.<private name>.Bool" {
 entry(%0: $main.MemoryOrder, %1: $main.MemoryOrder):
    %3 = alloc_stack [let] $main.MemoryOrder
@@ -121,7 +271,7 @@ entry(%0: $main.MemoryOrder, %1: $main.MemoryOrder):
    ret %13: $"main.<private name>.Bool"
 }
 
-; main.MemoryOrder.init(rawValue: i32)
+; main.MemoryOrder.init(rawValue: owned i32 (aka i32))
 define @_CNW4mainE11MemoryOrderC1EiL8rawValue([mut ref] MutRef<$main.MemoryOrder>, [owned] i32) -> void {
 entry(%self: MutRef<$main.MemoryOrder>, %1: i32):
    switch %1: i32, default label @init.failure [
@@ -198,7 +348,7 @@ init.case.SequentiallyConsistent:
    ret void
 }
 
-; main.MemoryOrder.get rawValue(_ self: main.MemoryOrder.Self)
+; main.MemoryOrder.get rawValue(_ self: main.MemoryOrder.Self (aka main.MemoryOrder))
 define @_CNW4mainE11MemoryOrderGa8rawValueES_L0([borrow] $main.MemoryOrder) -> i32 {
 entry(%0: $main.MemoryOrder):
    %2 = enum_value %0: $main.MemoryOrder
@@ -256,7 +406,7 @@ case.SequentiallyConsistent:
    br label @merge
 }
 
-; main.MemoryOrder.infix ~=(_ self: main.MemoryOrder.Self, _ rhs: main.MemoryOrder)
+; main.MemoryOrder.infix ~=(_ self: main.MemoryOrder.Self (aka main.MemoryOrder), _ rhs: main.MemoryOrder)
 define @"_CNW4mainE11MemoryOrderXi2~=ES_S_L0L0"([borrow] $main.MemoryOrder, [borrow] $main.MemoryOrder) -> u1 {
 entry(%0: $main.MemoryOrder, %1: $main.MemoryOrder):
    %3 = alloc_stack [let] $main.MemoryOrder
@@ -273,7 +423,7 @@ entry(%0: $main.MemoryOrder, %1: $main.MemoryOrder):
    ret %16: u1
 }
 
-; main.<private name>.Bool.prefix !(_ self: main.<private name>.Bool.Self)
+; main.<private name>.Bool.prefix !(_ self: main.<private name>.Bool.Self (aka main.<private name>.Bool))
 define @"_CNW4mainE4BoolXp1!ES0_L0"([borrow] $"main.<private name>.Bool") -> $"main.<private name>.Bool" {
 entry(%0: $"main.<private name>.Bool"):
    %2 = alloc_stack [let] $"main.<private name>.Bool"
@@ -293,7 +443,10 @@ entry(%self: MutRef<$"main.<private name>.Bool">):
    ret void
 }
 
-; main.func(v1: i64)
+; main.MemoryOrder.init(_ self: mut ref &mut main.MemoryOrder, rawValue: owned i32 (aka i32))
+declare @_CNW4mainE11MemoryOrderC2ERS_iL0L8rawValue([mut ref] MutRef<$main.MemoryOrder>, [owned] i32) -> void
+
+; main.func(v1: i64 (aka i64))
 define @_CNW4mainE4funcElL2v1([borrow] i64) -> $() {
 entry(%0: i64):
    %v1 = alloc_stack [let] i64
@@ -301,7 +454,7 @@ entry(%0: i64):
    ret $() undef
 }
 
-; main.func(v2: i64)
+; main.func(v2: i64 (aka i64))
 define @_CNW4mainE4funcElL2v2([borrow] i64) -> $() {
 entry(%0: i64):
    %v2 = alloc_stack [let] i64
@@ -309,7 +462,112 @@ entry(%0: i64):
    ret $() undef
 }
 
-; main.<private name>.Bool.copy(_ self: main.<private name>.Bool.Self)
+; main.Atomic<i64>.copy(_ self: main.Atomic<i64>.Self (aka main.Atomic<i64>))
+define @_CNW4mainE6AtomicIlE4copyES0_L0([borrow] $"main.Atomic<i64>") -> $"main.Atomic<i64>" {
+entry(%0: $"main.Atomic<i64>"):
+   %2 = alloc_stack $"main.Atomic<i64>"
+   %3 = load %2: MutRef<$"main.Atomic<i64>">
+   %4 = gep u64 0, %3: $"main.Atomic<i64>"
+   %5 = gep u64 0, %0: $"main.Atomic<i64>"
+   %6 = load %5: MutRef<i64>
+   init %6: i64, %4: MutRef<i64>
+   ret %3: $"main.Atomic<i64>"
+}
+
+; main.Atomic<i64>.__default_init(_ self: main.Atomic<i64>.Self (aka main.Atomic<i64>))
+define @_CNW4mainE6AtomicIlE14__default_initES0_L0([borrow] $"main.Atomic<i64>") -> void {
+entry(%0: $"main.Atomic<i64>"):
+   ret void
+}
+
+define @_CNW4mainE6AtomicIlED3Ev([owned] MutRef<$"main.Atomic<i64>">) -> void {
+entry(%0: MutRef<$"main.Atomic<i64>">):
+   %2 = load %0: MutRef<$"main.Atomic<i64>">
+   %3 = gep u64 0, %2: $"main.Atomic<i64>"
+   call intrinsic void "lifetime_end" (%3: MutRef<i64>)
+   ret void
+}
+
+; main.Atomic<i64>.init(_ self: mut ref &mut main.Atomic<i64>, value: owned i64)
+define @_CNW4mainE6AtomicIlEC2ERS0_lL0L5value([mut ref] MutRef<$"main.Atomic<i64>">, [owned] i64) -> void {
+entry(%0: MutRef<$"main.Atomic<i64>">, %1: i64):
+   %value = alloc_stack i64
+   init %1: i64, %value: MutRef<i64>
+   %8 = load %0: MutRef<$"main.Atomic<i64>">
+   %9 = field_ref MutRef<i64> $"main.Atomic<i64>"::value, %8: $"main.Atomic<i64>"
+   %10 = load %value: MutRef<i64>
+   call intrinsic void "lifetime_begin" (%9: MutRef<i64>)
+   init %10: i64, %9: MutRef<i64>
+   call intrinsic void "lifetime_end" (%value: MutRef<i64>)
+   ret void
+}
+
+; main.Atomic<i64>.init(value: owned i64)
+declare @_CNW4mainE6AtomicIlEC1ElL5value([mut ref] MutRef<$"main.Atomic<i64>">, [owned] i64) -> void
+
+; main.Atomic<i64>.init(_ self: mut ref &mut main.Atomic<i64>, weirdValue: owned i64)
+define @_CNW4mainE6AtomicIlEC2ERS0_lL0L10weirdValue([mut ref] MutRef<$"main.Atomic<i64>">, [owned] i64) -> void {
+entry(%0: MutRef<$"main.Atomic<i64>">, %1: i64):
+   %weirdValue = alloc_stack i64
+   init %1: i64, %weirdValue: MutRef<i64>
+   %9 = load %weirdValue: MutRef<i64>
+   call void @_CNW4mainE6AtomicIlEC2ERS0_lL0L5value(%0: MutRef<$"main.Atomic<i64>">, %9: i64)
+   call intrinsic void "lifetime_end" (%weirdValue: MutRef<i64>)
+   ret void
+}
+
+; main.Atomic<i64>.checkValidLoadOrder(_ self: MetaType<main.Atomic<i64>.Self (aka main.Atomic<i64>)>, _ memoryOrder: main.MemoryOrder)
+define @_CNW4mainE6AtomicIlE19checkValidLoadOrderEMS0_NW_0E11MemoryOrderEL0L0([borrow] MetaType<$"main.Atomic<i64>">, [borrow] $main.MemoryOrder) -> $() {
+entry(%0: MetaType<$"main.Atomic<i64>">, %1: $main.MemoryOrder):
+   %3 = alloc_stack [let] MetaType<$"main.Atomic<i64>">
+   init %0: MetaType<$"main.Atomic<i64>">, %3: Ref<MetaType<$"main.Atomic<i64>">>
+   %memoryOrder = alloc_stack [let] $main.MemoryOrder
+   init %1: $main.MemoryOrder, %memoryOrder: Ref<$main.MemoryOrder>
+   %11 = load %memoryOrder: Ref<$main.MemoryOrder>
+   br label @match.cmp
+
+; preds: label @entry
+match.cmp:
+   %15 = init_enum $main.MemoryOrder, %Release
+   %16 = call u1 @"_CNW4mainE11MemoryOrderXi2~=ES_S_L0L0"(%11: $main.MemoryOrder, %15: $main.MemoryOrder)
+   br %16: u1, label @match.body, label @match.cmp.0
+
+; preds: label @match.cmp
+match.body:
+   br label @match.body.0
+
+; preds: label @match.body, label @match.cmp.0
+match.body.0:
+   br label @match.body.1
+
+; preds: label @match.body.0, label @match.cmp.1
+match.body.1:
+   %30 = load %memoryOrder: Ref<$main.MemoryOrder>
+   %32 = call i32 @printf(UnsafePtr<u8> "memory order %d is not valid for load\0A", %30: $main.MemoryOrder)
+   br label @match.merge
+
+; preds: label @match.cmp
+match.cmp.0:
+   %20 = init_enum $main.MemoryOrder, %AcquireRelease
+   %21 = call u1 @"_CNW4mainE11MemoryOrderXi2~=ES_S_L0L0"(%11: $main.MemoryOrder, %20: $main.MemoryOrder)
+   br %21: u1, label @match.body.0, label @match.cmp.1
+
+; preds: label @match.body.1
+match.merge:
+   ret $() undef
+
+; preds: label @match.cmp.0
+match.cmp.1:
+   %24 = init_enum $main.MemoryOrder, %NotAtomic
+   %25 = call u1 @"_CNW4mainE11MemoryOrderXi2~=ES_S_L0L0"(%11: $main.MemoryOrder, %24: $main.MemoryOrder)
+   br %25: u1, label @match.body.1, label @match.body.default
+
+; preds: label @match.cmp.1
+match.body.default:
+   ret $() ()
+}
+
+; main.<private name>.Bool.copy(_ self: main.<private name>.Bool.Self (aka main.<private name>.Bool))
 define @_CNW4mainE4Bool4copyES0_L0([borrow] $"main.<private name>.Bool") -> $"main.<private name>.Bool" {
 entry(%0: $"main.<private name>.Bool"):
    %2 = alloc_stack $"main.<private name>.Bool"
@@ -321,13 +579,13 @@ entry(%0: $"main.<private name>.Bool"):
    ret %3: $"main.<private name>.Bool"
 }
 
-; main.<private name>.Bool.__default_init(_ self: main.<private name>.Bool.Self)
+; main.<private name>.Bool.__default_init(_ self: main.<private name>.Bool.Self (aka main.<private name>.Bool))
 define @_CNW4mainE4Bool14__default_initES0_L0([borrow] $"main.<private name>.Bool") -> void {
 entry(%0: $"main.<private name>.Bool"):
    ret void
 }
 
-; main.<private name>.Bool.init(value: i1)
+; main.<private name>.Bool.init(value: owned i1)
 define @_CNW4mainE4BoolC1EbL5value([mut ref] MutRef<$"main.<private name>.Bool">, [owned] u1) -> void {
 entry(%self: MutRef<$"main.<private name>.Bool">, %1: u1):
    %2 = load %self: MutRef<$"main.<private name>.Bool">
@@ -337,11 +595,12 @@ entry(%self: MutRef<$"main.<private name>.Bool">, %1: u1):
    ret void
 }
 
-; main.<private name>.Bool.init(_ self: main.<private name>.Bool.Self, value: i1)
-define @_CNW4mainE4BoolC2ES0_bL0L5value([borrow] $"main.<private name>.Bool", [owned] u1) -> void {
-entry(%0: $"main.<private name>.Bool", %1: u1):
-   %3 = gep u64 0, %0: $"main.<private name>.Bool"
-   init %1: u1, %3: MutRef<u1>
+; main.<private name>.Bool.init(_ self: mut ref &mut main.<private name>.Bool, value: owned i1)
+define @_CNW4mainE4BoolC2ERS0_bL0L5value([mut ref] MutRef<$"main.<private name>.Bool">, [owned] u1) -> void {
+entry(%0: MutRef<$"main.<private name>.Bool">, %1: u1):
+   %3 = load %0: MutRef<$"main.<private name>.Bool">
+   %4 = gep u64 0, %3: $"main.<private name>.Bool"
+   init %1: u1, %4: MutRef<u1>
    ret void
 }
 
@@ -360,13 +619,13 @@ entry(%self: MutRef<$"main.<private name>.ValueWitnessTable">):
    ret void
 }
 
-; main.<private name>.ValueWitnessTable.__default_init(_ self: main.<private name>.ValueWitnessTable.Self)
+; main.<private name>.ValueWitnessTable.__default_init(_ self: main.<private name>.ValueWitnessTable.Self (aka main.<private name>.ValueWitnessTable))
 define @_CNW4mainE17ValueWitnessTable14__default_initES0_L0([borrow] $"main.<private name>.ValueWitnessTable") -> void {
 entry(%0: $"main.<private name>.ValueWitnessTable"):
    ret void
 }
 
-; main.<private name>.ValueWitnessTable.init(copyFn: @thin (builtin.RawMutablePointer, builtin.RawPointer) -> Void, deinit: @thin (builtin.RawMutablePointer) -> Void)
+; main.<private name>.ValueWitnessTable.init(copyFn: owned @thin (borrow builtin.RawMutablePointer, borrow builtin.RawPointer) -> Void, deinit: owned @thin (borrow builtin.RawMutablePointer) -> Void)
 define @_CNW4mainE17ValueWitnessTableC1EDoFvPvKPvEDoFvS1_EL6copyFnL6deinit([mut ref] MutRef<$"main.<private name>.ValueWitnessTable">, [owned] $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, [owned] $(UnsafeMutableRawPtr) -> void) -> void {
 entry(%self: MutRef<$"main.<private name>.ValueWitnessTable">, %1: $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, %2: $(UnsafeMutableRawPtr) -> void):
    %3 = load %self: MutRef<$"main.<private name>.ValueWitnessTable">
@@ -378,13 +637,14 @@ entry(%self: MutRef<$"main.<private name>.ValueWitnessTable">, %1: $(UnsafeMutab
    ret void
 }
 
-; main.<private name>.ValueWitnessTable.init(_ self: main.<private name>.ValueWitnessTable.Self, copyFn: @thin (builtin.RawMutablePointer, builtin.RawPointer) -> Void, deinit: @thin (builtin.RawMutablePointer) -> Void)
-define @_CNW4mainE17ValueWitnessTableC2ES0_DoFvPvKPvEDoFvS1_EL0L6copyFnL6deinit([borrow] $"main.<private name>.ValueWitnessTable", [owned] $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, [owned] $(UnsafeMutableRawPtr) -> void) -> void {
-entry(%0: $"main.<private name>.ValueWitnessTable", %1: $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, %2: $(UnsafeMutableRawPtr) -> void):
-   %4 = gep u64 0, %0: $"main.<private name>.ValueWitnessTable"
-   init %1: $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, %4: MutRef<$(UnsafeMutableRawPtr, UnsafeRawPtr) -> void>
-   %6 = gep u64 1, %0: $"main.<private name>.ValueWitnessTable"
-   init %2: $(UnsafeMutableRawPtr) -> void, %6: MutRef<$(UnsafeMutableRawPtr) -> void>
+; main.<private name>.ValueWitnessTable.init(_ self: mut ref &mut main.<private name>.ValueWitnessTable, copyFn: owned @thin (borrow builtin.RawMutablePointer, borrow builtin.RawPointer) -> Void, deinit: owned @thin (borrow builtin.RawMutablePointer) -> Void)
+define @_CNW4mainE17ValueWitnessTableC2ERS0_DoFvPvKPvEDoFvS2_EL0L6copyFnL6deinit([mut ref] MutRef<$"main.<private name>.ValueWitnessTable">, [owned] $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, [owned] $(UnsafeMutableRawPtr) -> void) -> void {
+entry(%0: MutRef<$"main.<private name>.ValueWitnessTable">, %1: $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, %2: $(UnsafeMutableRawPtr) -> void):
+   %4 = load %0: MutRef<$"main.<private name>.ValueWitnessTable">
+   %5 = gep u64 0, %4: $"main.<private name>.ValueWitnessTable"
+   init %1: $(UnsafeMutableRawPtr, UnsafeRawPtr) -> void, %5: MutRef<$(UnsafeMutableRawPtr, UnsafeRawPtr) -> void>
+   %7 = gep u64 1, %4: $"main.<private name>.ValueWitnessTable"
+   init %2: $(UnsafeMutableRawPtr) -> void, %7: MutRef<$(UnsafeMutableRawPtr) -> void>
    ret void
 }
 
@@ -405,13 +665,13 @@ entry(%self: MutRef<$"main.<private name>.ProtocolConformance">):
    ret void
 }
 
-; main.<private name>.ProtocolConformance.__default_init(_ self: main.<private name>.ProtocolConformance.Self)
+; main.<private name>.ProtocolConformance.__default_init(_ self: main.<private name>.ProtocolConformance.Self (aka main.<private name>.ProtocolConformance))
 define @_CNW4mainE19ProtocolConformance14__default_initES0_L0([borrow] $"main.<private name>.ProtocolConformance") -> void {
 entry(%0: $"main.<private name>.ProtocolConformance"):
    ret void
 }
 
-; main.<private name>.ProtocolConformance.init(typeInfo: builtin.RawPointer<main.<private name>.TypeInfo>, vtable: builtin.RawPointer<builtin.RawPointer>)
+; main.<private name>.ProtocolConformance.init(typeInfo: owned builtin.RawPointer<main.<private name>.TypeInfo>, vtable: owned builtin.RawPointer<builtin.RawPointer>)
 define @_CNW4mainE19ProtocolConformanceC1EKPNS_8TypeInfoEKPKPvL8typeInfoL6vtable([mut ref] MutRef<$"main.<private name>.ProtocolConformance">, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<UnsafeRawPtr>) -> void {
 entry(%self: MutRef<$"main.<private name>.ProtocolConformance">, %1: UnsafePtr<$"main.<private name>.TypeInfo">, %2: UnsafePtr<UnsafeRawPtr>):
    %3 = load %self: MutRef<$"main.<private name>.ProtocolConformance">
@@ -423,13 +683,14 @@ entry(%self: MutRef<$"main.<private name>.ProtocolConformance">, %1: UnsafePtr<$
    ret void
 }
 
-; main.<private name>.ProtocolConformance.init(_ self: main.<private name>.ProtocolConformance.Self, typeInfo: builtin.RawPointer<main.<private name>.TypeInfo>, vtable: builtin.RawPointer<builtin.RawPointer>)
-define @_CNW4mainE19ProtocolConformanceC2ES0_KPNS_8TypeInfoEKPKPvL0L8typeInfoL6vtable([borrow] $"main.<private name>.ProtocolConformance", [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<UnsafeRawPtr>) -> void {
-entry(%0: $"main.<private name>.ProtocolConformance", %1: UnsafePtr<$"main.<private name>.TypeInfo">, %2: UnsafePtr<UnsafeRawPtr>):
-   %4 = gep u64 0, %0: $"main.<private name>.ProtocolConformance"
-   init %1: UnsafePtr<$"main.<private name>.TypeInfo">, %4: MutRef<UnsafePtr<$"main.<private name>.TypeInfo">>
-   %6 = gep u64 1, %0: $"main.<private name>.ProtocolConformance"
-   init %2: UnsafePtr<UnsafeRawPtr>, %6: MutRef<UnsafePtr<UnsafeRawPtr>>
+; main.<private name>.ProtocolConformance.init(_ self: mut ref &mut main.<private name>.ProtocolConformance, typeInfo: owned builtin.RawPointer<main.<private name>.TypeInfo>, vtable: owned builtin.RawPointer<builtin.RawPointer>)
+define @_CNW4mainE19ProtocolConformanceC2ERS0_KPNS_8TypeInfoEKPKPvL0L8typeInfoL6vtable([mut ref] MutRef<$"main.<private name>.ProtocolConformance">, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<UnsafeRawPtr>) -> void {
+entry(%0: MutRef<$"main.<private name>.ProtocolConformance">, %1: UnsafePtr<$"main.<private name>.TypeInfo">, %2: UnsafePtr<UnsafeRawPtr>):
+   %4 = load %0: MutRef<$"main.<private name>.ProtocolConformance">
+   %5 = gep u64 0, %4: $"main.<private name>.ProtocolConformance"
+   init %1: UnsafePtr<$"main.<private name>.TypeInfo">, %5: MutRef<UnsafePtr<$"main.<private name>.TypeInfo">>
+   %7 = gep u64 1, %4: $"main.<private name>.ProtocolConformance"
+   init %2: UnsafePtr<UnsafeRawPtr>, %7: MutRef<UnsafePtr<UnsafeRawPtr>>
    ret void
 }
 
@@ -450,13 +711,13 @@ entry(%self: MutRef<$"main.<private name>.TypeInfo">):
    ret void
 }
 
-; main.<private name>.TypeInfo.__default_init(_ self: main.<private name>.TypeInfo.Self)
+; main.<private name>.TypeInfo.__default_init(_ self: main.<private name>.TypeInfo.Self (aka main.<private name>.TypeInfo))
 define @_CNW4mainE8TypeInfo14__default_initES0_L0([borrow] $"main.<private name>.TypeInfo") -> void {
 entry(%0: $"main.<private name>.TypeInfo"):
    ret void
 }
 
-; main.<private name>.TypeInfo.init(baseClass: builtin.RawPointer<main.<private name>.TypeInfo>, vtable: builtin.RawPointer<builtin.RawPointer>, deinit: @thin (builtin.RawMutablePointer) -> Void, name: builtin.RawPointer<u8>, valueWitnessTable: builtin.RawPointer<main.<private name>.ValueWitnessTable>, conformances: builtin.RawPointer<main.<private name>.ProtocolConformance>, size: u64, alignment: u64, stride: u64)
+; main.<private name>.TypeInfo.init(baseClass: owned builtin.RawPointer<main.<private name>.TypeInfo>, vtable: owned builtin.RawPointer<builtin.RawPointer>, deinit: owned @thin (borrow builtin.RawMutablePointer) -> Void, name: owned builtin.RawPointer<u8>, valueWitnessTable: owned builtin.RawPointer<main.<private name>.ValueWitnessTable>, conformances: owned builtin.RawPointer<main.<private name>.ProtocolConformance>, size: owned u64, alignment: owned u64, stride: owned u64)
 define @_CNW4mainE8TypeInfoC1EKPS0_KPKPvDoFvPvEKPhKPNS_17ValueWitnessTableEKPNS_19ProtocolConformanceEmmmL9baseClassL6vtableL6deinitL4nameL17valueWitnessTableL12conformancesL4sizeL9alignmentL6stride([mut ref] MutRef<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<UnsafeRawPtr>, [owned] $(UnsafeMutableRawPtr) -> void, [owned] UnsafePtr<u8>, [owned] UnsafePtr<$"main.<private name>.ValueWitnessTable">, [owned] UnsafePtr<$"main.<private name>.ProtocolConformance">, [owned] u64, [owned] u64, [owned] u64) -> void {
 entry(%self: MutRef<$"main.<private name>.TypeInfo">, %1: UnsafePtr<$"main.<private name>.TypeInfo">, %2: UnsafePtr<UnsafeRawPtr>, %3: $(UnsafeMutableRawPtr) -> void, %4: UnsafePtr<u8>, %5: UnsafePtr<$"main.<private name>.ValueWitnessTable">, %6: UnsafePtr<$"main.<private name>.ProtocolConformance">, %7: u64, %8: u64, %9: u64):
    %10 = load %self: MutRef<$"main.<private name>.TypeInfo">
@@ -482,27 +743,28 @@ entry(%self: MutRef<$"main.<private name>.TypeInfo">, %1: UnsafePtr<$"main.<priv
    ret void
 }
 
-; main.<private name>.TypeInfo.init(_ self: main.<private name>.TypeInfo.Self, baseClass: builtin.RawPointer<main.<private name>.TypeInfo>, vtable: builtin.RawPointer<builtin.RawPointer>, deinit: @thin (builtin.RawMutablePointer) -> Void, name: builtin.RawPointer<u8>, valueWitnessTable: builtin.RawPointer<main.<private name>.ValueWitnessTable>, conformances: builtin.RawPointer<main.<private name>.ProtocolConformance>, size: u64, alignment: u64, stride: u64)
-define @_CNW4mainE8TypeInfoC2ES0_KPS0_KPKPvDoFvPvEKPhKPNS_17ValueWitnessTableEKPNS_19ProtocolConformanceEmmmL0L9baseClassL6vtableL6deinitL4nameL17valueWitnessTableL12conformancesL4sizeL9alignmentL6stride([borrow] $"main.<private name>.TypeInfo", [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<UnsafeRawPtr>, [owned] $(UnsafeMutableRawPtr) -> void, [owned] UnsafePtr<u8>, [owned] UnsafePtr<$"main.<private name>.ValueWitnessTable">, [owned] UnsafePtr<$"main.<private name>.ProtocolConformance">, [owned] u64, [owned] u64, [owned] u64) -> void {
-entry(%0: $"main.<private name>.TypeInfo", %1: UnsafePtr<$"main.<private name>.TypeInfo">, %2: UnsafePtr<UnsafeRawPtr>, %3: $(UnsafeMutableRawPtr) -> void, %4: UnsafePtr<u8>, %5: UnsafePtr<$"main.<private name>.ValueWitnessTable">, %6: UnsafePtr<$"main.<private name>.ProtocolConformance">, %7: u64, %8: u64, %9: u64):
-   %11 = gep u64 0, %0: $"main.<private name>.TypeInfo"
-   init %1: UnsafePtr<$"main.<private name>.TypeInfo">, %11: MutRef<UnsafePtr<$"main.<private name>.TypeInfo">>
-   %13 = gep u64 1, %0: $"main.<private name>.TypeInfo"
-   init %2: UnsafePtr<UnsafeRawPtr>, %13: MutRef<UnsafePtr<UnsafeRawPtr>>
-   %15 = gep u64 2, %0: $"main.<private name>.TypeInfo"
-   init %3: $(UnsafeMutableRawPtr) -> void, %15: MutRef<$(UnsafeMutableRawPtr) -> void>
-   %17 = gep u64 3, %0: $"main.<private name>.TypeInfo"
-   init %4: UnsafePtr<u8>, %17: MutRef<UnsafePtr<u8>>
-   %19 = gep u64 4, %0: $"main.<private name>.TypeInfo"
-   init %5: UnsafePtr<$"main.<private name>.ValueWitnessTable">, %19: MutRef<UnsafePtr<$"main.<private name>.ValueWitnessTable">>
-   %21 = gep u64 5, %0: $"main.<private name>.TypeInfo"
-   init %6: UnsafePtr<$"main.<private name>.ProtocolConformance">, %21: MutRef<UnsafePtr<$"main.<private name>.ProtocolConformance">>
-   %23 = gep u64 6, %0: $"main.<private name>.TypeInfo"
-   init %7: u64, %23: MutRef<u64>
-   %25 = gep u64 7, %0: $"main.<private name>.TypeInfo"
-   init %8: u64, %25: MutRef<u64>
-   %27 = gep u64 8, %0: $"main.<private name>.TypeInfo"
-   init %9: u64, %27: MutRef<u64>
+; main.<private name>.TypeInfo.init(_ self: mut ref &mut main.<private name>.TypeInfo, baseClass: owned builtin.RawPointer<main.<private name>.TypeInfo>, vtable: owned builtin.RawPointer<builtin.RawPointer>, deinit: owned @thin (borrow builtin.RawMutablePointer) -> Void, name: owned builtin.RawPointer<u8>, valueWitnessTable: owned builtin.RawPointer<main.<private name>.ValueWitnessTable>, conformances: owned builtin.RawPointer<main.<private name>.ProtocolConformance>, size: owned u64, alignment: owned u64, stride: owned u64)
+define @_CNW4mainE8TypeInfoC2ERS0_KPS0_KPKPvDoFvPvEKPhKPNS_17ValueWitnessTableEKPNS_19ProtocolConformanceEmmmL0L9baseClassL6vtableL6deinitL4nameL17valueWitnessTableL12conformancesL4sizeL9alignmentL6stride([mut ref] MutRef<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<UnsafeRawPtr>, [owned] $(UnsafeMutableRawPtr) -> void, [owned] UnsafePtr<u8>, [owned] UnsafePtr<$"main.<private name>.ValueWitnessTable">, [owned] UnsafePtr<$"main.<private name>.ProtocolConformance">, [owned] u64, [owned] u64, [owned] u64) -> void {
+entry(%0: MutRef<$"main.<private name>.TypeInfo">, %1: UnsafePtr<$"main.<private name>.TypeInfo">, %2: UnsafePtr<UnsafeRawPtr>, %3: $(UnsafeMutableRawPtr) -> void, %4: UnsafePtr<u8>, %5: UnsafePtr<$"main.<private name>.ValueWitnessTable">, %6: UnsafePtr<$"main.<private name>.ProtocolConformance">, %7: u64, %8: u64, %9: u64):
+   %11 = load %0: MutRef<$"main.<private name>.TypeInfo">
+   %12 = gep u64 0, %11: $"main.<private name>.TypeInfo"
+   init %1: UnsafePtr<$"main.<private name>.TypeInfo">, %12: MutRef<UnsafePtr<$"main.<private name>.TypeInfo">>
+   %14 = gep u64 1, %11: $"main.<private name>.TypeInfo"
+   init %2: UnsafePtr<UnsafeRawPtr>, %14: MutRef<UnsafePtr<UnsafeRawPtr>>
+   %16 = gep u64 2, %11: $"main.<private name>.TypeInfo"
+   init %3: $(UnsafeMutableRawPtr) -> void, %16: MutRef<$(UnsafeMutableRawPtr) -> void>
+   %18 = gep u64 3, %11: $"main.<private name>.TypeInfo"
+   init %4: UnsafePtr<u8>, %18: MutRef<UnsafePtr<u8>>
+   %20 = gep u64 4, %11: $"main.<private name>.TypeInfo"
+   init %5: UnsafePtr<$"main.<private name>.ValueWitnessTable">, %20: MutRef<UnsafePtr<$"main.<private name>.ValueWitnessTable">>
+   %22 = gep u64 5, %11: $"main.<private name>.TypeInfo"
+   init %6: UnsafePtr<$"main.<private name>.ProtocolConformance">, %22: MutRef<UnsafePtr<$"main.<private name>.ProtocolConformance">>
+   %24 = gep u64 6, %11: $"main.<private name>.TypeInfo"
+   init %7: u64, %24: MutRef<u64>
+   %26 = gep u64 7, %11: $"main.<private name>.TypeInfo"
+   init %8: u64, %26: MutRef<u64>
+   %28 = gep u64 8, %11: $"main.<private name>.TypeInfo"
+   init %9: u64, %28: MutRef<u64>
    ret void
 }
 
@@ -537,7 +799,7 @@ entry(%self: MutRef<$"main.<private name>.Int64">):
    ret void
 }
 
-; main.<private name>.Int64.copy(_ self: main.<private name>.Int64.Self)
+; main.<private name>.Int64.copy(_ self: main.<private name>.Int64.Self (aka main.<private name>.Int64))
 define @_CNW4mainE5Int644copyES0_L0([borrow] $"main.<private name>.Int64") -> $"main.<private name>.Int64" {
 entry(%0: $"main.<private name>.Int64"):
    %2 = alloc_stack $"main.<private name>.Int64"
@@ -549,13 +811,13 @@ entry(%0: $"main.<private name>.Int64"):
    ret %3: $"main.<private name>.Int64"
 }
 
-; main.<private name>.Int64.__default_init(_ self: main.<private name>.Int64.Self)
+; main.<private name>.Int64.__default_init(_ self: main.<private name>.Int64.Self (aka main.<private name>.Int64))
 define @_CNW4mainE5Int6414__default_initES0_L0([borrow] $"main.<private name>.Int64") -> void {
 entry(%0: $"main.<private name>.Int64"):
    ret void
 }
 
-; main.<private name>.Int64.init(value: i64)
+; main.<private name>.Int64.init(value: owned i64)
 define @_CNW4mainE5Int64C1ElL5value([mut ref] MutRef<$"main.<private name>.Int64">, [owned] i64) -> void {
 entry(%self: MutRef<$"main.<private name>.Int64">, %1: i64):
    %2 = load %self: MutRef<$"main.<private name>.Int64">
@@ -565,11 +827,12 @@ entry(%self: MutRef<$"main.<private name>.Int64">, %1: i64):
    ret void
 }
 
-; main.<private name>.Int64.init(_ self: main.<private name>.Int64.Self, value: i64)
-define @_CNW4mainE5Int64C2ES0_lL0L5value([borrow] $"main.<private name>.Int64", [owned] i64) -> void {
-entry(%0: $"main.<private name>.Int64", %1: i64):
-   %3 = gep u64 0, %0: $"main.<private name>.Int64"
-   init %1: i64, %3: MutRef<i64>
+; main.<private name>.Int64.init(_ self: mut ref &mut main.<private name>.Int64, value: owned i64)
+define @_CNW4mainE5Int64C2ERS0_lL0L5value([mut ref] MutRef<$"main.<private name>.Int64">, [owned] i64) -> void {
+entry(%0: MutRef<$"main.<private name>.Int64">, %1: i64):
+   %3 = load %0: MutRef<$"main.<private name>.Int64">
+   %4 = gep u64 0, %3: $"main.<private name>.Int64"
+   init %1: i64, %4: MutRef<i64>
    ret void
 }
 
@@ -588,13 +851,13 @@ entry(%self: MutRef<$"main.<private name>.ExistentialContainer">):
    ret void
 }
 
-; main.<private name>.ExistentialContainer.__default_init(_ self: main.<private name>.ExistentialContainer.Self)
+; main.<private name>.ExistentialContainer.__default_init(_ self: main.<private name>.ExistentialContainer.Self (aka main.<private name>.ExistentialContainer))
 define @_CNW4mainE20ExistentialContainer14__default_initES0_L0([borrow] $"main.<private name>.ExistentialContainer") -> void {
 entry(%0: $"main.<private name>.ExistentialContainer"):
    ret void
 }
 
-; main.<private name>.ExistentialContainer.init(value: builtin.RawMutablePointer, typeInfo: builtin.RawPointer<main.<private name>.TypeInfo>, conformance: builtin.RawPointer<main.<private name>.ProtocolConformance>)
+; main.<private name>.ExistentialContainer.init(value: owned builtin.RawMutablePointer, typeInfo: owned builtin.RawPointer<main.<private name>.TypeInfo>, conformance: owned builtin.RawPointer<main.<private name>.ProtocolConformance>)
 define @_CNW4mainE20ExistentialContainerC1EPvKPNS_8TypeInfoEKPNS_19ProtocolConformanceEL5valueL8typeInfoL11conformance([mut ref] MutRef<$"main.<private name>.ExistentialContainer">, [owned] UnsafeMutableRawPtr, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<$"main.<private name>.ProtocolConformance">) -> void {
 entry(%self: MutRef<$"main.<private name>.ExistentialContainer">, %1: UnsafeMutableRawPtr, %2: UnsafePtr<$"main.<private name>.TypeInfo">, %3: UnsafePtr<$"main.<private name>.ProtocolConformance">):
    %4 = load %self: MutRef<$"main.<private name>.ExistentialContainer">
@@ -608,15 +871,16 @@ entry(%self: MutRef<$"main.<private name>.ExistentialContainer">, %1: UnsafeMuta
    ret void
 }
 
-; main.<private name>.ExistentialContainer.init(_ self: main.<private name>.ExistentialContainer.Self, value: builtin.RawMutablePointer, typeInfo: builtin.RawPointer<main.<private name>.TypeInfo>, conformance: builtin.RawPointer<main.<private name>.ProtocolConformance>)
-define @_CNW4mainE20ExistentialContainerC2ES0_PvKPNS_8TypeInfoEKPNS_19ProtocolConformanceEL0L5valueL8typeInfoL11conformance([borrow] $"main.<private name>.ExistentialContainer", [owned] UnsafeMutableRawPtr, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<$"main.<private name>.ProtocolConformance">) -> void {
-entry(%0: $"main.<private name>.ExistentialContainer", %1: UnsafeMutableRawPtr, %2: UnsafePtr<$"main.<private name>.TypeInfo">, %3: UnsafePtr<$"main.<private name>.ProtocolConformance">):
-   %5 = gep u64 0, %0: $"main.<private name>.ExistentialContainer"
-   init %1: UnsafeMutableRawPtr, %5: MutRef<UnsafeMutableRawPtr>
-   %7 = gep u64 1, %0: $"main.<private name>.ExistentialContainer"
-   init %2: UnsafePtr<$"main.<private name>.TypeInfo">, %7: MutRef<UnsafePtr<$"main.<private name>.TypeInfo">>
-   %9 = gep u64 2, %0: $"main.<private name>.ExistentialContainer"
-   init %3: UnsafePtr<$"main.<private name>.ProtocolConformance">, %9: MutRef<UnsafePtr<$"main.<private name>.ProtocolConformance">>
+; main.<private name>.ExistentialContainer.init(_ self: mut ref &mut main.<private name>.ExistentialContainer, value: owned builtin.RawMutablePointer, typeInfo: owned builtin.RawPointer<main.<private name>.TypeInfo>, conformance: owned builtin.RawPointer<main.<private name>.ProtocolConformance>)
+define @_CNW4mainE20ExistentialContainerC2ERS0_PvKPNS_8TypeInfoEKPNS_19ProtocolConformanceEL0L5valueL8typeInfoL11conformance([mut ref] MutRef<$"main.<private name>.ExistentialContainer">, [owned] UnsafeMutableRawPtr, [owned] UnsafePtr<$"main.<private name>.TypeInfo">, [owned] UnsafePtr<$"main.<private name>.ProtocolConformance">) -> void {
+entry(%0: MutRef<$"main.<private name>.ExistentialContainer">, %1: UnsafeMutableRawPtr, %2: UnsafePtr<$"main.<private name>.TypeInfo">, %3: UnsafePtr<$"main.<private name>.ProtocolConformance">):
+   %5 = load %0: MutRef<$"main.<private name>.ExistentialContainer">
+   %6 = gep u64 0, %5: $"main.<private name>.ExistentialContainer"
+   init %1: UnsafeMutableRawPtr, %6: MutRef<UnsafeMutableRawPtr>
+   %8 = gep u64 1, %5: $"main.<private name>.ExistentialContainer"
+   init %2: UnsafePtr<$"main.<private name>.TypeInfo">, %8: MutRef<UnsafePtr<$"main.<private name>.TypeInfo">>
+   %10 = gep u64 2, %5: $"main.<private name>.ExistentialContainer"
+   init %3: UnsafePtr<$"main.<private name>.ProtocolConformance">, %10: MutRef<UnsafePtr<$"main.<private name>.ProtocolConformance">>
    ret void
 }
 

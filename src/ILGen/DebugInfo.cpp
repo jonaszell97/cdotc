@@ -16,7 +16,7 @@
 //#include "../../../Variant/Type/FunctionType.h"
 //#include "../../../Variant/Type/TupleType.h"
 //#include "../../../Variant/Type/RecordType.h"
-//#include "../../../Variant/Type/GenericType.h"
+//#include "../../../Variant/Type/TemplateParamType.h"
 //#include "../../../Variant/Type/QualType.h"
 //
 //#include "../../Statement/Declaration/LocalVarDecl.h"
@@ -222,7 +222,7 @@
 //
 //         break;
 //      }
-//      case TypeID::GenericTypeID: {
+//      case TypeID::TemplateParamTypeID: {
 //         MD = getTypeDI(ty->asGenericTy()->getActualType());
 //         break;
 //      }

@@ -312,6 +312,14 @@ QueryResult GenerateILFunctionBodyQuery::run()
       return fail();
    }
 
+   if (auto *M = dyn_cast<MethodDecl>(C)) {
+      if (M->isProtocolRequirement()) {
+         return finish();
+      }
+   }
+
+   ILGen.DeclareFunction(C);
+
    if (!C->getBody()) {
       return finish();
    }

@@ -800,16 +800,17 @@ public:
 private:
    QueryResult run();
 
-   IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType);
+   IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType, uint8_t isSelf = false);
 
    QueryResult finish(bool Result, Status St = Done);
 
    QualType givenType;
    QualType paramType;
+   uint8_t isSelf;
    llvm::Optional<bool> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType);
+   static void Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType, uint8_t isSelf);
 
 };
 
@@ -904,10 +905,10 @@ public:
 
 };
 
-class SubstGenericTypesQuery: public Query, public llvm::FoldingSetNode {
+class SubstTemplateParamTypesQuery: public Query, public llvm::FoldingSetNode {
 public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
-   static bool classofKind(Kind K) { return K == Kind::SubstGenericTypesQueryID; }
+   static bool classofKind(Kind K) { return K == Kind::SubstTemplateParamTypesQueryID; }
 
    using result_type = QualType;
 
@@ -922,7 +923,7 @@ public:
 private:
    QueryResult run();
 
-   SubstGenericTypesQuery(QueryContext &QC, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR);
+   SubstTemplateParamTypesQuery(QueryContext &QC, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR);
 
    QueryResult finish(QualType Result, Status St = Done);
 
@@ -936,10 +937,10 @@ public:
 
 };
 
-class SubstGenericTypesNonFinalQuery: public Query {
+class SubstTemplateParamTypesNonFinalQuery: public Query {
 public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
-   static bool classofKind(Kind K) { return K == Kind::SubstGenericTypesNonFinalQueryID; }
+   static bool classofKind(Kind K) { return K == Kind::SubstTemplateParamTypesNonFinalQueryID; }
 
    using result_type = QualType;
 
@@ -954,7 +955,7 @@ public:
 private:
    QueryResult run();
 
-   SubstGenericTypesNonFinalQuery(QueryContext &QC, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR);
+   SubstTemplateParamTypesNonFinalQuery(QueryContext &QC, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR);
 
    QueryResult finish(QualType Result, Status St = Done);
 

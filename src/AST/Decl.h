@@ -1202,8 +1202,10 @@ class AliasDecl final: public NamedDecl,
    SourceLocation Loc;
    SourceType Type;
    StaticExpr* aliasExpr;
-   unsigned NumParams;
    InstantiationInfo<AliasDecl> *instantiationInfo = nullptr;
+
+   unsigned NumParams : 31;
+   bool strong : 1;
 
 public:
    static AliasDecl *Create(ASTContext &C,
@@ -1275,6 +1277,9 @@ public:
    {
       return instantiationInfo->specializedTemplate;
    }
+
+   bool isStrong() const { return strong; }
+   void setStrong(bool s) { strong = s; }
 };
 
 enum class ImplicitConformanceKind : unsigned char {

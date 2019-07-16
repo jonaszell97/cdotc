@@ -635,7 +635,11 @@ void ASTStmtReader::visitCallExpr(CallExpr *S)
    S->setBuiltinKind(Record.readInt());
    S->setFunc(Record.readDeclAs<CallableDecl>());
    S->setParentExpr(Record.readSubExpr());
-   S->setContext(Record.readDeclAs<DeclContext>());
+
+   bool hasTemplateArgs = Record.readBool();
+   if (hasTemplateArgs) {
+      S->setTemplateArgs(Record.readTemplateArgumentList());
+   }
 }
 
 void ASTStmtReader::visitAnonymousCallExpr(AnonymousCallExpr *S)

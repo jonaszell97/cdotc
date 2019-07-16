@@ -127,7 +127,7 @@
 //         return true;
 //      }
 //
-//      ParentType = PE->getExprType()->stripReference();
+//      ParentType = PE->getExprType()->removeReference();
 //      if (ParentType->isUnknownAnyType()) {
 //         makeNestedNameSpec(Sema, Sema.getContext(), NameSpec, Ident);
 //         return true;
@@ -160,7 +160,7 @@
 //      ParentType = Underlying;
 //      Ident->setStaticLookup(true);
 //
-//      auto *R = ParentType->stripReference()->getRecord();
+//      auto *R = ParentType->removeReference()->getRecord();
 //      Ident->setDeclCtx(R);
 //   }
 //   else if (Ident->hasLeadingDot()) {

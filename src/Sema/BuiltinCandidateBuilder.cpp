@@ -342,7 +342,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
    case op::As: case op::AsExclaim: case op::AsQuestion: {
       FunctionType *FnTy = Context.getFunctionType(
          Context.getUnknownAnyTy(),
-         { lhsType->stripReference(), Context.getUnknownAnyTy() });
+         { lhsType->removeReference(), Context.getUnknownAnyTy() });
 
       Vec.emplace_back(FnTy);
       break;
@@ -449,7 +449,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
    }
    case op::AddrOf: {
       if (!lhsType->isMutableReferenceType())
-         lhsType = Context.getMutableReferenceType(lhsType->stripReference());
+         lhsType = Context.getMutableReferenceType(lhsType->removeReference());
 
       auto ResultTy = Context.getMutableBorrowType(
          lhsType->getReferencedType());
@@ -471,7 +471,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       break;
    }
    case op::TypeOf: {
-      lhsType = lhsType->stripReference();
+      lhsType = lhsType->removeReference();
       FunctionType *FnTy = Context.getFunctionType(
          Context.getMetaType(lhsType), { lhsType });
 

@@ -776,7 +776,7 @@ void IRGen::emitLocalVarDI(const il::DebugLocalInst &Inst,
       return;
    }
 
-   QualType ReferencedTy = ILVal->getType()->stripReference();
+   QualType ReferencedTy = ILVal->getType()->removeReference();
    llvm::DIType *DIType;
 
    if (ReferencedTy->isClass() && !isa<il::Argument>(ILVal)) {

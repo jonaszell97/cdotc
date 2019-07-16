@@ -137,7 +137,7 @@ il::Value* ILGenPass::visit(Expression *expr)
       else if (V->getType()->isEmptyTupleType()) {
          V = Builder.GetEmptyTuple();
       }
-      else if (V->getType()->stripReference()->isBoxType()) {
+      else if (V->getType()->removeReference()->isBoxType()) {
          V = Builder.CreateIntrinsicCall(Intrinsic::unbox,
                                          Builder.CreateLoad(V));
       }
@@ -1306,10 +1306,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    ModuleRAII MR(*this, getModuleFor(CD));
    il::Function *func = getFunc(CD);
 
-   if (func->getName()=="_CNW4mainE6AtomicIlEC2ES0_lL0L10weirdValue") {
-       int i=3; //CBP
-   }
-
    if (!func->isDeclared())
       return;
 
@@ -1861,7 +1857,7 @@ CallableDecl *ILGenPass::MaybeSpecialize(CallableDecl *C, Expression *SelfArg)
 
    if (SelfArg) {
       NoImplicitConv = SelfArg->ignoreParensAndImplicitCasts();
-      SelfType = NoImplicitConv->getExprType()->stripReference();
+      SelfType = NoImplicitConv->getExprType()->removeReference();
    }
 
    // This type hierarchy will be referenced in following code examples.
@@ -1879,9 +1875,9 @@ CallableDecl *ILGenPass::MaybeSpecialize(CallableDecl *C, Expression *SelfArg)
    // }
    //
    // func(Dog()) <-- func<Dog> specialized here.
-   if (SelfType && SelfType->isGenericType()) {
+   if (SelfType && SelfType->isTemplateParamType()) {
       // Get the concrete type for type parameter T.
-      auto Concrete = getSubstitution(cast<GenericType>(SelfType)->getParam());
+      auto Concrete = getSubstitution(cast<TemplateParamType>(SelfType)->getParam());
 
       // Get the implementation of the called protocol method.
       assert(Concrete->isType() && Concrete->getType()->isRecordType());
@@ -3086,7 +3082,7 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl *Decl)
       }
 
       il::Value *MovedVal;
-      if (SP.IsImplicitlyCopyableType(DeclTy->stripReference())) {
+      if (SP.IsImplicitlyCopyableType(DeclTy->removeReference())) {
          MovedVal = Val;
       }
       else {
@@ -3682,7 +3678,8 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr *Expr)
    case Decl::FieldDeclID: {
       auto *F = cast<FieldDecl>(ND);
       if (ParentVal->isLvalue()) {
-         ParentVal = Builder.CreateLoad(ParentVal);
+         auto *ld = Builder.CreateLoad(ParentVal);
+         ParentVal = ld;
       }
 
       if (ParentVal->getType()->isDependentRecordType()) {
@@ -3931,7 +3928,7 @@ il::Value* ILGenPass::visitBuiltinIdentExpr(BuiltinIdentExpr *node)
       return ConstantInt::getCTFE(ValueType(Builder.getContext(),
                                             SP.getContext().getBoolTy()));
    case BuiltinIdentifier::__builtin_void:
-      return GetTypeInfo(node->getExprType()->stripMetaType());
+      return GetTypeInfo(node->getExprType()->removeMetaType());
    default:
       llvm_unreachable("Unsupported builtin identifier");
    }
@@ -4135,9 +4132,10 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *Expr,
       Val = LookThroughLoad(Val);
 
       if (NeedSelf && i++ == 0) {
-         if (Val->isLvalue() && !CalledFn->isBaseInitializer())
+         if (Val->isLvalue() && !CalledFn->isBaseInitializer()) {
             MutableBorrows.emplace_back(Val, Expr->getParenRange().getEnd(),
                                         true);
+         }
 
          ++arg_it;
          continue;
@@ -4528,7 +4526,7 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
          auto *BB = Builder.CreateBasicBlock(OS.str());
          Builder.SetInsertPoint(BB);
 
-         Builder.CreateStore(Val, Dst, MemoryOrder::Relaxed);
+         Builder.CreateStore(Val, Dst, Order);
          Builder.CreateBr(MergeBB);
 
          Switch->addCase(Builder.getInt32((uint32_t)Order), BB);
@@ -5184,6 +5182,8 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *Stmt)
 
    bool AllCasesReturn = true;
    unsigned i = 0;
+   unsigned j = 0;
+
    for (auto *Case : Stmt->getCases()) {
       auto *Body = CaseBlocks[i];
       il::BasicBlock *NextBody = nullptr;
@@ -5192,14 +5192,16 @@ void ILGenPass::HandleEqualitySwitch(MatchStmt *Stmt)
       }
 
       if (!Case->isDefault()) {
-         auto *ThisComp = CompBlocks[i];
-         auto *NextCmp = CompBlocks[i + 1];
+         auto *ThisComp = CompBlocks[j];
+         auto *NextCmp = CompBlocks[j + 1];
 
          // Branch to the comparison block.
          Builder.SetInsertPoint(ThisComp);
 
          // Match the pattern, binding any values along the way.
          visitPatternExpr(Case->getPattern(), SwitchVal, Body, NextCmp);
+
+         ++j;
       }
 
       // Visit the case body.
@@ -5674,7 +5676,7 @@ void ILGenPass::visitReturnStmt(ReturnStmt *Stmt)
       // emit cleanups
       Cleanups.emitAllWithoutPopping();
 
-      if (Val && !Val->getType()->isEmptyTupleType()) {
+      if (Val && !Val->getType()->isVoidType()) {
          Ret = Builder.CreateRet(Val);
       }
       else {
@@ -5685,7 +5687,12 @@ void ILGenPass::visitReturnStmt(ReturnStmt *Stmt)
       // emit cleanups
       Cleanups.emitAllWithoutPopping();
 
-      Ret = Builder.CreateRetVoid();
+      if (Fn->getReturnType()->isEmptyTupleType()) {
+         Ret = Builder.CreateRet(Builder.GetEmptyTuple());
+      }
+      else {
+         Ret = Builder.CreateRetVoid();
+      }
    }
 
    if (NRVOCand) {
@@ -6825,8 +6832,8 @@ il::Value* ILGenPass::visitCastExpr(CastExpr *Cast)
 {
    auto target = visit(Cast->getTarget());
 
-   QualType DestTy = Cast->getTargetType()->stripMetaType();
-   if (auto *G = dyn_cast<GenericType>(DestTy)) {
+   QualType DestTy = Cast->getTargetType()->removeMetaType();
+   if (auto *G = dyn_cast<TemplateParamType>(DestTy)) {
       if (auto *Subst = getSubstitution(G->getParam())) {
          assert(Subst->isType() && !Subst->isVariadic());
 

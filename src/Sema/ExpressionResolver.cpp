@@ -395,8 +395,8 @@ Expression* ExprResolverImpl::buildMetaTypeUnionExpr(PrecedenceResult &Res,
                                                      Expression *LHS,
                                                      Expression *RHS) {
    SourceType Types[] {
-      SourceType(LHS->getExprType()->stripMetaType()),
-      SourceType(RHS->getExprType()->stripMetaType())
+      SourceType(LHS->getExprType()->removeMetaType()),
+      SourceType(RHS->getExprType()->removeMetaType())
    };
 
    SourceRange SR(LHS->getSourceLoc(), RHS->getSourceRange().getEnd());
@@ -418,7 +418,7 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
       auto *Ident = new(SP.Context) IdentifierRefExpr(Res.OpLoc, LHS,
                                                       Res.OpName);
 
-      return AnonymousCallExpr::Create(SP.Context, Res.OpLoc, Ident, {LHS, RHS},
+      return AnonymousCallExpr::Create(SP.Context, Res.OpLoc, Ident, {RHS},
                                        {});
    }
    }

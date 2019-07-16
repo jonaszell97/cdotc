@@ -997,9 +997,11 @@ AliasDecl::AliasDecl(SourceLocation Loc,
                      ArrayRef<TemplateParamDecl*> templateParams)
    : NamedDecl(AliasDeclID, AccessSpec, Name),
      DeclContext(AliasDeclID),
-     Loc(Loc), Type(Type), aliasExpr(aliasExpr),
-     NumParams((unsigned)templateParams.size())
+     Loc(Loc), Type(Type), aliasExpr(aliasExpr)
 {
+   NumParams = (unsigned)templateParams.size();
+   strong = false;
+
    std::copy(templateParams.begin(), templateParams.end(),
              getTrailingObjects<TemplateParamDecl*>());
 }
@@ -1021,8 +1023,11 @@ AliasDecl* AliasDecl::Create(ASTContext &C,
 AliasDecl::AliasDecl(EmptyShell, unsigned N)
    : NamedDecl(AliasDeclID, AccessSpecifier::Default, DeclarationName()),
      DeclContext(AliasDeclID),
-     aliasExpr(nullptr), NumParams(N)
-{}
+     aliasExpr(nullptr)
+{
+   NumParams = N;
+   strong = false;
+}
 
 AliasDecl *AliasDecl::CreateEmpty(ASTContext &C, unsigned N)
 {

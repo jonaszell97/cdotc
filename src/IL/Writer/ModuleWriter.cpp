@@ -134,7 +134,7 @@ void ModuleWriterImpl::WriteQualType(QualType ty)
 {
    assert(!ty->isAutoType());
 
-   if (auto *Gen = dyn_cast<GenericType>(ty)) {
+   if (auto *Gen = dyn_cast<TemplateParamType>(ty)) {
       out << (char)ValPrefix::Type
           << "<" << Gen->getParam()->getDeclName() << " : ";
       WriteQualType(Gen->getCovariance());
@@ -753,13 +753,13 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
    }
 
    if (auto Load = dyn_cast<LoadInst>(I)) {
+      out << "load ";
+
       if (Load->getMemoryOrder() != MemoryOrder::NotAtomic) {
-         out << Load->getMemoryOrder() << " ";
+         out << "atomic [" << Load->getMemoryOrder() << "] ";
       }
 
-      out << "load ";
       WriteValue(Load->getTarget());
-
       return;
    }
 
@@ -781,11 +781,11 @@ void ModuleWriterImpl::WriteInstructionImpl(const Instruction *I)
    }
    
    if (auto Store = dyn_cast<StoreInst>(I)) {
-      if (Store->getMemoryOrder() != MemoryOrder::NotAtomic) {
-         out << Store->getMemoryOrder() << " ";
-      }
-
       out << "store ";
+
+      if (Store->getMemoryOrder() != MemoryOrder::NotAtomic) {
+         out << "atomic [" << Store->getMemoryOrder() << "] ";
+      }
 
       if (Store->getDst()->isTagged() || Store->isTagged())
          out << "[tagged] ";

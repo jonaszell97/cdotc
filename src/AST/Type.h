@@ -124,7 +124,7 @@ public:
       ContainsUnconstrainedGeneric        = 0x1,
 
       /// This type contains a generic type.
-      ContainsGenericType                 = 0x2,
+      ContainsTemplateParamType                 = 0x2,
 
       /// This type containts an associated type or Self constraint.
       ContainsAssociatedType              = 0x4,
@@ -179,7 +179,7 @@ public:
    TypeProperties operator-(Property P) { return TypeProperties(Props & ~P); }
 
    bool isDependent() const;
-   bool containsGenericType() const;
+   bool containsTemplateParamType() const;
    bool containsAssociatedType() const;
    bool containsTemplate() const;
    bool containsUnexpandedParameterPack() const;
@@ -268,8 +268,8 @@ public:
    }
 
    bool isDependentType() const { return properties().isDependent(); }
-   bool containsGenericType() const
-   { return properties().containsGenericType(); }
+   bool containsTemplateParamType() const
+   { return properties().containsTemplateParamType(); }
 
    bool containsAssociatedType() const
    { return properties().containsAssociatedType(); }
@@ -293,8 +293,8 @@ public:
    QualType getBorrowedType() const;
    QualType getBoxedType() const;
 
-   QualType stripReference() const;
-   QualType stripMetaType() const;
+   QualType removeReference() const;
+   QualType removeMetaType() const;
 
    unsigned short getAlignment() const;
    size_t getSize() const;
@@ -1369,14 +1369,14 @@ public:
    bool hasTemplateArgs() const { return true; }
 };
 
-class GenericType: public Type, public llvm::FoldingSetNode {
-   explicit GenericType(ast::TemplateParamDecl *Param);
+class TemplateParamType: public Type, public llvm::FoldingSetNode {
+   explicit TemplateParamType(ast::TemplateParamDecl *Param);
 
    ast::TemplateParamDecl *P;
 
 public:
    ast::TemplateParamDecl *getParam() const { return P; }
-   llvm::StringRef getGenericTypeName() const;
+   llvm::StringRef getTemplateParamTypeName() const;
    QualType getCovariance() const;
    QualType getContravariance() const;
    unsigned getIndex() const;
@@ -1397,7 +1397,7 @@ public:
 
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == TypeID::GenericTypeID;
+      return T->getTypeID() == TypeID::TemplateParamTypeID;
    }
 
    friend class ast::ASTContext;
@@ -1488,6 +1488,11 @@ protected:
 };
 
 class TypedefType: public Type, public llvm::FoldingSetNode {
+protected:
+   TypedefType(TypeID typeID,
+               ast::AliasDecl *td,
+               bool Dependent);
+
 public:
    // HACK - on creation, the actual underlying type of the
    // TypedefDecl might not be known yet. We have to violate type
@@ -1507,7 +1512,8 @@ public:
 
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == TypeID::TypedefTypeID;
+      return T->getTypeID() == TypeID::TypedefTypeID
+         || T->getTypeID() == TypeID::DependentTypedefTypeID;
    }
 
    friend class ast::ASTContext;

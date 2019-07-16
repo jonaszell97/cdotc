@@ -200,7 +200,7 @@ private:
    llvm::Constant *getGetConformanceFn();
 
    llvm::Constant *getGetGenericArgumentFn();
-   llvm::Constant *getGetGenericTypeValueFn();
+   llvm::Constant *getGetTemplateParamTypeValueFn();
 
    llvm::Constant *getDynamicDownCastFn();
 
@@ -318,7 +318,7 @@ private:
    llvm::Constant *GetConformanceFn;
 
    llvm::Constant *GetGenericArgumentFn;
-   llvm::Constant *GetGenericTypeValueFn;
+   llvm::Constant *GetTemplateParamTypeValueFn;
 
    llvm::Constant *DynamicDownCastFn;
 

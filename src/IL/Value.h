@@ -167,6 +167,7 @@ protected:
    struct LoadInstBits {
       ValueBits InstBits;
       MemoryOrder memoryOrder : 3;
+      bool IsFieldAccessLoad : 1;
    };
 
    struct MoveInstBits {

@@ -259,6 +259,25 @@ public:
    {}
 };
 
+class StrongAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::Strong; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   StrongAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit StrongAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::Strong, SR)
+   {}
+};
+
 class VersionDeclAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -374,9 +393,6 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::Align:
       return AfterSema;
-   case AttrKind::Inline:
-   case AttrKind::Implicit:
-      return AfterDeclaration;
    case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
@@ -389,7 +405,11 @@ public:
    case AttrKind::_Builtin:
    case AttrKind::_Semantics:
       return Immediate;
+   case AttrKind::Inline:
+   case AttrKind::Implicit:
+      return AfterDeclaration;
    case AttrKind::Extern:
+   case AttrKind::Strong:
    case AttrKind::VersionDecl:
    case AttrKind::VersionStmt:
       return BeforeDeclaration;
@@ -400,36 +420,38 @@ public:
    bool Attr::isInherited() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::VersionStmt:
-      return false;
-   case AttrKind::VersionDecl:
-      return false;
-   case AttrKind::NoDerive:
-      return false;
-   case AttrKind::Testable:
-      return false;
-   case AttrKind::AutoClosure:
-      return false;
-   case AttrKind::Escaping:
-      return false;
-   case AttrKind::CompileTime:
-      return true;
-   case AttrKind::Align:
-      return false;
-   case AttrKind::_Semantics:
-      return false;
-   case AttrKind::Opaque:
+         case AttrKind::_Semantics:
       return false;
    case AttrKind::_Builtin:
       return false;
+   case AttrKind::VersionStmt:
+      return false;
+   case AttrKind::Strong:
+      return false;
+   case AttrKind::NoDerive:
+      return false;
    case AttrKind::Thin:
+      return false;
+   case AttrKind::Testable:
+      return false;
+   case AttrKind::CompileTime:
+      return true;
+   case AttrKind::Escaping:
+      return false;
+   case AttrKind::AutoClosure:
+      return false;
+   case AttrKind::DiscardableResult:
+      return true;
+   case AttrKind::VersionDecl:
       return false;
    case AttrKind::Implicit:
       return false;
+   case AttrKind::Opaque:
+      return false;
    case AttrKind::Inline:
       return true;
-   case AttrKind::DiscardableResult:
-      return true;
+   case AttrKind::Align:
+      return false;
    case AttrKind::Extern:
       return false;
 
@@ -599,6 +621,18 @@ out << '(' << kindStr << ')';
 
 NoDeriveAttr *NoDeriveAttr::clone(ast::ASTContext &Ctx) const {
    return new(Ctx) NoDeriveAttr(kind, SourceLoc);
+}
+
+
+
+void StrongAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+StrongAttr *StrongAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) StrongAttr(SourceLoc);
 }
 
 

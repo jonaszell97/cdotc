@@ -753,7 +753,7 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       break;
    }
    case Value::AllocBoxInstID:
-      I = Builder.CreateAllocBox(Type->stripReference()->getBoxedType(),
+      I = Builder.CreateAllocBox(Type->removeReference()->getBoxedType(),
          Record.readValueAs<Function>());
       break;
    case Value::RetInstID: {

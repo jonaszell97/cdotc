@@ -6,6 +6,7 @@
 
 #include "Decl.h"
 #include "Driver/Compiler.h"
+#include "Query/QueryContext.h"
 #include "Serialization/ModuleFile.h"
 #include "Support/Casting.h"
 
@@ -758,17 +759,17 @@ ASTContext::getDependentRecordType(RecordDecl *R,
    return New;
 }
 
-GenericType* ASTContext::getTemplateArgType(TemplateParamDecl *Param) const
+TemplateParamType* ASTContext::getTemplateArgType(TemplateParamDecl *Param) const
 {
    llvm::FoldingSetNodeID ID;
-   GenericType::Profile(ID, Param);
+   TemplateParamType::Profile(ID, Param);
 
    void *insertPos = nullptr;
-   if (auto *Ptr = GenericTypes.FindNodeOrInsertPos(ID, insertPos))
+   if (auto *Ptr = TemplateParamTypes.FindNodeOrInsertPos(ID, insertPos))
       return Ptr;
 
-   auto New = new (*this, TypeAlignment) GenericType(Param);
-   GenericTypes.InsertNode(New, insertPos);
+   auto New = new (*this, TypeAlignment) TemplateParamType(Param);
+   TemplateParamTypes.InsertNode(New, insertPos);
 
    return New;
 }
@@ -858,6 +859,61 @@ TypeVariableType* ASTContext::getTypeVariableType(unsigned ID) const
    TypeVariableTypes[ID] = T;
 
    return T;
+}
+
+DependentTypedefType* ASTContext::getDependentTypedefType(
+                                          AliasDecl *td,
+                                          sema::FinalTemplateArgumentList *args,
+                                          QualType Parent) const {
+   assert(!td->isInstantiation() && "dependent instantiation?");
+
+   llvm::FoldingSetNodeID ID;
+   DependentTypedefType::Profile(ID, td, args, Parent);
+
+   void *insertPos = nullptr;
+   if (auto *Ptr = DependentTypedefTypes.FindNodeOrInsertPos(ID, insertPos)) {
+      return Ptr;
+   }
+
+   QualType CanonicalType = td->getType()->asMetaType()->getUnderlyingType()->getCanonicalType();
+   CI.getQueryContext().SubstTemplateParamTypes(CanonicalType, CanonicalType, *args, td->getSourceRange());
+
+//   bool Canonical = true;
+//   for (auto &Arg : *args) {
+//      if (!isCanonical(Arg)) {
+//         Canonical = false;
+//         break;
+//      }
+//   }
+//
+//   DependentTypedefType *CanonicalType = nullptr;
+//   if (!Canonical) {
+//      SmallVector<sema::TemplateArgument, 4> CanonicalArgs;
+//      CanonicalArgs.reserve(args->size());
+//
+//      for (auto &Arg : *args) {
+//         CanonicalArgs.emplace_back(makeCanonical(Arg));
+//      }
+//
+//      auto *CanonicalList = sema::FinalTemplateArgumentList::Create(
+//         const_cast<ASTContext&>(*this), CanonicalArgs, true);
+//
+//      CanonicalType = getDependentTypedefType(td, CanonicalList,
+//                                             Parent
+//                                             ? Parent->getCanonicalType()
+//                                             : QualType());
+//
+//      // We need to get the insert position again since the folding set might
+//      // have grown.
+//      auto *NewTy = DependentTypedefTypes.FindNodeOrInsertPos(ID, insertPos);
+//      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
+//   }
+
+   auto New = new(*this, TypeAlignment) DependentTypedefType(td, args, Parent,
+                                                             CanonicalType);
+
+   DependentTypedefTypes.InsertNode(New, insertPos);
+   return New;
 }
 
 CallableDecl*

@@ -218,7 +218,7 @@ public:
       : VariadicParams(VariadicParams)
    {}
 
-   bool visitGenericType(GenericType *T)
+   bool visitTemplateParamType(TemplateParamType *T)
    {
       if (T->getParam()->isVariadic()) {
          VariadicParams.insert(T->getParam());
@@ -306,7 +306,7 @@ public:
 
    bool findTemplateParams(QualType ParamTy, Expression *&Expr)
    {
-      assert(ParamTy->containsGenericType());
+      assert(ParamTy->containsTemplateParamType());
       visit(ParamTy, Expr);
 
       if (!CouldInfer) {
@@ -325,7 +325,7 @@ public:
       unsigned VariadicIdx = -1;
 
       for (auto &El : T->getContainedTypes()) {
-         auto *Param = El->asGenericType();
+         auto *Param = El->asTemplateParamType();
          if (!Param) {
             if (El->properties().containsUnexpandedParameterPack()) {
                if (Tup) {
@@ -412,7 +412,7 @@ static unsigned getPreviousNumVariadicArgs(TemplateParamDecl *Param,
          continue;
       }
 
-      if (ArgDecl->getType()->asGenericType()->getParam() == Param) {
+      if (ArgDecl->getType()->asTemplateParamType()->getParam() == Param) {
          return ArgPair.getSecond().size();
       }
    }
@@ -440,7 +440,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
    auto It = DeclArgMap.find(ArgDecl);
    if (It == DeclArgMap.end()) {
       if (ArgDecl->isVariadicArgPackExpansion()) {
-         auto *Param = ArgDecl->getType()->asGenericType()->getParam();
+         auto *Param = ArgDecl->getType()->asTemplateParamType()->getParam();
          bool FirstOccurence = VariadicParams.count(Param) == 0;
 
          if (FirstOccurence) {
@@ -496,7 +496,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
    // If the parameter type is a pack expansion, we can use the supplied
    // values directly.
    if (ArgDecl->isVariadicArgPackExpansion()) {
-      auto *Param = ArgDecl->getType()->asGenericType()->getParam();
+      auto *Param = ArgDecl->getType()->asTemplateParamType()->getParam();
       auto *Arg = templateArgs.getArgForParam(Param);
 
       if (!Arg->isFrozen() && Arg->getVariadicArgs().empty()) {
@@ -607,7 +607,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
             ArgVal, PathElement::parameterType(ArgDecl));
 
          QualType NeededTy = ArgDecl->getType();
-         Sema.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+         Sema.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
                                            templateArgs,
                                            ArgVal->getSourceRange());
 
@@ -638,7 +638,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
 
       QualType NeededTy = ArgDecl->getType();
       if (Cand.getFunc()->isTemplate()) {
-         Sema.QC.SubstGenericTypesNonFinal(NeededTy, NeededTy,
+         Sema.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
                                            templateArgs,
                                            ArgVal->getSourceRange());
       }
@@ -660,7 +660,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
 
       if (!Result.Type->containsTypeVariable()) {
          bool Convertible;
-         if (Sema.QC.IsValidParameterValue(Convertible, Result.Type, NeededTy)) {
+         if (Sema.QC.IsValidParameterValue(Convertible, Result.Type, NeededTy, ArgDecl->isSelf())) {
             Cand.setIsInvalid();
             return true;
          }
@@ -1014,7 +1014,7 @@ static bool resolveCandidate(SemaPass &Sema,
    }
 
    // Create a new constraint system for this overload.
-   Cand.Builder = std::make_unique<ConstraintBuilder>(Sema.QC);
+   Cand.Builder = std::make_unique<ConstraintBuilder>(Sema.QC, Caller->getSourceRange());
    ConstraintSystem &Sys = Cand.Builder->Sys;
 
    // Generate the constraints for each parameter.
@@ -1198,7 +1198,7 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
    }
 
    // Create a new constraint system for this overload.
-   Cand.Builder = std::make_unique<ConstraintBuilder>(Sema.QC);
+   Cand.Builder = std::make_unique<ConstraintBuilder>(Sema.QC, Caller->getSourceRange());
    ConstraintSystem &Sys = Cand.Builder->Sys;
 
    // Generate the constraints for each parameter.

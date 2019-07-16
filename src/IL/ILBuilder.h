@@ -599,7 +599,7 @@ public:
 
    GenericInitInst *CreateGenericInit(il::Value *Val,
                                       il::Value *GenericEnvironment,
-                                      QualType GenericType,
+                                      QualType TemplateParamType,
                                       StringRef Name = "");
 
    Value *CreateIsX(Value *V, uint64_t val);

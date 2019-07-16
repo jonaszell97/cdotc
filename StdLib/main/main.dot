@@ -13,8 +13,11 @@ import libc
 // var x = 0 as Template<builtin.i64>
 // funky(x)
 
-// var a = Atomic(weirdValue: 0)
+var a = Atomic(weirdValue: 12)
 // __debug
-// _ = a.load()
 
-// _ = libc.stdio.printf("value: %d\n", a.load())
+a.store(69)
+let x = a.load(memoryOrder: .AcquireRelease)
+// FIXME
+// _ = printf("value: %d\n", x as builtin.i32)
+_ = libc.stdio.printf("value: %llu\n", x)

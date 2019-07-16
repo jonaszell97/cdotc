@@ -352,7 +352,8 @@ def IsImplicitlyConvertible : BoolQuery {
 def IsValidParameterValue : BoolQuery {
     parameters = [
         TypeParam<"givenType">,
-        TypeParam<"paramType">
+        TypeParam<"paramType">,
+        BoolParam<"isSelf", "false">
     ]
 
     simpleQuery = true
@@ -403,7 +404,7 @@ def SubstAssociatedTypes : Query<"QualType"> {
 }
 
 /// Substitute all generic types within a type.
-def SubstGenericTypes : Query<"QualType"> {
+def SubstTemplateParamTypes : Query<"QualType"> {
     parameters = [
         // The type containing protocol associated types.
         TypeParam<"T">,
@@ -419,7 +420,7 @@ def SubstGenericTypes : Query<"QualType"> {
 }
 
 /// Substitute all generic types within a type.
-def SubstGenericTypesNonFinal : Query<"QualType"> {
+def SubstTemplateParamTypesNonFinal : Query<"QualType"> {
     parameters = [
         // The type containing protocol associated types.
         TypeParam<"T">,

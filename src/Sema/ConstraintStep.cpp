@@ -367,8 +367,13 @@ static void addBinding(ConstraintSystem &Sys,
                        SmallVectorImpl<PotentialBinding> &Bindings,
                        unsigned Score,
                        unsigned OverloadIndex) {
-   if (Sys.representsTemplateParam(TypeVar) && T->isProtocol()) {
-      Score += 1;
+   if (Sys.representsTemplateParam(TypeVar)) {
+      if (T->isReferenceType()) {
+         return;
+      }
+      if (T->isProtocol()) {
+         Score += 1;
+      }
    }
 
    Bindings.emplace_back(T, Score, OverloadIndex);

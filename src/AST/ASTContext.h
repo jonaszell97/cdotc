@@ -129,11 +129,12 @@ private:
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
    mutable llvm::FoldingSet<InferredSizeArrayType> InferredSizeArrayTypes;
    mutable llvm::FoldingSet<TupleType> TupleTypes;
-   mutable llvm::FoldingSet<GenericType> GenericTypes;
+   mutable llvm::FoldingSet<TemplateParamType> TemplateParamTypes;
    mutable llvm::FoldingSet<AssociatedType> AssociatedTypes;
    mutable llvm::FoldingSet<DependentRecordType> DependentRecordTypes;
    mutable llvm::FoldingSet<MetaType> MetaTypes;
    mutable llvm::FoldingSet<TypedefType> TypedefTypes;
+   mutable llvm::FoldingSet<DependentTypedefType> DependentTypedefTypes;
    mutable llvm::FoldingSet<RecordType> RecordTypes;
    mutable llvm::FoldingSet<DependentNameType> DependentNameTypes;
    mutable llvm::DenseMap<unsigned, TypeVariableType*> TypeVariableTypes;
@@ -377,12 +378,17 @@ public:
 
    DependentNameType *getDependentNameType(NestedNameSpecifierWithLoc *Name) const;
 
-   GenericType *getTemplateArgType(TemplateParamDecl *Param) const;
+   TemplateParamType *getTemplateArgType(TemplateParamDecl *Param) const;
    AssociatedType *getAssociatedType(AssociatedTypeDecl *AT,
                                      AssociatedType *OuterAT = nullptr) const;
 
    MetaType *getMetaType(QualType forType) const;
    TypedefType *getTypedefType(AliasDecl *TD) const;
+
+   DependentTypedefType* getDependentTypedefType(
+                                          AliasDecl *td,
+                                          sema::FinalTemplateArgumentList *args,
+                                          QualType Parent = QualType()) const;
 
    TypeVariableType *getTypeVariableType(unsigned ID) const;
 

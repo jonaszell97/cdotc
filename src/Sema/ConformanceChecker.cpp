@@ -46,12 +46,12 @@ public:
       return Ty;
    }
 
-   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &Types)
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
    {
-      Types.push_back(visitGenericType(T));
+      Types.push_back(visitTemplateParamType(T));
    }
 
-   QualType visitGenericType(GenericType *Ty)
+   QualType visitTemplateParamType(TemplateParamType *Ty)
    {
       if (!ND)
          return Ty;
@@ -167,7 +167,7 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
       }
    }
 
-   if (NeededCan->containsGenericType()) {
+   if (NeededCan->containsTemplateParamType()) {
       TypeSubstVisitor.setLookupDecl(LookupDecl);
       NeededCan = TypeSubstVisitor.visit(NeededCan);
    }
@@ -1862,6 +1862,7 @@ QueryResult AddSingleConformanceQuery::run()
 
 QueryResult ConformsToQuery::run()
 {
+   QualType T = this->T->getDesugaredType();
    if (P->isAny()) {
       return finish(true);
    }

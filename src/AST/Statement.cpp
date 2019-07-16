@@ -11,6 +11,17 @@
 namespace cdot {
 namespace ast {
 
+void Statement::setIsInvalid(bool error)
+{
+#ifndef NDEBUG
+   if (error) {
+       NO_OP;
+   }
+#endif
+
+   setFlag(HadError, error);
+}
+
 void Statement::dumpFlags() const
 {
    printFlags(llvm::errs());
@@ -53,6 +64,12 @@ bool Statement::needsInstantiation() const
 
 void Statement::copyStatusFlags(Statement *Stmt)
 {
+#ifndef NDEBUG
+   if (Stmt->isInvalid()) {
+      setIsInvalid(true);
+   }
+#endif
+
    static unsigned StatusFlags =
       TypeDependent
       | ValueDependent

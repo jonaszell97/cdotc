@@ -17,6 +17,7 @@
 #include "Serialization/ModuleFile.h"
 #include "Support/Casting.h"
 #include "Support/Format.h"
+#include "Support/Log.h"
 #include "Support/SaveAndRestore.h"
 #include "Support/StringSwitch.h"
 
@@ -353,7 +354,7 @@ ExprResult SemaPass::typecheckExpr(Expression *Expr, SourceType RequiredType)
       RequiredType = SourceType();
    }
 
-   ConstraintBuilder Builder(QC);
+   ConstraintBuilder Builder(QC, Expr->getSourceRange());
    auto &Sys = Builder.Sys;
 
    auto rebuiltExpr = Builder.rebuildExpression(Expr);
@@ -450,7 +451,7 @@ static void updateStatusFlags(Expression *E, QualType ExprTy)
    unsigned ExprFlags = E->getSubclassData();
    uint16_t TypeFlags = ExprTy->properties().getRawProperties();
 
-   ExprFlags |= (TypeFlags & TypeProperties::ContainsGenericType);
+   ExprFlags |= (TypeFlags & TypeProperties::ContainsTemplateParamType);
    ExprFlags |= (TypeFlags & TypeProperties::ContainsAssociatedType);
    ExprFlags |= ExprTy->isDependentType();
 
@@ -514,7 +515,7 @@ ExprResult SemaPass::visit(Expression *Expr, bool)
    QualType ExprTy = Expr->getExprType();
    assert(ExprTy && "didn't set exprType on valid expression!");
 
-   if (ExprTy->containsGenericType() || ExprTy->containsAssociatedType()) {
+   if (ExprTy->containsTemplateParamType() || ExprTy->containsAssociatedType()) {
       Expr->setNeedsInstantiation(true);
    }
 
@@ -842,7 +843,7 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
 
    if (!ConvSeq.isValid()) {
       if (!destTy->isReferenceType()) {
-         originTy = originTy->stripReference();
+         originTy = originTy->removeReference();
       }
 
       if (!ignoreError) {
@@ -866,7 +867,7 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr,
       if (!ignoreError) {
          diagnose(Expr, err_cast_requires_op, DiagLoc, DiagRange,
                   diag::opt::show_constness,
-                  destTy->stripReference(), originTy->stripReference(),
+                  destTy->removeReference(), originTy->removeReference(),
                   (int) ConvSeq.getStrength() - 1, Expr->getSourceRange());
       }
       else if (hadError) {
@@ -1135,7 +1136,7 @@ void SemaPass::checkDeclaredVsGivenType(Decl *DependentDecl,
    }
 
    QualType OrigTy = GivenType;
-   GivenType = GivenType->stripReference();
+   GivenType = GivenType->removeReference();
 
    // try to infer array size if the given type has the form [T; ?]
    if (DeclaredType->isInferredSizeArrayType()) {
@@ -1173,7 +1174,7 @@ void SemaPass::checkDeclaredVsGivenType(Decl *DependentDecl,
    // if the type is inferred, update it, otherwise check implicit
    // convertability
    if (!DeclaredType || DeclaredType->isAutoType()) {
-      if (!GivenType->stripMetaType()->isDependentNameType()) {
+      if (!GivenType->removeMetaType()->isDependentNameType()) {
          if (OrigTy->isMutableBorrowType()) {
             ST.setResolvedType(OrigTy);
          }
@@ -1255,7 +1256,7 @@ bool SemaPass::visitVarDecl(VarDecl *Decl)
       }
       else if (Val->isLValue() && !Val->getExprType()->isMutableBorrowType()) {
          // If the type is implicitly copyable, make a copy instead of moving.
-         if (IsImplicitlyCopyableType(Val->getExprType()->stripReference())) {
+         if (IsImplicitlyCopyableType(Val->getExprType()->removeReference())) {
             Val = castToRValue(Val);
          }
          else {
@@ -1294,6 +1295,10 @@ DeclResult SemaPass::visitLocalVarDecl(LocalVarDecl *Decl)
                                                  getBlockScope()->getScopeID());
 
    makeDeclAvailable(getDeclContext(), DeclName, Decl);
+
+   LOG(LocalVariables, "'", Decl->getFullName(),
+       "': ", Decl->getType().getResolvedType());
+
    return Decl;
 }
 
@@ -1314,6 +1319,10 @@ DeclResult SemaPass::visitGlobalVarDecl(GlobalVarDecl *Decl)
       Decl->getType().setResolvedType(Decl->getValue()->getExprType());
 
    ILGen->DeclareGlobalVariable(Decl);
+
+   LOG(LocalVariables, "'", Decl->getFullName(),
+       "': ", Decl->getType().getResolvedType());
+
    return Decl;
 }
 
@@ -1874,7 +1883,7 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
    bool isMetaType = false;
 
    if (auto Ctx = Expr->getContextualType()) {
-      Ctx = Ctx->stripReference();
+      Ctx = Ctx->removeReference();
 
       if ((ArrTy = Ctx->asArrayType())) {
          elementTy = ArrTy->getElementType();
@@ -1931,7 +1940,7 @@ ExprResult SemaPass::visitArrayLiteral(ArrayLiteral *Expr)
    }
 
    if (isMetaType) {
-      elementTy = elementTy->stripMetaType();
+      elementTy = elementTy->removeMetaType();
    }
 
    TemplateArgument Arg(Array->getTemplateParams().front(),
@@ -2801,7 +2810,7 @@ void SemaPass::visitIfConditions(Statement *Stmt,
             continue;
 
          auto CondExpr = C.BindingData.Decl->getValue();
-         CanType CondTy = CondExpr->getExprType()->stripReference()
+         CanType CondTy = CondExpr->getExprType()->removeReference()
                                   ->getDesugaredType();
 
          if (!CondTy->isRecordType() && !CondTy->isExistentialType()) {
@@ -3337,7 +3346,7 @@ static ExprResult matchEnum(SemaPass &SP,
          if (!argResult) {
             // Create a dummy expression with the correct type.
             Args.push_back(BuiltinExpr::Create(Context,
-                                               CaseArgTy->stripReference()));
+                                               CaseArgTy->removeReference()));
 
             continue;
          }
@@ -3346,7 +3355,7 @@ static ExprResult matchEnum(SemaPass &SP,
          if (!argResult) {
             // Create a dummy expression with the correct type.
             Args.push_back(BuiltinExpr::Create(Context,
-                                               CaseArgTy->stripReference()));
+                                               CaseArgTy->removeReference()));
 
             continue;
          }
@@ -3360,7 +3369,7 @@ static ExprResult matchEnum(SemaPass &SP,
 
          // Create a dummy expression with the correct type.
          Args.push_back(BuiltinExpr::Create(Context,
-                                            CaseArgTy->stripReference()));
+                                            CaseArgTy->removeReference()));
 
          // Resolve the pattern.
          SP.visitPatternExpr(Expr, Pattern, Args.back());
@@ -3373,7 +3382,7 @@ static ExprResult matchEnum(SemaPass &SP,
          // Verify that mutability of the declaration and the matched value
          // is compatible.
          if (Var->isConst()) {
-            CaseArgTy = Context.getReferenceType(CaseArgTy->stripReference());
+            CaseArgTy = Context.getReferenceType(CaseArgTy->removeReference());
          }
          else {
             if (MatchVal->getExprType()->isNonMutableReferenceType()) {
@@ -3382,12 +3391,12 @@ static ExprResult matchEnum(SemaPass &SP,
             }
 
             CaseArgTy = Context.getMutableReferenceType(
-               CaseArgTy->stripReference());
+               CaseArgTy->removeReference());
          }
 
          // Create a dummy expression with the correct type.
          Args.push_back(BuiltinExpr::Create(Context,
-                                            CaseArgTy->stripReference()));
+                                            CaseArgTy->removeReference()));
 
          // Resolve the declarations name and type.
          auto typeref = SourceType(CaseArgTy);
@@ -3572,7 +3581,7 @@ ExprResult SemaPass::visitCasePattern(CasePattern *Expr, Expression *MatchVal)
 
    DeclContext *LookupCtx = nullptr;
    if (Expr->hasLeadingDot()) {
-      auto CtxTy = MatchVal->getExprType()->stripReference();
+      auto CtxTy = MatchVal->getExprType()->removeReference();
       if (CtxTy->isMetaType())
          CtxTy = CtxTy->asMetaType()->getUnderlyingType();
 
@@ -4992,7 +5001,7 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr *Expr)
             return Expr;
          }
 
-         CanType ty = res.get()->stripMetaType()->getDesugaredType();
+         CanType ty = res.get()->removeMetaType()->getDesugaredType();
 
          if (Expr->getKind() == TraitsExpr::HasMember) {
             auto &member = args[1].getStr();

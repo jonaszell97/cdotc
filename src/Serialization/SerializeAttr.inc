@@ -27,6 +27,8 @@ void ASTAttrWriter::visitCompileTimeAttr(CompileTimeAttr *A) {
 void ASTAttrWriter::visitNoDeriveAttr(NoDeriveAttr *A) {
    Record.push_back((uint64_t)A->getKind());
 }
+void ASTAttrWriter::visitStrongAttr(StrongAttr *A) {
+}
 void ASTAttrWriter::visitVersionDeclAttr(VersionDeclAttr *A) {
    Record.push_back((uint64_t)A->getVersion());
 }
@@ -80,6 +82,9 @@ CompileTimeAttr *ASTAttrReader::readCompileTimeAttr(SourceRange SR) {
 NoDeriveAttr *ASTAttrReader::readNoDeriveAttr(SourceRange SR) {
    auto kind = Record.readEnum<NoDeriveAttr::KindKind>();
    return new(C) NoDeriveAttr(std::move(kind), SR);
+}
+StrongAttr *ASTAttrReader::readStrongAttr(SourceRange SR) {
+   return new(C) StrongAttr(SR);
 }
 VersionDeclAttr *ASTAttrReader::readVersionDeclAttr(SourceRange SR) {
    auto version = Record.readEnum<VersionDeclAttr::VersionKind>();

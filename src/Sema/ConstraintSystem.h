@@ -894,6 +894,9 @@ public:
    /// Reference to the query context.
    QueryContext &QC;
 
+   /// The location this constraint system belongs to.
+   SourceRange Loc;
+
    /// The current scope of the solver.
    struct SolverScope {
       /// Enter a new solver scope.
@@ -1029,6 +1032,7 @@ private:
 public:
    /// Construct a new constraint system.
    explicit ConstraintSystem(QueryContext &QC,
+                             SourceRange Loc = SourceRange(),
                              llvm::raw_ostream *LogStream = nullptr);
 
    /// \return The constraint graph associated with this system.

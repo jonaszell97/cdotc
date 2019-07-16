@@ -71,10 +71,10 @@ FunctionType* CandidateSet::Candidate::getFunctionType() const
 {
    if (isAnonymousCandidate()) {
       if (auto *E = getFuncExpr()) {
-         return E->getExprType()->stripReference()->asFunctionType();
+         return E->getExprType()->removeReference()->asFunctionType();
       }
 
-      return cast<VarDecl>(getFuncDecl())->getType()->stripReference()
+      return cast<VarDecl>(getFuncDecl())->getType()->removeReference()
                                          ->asFunctionType();
    }
 
@@ -345,7 +345,7 @@ static void diagnoseCandidate(SemaPass &SP,
 
       SourceLocation loc = getArgumentLoc(Cand, args);
       auto &TemplateArgs = Cand.InnerTemplateArgs;
-      SP.QC.SubstGenericTypesNonFinal(neededTy, neededTy, TemplateArgs,
+      SP.QC.SubstTemplateParamTypesNonFinal(neededTy, neededTy, TemplateArgs,
                                       Caller->getSourceRange());
 
       auto ArgNo = Cand.Data1 + 1;

@@ -189,7 +189,15 @@ private:
       }
    }
 
-   void visitGenericTypeChildren(GenericType *T)
+   void visitDependentTypedefTypeChildren(DependentTypedefType *T)
+   {
+      for (auto &Arg : T->getTemplateArgs()) {
+         if (!VisitTemplateArg(Arg))
+            return;
+      }
+   }
+
+   void visitTemplateParamTypeChildren(TemplateParamType *T)
    {
       return visit(T->getCovariance());
    }
@@ -497,7 +505,7 @@ protected:
 
    bool visitDependentRecordType(DependentRecordType *LHS, QualType RHS)
    {
-      if (!RHS->hasTemplateArgs()) {
+      if (!RHS->isRecordType() || !RHS->hasTemplateArgs()) {
          return false;
       }
 
@@ -519,7 +527,31 @@ protected:
       return LHS->getRecord() == RHSRec;
    }
 
-   bool visitGenericType(GenericType *LHS, QualType RHS)
+   bool visitDependentTypedefType(DependentTypedefType *LHS, QualType RHS)
+   {
+      if (!RHS->isTypedefType() || !RHS->hasTemplateArgs()) {
+         return false;
+      }
+
+      auto &LHSArgs = LHS->getTemplateArgs();
+      auto &RHSArgs = RHS->getTemplateArgs();
+
+      if (!compareTemplateArgLists(LHSArgs, RHSArgs)) {
+         return false;
+      }
+
+      ast::AliasDecl *RHStd;
+      if (auto *Dep = RHS->asDependentTypedefType()) {
+         RHStd = Dep->getTypedef();
+      }
+      else {
+         RHStd = RHS->asTypedefType()->getTypedef()->getSpecializedTemplate();
+      }
+
+      return LHS->getTypedef() == RHStd;
+   }
+
+   bool visitTemplateParamType(TemplateParamType *LHS, QualType RHS)
    {
       return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }

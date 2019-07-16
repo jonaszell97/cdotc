@@ -468,6 +468,22 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
          }
 
          OS << Arg->getDeclName() << ": ";
+
+         switch (Arg->getConvention()) {
+         case ArgumentConvention::Borrowed:
+         case ArgumentConvention::Default:
+            break;
+         case ArgumentConvention::Owned:
+            OS << "owned ";
+            break;
+         case ArgumentConvention::ImmutableRef:
+            OS << "ref ";
+            break;
+         case ArgumentConvention::MutableRef:
+            OS << "mut ref ";
+            break;
+         }
+
          OS << Arg->getType();
       }
 

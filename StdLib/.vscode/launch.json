@@ -19,7 +19,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "/Users/Jonas/CDotProjects/ex/out/a.out",
+            "program": "/Users/Jonas/CDot/StdLib/main/out/a.out",
             "args": ["1000000"],
             "cwd": "${workspaceRoot}",
             "initCommands": [

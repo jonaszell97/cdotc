@@ -52,7 +52,7 @@ public:
       _lastFlag         = SpecializationCandidate,
    };
 
-   static_assert((int)ContainsGenericParam == (int)TypeProperties::ContainsGenericType,
+   static_assert((int)ContainsGenericParam == (int)TypeProperties::ContainsTemplateParamType,
                  "type and statement flags must match!");
 
    static_assert((int)ContainsAssociatedType == (int)TypeProperties::ContainsAssociatedType,
@@ -114,7 +114,7 @@ public:
    }
 
    bool isInvalid() const { return flagIsSet(HadError); }
-   void setIsInvalid(bool error) { setFlag(HadError, error); }
+   void setIsInvalid(bool error);
 
    bool isUnsafe() const { return flagIsSet(Unsafe); }
    void setUnsafe(bool unsafe) { setFlag(Unsafe, unsafe); }

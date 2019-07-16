@@ -1539,6 +1539,10 @@ public:
                                  RecordDecl *R,
                                  const sema::TemplateArgList &TemplateArgs);
 
+   AliasDecl *InstantiateAlias(SourceLocation POI,
+                               AliasDecl *td,
+                               sema::FinalTemplateArgumentList *TemplateArgs);
+
    void checkDuplicateFunctionDeclaration(CallableDecl *C,
                                           llvm::StringRef fnKind);
 

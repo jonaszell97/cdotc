@@ -26,6 +26,7 @@
    CDOT_DECL_ATTR(Testable, testable)
    CDOT_DECL_ATTR(CompileTime, compiletime)
    CDOT_DECL_ATTR(NoDerive, noDerive)
+   CDOT_DECL_ATTR(Strong, strong)
    CDOT_DECL_ATTR(VersionDecl, version)
    CDOT_DECL_ATTR(_Builtin, _builtin)
    CDOT_DECL_ATTR(_Semantics, _semantics)

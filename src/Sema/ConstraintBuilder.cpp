@@ -23,8 +23,9 @@ using LocatorKind = ConstraintLocator::LocatorKind;
 using PathElement = ConstraintLocator::PathElement;
 
 ConstraintBuilder::ConstraintBuilder(QueryContext &QC,
+                                     SourceRange Loc,
                                      llvm::raw_ostream *LogStream)
-   : Sys(QC, LogStream), Sema(*QC.Sema)
+   : Sys(QC, Loc, LogStream), Sema(*QC.Sema)
 {
 
 }
@@ -176,12 +177,12 @@ public:
         Builder(Builder), Bindings(Bindings)
    { }
 
-   void visitGenericType(GenericType *T, SmallVectorImpl<QualType> &VariadicTys)
+   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &VariadicTys)
    {
-      VariadicTys.push_back(visitGenericType(T));
+      VariadicTys.push_back(visitTemplateParamType(T));
    }
 
-   QualType visitGenericType(GenericType *T)
+   QualType visitTemplateParamType(TemplateParamType *T)
    {
       auto *Param = T->getParam();
       Builder.registerTemplateParam(Param);
@@ -206,13 +207,13 @@ public:
       : Sys(Sys), Bindings(Bindings)
    { }
 
-   bool visitGenericType(GenericType *GT, QualType RHS)
+   bool visitTemplateParamType(TemplateParamType *GT, QualType RHS)
    {
       // Give a hint to the solver to try the actual type as the value of
       // the generic type to prevent the covariance from always being chosen.
       Sys.newConstraint<DefaultableConstraint>(
          Bindings.ParamBindings[GT->getParam()],
-         RHS, Locator());
+         RHS->removeReference(), Locator());
 
       return true;
    }
@@ -260,7 +261,7 @@ ConstraintBuilder::generateArgumentConstraints(Expression *&E,
    auto SAR = support::saveAndRestore(GeneratingArgConstraints, true);
    auto Result = generateConstraints(E, RequiredType, Locator);
    if (InvalidArg) {
-      return Failure;
+      Result.Kind = InvalidArgument;
    }
 
    return Result;
@@ -336,9 +337,9 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
       TypeDependent |= T->isUnknownAnyType();
       EncounteredError |= Expr->isInvalid();
 
-      if (RequiredType && RequiredType->containsGenericType()) {
+      if (RequiredType && RequiredType->containsTemplateParamType()) {
          TypeParamBinder Binder(Sys, Bindings);
-         Binder.visit(RequiredType->stripReference(), T->stripReference());
+         Binder.visit(RequiredType->removeReference(), T->removeReference());
       }
 
       return T;
@@ -377,7 +378,7 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
    // Constrain the type of the entire expression to be convertible to the
    // required type.
    CanType DesugaredTy;
-   if (RequiredType->containsGenericType()) {
+   if (RequiredType->containsTemplateParamType()) {
       TypeParamRemover Builder(Sema, Expr->getSourceRange(), *this, Bindings);
       DesugaredTy = Builder.visit(RequiredType)->getDesugaredType();
 
@@ -1291,7 +1292,13 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
                                           !GeneratingArgConstraints);
 
    if (!Cand) {
-      EncounteredError = true;
+      if (GeneratingArgConstraints) {
+         InvalidArg = true;
+      }
+      else {
+         EncounteredError = true;
+      }
+
       return Sema.ErrorTy;
    }
 
@@ -1307,6 +1314,14 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
    }
    else {
       ReturnType = Sema.Context.getRecordType(Cand->getFunc()->getRecord());
+   }
+
+   if (Cand->getFunc()->isTemplate()) {
+      if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType,
+                                                  Cand->InnerTemplateArgs,
+                                                  Call->getSourceRange())) {
+         EncounteredError = true;
+      }
    }
 
    Data.BestCand = Cand;
@@ -1420,7 +1435,7 @@ QualType ConstraintBuilder::visitAssignExpr(AssignExpr *Expr, SourceType T)
 
    if (auto *TypeVar = RHSType->asTypeVariableType()) {
       Sys.newConstraint<ImplicitConversionConstraint>(
-         TypeVar, LHSType->stripReference(),
+         TypeVar, LHSType->removeReference(),
          makeLocator(Expr,
             PathElement::contextualType(Expr->getRhs()->getSourceRange())));
    }
@@ -1465,26 +1480,30 @@ QualType ConstraintBuilder::visitCastExpr(CastExpr *Cast, SourceType T)
    }
 
    (void) visitExpr(Cast->getTarget());
-   return to->stripMetaType();
+   return to->removeMetaType();
 }
 
 QualType ConstraintBuilder::visitAddrOfExpr(AddrOfExpr *Expr, SourceType T)
 {
    auto ReferenceTy = visitExpr(Expr->getTarget(), T);
-   QualType Result;
-   if (ReferenceTy->isMutableReferenceType()) {
-      Result = Sema.Context.getMutablePointerType(
-         ReferenceTy->getReferencedType());
+   if (auto *typeVar = ReferenceTy->asTypeVariableType()) {
+      // We need to create a new type variable for the dereferenced type first.
+      auto *deref = Sys.newTypeVariable();
+      Sys.newConstraint<TypeEqualityConstraint>(
+         typeVar, Sema.Context.getMutableReferenceType(deref), nullptr);
+
+      ReferenceTy = deref;
    }
-   else if (ReferenceTy->isReferenceType()) {
-      Result = Sema.Context.getPointerType(
-         ReferenceTy->getReferencedType());
-   }
-   else {
-      Result = Sema.Context.getPointerType(Sema.Context.getVoidType());
+   else if (!ReferenceTy->isTypeVariableType() && !ReferenceTy->isMutableReferenceType()) {
+      Sema.diagnose(Expr, err_generic_error,
+                     "cannot mutably borrow value of type "
+                         + ReferenceTy.toDiagString(),
+                     Expr->getSourceRange());
+
+      EncounteredError = true;
    }
 
-   return Result;
+   return Sema.Context.getMutableBorrowType(ReferenceTy->removeReference());
 }
 
 QualType ConstraintBuilder::visitImplicitCastExpr(ImplicitCastExpr* Expr,

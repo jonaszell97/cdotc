@@ -166,7 +166,7 @@ Method::Method(const Method &other, Module &M)
 ast::RecordDecl* Method::getRecordType() const
 {
    return BasicBlocks.front().getArgs()
-                     .front().getType()->stripReference()->getRecord();
+                     .front().getType()->removeReference()->getRecord();
 }
 
 Initializer::Initializer(llvm::StringRef methodName,
