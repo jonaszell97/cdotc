@@ -1,6 +1,0 @@
-
-module std.math
-
-struct BigDecimal {
-    
-}

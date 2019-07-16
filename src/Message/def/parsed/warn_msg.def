@@ -1,3 +1,0 @@
-{ warn_generic_warn, "\"$0\""},
-{ warn_implicit_cast, "\"implicit cast from $0 to $1\""},
-{ warn_main_return_type, "\"return type of 'main' will always be set to Int\""},

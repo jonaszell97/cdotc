@@ -1,6 +1,0 @@
-
-@version(POSIX)
-public let newline = "\n"
-
-@version(Windows)
-public let newline = "\r\n"

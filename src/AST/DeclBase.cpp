@@ -487,7 +487,7 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
          OS << Arg->getType();
       }
 
-      OS << ")";
+      OS << ") -> " << C->getReturnType();
    }
 
    return OS.str();

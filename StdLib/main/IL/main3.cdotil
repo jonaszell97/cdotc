@@ -1,8 +1,0 @@
-
-; Module ID: /Users/Jonas/CDot/cmake-build-debug/test/main3.dot
-define internal @_CNW5main3E7goodbyeEv() -> void {
-entry:
-   debug_loc { line: 2, col: 2, file: 2 }
-   debug_loc { line: 2, col: 16, file: 2 }
-   ret void
-}
