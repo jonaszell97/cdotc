@@ -671,12 +671,44 @@ static void diagnoseAnonymousCandidate(SemaPass &SP,
 
 void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
                                             Expression *SelfVal,
-                                            ArrayRef<Expression*> args,
-                                            ArrayRef<Expression*> templateArgs,
+                                            ArrayRef<Expression*> constArgs,
+                                            ArrayRef<Expression*> constTemplateArgs,
                                             Statement *Caller,
                                             SourceLocation OpLoc) {
    if (InvalidCand) {
       Caller->setIsInvalid(true);
+      return;
+   }
+
+   std::vector<Expression*> args = constArgs.vec();
+   std::vector<Expression*> templateArgs = constTemplateArgs.vec();
+
+   // Resolve all arguments ambiguous types.
+   bool issuedDiag = false;
+   for (auto *&arg : args) {
+      if (!arg->getExprType()) {
+         auto result = SP.typecheckExpr(arg);
+         if (!result) {
+            issuedDiag = true;
+            continue;
+         }
+
+         arg = result.get();
+      }
+   }
+   for (auto *&arg : templateArgs) {
+      if (!arg->getExprType()) {
+         auto result = SP.typecheckExpr(arg);
+         if (!result) {
+            issuedDiag = true;
+            continue;
+         }
+
+         arg = result.get();
+      }
+   }
+
+   if (issuedDiag) {
       return;
    }
 
@@ -714,7 +746,7 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
          auto R = FuncName.getConstructorType()->getRecord();
          SP.diagnose(Caller, err_no_matching_initializer,
                      Candidates.empty() ? Accessible : Matching,
-                     R->getSpecifierForDiagnostic(), R->getFullName(),
+                     R, R->getFullName(),
                      Caller->getSourceRange());
       }
    }

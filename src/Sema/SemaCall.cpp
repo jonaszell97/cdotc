@@ -522,6 +522,7 @@ RecordDecl *SemaPass::InstantiateRecord(SourceLocation POI,
       POI, R, FinalTemplateArgumentList::Create(Context, TemplateArgs));
 }
 
+LLVM_ATTRIBUTE_UNUSED
 static bool wouldSelfBeValid(SemaPass &SP, bool &Static)
 {
    Static = false;

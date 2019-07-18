@@ -1114,6 +1114,52 @@ QueryResult QueryContext::NeedsStructReturn(bool &Result, CanType T)
 
 }
 
+template<> PassByValueQuery *QueryContext::getQuery<PassByValueQuery>(CanType T)
+{
+   auto It = PassByValueQueries.find(T);
+   if (It != PassByValueQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::PassByValue(bool &Result, CanType T)
+
+{
+   auto Key = T;
+   auto It = PassByValueQueries.find(Key);
+   PassByValueQuery *_Q;
+   if (It == PassByValueQueries.end()) {
+      _Q = new(*this) PassByValueQuery(*this, T);
+      PassByValueQueries[_Q->T] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T)
 {
    auto It = ContainsAssociatedTypeConstraintQueries.find(T);
@@ -1160,7 +1206,7 @@ QueryResult QueryContext::ContainsAssociatedTypeConstraint(bool &Result, CanType
 
 }
 
-QueryResult QueryContext::IsImplicitlyConvertible(bool &Result, QualType From, QualType To)
+QueryResult QueryContext::IsImplicitlyConvertible(IsImplicitlyConvertibleQuery::ResultType &Result, QualType From, QualType To)
 
 {
    auto Key = std::make_pair(From, To);
@@ -1177,7 +1223,7 @@ IsImplicitlyConvertibleQueries[Key] = Result;
 return QueryResult(QueryResult::Success);
 }
 
-QueryResult QueryContext::IsValidParameterValue(bool &Result, QualType givenType, QualType paramType, uint8_t isSelf)
+QueryResult QueryContext::IsValidParameterValue(IsValidParameterValueQuery::ResultType &Result, QualType givenType, QualType paramType, uint8_t isSelf)
 
 {
    auto Key = std::make_pair(givenType, std::make_pair(paramType, isSelf));

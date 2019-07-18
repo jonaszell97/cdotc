@@ -493,39 +493,6 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile) const
    return OS.str();
 }
 
-size_t NamedDecl::getSpecifierForDiagnostic()
-{
-   switch (kind) {
-   case ExtensionDeclID:
-      return cast<ExtensionDecl>(this)->getExtendedRecord()
-      ->getSpecifierForDiagnostic();
-   case StructDeclID:
-   case ClassDeclID:
-   case EnumDeclID:
-   case UnionDeclID:
-   case ProtocolDeclID:
-      return cast<RecordDecl>(this)->getSpecifierForDiagnostic();
-   case FunctionDeclID:
-      return 5;
-   case MethodDeclID:
-   case InitDeclID:
-   case DeinitDeclID:
-      return 6;
-   case AliasDeclID:
-      return 7;
-   case NamespaceDeclID:
-      return 8;
-   case FieldDeclID:
-      return 9;
-   case PropDeclID:
-      return 10;
-   case TypedefDeclID:
-      return 11;
-   default:
-      llvm_unreachable("missing diagnostic specifier!");
-   }
-}
-
 void NamedDecl::setAccessLoc(cdot::SourceLocation Loc)
 {
    AccessLoc = Loc;

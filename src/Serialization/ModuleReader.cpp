@@ -70,9 +70,9 @@ ModuleReader::~ModuleReader()
 void ModuleReader::Error(llvm::StringRef Msg) const
 {
    CI.getSema().diagnose(diag::err_generic_error, Msg);
-   CI.getSema().~SemaPass();
-
-   std::exit(1);
+//   CI.getSema().~SemaPass();
+//
+//   std::exit(1);
 }
 
 void ModuleReader::Error(unsigned DiagID, llvm::StringRef Arg1,
@@ -229,6 +229,10 @@ ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor &Stream)
          switch (Entry.ID) {
          case MODULE_BLOCK_ID:
             Mod = ReadModuleBlock(Stream);
+            if (!Mod) {
+               return Failure;
+            }
+
             continue;
          default:
             if (Stream.SkipBlock()) {
@@ -267,7 +271,10 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
       case llvm::BitstreamEntry::SubBlock:
          switch (Entry.ID) {
          case MODULE_BLOCK_ID: {
-            ReadModuleBlock(Stream, Mod);
+            if (!ReadModuleBlock(Stream, Mod)) {
+               return nullptr;
+            }
+
             continue;
          }
          default:
@@ -289,8 +296,15 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
       switch ((ModuleBlockRecordTypes)Kind) {
       case MODULE_NAME: {
          auto ID = (unsigned)Record.readInt();
-
          auto *II = &CI.getContext().getIdentifiers().get(Record.readString());
+
+         auto major = Record.readInt();
+         auto minor = Record.readInt();
+
+         if (major != CDOT_VERSION_MAJOR || minor != CDOT_VERSION_MINOR) {
+            Error("module was compiled for a different version of cdot!");
+            return nullptr;
+         }
 
          if (ParentModule) {
             if (auto *SubMod = ParentModule->getSubModule(II)) {

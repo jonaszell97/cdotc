@@ -1202,6 +1202,8 @@ RecordType::RecordType(RecordDecl *record)
    : Type(TypeID::RecordTypeID, nullptr),
      Rec(record)
 {
+   assert(!record->isTemplate() && "should be a DependentRecordType!");
+
    if (record->isTemplateOrInTemplate()) {
       Bits.Props |= TypeProperties::ContainsTemplate;
    }

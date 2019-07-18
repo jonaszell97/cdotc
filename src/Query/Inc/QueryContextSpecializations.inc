@@ -18,6 +18,7 @@ template<> IsTriviallyCopyableQuery *QueryContext::getQuery<IsTriviallyCopyableQ
 template<> NeedsRetainOrReleaseQuery *QueryContext::getQuery<NeedsRetainOrReleaseQuery>(CanType T);
 template<> NeedsDeinitilizationQuery *QueryContext::getQuery<NeedsDeinitilizationQuery>(CanType T);
 template<> NeedsStructReturnQuery *QueryContext::getQuery<NeedsStructReturnQuery>(CanType T);
+template<> PassByValueQuery *QueryContext::getQuery<PassByValueQuery>(CanType T);
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T);
 template<> SubstAssociatedTypesQuery *QueryContext::getQuery<SubstAssociatedTypesQuery>(QualType T, QualType Self);
 template<> SubstTemplateParamTypesQuery *QueryContext::getQuery<SubstTemplateParamTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs);

@@ -77,8 +77,7 @@ static bool matchingLabels(SemaPass &Sema,
       if (Label && !Label->isStr("_")) {
          bool FoundLabel = false;
          for (auto *ArgDecl : ArgDecls) {
-            if (ArgDecl->getLabel() == Label
-                || ArgDecl->isVariadicArgPackExpansion()) {
+            if (ArgDecl->getLabel() == Label) {
                FoundLabel = true;
                DeclArgMap[ArgDecl].push_back(ArgVal);
                break;
@@ -123,7 +122,7 @@ static bool matchingLabels(SemaPass &Sema,
          }
       }
 
-      if (ArgDecl->isVariadicArgPackExpansion()) {
+      if (ArgDecl->isVariadic()) {
          VariadicArgDecl = ArgDecl;
       }
 
@@ -408,7 +407,7 @@ static unsigned getPreviousNumVariadicArgs(TemplateParamDecl *Param,
                                            DeclArgMapType &DeclArgMap) {
    for (auto &ArgPair : DeclArgMap) {
       auto *ArgDecl = ArgPair.getFirst();
-      if (!ArgDecl->isVariadicArgPackExpansion()) {
+      if (!ArgDecl->isVariadic()) {
          continue;
       }
 
@@ -440,7 +439,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
    // If no argument is given, check if there is a default one.
    auto It = DeclArgMap.find(ArgDecl);
    if (It == DeclArgMap.end()) {
-      if (ArgDecl->isVariadicArgPackExpansion()) {
+      if (ArgDecl->isVariadic()) {
          auto *Param = ArgDecl->getType()->asTemplateParamType()->getParam();
          bool FirstOccurence = VariadicParams.count(Param) == 0;
 
@@ -496,7 +495,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
 
    // If the parameter type is a pack expansion, we can use the supplied
    // values directly.
-   if (ArgDecl->isVariadicArgPackExpansion()) {
+   if (ArgDecl->isVariadic()) {
       auto *Param = ArgDecl->getType()->asTemplateParamType()->getParam();
       auto *Arg = templateArgs.getArgForParam(Param);
 
@@ -660,16 +659,18 @@ static bool createParamConstraints(ConstraintSystem &Sys,
       }
 
       if (!Result.Type->containsTypeVariable()) {
-         bool Convertible;
-         if (Sema.QC.IsValidParameterValue(Convertible, Result.Type, NeededTy, ArgDecl->isSelf())) {
+         IsValidParameterValueQuery::result_type result;
+         if (Sema.QC.IsValidParameterValue(result, Result.Type, NeededTy, ArgDecl->isSelf())) {
             Cand.setIsInvalid();
             return true;
          }
 
-         if (!Convertible) {
+         if (!result.isValid) {
             Cand.setHasIncompatibleArgument(i, Result.Type, NeededTy);
             return true;
          }
+
+         Cand.ConversionPenalty += result.conversionPenalty;
       }
 
       ArgExprs.emplace_back(ArgVal);
@@ -704,17 +705,19 @@ static bool createAnonymousParamConstraints(ConstraintSystem &Sys,
    }
 
    if (!Result.Type->containsTypeVariable()) {
-      bool Convertible;
-      if (Sema.QC.IsImplicitlyConvertible(Convertible, Result.Type,
+      IsImplicitlyConvertibleQuery::result_type result;
+      if (Sema.QC.IsImplicitlyConvertible(result, Result.Type,
                                           NeededTy)) {
          Cand.setIsInvalid();
          return true;
       }
 
-      if (!Convertible) {
+      if (!result.implicitlyConvertible) {
          Cand.setHasIncompatibleArgument(i, Result.Type, NeededTy);
          return true;
       }
+
+      Cand.ConversionPenalty += result.conversionPenalty;
    }
 
    return false;
@@ -810,12 +813,17 @@ static bool applyConversions(SemaPass &SP,
 
    for (Expression *&E : CandSet.ResolvedArgs) {
       FuncArgDecl *ArgDecl = nullptr;
+      QualType requiredType;
+
       if (i < ArgDecls.size()) {
          ArgDecl = ArgDecls[i];
       }
+      if (i < ParamTys.size()) {
+         requiredType = ParamTys[i];
+      }
 
       // Make sure the expression type is resolved.
-      auto Result = SP.visitExpr(Caller, E);
+      auto Result = SP.typecheckExpr(E, requiredType, Caller);
       if (!Result) {
          ++i;
          continue;
@@ -920,19 +928,21 @@ static bool compatibleReturnType(SemaPass &Sema,
    }
 
    if (ReturnType->containsTemplateParamType()) {
-      assert(Cand.getFunc()->isTemplate() && "function not correctly instantiated!");
+      assert((Cand.getFunc()->isTemplate() || Cand.getFunc()->isInitializerOfTemplate()
+         || Cand.getFunc()->isCaseOfTemplatedEnum())
+         && "function not correctly instantiated!");
 
       if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType, Cand.InnerTemplateArgs, {})) {
          return true;
       }
    }
 
-   bool Convertible;
-   if (Sema.QC.IsImplicitlyConvertible(Convertible, ReturnType, RequiredType)) {
+   IsImplicitlyConvertibleQuery::result_type result;
+   if (Sema.QC.IsImplicitlyConvertible(result, ReturnType, RequiredType)) {
       return true;
    }
 
-   if (!Convertible) {
+   if (!result.implicitlyConvertible) {
       Cand.setHasIncompatibleReturnType(RequiredType, ReturnType);
       return false;
    }
@@ -1096,7 +1106,6 @@ static bool resolveCandidate(SemaPass &Sema,
          // FIXME we need to still put some error here to prevent Sema
          //  from just moving on...
          Cand.setIsInvalid();
-         CandSet.InvalidCand = true;
       }
 
       return false;
@@ -1143,7 +1152,7 @@ static bool resolveCandidate(SemaPass &Sema,
 
    // Check for ambiguity.
    auto &S = Solutions.front();
-   Cand.ConversionPenalty = S.Score;
+   S.Score += Cand.ConversionPenalty;
 
    if (!BestCandidate || BestSolution.Score > S.Score) {
       BestCandidate = &Cand;
@@ -1254,7 +1263,6 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
          // FIXME we need to still put some error here to prevent Sema
          //  from just moving on...
          Cand.setIsInvalid();
-         CandSet.InvalidCand = true;
       }
 
       return false;
@@ -1276,7 +1284,7 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
 
    // Check for ambiguity.
    auto &S = Solutions.front();
-   Cand.ConversionPenalty = S.Score;
+   S.Score += Cand.ConversionPenalty;
 
    if (!BestCandidate || BestSolution.Score > S.Score) {
       BestCandidate = &Cand;

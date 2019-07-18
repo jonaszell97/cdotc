@@ -654,8 +654,41 @@ ASTContext::getTupleType(ArrayRef<QualType> containedTypes) const
    return TupTy;
 }
 
+static DependentRecordType *createTemplateType(ASTContext &C, RecordDecl *R)
+{
+   SmallVector<sema::TemplateArgument, 2> templateArgs;
+   for (auto *param : R->getTemplateParams()) {
+      if (param->isVariadic()) {
+         templateArgs.emplace_back(param, param->isTypeName(),
+                                   std::vector<sema::TemplateArgument>(),
+                                   param->getSourceLoc());
+      }
+      else if (param->isTypeName()) {
+         templateArgs.emplace_back(param, C.getTemplateArgType(param),
+                                   param->getSourceLoc());
+      }
+      else {
+         llvm_unreachable("not sure how to handle this!");
+      }
+   }
+
+   auto *finalList = sema::FinalTemplateArgumentList::Create(C, templateArgs);
+   auto *dependentType = C.getDependentRecordType(R, finalList);
+
+   R->setType(dependentType);
+   return dependentType;
+}
+
 RecordType* ASTContext::getRecordType(RecordDecl *R) const
 {
+   if (R->isTemplate()) {
+      if (QualType T = R->getType()) {
+         return T->asDependentRecordType();
+      }
+
+      return createTemplateType(const_cast<ASTContext&>(*this), R);
+   }
+
    llvm::FoldingSetNodeID ID;
    RecordType::Profile(ID, R);
 

@@ -337,6 +337,11 @@ void ASTStmtReader::visitStaticForStmt(StaticForStmt *S)
    S->setElementName(Record.getIdentifierInfo());
    S->setRange(cast<StaticExpr>(Record.readSubExpr()));
    S->setBody(Record.readSubStmt());
+   S->setVariadic(Record.readBool());
+
+   if (S->isVariadic()) {
+      S->setVariadicDecl(ReadDeclAs<NamedDecl>());
+   }
 }
 
 void ASTStmtReader::visitMixinStmt(MixinStmt *S)
@@ -539,8 +544,9 @@ void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr *S)
    S->setAllowIncompleteTemplateArgs((Flags & (1 << 7)) != 0);
    S->setAllowNamespaceRef((Flags & (1 << 8)) != 0);
    S->setAllowOverloadRef((Flags & (1 << 9)) != 0);
-   S->setLeadingDot((Flags & (1 << 10)) != 0);
-   S->setCalled((Flags & (1 << 11)) != 0);
+   S->setAllowVariadicRef((Flags & (1 << 10)) != 0);
+   S->setLeadingDot((Flags & (1 << 11)) != 0);
+   S->setCalled((Flags & (1 << 12)) != 0);
 
    S->setCaptureIndex(Record.readInt());
    S->setParentExpr(Record.readSubExpr());
@@ -1032,6 +1038,16 @@ void ASTStmtReader::visitMixinExpr(MixinExpr *S)
 
    S->setParens(ReadSourceRange());
    S->setMixinExpr(Record.readSubExpr());
+}
+
+void ASTStmtReader::visitVariadicExpansionExpr(VariadicExpansionExpr *S)
+{
+   visitExpr(S);
+
+   S->setExpr(Record.readSubExpr());
+   S->setEllipsisLoc(ReadSourceLocation());
+   S->setParameterPack(ReadDeclAs<NamedDecl>());
+   S->setElementDecl(ReadDeclAs<NamedDecl>());
 }
 
 void ASTStmtReader::visitMacroVariableExpr(MacroVariableExpr *S)

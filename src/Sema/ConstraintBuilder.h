@@ -36,9 +36,8 @@ private:
    /// Map from closure parameters to assigned type variables.
    llvm::DenseMap<unsigned, TypeVariableType*> *ClosureParams = nullptr;
 
-   /// Variadic template parameters that we have encountered in the type of
-   /// a function argument.
-   llvm::DenseSet<ast::TemplateParamDecl*> EncounteredVariadicParams;
+   /// Map from expressions to assigned type variables.
+   llvm::DenseMap<ast::Expression*, TypeVariableType*> typeVarMap;
 
    /// True if all expressions have unambiguous types.
    bool AllUnambiguous = true;
@@ -55,6 +54,10 @@ private:
    /// True iff we are generating constraints for an argument, and that
    /// argument is invalid.
    bool InvalidArg = false;
+
+   TypeVariableType *getTypeVar(ast::Expression *E,
+                                bool force = false,
+                                ast::SourceType T = {});
 
 public:
    /// Information about an as of yet unresolved call expression.
@@ -110,7 +113,7 @@ public:
 
    /// Create a locator for an expression.
    Locator makeLocator(ast::Expression *E,
-                       ArrayRef<ConstraintLocator::PathElement> Elements);
+                       ArrayRef<ConstraintLocator::PathElement> Elements = {});
 
    /// Get the type variable for a closure parameter, if it exists.
    TypeVariableType *getClosureParam(DeclarationName Name);

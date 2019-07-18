@@ -236,7 +236,7 @@ TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
                                      SourceLocation NameLoc,
                                      SourceLocation EllipsisLoc,
                                      bool Unbounded)
-   : NamedDecl(TemplateParamDeclID, (AccessSpecifier)0, Name),
+   : NamedDecl(TemplateParamDeclID, AccessSpecifier::Public, Name),
      covariance(covariance), contravariance(contravariance),
      typeName(true), Unbounded(Unbounded),
      defaultValue(defaultValue), Index(Index),  Depth(0),
@@ -252,7 +252,7 @@ TemplateParamDecl::TemplateParamDecl(DeclarationName Name,
                                      SourceLocation NameLoc,
                                      SourceLocation EllipsisLoc,
                                      bool Unbounded)
-   : NamedDecl(TemplateParamDeclID, (AccessSpecifier)0, Name),
+   : NamedDecl(TemplateParamDeclID, AccessSpecifier::Public, Name),
      covariance(valueType), contravariance(nullptr),
      typeName(false), Unbounded(Unbounded),
      defaultValue(defaultValue), Index(Index), Depth(0),
@@ -291,7 +291,7 @@ TemplateParamDecl* TemplateParamDecl::Create(ASTContext &C,
 }
 
 TemplateParamDecl::TemplateParamDecl(EmptyShell)
-   : NamedDecl(TemplateParamDeclID, AccessSpecifier::Default, DeclarationName()),
+   : NamedDecl(TemplateParamDeclID, AccessSpecifier::Public, DeclarationName()),
      covariance(nullptr), contravariance(nullptr),
      typeName(false), defaultValue(nullptr), Index(0)
 {}
@@ -401,7 +401,7 @@ LocalVarDecl::LocalVarDecl(AccessSpecifier access,
                            Expression* value)
    : VarDecl(LocalVarDeclID, access, VarOrLetLoc, ColonLoc,
              isConst, Name, type, value),
-     IsNRVOCand(false), InitIsMove(false)
+     IsNRVOCand(false), InitIsMove(false), variadicForDecl(false)
 {}
 
 LocalVarDecl* LocalVarDecl::Create(ASTContext &C,
@@ -419,7 +419,7 @@ LocalVarDecl* LocalVarDecl::Create(ASTContext &C,
 LocalVarDecl::LocalVarDecl(EmptyShell)
    : VarDecl(LocalVarDeclID, AccessSpecifier::Default, {}, {}, false, 
              DeclarationName(), SourceType(), nullptr),
-     IsNRVOCand(false), InitIsMove(false)
+     IsNRVOCand(false), InitIsMove(false), variadicForDecl(false)
 {}
 
 LocalVarDecl *LocalVarDecl::CreateEmpty(ASTContext &C)
@@ -999,8 +999,11 @@ AliasDecl::AliasDecl(SourceLocation Loc,
      DeclContext(AliasDeclID),
      Loc(Loc), Type(Type), aliasExpr(aliasExpr)
 {
+   assert((int)AccessSpec <= 5 && "bad access specifier");
+
    NumParams = (unsigned)templateParams.size();
    strong = false;
+   variadicForDecl = false;
 
    std::copy(templateParams.begin(), templateParams.end(),
              getTrailingObjects<TemplateParamDecl*>());
@@ -1027,6 +1030,7 @@ AliasDecl::AliasDecl(EmptyShell, unsigned N)
 {
    NumParams = N;
    strong = false;
+   variadicForDecl = false;
 }
 
 AliasDecl *AliasDecl::CreateEmpty(ASTContext &C, unsigned N)
@@ -1131,19 +1135,6 @@ bool RecordDecl::isRawEnum() const
    }
 
    return false;
-}
-
-int RecordDecl::getNameSelector() const
-{
-   switch (kind) {
-   case ClassDeclID: return 0;
-   case StructDeclID: return 1;
-   case EnumDeclID: return 2;
-   case UnionDeclID: return 3;
-   case ProtocolDeclID: return 4;
-   default:
-      llvm_unreachable("bad record decl");
-   }
 }
 
 AssociatedTypeDecl* RecordDecl::getAssociatedType(DeclarationName name,
@@ -1904,7 +1895,7 @@ StaticForDecl::StaticForDecl(SourceLocation StaticLoc,
                              CompoundDecl *BodyDecl)
    : Decl(StaticForDeclID),
      StaticLoc(StaticLoc), RBRaceLoc(RBRaceLoc),
-     elementName(elementName), range(range), BodyDecl(BodyDecl)
+     elementName(elementName), range(range), BodyDecl(BodyDecl), variadic(false)
 {
 
 }
@@ -1920,7 +1911,7 @@ StaticForDecl* StaticForDecl::Create(ASTContext &C,
 }
 
 StaticForDecl::StaticForDecl(EmptyShell)
-   : Decl(StaticForDeclID)
+   : Decl(StaticForDeclID), variadic(false)
 {}
 
 StaticForDecl *StaticForDecl::CreateEmpty(ASTContext &C)

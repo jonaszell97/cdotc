@@ -21,6 +21,7 @@ class BlockScope;
 namespace ast {
 
 class Decl;
+class NamedDecl;
 class LocalVarDecl;
 class CallableDecl;
 class VarDecl;
@@ -988,6 +989,9 @@ class StaticForStmt: public Statement {
    StaticExpr *range;
    Statement *body;
 
+   bool variadic;
+   NamedDecl *variadicDecl = nullptr;
+
 public:
    static StaticForStmt *Create(ASTContext &C,
                                 SourceLocation StaticLoc,
@@ -1018,6 +1022,12 @@ public:
    void setElementName(IdentifierInfo *EN) { elementName = EN; }
    void setRange(StaticExpr *R) { range = R; }
    void setBody(Statement *B) { body = B; }
+
+   bool isVariadic() const { return variadic; }
+   void setVariadic(bool v) { variadic = v; }
+
+   NamedDecl *getVariadicDecl() const { return variadicDecl; }
+   void setVariadicDecl(NamedDecl *D) { variadicDecl = D; }
 };
 
 class MacroExpansionStmt final:

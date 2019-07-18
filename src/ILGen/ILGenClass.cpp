@@ -905,15 +905,15 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl *S, bool IsComplete)
    il::Value *Self = &*arg_it++;
    Fn->setSelf(Self);
 
-   if (Self->isLvalue())
-      Self = Builder.CreateLoad(Self);
-
    if (IsComplete) {
       auto *DefaultInit = S->getDefaultInitializer();
       if (registerCalledFunction(DefaultInit, S)) {
          Builder.CreateCall(getFunc(DefaultInit), Self);
       }
    }
+
+   if (Self->isLvalue())
+      Self = Builder.CreateLoad(Self);
 
    unsigned i = 0;
    for (auto F : S->getFields()) {

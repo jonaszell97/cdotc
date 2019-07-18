@@ -210,6 +210,14 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    QC->Sema = Sema.get();
    cl::ParseCommandLineOptions(argc, argv);
 
+   for (int i = 0; i < argc; ++i) {
+      if (i != 0) {
+         options.commandLineArguments += ' ';
+      }
+
+      options.commandLineArguments += argv[i];
+   }
+
    Sema->getDiags().setMaxErrors(MaxErrors);
    options.MaxInstantiationDepth = MaxInstDepth;
 

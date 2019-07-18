@@ -4,6 +4,8 @@
 
 #include "ConstraintSystem.h"
 
+#include "AST/Decl.h"
+#include "AST/TypeVisitor.h"
 #include "Query/QueryContext.h"
 #include "Sema/SemaPass.h"
 
@@ -256,8 +258,109 @@ static bool diagnoseLiteralFailre(ConstraintSystem &Sys, LiteralConstraint *LC,
    return true;
 }
 
+namespace {
+
+class TypeEquivalenceChecker: public TypeComparer<TypeEquivalenceChecker> {
+   /// Reference to the constraint system.
+   ConstraintSystem &Sys;
+
+   /// The equality constraint.
+   Constraint *C;
+
+   SourceRange getSourceRange()
+   {
+      if (auto *L = C->getLocator()) {
+         return L->getAnchor()->getSourceRange();
+      }
+
+      return SourceRange();
+   }
+
+public:
+   TypeEquivalenceChecker(ConstraintSystem &Sys,
+                          Constraint *C)
+      : Sys(Sys), C(C)
+   { }
+
+   /// Set to true once we diagnosed an issue.
+   bool diagnosedIssue = false;
+
+   bool visitMutablePointerType(MutablePointerType *LHS, QualType RHS)
+   {
+      if (!RHS->isMutablePointerType()) {
+         Sys.QC.Sema->diagnose(err_generic_error,
+            "pointer must be mutable", getSourceRange());
+
+         diagnosedIssue = true;
+         return false;
+      }
+
+      return true;
+   }
+
+   bool visitReferenceType(ReferenceType *LHS, QualType RHS)
+   {
+      if (!RHS->isReferenceType()) {
+         Sys.QC.Sema->diagnose(
+            err_generic_error,
+            "reference type expected", getSourceRange());
+
+         diagnosedIssue = true;
+         return false;
+      }
+
+      return false;
+   }
+
+   bool visitMutableReferenceType(MutableReferenceType *LHS, QualType RHS)
+   {
+      if (!RHS->isMutableReferenceType()) {
+         Sys.QC.Sema->diagnose(
+            err_generic_error,
+            "mutable reference type expected", getSourceRange());
+
+         diagnosedIssue = true;
+         return false;
+      }
+
+      return false;
+   }
+
+   bool visitMutableBorrowType(MutableBorrowType *LHS, QualType RHS)
+   {
+      if (!RHS->isMutableBorrowType()) {
+         Sys.QC.Sema->diagnose(
+            err_generic_error,
+            "mutable borrow type expected", getSourceRange());
+
+         diagnosedIssue = true;
+         return false;
+      }
+
+      return false;
+   }
+};
+
+} // anonymous namespace
+
+static bool diagnoseEqualityFailure(ConstraintSystem &Sys,
+                                    TypeEqualityConstraint *EC,
+                                    OverloadCandidate *Cand) {
+   TypeEquivalenceChecker checker(Sys, EC);
+
+   QualType LHS = Sys.getConcreteType(EC->getConstrainedType());
+   QualType RHS = Sys.getConcreteType(EC->getRHSType(), EC->getConstrainedType());
+   checker.visit(RHS, LHS);
+
+   return checker.diagnosedIssue;
+}
+
 static bool checkUninferrableTemplateParam(ConstraintSystem &Sys,
                                            OverloadCandidate *Cand) {
+   if (!Cand) {
+      return false;
+   }
+
    TypeVariableType *ParamVar = nullptr;
    for (auto *TV : Sys.getTypeVariables()) {
       if (Sys.representsTemplateParam(TV) && !Sys.isAssigned(TV)) {
@@ -328,20 +431,8 @@ static bool checkIncompleteInformation(ConstraintSystem &Sys,
 }
 
 static bool diagnoseFailureImpl(ConstraintSystem &Sys,
+                                Constraint *FailedConstraint,
                                 OverloadCandidate *Cand = nullptr) {
-   // Check if there was incomplete contextual information for a constraint.
-   if (checkIncompleteInformation(Sys, Cand)) {
-      return true;
-   }
-   if (checkUninferrableTemplateParam(Sys, Cand)) {
-      return true;
-   }
-   
-   auto *FailedConstraint = Sys.FailedConstraint;
-   if (!FailedConstraint) {
-      return false;
-   }
-
    switch (FailedConstraint->getKind()) {
    case Constraint::ImplicitConversionID: {
       auto *Conv = cast<ImplicitConversionConstraint>(FailedConstraint);
@@ -367,11 +458,57 @@ static bool diagnoseFailureImpl(ConstraintSystem &Sys,
 
       break;
    }
+   case Constraint::TypeEqualityID: {
+      auto *EC = cast<TypeEqualityConstraint>(FailedConstraint);
+      if (diagnoseEqualityFailure(Sys, EC, Cand)) {
+         return true;
+      }
+
+      break;
+   }
+   case Constraint::TypeBindingID: {
+      // If a type binding fails, there has to be some other constraint that
+      // violates that binding.
+      auto constraints = Sys.getConstraintGraph().getOrAddNode(
+         FailedConstraint->getConstrainedType())->getConstraints();
+
+      for (auto *C : constraints) {
+         switch (C->getKind()) {
+         case Constraint::ImplicitConversionID:
+         case Constraint::MemberID:
+         case Constraint::LiteralID:
+         case Constraint::TypeEqualityID:
+            return diagnoseFailureImpl(Sys, C, Cand);
+         default:
+            break;
+         }
+      }
+
+      break;
+   }
    default:
       break;
    }
 
    return false;
+}
+
+static bool diagnoseFailureImpl(ConstraintSystem &Sys,
+                                OverloadCandidate *Cand = nullptr) {
+   // Check if there was incomplete contextual information for a constraint.
+   if (checkIncompleteInformation(Sys, Cand)) {
+      return true;
+   }
+   if (checkUninferrableTemplateParam(Sys, Cand)) {
+      return true;
+   }
+   
+   auto *FailedConstraint = Sys.FailedConstraint;
+   if (!FailedConstraint) {
+      return false;
+   }
+
+   return diagnoseFailureImpl(Sys, FailedConstraint, Cand);
 }
 
 bool ConstraintSystem::diagnoseFailure()

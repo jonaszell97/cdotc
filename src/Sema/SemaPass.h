@@ -404,10 +404,14 @@ public:
    StmtResult visitDebugStmt(DebugStmt *Stmt);
 
    StmtResult visitStaticIfStmt(StaticIfStmt *Stmt);
+
+   ExprResult visitVariadicExpansionExpr(VariadicExpansionExpr *Expr);
+   StmtResult visitVariadicForStmt(StaticForStmt *Stmt);
    StmtResult visitStaticForStmt(StaticForStmt *Stmt);
 
    DeclResult visitStaticAssertDecl(StaticAssertDecl *Decl);
    DeclResult visitStaticPrintDecl(StaticPrintDecl *Decl);
+   DeclResult visitVariadicForDecl(StaticForDecl *Decl);
 
    ExprResult visitStaticExpr(StaticExpr *Expr);
    ExprResult visitTraitsExpr(TraitsExpr *Expr);
@@ -1281,6 +1285,8 @@ public:
    InitDecl *getStringInit();
    MethodDecl *getStringPlusEqualsString();
 
+   bool canUseClass(SourceLocation Loc);
+
    bool isInReflectModule(Decl *D);
    bool isInBuiltinModule(Decl *D);
    bool isInStdModule(Decl *D);
@@ -1306,6 +1312,7 @@ public:
    bool NeedsRetainOrRelease(QualType Ty);
    bool NeedsDeinitilization(QualType Ty);
    bool NeedsStructReturn(QualType Ty);
+   bool ShouldPassByValue(QualType Ty);
 
    bool ContainsAssociatedTypeConstraint(QualType Ty);
 
@@ -1741,6 +1748,8 @@ private:
    // Builtin namespace
    const IdentifierInfo *BuiltinIdents[64];
    bool BuiltinIdentsInitialized = false;
+
+   llvm::Optional<bool> canUseClassVal;
 
    void initBuiltinIdents();
    ExprResult HandleBuiltinCall(CallExpr *C);

@@ -1024,6 +1024,10 @@ private:
    /// \return true if this constraint is unsolvable, false otherwise.
    bool simplify(Constraint *C, SmallVectorImpl<Constraint*> &Worklist);
 
+   /// Apply all concrete type variable bindings and check if all constraints
+   /// are still satisfiable.
+   bool applyConcreteBindings();
+
    /// Functions to check if a specific constraint is satisfied.
 #  define CDOT_CONSTRAINT(NAME)                    \
    bool isSatisfied(NAME##Constraint *C);

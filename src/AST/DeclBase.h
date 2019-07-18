@@ -488,8 +488,6 @@ public:
 
    void dumpName() const;
 
-   size_t getSpecifierForDiagnostic();
-
    bool isExported() const;
 
    unsigned int getFlags() const { return flags; }

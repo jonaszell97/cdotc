@@ -122,9 +122,14 @@ public:
    Statement *instantiateFunctionBody(CallableDecl *inst)
    {
       auto *Template = inst->getBodyTemplate();
+      auto numArgs = inst->getArgs().size();
 
       int i = 0;
       for (auto *paramDecl : Template->getArgs()) {
+         if (i >= numArgs) {
+            continue;
+         }
+
          instantiationMap.try_emplace(paramDecl, inst->getArgAt(i++));
       }
 
@@ -371,6 +376,10 @@ public:
             }
 
             if ((Props & GenericMask) != 0) {
+               if (!SubstContexts.empty()) {
+                  Inst = VariadicParamSubstVisitor(*this).visit(Inst);
+               }
+
                if (SP.QC.SubstTemplateParamTypes(Inst, Inst, templateArgs, POI)) {
                   return Ty;
                }
@@ -437,16 +446,52 @@ public:
       return Context.getRecordType(Inst);
    }
 
-private:
-   Decl *getInstantiation(const Decl *D)
+   const TemplateArgument* hasTemplateArg(DeclarationName Name)
    {
-      return instantiationMap[D];
+      return templateArgs.getNamedArg(Name);
+   }
+
+   const TemplateArgument* hasTemplateArg(TemplateParamDecl *P)
+   {
+      return templateArgs.getNamedArg(P->getDeclName());
+   }
+
+   struct SubstContextRAII {
+      SubstContextRAII(InstantiatorImpl &Inst,
+                       TemplateParamDecl *param,
+                       DeclarationName declName,
+                       unsigned index,
+                       std::function<Expression*(SourceRange)> &&makeSubstExpr)
+         : Inst(Inst)
+      {
+         Inst.SubstContexts.emplace_back(param, declName, index, move(makeSubstExpr));
+      }
+
+      ~SubstContextRAII()
+      {
+         Inst.SubstContexts.pop_back();
+      }
+
+   private:
+      InstantiatorImpl &Inst;
+   };
+
+private:
+   Decl *getInstantiation(Decl *D)
+   {
+      auto it = instantiationMap.find(D);
+      if (it == instantiationMap.end()) {
+         assert(canElideInstantiation(D));
+         return D;
+      }
+
+      return it->getSecond();
    }
 
    template<class T>
-   T *getInstantiation(const Decl *D)
+   T *getInstantiation(Decl *D)
    {
-      return cast<T>(instantiationMap[D]);
+      return cast<T>(getInstantiation(D));
    }
 
    SourceType visitOrAuto(const SourceType &Ty)
@@ -624,8 +669,15 @@ private:
    Decl* visitStaticIfDecl(StaticIfDecl *node);
    Decl* visitStaticForDecl(StaticForDecl *node);
 
+   Expression *visitVariadicExpansionExpr(VariadicExpansionExpr *Expr);
+   void visitVariadicExpansionExpr(VariadicExpansionExpr *Expr,
+                                   SmallVectorImpl<Expression*> &Exprs);
+
    Statement* visitStaticIfStmt(StaticIfStmt *node);
+   Statement* visitVariadicForStmt(StaticForStmt *node);
    Statement* visitStaticForStmt(StaticForStmt *node);
+
+   Decl* visitVariadicForDecl(StaticForDecl *Decl);
 
    AttributedStmt *visitAttributedStmt(AttributedStmt *S);
    AttributedExpr *visitAttributedExpr(AttributedExpr *E);
@@ -665,7 +717,7 @@ private:
 
    /// Reference to the AST context.
    ASTContext &Context;
-   
+
    /// Declaration scope for this instantiation.
    SemaPass::DeclScopeRAII InstScope;
 
@@ -705,139 +757,33 @@ private:
       il::Constant *SubstVal = nullptr;
    } ValueSubst;
 
-   struct UnevalutedScopeRAII {
-      UnevalutedScopeRAII(InstantiatorImpl &Inst, bool unevaluated)
-         : Inst(Inst), previous(Inst.InUnevaluatedScope)
-      {
-         Inst.InUnevaluatedScope |= unevaluated;
-      }
-
-      ~UnevalutedScopeRAII()
-      {
-         Inst.InUnevaluatedScope = previous;
-      }
-
-   private:
-      InstantiatorImpl &Inst;
-      bool previous;
-   };
-
    struct SubstContext {
    public:
-      SubstContext(TemplateParamDecl *Param,
-                   const IdentifierInfo *FuncArg,
-                   DeclarationName IdentSubst,
-                   const TemplateArgument *ArgSubst)
-         : Param(Param), FuncArg(FuncArg), IdentSubst(IdentSubst),
-           ArgSubst(ArgSubst)
+      SubstContext(TemplateParamDecl *param,
+                   DeclarationName declName,
+                   unsigned index,
+                   std::function<Expression*(SourceRange)> &&makeSubstExpr)
+         : param(param), declName(declName), index(index),
+           makeSubstExpr(move(makeSubstExpr))
       { }
 
-      TemplateParamDecl *Param;
-
-      const IdentifierInfo *FuncArg;
-      DeclarationName IdentSubst;
-
-      const TemplateArgument *ArgSubst;
-   };
-
-   struct SubstContextRAII {
-      SubstContextRAII(InstantiatorImpl &Inst,
-                       TemplateParamDecl *Param,
-                       const IdentifierInfo *FuncArg,
-                       DeclarationName IdentSubst,
-                       const TemplateArgument *ArgSubst)
-         : Inst(Inst)
-      {
-         Inst.SubstContexts.emplace_back(Param, FuncArg, IdentSubst, ArgSubst);
-      }
-
-      ~SubstContextRAII()
-      {
-         Inst.SubstContexts.pop_back();
-      }
-
-   private:
-      InstantiatorImpl &Inst;
+      TemplateParamDecl *param;
+      DeclarationName declName;
+      unsigned index;
+      std::function<Expression*(SourceRange)> makeSubstExpr;
    };
 
    std::vector<SubstContext> SubstContexts;
 
-   struct InstantiatingRecordRAII {
-      InstantiatingRecordRAII(InstantiatorImpl &Inst, RecordDecl *R)
-         : Inst(Inst), Prev(Inst.InstantiatingRecord)
-      {
-         Inst.InstantiatingRecord = R;
-      }
-
-      ~InstantiatingRecordRAII()
-      {
-         Inst.InstantiatingRecord = Prev;
-      }
-
-   private:
-      InstantiatorImpl &Inst;
-      RecordDecl *Prev;
-   };
-
-   DeclarationName getVariadicArgumentSubst(const IdentifierInfo *II)
+   Expression *getVariadicSubstitution(DeclarationName declName, SourceRange SR)
    {
-      auto end_it = SubstContexts.rend();
-      for (auto it = SubstContexts.rbegin(); it != end_it; ++it) {
-         auto &Subst = *it;
-         if (!Subst.FuncArg)
-            continue;
-
-         if (Subst.FuncArg == II)
-            return Subst.IdentSubst;
+      for (auto it = SubstContexts.rbegin(); it != SubstContexts.rend(); ++it) {
+         if (it->declName == declName) {
+            return it->makeSubstExpr(SR);
+         }
       }
 
       return nullptr;
-   }
-
-   const TemplateArgument *getParameterSubst(DeclarationName name)
-   {
-      auto end_it = SubstContexts.rend();
-      for (auto it = SubstContexts.rbegin(); it != end_it; ++it) {
-         auto &Subst = *it;
-         if (!Subst.ArgSubst)
-            continue;
-
-         if (Subst.Param->getDeclName() == name)
-            return Subst.ArgSubst;
-      }
-
-      return nullptr;
-   }
-
-   const TemplateArgument *getParameterSubst(TemplateParamDecl *P)
-   {
-      auto end_it = SubstContexts.rend();
-      for (auto it = SubstContexts.rbegin(); it != end_it; ++it) {
-         auto &Subst = *it;
-         if (!Subst.ArgSubst)
-            continue;
-
-         if (Subst.Param->getDeclName() == P->getDeclName())
-            return Subst.ArgSubst;
-      }
-
-      return nullptr;
-   }
-
-   const TemplateArgument* hasTemplateArg(DeclarationName Name)
-   {
-      if (auto P = getParameterSubst(Name))
-         return P;
-
-      return templateArgs.getNamedArg(Name);
-   }
-
-   const TemplateArgument* hasTemplateArg(TemplateParamDecl *P)
-   {
-      if (auto Arg = getParameterSubst(P))
-         return Arg;
-
-      return templateArgs.getNamedArg(P->getDeclName());
    }
 
    sema::FinalTemplateArgumentList *instantiateTemplateArgs(
@@ -845,7 +791,8 @@ private:
       NamedDecl *Template);
 
    void instantiateTemplateArgument(const TemplateArgument &TA,
-                                    TemplateArgList &list);
+                                    TemplateArgList &list,
+                                    bool variadic);
 
    QualType instantiateConversionStep(ConversionSequenceBuilder &builder,
                                       const ConversionStep &step,
@@ -1021,7 +968,7 @@ private:
          }
          case Decl::FuncArgDeclID: {
             auto *Arg = cast<FuncArgDecl>(ND);
-            if (Arg->isVariadicArgPackExpansion()) {
+            if (Arg->isVariadic()) {
                PackArguments.insert(Arg);
                visit(Arg->getType().getTypeExpr());
             }
@@ -1040,6 +987,50 @@ private:
       llvm::SmallPtrSetImpl<FuncArgDecl*> &PackArguments;
    };
 
+   class VariadicParamSubstVisitor: public TypeBuilder<VariadicParamSubstVisitor> {
+      InstantiatorImpl &instantiator;
+
+   public:
+      explicit VariadicParamSubstVisitor(InstantiatorImpl &instantiator)
+         : TypeBuilder(instantiator.SP, {}),
+           instantiator(instantiator)
+      {}
+
+      void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
+      {
+         Types.push_back(visitTemplateParamType(T));
+      }
+
+      QualType visitTemplateParamType(TemplateParamType *T)
+      {
+         const TemplateArgument *Arg = instantiator.templateArgs.getArgForParam(T->getParam());
+         if (!Arg || Arg->isNull()) {
+            return T;
+         }
+
+         assert(!Arg->isValue() && "should not appear in type position!");
+         if (Arg->isVariadic()) {
+            for (auto it = instantiator.SubstContexts.rbegin();
+            it != instantiator.SubstContexts.rend(); ++it) {
+               if (it->param == T->getParam()) {
+                  return Arg->getVariadicArgs()[it->index].getType();
+               }
+            }
+         }
+
+         return Arg->getType();
+      }
+
+      QualType visitTypedefType(TypedefType *T)
+      {
+         if (T->getTypedef()->isInstantiation()) {
+            return TypeBuilder::visitTypedefType(T);
+         }
+
+         return visit(T->getDesugaredType());
+      }
+   };
+
    template<class Container>
    using element_type = typename
       std::remove_pointer<typename
@@ -1049,59 +1040,59 @@ private:
    template<class Container, class Element = element_type<Container>>
    bool expandVariadicArgument(Container &exprs,
                                Expression* variadicExpr) {
-      if (!variadicExpr->isVariadicArgPackExpansion()) {
+      if (true || !variadicExpr->isVariadicArgPackExpansion()) {
          exprs.emplace_back(cast<Element>(visit(variadicExpr)));
          return false;
       }
 
-      SmallPtrSet<TemplateParamDecl*, 4> VariadicParams;
-      SmallPtrSet<FuncArgDecl*, 4> PackArguments;
-
-      VariadicParamFinder Visitor(VariadicParams, PackArguments);
-      Visitor.visit(variadicExpr);
-
-      assert(!VariadicParams.empty() && "undiagnosed invalid pack expansion");
-
-      if (VariadicParams.size() > 1) {
-         llvm_unreachable("FIXME error message");
-      }
-
-      TemplateParamDecl *ParameterPack = *VariadicParams.begin();
-      FuncArgDecl *PackArgument = nullptr;
-
-      if (!PackArguments.empty())
-         PackArgument = *PackArguments.begin();
-
-      auto GivenArg = hasTemplateArg(ParameterPack);
-      if (!GivenArg) {
-         // current context is still templated
-         exprs.emplace_back(cast<Element>(visit(variadicExpr)));
-         return false;
-      }
-
-      assert(GivenArg->isVariadic() && "invalid passed template argument");
-
-      unsigned numVariadics = (unsigned)GivenArg->getVariadicArgs().size();
-      for (unsigned i = 0; i < numVariadics; ++i) {
-         DeclarationName IdentSubst;
-         const IdentifierInfo *FuncArg = nullptr;
-
-         if (PackArgument) {
-            FuncArg = PackArgument->getIdentifierInfo();
-            IdentSubst = Context.getDeclNameTable()
-                                .getPackExpansionName(FuncArg, i);
-         }
-
-         SubstContextRAII raii(*this, ParameterPack, FuncArg, IdentSubst,
-                               &GivenArg->getVariadicArgs()[i]);
-
-         Expression *newExpr = visit(variadicExpr);
-         newExpr->setEllipsisLoc(SourceLocation());
-
-         exprs.emplace_back(newExpr);
-      }
-
-      return true;
+//      SmallPtrSet<TemplateParamDecl*, 4> VariadicParams;
+//      SmallPtrSet<FuncArgDecl*, 4> PackArguments;
+//
+//      VariadicParamFinder Visitor(VariadicParams, PackArguments);
+//      Visitor.visit(variadicExpr);
+//
+//      assert(!VariadicParams.empty() && "undiagnosed invalid pack expansion");
+//
+//      if (VariadicParams.size() > 1) {
+//         llvm_unreachable("FIXME error message");
+//      }
+//
+//      TemplateParamDecl *ParameterPack = *VariadicParams.begin();
+//      FuncArgDecl *PackArgument = nullptr;
+//
+//      if (!PackArguments.empty())
+//         PackArgument = *PackArguments.begin();
+//
+//      auto GivenArg = hasTemplateArg(ParameterPack);
+//      if (!GivenArg) {
+//         // current context is still templated
+//         exprs.emplace_back(cast<Element>(visit(variadicExpr)));
+//         return false;
+//      }
+//
+//      assert(GivenArg->isVariadic() && "invalid passed template argument");
+//
+//      unsigned numVariadics = (unsigned)GivenArg->getVariadicArgs().size();
+//      for (unsigned i = 0; i < numVariadics; ++i) {
+//         DeclarationName IdentSubst;
+//         const IdentifierInfo *FuncArg = nullptr;
+//
+//         if (PackArgument) {
+//            FuncArg = PackArgument->getIdentifierInfo();
+//            IdentSubst = Context.getDeclNameTable()
+//                                .getPackExpansionName(FuncArg, i);
+//         }
+//
+//         SubstContextRAII raii(*this, ParameterPack, FuncArg, IdentSubst,
+//                               &GivenArg->getVariadicArgs()[i]);
+//
+//         Expression *newExpr = visit(variadicExpr);
+//         newExpr->setEllipsisLoc(SourceLocation());
+//
+//         exprs.emplace_back(newExpr);
+//      }
+//
+//      return true;
    }
 
    bool expandVariadicDecl(FieldDecl *Decl)
@@ -1547,15 +1538,6 @@ FieldDecl* InstantiatorImpl::visitFieldDecl(FieldDecl *Decl)
       return nullptr;
 
    DeclarationName DeclName = Decl->getDeclName();
-   if (auto Subst = getVariadicArgumentSubst(Decl->getIdentifierInfo())) {
-      DeclName = Subst;
-   }
-   else if (Decl->isVariadic()) {
-      if (expandVariadicDecl(Decl))
-         return nullptr;
-
-      // still in a dependent context, instantiate normally
-   }
 
    auto Inst = FieldDecl::Create(Context, Decl->getAccess(),
                                  Decl->getVarOrLetLoc(), Decl->getColonLoc(),
@@ -1780,11 +1762,14 @@ CompoundDecl* InstantiatorImpl::visitCompoundDecl(CompoundDecl *D)
    auto Inst = CompoundDecl::Create(Context, D->getLBraceLoc(),
                                     D->isTransparent());
 
-   SemaPass::DeclContextRAII declContextRAII(SP, Inst,
-                                             SemaPass::SetParentContext);
+   SP.ActOnDecl(&SP.getDeclContext(), Inst);
 
-   for (auto &decl : D->getDecls())
-      visit(decl);
+   for (auto &decl : D->getDecls()) {
+      auto *declInst = visit(decl);
+      if (declInst) {
+         SP.ActOnDecl(Inst, declInst);
+      }
+   }
 
    Inst->setRBraceLoc(D->getRBraceLoc());
    return Inst;
@@ -1810,7 +1795,7 @@ void InstantiatorImpl::copyArgListAndFindVariadic(
                                  SmallVectorImpl<FuncArgDecl*> &Variadics){
    auto argList = C->getArgs();
    for (auto arg : argList) {
-      if (!arg->isVariadicArgPackExpansion()) {
+      if (!arg->isVariadic()) {
          auto *argInst = clone(arg);
          Variadics.push_back(argInst);
          instantiationMap.try_emplace(arg, argInst);
@@ -1941,19 +1926,12 @@ InstantiatorImpl::visitFuncArgDecl(FuncArgDecl *Decl)
 {
    bool IsSubstitution = false;
    DeclarationName DeclName = Decl->getDeclName();
-   if (auto Subst = getVariadicArgumentSubst(Decl->getIdentifierInfo())) {
-      DeclName = Subst;
-      IsSubstitution = true;
-   }
-   else {
-      assert(!Decl->isVariadic() && "should be handled specially!");
-   }
 
    auto *Inst = FuncArgDecl::Create(Context, Decl->getOwnershipLoc(),
                               Decl->getColonLoc(), DeclName, Decl->getLabel(),
                               Decl->getConvention(), visit(Decl->getType()),
                               copyOrNull(Decl->getDefaultVal()),
-                              Decl->isVariadicArgPackExpansion()
+                              Decl->isVariadic()
                                   && !IsSubstitution,
                               Decl->isCstyleVararg(), Decl->isSelf());
 
@@ -2151,81 +2129,106 @@ Expression* InstantiatorImpl::makeLiteralExpr(Expression *Expr,
 
 Expression* InstantiatorImpl::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
 {
-   if (!Ident->getParentExpr()) {
-      if (auto Arg = hasTemplateArg(Ident->getDeclName())) {
-         if (Arg->isVariadic()) {
-            auto Subst = getParameterSubst(Ident->getDeclName());
-
-            assert(Subst && "didn't diagnose unexpanded parameter pack!");
-
-            return new(Context) IdentifierRefExpr(
-               Ident->getSourceLoc(), IdentifierKind::MetaType,
-               getContext().getMetaType(Subst->getType()));
-         }
-
-         if (Arg->isType()) {
-            return new(Context) IdentifierRefExpr(
-               Ident->getSourceLoc(), IdentifierKind::MetaType,
-               getContext().getMetaType(Arg->getType()));
-         }
-
-         return StaticExpr::Create(Context, Arg->getParam()->getValueType(),
-                                   Ident->getSourceRange(),
-                                   Arg->getValue());
-      }
-
-      if (ValueSubst.Name == Ident->getIdentInfo()) {
-         return StaticExpr::Create(Context, ValueSubst.SubstVal->getType(),
-                                   Ident->getSourceRange(),
-                                   ValueSubst.SubstVal);
-      }
-   }
-
-   DeclarationName DeclName;
-   if (Ident->getKind() == IdentifierKind::FunctionArg) {
-      if (Ident->getFuncArg()->isVariadicArgPackExpansion()) {
-         DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
-      }
-   }
-   else if (Ident->getKind() == IdentifierKind::Field
-            || Ident->getKind() == IdentifierKind::StaticField) {
-      if (Ident->getFieldDecl()->isVariadic()) {
-         DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
-      }
-   }
-
-   if (!DeclName)
-      DeclName = Ident->getDeclName();
-
-   auto Inst = new(Context) IdentifierRefExpr(Ident->getSourceLoc(), DeclName,
-                                              nullptr);
-
-   Inst->setSelf(Ident->isSelf());
-   Inst->setParentExpr(copyOrNull(Ident->getParentExpr()));
-   Inst->setIsPointerAccess(Ident->isPointerAccess());
-   Inst->setAllowNamespaceRef(Ident->allowNamespaceRef());
-   Inst->setLeadingDot(Ident->hasLeadingDot());
-
-   auto *NameSpec = Ident->getNameSpec();
-   if (NameSpec && Ident->isInTypePosition()) {
-      QualType T = Context.getDependentNameType(NameSpec);
-      T = visit(SourceType(T));
-
-      if (auto *DN = dyn_cast<DependentNameType>(T)) {
-         Ident->setNameSpec(DN->getNameSpecWithLoc());
-      }
-      else {
-         Ident->setNameSpec(NameSpec);
-      }
-   }
-
-   return Inst;
+   llvm_unreachable("should never be instantiated");
+//   if (!Ident->getParentExpr()) {
+//      if (auto Arg = hasTemplateArg(Ident->getDeclName())) {
+//         if (Arg->isVariadic()) {
+//            auto Subst = getParameterSubst(Ident->getDeclName());
+//
+//            assert(Subst && "didn't diagnose unexpanded parameter pack!");
+//
+//            return new(Context) IdentifierRefExpr(
+//               Ident->getSourceLoc(), IdentifierKind::MetaType,
+//               getContext().getMetaType(Subst->getType()));
+//         }
+//
+//         if (Arg->isType()) {
+//            return new(Context) IdentifierRefExpr(
+//               Ident->getSourceLoc(), IdentifierKind::MetaType,
+//               getContext().getMetaType(Arg->getType()));
+//         }
+//
+//         return StaticExpr::Create(Context, Arg->getParam()->getValueType(),
+//                                   Ident->getSourceRange(),
+//                                   Arg->getValue());
+//      }
+//
+//      if (ValueSubst.Name == Ident->getIdentInfo()) {
+//         return StaticExpr::Create(Context, ValueSubst.SubstVal->getType(),
+//                                   Ident->getSourceRange(),
+//                                   ValueSubst.SubstVal);
+//      }
+//   }
+//
+//   DeclarationName DeclName;
+//   if (Ident->getKind() == IdentifierKind::FunctionArg) {
+//      if (Ident->getFuncArg()->isVariadicArgPackExpansion()) {
+//         DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
+//      }
+//   }
+//   else if (Ident->getKind() == IdentifierKind::Field
+//            || Ident->getKind() == IdentifierKind::StaticField) {
+//      if (Ident->getFieldDecl()->isVariadic()) {
+//         DeclName = getVariadicArgumentSubst(Ident->getIdentInfo());
+//      }
+//   }
+//
+//   if (!DeclName)
+//      DeclName = Ident->getDeclName();
+//
+//   auto Inst = new(Context) IdentifierRefExpr(Ident->getSourceLoc(), DeclName,
+//                                              nullptr);
+//
+//   Inst->setSelf(Ident->isSelf());
+//   Inst->setParentExpr(copyOrNull(Ident->getParentExpr()));
+//   Inst->setIsPointerAccess(Ident->isPointerAccess());
+//   Inst->setAllowNamespaceRef(Ident->allowNamespaceRef());
+//   Inst->setLeadingDot(Ident->hasLeadingDot());
+//
+//   auto *NameSpec = Ident->getNameSpec();
+//   if (NameSpec && Ident->isInTypePosition()) {
+//      QualType T = Context.getDependentNameType(NameSpec);
+//      T = visit(SourceType(T));
+//
+//      if (auto *DN = dyn_cast<DependentNameType>(T)) {
+//         Ident->setNameSpec(DN->getNameSpecWithLoc());
+//      }
+//      else {
+//         Ident->setNameSpec(NameSpec);
+//      }
+//   }
+//
+//   return Inst;
 }
 
 Expression* InstantiatorImpl::visitDeclRefExpr(DeclRefExpr *Expr)
 {
    auto *decl = Expr->getDecl();
    switch (decl->getKind()) {
+   case Decl::LocalVarDeclID: {
+      auto *localVar = cast<LocalVarDecl>(decl);
+      if (localVar->isVariadicForDecl()) {
+         auto *subst = getVariadicSubstitution(
+            localVar->getDeclName().getLocalVarName(), Expr->getSourceRange());
+
+         assert(subst && "no substitution for variadic parameter!");
+         return subst;
+      }
+
+      goto case_default;
+   }
+   case Decl::AliasDeclID: {
+      auto *alias = cast<AliasDecl>(decl);
+      if (alias->isVariadicForDecl()) {
+         auto *subst = getVariadicSubstitution(
+            alias->getDeclName().getLocalVarName(), Expr->getSourceRange());
+
+         assert(subst && "no substitution for variadic parameter!");
+         return subst;
+      }
+
+      goto case_default;
+   }
    case Decl::AssociatedTypeDeclID: {
       assert(Self && "no Self type to find associated type implementation!");
 
@@ -2254,8 +2257,9 @@ Expression* InstantiatorImpl::visitDeclRefExpr(DeclRefExpr *Expr)
             Context.getMetaType(arg->getType()));
       }
 
-      LLVM_FALLTHROUGH;
+      goto case_default;
    }
+   case_default:
    default:
       return DeclRefExpr::Create(Context, getInstantiation<NamedDecl>(decl),
                                  Expr->getSourceRange());
@@ -2317,31 +2321,38 @@ InstantiatorImpl::instantiateTemplateArgs(FinalTemplateArgumentList *templateArg
                                           NamedDecl *Template) {
    TemplateArgList realTemplateArgs(SP, Template);
    for (const auto &TA : *templateArgs) {
-      instantiateTemplateArgument(TA, realTemplateArgs);
+      instantiateTemplateArgument(TA, realTemplateArgs, false);
    }
 
    return FinalTemplateArgumentList::Create(SP.Context, realTemplateArgs);
 }
 
 void InstantiatorImpl::instantiateTemplateArgument(const TemplateArgument &TA,
-                                                   TemplateArgList &list) {
+                                                   TemplateArgList &list,
+                                                   bool variadic) {
    if (TA.isVariadic()) {
       for (const auto &VA : TA.getVariadicArgs()) {
-         instantiateTemplateArgument(VA, list);
+         instantiateTemplateArgument(VA, list, true);
       }
 
       return;
    }
 
+   TemplateArgument newArg;
    if (TA.isValue()) {
       auto *valueExpr = cast<StaticExpr>(visit(TA.getValueExpr()));
-      list.setParamValue(TA.getParam(),
-                         TemplateArgument(TA.getParam(), valueExpr, TA.getLoc()));
+      newArg = TemplateArgument(TA.getParam(), valueExpr, TA.getLoc());
    }
    else {
       auto type = visit(TA.getType());
-      list.setParamValue(TA.getParam(),
-                         TemplateArgument(TA.getParam(), type, TA.getLoc()));
+      newArg = TemplateArgument(TA.getParam(), type, TA.getLoc());
+   }
+
+   if (variadic) {
+      list.getArgForParam(TA.getParam())->getVariadicArgs().push_back(move(newArg));
+   }
+   else {
+      list.setParamValue(TA.getParam(), move(newArg));
    }
 }
 
@@ -2359,9 +2370,10 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr *node)
    if (Expression *PE = dyn_cast_or_null<MemberRefExpr>(node->getParentExpr())) {
       PE = PE->getParentExpr();
 
-      QualType lookupType = visit(SourceType(PE->getExprType()->removeReference()));
-      NamedDecl *decl;
+      QualType lookupType = visit(SourceType(PE->getExprType()->removeReference()))
+         ->removeMetaType();
 
+      NamedDecl *decl;
       if (SP.QC.FindEquivalentDecl(decl, func,
                                    cast<DeclContext>(SP.getTypeDecl(lookupType)),
                                    lookupType)) {
@@ -2964,6 +2976,10 @@ Decl* InstantiatorImpl::visitStaticIfDecl(StaticIfDecl *node)
 
 Decl* InstantiatorImpl::visitStaticForDecl(StaticForDecl *node)
 {
+   if (node->isVariadic()) {
+      return visitVariadicForDecl(node);
+   }
+
    auto Decl = StaticForDecl::Create(Context, node->getStaticLoc(),
                                      node->getRBRaceLoc(),
                                      node->getElementName(),
@@ -2992,8 +3008,146 @@ Statement* InstantiatorImpl::visitStaticIfStmt(StaticIfStmt *node)
                                visitStaticExpr(node->getCondition()), Template);
 }
 
+template<class CallbackFn>
+void expandVariadicStmt(InstantiatorImpl &instantiator,
+                        ASTContext &Context,
+                        NamedDecl *decl,
+                        DeclarationName elementName,
+                        DeclarationName declName,
+                        CallbackFn &&callbackFn) {
+   TemplateParamDecl *param;
+   bool isMeta;
+
+   if (auto *localVar = dyn_cast<LocalVarDecl>(decl)) {
+      isMeta = false;
+      param = localVar->getType()->asTemplateParamType()->getParam();
+   }
+   else {
+      isMeta = true;
+      param = cast<AliasDecl>(decl)->getType()->removeMetaType()
+                                   ->asTemplateParamType()->getParam();
+   }
+
+   auto *subst = instantiator.hasTemplateArg(param);
+
+   SmallVector<Statement*, 4> stmts;
+   stmts.reserve(subst->getVariadicArgs().size());
+
+   int i = 0;
+   for (auto &VA : subst->getVariadicArgs()) {
+      std::function<Expression*(SourceRange)> makeSubstExpr;
+      if (isMeta) {
+         makeSubstExpr = [&](SourceRange SR) {
+            return new(Context) IdentifierRefExpr(
+               SR, IdentifierKind::MetaType,
+               Context.getMetaType(VA.getType()));
+         };
+      }
+      else {
+         DeclarationName instName = Context.getDeclNameTable()
+                                           .getPackExpansionName(declName, i);
+
+         makeSubstExpr = [&](SourceRange SR) {
+            return new(Context) IdentifierRefExpr(SR, instName);
+         };
+      }
+
+      InstantiatorImpl::SubstContextRAII substContext(
+         instantiator, param, elementName, i, move(makeSubstExpr));
+
+      callbackFn();
+      ++i;
+   }
+}
+
+Expression*
+InstantiatorImpl::visitVariadicExpansionExpr(VariadicExpansionExpr *Expr)
+{
+   SmallVector<Expression*, 2> Exprs;
+   visitVariadicExpansionExpr(Expr, Exprs);
+
+   auto *tup = TupleLiteral::Create(Context, Expr->getSourceRange(), Exprs);
+
+   ConversionSequenceBuilder convSeq;
+   convSeq.addStep(CastKind::ToEmptyTuple, Context.getEmptyTupleType());
+
+   return ImplicitCastExpr::Create(
+      Context, tup, ConversionSequence::Create(Context, convSeq));
+}
+
+void
+InstantiatorImpl::visitVariadicExpansionExpr(VariadicExpansionExpr *Expr,
+                                             SmallVectorImpl<Expression*> &Exprs) {
+   auto *expandedExpr = Expr->getExpr();
+   auto *decl = Expr->getParameterPack();
+   DeclarationName declName = decl->getDeclName();
+
+   expandVariadicStmt(*this, Context, Expr->getElementDecl(), declName, declName, [&]() {
+      auto result = visit(expandedExpr);
+      if (result) {
+         Exprs.push_back(result);
+      }
+   });
+}
+
+Statement* InstantiatorImpl::visitVariadicForStmt(StaticForStmt *node)
+{
+   DeclarationName declName;
+   if (auto *declRef = dyn_cast<DeclRefExpr>(node->getRange()->getExpr())) {
+      declName = declRef->getDecl()->getDeclName();
+   }
+   else {
+      declName = cast<MemberRefExpr>(
+         node->getRange()->getExpr())->getMemberDecl()->getDeclName();
+   }
+
+   auto *decl = node->getVariadicDecl();
+
+   DeclarationName elementName = node->getElementName();
+   SmallVector<Statement*, 4> stmts;
+
+   expandVariadicStmt(*this, Context, decl, elementName, declName, [&]() {
+      auto bodyInst = visit(node->getBody());
+      if (bodyInst) {
+         stmts.push_back(bodyInst);
+      }
+   });
+
+   return CompoundStmt::Create(Context, stmts, true,
+                               node->getSourceRange().getStart(),
+                               node->getSourceRange().getEnd());
+}
+
+Decl* InstantiatorImpl::visitVariadicForDecl(StaticForDecl *Decl)
+{
+   DeclarationName declName;
+   if (auto *declRef = dyn_cast<DeclRefExpr>(Decl->getRange()->getExpr())) {
+      declName = declRef->getDecl()->getDeclName();
+   }
+   else {
+      llvm_unreachable("should not be possible");
+   }
+
+   auto *decl = Decl->getVariadicDecl();
+   DeclarationName elementName = Decl->getElementName();
+
+   auto *compoundDecl = CompoundDecl::Create(Context, Decl->getSourceLoc(), true);
+   SP.ActOnDecl(&SP.getDeclContext(), compoundDecl);
+
+   SemaPass::DeclContextRAII DCR(SP, compoundDecl);
+   expandVariadicStmt(*this, Context, decl, elementName, declName, [&]() {
+      (void) visit(Decl->getBodyDecl());
+   });
+
+   return compoundDecl;
+}
+
 Statement* InstantiatorImpl::visitStaticForStmt(StaticForStmt *node)
 {
+   if (node->isVariadic()) {
+      return visitVariadicForStmt(node);
+   }
+
    return StaticForStmt::Create(Context, node->getStaticLoc(),
                                 node->getForLoc(), node->getElementName(),
                                 visitStaticExpr(node->getRange()),
@@ -3361,27 +3515,27 @@ QueryResult InstantiateRecordQuery::run()
    auto &InstInfo = QC.RecordMeta[Inst];
 
    // Make all declarations visible without instantiating them.
-   for (auto *D : Template->getDecls<NamedDecl>()) {
-      if (D->isSynthesized()) {
+   for (auto *ND : Template->getDecls<NamedDecl>()) {
+      if (ND->isSynthesized()) {
          continue;
       }
 
       // Don't instantiate template parameters.
-      if (isa<TemplateParamDecl>(D)) {
+      if (isa<TemplateParamDecl>(ND)) {
          continue;
       }
 
       if (OuterInst) {
          NamedDecl *Result;
-         if (auto Err = QC.InstantiateTemplateMember(Result, D, Inst,
+         if (auto Err = QC.InstantiateTemplateMember(Result, ND, Inst,
                                                      TemplateArgs,
                                                      PointOfInstantiation)) {
             QueryResult::update(K, Err.K);
          }
       }
       else {
-         SP.makeDeclAvailable(*Inst, getNameFor(QC.Context, D, Inst), D);
-         updateSpecialFunction(QC, D, D, Template, Inst, TemplateInfo,
+         SP.makeDeclAvailable(*Inst, getNameFor(QC.Context, ND, Inst), ND);
+         updateSpecialFunction(QC, ND, ND, Template, Inst, TemplateInfo,
                                InstInfo);
       }
    }
@@ -3419,6 +3573,48 @@ QueryResult InstantiateRecordQuery::run()
             SP.makeDeclAvailable(*Inst, getNameFor(QC.Context, D, Inst), D);
             updateSpecialFunction(QC, D, D, Template, Inst, TemplateInfo,
                                   InstInfo);
+         }
+      }
+   }
+
+   // Now instantiate meta declarations.
+   SmallVector<Decl*, 2> metaDecls;
+   for (auto *D : Template->getDecls<Decl>()) {
+      switch (D->getKind()) {
+      case Decl::StaticIfDeclID:
+      case Decl::StaticForDeclID:
+      case Decl::StaticAssertDeclID:
+      case Decl::StaticPrintDeclID: {
+         metaDecls.push_back(D);
+         break;
+      }
+      default:
+         break;
+      }
+   }
+
+   if (!metaDecls.empty()) {
+      // Mark query as finished here.
+//      finish(Inst);
+
+      InstantiatorImpl Instantiator(*QC.Sema, *TemplateArgs,
+                                    Template,
+                                    QC.Context.getRecordType(Inst),
+                                    PointOfInstantiation);
+
+      SemaPass::DeclContextRAII DCR(*QC.Sema, Inst);
+      for (auto *metaDecl : metaDecls) {
+         auto *inst = Instantiator.instantiateDecl(metaDecl);
+         if (!inst) {
+            continue;
+         }
+
+         if (auto *compoundDecl = dyn_cast<CompoundDecl>(inst)) {
+            for (auto *innerCompoundDecl : compoundDecl->getDecls<CompoundDecl>()) {
+               for (auto *innerDecl : innerCompoundDecl->getDecls<NamedDecl>()) {
+                  QC.Sema->makeDeclAvailable(*Inst, innerDecl);
+               }
+            }
          }
       }
    }

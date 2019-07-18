@@ -246,7 +246,7 @@ bool FileManager::wasIncludedFrom(SourceID CurrentFile,
       BaseFileFromIncluded = BaseFileFromIncluded->getValue().IncludedFrom;
    }
 
-   return BaseFileFromCurrent == BaseFileFromIncluded;
+   return BaseFileFromCurrent && BaseFileFromCurrent == BaseFileFromIncluded;
 }
 
 SourceLocation FileManager::getAliasLoc(SourceID sourceId)

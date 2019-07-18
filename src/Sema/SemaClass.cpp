@@ -125,6 +125,7 @@ QueryResult DeclareImplicitDefaultInitQuery::run()
 
    Decl->setSynthesized(true);
    Decl->setDefaultInitializer(true);
+   Decl->setMutating(true);
 
    if (S->isInstantiation()) {
       Decl->setMethodID(cast<StructDecl>(S->getSpecializedTemplate())
@@ -269,8 +270,59 @@ static bool resolveBaseClass(QueryContext &QC, ClassDecl *D)
    return false;
 }
 
+bool SemaPass::canUseClass(SourceLocation Loc)
+{
+   if (canUseClassVal.hasValue()) {
+      return canUseClassVal.getValue();
+   }
+
+   const char *missingFn = nullptr;
+   if (!getAtomicReleaseDecl()) {
+      missingFn = "_cdot_AtomicRelease";
+   }
+   else if (!getCopyClassDecl()) {
+      missingFn = "_cdot_CopyClass";
+   }
+   else if (!getPureVirtualDecl()) {
+      missingFn = "_cdot_PureVirtual";
+   }
+
+   canUseClassVal = missingFn == nullptr;
+
+   if (missingFn != nullptr) {
+      diagnose(
+         err_generic_error,
+         std::string("'class' cannot be used because the builtin declaration for '")
+            + missingFn + "' is missing", Loc);
+
+      auto &options = getCompilationUnit().getOptions();
+      if (options.noPrelude()) {
+         StringRef commandLineArgs = options.getCommandLineArguments();
+         size_t offset = commandLineArgs.find("-no-prelude");
+
+         // Max length: 80
+         if (commandLineArgs.size() > 80) {
+            commandLineArgs = commandLineArgs.substr(offset - 35, 80);
+            offset = commandLineArgs.find("-no-prelude");
+         }
+
+         SourceLocation optLoc(offset);
+         diagnose(note_generic_note,
+                  "try removing the command line argument '-no-prelude'",
+                  FakeSourceLocation { commandLineArgs.str() },
+                  SourceRange(optLoc, optLoc.offsetBy(11)));
+      }
+   }
+
+   return canUseClassVal.getValue();
+}
+
 QueryResult PrepareClassInterfaceQuery::run()
 {
+   if (!QC.Sema->canUseClass(D->getSourceLoc())) {
+      return fail();
+   }
+
    if (resolveBaseClass(QC, D)) {
       return fail();
    }
@@ -953,8 +1005,6 @@ QueryResult PreparePropInterfaceQuery::run()
 
    if (Decl->isProtocolRequirement() && !Decl->isProtocolDefaultImpl()) {
       QualType Type = Decl->getType();
-
-      // FIXME into-query
       if (QC.Sema->ContainsAssociatedTypeConstraint(Type)) {
          cast<ProtocolDecl>(R)->setHasAssociatedTypeConstraint(true);
       }
@@ -968,7 +1018,9 @@ QueryResult PreparePropInterfaceQuery::run()
       if (D->isReadWrite() && !Decl->getSetterMethod()) {
          auto *Ptr = QC.Sema->getUnsafeMutablePtrDecl();
          if (!Ptr) {
-            QC.Sema->diagnose(err_no_builtin_decl, 100);
+            QC.Sema->diagnose(err_no_builtin_decl, BuiltinFeature::ReadWriteProperty,
+                              Getter->getSourceLoc());
+
             return fail();
          }
 
@@ -1071,6 +1123,7 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
       Getter->setSynthesized(true);
       Getter->setSubscript(true);
 
+      Getter->setReturnType(res.get());
       Getter->setLexicalContext(Decl->getLexicalContext());
       Getter->setLogicalContext(Decl->getDeclContext());
 
@@ -1085,6 +1138,7 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
    }
 
    if (auto *Setter = Decl->getSetterMethod()) {
+      Setter->getArgs().back()->setType(res.get());
       Setter->getArgs().back()->getDefaultVal()->setExprType(res.get());
 
       Setter->setSynthesized(true);

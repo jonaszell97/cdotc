@@ -643,12 +643,13 @@ StaticForStmt::StaticForStmt(SourceLocation StaticLoc,
                              Statement *body)
    : Statement(StaticForStmtID),
      StaticLoc(StaticLoc), ForLoc(ForLoc),
-     elementName(elementName), range(range), body(body)
+     elementName(elementName), range(range), body(body),
+     variadic(false)
 {}
 
 StaticForStmt::StaticForStmt(EmptyShell)
    : Statement(StaticForStmtID),
-     range(nullptr), body(nullptr)
+     range(nullptr), body(nullptr), variadic(false)
 {}
 
 StaticForStmt* StaticForStmt::Create(ASTContext &C,

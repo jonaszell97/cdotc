@@ -1741,6 +1741,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    bool AllowIncompleteTemplateArgs : 1;
    bool AllowNamespaceRef : 1;
    bool AllowOverloadRef : 1;
+   bool AllowVariadicRef : 1;
    bool LeadingDot      : 1;
    bool IssueDiag       : 1;
 
@@ -1900,6 +1901,9 @@ public:
 
    bool allowNamespaceRef() const { return AllowNamespaceRef; }
    void setAllowNamespaceRef(bool V) { AllowNamespaceRef = V; }
+
+   bool allowVariadicRef() const { return AllowVariadicRef; }
+   void setAllowVariadicRef(bool V) { AllowVariadicRef = V; }
 
    bool isCapture() const { return IsCapture; }
    void setIsCapture(bool C) { IsCapture = C; }
@@ -2423,6 +2427,7 @@ class AnonymousCallExpr final: public Expression,
    SourceRange ParenRange;
 
    Expression *ParentExpr;
+   Expression *SelfVal;
    FunctionType *FnTy;
 
    unsigned NumArgs     : 31;
@@ -2449,6 +2454,9 @@ public:
 
    Expression *getParentExpr() const { return ParentExpr; }
    void setParentExpr(Expression *PE) { ParentExpr = PE; }
+
+   Expression *getSelfVal() const { return SelfVal; }
+   void setSelfVal(Expression *E) { SelfVal = E; }
 
    FunctionType *getFunctionType() const { return FnTy; }
    void setFunctionType(FunctionType *FnTy) { AnonymousCallExpr::FnTy = FnTy; }
@@ -2845,7 +2853,7 @@ public:
    static MixinExpr *Create(ASTContext &C, SourceRange Parens,
                             Expression *Expr);
 
-   MixinExpr(EmptyShell Empty);
+   explicit MixinExpr(EmptyShell Empty);
 
    SourceRange getSourceRange() const { return Parens; }
    void setParens(SourceRange SR) { Parens = SR; }
@@ -2863,6 +2871,40 @@ private:
    Expression *Expr;
 };
 
+class VariadicExpansionExpr: public Expression {
+   VariadicExpansionExpr(SourceLocation EllipsisLoc, Expression *Expr);
+
+   SourceLocation EllipsisLoc;
+   Expression *Expr;
+
+   NamedDecl *parameterPack = nullptr;
+   NamedDecl *elementDecl = nullptr;
+
+public:
+   static VariadicExpansionExpr *Create(ASTContext &C,
+                                        SourceLocation EllipsisLoc,
+                                        Expression *Expr);
+
+   explicit VariadicExpansionExpr(EmptyShell Empty);
+
+   SourceLocation getEllipsisLoc() const { return EllipsisLoc; }
+   void setEllipsisLoc(SourceLocation loc) { this->EllipsisLoc = loc; }
+
+   SourceRange getSourceRange() const;
+
+   Expression *getExpr() const { return Expr; }
+   void setExpr(Expression *E) { Expr = E; }
+
+   NamedDecl *getParameterPack() const { return parameterPack; }
+   void setParameterPack(NamedDecl *D) { parameterPack = D; }
+
+   NamedDecl *getElementDecl() const { return elementDecl; }
+   void setElementDecl(NamedDecl *D) { elementDecl = D; }
+
+   static bool classofKind(NodeType kind) { return kind == VariadicExpansionExprID; }
+   static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }
+};
+
 class MacroVariableExpr: public Expression {
    explicit MacroVariableExpr(Expression *E);
 
@@ -2870,7 +2912,7 @@ class MacroVariableExpr: public Expression {
 
 public:
    static MacroVariableExpr *Create(ASTContext &C, Expression *E);
-   MacroVariableExpr(EmptyShell Empty);
+   explicit MacroVariableExpr(EmptyShell Empty);
 
    static bool classofKind(NodeType kind){ return kind == MacroVariableExprID; }
    static bool classof(AstNode const *T) { return classofKind(T->getTypeID()); }

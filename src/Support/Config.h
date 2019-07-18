@@ -5,6 +5,10 @@
 #ifndef CDOT_CONFIG_H
 #define CDOT_CONFIG_H
 
+#define CDOT_VERSION_MAJOR    0
+#define CDOT_VERSION_MINOR    1
+#define CDOT_VERSION_PATCH    0
+
 #ifndef __has_feature
 #  define __has_feature(x) 0
 #endif

@@ -337,6 +337,7 @@ def IsTriviallyCopyable : TypeMetaQuery
 def NeedsRetainOrRelease : TypeMetaQuery
 def NeedsDeinitilization : TypeMetaQuery
 def NeedsStructReturn : TypeMetaQuery
+def PassByValue : TypeMetaQuery
 def ContainsAssociatedTypeConstraint : TypeMetaQuery
 
 def IsImplicitlyConvertible : BoolQuery {

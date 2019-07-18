@@ -129,6 +129,7 @@ class QueryClassEmitter {
       StringRef CustomGet;
       StringRef CustomAssign;
       StringRef CustomHeaderCode;
+      StringRef CustomPreReturnCode;
       StringRef ConstructorCode;
       StringRef CustomImplCode;
       StringRef PersistentState;
@@ -220,6 +221,8 @@ void QueryClassEmitter::Setup()
          ->getCode();
       Info.CustomHeaderCode = cast<CodeBlock>(
          Query->getFieldValue("customHeaderCode"))->getCode();
+      Info.CustomPreReturnCode = cast<CodeBlock>(
+         Query->getFieldValue("customPreReturnCode"))->getCode();
       Info.ConstructorCode = cast<CodeBlock>(
          Query->getFieldValue("constructorCode"))->getCode();
       Info.PersistentState = cast<CodeBlock>(
@@ -1163,6 +1166,10 @@ void QueryClassEmitter::EmitQueryContextImpls()
                OS << "   if (It != " << HashMap << ".end()) {\n";
 
                if (Info.Infallible) {
+                  if (!Info.CustomPreReturnCode.empty()) {
+                     OS << "      " << Info.CustomPreReturnCode;
+                  }
+
                   if (!Info.CustomAssign.empty()) {
                      OS << "      return " << Info.CustomAssign << ";";
                   }
@@ -1171,6 +1178,10 @@ void QueryClassEmitter::EmitQueryContextImpls()
                   }
                }
                else {
+                  if (!Info.CustomPreReturnCode.empty()) {
+                     OS << "      " << Info.CustomPreReturnCode;
+                  }
+
                   if (Info.Type != "void") {
                      if (!Info.CustomAssign.empty()) {
                         OS << "      Result = " << Info.CustomAssign << ";";
@@ -1226,11 +1237,13 @@ void QueryClassEmitter::EmitQueryContextImpls()
 
             if (Info.Infallible) {
                OS << "   if (" << Instance << ") {\n"
+                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      return;"
                   << "   }\n";
             }
             else {
                OS << "   if (" << Instance << ") {\n"
+                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      return QueryResult(QueryResult::Success);"
                   << "   }\n";
             }
@@ -1240,11 +1253,13 @@ void QueryClassEmitter::EmitQueryContextImpls()
 
             if (Info.Infallible) {
                OS << "   if (" << Instance << ") {\n"
+                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      return Instance.getValue();"
                   << "   }\n";
             }
             else {
                OS << "   if (" << Instance << ") {\n"
+                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      Result = Instance.getValue();"
                   << "      return QueryResult(QueryResult::Success);"
                   << "   }\n";
@@ -1297,10 +1312,15 @@ void QueryClassEmitter::EmitQueryContextImpls()
             }
          }
 
+         if (!Info.CustomPreReturnCode.empty()) {
+            OS << "      " << Info.CustomPreReturnCode;
+         }
+
          if (Info.Infallible) {
             OS << "return;";
          }
          else {
+
             OS << "return QueryResult(QueryResult::Success);";
          }
       }
@@ -1325,6 +1345,10 @@ void QueryClassEmitter::EmitQueryContextImpls()
                }
             }
 
+            if (!Info.CustomPreReturnCode.empty()) {
+               OS << "      " << Info.CustomPreReturnCode;
+            }
+
             OS << "return Result;";
          }
          else {
@@ -1340,11 +1364,20 @@ void QueryClassEmitter::EmitQueryContextImpls()
                }
             }
 
+            if (!Info.CustomPreReturnCode.empty()) {
+               OS << "      " << Info.CustomPreReturnCode;
+            }
+
             OS << "return QueryResult(QueryResult::Success);";
          }
       }
       else if (Info.Infallible) {
          std::string ReturnResult;
+         if (!Info.CustomPreReturnCode.empty()) {
+            ReturnResult += Info.CustomPreReturnCode;
+            ReturnResult += "\n";
+         }
+
          if (Info.GetReturnType != "void") {
             ReturnResult += "return _Q->get()";
          }
@@ -1385,6 +1418,11 @@ void QueryClassEmitter::EmitQueryContextImpls()
       }
       else {
          std::string AssignResult;
+         if (!Info.CustomPreReturnCode.empty()) {
+            AssignResult += Info.CustomPreReturnCode;
+            AssignResult += "\n";
+         }
+
          if (Info.GetReturnType != "void") {
             AssignResult += "Result = _Q->get();";
          }

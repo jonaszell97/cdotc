@@ -233,10 +233,7 @@ void TemplateArgument::Profile(llvm::FoldingSetNodeID &ID,
                                bool Canonicalize) const {
    uint8_t Flags = IsType
       | (IsVariadic << 1)
-      | (IsNull << 2)
-      | (Dependent << 3)
-      | (Frozen << 4)
-      | (Runtime << 5);
+      | (IsNull << 2);
 
    ID.AddInteger(Flags);
    ID.AddPointer(getParam());
@@ -246,8 +243,10 @@ void TemplateArgument::Profile(llvm::FoldingSetNodeID &ID,
    }
 
    if (isVariadic()) {
-      for (auto &VA : getVariadicArgs())
-         VA.Profile(ID);
+      ID.AddInteger(getVariadicArgs().size());
+      for (auto &VA : getVariadicArgs()) {
+         VA.Profile(ID, Canonicalize);
+      }
    }
    else if (isType()) {
       if (Canonicalize) {

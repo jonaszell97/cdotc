@@ -422,6 +422,10 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
    if (ArgExpr)
       TemplateArgs = ArgExpr->getExprs();
 
+   if (Ident->getDeclName().isStr("Element")) {
+       NO_OP;
+   }
+
    // Check if this expressions parent expr refers to a namespace.
    auto *NameSpec = checkNamespaceRef(Ident);
    if (Ident->isInvalid()) {
@@ -511,6 +515,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
       if (auto *R = NoSugar->asRecordType()) {
          Ident->setDeclCtx(R->getRecord());
+      }
+      else if (auto *TP = NoSugar->asTemplateParamType()) {
+         Ident->setDeclCtx(TP->getCovariance()->getRecord());
       }
       else if (Ident->getDeclName().isAnyOperatorName()) {
          Ident->setDeclCtx(DeclCtx);
@@ -867,12 +874,43 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr *Ident,
 
       break;
    }
-   case Decl::FieldDeclID:
+   case Decl::FuncArgDeclID: {
+      auto *arg = cast<FuncArgDecl>(FoundDecl);
+      if (arg->isVariadic() && !Ident->allowVariadicRef()) {
+         diagnose(
+            Ident, err_generic_error,
+            "variadic function argument can only be referenced in a for... statement",
+            Ident->getSourceRange());
+      }
+
+      break;
+   }
+   case Decl::TemplateParamDeclID: {
+      auto *param = cast<TemplateParamDecl>(FoundDecl);
+      if (param->isVariadic() && !Ident->allowVariadicRef()) {
+         diagnose(
+            Ident, err_generic_error,
+            "variadic template parameter can only be referenced in a for... statement",
+            Ident->getSourceRange());
+      }
+
+      break;
+   }
+   case Decl::FieldDeclID: {
       if (FoundDecl->isStatic()) {
          break;
       }
 
+      auto *field = cast<FieldDecl>(FoundDecl);
+      if (field->isVariadic() && !Ident->allowVariadicRef()) {
+         diagnose(
+            Ident, err_generic_error,
+            "variadic field can only be referenced in a for... statement",
+            Ident->getSourceRange());
+      }
+
       LLVM_FALLTHROUGH;
+   }
    case Decl::PropDeclID:
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
@@ -931,12 +969,17 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr *Expr)
    }
 
    auto *ND = Expr->getDecl();
+   checkAccessibility(ND, Expr);
 
    QualType ResultType;
    switch (ND->getKind()) {
    case Decl::AliasDeclID: {
       if (QC.PrepareDeclInterface(ND)) {
          return ExprError();
+      }
+
+      if (cast<AliasDecl>(ND)->isVariadicForDecl()) {
+         Expr->setNeedsInstantiation(true);
       }
 
       ResultType = cast<AliasDecl>(ND)->getType();
@@ -1007,6 +1050,11 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr *Expr)
          }
          if (QC.CheckAccessibility(DeclCtx, Var, Expr->getSourceLoc())) {
             Expr->setIsInvalid(true);
+         }
+      }
+      else if (auto *localVar = dyn_cast<LocalVarDecl>(ND)) {
+         if (localVar->isVariadicForDecl()) {
+            Expr->setNeedsInstantiation(true);
          }
       }
 
@@ -1094,6 +1142,8 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr *Expr)
    if (QC.PrepareDeclInterface(ND)) {
       return ExprError();
    }
+
+   checkAccessibility(ND, Expr);
 
    QualType ResultType;
    switch (ND->getKind()) {
@@ -2128,7 +2178,7 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr *Expr)
       auto rec = ty->getRecord();
       if (!isa<EnumDecl>(rec)) {
          diagnose(Expr, err_record_is_not_enum, Expr->getSourceLoc(),
-                  rec->getSpecifierForDiagnostic(), rec->getName());
+                  rec, rec->getName());
          return ExprError();
       }
 
@@ -2260,7 +2310,7 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr *Expr)
                                                         ->getUnderlyingType()
                                                         ->isRecordType()) {
       auto R = SubscriptedTy->asMetaType()->getUnderlyingType()->getRecord();
-      diagnose(Expr, err_not_a_template, R->getSpecifierForDiagnostic(),
+      diagnose(Expr, err_not_a_template,
                R->getDeclName(), Expr->getSourceRange());
 
       diagnose(note_declared_here, R->getSourceLoc());
@@ -2380,7 +2430,7 @@ void SemaPass::diagnoseMemberNotFound(ast::DeclContext *Ctx,
          case Decl::ProtocolDeclID: case Decl::NamespaceDeclID: {
             auto ND = cast<NamedDecl>(Ctx);
             diagnose(Subject, err_member_not_found, SR,
-                     ND->getSpecifierForDiagnostic(), ND->getDeclName(),
+                     ND, ND->getDeclName(),
                      memberName);
 
             return;
@@ -2413,10 +2463,9 @@ void SemaPass::diagnoseTemplateArgErrors(NamedDecl *Template,
                                          llvm::ArrayRef<Expression*>
                                                                    OriginalArgs,
                                          TemplateArgListResult &Cand) {
-   size_t selector = Template->getSpecifierForDiagnostic();
    diagnose(ErrorStmt, err_incompatible_template_args,
             ErrorStmt->getSourceRange(),
-            selector, Template->getName());
+            Template, Template->getName());
 
    switch (Cand.ResultKind) {
    case sema::TemplateArgListResultKind::TLR_CouldNotInfer: {
@@ -2629,7 +2678,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, StmtOrDecl SOD)
       }
 
       // declaration is not accessible here
-      diagnose(SOD, err_private_access, ND->getSpecifierForDiagnostic(),
+      diagnose(SOD, err_private_access, ND,
                ND->getDeclName(), SOD.getSourceRange());
 
       break;
@@ -2649,7 +2698,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, StmtOrDecl SOD)
       }
 
       // declaration is not accessible here
-      diagnose(SOD, err_protected_access, ND->getSpecifierForDiagnostic(),
+      diagnose(SOD, err_protected_access, ND,
                ND->getDeclName(), C->getDeclName(), SOD.getSourceRange());
 
       break;
@@ -2664,7 +2713,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, StmtOrDecl SOD)
          return;
 
       // declaration is not accessible here
-      diagnose(SOD, err_fileprivate_access, ND->getSpecifierForDiagnostic(),
+      diagnose(SOD, err_fileprivate_access, ND,
                ND->getDeclName(), FileMgr.getFileName(DeclID),
                SOD.getSourceRange());
 
@@ -2676,7 +2725,7 @@ void SemaPass::checkAccessibility(NamedDecl *ND, StmtOrDecl SOD)
          return;
       }
 
-      diagnose(SOD, err_internal_access, ND->getSpecifierForDiagnostic(),
+      diagnose(SOD, err_internal_access, ND,
                ND->getDeclName(),
                ND->getModule()->getBaseModule()->getDeclName(),
                SOD.getSourceRange());

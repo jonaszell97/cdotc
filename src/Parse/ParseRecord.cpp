@@ -189,6 +189,15 @@ ParseResult Parser::parseRecordLevelDecl()
    }
    case tok::open_brace:
       return parseCompoundDecl(false, false);
+   case tok::kw_for: {
+      if (!lookahead().is(tok::triple_period)) {
+         SP.diagnose(err_generic_error,
+            "only 'for...' declarations can appear in records",
+            currentTok().getSourceLoc());
+      }
+
+      return parseStaticForDecl(true);
+   }
    case tok::kw_static:
       AccessValid = false;
       switch (lookahead().getKind()) {
@@ -428,10 +437,7 @@ void Parser::parseClassHead(RecordHead &Head)
       }
       else if (next.is(Ident_where)) {
          advance();
-         advance();
-
-         Head.constraints.push_back(StaticExpr::Create(Context,
-            parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr()));
+         parseDeclConstraints(Head.constraints);
       }
       else {
          break;
@@ -481,16 +487,13 @@ ParseResult Parser::parseConstrDecl()
                                  move(params), nullptr, DeclarationName(),
                                  IsFallible);
 
-   llvm::TinyPtrVector<StaticExpr*> constraints;
-   while (lookahead().is(Ident_where)) {
+   SmallVector<DeclConstraint*, 4> Constraints;
+   if (lookahead().is(Ident_where)) {
       advance();
-      advance();
-
-      constraints.push_back(StaticExpr::Create(Context,
-         parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr()));
+      parseDeclConstraints(Constraints);
    }
 
-   Context.setConstraints(Init, constraints);
+   Context.setConstraints(Init, Constraints);
 
    Statement* body = nullptr;
    if (lexer->lookahead().is(tok::open_brace)) {
@@ -527,7 +530,7 @@ ParseResult Parser::parseDestrDecl()
    auto Deinit = DeinitDecl::Create(Context, Loc, nullptr, args);
    if (ParsingProtocol) {
       SP.diagnose(Deinit, err_may_not_appear_in_protocol,
-                  Deinit->getSpecifierForDiagnostic(),
+                  Deinit,
                   currentTok().getSourceLoc());
    }
 
@@ -1146,13 +1149,10 @@ ParseResult Parser::parseMethodDecl()
       returnType = SourceType(Context.getAutoType());
    }
 
-   std::vector<StaticExpr*> constraints;
-   while (lookahead().is(Ident_where)) {
+   SmallVector<DeclConstraint*, 4> Constraints;
+   if (lookahead().is(Ident_where)) {
       advance();
-      advance();
-
-      constraints.push_back(StaticExpr::Create(Context,
-         parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr()));
+      parseDeclConstraints(Constraints);
    }
 
    MethodDecl *methodDecl;
@@ -1199,7 +1199,7 @@ ParseResult Parser::parseMethodDecl()
    methodDecl->setUnsafe(Unsafe);
    methodDecl->setAbstract(IsAbstract);
 
-   Context.setConstraints(methodDecl, constraints);
+   Context.setConstraints(methodDecl, Constraints);
 
    return ActOnDecl(methodDecl);
 }

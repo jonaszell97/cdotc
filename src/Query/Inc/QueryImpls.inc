@@ -28,6 +28,7 @@ bool Query::isPure() const
    case NeedsRetainOrReleaseQueryID: return false;
    case NeedsDeinitilizationQueryID: return false;
    case NeedsStructReturnQueryID: return false;
+   case PassByValueQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
    case IsValidParameterValueQueryID: return false;
@@ -238,6 +239,7 @@ bool Query::canBeCached() const
    case NeedsRetainOrReleaseQueryID: return true;
    case NeedsDeinitilizationQueryID: return true;
    case NeedsStructReturnQueryID: return true;
+   case PassByValueQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
    case IsValidParameterValueQueryID: return true;
@@ -448,6 +450,7 @@ bool Query::canBeSerialized() const
    case NeedsRetainOrReleaseQueryID: return false;
    case NeedsDeinitilizationQueryID: return false;
    case NeedsStructReturnQueryID: return false;
+   case PassByValueQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
    case IsValidParameterValueQueryID: return false;
@@ -658,6 +661,7 @@ bool Query::canBeDependent() const
    case NeedsRetainOrReleaseQueryID: return true;
    case NeedsDeinitilizationQueryID: return true;
    case NeedsStructReturnQueryID: return true;
+   case PassByValueQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
    case IsValidParameterValueQueryID: return true;
@@ -1937,6 +1941,56 @@ void NeedsStructReturnQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T)
    T.Profile(ID);
 }
 
+PassByValueQuery::PassByValueQuery(QueryContext &QC, CanType T) : Query(PassByValueQueryID, QC), T(T) {
+
+}
+
+bool PassByValueQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string PassByValueQuery::description() const
+{
+   std::string s;
+   s += "checking ";
+   s += "PassByValue";
+   s += " on ";
+   s += T.toDiagString();
+   return s;
+}
+
+std::string PassByValueQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[PassByValue]"
+;   OS << " T = ";
+OS << T;
+;
+
+   return OS.str();
+}
+
+QueryResult PassByValueQuery::finish(bool Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+void PassByValueQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, T);
+}
+
+void PassByValueQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T)
+{
+   T.Profile(ID);
+}
+
 ContainsAssociatedTypeConstraintQuery::ContainsAssociatedTypeConstraintQuery(QueryContext &QC, CanType T) : Query(ContainsAssociatedTypeConstraintQueryID, QC), T(T) {
 
 }
@@ -1991,7 +2045,7 @@ IsImplicitlyConvertibleQuery::IsImplicitlyConvertibleQuery(QueryContext &QC, Qua
 
 }
 
-bool IsImplicitlyConvertibleQuery::get() const
+IsImplicitlyConvertibleQuery::ResultType IsImplicitlyConvertibleQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
    return Result.getValue();
@@ -2021,7 +2075,7 @@ OS << "'" << To << "'";
    return OS.str();
 }
 
-QueryResult IsImplicitlyConvertibleQuery::finish(bool Result, Status St)
+QueryResult IsImplicitlyConvertibleQuery::finish(IsImplicitlyConvertibleQuery::ResultType Result, Status St)
 {
    this->Result = Result;
 
@@ -2043,7 +2097,7 @@ IsValidParameterValueQuery::IsValidParameterValueQuery(QueryContext &QC, QualTyp
 
 }
 
-bool IsValidParameterValueQuery::get() const
+IsValidParameterValueQuery::ResultType IsValidParameterValueQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
    return Result.getValue();
@@ -2076,7 +2130,7 @@ OS << isSelf;
    return OS.str();
 }
 
-QueryResult IsValidParameterValueQuery::finish(bool Result, Status St)
+QueryResult IsValidParameterValueQuery::finish(IsValidParameterValueQuery::ResultType Result, Status St)
 {
    this->Result = Result;
 

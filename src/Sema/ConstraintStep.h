@@ -180,6 +180,9 @@ class TypeVariableBindingProducer {
    /// Current index into the binding vector.
    unsigned Index = 0;
 
+   /// Whether or not the type variable has a concrete binding.
+   bool hasConcreteBinding = false;
+
    /// Computes the initial bindings.
    void computeInitialBindings(TypeVariableType *T, ConstraintSystem &Sys);
 

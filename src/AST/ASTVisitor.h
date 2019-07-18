@@ -121,11 +121,16 @@ public:
       }
    }
 
+   bool visitStmt(Statement *node, ParamTys... params)
+   {
+      return visit(node, std::forward<ParamTys>(params)...);
+   }
+
 protected:
    bool visitCompoundStmt(CompoundStmt* Stmt)
    {
       for (auto S : Stmt->getStatements()) {
-         if (!visit(S))
+         if (!static_cast<SubClass*>(this)->visitStmt(S))
             break;
       }
       
@@ -138,7 +143,7 @@ protected:
    bool visitReturnStmt(ReturnStmt* Stmt)
    {
       if (auto RetVal = Stmt->getReturnValue())
-         visit(RetVal);
+         static_cast<SubClass*>(this)->visitStmt(RetVal);
       
       return true;
    }
@@ -146,7 +151,7 @@ protected:
    bool visitDiscardAssignStmt(DiscardAssignStmt *Stmt)
    {
       if (auto *RHS = Stmt->getRHS())
-         visit(RHS);
+         static_cast<SubClass*>(this)->visitStmt(RHS);
 
       return true;
    }
@@ -154,27 +159,27 @@ protected:
    bool visitCaseStmt(CaseStmt* Stmt)
    {
       if (auto Pat = Stmt->getPattern())
-         if (!visit(Pat))
+         if (!static_cast<SubClass*>(this)->visitStmt(Pat))
             return true;
 
       if (auto Body = Stmt->getBody())
-         visit(Body);
+         static_cast<SubClass*>(this)->visitStmt(Body);
       
       return true;
    }
 
    bool visitForStmt(ForStmt* Stmt)
    {
-      if (!visit(Stmt->getInitialization()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getInitialization()))
          return true;
       
-      if (!visit(Stmt->getTermination()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getTermination()))
          return true;
 
-      if (!visit(Stmt->getIncrement()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getIncrement()))
          return true;
 
-      visit(Stmt->getBody());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getBody());
       return true;
    }
 
@@ -183,27 +188,27 @@ protected:
       for (auto &C : Stmt->getConditions()) {
          switch (C.K) {
          case IfCondition::Expression:
-            if (!visit(C.ExprData.Expr))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.ExprData.Expr))
                return true;
 
             break;
          case IfCondition::Binding:
             break;
          case IfCondition::Pattern:
-            if (!visit(C.PatternData.Pattern))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Pattern))
                return true;
-            if (!visit(C.PatternData.Expr))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Expr))
                return true;
 
             break;
          }
       }
 
-      if (!visit(Stmt->getIfBranch()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getIfBranch()))
          return true;
 
       if (auto Else = Stmt->getElseBranch())
-         visit(Else);
+         static_cast<SubClass*>(this)->visitStmt(Else);
 
       return true;
    }
@@ -213,16 +218,16 @@ protected:
       for (auto &C : Stmt->getConditions()) {
          switch (C.K) {
          case IfCondition::Expression:
-            if (!visit(C.ExprData.Expr))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.ExprData.Expr))
                return true;
 
             break;
          case IfCondition::Binding:
             break;
          case IfCondition::Pattern:
-            if (!visit(C.PatternData.Pattern))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Pattern))
                return true;
-            if (!visit(C.PatternData.Expr))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Expr))
                return true;
 
             break;
@@ -230,27 +235,27 @@ protected:
       }
 
       if (auto Body = Stmt->getBody())
-         visit(Body);
+         static_cast<SubClass*>(this)->visitStmt(Body);
 
       return true;
    }
 
    bool visitForInStmt(ForInStmt* Stmt)
    {
-      if (!visit(Stmt->getRangeExpr()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getRangeExpr()))
          return true;
       
-      visit(Stmt->getBody());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getBody());
       return true;
    }
 
    bool visitMatchStmt(MatchStmt* Stmt)
    {
-      if (!visit(Stmt->getSwitchValue()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getSwitchValue()))
          return true;
       
       for (auto C : Stmt->getCases())
-         if (!visit(C))
+         if (!static_cast<SubClass*>(this)->visitStmt(C))
             return true;
          
       return true;
@@ -258,11 +263,11 @@ protected:
 
    bool visitDoStmt(DoStmt* Stmt)
    {
-      if (!visit(Stmt->getBody()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getBody()))
          return true;
       
       for (auto &c : Stmt->getCatchBlocks()) {
-         if (!visit(c.Body))
+         if (!static_cast<SubClass*>(this)->visitStmt(c.Body))
             return true;
       }
       
@@ -271,19 +276,19 @@ protected:
 
    bool visitTryExpr(TryExpr* Expr)
    {
-      visit(Expr->getExpr());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getExpr());
       return true;
    }
 
    bool visitAwaitExpr(AwaitExpr* Expr)
    {
-      visit(Expr->getExpr());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getExpr());
       return true;
    }
 
    bool visitThrowStmt(ThrowStmt* Stmt)
    {
-      visit(Stmt->getThrownVal());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getThrownVal());
       return true;
    }
 
@@ -292,30 +297,30 @@ protected:
 
    bool visitStaticIfStmt(StaticIfStmt* Stmt)
    {
-      if (!visit(Stmt->getCondition()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getCondition()))
          return true;
 
-      if (!visit(Stmt->getIfBranch()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getIfBranch()))
          return true;
 
       if (auto Else = Stmt->getElseBranch())
-         visit(Else);
+         static_cast<SubClass*>(this)->visitStmt(Else);
 
       return true;
    }
 
    bool visitStaticForStmt(StaticForStmt* Stmt)
    {
-      if (!visit(Stmt->getRange()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getRange()))
          return true;
 
-      visit(Stmt->getBody());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getBody());
       return true;
    }
 
    bool visitParenExpr(ParenExpr* Stmt)
    {
-      visit(Stmt->getParenthesizedExpr());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getParenthesizedExpr());
       return true;
    }
 
@@ -329,7 +334,7 @@ protected:
    bool visitStringInterpolation(StringInterpolation* Stmt)
    {
       for (auto &Seg : Stmt->getSegments())
-         if (!visit(Seg))
+         if (!static_cast<SubClass*>(this)->visitStmt(Seg))
             return true;
 
       return true;
@@ -337,18 +342,18 @@ protected:
 
    bool visitLambdaExpr(LambdaExpr* Expr)
    {
-      visit(Expr->getBody());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getBody());
       return true;
    }
 
    bool visitDictionaryLiteral(DictionaryLiteral* Stmt)
    {
       for (auto &E : Stmt->getKeys())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       for (auto &E : Stmt->getValues())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -357,7 +362,7 @@ protected:
    bool visitArrayLiteral(ArrayLiteral* Stmt)
    {
       for (auto &E : Stmt->getValues())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -366,7 +371,7 @@ protected:
    bool visitTupleLiteral(TupleLiteral* Stmt)
    {
       for (auto &E : Stmt->getElements())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -375,7 +380,7 @@ protected:
    bool visitIdentifierRefExpr(IdentifierRefExpr* Stmt)
    {
       if (auto E = Stmt->getParentExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
@@ -387,7 +392,7 @@ protected:
    bool visitTupleMemberExpr(TupleMemberExpr* Stmt)
    {
       if (auto E = Stmt->getParentExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
@@ -395,10 +400,10 @@ protected:
    bool visitCallExpr(CallExpr* Stmt)
    {
       if (auto E = Stmt->getParentExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       for (auto &E : Stmt->getArgs())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -407,10 +412,10 @@ protected:
    bool visitAnonymousCallExpr(AnonymousCallExpr* Stmt)
    {
       if (auto E = Stmt->getParentExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       for (auto &E : Stmt->getArgs())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -419,7 +424,7 @@ protected:
    bool visitEnumCaseExpr(EnumCaseExpr* Stmt)
    {
       for (auto &E : Stmt->getArgs())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -428,10 +433,10 @@ protected:
    bool visitSubscriptExpr(SubscriptExpr* Stmt)
    {
       if (auto E = Stmt->getParentExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       for (auto &E : Stmt->getIndices())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -440,10 +445,10 @@ protected:
    bool visitTemplateArgListExpr(TemplateArgListExpr *Expr)
    {
       if (auto E = Expr->getParentExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       for (auto &E : Expr->getExprs())
-         if (!visit(E))
+         if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
 
       return true;
@@ -453,7 +458,7 @@ protected:
 
    bool visitExpressionPattern(ExpressionPattern* Stmt)
    {
-      visit(Stmt->getExpr());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getExpr());
       return true;
    }
 
@@ -462,16 +467,16 @@ protected:
       for (auto &C : Stmt->getArgs()) {
          switch (C.K) {
          case IfCondition::Expression:
-            if (!visit(C.ExprData.Expr))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.ExprData.Expr))
                return true;
 
             break;
          case IfCondition::Binding:
             break;
          case IfCondition::Pattern:
-            if (!visit(C.PatternData.Pattern))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Pattern))
                return true;
-            if (!visit(C.PatternData.Expr))
+            if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Expr))
                return true;
 
             break;
@@ -484,7 +489,7 @@ protected:
    bool visitIsPattern(IsPattern* Stmt)
    {
       if (auto E = Stmt->getIsType().getTypeExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
       
       return true;
    }
@@ -492,7 +497,7 @@ protected:
    bool visitExprSequence(ExprSequence* Stmt) {
       for (auto &el : Stmt->getFragments())
          if (el.getKind() == SequenceElement::EF_Expression)
-            if (!visit(el.getExpr()))
+            if (!static_cast<SubClass*>(this)->visitStmt(el.getExpr()))
                return true;
             
       return true;
@@ -500,52 +505,52 @@ protected:
 
    bool visitUnaryOperator(UnaryOperator* Stmt)
    {
-      visit(Stmt->getTarget());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getTarget());
       return true;
    }
 
    bool visitBinaryOperator(BinaryOperator* Stmt)
    {
-      if (!visit(Stmt->getLhs()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getLhs()))
          return true;
 
-      visit(Stmt->getRhs());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getRhs());
       return true;
    }
 
    bool visitAssignExpr(AssignExpr* Stmt)
    {
-      if (!visit(Stmt->getLhs()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getLhs()))
          return true;
 
-      visit(Stmt->getRhs());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getRhs());
       return true;
    }
 
    bool visitTypePredicateExpr(TypePredicateExpr* Stmt)
    {
-      if (!visit(Stmt->getLHS()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getLHS()))
          return true;
 
-      visit(Stmt->getRHS());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getRHS());
       return true;
    }
 
    bool visitCastExpr(CastExpr* Stmt)
    {
-      visit(Stmt->getTarget());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getTarget());
       return true;
    }
 
    bool visitAddrOfExpr(AddrOfExpr* Stmt)
    {
-      visit(Stmt->getTarget());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getTarget());
       return true;
    }
 
    bool visitImplicitCastExpr(ImplicitCastExpr* Stmt)
    {
-      visit(Stmt->getTarget());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getTarget());
       return true;
    }
 
@@ -554,25 +559,25 @@ protected:
       auto &C = Stmt->getCond();
       switch (C.K) {
       case IfCondition::Expression:
-         if (!visit(C.ExprData.Expr))
+         if (!static_cast<SubClass*>(this)->visitStmt(C.ExprData.Expr))
             return true;
 
          break;
       case IfCondition::Binding:
          break;
       case IfCondition::Pattern:
-         if (!visit(C.PatternData.Pattern))
+         if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Pattern))
             return true;
-         if (!visit(C.PatternData.Expr))
+         if (!static_cast<SubClass*>(this)->visitStmt(C.PatternData.Expr))
             return true;
 
          break;
       }
 
-      if (!visit(Stmt->getTrueVal()))
+      if (!static_cast<SubClass*>(this)->visitStmt(Stmt->getTrueVal()))
          return true;
 
-      visit(Stmt->getFalseVal());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getFalseVal());
       return true;
    }
 
@@ -580,7 +585,7 @@ protected:
 
    bool visitStaticExpr(StaticExpr* Stmt)
    {
-      visit(Stmt->getExpr());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getExpr());
       return true;
    }
 
@@ -588,7 +593,7 @@ protected:
    {
       if (Stmt->getKind() == ConstraintExpr::Type)
          if (auto E = Stmt->getTypeConstraint().getTypeExpr())
-            visit(E);
+            static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
@@ -599,16 +604,16 @@ protected:
          switch (arg.getKind()) {
          case TraitsArgument::Type:
             if (auto E = arg.getType().getTypeExpr())
-               visit(E);
+               static_cast<SubClass*>(this)->visitStmt(E);
 
             break;
          case TraitsArgument::Stmt:
-            if (!visit(arg.getStmt()))
+            if (!static_cast<SubClass*>(this)->visitStmt(arg.getStmt()))
                return true;
 
             break;
          case TraitsArgument::Expr:
-            if (!visit(arg.getExpr()))
+            if (!static_cast<SubClass*>(this)->visitStmt(arg.getExpr()))
                return true;
 
             break;
@@ -622,19 +627,25 @@ protected:
 
    bool visitMixinExpr(MixinExpr* Stmt)
    {
-      visit(Stmt->getMixinExpr());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getMixinExpr());
+      return true;
+   }
+
+   bool visitVariadicExpansionExpr(VariadicExpansionExpr *Expr)
+   {
+      static_cast<SubClass*>(this)->visitStmt(Expr->getExpr());
       return true;
    }
 
    bool visitAttributedStmt(AttributedStmt* Stmt)
    {
-      visit(Stmt->getStatement());
+      static_cast<SubClass*>(this)->visitStmt(Stmt->getStatement());
       return true;
    }
 
    bool visitAttributedExpr(AttributedExpr* Expr)
    {
-      visit(Expr->getExpr());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getExpr());
       return true;
    }
 
@@ -642,10 +653,10 @@ protected:
    {
       for (auto &Ty : Expr->getArgTypes())
          if (auto E = Ty.getTypeExpr())
-            if (!visit(E))
+            if (!static_cast<SubClass*>(this)->visitStmt(E))
                return true;
 
-      visit(Expr->getReturnType().getTypeExpr());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getReturnType().getTypeExpr());
       return true;
    }
 
@@ -653,7 +664,7 @@ protected:
    {
       for (auto &Ty : Expr->getContainedTypes())
          if (auto E = Ty.getTypeExpr())
-            if (!visit(E))
+            if (!static_cast<SubClass*>(this)->visitStmt(E))
                return true;
 
       return true;
@@ -663,7 +674,7 @@ protected:
    {
       for (auto &Ty : Expr->getExistentials())
          if (auto E = Ty.getTypeExpr())
-            if (!visit(E))
+            if (!static_cast<SubClass*>(this)->visitStmt(E))
                return true;
 
       return true;
@@ -672,21 +683,21 @@ protected:
    bool visitArrayTypeExpr(ArrayTypeExpr* Expr)
    {
       if (auto E = Expr->getElementTy().getTypeExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
 
    bool visitDeclTypeExpr(DeclTypeExpr* Expr)
    {
-      visit(Expr->getTyExpr());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getTyExpr());
       return true;
    }
 
    bool visitReferenceTypeExpr(ReferenceTypeExpr* Expr)
    {
       if (auto E = Expr->getSubType().getTypeExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
@@ -694,7 +705,7 @@ protected:
    bool visitPointerTypeExpr(PointerTypeExpr* Expr)
    {
       if (auto E = Expr->getSubType().getTypeExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
@@ -702,14 +713,14 @@ protected:
    bool visitOptionTypeExpr(OptionTypeExpr* Expr)
    {
       if (auto E = Expr->getSubType().getTypeExpr())
-         visit(E);
+         static_cast<SubClass*>(this)->visitStmt(E);
 
       return true;
    }
 
    bool visitMixinStmt(MixinStmt* Expr)
    {
-      visit(Expr->getMixinExpr());
+      static_cast<SubClass*>(this)->visitStmt(Expr->getMixinExpr());
       return true;
    }
 
@@ -721,6 +732,37 @@ protected:
    bool visitMemberRefExpr(MemberRefExpr*) { return true; }
    bool visitOverloadedDeclRefExpr(OverloadedDeclRefExpr*) { return true; }
 };
+
+
+template<class CallbackFn, class ...StmtClass>
+class SpecificASTVisitor: public RecursiveASTVisitor<SpecificASTVisitor<CallbackFn, StmtClass...>> {
+   CallbackFn fn;
+
+   template<class T>
+   void tryVisit(Statement *stmt)
+   {
+      if (auto *specificNode = support::dyn_cast<T>(stmt)) {
+         this->fn(specificNode);
+      }
+   }
+
+public:
+   explicit SpecificASTVisitor(CallbackFn &&fn)
+      : fn(std::move(fn))
+   {}
+
+   bool visitStmt(Statement *stmt)
+   {
+      (tryVisit<StmtClass>(stmt), ...);
+      return RecursiveASTVisitor<SpecificASTVisitor<CallbackFn, StmtClass...>>::visit(stmt);
+   }
+};
+
+template<class ...StmtClass, class CallbackFn>
+void visitSpecificStatement(CallbackFn &&fn, Statement *stmt)
+{
+   SpecificASTVisitor<CallbackFn, StmtClass...>(std::move(fn)).visitStmt(stmt);
+}
 
 template<class SubClass>
 class StmtBuilder {
@@ -1522,6 +1564,18 @@ protected:
          auto Result = visitExpr(Val);
          if (Result) {
             Expr->setMixinExpr(Result.get());
+         }
+      }
+
+      return Expr;
+   }
+
+   ExprResult visitVariadicExpansionExpr(VariadicExpansionExpr *Expr)
+   {
+      if (auto Val = Expr->getExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setExpr(Result.get());
          }
       }
 

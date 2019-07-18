@@ -28,6 +28,11 @@ private:
 public:
    uint32_t getOffset() const { return offset; }
 
+   SourceLocation offsetBy(uint32_t offset) const
+   {
+      return SourceLocation(this->offset + offset);
+   }
+
    bool isValid() const { return offset > 0; }
    operator bool() const { return isValid(); }
 

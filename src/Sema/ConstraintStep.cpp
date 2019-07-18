@@ -419,7 +419,7 @@ static void findBindings(ConstraintSystem &Sys,
       auto *Lit = cast<LiteralConstraint>(C);
 
       QualType T = Lit->getDefaultLiteralType(Sys.QC);
-      if (FoundBindings.insert(T).second) {
+      if (T && FoundBindings.insert(T).second) {
          addBinding(Sys, TypeVar, T, Bindings, Score, OverloadIndex);
       }
 
@@ -497,6 +497,7 @@ void TypeVariableBindingProducer::computeInitialBindings(TypeVariableType *T,
    if (Sys.hasConcreteBinding(T)) {
       auto *C = Sys.getFirstConstraint<TypeBindingConstraint>(T);
       findBindings(Sys, C, T, Bindings, FoundBindings, 0);
+      hasConcreteBinding = true;
 
       return;
    }
@@ -541,7 +542,7 @@ void TypeVariableBindingProducer::nextStage()
 
 bool TypeVariableBindingProducer::computeFollowupBindings(ConstraintSystem &Sys)
 {
-   if (Stage == Any) {
+   if (hasConcreteBinding || Stage == Any) {
       return false;
    }
 

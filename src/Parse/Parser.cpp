@@ -639,17 +639,21 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
       typeref = SourceType(Expr);
    }
 
-   // as a special case, allow a '...' with a space after a function type to
+   // As a special case, allow a '...' with a space after a function type to
    // apply to the function type itself, without a space it would always
    // apply to the return type
    if (isa<FunctionTypeExpr>(typeref.getTypeExpr())
          && lookahead().is(tok::triple_period)) {
       advance();
-      typeref.getTypeExpr()->setEllipsisLoc(currentTok().getSourceLoc());
+
+      typeref.setTypeExpr(VariadicExpansionExpr::Create(
+         Context, currentTok().getSourceLoc(), typeref.getTypeExpr()));
    }
    else if (lookahead(false, true).is(tok::triple_period)) {
       advance(false, true);
-      typeref.getTypeExpr()->setEllipsisLoc(currentTok().getSourceLoc());
+
+      typeref.setTypeExpr(VariadicExpansionExpr::Create(
+         Context, currentTok().getSourceLoc(), typeref.getTypeExpr()));
    }
 
    return typeref;
@@ -1158,16 +1162,10 @@ ParseResult Parser::parseAlias()
       aliasExpr = StaticExpr::Create(Context, ExprRes.getExpr());
    }
 
-   std::vector<StaticExpr*> constraints;
-   while (lookahead().is(Ident_where)) {
+   SmallVector<DeclConstraint*, 4> Constraints;
+   if (lookahead().is(Ident_where)) {
       advance();
-      advance();
-
-      auto expr = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure);
-      if (expr)
-         constraints.push_back(StaticExpr::Create(Context, expr.getExpr()));
-      else
-         skipUntilProbableEndOfExpr();
+      parseDeclConstraints(Constraints);
    }
 
    auto aliasDecl = AliasDecl::Create(Context, AliasLoc, CurDeclAttrs.Access,
@@ -1175,12 +1173,12 @@ ParseResult Parser::parseAlias()
 
    if (ParsingProtocol) {
       SP.diagnose(aliasDecl, err_may_not_appear_in_protocol,
-                  aliasDecl->getSpecifierForDiagnostic(),
+                  aliasDecl,
                   currentTok().getSourceLoc());
    }
 
    aliasDecl->setAccessLoc(CurDeclAttrs.AccessLoc);
-   Context.setConstraints(aliasDecl, constraints);
+   Context.setConstraints(aliasDecl, Constraints);
 
    return ActOnDecl(aliasDecl);
 }
@@ -1397,9 +1395,8 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
    // whitespace
    if (lookahead(false, true).is(tok::triple_period)) {
       advance(false, true);
-
-      ParentExpr->setEllipsisLoc(currentTok().getSourceLoc());
-      return maybeParseSubExpr(ParentExpr);
+      return maybeParseSubExpr(VariadicExpansionExpr::Create(
+         Context, currentTok().getSourceLoc(), ParentExpr));
    }
 
    /// The '<' in a template argument list must immediately follow it's
@@ -3064,8 +3061,8 @@ ParseResult Parser::parseTraitsExpr()
    return TraitsExpr::Create(Context, TraitsLoc, Parens, kind, args);
 }
 
-ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
-{
+ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
+                                 bool ignoreDeclAttrs) {
    bool isLet = false;
    SourceLocation VarOrLetLoc;
 
@@ -3134,7 +3131,13 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
       return ActOnDecl(G);
    }
 
-   auto L = LocalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
+   if (!ignoreDeclAttrs && CurDeclAttrs.AccessLoc) {
+      SP.diagnose(err_generic_error,
+         "local variables cannot have an access specifier",
+         CurDeclAttrs.AccessLoc);
+   }
+
+   auto L = LocalVarDecl::Create(Context, AccessSpecifier::Public, VarOrLetLoc,
                                  ColonLoc, isLet, Name, type, value);
 
    L->setAccessLoc(CurDeclAttrs.AccessLoc);
@@ -3336,6 +3339,7 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
       if (argType.getTypeExpr()
           && argType.getTypeExpr()->isVariadicArgPackExpansion()) {
          templateArgExpansion = true;
+         argType.getTypeExpr()->setEllipsisLoc({});
       }
 
       // optional default value
@@ -3474,16 +3478,10 @@ ParseResult Parser::parseFunctionDecl()
       returnType = SourceType(Context.getAutoType());
    }
 
-   std::vector<StaticExpr*> constraints;
-   while (lookahead().is(Ident_where)) {
+   SmallVector<DeclConstraint*, 4> Constraints;
+   if (lookahead().is(Ident_where)) {
       advance();
-      advance();
-
-      auto constraintResult = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure);
-      if (constraintResult) {
-         constraints.push_back(StaticExpr::Create(Context,
-                                                  constraintResult.getExpr()));
-      }
+      parseDeclConstraints(Constraints);
    }
 
    auto funcDecl = FunctionDecl::Create(Context, CurDeclAttrs.Access, DefLoc,
@@ -3505,7 +3503,7 @@ ParseResult Parser::parseFunctionDecl()
    funcDecl->setUnsafe(Unsafe);
    funcDecl->setBody(body);
 
-   Context.setConstraints(funcDecl, constraints);
+   Context.setConstraints(funcDecl, Constraints);
    return ActOnDecl(funcDecl);
 }
 
@@ -3923,7 +3921,7 @@ void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
    bool expectNewline = StopAt == tok::newline;
    while (!currentTok().is(StopAt)) {
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
-         auto *VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
+         auto *VD = parseVarDecl(false, false, true).tryGetDecl<LocalVarDecl>();
 
          if (VD && !VD->getValue()) {
             SP.diagnose(err_if_let_must_have_value, VD->getSourceLoc());
@@ -4116,16 +4114,27 @@ ParseResult Parser::parseStaticIfDecl()
    return ActOnDecl(Decl);
 }
 
-ParseResult Parser::parseStaticFor()
+ParseResult Parser::parseStaticFor(bool variadic)
 {
-   if (inGlobalDeclContext())
-      return parseStaticForDecl();
+   if (inGlobalDeclContext()) {
+      return parseStaticForDecl(variadic);
+   }
 
-   auto StaticLoc = currentTok().getSourceLoc();
-   advance(); // static
+   SourceLocation StaticLoc = currentTok().getSourceLoc();
+   SourceLocation ForLoc = lookahead().getSourceLoc();
 
-   auto ForLoc = currentTok().getSourceLoc();
-   advance(); // for
+   if (variadic) {
+      advance(); // for
+
+      // Will already be diagnosed if not present.
+      if (currentTok().is(tok::triple_period)) {
+         advance(); // ...
+      }
+   }
+   else {
+      advance(); // static
+      advance(); // for
+   }
 
    IdentifierInfo *ident = nullptr;
    if (!currentTok().is(tok::ident)) {
@@ -4160,8 +4169,8 @@ ParseResult Parser::parseStaticFor()
 
    advance();
 
-   auto range = StaticExpr::Create(Context,
-      parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
+   auto *rangeExpr = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr();
+   auto range = StaticExpr::Create(Context, rangeExpr);
 
    advance();
 
@@ -4170,16 +4179,29 @@ ParseResult Parser::parseStaticFor()
       Compound->setPreserveScope(true);
    }
 
-   return StaticForStmt::Create(Context, StaticLoc, ForLoc, ident, range, body);
+   auto *Stmt = StaticForStmt::Create(Context, StaticLoc, ForLoc, ident, range, body);
+   Stmt->setVariadic(variadic);
+
+   return Stmt;
 }
 
-ParseResult Parser::parseStaticForDecl()
+ParseResult Parser::parseStaticForDecl(bool variadic)
 {
    SourceLocation StaticLoc = currentTok().getSourceLoc();
    SourceLocation RBRaceLoc;
 
-   advance(); // static
-   advance(); // for
+   if (variadic) {
+      advance(); // for
+
+      // Will already be diagnosed if not present.
+      if (currentTok().is(tok::triple_period)) {
+         advance(); // ...
+      }
+   }
+   else {
+      advance(); // static
+      advance(); // for
+   }
 
    IdentifierInfo *ident = nullptr;
    if (!currentTok().is(tok::ident)) {
@@ -4212,7 +4234,7 @@ ParseResult Parser::parseStaticForDecl()
 
    CompoundDecl *BodyDecl = CompoundDecl::Create(Context,
                                                  currentTok().getSourceLoc(),
-                                                 false);
+                                                 true);
 
    if (!currentTok().is(tok::open_brace)) {
       SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
@@ -4246,6 +4268,7 @@ ParseResult Parser::parseStaticForDecl()
                                      range, BodyDecl);
 
 
+   Decl->setVariadic(variadic);
    return ActOnDecl(Decl);
 }
 
@@ -4455,6 +4478,15 @@ ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
 
 ParseResult Parser::parseForStmt(IdentifierInfo *Label)
 {
+   if (lookahead().is(tok::triple_period)) {
+      if (Label != nullptr) {
+         SP.diagnose(err_generic_error, "for... statement cannot be labeled",
+                     currentTok().getSourceLoc());
+      }
+
+      return parseStaticFor(true);
+   }
+
    auto ForLoc = currentTok().getSourceLoc();
    advance();
 
@@ -4954,6 +4986,15 @@ ParseResult Parser::parseTopLevelDecl()
       auto MD = MixinDecl::Create(Context, loc, Parens, E);
       return ActOnDecl(MD);
    }
+   case tok::kw_for: {
+      if (!lookahead().is(tok::triple_period)) {
+         SP.diagnose(err_generic_error,
+                     "only 'for...' declarations can appear at the top level",
+                     currentTok().getSourceLoc());
+      }
+
+      return parseStaticForDecl(true);
+   }
    case tok::kw_static:
       if (lookahead().is(tok::kw_if)) {
          return parseStaticIf();
@@ -5080,7 +5121,7 @@ void Parser::parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
       }
 
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
-         auto *VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
+         auto *VD = parseVarDecl(false, false, true).tryGetDecl<LocalVarDecl>();
 
          OnlyExprs = false;
          Args.emplace_back(VD, nullptr);
@@ -5623,6 +5664,7 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
       advance();
    }
 
+   assert((int)CurDeclAttrs.Access <= 5 && "bad access specifier");
    return Prev;
 }
 
@@ -5911,7 +5953,7 @@ ParseResult Parser::parseNamespaceDecl()
 
    if (ParsingProtocol) {
       SP.diagnose(NS, err_may_not_appear_in_protocol,
-                  NS->getSpecifierForDiagnostic(),
+                  NS,
                   currentTok().getSourceLoc());
    }
 

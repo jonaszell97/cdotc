@@ -16,6 +16,8 @@ namespace ast {
    class CallableDecl;
 } // namespace ast
 
+unsigned getPenalty(CastKind kind);
+
 class ConversionStep {
    CastKind Kind : 7;
    bool Halt : 1;
@@ -54,6 +56,7 @@ class ConversionSequenceBuilder {
    CastStrength Strength : 4;
    bool Dependent : 1;
    std::vector<ConversionStep> Steps;
+   unsigned Penalty = 0;
 
 public:
    ConversionSequenceBuilder()
@@ -77,21 +80,26 @@ public:
    void setDependent(bool D) { Dependent = D; }
    bool isDependent() const { return Dependent; }
 
+   unsigned getPenalty() const { return Penalty; }
+
    void addStep(CastKind kind, QualType resultType)
    {
       Steps.emplace_back(kind, resultType);
+      Penalty += ::cdot::getPenalty(kind);
    }
 
    void addStep(CastKind kind, QualType resultType, CastStrength Strength)
    {
       Steps.emplace_back(kind, resultType);
       updateStrength(Strength);
+      Penalty += ::cdot::getPenalty(kind);
    }
 
    void addStep(ast::CallableDecl *Decl, CastStrength Strength)
    {
       Steps.emplace_back(Decl);
       updateStrength(Strength);
+      Penalty += 3;
    }
 
    void addHalt()
@@ -146,6 +154,7 @@ class ConversionSequence final: TrailingObjects<ConversionSequence,
                                                 ConversionStep> {
    CastStrength Strength;
    unsigned NumSteps;
+   unsigned Penalty;
 
    ConversionSequence(const ConversionSequenceBuilder &Builder,
                       QualType finalType);
@@ -176,6 +185,7 @@ public:
    }
 
    bool isValid() const { return NumSteps != 0; }
+   unsigned getPenalty() const { return Penalty; }
 
    bool isNoOp() const
    {

@@ -834,6 +834,11 @@ bool DumperImpl::visitMixinExpr(MixinExpr *expr)
    return true;
 }
 
+bool DumperImpl::visitVariadicExpansionExpr(VariadicExpansionExpr *expr)
+{
+   return true;
+}
+
 bool DumperImpl::visitMixinStmt(MixinStmt *expr)
 {
    return true;

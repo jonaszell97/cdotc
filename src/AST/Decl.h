@@ -414,6 +414,7 @@ class LocalVarDecl: public VarDecl {
 
    bool IsNRVOCand : 1;
    bool InitIsMove : 1;
+   bool variadicForDecl : 1;
 
 public:
    static LocalVarDecl *Create(ASTContext &C,
@@ -437,6 +438,9 @@ public:
 
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
    static bool classofKind(DeclKind kind) { return kind == LocalVarDeclID; }
+
+   bool isVariadicForDecl() const { return variadicForDecl; }
+   void setVariadicForDecl(bool s) { variadicForDecl = s; }
 };
 
 class GlobalVarDecl: public VarDecl {
@@ -1204,8 +1208,9 @@ class AliasDecl final: public NamedDecl,
    StaticExpr* aliasExpr;
    InstantiationInfo<AliasDecl> *instantiationInfo = nullptr;
 
-   unsigned NumParams : 31;
+   unsigned NumParams : 30;
    bool strong : 1;
+   bool variadicForDecl : 1;
 
 public:
    static AliasDecl *Create(ASTContext &C,
@@ -1280,6 +1285,9 @@ public:
 
    bool isStrong() const { return strong; }
    void setStrong(bool s) { strong = s; }
+
+   bool isVariadicForDecl() const { return variadicForDecl; }
+   void setVariadicForDecl(bool s) { variadicForDecl = s; }
 };
 
 enum class ImplicitConformanceKind : unsigned char {
@@ -1387,19 +1395,6 @@ public:
    bool isUnion() const;
    bool isProtocol() const;
    bool isRawEnum() const;
-
-   size_t getSpecifierForDiagnostic()
-   {
-      switch (kind) {
-      case ClassDeclID: return 0;
-      case StructDeclID: return 1;
-      case EnumDeclID: return 2;
-      case UnionDeclID: return 3;
-      case ProtocolDeclID: return 4;
-      default:
-         llvm_unreachable("not a record decl");
-      }
-   }
 
    ArrayRef<SourceType> getConformanceTypes() const { return conformanceTypes; }
    ASTVector<SourceType> &getConformanceTypes() { return conformanceTypes; }
@@ -2466,6 +2461,9 @@ class StaticForDecl: public Decl {
    StaticExpr *range;
    CompoundDecl *BodyDecl;
 
+   bool variadic;
+   NamedDecl *variadicDecl = nullptr;
+
 public:
    static StaticForDecl *Create(ASTContext &C,
                                 SourceLocation StaticLoc,
@@ -2495,6 +2493,12 @@ public:
 
    void setStaticLoc(SourceLocation Loc) { StaticLoc = Loc; }
    void setRBRaceLoc(SourceLocation Loc) { RBRaceLoc = Loc; }
+
+   bool isVariadic() const { return variadic; }
+   void setVariadic(bool v) { variadic = v; }
+
+   NamedDecl *getVariadicDecl() const { return variadicDecl; }
+   void setVariadicDecl(NamedDecl *D) { variadicDecl = D; }
 
    SourceLocation getStaticLoc() const { return StaticLoc; }
    SourceLocation getRBRaceLoc() const { return RBRaceLoc; }

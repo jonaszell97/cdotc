@@ -307,6 +307,10 @@ void ASTDeclWriter::visitStaticForDecl(StaticForDecl *D)
    Record.AddSourceLocation(D->getRBRaceLoc());
    Record.AddStmt(D->getRange());
    Record.AddDeclRef(D->getBodyDecl());
+   Record.push_back(D->isVariadic());
+
+   if (D->isVariadic())
+      Record.AddDeclRef(D->getVariadicDecl());
 }
 
 void ASTDeclWriter::visitMixinDecl(MixinDecl *D)
@@ -428,6 +432,12 @@ void ASTDeclWriter::visitAliasDecl(AliasDecl *D)
    Record.AddSourceLocation(D->getSourceLoc());
    Record.AddTypeRef(D->getType());
    Record.AddStmt(D->getAliasExpr());
+
+   uint64_t flags = 0;
+   flags |= (D->isStrong());
+   flags |= (D->isVariadicForDecl() << 1);
+
+   Record.push_back(flags);
 }
 
 void ASTDeclWriter::visitPrecedenceGroupDecl(PrecedenceGroupDecl *D)
@@ -707,8 +717,12 @@ void ASTDeclWriter::visitLocalVarDecl(LocalVarDecl *D)
 {
    visitVarDecl(D);
 
-   Record.push_back(D->isNRVOCandidate());
-   Record.push_back(D->isInitMove());
+   uint64_t flags = 0;
+   flags |= D->isNRVOCandidate();
+   flags |= (D->isInitMove() << 1);
+   flags |= (D->isVariadicForDecl() << 2);
+
+   Record.push_back(flags);
 }
 
 void ASTDeclWriter::visitGlobalVarDecl(GlobalVarDecl *D)

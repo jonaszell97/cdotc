@@ -195,7 +195,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
    RecordData Record;
    Stream.EnterSubblock(MODULE_BLOCK_ID, 5);
 
-   // Module name and ID
+   // Module name, ID and version
    {
       auto ID = NextModuleID++;
       ModuleIDs[Mod] = ID;
@@ -204,6 +204,10 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
       auto ModName = Mod->getName()->getIdentifier();
       Record.push_back(ModName.size());
       Record.append(ModName.begin(), ModName.end());
+
+      Record.push_back(CDOT_VERSION_MAJOR);
+      Record.push_back(CDOT_VERSION_MINOR);
+
       Stream.EmitRecord(MODULE_NAME, Record);
    }
 

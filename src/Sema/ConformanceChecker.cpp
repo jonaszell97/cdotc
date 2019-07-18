@@ -150,7 +150,7 @@ void ConformanceCheckerImpl::genericError(RecordDecl *Rec, ProtocolDecl *P)
       return;
 
    IssuedError = true;
-   SP.diagnose(Rec, err_incorrect_protocol_impl, Rec->getNameSelector(),
+   SP.diagnose(Rec, err_incorrect_protocol_impl, Rec,
                Rec->getDeclName(), P->getDeclName(), Rec->getSourceLoc());
 }
 
@@ -1562,7 +1562,7 @@ QueryResult ResolveAssociatedTypesQuery::run()
          FoundMissing = true;
 
          sema().diagnose(Rec, err_incorrect_protocol_impl,
-                         Rec->getSpecifierForDiagnostic(),
+                         Rec,
                          Rec->getDeclName(),
                          AT->getRecord()->getDeclName(),
                          Rec->getSourceLoc());

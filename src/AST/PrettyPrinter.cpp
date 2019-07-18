@@ -958,6 +958,12 @@ void PrettyPrinterImpl::visitMixinExpr(ast::MixinExpr *expr)
    out << ")";
 }
 
+void PrettyPrinterImpl::visitVariadicExpansionExpr(VariadicExpansionExpr *expr)
+{
+   visitExpr(expr);
+   out << "...";
+}
+
 void PrettyPrinterImpl::visitMixinStmt(ast::MixinStmt *expr)
 {
    out << "mixin(";

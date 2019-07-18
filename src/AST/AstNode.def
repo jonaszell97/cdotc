@@ -104,6 +104,7 @@
       CDOT_EXPR(ConstraintExpr)
       CDOT_EXPR(TraitsExpr)
       CDOT_EXPR(MixinExpr)
+      CDOT_EXPR(VariadicExpansionExpr)
 
       CDOT_EXPR(MacroVariableExpr)
       CDOT_EXPR(MacroExpansionExpr)

@@ -350,6 +350,10 @@ NamedDecl* SemaPass::getInstantiationScope(NamedDecl *Inst)
 
 ExprResult SemaPass::typecheckExpr(Expression *Expr, SourceType RequiredType)
 {
+   if (Expr->isSemanticallyChecked()) {
+      return Expr;
+   }
+
    if (RequiredType && RequiredType->isAutoType()) {
       RequiredType = SourceType();
    }
@@ -482,8 +486,8 @@ ExprResult SemaPass::visit(Expression *Expr, bool)
 
    // If this is a variadic pack expansion, allow unexpanded parameters to
    // appear in all sub expressions.
-   ArgPackExpansionRAII argPackExpansionRAII(
-      *this, Expr->isVariadicArgPackExpansion());
+//   ArgPackExpansionRAII argPackExpansionRAII(
+//      *this, Expr->isVariadicArgPackExpansion());
 
    ExprResult Res;
    switch (Expr->getTypeID()) {
@@ -523,24 +527,24 @@ ExprResult SemaPass::visit(Expression *Expr, bool)
       Expr->setSemanticallyChecked(true);
       updateStatusFlags(Expr, ExprTy);
 
-      if (Expr->isVariadicArgPackExpansion()) {
-         if (!inUnboundedTemplate()) {
-            diagnose(Expr, err_pack_expansion_cannot_appear,
-                     Expr->getEllipsisRange());
-         }
-         else if (!Expr->containsUnexpandedParameterPack()) {
-            diagnose(Expr, err_invalid_pack_expansion,
-                     Expr->getEllipsisRange());
-            Expr->setEllipsisLoc(SourceLocation());
-         }
-         else {
-            Expr->setContainsUnexpandedParameterPack(false);
-         }
-      }
-      else if (Expr->containsUnexpandedParameterPack()
-               && !Bits.AllowUnexpandedParameterPack) {
-         diagnose(Expr, err_unexpanded_pack, Expr->getSourceRange());
-      }
+//      if (Expr->isVariadicArgPackExpansion()) {
+//         if (!inUnboundedTemplate()) {
+//            diagnose(Expr, err_pack_expansion_cannot_appear,
+//                     Expr->getEllipsisRange());
+//         }
+//         else if (!Expr->containsUnexpandedParameterPack()) {
+//            diagnose(Expr, err_invalid_pack_expansion,
+//                     Expr->getEllipsisRange());
+//            Expr->setEllipsisLoc(SourceLocation());
+//         }
+//         else {
+//            Expr->setContainsUnexpandedParameterPack(false);
+//         }
+//      }
+//      else if (Expr->containsUnexpandedParameterPack()
+//               && !Bits.AllowUnexpandedParameterPack) {
+//         diagnose(Expr, err_unexpanded_pack, Expr->getSourceRange());
+//      }
    }
 
    return Expr;
@@ -550,6 +554,17 @@ bool SemaPass::warnOnUnusedResult(Expression *E) const
 {
    if (E->isDependent() || E->isInvalid())
       return false;
+
+   if (QualType exprType = E->getExprType()) {
+      if (E->getExprType()->isEmptyTupleType() || E->getExprType()->isVoidType()) {
+         return false;
+      }
+
+      bool Unpopulated;
+      if (QC.IsUnpopulated(Unpopulated, exprType) || Unpopulated) {
+         return false;
+      }
+   }
 
    switch (E->getTypeID()) {
    case Expression::ParenExprID:
@@ -581,49 +596,19 @@ bool SemaPass::warnOnUnusedResult(Expression *E) const
             return false;
          }
 
-         QualType RetTy = Call->getExprType();
-
-         bool Unpopulated;
-         if (QC.IsUnpopulated(Unpopulated, RetTy) || Unpopulated) {
-            return false;
-         }
-
-         return !RetTy->isVoidType()
-                && !RetTy->isEmptyTupleType()
-                && !Call->getFunc()->hasAttribute<DiscardableResultAttr>();
+         return !Call->getFunc()->hasAttribute<DiscardableResultAttr>();
       }
-      default: {
-         QualType RetTy = Call->getExprType();
-
-         bool Unpopulated;
-         if (QC.IsUnpopulated(Unpopulated, RetTy) || Unpopulated) {
-            return false;
-         }
-
-         return !RetTy->isVoidType() && !RetTy->isEmptyTupleType();
+      default:
+         break;
       }
-      }
+
+      break;
    }
-   case Expression::AnonymousCallExprID: {
-      QualType exprType = E->getExprType();
-
-      bool Unpopulated;
-      if (QC.IsUnpopulated(Unpopulated, exprType) || Unpopulated) {
-         return false;
-      }
-
-      return !exprType->isVoidType() && !exprType->isEmptyTupleType();
+   default:
+      break;
    }
-   default: {
-      QualType exprType = E->getExprType();
-      bool Unpopulated;
-      if (QC.IsUnpopulated(Unpopulated, exprType) || Unpopulated) {
-         return false;
-      }
 
-      return !exprType->isVoidType() && !exprType->isEmptyTupleType();
-   }
-   }
+   return true;
 }
 
 StmtResult SemaPass::visit(Statement *stmt, bool)
@@ -800,6 +785,15 @@ bool SemaPass::NeedsStructReturn(QualType Ty)
 {
    bool Result;
    if (QC.NeedsStructReturn(Result, Ty))
+      return false;
+
+   return Result;
+}
+
+bool SemaPass::ShouldPassByValue(QualType Ty)
+{
+   bool Result;
+   if (QC.PassByValue(Result, Ty))
       return false;
 
    return Result;
@@ -2059,6 +2053,8 @@ static InitDecl *LookupInitializableByDecl(SemaPass &Sema, RecordDecl *R,
       return nullptr;
    }
 
+   CanType canonicalTy = Ty->getCanonicalType()->getDesugaredType();
+
    // We might need to deserialize the declaration first.
    auto &Ctx = Sema.getContext();
    auto Name = Ctx.getDeclNameTable()
@@ -2079,14 +2075,14 @@ static InitDecl *LookupInitializableByDecl(SemaPass &Sema, RecordDecl *R,
       if (!Init->isCompleteInitializer()) {
          continue;
       }
-      if (!Ty && Init->getArgs().empty()) {
+      if (!canonicalTy && Init->getArgs().empty()) {
          return Init;
       }
 
       if (Init->getArgs().size() != 1) {
          continue;
       }
-      if (Init->getArgs().front()->getType() == Ty) {
+      if (Init->getArgs().front()->getType()->getCanonicalType()->getDesugaredType() == canonicalTy) {
          return Init;
       }
    }
@@ -2172,6 +2168,7 @@ static ExprResult LookupInitializableByDecl(SemaPass &Sema, CanType Ty,
    }
 
    E->setExprType(Ty);
+   E->setSemanticallyChecked(true);
 
    auto *InitDecl = LookupInitializableByDecl(Sema, ConformingRec, AssocType,E);
    if (!InitDecl) {
@@ -2188,7 +2185,7 @@ static ExprResult LookupInitializableByDecl(SemaPass &Sema, CanType Ty,
       return E;
    }
 
-   return Sema.CreateCall(InitDecl, E, E->getSourceLoc());
+   return Sema.visitExpr(Sema.CreateCall(InitDecl, E, E->getSourceLoc()));
 }
 
 ExprResult SemaPass::visitIntegerLiteral(IntegerLiteral *Expr)
@@ -4361,7 +4358,7 @@ void SemaPass::visitConstraints(NamedDecl *ConstrainedDecl)
 
          if (ConceptRef->getKind() != IdentifierKind::Alias) {
             diagnose(ConceptRef, err_cannot_be_used_as_concept,
-                     ConceptRef->getNamedDecl()->getSpecifierForDiagnostic(),
+                     ConceptRef->getNamedDecl(),
                      ConceptRef->getNamedDecl()->getDeclName(),
                      ConceptRef->getSourceRange());
 
@@ -4421,7 +4418,7 @@ void SemaPass::visitConstraints(NamedDecl *ConstrainedDecl)
 
          if (Result->empty()) {
             diagnose(ConstrainedDecl, err_member_not_found,
-                     cast<NamedDecl>(CurCtx)->getSpecifierForDiagnostic(),
+                     cast<NamedDecl>(CurCtx),
                      cast<NamedDecl>(CurCtx)->getDeclName(),
                      Ident->getIdentifier(), C->getSourceRange());
 
@@ -4475,7 +4472,7 @@ void SemaPass::visitConstraints(NamedDecl *ConstrainedDecl)
          }
          else {
             diagnose(ConstrainedDecl, err_cannot_be_referenced_in_constraint,
-                     Result->front().front()->getSpecifierForDiagnostic(),
+                     Result->front().front(),
                      Result->front().front()->getDeclName(),
                      C->getSourceRange());
 
@@ -4820,8 +4817,271 @@ static bool isStdArray(SemaPass &SP, QualType Ty)
           && R->getSpecializedTemplate() == SP.getArrayDecl();
 }
 
+static NamedDecl *getReferencedDecl(Expression *expr)
+{
+   if (auto *declRef = dyn_cast<DeclRefExpr>(expr)) {
+      return declRef->getDecl();
+   }
+   else {
+      return cast<MemberRefExpr>(expr)->getMemberDecl();
+   }
+}
+
+static NamedDecl *createVariadicDecl(SemaPass &Sema, NamedDecl *variadicDecl,
+                                     StmtOrDecl SOD, IdentifierInfo *name,
+                                     bool ignoreErrors = false) {
+   auto fail = [&]() {
+      if (!ignoreErrors) {
+         Sema.diagnose(
+            SOD, err_generic_error,
+            "for... range expression must reference a variadic template parameter, field or argument",
+            SOD.getSourceRange());
+      }
+
+      return (NamedDecl*)nullptr;
+   };
+
+   DeclarationName DeclName;
+   if (auto *scope = Sema.getBlockScope()) {
+      DeclName = Sema.Context.getDeclNameTable().getLocalVarName(
+         name, scope->getScopeID());
+   }
+   else {
+      DeclName = name;
+   }
+
+   NamedDecl *elementDecl;
+   switch (variadicDecl->getKind()) {
+   case Decl::FuncArgDeclID: {
+      auto *arg = cast<FuncArgDecl>(variadicDecl);
+      if (!arg->isVariadic()) {
+         return fail();
+      }
+
+      QualType elementType = arg->getType().getResolvedType()->asTemplateParamType();
+      auto *varDecl = LocalVarDecl::Create(Sema.Context, AccessSpecifier::Public,
+                                           SOD.getSourceLoc(), {}, arg->isConst(),
+                                           DeclName, elementType, nullptr);
+
+      varDecl->setVariadicForDecl(true);
+      elementDecl = varDecl;
+
+      break;
+   }
+   case Decl::TemplateParamDeclID: {
+      auto *param = cast<TemplateParamDecl>(variadicDecl);
+      if (!param->isVariadic()) {
+         return fail();
+      }
+
+      QualType elementType = Sema.Context.getMetaType(Sema.Context.getTemplateArgType(param));
+      auto *aliasDecl = AliasDecl::Create(Sema.Context, SOD.getSourceLoc(),
+                                          AccessSpecifier::Public,
+                                          DeclName, elementType, nullptr, {});
+
+      aliasDecl->setVariadicForDecl(true);
+      elementDecl = aliasDecl;
+
+      break;
+   }
+   case Decl::FieldDeclID: {
+      auto *field = cast<FieldDecl>(variadicDecl);
+      if (!field->isVariadic()) {
+         return fail();
+      }
+
+      QualType elementType = field->getType().getResolvedType()->asTemplateParamType();
+      auto *varDecl = LocalVarDecl::Create(Sema.Context, AccessSpecifier::Public,
+                                           SOD.getSourceLoc(), {},
+                                           field->isConst(),
+                                           DeclName, elementType, nullptr);
+
+      varDecl->setVariadicForDecl(true);
+      elementDecl = varDecl;
+
+      break;
+   }
+   default:
+      return fail();
+   }
+
+   Sema.addDeclToContext(Sema.getDeclContext(), elementDecl);
+
+   if (Sema.QC.PrepareDeclInterface(elementDecl)) {
+      llvm_unreachable("should not be possible!");
+   }
+
+   return elementDecl;
+}
+
+ExprResult SemaPass::visitVariadicExpansionExpr(VariadicExpansionExpr *Expr)
+{
+   Expression *expandedExpr = Expr->getExpr();
+
+   auto rebuiltExpr = typecheckExpr(expandedExpr, SourceType(), Expr);
+   if (!rebuiltExpr) {
+      Expr->setIsInvalid(true);
+      Expr->setExprType(ErrorTy);
+
+      return ExprError();
+   }
+
+   expandedExpr = rebuiltExpr.get();
+   Expr->setExprType(Context.getEmptyTupleType());
+
+   // Find all referenced variadic parameters.
+   SmallVector<std::pair<NamedDecl*, NamedDecl*>, 2> foundVariadicDecls;
+
+   visitSpecificStatement<DeclRefExpr, MemberRefExpr>([&](Expression *expr) {
+      NamedDecl *parameterPack = getReferencedDecl(expr);
+
+      ScopeGuard scope(*this);
+      NamedDecl *elementDecl = createVariadicDecl(*this, parameterPack, Expr,
+         parameterPack->getDeclName().getIdentifierInfo(), true);
+
+      if (!elementDecl) {
+         return;
+      }
+
+      cast<DeclRefExpr>(expr)->setDecl(elementDecl);
+      foundVariadicDecls.emplace_back(parameterPack, elementDecl);
+   }, expandedExpr);
+
+   if (foundVariadicDecls.empty()) {
+      diagnose(Expr, err_generic_error,
+         "expression does not contain any unexpanded parameter packs",
+         expandedExpr->getSourceRange());
+
+      return ExprError();
+   }
+
+   VariadicExpansionExpr *currentExpr = Expr;
+   for (int i = 0; i < foundVariadicDecls.size(); ++i) {
+      currentExpr->setParameterPack(foundVariadicDecls[i].first);
+      currentExpr->setElementDecl(foundVariadicDecls[i].second);
+
+      if (i > 0) {
+         currentExpr = VariadicExpansionExpr::Create(
+            Context, Expr->getEllipsisLoc(), currentExpr);
+
+         currentExpr->setSemanticallyChecked(true);
+         currentExpr->setExprType(Context.getEmptyTupleType());
+      }
+   }
+
+   Expr->setExpr(expandedExpr);
+   Expr->setNeedsInstantiation(true);
+
+   return Expr;
+}
+
+StmtResult SemaPass::visitVariadicForStmt(StaticForStmt *Stmt)
+{
+   auto *rangeExpr = Stmt->getRange()->getExpr();
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(rangeExpr)) {
+      Ident->setAllowVariadicRef(true);
+
+      auto result = typecheckExpr(Ident, SourceType(), Stmt);
+      if (!result) {
+         return StmtError();
+      }
+
+      rangeExpr = result.get();
+      Stmt->getRange()->setExpr(rangeExpr);
+   }
+
+   auto fail = [&]() {
+      diagnose(rangeExpr, err_generic_error,
+               "for... range expression must reference a variadic template parameter, field or argument",
+               rangeExpr->getSourceRange());
+
+      return StmtError();
+   };
+
+   NamedDecl *variadicDecl;
+   if (auto *declRef = dyn_cast<DeclRefExpr>(rangeExpr)) {
+      variadicDecl = declRef->getDecl();
+   }
+   else if (auto *memberRef = dyn_cast<MemberRefExpr>(rangeExpr)) {
+      variadicDecl = memberRef->getMemberDecl();
+   }
+   else {
+      return fail();
+   }
+
+   ScopeGuard scope(*this);
+   NamedDecl *elementDecl = createVariadicDecl(*this, variadicDecl, Stmt, Stmt->getElementName());
+   if (!elementDecl) {
+      return StmtError();
+   }
+
+   Stmt->setVariadicDecl(elementDecl);
+
+   auto bodyResult = visitStmt(Stmt, Stmt->getBody());
+   if (!bodyResult || Stmt->isInvalid())
+      return StmtError();
+
+   Stmt->setBody(bodyResult.get());
+   Stmt->setNeedsInstantiation(true);
+
+   return Stmt;
+}
+
+DeclResult SemaPass::visitVariadicForDecl(StaticForDecl *Decl)
+{
+   auto *rangeExpr = Decl->getRange()->getExpr();
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(rangeExpr)) {
+      Ident->setAllowVariadicRef(true);
+
+      auto result = typecheckExpr(Ident, SourceType(), Decl);
+      if (!result) {
+         return DeclError();
+      }
+
+      rangeExpr = result.get();
+      Decl->getRange()->setExpr(rangeExpr);
+   }
+
+   auto fail = [&]() {
+      diagnose(rangeExpr, err_generic_error,
+               "for... range expression must reference a variadic template parameter, field or argument",
+               rangeExpr->getSourceRange());
+
+      return DeclError();
+   };
+
+   NamedDecl *variadicDecl;
+   if (auto *declRef = dyn_cast<DeclRefExpr>(rangeExpr)) {
+      variadicDecl = declRef->getDecl();
+   }
+   else if (auto *memberRef = dyn_cast<MemberRefExpr>(rangeExpr)) {
+      variadicDecl = memberRef->getMemberDecl();
+   }
+   else {
+      return fail();
+   }
+
+   NamedDecl *elementDecl = createVariadicDecl(*this, variadicDecl, Decl, Decl->getElementName());
+   if (!elementDecl) {
+      return DeclError();
+   }
+
+   Decl->setVariadicDecl(elementDecl);
+
+   if (QC.PrepareDeclInterface(Decl->getBodyDecl())) {
+      return DeclError();
+   }
+
+   Decl->setIsTypeDependent(true);
+   return Decl;
+}
+
 StmtResult SemaPass::visitStaticForStmt(StaticForStmt *Stmt)
 {
+   if (Stmt->isVariadic()) {
+      return visitVariadicForStmt(Stmt);
+   }
+
    auto StaticRes = typecheckExpr(Stmt->getRange(), SourceType(), Stmt);
    if (Stmt->getRange()->isDependent() && currentScope)
       currentScope->setHasUnresolvedStaticCond(true);

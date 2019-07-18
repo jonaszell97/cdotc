@@ -478,7 +478,7 @@ QueryResult GetExtendedDeclQuery::run()
       DC = dyn_cast<DeclContext>(ND);
       if (!DC || isa<CallableDecl>(ND)) {
          SP.diagnose(err_cannot_lookup_member_in,
-                     ND->getSpecifierForDiagnostic(),
+                     ND,
                      ND->getDeclName(), ND->getSourceLoc());
 
          return fail();
@@ -493,7 +493,7 @@ QueryResult GetExtendedDeclQuery::run()
 
       if (!ND->isTemplate()) {
          SP.diagnose(err_not_a_template,
-                     ND->getSpecifierForDiagnostic(),
+                     ND,
                      ND->getDeclName(), ND->getSourceLoc());
 
          return fail();
@@ -1746,7 +1746,7 @@ QueryResult NestedNameLookupQuery::run()
       if (!isa<DeclContext>(SingleDecl)) {
          if (IssueDiag) {
             QC.Sema->diagnose(err_cannot_lookup_member_in,
-                              SingleDecl->getSpecifierForDiagnostic(),
+                              SingleDecl,
                               SingleDecl->getDeclName(), Loc);
          }
 
@@ -2045,7 +2045,7 @@ QueryResult ResolveNestedNameSpecToTypeQuery::run()
          if (!DC) {
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 ND->getSpecifierForDiagnostic(),
+                                 ND,
                                  ND->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2076,7 +2076,7 @@ QueryResult ResolveNestedNameSpecToTypeQuery::run()
          if (!isa<DeclContext>(TypeDecl)) {
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl,
                                  TypeDecl->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2121,7 +2121,7 @@ QueryResult ResolveNestedNameSpecToTypeQuery::run()
          if (!isa<DeclContext>(TypeDecl)) {
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl,
                                  TypeDecl->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2170,7 +2170,7 @@ QueryResult ResolveNestedNameSpecToTypeQuery::run()
          if (!isa<DeclContext>(TypeDecl)) {
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl,
                                  TypeDecl->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2246,7 +2246,7 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
          if (!DC) {
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 ND->getSpecifierForDiagnostic(),
+                                 ND,
                                  ND->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2277,7 +2277,7 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
 
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl,
                                  TypeDecl->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2321,7 +2321,7 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
 
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl,
                                  TypeDecl->getDeclName(),
                                  this->Name->getSourceRange(i));
             }
@@ -2364,7 +2364,7 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
 
             if (IssueDiag) {
                QC.Sema->diagnose(err_cannot_lookup_member_in,
-                                 TypeDecl->getSpecifierForDiagnostic(),
+                                 TypeDecl,
                                  TypeDecl->getDeclName(),
                                  this->Name->getSourceRange(i));
             }

@@ -501,35 +501,69 @@ static bool lookupImplicitInitializer(SemaPass &SP,
          Seq.addStep(I, CastStrength::Implicit);
          return true;
       }
-      else if (!I->isTemplate() && !NeededTy->isDependentType()) {
+
+      if (!I->isTemplate() && !I->isInitializerOfTemplate() && !NeededTy->isDependentType()) {
          return false;
       }
 
-      sema::TemplateArgList Args(SP, I);
-      Args.inferFromType(from, NeededTy);
+      sema::TemplateArgList OuterArgs;
+      sema::TemplateArgList InnerArgs;
+      sema::MultiLevelTemplateArgList templateArgs;
 
-      if (Args.isStillDependent()) {
+      if (I->isTemplate()) {
+         InnerArgs = sema::TemplateArgList(SP, I);
+         templateArgs.addOuterList(InnerArgs);
+      }
+      if (I->isInitializerOfTemplate()) {
+         OuterArgs = sema::TemplateArgList(SP, R);
+         templateArgs.addOuterList(OuterArgs);
+      }
+
+      templateArgs.inferFromType(from, NeededTy);
+
+      if (templateArgs.isStillDependent()) {
          return false;
       }
-      if (!Args.checkCompatibility()) {
+      if (!templateArgs.checkCompatibility()) {
          return false;
       }
 
-      // Instantiate the initializer.
-      auto *FinalList = sema::FinalTemplateArgumentList::Create(SP.Context,
-                                                                Args);
+      if (I->isInitializerOfTemplate()) {
+         auto *outerTemplateArgs  = sema::FinalTemplateArgumentList::Create(
+            SP.Context, OuterArgs);
 
-      MethodDecl *Inst;
-      if (SP.QC.InstantiateMethod(Inst, I, FinalList, I->getSourceLoc())) {
-         Seq = ConversionSequenceBuilder::MakeNoop(to);
-         return true;
-      }
-      if (SP.QC.PrepareDeclInterface(Inst)) {
-         Seq = ConversionSequenceBuilder::MakeNoop(to);
-         return true;
+         if (SP.QC.InstantiateRecord(R, R, outerTemplateArgs, I->getSourceLoc())) {
+            Seq = ConversionSequenceBuilder::MakeNoop(to);
+            return true;
+         }
+
+         NamedDecl *EquivDecl;
+         if (SP.QC.FindEquivalentDecl(EquivDecl, I, R, SP.Context.getRecordType(R))) {
+            Seq = ConversionSequenceBuilder::MakeNoop(to);
+            return true;
+         }
+
+         I = cast<InitDecl>(EquivDecl);
       }
 
-      Seq.addStep(Inst, CastStrength::Implicit);
+      if (I->isTemplate()) {
+         auto *innerTemplateArgs  = sema::FinalTemplateArgumentList::Create(
+            SP.Context, InnerArgs);
+
+         MethodDecl *Inst;
+         if (SP.QC.InstantiateMethod(Inst, I, innerTemplateArgs, I->getSourceLoc())) {
+            Seq = ConversionSequenceBuilder::MakeNoop(to);
+            return true;
+         }
+         if (SP.QC.PrepareDeclInterface(Inst)) {
+            Seq = ConversionSequenceBuilder::MakeNoop(to);
+            return true;
+         }
+
+         I = cast<InitDecl>(Inst);
+      }
+
+      Seq.addStep(I, CastStrength::Implicit);
       return true;
    }
 

@@ -103,15 +103,16 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
    // This can happen on calls with a leading period. We resolved the
    // overload first, now we can resolve the call.
    if (CallIt == UnresolvedCalls.end()) {
-      assert(isa<IdentifierRefExpr>(Expr->getParentExpr())
-         && cast<IdentifierRefExpr>(Expr->getParentExpr())->hasLeadingDot());
+      if (isa<IdentifierRefExpr>(Expr->getParentExpr())
+      && cast<IdentifierRefExpr>(Expr->getParentExpr())->hasLeadingDot()) {
+         auto ParentRes = visitExpr(Expr->getParentExpr());
+         if (!ParentRes) {
+            return ExprError();
+         }
 
-      auto ParentRes = visitExpr(Expr->getParentExpr());
-      if (!ParentRes) {
-         return ExprError();
+         Expr->setParentExpr(ParentRes.get());
       }
 
-      Expr->setParentExpr(ParentRes.get());
       return Sys.QC.Sema->typecheckExpr(Expr);
    }
 

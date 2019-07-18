@@ -682,7 +682,8 @@ private:
    ParseResult parseCompoundDecl(bool TopLevel, bool Transparent = true);
 
    ParseResult parseVarDecl(bool allowTrailingClosure = true,
-                            bool skipKeywords = false);
+                            bool skipKeywords = false,
+                            bool ignoreDeclAttrs = false);
 
    ParseResult parseDestructuringDecl(bool isLet, bool isForIn = false);
 
@@ -751,7 +752,7 @@ private:
 
       DeclarationName recordName;
       ASTVector<SourceType> conformances;
-      std::vector<StaticExpr*> constraints;
+      llvm::SmallVector<DeclConstraint*, 2> constraints;
       ASTVector<TemplateParamDecl*> templateParams;
 
       union {
@@ -849,9 +850,9 @@ private:
    ParseResult parseStaticPrint();
 
    ParseResult parseStaticIf();
-   ParseResult parseStaticFor();
+   ParseResult parseStaticFor(bool variadic = false);
    ParseResult parseStaticIfDecl();
-   ParseResult parseStaticForDecl();
+   ParseResult parseStaticForDecl(bool variadic = false);
 
    ParseResult parseConstraintExpr();
    ParseResult parseTraitsExpr();

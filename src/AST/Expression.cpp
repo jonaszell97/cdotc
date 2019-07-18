@@ -547,6 +547,32 @@ MixinExpr* MixinExpr::Create(ASTContext &C,
    return new(C) MixinExpr(Parens, Expr);
 }
 
+VariadicExpansionExpr::VariadicExpansionExpr(SourceLocation EllipsisLoc,
+                                             Expression *Expr)
+   : Expression(VariadicExpansionExprID),
+     EllipsisLoc(EllipsisLoc), Expr(Expr)
+{
+
+}
+
+VariadicExpansionExpr* VariadicExpansionExpr::Create(ASTContext &C,
+                                                     SourceLocation EllipsisLoc,
+                                                     Expression *Expr) {
+   return new(C) VariadicExpansionExpr(EllipsisLoc, Expr);
+}
+
+VariadicExpansionExpr::VariadicExpansionExpr(EmptyShell)
+   : Expression(VariadicExpansionExprID),
+     EllipsisLoc(), Expr(nullptr)
+{
+
+}
+
+SourceRange VariadicExpansionExpr::getSourceRange() const
+{
+   return SourceRange(Expr->getSourceLoc(), EllipsisLoc.offsetBy(3));
+}
+
 SequenceElement::SequenceElement(op::OperatorKind opKind,
                                  uint8_t whitespace,
                                  SourceLocation loc)
@@ -1089,9 +1115,9 @@ BoolLiteral* BoolLiteral::Create(ASTContext &C,
 
 CharLiteral::CharLiteral(SourceRange Loc, QualType type, char value)
    : Expression(CharLiteralID),
-     Loc(Loc), narrow(value), IsWide(false), type(type)
+     Loc(Loc), wide(0), IsWide(false), type(type)
 {
-
+   narrow = value;
 }
 
 CharLiteral::CharLiteral(SourceRange Loc, QualType type, uint32_t value)
@@ -1103,7 +1129,7 @@ CharLiteral::CharLiteral(SourceRange Loc, QualType type, uint32_t value)
 
 CharLiteral::CharLiteral(EmptyShell)
    : Expression(CharLiteralID),
-     narrow(0)
+     wide(0)
 {}
 
 CharLiteral* CharLiteral::Create(ASTContext &C,
@@ -1331,7 +1357,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      pointerAccess(false), OnlyForLookup(false), InTypePosition(InTypePos),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     AllowOverloadRef(false),
+     AllowOverloadRef(false), AllowVariadicRef(false),
      LeadingDot(false), IssueDiag(true)
 {
    IdentifierInfo *II = nullptr;
@@ -1357,7 +1383,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      pointerAccess(IsPointerAccess), OnlyForLookup(false), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     AllowOverloadRef(false),
+     AllowOverloadRef(false), AllowVariadicRef(false),
      LeadingDot(false), IssueDiag(true)
 {
    IdentifierInfo *II = nullptr;
@@ -1381,7 +1407,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc, IdentifierKind kind,
      pointerAccess(false), OnlyForLookup(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     AllowOverloadRef(false),
+     AllowOverloadRef(false), AllowVariadicRef(false),
      LeadingDot(false), IssueDiag(true)
 {
    setSemanticallyChecked(true);
@@ -1397,7 +1423,7 @@ IdentifierRefExpr::IdentifierRefExpr(SourceRange Loc,
      pointerAccess(false), OnlyForLookup(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     AllowOverloadRef(false),
+     AllowOverloadRef(false), AllowVariadicRef(false),
      LeadingDot(false), IssueDiag(true)
 {
    setSemanticallyChecked(true);
@@ -1411,7 +1437,7 @@ IdentifierRefExpr::IdentifierRefExpr(EmptyShell)
      pointerAccess(false), OnlyForLookup(true), InTypePosition(false),
      IsSynthesized(false), IsCapture(false), IsSelf(false),
      AllowIncompleteTemplateArgs(false), AllowNamespaceRef(false),
-     AllowOverloadRef(false),
+     AllowOverloadRef(false), AllowVariadicRef(false),
      LeadingDot(false), IssueDiag(true)
 {}
 
@@ -1775,8 +1801,8 @@ AnonymousCallExpr::AnonymousCallExpr(SourceRange ParenRange,
                                      ArrayRef<Expression*> Args,
                                      ArrayRef<IdentifierInfo*> Labels)
    : Expression(AnonymousCallExprID),
-     ParenRange(ParenRange), ParentExpr(ParentExpr), FnTy(nullptr),
-     NumArgs((unsigned)Args.size()), IsPrimitiveInit(false)
+     ParenRange(ParenRange), ParentExpr(ParentExpr), SelfVal(nullptr),
+     FnTy(nullptr), NumArgs((unsigned)Args.size()), IsPrimitiveInit(false)
 {
    std::copy(Args.begin(), Args.end(), getTrailingObjects<Expression*>());
 
@@ -1799,7 +1825,7 @@ AnonymousCallExpr* AnonymousCallExpr::Create(ASTContext &C,
 
 AnonymousCallExpr::AnonymousCallExpr(EmptyShell, unsigned N)
    : Expression(AnonymousCallExprID),
-     ParentExpr(nullptr), FnTy(nullptr), NumArgs(N)
+     ParentExpr(nullptr), SelfVal(nullptr), FnTy(nullptr), NumArgs(N)
 {}
 
 AnonymousCallExpr *AnonymousCallExpr::CreateEmpty(ASTContext &C, unsigned N)

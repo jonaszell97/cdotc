@@ -132,7 +132,8 @@ TypeBindingConstraint::TypeBindingConstraint(TypeVariable Var,
                                              Locator Loc)
    : RelationalConstraint(TypeBindingID, Var, Type, Loc)
 {
-
+   assert(!Type->containsTypeVariable()
+      && "binding should not contain type variable!");
 }
 
 TypeBindingConstraint*
@@ -623,7 +624,7 @@ void ConstraintSystem::registerConstraint(Constraint *Cons)
    CG.addConstraint(Cons);
 
    QualType RHSType = Cons->getRHSType();
-   if (!RHSType || !RHSType->containsTypeVariable()) {
+   if (!RHSType || RHSType->containsTypeVariable()) {
       return;
    }
 
@@ -632,7 +633,12 @@ void ConstraintSystem::registerConstraint(Constraint *Cons)
          CG.makeEquivalent(Cons->getConstrainedType(), TV);
       }
 
-      DirectBindingMap[Cons->getConstrainedType()] = TB->getRHSType();
+      auto result = DirectBindingMap.try_emplace(
+         Cons->getConstrainedType(), TB->getRHSType());
+
+      (void)result;
+      assert((result.second || result.first->getSecond() == TB->getRHSType())
+         && "same type variable bound twice!");
    }
 }
 
@@ -891,8 +897,8 @@ bool ConstraintSystem::isSatisfied(TypeBindingConstraint *C)
 bool ConstraintSystem::isSatisfied(TypeEqualityConstraint *C)
 {
    auto *TypeVar = C->getConstrainedType();
-   CanType LHS = getConcreteType(C->getConstrainedType())->removeReference();
-   CanType RHS = getConcreteType(C->getType(), TypeVar)->removeReference();
+   CanType LHS = getConcreteType(C->getConstrainedType());
+   CanType RHS = getConcreteType(C->getType(), TypeVar);
 
    if (LHS->containsTypeVariable() || RHS->containsTypeVariable()) {
       // Can't tell right now, assume it's satisfied.
@@ -1333,9 +1339,32 @@ public:
       }
       else if (!Sys.isOverloadChoice(LHS)) {
          auto &CG = Sys.getConstraintGraph();
+         bool madeChanges = false;
 
-         Sys.bindTypeVariable(LHS, RHS);
-         Sys.newConstraint<TypeBindingConstraint>(LHS, RHS, C->getLocator());
+         if (QualType binding = Sys.getConstraintGraph().getBinding(LHS)) {
+           if (binding != RHS) {
+              return false;
+           }
+         }
+         else {
+            Sys.bindTypeVariable(LHS, RHS);
+            madeChanges = true;
+         }
+
+         if (Sys.hasConcreteBinding(LHS)) {
+            auto binding = Sys.getConstrainedBinding(LHS);
+            if (binding != RHS) {
+               return false;
+            }
+         }
+         else {
+            Sys.newConstraint<TypeBindingConstraint>(LHS, RHS, C->getLocator());
+            madeChanges = true;
+         }
+
+         if (!madeChanges) {
+            return true;
+         }
 
          // Revisit the constraints that mention this type variable.
          auto Constraints = CG.getOrAddNode(LHS)->getConstraints();
@@ -1488,16 +1517,44 @@ bool ConstraintSystem::simplify(Constraint *C,
    }
 }
 
+bool ConstraintSystem::applyConcreteBindings()
+{
+   for (auto &binding : DirectBindingMap) {
+      if (QualType concreteType = CG.getBinding(binding.getFirst())) {
+         if (binding.getSecond() != concreteType) {
+            return true;
+         }
+      }
+      else {
+         bindTypeVariable(binding.getFirst(), binding.getSecond());
+      }
+
+      if (auto *failed = simplifyConstraints(binding.getFirst())) {
+         return true;
+      }
+   }
+
+   return false;
+}
+
 ConstraintSystem::ResultKind
 ConstraintSystem::solve(SmallVectorImpl<Solution> &Solutions,
                         bool StopAfterFirstFailure) {
    // Enter a first solver scope.
-   SolverScope *OuterScope = new(*this) SolverScope(*this);
+   auto *OuterScope = new(*this) SolverScope(*this);
    this->StopAfterFirstFailure = StopAfterFirstFailure;
 
    if (NextTypeVariable == 0) {
       Solutions.emplace_back(AssignmentMapType(), 0);
       return Success;
+   }
+
+   if (applyConcreteBindings()) {
+      if (!StopAfterFirstFailure) {
+         OuterScope->~SolverScope();
+      }
+
+      return Failure;
    }
 
    SmallVector<SolverStep*, 4> Worklist;
@@ -1653,10 +1710,10 @@ static int isBetterBinding(ConstraintSystem &Sys,
 
       QualType DefaultTy = Lit->getDefaultLiteralType(Sys.QC);
       if (T1 != DefaultTy) {
-         return -1;
+         return T2 != DefaultTy ? 0 : 1;
       }
       if (T2 != DefaultTy) {
-         return 1;
+         return -1;
       }
 
       return 0;

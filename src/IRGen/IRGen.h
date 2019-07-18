@@ -81,7 +81,6 @@ private:
 
    bool NeedsStructReturn(CanType Ty);
    bool IsSmallStruct(CanType Ty);
-   bool PassStructDirectly(CanType Ty);
 
    void addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal);
 

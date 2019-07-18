@@ -50,7 +50,7 @@ enum LogKind : uint64_t {
    All = uint64_t(-1),
 };
 
-extern uint64_t ActiveLogs;
+uint64_t ActiveLogs();
 
 inline void log_impl(llvm::raw_ostream &OS)
 {
@@ -69,7 +69,7 @@ void log_impl(llvm::raw_ostream &OS, const T &t, const Ts&... ts)
 
 #ifndef NDEBUG
 #  define LOG(KIND, ...)                                            \
-      if ((::cdot::support::log::ActiveLogs                         \
+      if ((::cdot::support::log::ActiveLogs()                       \
          & ::cdot::support::log::KIND)!= 0)                         \
          ::cdot::support::log::log_impl(llvm::errs(),               \
                                         "LOG(" #KIND "): ",         \

@@ -279,7 +279,7 @@ QueryResult ResolveUsingQuery::run()
       NamedDecl *Target = LookupRes->front().front();
       if (!isa<DeclContext>(Target)) {
          QC.Sema->diagnose(U, err_cannot_lookup_member_in,
-                         Target->getSpecifierForDiagnostic(),
+                         Target,
                          Target->getDeclName());
 
          return finish(DoneWithError);
@@ -345,7 +345,7 @@ QueryResult ResolveImportQuery::run()
       }
 
       if (LookupRes->empty()) {
-         QC.Sema->diagnose(I, err_member_not_found, /*module*/ 9, Mod->getName(),
+         QC.Sema->diagnose(I, err_member_not_found, Decl::ModuleDeclID, Mod->getName(),
                          Name, I->getSourceRange());
 
          Valid = false;
@@ -444,6 +444,15 @@ QueryResult ResolveStaticIfQuery::run()
 
 QueryResult ResolveStaticForQuery::run()
 {
+   if (Decl->isVariadic()) {
+      auto result = QC.Sema->visitVariadicForDecl(Decl);
+      if (!result) {
+         return fail();
+      }
+
+      return finish(result.get());
+   }
+
    llvm_unreachable("TODO!");
 }
 
@@ -550,7 +559,7 @@ QueryResult GetReferencedAssociatedTypesQuery::run()
    }
 
    QC.Sema->diagnose(ConstrainedDecl, err_cannot_be_referenced_in_constraint,
-                   Decl->getSpecifierForDiagnostic(),
+                   Decl,
                    Decl->getDeclName(), C->getSourceRange());
 
    return fail();
@@ -748,7 +757,7 @@ QueryResult VerifyConstraintQuery::run()
 
       if (ConceptRef->getKind() != IdentifierKind::Alias) {
          QC.Sema->diagnose(ConceptRef, err_cannot_be_used_as_concept,
-                         ConceptRef->getNamedDecl()->getSpecifierForDiagnostic(),
+                         ConceptRef->getNamedDecl(),
                          ConceptRef->getNamedDecl()->getDeclName(),
                          ConceptRef->getSourceRange());
 
@@ -794,7 +803,7 @@ QueryResult VerifyConstraintQuery::run()
          if (i == 0) {
             QC.Sema->diagnose(ConstrainedDecl, err_member_not_found,
                               cast<NamedDecl>(
-                                 CurCtx)->getSpecifierForDiagnostic(),
+                                 CurCtx),
                               cast<NamedDecl>(CurCtx)->getDeclName(),
                               Ident->getIdentifier(), C->getSourceRange());
          }
@@ -848,7 +857,7 @@ QueryResult VerifyConstraintQuery::run()
       else {
          QC.Sema->diagnose(ConstrainedDecl,
                           err_cannot_be_referenced_in_constraint,
-                          Result.front()->getSpecifierForDiagnostic(),
+                          Result.front(),
                           Result.front()->getDeclName(),
                           C->getSourceRange());
 
@@ -859,7 +868,7 @@ QueryResult VerifyConstraintQuery::run()
    }
 
    if (Dependent) {
-      while (i < NameQualSize) {
+      while (i < NameQualSize - 1) {
          Name = NestedNameSpecifier::Create(Tbl, NameQual[i++], Name);
       }
 
@@ -1131,8 +1140,8 @@ QueryResult CheckAccessibilityQuery::run()
       }
 
       // declaration is not accessible here
-      QC.Sema->diagnose(err_private_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(), Loc);
+      QC.Sema->diagnose(err_private_access, ND,
+                        ND->getDeclName(), Loc);
 
       break;
    }
@@ -1151,8 +1160,8 @@ QueryResult CheckAccessibilityQuery::run()
       }
 
       // declaration is not accessible here
-      QC.Sema->diagnose(err_protected_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(), C->getDeclName(), Loc);
+      QC.Sema->diagnose(err_protected_access, ND,
+                        ND->getDeclName(), C->getDeclName(), Loc);
 
       break;
    }
@@ -1166,9 +1175,9 @@ QueryResult CheckAccessibilityQuery::run()
          return finish();
 
       // declaration is not accessible here
-      QC.Sema->diagnose(err_fileprivate_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(), FileMgr.getFileName(DeclID),
-                      Loc);
+      QC.Sema->diagnose(err_fileprivate_access, ND,
+                        ND->getDeclName(), FileMgr.getFileName(DeclID),
+                        Loc);
 
       break;
    }
@@ -1178,17 +1187,17 @@ QueryResult CheckAccessibilityQuery::run()
          return finish();
       }
 
-      QC.Sema->diagnose(err_internal_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(),
-                      ND->getModule()->getBaseModule()->getDeclName(),
-                      Loc);
+      QC.Sema->diagnose(err_internal_access, ND,
+                        ND->getDeclName(),
+                        ND->getModule()->getBaseModule()->getDeclName(),
+                        Loc);
 
       break;
    }
    }
 
    QC.Sema->diagnose(note_access_spec_here, /*implicitly*/ !ND->getAccessRange(),
-                   (int)AccessSpec, ND->getAccessRange(), ND->getSourceLoc());
+                     (int)AccessSpec, ND->getAccessRange(), ND->getSourceLoc());
 
    return finish(DoneWithError);
 }
@@ -1590,6 +1599,14 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
       return finish();
    }
 
+   // Allow variadic parameter reference in argument type.
+   auto *typeExpr = D->getType().getTypeExpr();
+   if (typeExpr) {
+      if (auto *ident = dyn_cast<IdentifierRefExpr>(typeExpr->ignoreParens())) {
+         ident->setAllowVariadicRef(true);
+      }
+   }
+
    auto TypeRes = QC.Sema->visitSourceType(D, D->getType());
    if (!TypeRes || TypeRes.get()->isErrorType()) {
       D->setVariadicArgPackExpansion(false);
@@ -1609,6 +1626,22 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
       QC.Sema->diagnose(D, err_generic_error,
                       "function arguments may not be of type 'void'",
                       Loc);
+   }
+
+   // Check if this argument is variadic.
+   if (auto *paramType = DeclaredArgType->asTemplateParamType()) {
+      if (paramType->getParam()->isVariadic()) {
+         QualType argType = DeclaredArgType.getResolvedType();
+         bool isReallyVariadic = true;
+
+         if (auto *td = dyn_cast<TypedefType>(argType)) {
+            if (td->getTypedef()->isVariadicForDecl()) {
+               isReallyVariadic = false;
+            }
+         }
+
+         D->setVariadic(isReallyVariadic);
+      }
    }
 
    QC.Sema->checkIfTypeUsableAsDecl(DeclaredArgType, D);
@@ -1835,7 +1868,7 @@ QueryResult TypecheckAssociatedTypeQuery::run()
 
       if (!AT) {
          QC.Sema->diagnose(ATDecl, err_no_such_associated_type,
-                         Rec->getSpecifierForDiagnostic(), Rec->getDeclName(),
+                         Rec, Rec->getDeclName(),
                          ATDecl->getDeclName(), ATDecl->getSourceLoc());
 
          return fail();
@@ -2179,12 +2212,13 @@ QueryResult PrepareAliasInterfaceQuery::run()
    }
 
    if (!D->getAliasExpr()) {
-      if (!D->hasAttribute<_BuiltinAttr>()) {
+      if (D->hasAttribute<_BuiltinAttr>()) {
+         QC.Sema->SetBuiltinAliasType(D);
+      }
+      else if (!D->isVariadicForDecl()) {
          QC.Sema->diagnose(D, err_alias_without_value, D->getSourceRange());
          return fail();
       }
-
-      QC.Sema->SetBuiltinAliasType(D);
    }
 
    // If the type is inferred, we need to typecheck the expression already.

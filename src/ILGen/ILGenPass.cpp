@@ -1386,12 +1386,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       if (cast<InitDecl>(CD)->isCompleteInitializer() && !CD->isFallibleInit()) {
          if (auto S = cast<StructDecl>(M->getRecordType())) {
             il::Value *Self = func->getEntryBlock()->getBlockArg(0);
-            if (Self->isLvalue()) {
-               auto Load = Builder.CreateLoad(Self);
-               Load->setSynthesized(true);
-
-               Self = Load;
-            }
 
             il::CallInst *Call;
             if (auto *Env = getCurrentGenericEnvironment()) {

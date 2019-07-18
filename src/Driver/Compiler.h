@@ -120,6 +120,7 @@ private:
    std::vector<std::string> includePaths;
    std::vector<std::string> linkerInput;
    std::vector<std::string> clangOptions;
+   std::string commandLineArguments;
 
    std::unordered_map<InputKind, std::vector<std::string>> inFiles;
 
@@ -133,6 +134,8 @@ public:
    OptimizationLevel optimizationLevel = OptimizationLevel::O2;
    unsigned maxMacroRecursionDepth = 256;
    unsigned MaxInstantiationDepth = 0;
+
+   llvm::StringRef getCommandLineArguments() const { return commandLineArguments; }
 
    void addInput(std::string &&file);
    void setOutput(StringRef file);

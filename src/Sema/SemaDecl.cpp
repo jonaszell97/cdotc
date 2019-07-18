@@ -190,8 +190,12 @@ static bool checkProtocolDefaultDecl(SemaPass &SP, ProtocolDecl *P,
 
 void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
 {
-   if (P->isInvalid())
+   if (P->isInvalid()) {
       return;
+   }
+   if (QC.FindExtensions(Context.getRecordType(P))) {
+      return;
+   }
 
    DeclScopeRAII DSR(*this, Ext);
 
@@ -352,13 +356,13 @@ void SemaPass::noteInstantiationContext()
       // come from a templated record
       if (D->getSpecializedTemplate()->isTemplate()) {
          diagnose(note_instantiation_of, D->getInstantiatedFrom(),
-                  D->getSpecializedTemplate()->getSpecifierForDiagnostic(),
+                  D->getSpecializedTemplate(),
                   D->getSpecializedTemplate()->getDeclName(), true,
                   D->getTemplateArgs().toString('\0', '\0', true));
       }
       else {
          diagnose(note_instantiation_of, D->getInstantiatedFrom(),
-                  D->getSpecializedTemplate()->getSpecifierForDiagnostic(),
+                  D->getSpecializedTemplate(),
                   D->getSpecializedTemplate()->getDeclName(), false);
       }
 
@@ -368,7 +372,7 @@ void SemaPass::noteInstantiationContext()
              && !getInstantiationScope(D)->isInstantiation()) {
             auto Record = M->getRecord();
             diagnose(note_instantiation_of, Record->getInstantiatedFrom(),
-                     Record->getSpecifierForDiagnostic(),
+                     Record,
                      Record->getSpecializedTemplate()->getDeclName(), true,
                      Record->getTemplateArgs().toString('\0', '\0', true));
          }
@@ -1196,7 +1200,7 @@ TypeResult SemaPass::visitSourceType(const SourceType &Ty, bool WantMeta)
    }
 
    auto Result = typecheckExpr(Ty.getTypeExpr());
-   if (!Result) {
+   if (!Result || Result.get()->isInvalid()) {
       Ty.setResolvedType(UnknownAnyTy);
       return TypeError();
    }
@@ -2366,9 +2370,20 @@ ProtocolDecl *SemaPass::getInitializableByDecl(InitializableByKind Kind)
    }
 
    auto Prelude = getPreludeModule();
-   if (!Prelude)
+   if (!Prelude) {
+#ifndef NDEBUG
+      // Allow these to be manually provided in debug mode.
+      auto Decl = QC.LookupSingleAs<ProtocolDecl>(
+         getCompilationUnit().getCompilationModule()->getDecl(), II,
+         BuiltinOpts);
+
+      InitializableBy[(unsigned)Kind] = Decl;
+      return Decl;
+#else
       return nullptr;
-   
+#endif
+   }
+
    auto Decl = QC.LookupSingleAs<ProtocolDecl>(Prelude->getDecl(), II,
                                                BuiltinOpts);
 
@@ -2458,7 +2473,7 @@ StructDecl* SemaPass::getUIntDecl()
    {                                                           \
       RecordDecl *D;                                           \
       QC.GetBuiltinRecord(D, GetBuiltinRecordQuery::NAME);     \
-      return cast<StructDecl>(D);                              \
+      return cast_or_null<StructDecl>(D);                      \
    }
 
 GET_BUILTIN_DECL(Int8)

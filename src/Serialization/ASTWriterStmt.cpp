@@ -345,6 +345,11 @@ void ASTStmtWriter::visitStaticForStmt(StaticForStmt *S)
    Record.AddIdentifierRef(S->getElementName());
    Record.AddStmt(S->getRange());
    Record.AddStmt(S->getBody());
+
+   Record.push_back(S->isVariadic());
+   if (S->isVariadic()) {
+      Record.AddDeclRef(S->getVariadicDecl());
+   }
 }
 
 void ASTStmtWriter::visitMixinStmt(MixinStmt *S)
@@ -537,8 +542,9 @@ void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
    Flags |= (S->allowIncompleteTemplateArgs() << 7);
    Flags |= (S->allowNamespaceRef() << 8);
    Flags |= (S->allowOverloadRef() << 9);
-   Flags |= (S->hasLeadingDot() << 10);
-   Flags |= (S->isCalled() << 11);
+   Flags |= (S->allowVariadicRef() << 10);
+   Flags |= (S->hasLeadingDot() << 11);
+   Flags |= (S->isCalled() << 12);
 
    Record.push_back(Flags);
    Record.push_back(S->getCaptureIndex());
@@ -980,6 +986,16 @@ void ASTStmtWriter::visitMixinExpr(MixinExpr *S)
 
    Record.AddSourceRange(S->getSourceRange());
    Record.AddStmt(S->getMixinExpr());
+}
+
+void ASTStmtWriter::visitVariadicExpansionExpr(VariadicExpansionExpr *S)
+{
+   visitExpr(S);
+
+   Record.AddStmt(S->getExpr());
+   Record.AddSourceLocation(S->getEllipsisLoc());
+   Record.AddDeclRef(S->getParameterPack());
+   Record.AddDeclRef(S->getElementDecl());
 }
 
 void ASTStmtWriter::visitMacroVariableExpr(MacroVariableExpr *S)

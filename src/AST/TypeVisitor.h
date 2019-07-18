@@ -297,7 +297,7 @@ protected:
 
    bool visitMutablePointerType(MutablePointerType *LHS, QualType RHS)
    {
-      if (auto *Ptr = RHS->asPointerType()) {
+      if (auto *Ptr = RHS->asMutablePointerType()) {
          return visit(LHS->getPointeeType(), Ptr->getPointeeType());
       }
 
@@ -315,7 +315,7 @@ protected:
 
    bool visitMutableReferenceType(MutableReferenceType *LHS, QualType RHS)
    {
-      if (auto *Ptr = RHS->asReferenceType()) {
+      if (auto *Ptr = RHS->asMutableReferenceType()) {
          return visit(LHS->getReferencedType(), Ptr->getReferencedType());
       }
 
@@ -324,7 +324,7 @@ protected:
 
    bool visitMutableBorrowType(MutableBorrowType *LHS, QualType RHS)
    {
-      if (auto *Ptr = RHS->asReferenceType()) {
+      if (auto *Ptr = RHS->asMutableBorrowType()) {
          return visit(LHS->getReferencedType(), Ptr->getReferencedType());
       }
 

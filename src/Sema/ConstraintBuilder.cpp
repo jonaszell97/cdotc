@@ -78,6 +78,21 @@ public:
       return Expr;
    }
 
+   ExprResult visitVariadicExpansionExpr(VariadicExpansionExpr *Expr)
+   {
+      // Mark identifiers so that they can reference variadic parameters.
+      visitSpecificStatement<IdentifierRefExpr>([](IdentifierRefExpr *ident) {
+         ident->setAllowVariadicRef(true);
+      }, Expr->getExpr());
+
+      auto result = visitExpr(Expr->getExpr());
+      if (result) {
+         Expr->setExpr(result.get());
+      }
+
+      return Expr;
+   }
+
    ExprResult visitAnonymousCallExpr(AnonymousCallExpr *Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
@@ -438,13 +453,14 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
    }
 
    if (!T || Expr->isInvalid() || T->isErrorType()) {
-      EncounteredError = true;
-      Expr->setIsInvalid(true);
-
       T = Sys.newTypeVariable();
    }
 
    Bindings.ExprBindings[Expr] = T;
+
+   if (auto *typeVar = T->asTypeVariableType()) {
+      typeVarMap[Expr] = typeVar;
+   }
 
    if (!RequiredType || RequiredType->isAutoType()) {
       return T;
@@ -455,6 +471,8 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
       Var = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
       Sys.newConstraint<TypeBindingConstraint>(Var, T, nullptr);
    }
+
+   typeVarMap[Expr] = Var;
 
    // Constrain the type of the entire expression to be convertible to the
    // required type.
@@ -491,6 +509,38 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
    }
 
    return Var;
+}
+
+TypeVariableType*
+ConstraintBuilder::getTypeVar(Expression *E, bool force, SourceType T)
+{
+   auto resultType = visitExpr(E, T);
+   if (!resultType) {
+      return nullptr;
+   }
+   if (auto *typeVar = resultType->asTypeVariableType()) {
+      return typeVar;
+   }
+
+   auto it = typeVarMap.find(E);
+   if (it == typeVarMap.end()) {
+      if (force) {
+         QualType ty;
+         auto bindingIt = Bindings.ExprBindings.find(E);
+         if (bindingIt != Bindings.ExprBindings.end()) {
+            ty = bindingIt->getSecond();
+         }
+
+         auto *typeVar = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+         Sys.newConstraint<TypeBindingConstraint>(typeVar, ty, nullptr);
+
+         return typeVar;
+      }
+
+      return nullptr;
+   }
+
+   return it->getSecond();
 }
 
 QualType ConstraintBuilder::visitAttributedExpr(AttributedExpr *Expr, SourceType T)
@@ -1246,7 +1296,7 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr *Call, SourceType T,
       Ident->setAllowIncompleteTemplateArgs(true);
       Ident->setCalled(true);
 
-      if (Ident->hasLeadingDot() && !Ident->getContextualType()) {
+      if (T && Ident->hasLeadingDot() && !Ident->getContextualType()) {
          Ident->setContextualType(T);
       }
 
@@ -1348,6 +1398,13 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr *Call, SourceType T,
 
          return true;
       }
+   }
+
+   if (auto *prevSelfVal = Call->getSelfVal()) {
+      SelfVal = prevSelfVal;
+   }
+   else {
+      Call->setSelfVal(SelfVal);
    }
 
    return false;
@@ -1526,22 +1583,38 @@ QualType ConstraintBuilder::visitBinaryOperator(BinaryOperator* Expr, SourceType
 
 QualType ConstraintBuilder::visitAssignExpr(AssignExpr *Expr, SourceType T)
 {
-   auto LHSType = visitExpr(Expr->getLhs(), T);
-   if (!LHSType) {
+   QualType lhsType = visitExpr(Expr->getLhs());
+   if (!lhsType) {
+      Expr->setIsInvalid(true);
+      EncounteredError = true;
+
       return QualType();
    }
 
-   auto RHSType = visitExpr(Expr->getRhs(), T);
-   if (!RHSType) {
+   TypeVariable rhsTypeVar = getTypeVar(Expr->getRhs(), true, lhsType->removeReference());
+   if (!rhsTypeVar) {
+      Expr->setIsInvalid(true);
+      EncounteredError = true;
+
       return QualType();
    }
 
-   if (auto *TypeVar = RHSType->asTypeVariableType()) {
-      Sys.newConstraint<ImplicitConversionConstraint>(
-         TypeVar, LHSType->removeReference(),
-         makeLocator(Expr,
-            PathElement::contextualType(Expr->getRhs()->getSourceRange())));
-   }
+   TypeVariable lhsTypeVar = getTypeVar(Expr->getLhs(), true);
+
+   // The right hand side must be convertible to a type to which the left
+   // hand side is a mutable reference to.
+   TypeVariable commonType = Sys.newTypeVariable();
+
+   auto *locator = makeLocator(
+      Expr,
+      PathElement::contextualType(Expr->getRhs()->getSourceRange()));
+
+   Sys.newConstraint<ImplicitConversionConstraint>(
+      rhsTypeVar, commonType, locator);
+
+   Sys.newConstraint<TypeEqualityConstraint>(
+      lhsTypeVar, Sema.Context.getMutableReferenceType(commonType),
+      makeLocator(Expr->getLhs(), {}));
 
    return Sema.Context.getEmptyTupleType();
 }
@@ -1550,7 +1623,9 @@ QualType ConstraintBuilder::visitTypePredicateExpr(TypePredicateExpr *Expr, Sour
 {
    auto result = Sema.visitTypePredicateExpr(Expr);
    if (!result) {
+      Expr->setIsInvalid(true);
       EncounteredError = true;
+
       return QualType();
    }
 
@@ -1568,7 +1643,9 @@ QualType ConstraintBuilder::visitCastExpr(CastExpr *Cast, SourceType T)
    // actually given a meta type
    auto TypeResult = Sema.visitSourceType(Cast, Cast->getTargetType(), true);
    if (!TypeResult) {
+      Cast->setIsInvalid(true);
       EncounteredError = true;
+
       return QualType();
    }
 
@@ -1613,7 +1690,9 @@ QualType ConstraintBuilder::visitImplicitCastExpr(ImplicitCastExpr* Expr,
                                                   SourceType T) {
    auto result = Sema.visitImplicitCastExpr(Expr);
    if (!result) {
+      Expr->setIsInvalid(true);
       EncounteredError = true;
+
       return QualType();
    }
 
@@ -1634,9 +1713,28 @@ QualType ConstraintBuilder::visitIfExpr(IfExpr *Expr, SourceType T)
       break;
    }
 
-   (void) visitExpr(Expr->getTrueVal(), T);
-   (void) visitExpr(Expr->getFalseVal(), T);
-   return nullptr;
+   // TODO constraint for boolean-like values? maybe conformance constraint?
+
+   auto *TrueVal = Expr->getTrueVal();
+   auto *FalseVal = Expr->getFalseVal();
+
+   auto *trueTypeVar = getTypeVar(TrueVal, true, T);
+   auto *falseTypeVar = getTypeVar(FalseVal, true, T);
+
+   if (!trueTypeVar || !falseTypeVar) {
+      return nullptr;
+   }
+
+   // Create a type variable for a common type between TrueVal and FalseVal.
+   auto *commonType = Sys.newTypeVariable();
+
+   Sys.newConstraint<ImplicitConversionConstraint>(
+      trueTypeVar, commonType, makeLocator(TrueVal));
+
+   Sys.newConstraint<ImplicitConversionConstraint>(
+      falseTypeVar, commonType, makeLocator(TrueVal));
+
+   return commonType;
 }
 
 QualType ConstraintBuilder::visitStaticExpr(StaticExpr* Expr, SourceType T)
@@ -1664,6 +1762,17 @@ QualType ConstraintBuilder::visitMixinExpr(MixinExpr *Expr, SourceType T)
 {
    (void) visitExpr(Expr->getMixinExpr(), T);
    return Sys.newTypeVariable();
+}
+
+QualType ConstraintBuilder::visitVariadicExpansionExpr(VariadicExpansionExpr *Expr,
+                                                       SourceType RequiredType) {
+   auto result = Sema.visitExpr(Expr);
+   if (!result) {
+      EncounteredError = true;
+      return QualType();
+   }
+
+   return Expr->getExprType();
 }
 
 QualType ConstraintBuilder::visitMacroVariableExpr(MacroVariableExpr *Expr,

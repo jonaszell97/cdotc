@@ -760,21 +760,6 @@ bool IRGen::NeedsStructReturn(CanType Ty)
    return Sema.NeedsStructReturn(Ty->getDesugaredType());
 }
 
-bool IRGen::PassStructDirectly(CanType Ty)
-{
-   return false;
-//   if (!Ty->isRecordType())
-//      return false;
-//
-//   if (Ty->getRecord()->getKind() != Decl::StructDeclID)
-//      return false;
-//
-//   auto *S = cast<StructDecl>(Ty->getRecord());
-//   auto NumFields = S->getNumNonStaticFields();
-//
-//   return NumFields < TI.getDirectStructPassingFieldThreshold();
-}
-
 llvm::StructType* IRGen::getEnumCaseTy(ast::EnumCaseDecl *Decl)
 {
    auto it = EnumCaseTys.find(Decl);
@@ -1299,6 +1284,10 @@ void IRGen::visitFunction(Function &F)
    // Allocate structs that were passed destructured.
    Builder.SetInsertPoint(AllocaBB);
 
+   if (F.getName()=="_CNW4mainE5Int64C1ElL5value") {
+       NO_OP;
+   }
+
    for (auto &B : F.getBasicBlocks()) {
       if (B.hasNoPredecessors())
          continue;
@@ -1471,7 +1460,7 @@ llvm::Value* IRGen::CreateCall(il::Function *F,
                                llvm::SmallVector<llvm::Value*, 8> &args) {
    auto fun = getFunction(F);
 
-   bool sret = F->hasStructReturn() && !PassStructDirectly(F->getReturnType());
+   bool sret = F->hasStructReturn();
    if (sret) {
       auto alloca = CreateAlloca(F->getReturnType());
       args.insert(args.begin(), alloca);
@@ -2475,16 +2464,28 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
    return Val;
 }
 
+bool shouldReallyLoad(SemaPass &Sema, const LoadInst &I)
+{
+   if (Sema.NeedsStructReturn(I.getType())) {
+      return false;
+   }
+
+   auto *singleUser = I.getSingleUser();
+   if (!singleUser) {
+      return true;
+   }
+
+   if (isa<GEPInst>(singleUser) || isa<FieldRefInst>(singleUser)) {
+      return false;
+   }
+
+   return true;
+}
+
 llvm::Value *IRGen::visitLoadInst(LoadInst const& I)
 {
    auto val = getLlvmValue(I.getTarget());
-   if (auto *singleUser = dyn_cast_or_null<FieldRefInst>(I.getSingleUser())) {
-      if (val->getType()->isPointerTy() && val->getType()->getPointerElementType()->isStructTy()) {
-         return val;
-      }
-   }
-
-   if (NeedsStructReturn(I.getType())) {
+   if (!shouldReallyLoad(Sema, I)) {
       return val;
    }
 
@@ -2530,16 +2531,6 @@ llvm::Value* IRGen::visitRetInst(RetInst const& I)
       }
 
       auto func = I.getParent()->getParent();
-      if (PassStructDirectly(func->getReturnType())) {
-         auto *S = cast<StructDecl>(func->getReturnType()->getRecord());
-         if (S->getNumNonStaticFields() == 1) {
-            auto *GEP = Builder.CreateStructGEP(getStructTy(S), retVal, 0);
-            return Builder.CreateRet(Builder.CreateLoad(GEP));
-         }
-
-         return Builder.CreateRet(Builder.CreateLoad(retVal));
-      }
-
       if (func->hasStructReturn()) {
          auto argIt = Builder.GetInsertBlock()->getParent()->arg_begin();
          if (I.getParent()->getParent()->isLambda())

@@ -376,6 +376,116 @@ QueryResult NeedsStructReturnQuery::run()
    return finish(Result, S);
 }
 
+QueryResult PassByValueQuery::run()
+{
+   CanType T = this->T->getDesugaredType();
+
+   Status S = Done;
+   if (T->isDependentType()) {
+      S = Dependent;
+   }
+
+   bool Result;
+   switch (T->getTypeID()) {
+   default:
+      Result = false;
+      break;
+   case Type::BuiltinTypeID:
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::MutableBorrowTypeID:
+   case Type::FunctionTypeID:
+      Result = true;
+      break;
+   case Type::AssociatedTypeID:
+   case Type::ExistentialTypeID:
+      Result = false;
+      break;
+   case Type::RecordTypeID: {
+      auto rec = T->getRecord();
+      switch (rec->getKind()) {
+      case Decl::EnumDeclID:
+         Result = !cast<EnumDecl>(rec)->isRawEnum();
+         break;
+      case Decl::StructDeclID: {
+         auto &StoredFields = cast<StructDecl>(rec)->getStoredFields();
+         if (StoredFields.size() > 3) {
+            Result = false;
+         }
+         else {
+            Result = true;
+            for (auto *F : StoredFields) {
+               if (QC.PrepareDeclInterface(F)) {
+                  continue;
+               }
+
+               if (QC.PassByValue(Result, F->getType())) {
+                  continue;
+               }
+
+               if (!Result) {
+                  break;
+               }
+            }
+         }
+
+         break;
+      }
+      case Decl::UnionDeclID:
+      case Decl::ProtocolDeclID:
+      case Decl::ClassDeclID:
+         Result = false;
+         break;
+      default:
+         llvm_unreachable("bad record kind!");
+      }
+
+      break;
+   }
+   case Type::TupleTypeID: {
+      auto ContainedTypes = T->asTupleType()->getContainedTypes();
+      if (ContainedTypes.size() > 3) {
+         Result = false;
+      }
+      else {
+         Result = true;
+         for (auto ContainedTy : ContainedTypes) {
+            if (QC.PassByValue(Result, ContainedTy)) {
+               continue;
+            }
+
+            if (!Result) {
+               break;
+            }
+         }
+      }
+
+      break;
+   }
+   case Type::ArrayTypeID: {
+      auto *Arr = T->asArrayType();
+      if (Arr->getNumElements() > 3) {
+         Result = false;
+      }
+      else {
+         if (auto Err = QC.PassByValue(Result, Arr->getElementType())) {
+            return Query::finish(Err);
+         }
+      }
+
+      break;
+   }
+   case Type::MetaTypeID:
+   case Type::BoxTypeID:
+      Result = true;
+      break;
+   }
+
+   return finish(Result, S);
+}
+
 QueryResult NeedsDeinitilizationQuery::run()
 {
    CanType T = this->T->getDesugaredType();
@@ -946,9 +1056,7 @@ public:
       }
 
       assert(!Arg->isValue() && "should not appear in type position!");
-      if (Arg->isVariadic()) {
-         return T;
-      }
+      assert(!Arg->isVariadic() && "should have been removed!");
 
       return Arg->getType();
    }
@@ -1784,7 +1892,11 @@ QueryResult IsImplicitlyConvertibleQuery::run()
       return Query::finish(Err);
    }
 
-   return finish(Seq && Seq->isImplicit());
+   if (!Seq || !Seq->isImplicit()) {
+      return finish({ false, 0 });
+   }
+
+   return finish({ true, Seq->getPenalty() });
 }
 
 QueryResult GetConversionSequenceQuery::run()
@@ -1808,6 +1920,7 @@ class TemplateParamTypeComparer: public TypeComparer<TemplateParamTypeComparer> 
 
 public:
    bool typeDependent = false;
+   unsigned penalty = 0;
 
    explicit TemplateParamTypeComparer(SemaPass &Sema) : Sema(Sema) {}
 
@@ -1818,6 +1931,7 @@ public:
          typeDependent = true;
       }
 
+      penalty += Builder.getPenalty();
       return Builder.isValid();
    }
 
@@ -1846,13 +1960,12 @@ QueryResult IsValidParameterValueQuery::run()
    }
 
    if (!paramType->containsTemplateParamType()) {
-      bool implicitlyConvertible;
-      if (auto err = QC.IsImplicitlyConvertible(implicitlyConvertible,
-                                                givenType, paramType)) {
+      IsImplicitlyConvertibleQuery::result_type result;
+      if (auto err = QC.IsImplicitlyConvertible(result, givenType, paramType)) {
          return err;
       }
 
-      return finish(implicitlyConvertible);
+      return finish({result.implicitlyConvertible, result.conversionPenalty});
    }
 
    // Implicit lvalue -> rvalue
@@ -1868,5 +1981,5 @@ QueryResult IsValidParameterValueQuery::run()
    TemplateParamTypeComparer comparer(*QC.Sema);
 
    bool result = comparer.visit(paramType, givenType);
-   return finish(result);
+   return finish({result, comparer.penalty});
 }

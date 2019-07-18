@@ -23,6 +23,7 @@ class DiagnosticsEngine;
 
 namespace ast {
    class AstNode;
+   class NamedDecl;
    struct SourceType;
 } // namespace ast
 
@@ -50,6 +51,30 @@ namespace opt {
       show_constness,
    };
 } // namespace opt
+
+struct BuiltinFeature {
+private:
+   BuiltinFeature() {}
+
+public:
+   enum FeatureKind {
+      None = 0,
+      OptionalType,
+      ArrayLiteral,
+      DictionaryLiteral,
+      StringLiteral,
+      ArrayType,
+      DictionaryType,
+      OptionType,
+      FallibleCast,
+      TypeOf,
+      FallibleInit,
+      OptionalTry,
+      AsyncAwait,
+      Closure,
+      ReadWriteProperty,
+   };
+};
 
 struct FakeSourceLocation {
    mutable std::string text;
@@ -96,6 +121,7 @@ public:
       return *this << (int)i;
    }
 
+   DiagnosticBuilder& operator<<(const ast::NamedDecl *decl);
    DiagnosticBuilder& operator<<(llvm::APInt const& API);
 
    DiagnosticBuilder& operator<<(SourceLocation loc);

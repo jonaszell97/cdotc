@@ -35,7 +35,7 @@ QueryResult GetBuiltinModuleQuery::run()
 
    auto *StdII = sema().getIdentifier("core");
    if (QC.CI.getOptions().noPrelude() && !ModuleMgr.IsModuleLoaded(StdII)) {
-      return finish(nullptr);
+      return fail();
    }
 
    if (Mod == Std) {
@@ -67,6 +67,10 @@ QueryResult GetBuiltinModuleQuery::run()
    }
 
    auto *M = QC.CI.getModuleMgr().GetModule(Idents);
+   if (!M) {
+      return fail();
+   }
+
    return finish(M);
 }
 
@@ -159,8 +163,52 @@ QueryResult GetBuiltinAliasQuery::run()
       return fail();
    }
 
+#ifndef NDEBUG
+   if (!LookupRes) {
+      if (QC.LookupSingle(LookupRes, QC.CI.getCompilationModule()->getDecl(), II)) {
+         return fail();
+      }
+   }
+#endif
+
    return finish(dyn_cast_or_null<AliasDecl>(LookupRes));
 }
+
+#ifndef NDEBUG
+
+static StringRef getBuiltinRecordName(GetBuiltinRecordQuery::RecordKind kind)
+{
+   switch (kind) {
+   case GetBuiltinRecordQuery::Bool: return "Bool";
+   case GetBuiltinRecordQuery::Character: return "Character";
+   case GetBuiltinRecordQuery::Int8: return "Int8";
+   case GetBuiltinRecordQuery::UInt8: return "UInt8";
+   case GetBuiltinRecordQuery::Int16: return "Int16";
+   case GetBuiltinRecordQuery::UInt16: return "UInt16";
+   case GetBuiltinRecordQuery::Int32: return "Int32";
+   case GetBuiltinRecordQuery::UInt32: return "UInt32";
+   case GetBuiltinRecordQuery::Int64: return "Int64";
+   case GetBuiltinRecordQuery::UInt64: return "UInt64";
+   case GetBuiltinRecordQuery::Int128: return "Int128";
+   case GetBuiltinRecordQuery::UInt128: return "UInt128";
+   case GetBuiltinRecordQuery::Float: return "Float";
+   case GetBuiltinRecordQuery::Double: return "Double";
+   case GetBuiltinRecordQuery::UnsafePtr: return "UnsafePtr";
+   case GetBuiltinRecordQuery::UnsafeMutablePtr: return "UnsafeMutablePtr";
+   case GetBuiltinRecordQuery::UnsafeRawPtr: return "UnsafeRawPtr";
+   case GetBuiltinRecordQuery::UnsafeMutableRawPtr: return "UnsafeMutableRawPtr";
+   case GetBuiltinRecordQuery::UnsafeBufferPtr: return "UnsafeBufferPtr";
+   case GetBuiltinRecordQuery::UnsafeMutableBufferPtr: return "UnsafeMutableBufferPtr";
+   case GetBuiltinRecordQuery::Array: return "Array";
+   case GetBuiltinRecordQuery::Dictionary: return "Dictionary";
+   case GetBuiltinRecordQuery::String: return "String";
+   case GetBuiltinRecordQuery::Option: return "Option";
+   default:
+      return "";
+   }
+}
+
+#endif
 
 QueryResult GetBuiltinRecordQuery::run()
 {
@@ -169,6 +217,18 @@ QueryResult GetBuiltinRecordQuery::run()
    if (QC.CI.getOptions().noPrelude()) {
       auto &Idents = QC.Context.getIdentifiers();
       auto *NS = QC.Sema->getPrivateNamespace();
+
+#ifndef NDEBUG
+      auto &name = Idents.get(getBuiltinRecordName(R));
+      NamedDecl *LookupRes;
+      if (QC.LookupSingle(LookupRes, QC.CI.getCompilationModule()->getDecl(), &name)) {
+         return fail();
+      }
+
+      if (auto *result = dyn_cast_or_null<RecordDecl>(LookupRes)) {
+         return finish(result);
+      }
+#endif
 
       switch (R) {
       case TypeInfo: {
@@ -606,6 +666,32 @@ QueryResult GetBuiltinRecordQuery::run()
    return finish(dyn_cast_or_null<RecordDecl>(LookupRes));
 }
 
+#ifndef NDEBUG
+
+static StringRef getBuiltinProtocolName(GetBuiltinProtocolQuery::ProtocolKind kind)
+{
+   switch (kind) {
+   case GetBuiltinProtocolQuery::Any: return "Any";
+   case GetBuiltinProtocolQuery::Equatable: return "Equatable";
+   case GetBuiltinProtocolQuery::Hashable: return "Hashable";
+   case GetBuiltinProtocolQuery::Copyable: return "Copyable";
+   case GetBuiltinProtocolQuery::MoveOnly: return "MoveOnly";
+   case GetBuiltinProtocolQuery::ImplicitlyCopyable: return "ImplicitlyCopyable";
+   case GetBuiltinProtocolQuery::StringRepresentable: return "StringRepresentable";
+   case GetBuiltinProtocolQuery::Persistable: return "Persistable";
+   case GetBuiltinProtocolQuery::Awaiter: return "Awaiter";
+   case GetBuiltinProtocolQuery::Awaitable: return "Awaitable";
+   case GetBuiltinProtocolQuery::TruthValue: return "TruthValue";
+   case GetBuiltinProtocolQuery::RawRepresentable: return "RawRepresentable";
+   case GetBuiltinProtocolQuery::Dereferenceable: return "Dereferenceable";
+   case GetBuiltinProtocolQuery::Unwrappable: return "Unwrappable";
+   default:
+      return "";
+   }
+}
+
+#endif
+
 QueryResult GetBuiltinProtocolQuery::run()
 {
    // Synthesize some types that the runtime needs even if there's no std
@@ -613,6 +699,19 @@ QueryResult GetBuiltinProtocolQuery::run()
    if (QC.CI.getOptions().noPrelude()) {
       auto &Idents = QC.Context.getIdentifiers();
       auto *NS = QC.Sema->getPrivateNamespace();
+
+#ifndef NDEBUG
+      auto &name = Idents.get(getBuiltinProtocolName(P));
+
+      NamedDecl *LookupRes;
+      if (QC.LookupSingle(LookupRes, QC.CI.getCompilationModule()->getDecl(), &name)) {
+         return fail();
+      }
+
+      if (auto *result = dyn_cast_or_null<ProtocolDecl>(LookupRes)) {
+         return finish(result);
+      }
+#endif
 
       switch (P) {
       case Any: {
@@ -686,7 +785,8 @@ QueryResult GetBuiltinProtocolQuery::run()
          auto *Getter = MethodDecl::Create(QC.Context,
                                  AccessSpecifier::Public, Loc, PropName,
                                  SourceType(QC.Context.getRecordType(BoolDecl)),
-                                 {}, {}, nullptr, false);
+                                 { QC.Sema->MakeSelfArg(Loc) }, {},
+                                 nullptr, false);
 
          auto *Prop = PropDecl::Create(QC.Context, AccessSpecifier::Public,
                                        Loc, Name, Getter->getReturnType(),

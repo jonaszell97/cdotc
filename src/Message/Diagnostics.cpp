@@ -277,6 +277,110 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
          llvm_unreachable("bad arg kind");
       }
    }
+   else if (funcName == "decl_kind") {
+      assert(args.empty() && "decl_kind expects no args");
+
+      Decl::DeclKind declKind;
+      switch (Engine.ArgKinds[idx]) {
+      case DiagnosticsEngine::ak_named_decl:
+         declKind = reinterpret_cast<const NamedDecl*>(Engine.OtherArgs[idx])->getKind();
+         break;
+      case DiagnosticsEngine::ak_integer:
+         declKind = static_cast<Decl::DeclKind>(Engine.OtherArgs[idx]);
+         break;
+      default:
+         llvm_unreachable("unsupported argument kind for function 'decl_kind'");
+      }
+
+      switch (declKind) {
+      case Decl::ExtensionDeclID:
+         msg += "extension";
+         break;
+      case Decl::StructDeclID:
+         msg += "struct";
+         break;
+      case Decl::ClassDeclID:
+         msg += "class";
+         break;
+      case Decl::EnumDeclID:
+         msg += "enum";
+         break;
+      case Decl::UnionDeclID:
+         msg += "union";
+         break;
+      case Decl::ProtocolDeclID:
+         msg += "protocol";
+         break;
+      case Decl::FunctionDeclID:
+         msg += "function";
+         break;
+      case Decl::MethodDeclID:
+         msg += "method";
+         break;
+      case Decl::InitDeclID:
+         msg += "initializer";
+         break;
+      case Decl::DeinitDeclID:
+         msg += "deinitializer";
+         break;
+      case Decl::EnumCaseDeclID:
+         msg += "enum case";
+         break;
+      case Decl::AliasDeclID:
+         msg += "alias";
+         break;
+      case Decl::NamespaceDeclID:
+         msg += "namespace";
+         break;
+      case Decl::FieldDeclID:
+         msg += "field";
+         break;
+      case Decl::PropDeclID:
+         msg += "property";
+         break;
+      case Decl::LocalVarDeclID:
+         msg += "local variable";
+         break;
+      case Decl::GlobalVarDeclID:
+         msg += "global variable";
+         break;
+      case Decl::FuncArgDeclID:
+         msg += "function argument";
+         break;
+      case Decl::AssociatedTypeDeclID:
+         msg += "associated type";
+         break;
+      case Decl::SubscriptDeclID:
+         msg += "subscript";
+         break;
+      case Decl::PrecedenceGroupDeclID:
+         msg += "precedence group";
+         break;
+      case Decl::OperatorDeclID:
+         msg += "operator";
+         break;
+      case Decl::MacroDeclID:
+         msg += "macro";
+         break;
+      case Decl::MacroExpansionDeclID:
+         msg += "macro expansion";
+         break;
+      case Decl::ModuleDeclID:
+         msg += "module";
+         break;
+      case Decl::SourceFileDeclID:
+         msg += "source file";
+         break;
+      case Decl::ImportDeclID:
+         msg += "import declaration";
+         break;
+      case Decl::UsingDeclID:
+         msg += "using declaration";
+         break;
+      default:
+         llvm_unreachable("missing diagnostic specifier!");
+      }
+   }
 }
 
 static SeverityLevel getSeverity(MessageKind msg)
@@ -322,10 +426,34 @@ void DiagnosticBuilder::finalize()
    out << prepareMessage(getMessage(msg));
 
    if (hasFakeSourceLoc) {
-      out << "\n" << Engine.StringArgs[Engine.NumArgs - 1] << "\n\n";
-      out.flush();
-      Engine.finalizeDiag(str, severity);
+      std::string &text = Engine.StringArgs[Engine.NumArgs - 1];
+      out << "\n" << text << "\n";
 
+      if (Engine.NumSourceRanges > 0) {
+         std::string Markers;
+         Markers.resize(text.size());
+         std::fill(Markers.begin(), Markers.end(), ' ');
+
+         for (int i = 0; i < Engine.NumSourceRanges; ++i) {
+            auto SR = Engine.SourceRanges[i];
+
+            if (!SR.getEnd()) {
+               Markers[SR.getStart().getOffset()] = '^';
+            }
+            else for (int j = SR.getStart().getOffset(); j < SR.getEnd().getOffset(); ++j) {
+               Markers[j] = '~';
+            }
+         }
+
+         out << Markers << "\n";
+      }
+      else {
+         out << "\n";
+      }
+
+      out.flush();
+
+      Engine.finalizeDiag(str, severity);
       return;
    }
 
@@ -500,6 +628,15 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(size_t i)
 {
    Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_integer;
    Engine.OtherArgs[Engine.NumArgs] = i;
+   ++Engine.NumArgs;
+
+   return *this;
+}
+
+DiagnosticBuilder& DiagnosticBuilder::operator<<(const NamedDecl *decl)
+{
+   Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_named_decl;
+   Engine.OtherArgs[Engine.NumArgs] = (uintptr_t)decl;
    ++Engine.NumArgs;
 
    return *this;

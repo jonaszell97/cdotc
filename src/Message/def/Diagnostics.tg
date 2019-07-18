@@ -210,7 +210,7 @@ def err_vararg_cannot_pass_void : Error<"cannot pass 'void' to a vararg function
 def err_iterator_must_return_option : Error<"'next' function used in for-in must return an 'Option' type">
 def err_could_not_infer_arr_element_type : Error<"could not infer array literal element type">
 
-def err_no_builtin_decl : Error<"${ 0 | select(none, optional type, array literal, dictionary literal, string literal, 'Array' type, 'Dictionary' type, 'Option' type, failible cast, 'typeof', fallible init, 'try?', 'async / await', 'closure') } cannot be used because the declaration for '${ 0 | select(Option, Option, Array, Dictionary, String, Array, Dictionary, Option, Option, TypeInfo, Option, Option, Future, Box) }' was not found">
+def err_no_builtin_decl : Error<"${ 0 | select(none, optional type, array literal, dictionary literal, string literal, 'Array' type, 'Dictionary' type, 'Option' type, fallible cast, 'typeof', fallible init, 'try?', 'async / await', closure, read / write property) } cannot be used because the declaration for '${ 0 | select(Option, Option, Array, Dictionary, String, Array, Dictionary, Option, Option, TypeInfo, Option, Option, Future, Box, UnsafePtr) }' was not found">
 
 def err_builtin_decl_not_found : Error<"builtin declaration '$0' is missing">
 

@@ -289,6 +289,11 @@ void ASTDeclReader::visitStaticForDecl(StaticForDecl *D)
    D->setRBRaceLoc(ReadSourceLocation());
    D->setRange(cast<StaticExpr>(Record.readExpr()));
    D->setBodyDecl(ReadDeclAs<CompoundDecl>());
+   D->setVariadic(Record.readBool());
+
+   if (D->isVariadic()) {
+      D->setVariadicDecl(ReadDeclAs<NamedDecl>());
+   }
 }
 
 void ASTDeclReader::visitMixinDecl(MixinDecl *D)
@@ -426,6 +431,10 @@ void ASTDeclReader::visitAliasDecl(AliasDecl *D)
    D->setSourceLoc(ReadSourceLocation());
    D->setType(Record.readSourceType());
    D->setAliasExpr(cast_or_null<StaticExpr>(Record.readExpr()));
+
+   uint64_t flags = Record.readInt();
+   D->setStrong((flags & 0x1) != 0);
+   D->setVariadicForDecl((flags & 0x2) != 0);
 }
 
 void ASTDeclReader::visitPrecedenceGroupDecl(PrecedenceGroupDecl *D)
@@ -774,8 +783,10 @@ void ASTDeclReader::visitLocalVarDecl(LocalVarDecl *D)
 {
    visitVarDecl(D);
 
-   D->setIsNRVOCandidate(Record.readBool());
-   D->setInitIsMove(Record.readBool());
+   uint64_t flags = Record.readInt();
+   D->setIsNRVOCandidate((flags & 0x1) != 0);
+   D->setInitIsMove((flags & 0x2) != 0);
+   D->setVariadicForDecl((flags & 0x4) != 0);
 }
 
 void ASTDeclReader::visitGlobalVarDecl(GlobalVarDecl *D)
