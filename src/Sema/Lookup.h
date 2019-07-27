@@ -19,6 +19,7 @@ struct SingleLevelLookupResult: public ast::DeclContextLookupResult {
    {}
 
    bool unique() const;
+   ast::NamedDecl *uniqueDecl() const;
 
    LambdaScope *LS = nullptr;
 };
@@ -190,6 +191,7 @@ public:
    }
 
    bool unique() const;
+   ast::NamedDecl *uniqueDecl() const;
 };
 
 } // namespace cdot

@@ -223,7 +223,7 @@
 //         break;
 //      }
 //      case TypeID::TemplateParamTypeID: {
-//         MD = getTypeDI(ty->asGenericTy()->getActualType());
+//         MD = getTypeDI(ty->asGenericTy()->getDefaultType());
 //         break;
 //      }
 //      default:

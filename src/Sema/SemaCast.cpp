@@ -319,11 +319,7 @@ static void FromRecord(SemaPass &SP, CanType from, CanType to,
 
    auto ToRec = to->getRecord();
    if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
-      bool ConformsTo;
-      if (SP.QC.ConformsTo(ConformsTo, from, P)) {
-         return Seq.addStep(CastKind::NoOp, to);
-      }
-
+      bool ConformsTo = SP.ConformsTo(from, P);
       if (ConformsTo) {
          return Seq.addStep(CastKind::ExistentialInit, to,
                             CastStrength::Implicit);
@@ -366,8 +362,8 @@ static void FromProtocol(SemaPass &SP, CanType from, CanType to,
 
    auto ToRec = to->getRecord();
    if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
-      bool ConformsTo;
-      if (SP.QC.ConformsTo(ConformsTo, from, P) || ConformsTo) {
+      bool ConformsTo = SP.ConformsTo(from, P);
+      if (ConformsTo) {
          return Seq.addStep(CastKind::NoOp, to);
       }
 
@@ -395,11 +391,7 @@ static void FromExistential(SemaPass &SP, CanType from, CanType to,
             return;
          }
 
-         bool ConformsTo;
-         if (SP.QC.ConformsTo(ConformsTo, P, Proto)) {
-            return Seq.addStep(CastKind::NoOp, to);
-         }
-
+         bool ConformsTo = SP.ConformsTo(P, Proto);
          if (ConformsTo) {
             return Seq.addStep(CastKind::ExistentialCast, to,
                                CastStrength::Implicit);
@@ -498,7 +490,9 @@ static bool lookupImplicitInitializer(SemaPass &SP,
 
       CanType NeededTy = I->getArgs().front()->getType();
       if (NeededTy == from) {
+         I = cast<InitDecl>(SP.maybeInstantiateMemberFunction(I, StmtOrDecl()));
          Seq.addStep(I, CastStrength::Implicit);
+
          return true;
       }
 
@@ -563,7 +557,9 @@ static bool lookupImplicitInitializer(SemaPass &SP,
          I = cast<InitDecl>(Inst);
       }
 
+      I = cast<InitDecl>(SP.maybeInstantiateMemberFunction(I, StmtOrDecl()));
       Seq.addStep(I, CastStrength::Implicit);
+
       return true;
    }
 
@@ -589,8 +585,8 @@ static void getConversionSequence(SemaPass &SP,
 
    // We call this here to preserve associated types / generic types for
    // the above implicit conversions.
-   SP.QC.ApplyCapabilites(fromTy, fromTy, &SP.getDeclContext());
-   SP.QC.ApplyCapabilites(toTy, toTy, &SP.getDeclContext());
+//   SP.QC.ApplyCapabilites(fromTy, fromTy, &SP.getDeclContext());
+//   SP.QC.ApplyCapabilites(toTy, toTy, &SP.getDeclContext());
 
    CanType from = fromTy->getDesugaredType();
    CanType to = toTy->getDesugaredType();
@@ -634,13 +630,7 @@ static void getConversionSequence(SemaPass &SP,
    // Any type -> Existential
    if (to->isExistentialType()) {
       for (auto E : to->asExistentialType()->getExistentials()) {
-         bool Conforms;
-         if (SP.QC.ConformsTo(Conforms, from,
-                              cast<ProtocolDecl>(E->getRecord()))) {
-            Seq.addStep(CastKind::NoOp, to);
-            return;
-         }
-
+         bool Conforms = SP.ConformsTo(from, cast<ProtocolDecl>(E->getRecord()));
          if (Conforms) {
             Seq.addStep(CastKind::ExistentialInit, to);
             return;
@@ -701,7 +691,6 @@ static void getConversionSequence(SemaPass &SP,
       break;
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
       FromReference(SP, from, to, Seq);
       break;
    case Type::DependentRecordTypeID:

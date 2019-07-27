@@ -93,15 +93,8 @@ QueryResult ResolveWildcardDeclarationsQuery::run()
    return finish(QueryResult(K));
 }
 
-QueryResult PrepareTypeNameLookupQuery::run()
+QueryResult ResolveMetaDeclarationsQuery::run()
 {
-   finish();
-
-   // Prepare the enclosing context.
-   if (DC->getParentCtx() && QC.PrepareTypeNameLookup(DC->getParentCtx())) {
-      return fail();
-   }
-
    SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
 
    // Still nothing, expand static if / for declarations.
@@ -161,9 +154,25 @@ QueryResult PrepareTypeNameLookupQuery::run()
          continue;
       }
 
-      if (auto Err = QC.PrepareTypeNameLookup(InnerDC)) {
+      if (auto Err = QC.ResolveMetaDeclarations(InnerDC)) {
          return Query::finish(Err);
       }
+   }
+
+   return finish();
+}
+
+QueryResult PrepareTypeNameLookupQuery::run()
+{
+   finish();
+
+   // Prepare the enclosing context.
+   if (DC->getParentCtx() && QC.PrepareTypeNameLookup(DC->getParentCtx())) {
+      return fail();
+   }
+
+   if (QC.ResolveMetaDeclarations(DC)) {
+      return fail();
    }
 
    // If this is not a record, we're done.
@@ -265,6 +274,7 @@ QueryResult FindExtensionsQuery::run()
    auto &Context = QC.CI.getContext();
    SmallPtrSet<ExtensionDecl*, 2> ExtensionsToRemove;
 
+   Status S = Done;
    for (auto *Ext : Context.UnresolvedExtensions) {
       SemaPass::DeclScopeRAII DSR(*QC.Sema, Ext->getDeclContext());
 
@@ -280,6 +290,8 @@ QueryResult FindExtensionsQuery::run()
       case ResultKind::AppliesDirectly:
          // FIXME generalized extensions
          Ext->setExtendedRecord(T->getRecord());
+         Ext->getExtendedType().setResolvedType(T);
+
          ExtensionsToRemove.insert(Ext);
 
          // Update the names of contained initializers and deinitializers.
@@ -288,26 +300,7 @@ QueryResult FindExtensionsQuery::run()
          LLVM_FALLTHROUGH;
       case ResultKind::Applies: {
          Context.addExtension(T, Ext);
-
-         // Add conformances if this declaration is not constrained, not a
-         // protocol and not a template.
-         bool AddConformances =
-            QC.CI.getContext().getExtConstraints(Ext).empty()
-            && !isa<ProtocolDecl>(T->getRecord())
-            && !T->getRecord()->isTemplate();
-
-         ConformanceKind Kind;
-         if (AddConformances) {
-            Kind = ConformanceKind::Explicit;
-         }
-         else {
-            Kind = ConformanceKind::Conditional;
-         }
-
-         if (QC.ResolveDeclaredConformances(T, Ext->getConformanceTypes(),
-                                            Kind)) {
-            return fail();
-         }
+         Ext->setName(QC.Context.getDeclNameTable().getExtensionName(T));
 
          break;
       }
@@ -318,7 +311,7 @@ QueryResult FindExtensionsQuery::run()
       Context.UnresolvedExtensions.erase(Ext);
    }
 
-   return finish();
+   return finish(S);
 }
 
 static bool
@@ -523,11 +516,12 @@ QueryResult MatchExtensionTypeQuery::run()
    // Check if the type is already resolved.
    const SourceType &ExtendedTy = PatternTy;
    if (ExtendedTy.isResolved()) {
-      if (ExtendedTy.getResolvedType() == T)
+      if (ExtendedTy.getResolvedType() == T) {
          return finish(AppliesDirectly);
-
-      if (ExtendedTy->isDependentType())
+      }
+      if (ExtendedTy->isDependentType()) {
          return finish(MightApply);
+      }
 
       return finish(DoesNotApply);
    }
@@ -778,19 +772,51 @@ QueryResult ResolveExtensionQuery::run()
    return finish();
 }
 
-QueryResult GetAssociatedTypeQuery::run()
+QueryResult GetAssociatedTypeImplQuery::run()
 {
-   AssociatedTypeDecl *Impl = R->lookupSingle<AssociatedTypeDecl>(Name);
-   if (!Impl) {
-      for (auto *Ext : Extensions) {
-         Impl = Ext->lookupSingle<AssociatedTypeDecl>(Name);
-         if (Impl) {
-            break;
+   auto *Impl = R->lookupSingle<AliasDecl>(Name);
+   if (Impl) {
+      return finish(Impl);
+   }
+
+   for (auto *Ext : Extensions) {
+      if (Constraints) {
+         if (!QC.IsSupersetOf(Constraints, QC.Sema->getDeclConstraints(Ext))) {
+            continue;
          }
+      }
+
+      Impl = Ext->lookupSingle<AliasDecl>(Name);
+      if (Impl) {
+         return finish(Impl);
       }
    }
 
-   return finish(Impl);
+   return finish(nullptr);
+}
+
+QueryResult GetAssociatedTypeDeclQuery::run()
+{
+   auto *Impl = P->lookupSingle<AssociatedTypeDecl>(Name);
+   if (Impl) {
+      return finish(Impl);
+   }
+
+   auto conformances = QC.Context.getConformanceTable().getAllConformances(P);
+   for (auto *conf : conformances) {
+      if (conf->isConditional() && Constraints) {
+         if (!QC.IsSupersetOf(conf->getConstraints(), Constraints)) {
+            continue;
+         }
+      }
+
+      Impl = conf->getProto()->lookupSingle<AssociatedTypeDecl>(Name);
+      if (Impl) {
+         return finish(Impl);
+      }
+   }
+
+   return finish(nullptr);
 }
 
 static DeclarationName adaptName(ASTContext &Ctx,
@@ -849,6 +875,9 @@ struct LookupOptions {
 
    /// If true, only look in this context, not any enclosing ones.
    bool ImmediateContextOnly = false;
+
+   /// Whether or not to look in protocol conformances.
+   bool LookInConformances = true;
 };
 
 struct LookupData {
@@ -959,11 +988,7 @@ static bool LookupInExtension(ExtensionDecl *Ext,
 static bool LookupInRecord(RecordDecl *R,
                            DeclarationName Name,
                            LookupData &Data) {
-   bool LookupInConformances = false;
-   if (isa<ProtocolDecl>(R)) {
-      LookupInConformances = true;
-   }
-
+   bool LookupInConformances = isa<ProtocolDecl>(R) && Data.Opts.LookInConformances;
    ASTContext &Context = Data.SP.Context;
 
    // Lookup in protocol conformances.
@@ -1047,8 +1072,9 @@ static bool LookupInExtension(ExtensionDecl *Ext,
    }
 
    for (auto &Conf : Ext->getConformanceTypes()) {
-      if (!Conf.isResolved())
+      if (!Conf.isResolved() || Conf->isErrorType()) {
          break;
+      }
 
       if (MultiLevelLookupImpl(*Conf->getRecord(), Name, Data)) {
          return true;
@@ -1183,84 +1209,15 @@ static bool MultiStageLookup(DeclContext *DC,
       return HandleFoundDecl(DC, Name, Data);
    }
 
+   if (!Data.Opts.LookInConformances) {
+      return false;
+   }
+
    auto &QC = Data.SP.QC;
    if (auto *Q = QC.getQuery<PrepareTypeNameLookupQuery>(DC)) {
       if (Q->done()) {
          return false;
       }
-   }
-
-   // Next, expand macros until there are none left or we found what we're
-   // looking for.
-   for (auto *Macro : DC->getDecls<MacroExpansionDecl>()) {
-      Decl *D;
-      if (QC.ExpandMacroDecl(D, Macro)) {
-         continue;
-      }
-   }
-
-   if (DC->hasAnyDeclNamed(Name)) {
-      return HandleFoundDecl(DC, Name, Data);
-   }
-
-   // Still nothing, expand static if / for declarations.
-   for (auto *Decl : DC->getDecls()) {
-      switch (Decl->getKind()) {
-      case Decl::StaticIfDeclID: {
-         auto *If = cast<StaticIfDecl>(Decl);
-         ast::Decl *Result;
-
-         if (QC.ResolveStaticIf(Result, If)) {
-            continue;
-         }
-
-         break;
-      }
-      case Decl::StaticForDeclID: {
-         auto *For = cast<StaticForDecl>(Decl);
-         ast::Decl *Result;
-
-         if (QC.ResolveStaticFor(Result, For)) {
-            continue;
-         }
-
-         break;
-      }
-      default:
-         break;
-      }
-   }
-
-   if (DC->hasAnyDeclNamed(Name)) {
-      return HandleFoundDecl(DC, Name, Data);
-   }
-
-   // Still nothing, start resolving wildcard using and import declarations.
-   for (auto *Decl : DC->getDecls()) {
-      switch (Decl->getKind()) {
-      case Decl::ImportDeclID: {
-         auto *I = cast<ImportDecl>(Decl);
-         if (QC.ResolveImport(I)) {
-            continue;
-         }
-
-         break;
-      }
-      case Decl::UsingDeclID: {
-         auto *U = cast<UsingDecl>(Decl);
-         if (QC.ResolveUsing(U)) {
-            continue;
-         }
-
-         break;
-      }
-      default:
-         break;
-      }
-   }
-
-   if (DC->hasAnyDeclNamed(Name)) {
-      return HandleFoundDecl(DC, Name, Data);
    }
 
    // If there's still nothing and this is not a record, we're done.
@@ -1269,12 +1226,7 @@ static bool MultiStageLookup(DeclContext *DC,
       return false;
    }
 
-   if (QC.DeclareSelfAlias(R)) {
-      return true;
-   }
-
-   // FIXME generalized extensions
-   if (QC.ResolveExplicitConformances(R->getType())) {
+   if (QC.ResolveAssociatedTypes(R->getType())) {
       return true;
    }
 
@@ -1298,12 +1250,7 @@ static bool MultiStageLookup(DeclContext *DC,
    }
 
    // Now resolve extensions and associated types.
-   if (Data.Opts.TypeLookup) {
-      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
-         return true;
-      }
-   }
-   else {
+   if (!Data.Opts.TypeLookup) {
       if (QC.CheckConformances(QC.Context.getRecordType(R))) {
          return true;
       }
@@ -1367,6 +1314,9 @@ static bool PrepareNameLookup(DeclContext *Ctx, LookupData &Data)
       else if (Data.SP.QC.PrepareNameLookup(Ctx)) {
          return true;
       }
+   }
+   else if (Data.SP.QC.ResolveMetaDeclarations(Ctx)) {
+      return true;
    }
 
    return false;
@@ -1500,6 +1450,17 @@ QueryResult LookupSingleQuery::run()
    return finish(SingleResult->front());
 }
 
+LookupOptions prepareLookupOptions(LookupOpts Opts)
+{
+   LookupOptions Options;
+   Options.TypeLookup = (Opts & LookupOpts::TypeLookup) != LookupOpts::None;
+   Options.LocalLookup = (Opts & LookupOpts::LocalLookup) != LookupOpts::None;
+   Options.PrepareNameLookup = (Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None;
+   Options.LookInConformances = (Opts & LookupOpts::LookInConformances) != LookupOpts::None;
+
+   return Options;
+}
+
 QueryResult LookupFirstQuery::run()
 {
    Module *Prelude = nullptr;
@@ -1510,11 +1471,8 @@ QueryResult LookupFirstQuery::run()
       }
    }
 
-   LookupOptions Opts;
+   LookupOptions Opts = prepareLookupOptions(this->Opts);
    Opts.FindFirst = true;
-   Opts.TypeLookup = (this->Opts & LookupOpts::TypeLookup) != LookupOpts::None;
-   Opts.LocalLookup = (this->Opts & LookupOpts::LocalLookup) != LookupOpts::None;
-   Opts.PrepareNameLookup = (this->Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None;
 
    bool LookedInPrelude = false;
    MultiLevelLookupResult Result;
@@ -1550,11 +1508,8 @@ QueryResult MultiLevelLookupQuery::run()
       }
    }
 
-   LookupOptions Opts;
+   LookupOptions Opts = prepareLookupOptions(this->Opts);
    Opts.FindFirst = false;
-   Opts.TypeLookup = (this->Opts & LookupOpts::TypeLookup) != LookupOpts::None;
-   Opts.LocalLookup = (this->Opts & LookupOpts::LocalLookup) != LookupOpts::None;
-   Opts.PrepareNameLookup = (this->Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None;
 
    bool LookedInPrelude = false;
    MultiLevelLookupResult Result;
@@ -1629,17 +1584,23 @@ QueryResult DirectLookupQuery::run()
 
    // Try looking in record extensions.
    if (auto *R = dyn_cast<RecordDecl>(DC)) {
+      auto &Context = QC.Sema->Context;
       if (LookInExtensions) {
          auto Extensions = R->getExtensions();
          for (auto *Ext : Extensions) {
+            if (Constraints) {
+               auto *CS = QC.Sema->getDeclConstraints(Ext);
+               if (!QC.IsSupersetOf(CS, Constraints)) {
+                  continue;
+               }
+            }
+
             DirectLookup = Ext->lookup(Name);
             if (!DirectLookup.empty()) {
                Result.addResult(DirectLookup);
             }
          }
       }
-
-      auto &Context = QC.Sema->Context;
 
       if (!Result.empty() || !isa<ProtocolDecl>(R)) {
          return finish(move(Result));
@@ -1697,6 +1658,42 @@ QueryResult DirectLookupQuery::run()
    // FIXME namespace redeclarations
 
    return finish(move(Result));
+}
+
+static bool shouldPerformRestrictedLookupIn(DeclContext *DC)
+{
+   switch (DC->getDeclKind()) {
+   case Decl::NamespaceDeclID:
+   case Decl::SourceFileDeclID:
+   case Decl::ModuleDeclID:
+   case Decl::CompoundDeclID:
+      return true;
+   default:
+      return false;
+   }
+}
+
+QueryResult RestrictedLookupQuery::run()
+{
+   MultiLevelLookupResult result;
+
+   auto *CurDC = DC;
+   while (CurDC) {
+      if (shouldPerformRestrictedLookupIn(CurDC)) {
+         if (QC.ResolveMetaDeclarations(CurDC)) {
+            return fail();
+         }
+
+         auto singleResult = CurDC->lookup(Name);
+         if (!singleResult.empty()) {
+            result.addResult(singleResult);
+         }
+      }
+
+      CurDC = CurDC->getParentCtx();
+   }
+
+   return finish(move(result));
 }
 
 QueryResult NestedNameLookupQuery::run()
@@ -1779,11 +1776,32 @@ QueryResult FindEquivalentDeclQuery::run()
       return finish(nullptr);
    }
 
-   if (auto *AT = dyn_cast<AssociatedTypeDecl>(Decl)) {
+   if (isa<AssociatedTypeDecl>(Decl)) {
       for (auto *Impl : LookupRes->allDecls()) {
-         auto *ATImpl = dyn_cast<AssociatedTypeDecl>(Impl);
-         if (!ATImpl)
+         auto *ATImpl = dyn_cast<AliasDecl>(Impl);
+         if (!ATImpl) {
             continue;
+         }
+
+         return finish(ATImpl);
+      }
+
+      return finish(nullptr);
+   }
+
+   if (isa<AliasDecl>(Decl)) {
+      for (auto *Impl : LookupRes->allDecls()) {
+         NamedDecl *ATImpl;
+         if (isa<ProtocolDecl>(DC)) {
+            ATImpl = dyn_cast<AssociatedTypeDecl>(Impl);
+         }
+         else {
+            ATImpl = dyn_cast<AliasDecl>(Impl);
+         }
+
+         if (!ATImpl) {
+            continue;
+         }
 
          return finish(ATImpl);
       }
@@ -1804,6 +1822,7 @@ QueryResult FindEquivalentDeclQuery::run()
          bool Equivalent;
          if (QC.CheckTypeEquivalence(Equivalent, P->getType(),
                                      PropImpl->getType(), Self,
+                                     P->getDeclContext(),
                                      P->getDeclContext())) {
             return fail();
          }
@@ -1839,6 +1858,7 @@ QueryResult FindEquivalentDeclQuery::run()
          bool Equivalent;
          if (QC.CheckTypeEquivalence(Equivalent, F->getType(),
                                      FieldImpl->getType(), Self,
+                                     F->getDeclContext(),
                                      F->getDeclContext())) {
             return fail();
          }
@@ -1865,6 +1885,7 @@ QueryResult FindEquivalentDeclQuery::run()
          bool Equivalent;
          if (QC.CheckTypeEquivalence(Equivalent, Sub->getType(),
                                      SubImpl->getType(), Self,
+                                     Sub->getDeclContext(),
                                      Sub->getDeclContext())) {
             return fail();
          }
@@ -1943,7 +1964,7 @@ static DeclContext *getContextForDecl(SemaPass &SP, NamedDecl *ND)
    }
 
    if (auto *AT = dyn_cast<AssociatedTypeDecl>(ND)) {
-      return getContextForDecl(SP, SP.getTypeDecl(AT->getActualType()));
+      return getContextForDecl(SP, SP.getTypeDecl(AT->getDefaultType()));
    }
 
    if (auto *Alias = dyn_cast<AliasDecl>(ND)) {
@@ -2092,22 +2113,17 @@ QueryResult ResolveNestedNameSpecToTypeQuery::run()
          break;
       case NestedNameSpecifier::AssociatedType: {
          auto *AT = CurName->getAssociatedType();
-         if (!AT->isImplementation()) {
-            auto *ATImpl = QC.LookupSingleAs<AssociatedTypeDecl>(
-               DC, AT->getDeclName());
+         auto *ATImpl = QC.LookupSingleAs<AliasDecl>(DC, AT->getDeclName());
 
-            if (!ATImpl || !ATImpl->isImplementation()) {
-               return finish(nullptr, Dependent);
-            }
-
-            AT = ATImpl;
+         if (!ATImpl || !ATImpl->isTypedef()) {
+            return finish(nullptr, Dependent);
          }
 
          if (i == NameDepth - 1) {
-            return finish(AT->getActualType());
+            return finish(AT->getDefaultType());
          }
 
-         QualType Ty = AT->getActualType();
+         QualType Ty = ATImpl->getAliasedType();
          auto *TypeDecl = QC.Sema->getTypeDecl(Ty);
 
          if (!TypeDecl) {
@@ -2293,18 +2309,13 @@ QueryResult ResolveNestedNameSpecToDeclQuery::run()
          break;
       case NestedNameSpecifier::AssociatedType: {
          auto *AT = CurName->getAssociatedType();
-         if (!AT->isImplementation()) {
-            auto *ATImpl = QC.LookupSingleAs<AssociatedTypeDecl>(
-               DC, AT->getDeclName());
+         auto *ATImpl = QC.LookupSingleAs<AliasDecl>(DC, AT->getDeclName());
 
-            if (!ATImpl || !ATImpl->isImplementation()) {
-               return finish(nullptr, Dependent);
-            }
-
-            AT = ATImpl;
+         if (!ATImpl || !ATImpl->isTypedef()) {
+            return finish(nullptr, Dependent);
          }
 
-         QualType Ty = AT->getActualType();
+         QualType Ty = ATImpl->getAliasedType();
          auto *TypeDecl = QC.Sema->getTypeDecl(Ty);
 
          if (!TypeDecl) {

@@ -163,7 +163,7 @@
 //       && Cand.getFunc()->isNonStaticMethod()
 //       && NeededTy->isMutableBorrowType()
 //       && GivenTy->isMutableReferenceType()) {
-//      GivenTy = SP.getContext().getMutableBorrowType(
+//      GivenTy = SP.getContext().getMutableReferenceType(
 //         GivenTy->removeReference())->getCanonicalType();
 //
 //      ConvSeq.addStep(CastKind::BitCast, GivenTy);
@@ -222,7 +222,7 @@
 //      }
 //      else if (!NeededTy->isMutableBorrowType()) {
 //         NeededTy = SP.getContext()
-//                      .getMutableBorrowType(NeededTy->removeReference())
+//                      .getMutableReferenceType(NeededTy->removeReference())
 //                      ->getCanonicalType();
 //      }
 //      else if (!GivenTy->isMutableBorrowType()) {

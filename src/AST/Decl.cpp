@@ -11,6 +11,7 @@
 #include "Sema/SemaPass.h"
 #include "Serialization/ModuleFile.h"
 #include "Support/StringSwitch.h"
+#include "Support/Various.h"
 
 #include <llvm/ADT/SmallString.h>
 
@@ -20,66 +21,203 @@ namespace cdot {
 namespace ast {
 
 DeclConstraint::DeclConstraint(Kind K,
-                               SourceRange SR,
-                               ArrayRef<IdentifierInfo *> NameQual,
-                               SourceType RHS)
-   : K(K), SR(SR), NameQualifierSize((unsigned)NameQual.size()), Type(RHS)
+                               QualType ConstrainedType,
+                               QualType RHS)
+   : K(K), ConstrainedType(ConstrainedType), Type(RHS)
 {
-   std::copy(NameQual.begin(), NameQual.end(),
-             getTrailingObjects<IdentifierInfo*>());
+
 }
 
-DeclConstraint::DeclConstraint(SourceRange SR,
-                               ArrayRef<IdentifierInfo*> NameQual,
-                               IdentifierRefExpr *ConceptRef)
-   : K(Concept), SR(SR), NameQualifierSize((unsigned)NameQual.size()),
-     ConceptRef(ConceptRef)
+DeclConstraint::DeclConstraint(QualType ConstrainedType,
+                               AliasDecl *Concept)
+   : K(Kind::Concept), ConstrainedType(ConstrainedType),
+     ConceptRef(Concept)
 {
-   std::copy(NameQual.begin(), NameQual.end(),
-             getTrailingObjects<IdentifierInfo*>());
-}
 
-DeclConstraint::DeclConstraint(SourceRange SR,
-                               ArrayRef<IdentifierInfo*> NameQual,
-                               Kind K)
-   : K(K), SR(SR), NameQualifierSize((unsigned)NameQual.size())
-{
-   std::copy(NameQual.begin(), NameQual.end(),
-             getTrailingObjects<IdentifierInfo*>());
-
-   assert(K == Class || K == Struct || K == Enum);
 }
 
 DeclConstraint* DeclConstraint::Create(ASTContext &C,
                                        Kind K,
-                                       SourceRange SR,
-                                       ArrayRef<IdentifierInfo*> NameQual,
-                                       SourceType RHS) {
-   void *Mem = C.Allocate(
-      totalSizeToAlloc<IdentifierInfo*>(NameQual.size()),
-      alignof(DeclConstraint));
+                                       QualType ConstrainedType,
+                                       QualType RHS) {
+   llvm::FoldingSetNodeID ID;
+   Profile(ID, K, ConstrainedType, RHS);
 
-   return new(Mem) DeclConstraint(K, SR, NameQual, RHS);
+   void *InsertPos;
+   if (auto *Ptr = C.DeclConstraints.FindNodeOrInsertPos(ID, InsertPos)) {
+      return Ptr;
+   }
+
+   auto *CS = new(C) DeclConstraint(K, ConstrainedType, RHS);
+   C.DeclConstraints.InsertNode(CS, InsertPos);
+
+   return CS;
 }
 
 DeclConstraint* DeclConstraint::Create(ASTContext &C,
-                                       SourceRange SR,
-                                       ArrayRef<IdentifierInfo*> NameQual,
-                                       IdentifierRefExpr *ConceptRef) {
-   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(NameQual.size()),
-                          alignof(DeclConstraint));
+                                       QualType ConstrainedType,
+                                       AliasDecl *Concept) {
+   llvm::FoldingSetNodeID ID;
+   Profile(ID, ConstrainedType, Concept);
 
-   return new(Mem) DeclConstraint(SR, NameQual, ConceptRef);
+   void *InsertPos;
+   if (auto *Ptr = C.DeclConstraints.FindNodeOrInsertPos(ID, InsertPos)) {
+      return Ptr;
+   }
+
+   auto *CS = new(C) DeclConstraint(ConstrainedType, Concept);
+   C.DeclConstraints.InsertNode(CS, InsertPos);
+
+   return CS;
 }
 
-DeclConstraint* DeclConstraint::Create(ASTContext &C,
-                                       Kind K,
-                                       SourceRange SR,
-                                       ArrayRef<IdentifierInfo*> NameQual) {
-   void *Mem = C.Allocate(totalSizeToAlloc<IdentifierInfo*>(NameQual.size()),
-                          alignof(DeclConstraint));
+void DeclConstraint::Profile(llvm::FoldingSetNodeID &ID)
+{
+   if (K != Kind::Concept) {
+      Profile(ID, K, ConstrainedType, Type);
+   }
+   else {
+      Profile(ID, ConstrainedType, ConceptRef);
+   }
+}
 
-   return new(Mem) DeclConstraint(SR, NameQual, K);
+void DeclConstraint::Profile(llvm::FoldingSetNodeID &ID,
+                             Kind K,
+                             QualType ConstrainedType,
+                             QualType RHS) {
+   ID.AddInteger(K);
+   ID.AddPointer(ConstrainedType.getAsOpaquePtr());
+   ID.AddPointer(RHS.getAsOpaquePtr());
+}
+
+void DeclConstraint::Profile(llvm::FoldingSetNodeID &ID,
+                             QualType ConstrainedType,
+                             AliasDecl *Concept) {
+   ID.AddInteger(Kind::Concept);
+   ID.AddPointer(ConstrainedType.getAsOpaquePtr());
+   ID.AddPointer(Concept);
+}
+
+void DeclConstraint::dump() const
+{
+   print(llvm::errs());
+}
+
+void DeclConstraint::print(llvm::raw_ostream &OS) const
+{
+   switch (K) {
+   case DeclConstraint::Concept: {
+      OS << ConceptRef->getDeclName() << "<" << ConstrainedType << ">";
+      break;
+   }
+   case DeclConstraint::TypeEquality:
+      OS << ConstrainedType.toDiagString() << " == "
+         << Type.toDiagString();
+      break;
+   case DeclConstraint::TypeInequality:
+      OS << ConstrainedType.toDiagString() << " != "
+         << Type.toDiagString();
+      break;
+   case DeclConstraint::TypePredicate:
+      OS << ConstrainedType.toDiagString() << " is "
+         << Type.toDiagString();
+      break;
+   case DeclConstraint::TypePredicateNegated:
+      OS << ConstrainedType.toDiagString() << " !is "
+         << Type.toDiagString();
+      break;
+   case DeclConstraint::Struct:
+      OS << ConstrainedType.toDiagString() << " is struct";
+      break;
+   case DeclConstraint::Class:
+      OS << ConstrainedType.toDiagString() << " is class";
+      break;
+   case DeclConstraint::Enum:
+      OS << ConstrainedType.toDiagString() << " is enum";
+      break;
+   }
+}
+
+ConstraintSet::ConstraintSet(ArrayRef<DeclConstraint*> constraints)
+   : NumConstraints((unsigned)constraints.size()),
+     ContainsTemplateParam(false)
+{
+   std::copy(constraints.begin(), constraints.end(),
+             getTrailingObjects<DeclConstraint*>());
+
+   for (auto *DC : constraints) {
+      if (DC->getConstrainedType()->containsTemplateParamType()) {
+         ContainsTemplateParam = true;
+         break;
+      }
+   }
+}
+
+ConstraintSet* ConstraintSet::Create(ASTContext &C,
+                                     ArrayRef<DeclConstraint*> constraints) {
+   llvm::FoldingSetNodeID ID;
+   Profile(ID, constraints);
+
+   void *InsertPos;
+   if (auto *Ptr = C.ConstraintSets.FindNodeOrInsertPos(ID, InsertPos)) {
+      return Ptr;
+   }
+
+   void *Mem = C.Allocate(totalSizeToAlloc<DeclConstraint*>(constraints.size()));
+   auto *CS = new(Mem) ConstraintSet(constraints);
+   C.ConstraintSets.InsertNode(CS, InsertPos);
+
+   return CS;
+}
+
+ConstraintSet* ConstraintSet::Combine(ASTContext &C,
+                                      ConstraintSet *C1,
+                                      ConstraintSet *C2) {
+   if (!C1 || C1->empty()) {
+      return C2;
+   }
+   if (!C2 || C2->empty()) {
+      return C1;
+   }
+
+   llvm::SetVector<DeclConstraint*> constraints;
+//   constraints.reserve(C1->size() + C2->size());
+
+   for (auto *DC : *C1) {
+      constraints.insert(DC);
+   }
+   for (auto *DC : *C2) {
+      constraints.insert(DC);
+   }
+
+   return Create(C, constraints.getArrayRef());
+}
+
+void ConstraintSet::Profile(llvm::FoldingSetNodeID &ID)
+{
+   Profile(ID, getConstraints());
+}
+
+void ConstraintSet::Profile(llvm::FoldingSetNodeID &ID,
+                            ArrayRef<DeclConstraint *> constraints) {
+   ID.AddInteger(constraints.size());
+   for (auto *c : constraints) {
+      ID.AddPointer(c);
+   }
+}
+
+void ConstraintSet::dump() const
+{
+   print(llvm::errs());
+}
+
+void ConstraintSet::print(llvm::raw_ostream &OS) const
+{
+   int i = 0;
+   for (auto *DC : *this) {
+      if (i++ != 0) OS << ", ";
+      DC->print(OS);
+   }
 }
 
 UsingDecl::UsingDecl(SourceRange Loc,
@@ -195,7 +333,7 @@ ModuleDecl* ModuleDecl::CreateEmpty(ASTContext &C)
 
 ModuleDecl *ModuleDecl::getPrimaryModule() const
 {
-   return cast<ModuleDecl>(primaryCtx);
+   return support::cast<ModuleDecl>(primaryCtx);
 }
 
 ModuleDecl* ModuleDecl::getBaseModule() const
@@ -401,7 +539,8 @@ LocalVarDecl::LocalVarDecl(AccessSpecifier access,
                            Expression* value)
    : VarDecl(LocalVarDeclID, access, VarOrLetLoc, ColonLoc,
              isConst, Name, type, value),
-     IsNRVOCand(false), InitIsMove(false), variadicForDecl(false)
+     IsNRVOCand(false), InitIsMove(false), variadicForDecl(false),
+     IsBorrow(false)
 {}
 
 LocalVarDecl* LocalVarDecl::Create(ASTContext &C,
@@ -419,7 +558,8 @@ LocalVarDecl* LocalVarDecl::Create(ASTContext &C,
 LocalVarDecl::LocalVarDecl(EmptyShell)
    : VarDecl(LocalVarDeclID, AccessSpecifier::Default, {}, {}, false, 
              DeclarationName(), SourceType(), nullptr),
-     IsNRVOCand(false), InitIsMove(false), variadicForDecl(false)
+     IsNRVOCand(false), InitIsMove(false), variadicForDecl(false),
+     IsBorrow(false)
 {}
 
 LocalVarDecl *LocalVarDecl::CreateEmpty(ASTContext &C)
@@ -711,13 +851,13 @@ void CallableDecl::createFunctionType(SemaPass &SP, unsigned flags, bool lambda)
       return;
 
    QualType retTy;
-   if (isa<InitDecl>(this)) {
+   if (isa<InitDecl>()) {
       retTy = SP.getContext().getVoidType();
    }
-   else if (isa<DeinitDecl>(this)) {
+   else if (isa<DeinitDecl>()) {
       retTy = SP.getContext().getVoidType();
    }
-   else if (isa<EnumCaseDecl>(this)) {
+   else if (isa<EnumCaseDecl>()) {
       retTy = SP.getContext().getRecordType(getRecord());
    }
    else {
@@ -750,7 +890,7 @@ void CallableDecl::createFunctionType(SemaPass &SP, unsigned flags, bool lambda)
 
 bool CallableDecl::isNonStaticMethod() const
 {
-   if (auto M = dyn_cast<MethodDecl>(this))
+   if (auto M = dyn_cast<MethodDecl>())
       return !M->isStatic();
 
    return false;
@@ -845,24 +985,24 @@ void CallableDecl::checkKnownFnKind()
 
 bool CallableDecl::isInitializerOfTemplate() const
 {
-   auto Init = dyn_cast<InitDecl>(this);
+   auto Init = dyn_cast<InitDecl>();
    return Init && Init->getRecord()->isTemplate();
 }
 
 bool CallableDecl::isCaseOfTemplatedEnum() const
 {
-   auto Case = dyn_cast<EnumCaseDecl>(this);
+   auto Case = dyn_cast<EnumCaseDecl>();
    return Case && Case->getRecord()->isTemplate();
 }
 
 bool CallableDecl::isFallibleInit() const
 {
-   return isa<InitDecl>(this) && cast<InitDecl>(this)->isFallible();
+   return isa<InitDecl>() && cast<InitDecl>()->isFallible();
 }
 
 bool CallableDecl::isCompleteInitializer() const
 {
-   if (auto *I = dyn_cast<InitDecl>(this))
+   if (auto *I = dyn_cast<InitDecl>())
       return I->isCompleteInitializer();
 
    return false;
@@ -870,7 +1010,7 @@ bool CallableDecl::isCompleteInitializer() const
 
 bool CallableDecl::isBaseInitializer() const
 {
-   if (auto *I = dyn_cast<InitDecl>(this))
+   if (auto *I = dyn_cast<InitDecl>())
       return I->isBaseInitializer();
 
    return false;
@@ -1047,6 +1187,21 @@ SourceRange AliasDecl::getSourceRange() const
                                 : Loc);
 }
 
+bool AliasDecl::isSelf() const
+{
+   return getDeclName().isStr("Self");
+}
+
+bool AliasDecl::isTypedef() const
+{
+   return getType()->isMetaType();
+}
+
+QualType AliasDecl::getAliasedType() const
+{
+   return getType()->removeMetaType();
+}
+
 RecordDecl::RecordDecl(DeclKind typeID,
                        AccessSpecifier access,
                        SourceLocation KeywordLoc,
@@ -1074,32 +1229,32 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
 {
    switch (decl->getKind()) {
    case DeinitDeclID:
-      deinitializer = cast<DeinitDecl>(decl);
+      deinitializer = support::cast<DeinitDecl>(decl);
       goto case_method;
    case MethodDeclID:
    case InitDeclID:
    case_method: {
-      auto M = cast<MethodDecl>(decl);
+      auto M = support::cast<MethodDecl>(decl);
       if (!M->getMethodID())
          M->setMethodID(lastMethodID++);
 
       break;
    }
    case FieldDeclID: {
-      auto F = cast<FieldDecl>(decl);
-      if (!F->isStatic() && isa<StructDecl>(this)) {
-         auto S = cast<StructDecl>(this);
+      auto F = support::cast<FieldDecl>(decl);
+      if (!F->isStatic() && isa<StructDecl>()) {
+         auto S = cast<StructDecl>();
          S->StoredFields.push_back(F);
       }
 
       break;
    }
    case EnumCaseDeclID: {
-      if (!isa<EnumDecl>(this))
+      if (!isa<EnumDecl>())
          break;
 
-      auto E = cast<EnumCaseDecl>(decl);
-      auto EDecl = cast<EnumDecl>(this);
+      auto E = support::cast<EnumCaseDecl>(decl);
+      auto EDecl = cast<EnumDecl>();
       EDecl->Unpopulated = false;
 
       if (E->getArgs().size() > EDecl->maxAssociatedValues)
@@ -1111,14 +1266,24 @@ DeclContext::AddDeclResultKind RecordDecl::addDecl(NamedDecl *decl)
       break;
    }
 
-   if (isa<ProtocolDecl>(this))
+   if (auto *P = dyn_cast<ProtocolDecl>()) {
+      if (decl->isStatic() || support::isa<InitDecl>(decl)) {
+         P->setHasStaticRequirements(true);
+      }
+      else if (auto *AT = support::dyn_cast<AssociatedTypeDecl>(decl)) {
+         if (!AT->isSelf()) {
+            P->setHasStaticRequirements(true);
+         }
+      }
+
       decl->setIsProtocolRequirement(true);
+   }
 
    return DeclContext::addDecl(decl);
 }
 
 #define CDOT_RECORD_IS_X(Name) \
-bool RecordDecl::is##Name() const { return isa<Name##Decl>(this); }
+bool RecordDecl::is##Name() const { return isa<Name##Decl>(); }
 
 CDOT_RECORD_IS_X(Struct)
 CDOT_RECORD_IS_X(Class)
@@ -1130,7 +1295,7 @@ CDOT_RECORD_IS_X(Protocol)
 
 bool RecordDecl::isRawEnum() const
 {
-   if (auto E = dyn_cast<EnumDecl>(this)) {
+   if (auto E = dyn_cast<EnumDecl>()) {
       return E->getMaxAssociatedValues() == 0;
    }
 
@@ -1182,12 +1347,12 @@ void RecordDecl::addExtension(ExtensionDecl *E) const
 bool RecordDecl::hasMethodWithName(DeclarationName name) const
 {
    for (auto &decl : getDecls()) {
-      auto Method = dyn_cast<MethodDecl>(decl);
+      auto Method = support::dyn_cast<MethodDecl>(decl);
       if (Method && Method->getDeclName() == name)
          return true;
    }
 
-   if (auto C = dyn_cast<ClassDecl>(this)) {
+   if (auto C = dyn_cast<ClassDecl>()) {
       if (auto P = C->getParentClass()) {
          return P->hasMethodWithName(name);
       }
@@ -1199,12 +1364,12 @@ bool RecordDecl::hasMethodWithName(DeclarationName name) const
 bool RecordDecl::hasMethodTemplate(DeclarationName name) const
 {
    for (auto &decl : getDecls()) {
-      auto Method = dyn_cast<MethodDecl>(decl);
+      auto Method = support::dyn_cast<MethodDecl>(decl);
       if (Method && Method->getDeclName() == name && Method->isTemplate())
          return true;
    }
 
-   if (auto C = dyn_cast<ClassDecl>(this)) {
+   if (auto C = dyn_cast<ClassDecl>()) {
       if (auto P = C->getParentClass()) {
          return P->hasMethodTemplate(name);
       }
@@ -1217,7 +1382,7 @@ PropDecl* RecordDecl::getProperty(DeclarationName name)
 {
    auto *Prop = dyn_cast_or_null<PropDecl>(lookupSingle(name));
    if (!Prop) {
-      if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto C = dyn_cast<ClassDecl>()) {
          if (auto P = C->getParentClass()) {
             return P->getProperty(name);
          }
@@ -1231,7 +1396,7 @@ FieldDecl* RecordDecl::getField(DeclarationName name)
 {
    auto *F = dyn_cast_or_null<FieldDecl>(lookupSingle(name));
    if (!F) {
-      if (auto C = dyn_cast<ClassDecl>(this)) {
+      if (auto C = dyn_cast<ClassDecl>()) {
          if (auto P = C->getParentClass()) {
             return P->getField(name);
          }
@@ -1399,7 +1564,8 @@ ProtocolDecl::ProtocolDecl(AccessSpecifier access,
                            ASTVector<TemplateParamDecl*> &&templateParams)
    : RecordDecl(ProtocolDeclID, access, KeywordLoc, Name, move(conformanceTypes),
                 move(templateParams)),
-     HasAssociatedTypeConstraint(false), IsAny(false)
+     HasAssociatedTypeConstraint(false), IsAny(false),
+     HasStaticRequirements(false)
 {}
 
 ProtocolDecl* ProtocolDecl::Create(ASTContext &C,
@@ -1415,7 +1581,8 @@ ProtocolDecl* ProtocolDecl::Create(ASTContext &C,
 
 ProtocolDecl::ProtocolDecl(EmptyShell Empty)
    : RecordDecl(Empty, ProtocolDeclID),
-     HasAssociatedTypeConstraint(false), IsAny(false)
+     HasAssociatedTypeConstraint(false), IsAny(false),
+     HasStaticRequirements(false)
 {}
 
 ProtocolDecl *ProtocolDecl::CreateEmpty(ASTContext &C)
@@ -1690,34 +1857,29 @@ FieldDecl *FieldDecl::CreateEmpty(ASTContext &C)
 }
 
 AssociatedTypeDecl::AssociatedTypeDecl(SourceLocation Loc,
-                                       IdentifierInfo *ProtoSpec,
                                        DeclarationName Name,
-                                       SourceType actualType,
-                                       SourceType covariance,
-                                       bool Implementation)
+                                       SourceType defaultValue,
+                                       SourceType covariance)
    : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Public, Name),
-     Loc(Loc), protocolSpecifier(ProtoSpec), actualType(actualType),
+     Loc(Loc),  defaultValue(defaultValue),
      covariance(covariance),
-     Implementation(Implementation), Self(Name.isStr("Self"))
+     Self(Name.isStr("Self"))
 {
 
 }
 
 AssociatedTypeDecl* AssociatedTypeDecl::Create(ASTContext &C,
                                                SourceLocation Loc,
-                                               IdentifierInfo *ProtoSpec,
                                                DeclarationName Name,
-                                               SourceType actualType,
-                                               SourceType covariance,
-                                               bool Implementation) {
-   return new(C) AssociatedTypeDecl(Loc, ProtoSpec, Name, actualType,
-                                    covariance, Implementation);
+                                               SourceType defaultValue,
+                                               SourceType covariance) {
+   return new(C) AssociatedTypeDecl(Loc, Name, defaultValue, covariance);
 }
 
 AssociatedTypeDecl::AssociatedTypeDecl(EmptyShell)
    : NamedDecl(AssociatedTypeDeclID, AccessSpecifier::Default,
                DeclarationName()),
-     protocolSpecifier(nullptr), Implementation(false), Self(false)
+     Self(false)
 {}
 
 AssociatedTypeDecl *AssociatedTypeDecl::CreateEmpty(ASTContext &C)

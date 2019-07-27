@@ -85,6 +85,11 @@ static MethodDecl *InstantiateMethodDefaultImpl(QueryContext &QC,
 
 QueryResult InstantiateProtocolDefaultImplQuery::run()
 {
+   assert(isa<ExtensionDecl>(Impl->getNonTransparentDeclContext())
+      && cast<ExtensionDecl>(Impl->getNonTransparentDeclContext())
+           ->getExtendedRecord()->isProtocol()
+      && "not a protocol default impl!");
+
    if (QC.PrepareDeclInterface(Impl)) {
       return fail();
    }
@@ -138,6 +143,23 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
       Inst = SubscriptDecl::Create(sema().Context, S->getAccess(),
                                    S->getSourceRange(), T, Getter, Setter);
    }
+   else if (auto *alias = dyn_cast<AliasDecl>(Impl)) {
+      QualType InstTy;
+      if (QC.SubstAssociatedTypes(InstTy, alias->getAliasedType(),
+                                  Self, alias->getSourceLoc())) {
+         return fail();
+      }
+
+      SourceType Ty(QC.Context.getMetaType(InstTy));
+      auto *typeExpr = new(QC.Context) IdentifierRefExpr(
+         alias->getSourceLoc(), IdentifierKind::MetaType, Ty);
+
+      auto *rawTypeExpr = StaticExpr::Create(QC.Context, typeExpr);
+      Inst = AliasDecl::Create(QC.Context, alias->getSourceLoc(),
+                               AccessSpecifier::Public,
+                               alias->getDeclName(), Ty,
+                               rawTypeExpr, {});
+   }
    else {
       llvm_unreachable("bad protocol default implementation kind!");
    }
@@ -159,14 +181,14 @@ QueryResult CheckTemplateExtensionApplicabilityQuery::run()
 {
    auto &Context = QC.CI.getContext();
 
-   auto Constraints = Context.getExtConstraints(Ext);
-   if (Constraints.empty())
+   auto Constraints = QC.Sema->getDeclConstraints(Ext);
+   if (Constraints->empty())
       return finish(true);
 
    QualType Ty = Context.getRecordType(Inst);
 
    bool AllSatisfied;
-   for (auto *C : Constraints) {
+   for (auto *C : *Constraints) {
       if (QC.IsConstraintSatisfied(AllSatisfied, C, Ty, Ext)) {
          return fail();
       }

@@ -122,6 +122,12 @@ class Query<let type: string> {
     /// Custom code to be inserted with the class implementation.
     let customImplCode: code = {}
 
+    /// Custom code to be inserted before the result of the query is returned.
+    let customPreReturnCode: code = {}
+
+    /// Custom code to be inserted at the start of the 'run' function.
+    let earlyExitCode: code = {}
+
     /// Brief description of the nature of this query.
     let description: string = "running $NAME"
 
@@ -340,7 +346,7 @@ def NeedsStructReturn : TypeMetaQuery
 def PassByValue : TypeMetaQuery
 def ContainsAssociatedTypeConstraint : TypeMetaQuery
 
-def IsImplicitlyConvertible : BoolQuery {
+def IsImplicitlyConvertible : Query<"IsImplicitlyConvertibleQuery::ResultType"> {
     parameters = [
         TypeParam<"From">,
         TypeParam<"To">
@@ -348,9 +354,20 @@ def IsImplicitlyConvertible : BoolQuery {
 
     simpleQuery = true
     canBeDependent = true
+
+    customHeaderCode = {
+    public:
+        struct ResultType {
+            /// Whether or not the types are implicitly convertible.
+            bool implicitlyConvertible;
+
+            /// The conversion penalty.
+            unsigned conversionPenalty;
+        };
+    }
 }
 
-def IsValidParameterValue : BoolQuery {
+def IsValidParameterValue : Query<"IsValidParameterValueQuery::ResultType"> {
     parameters = [
         TypeParam<"givenType">,
         TypeParam<"paramType">,
@@ -359,6 +376,17 @@ def IsValidParameterValue : BoolQuery {
 
     simpleQuery = true
     canBeDependent = true
+
+    customHeaderCode = {
+    public:
+        struct ResultType {
+            /// Whether or not the types are implicitly convertible.
+            bool isValid;
+
+            /// The conversion penalty.
+            unsigned conversionPenalty;
+        };
+    }
 }
 
 def GetConversionSequence : Query<"ConversionSequence*"> {
@@ -479,6 +507,7 @@ def GetBuiltinModule : Query<"Module*"> {
             Runtime,
             Async,
             Test,
+            Policy,
         };
 
     private:
@@ -950,6 +979,19 @@ def ResolveExplicitConformances : VoidQuery {
     ignoreCircularDependency = true
 }
 
+def ResolveConformancesToProtocols : Query<"llvm::SmallVector<ast::ProtocolDecl*, 2>"> {
+    parameters = [
+        // The type that the conformance was declared on.
+        TypeParam<"T">,
+
+        // The declaration that declares the conformances.
+        ArrayParam<"Conformances", "ast::SourceType">,
+    ]
+
+    shouldMoveResult = true
+    getReturnType = "ArrayRef<ast::ProtocolDecl*>"
+}
+
 /// Resolve all declared conformances of a declaration.
 def ResolveDeclaredConformances : VoidQuery {
     parameters = [
@@ -960,7 +1002,10 @@ def ResolveDeclaredConformances : VoidQuery {
         ArrayParam<"Conformances", "ast::SourceType">,
 
         // The kind of conformance to add.
-        QueryParam<"Kind", "ConformanceKind">
+        QueryParam<"Kind", "ConformanceKind">,
+
+        // The extension that this conformance was introduced by.
+        QueryParam<"CS", "ast::ConstraintSet*", "nullptr">,
     ]
 
     description = "resolving declared conformances of '${T.toDiagString()}'"
@@ -978,11 +1023,11 @@ def AddSingleConformance : VoidQuery {
         // The kind of conformance to add.
         QueryParam<"Kind", "ConformanceKind">,
 
+        // The extension that this conformance was introduced by.
+        QueryParam<"CS", "ast::ConstraintSet*", "nullptr">,
+
         // If true, recursively add conformances of this conformance.
         BoolParam<"AddRecursiveConformances", "true">,
-
-        // Closure called on every new conformance.
-        FunctionRefParam<"Callback", "void(ast::ProtocolDecl*)", "{}", true>
     ]
 
     canBeDependent = true
@@ -1008,25 +1053,6 @@ def ResolveAssociatedTypes : VoidQuery {
     ]
 }
 
-/// Get all associated types that are referenced within a constraint.
-def GetReferencedAssociatedTypes : Query<"SmallVector<ast::AssociatedTypeDecl*, 2>"> {
-    parameters = [
-        /// The declaration that is being constrained.
-        NamedDeclParam<"ConstrainedDecl">,
-
-        /// The constraint that should be checked.
-        QueryParam<"C", "ast::DeclConstraint*">
-    ]
-
-    shouldMoveResult = true
-    getReturnType = "ArrayRef<ast::AssociatedTypeDecl*>"
-
-    customFinish = {
-        // Update the referenced associated types of the constraint.
-        C->setReferencedAssociatedTypes(this->Result.getValue());
-    }
-}
-
 /// Check whether or not all associated types that are referenced in 
 /// a set of constraints are ready.
 def ReferencedAssociatedTypesReady : Query<"ReferencedAssociatedTypesReadyQuery::ResultKind"> {
@@ -1035,8 +1061,15 @@ def ReferencedAssociatedTypesReady : Query<"ReferencedAssociatedTypesReadyQuery:
         TypeParam<"T">,
 
         // The declaration whose constraints we should check.
-        NamedDeclParam<"ConstrainedDecl">
+        QueryParam<"CS", "ast::ConstraintSet*">,
     ]
+
+    earlyExitCode = {
+        if (!CS) {
+            Result = ReferencedAssociatedTypesReadyQuery::ResultKind::Ready;
+            return QueryResult(QueryResult::Success);
+        }
+    }
 
     customHeaderCode = {
     public:
@@ -1082,23 +1115,29 @@ def CheckProtocolExtensionApplicability
 }
 
 /// Check whether or not a declaration constraint is valid.
-def VerifyConstraint : VoidQuery {
+def VerifyConstraint : Query<"ast::DeclConstraint*"> {
     parameters = [
         /// The constraint to verify.
-        QueryParam<"C", "ast::DeclConstraint*">,
+        QueryParam<"C", "const ast::ParsedConstraint*">,
 
         /// The constrained declaration.
-        NamedDeclParam<"ConstrainedDecl">
+        NamedDeclParam<"ConstrainedDecl">,
     ]
+}
 
-    canBeDependent = true
+/// Check whether or not a declaration constraint is valid.
+def VerifyConstraints : Query<"ast::ConstraintSet*"> {
+    parameters = [
+        /// The constrained declaration.
+        NamedDeclParam<"ConstrainedDecl">,
+    ]
 }
 
 /// Check whether or not a declaration constraint is satisfied.
 def IsConstraintSatisfied : BoolQuery {
     parameters = [
         /// The constraint to verify.
-        QueryParam<"C", "ast::DeclConstraint*">,
+        QueryParam<"C", "const ast::DeclConstraint*">,
 
         /// The 'Self' declaration.
         TypeParam<"Self">,
@@ -1117,7 +1156,7 @@ def IsConstraintSatisfied : BoolQuery {
 def GetConstrainedType : Query<"QualType"> {
     parameters = [
         /// The constraint to verify.
-        QueryParam<"C", "ast::DeclConstraint*">,
+        QueryParam<"C", "const ast::DeclConstraint*">,
 
         /// The 'Self' declaration.
         TypeParam<"Self">,
@@ -1127,6 +1166,39 @@ def GetConstrainedType : Query<"QualType"> {
     ]
 
     canBeDependent = true
+}
+
+/// Whether or not a constraint set is a superset of another constraint set.
+def IsSupersetOf : BoolQuery {
+    parameters = [
+        QueryParam<"C1", "ast::ConstraintSet*">,
+        QueryParam<"C2", "ast::ConstraintSet*">,
+    ]
+
+    earlyExitCode = {
+        if (!C2 || C2->empty()) {
+            return true;
+        }
+        if (!C1 || C1->empty()) {
+            return C2->empty();
+        }
+        if (C1 == C2) {
+            return true;
+        }
+    }
+
+    simpleQuery = true
+    infallible = true
+}
+
+/// Returns all associated types referenced in a constraint set.
+def GetReferencedAssociatedTypes : Query<"std::vector<ast::AssociatedTypeDecl*>"> {
+    parameters = [
+        QueryParam<"CS", "ast::ConstraintSet*">,
+    ]
+
+    shouldMoveResult = true
+    getReturnType = "llvm::ArrayRef<ast::AssociatedTypeDecl*>"
 }
 
 /// Returns all associated types that a record needs to implement.
@@ -1661,6 +1733,31 @@ def MultiLevelTypeLookup : Query<"MultiLevelLookupResult"> {
     canBeCached = false
 }
 
+/// Perform a restricted lookup, i.e. one that does not look into extensions, conformances,
+/// etc. This is mainly used to find macros and protocols, which can only appear at the top
+/// level or in namespaces.
+def RestrictedLookup : Query<"MultiLevelLookupResult"> {
+    parameters = [
+        // The context to lookup in.
+        DeclContextParam<"DC">,
+
+        // The name to lookup.
+        DeclNameParam<"Name">,
+
+        // The lookup options.
+        QueryParam<"Opts", "LookupOpts", "DefaultLookupOpts">,
+    ]
+
+    pure = true
+    shouldMoveResult = true
+    ignoreCircularDependency = true
+
+    getReturnType = "const MultiLevelLookupResult*"
+    customGet = {
+        return &Result.getValue();
+    }
+}
+
 /// Perform a direct lookup, this only looks up in the record directly as well as in extensions.
 def DirectLookup : Query<"MultiLevelLookupResult"> {
     parameters = [
@@ -1674,7 +1771,10 @@ def DirectLookup : Query<"MultiLevelLookupResult"> {
         BoolParam<"LookInExtensions", "true">,
 
         // The lookup options.
-        QueryParam<"Opts", "LookupOpts", "DefaultLookupOpts">
+        QueryParam<"Opts", "LookupOpts", "DefaultLookupOpts">,
+
+        // The constraint ID of the extensions to look up in.
+        QueryParam<"Constraints", "ast::ConstraintSet*", "nullptr">,
     ]
 
     shouldMoveResult = true
@@ -1749,6 +1849,14 @@ foreach kind in [
     }
 }
 
+/// Resolve macros, mixins, static declarations and imports in a context.
+def ResolveMetaDeclarations : VoidQuery {
+    parameters = [
+        /// The context to prepare for lookup.
+        DeclContextParam<"DC">
+    ]
+}
+
 /// Prepare a declaration context for type lookup, i.e. types that are contained within it.
 def PrepareTypeNameLookup : VoidQuery {
     parameters = [
@@ -1784,7 +1892,7 @@ def InstantiateCases : VoidQuery {
 }
 
 /// Get an associated type by name.
-def GetAssociatedType : Query<"ast::AssociatedTypeDecl*"> {
+def GetAssociatedTypeImpl : Query<"ast::AliasDecl*"> {
     parameters = [
         /// The record to lookup the associated type in.
         RecordDeclParam<"R">,
@@ -1793,7 +1901,26 @@ def GetAssociatedType : Query<"ast::AssociatedTypeDecl*"> {
         DeclNameParam<"Name">,
 
         /// The records extensions.
-        ArrayParam<"Extensions", "ast::ExtensionDecl*">
+        ArrayParam<"Extensions", "ast::ExtensionDecl*">,
+
+        /// The constraint ID of the current context.
+        QueryParam<"Constraints", "ast::ConstraintSet*", "nullptr">,
+    ]
+
+    canBeCached = false
+}
+
+/// Get an associated type declaration by name.
+def GetAssociatedTypeDecl : Query<"ast::AssociatedTypeDecl*"> {
+    parameters = [
+        /// The record to lookup the associated type in.
+        QueryParam<"P", "ast::ProtocolDecl*">,
+
+        /// The associated type name to look up.
+        DeclNameParam<"Name">,
+
+        /// The constraint ID of the current context.
+        QueryParam<"Constraints", "ast::ConstraintSet*", "nullptr">,
     ]
 
     canBeCached = false
@@ -1813,7 +1940,10 @@ def CheckTypeEquivalence : BoolQuery {
         TypeParam<"Self">,
 
         /// The left hand side declaration context (to replace generic parameters).
-        DeclContextParam<"LHSDecl", "nullptr">
+        DeclContextParam<"LHSDecl", "nullptr">,
+
+        /// The current declaration context (used for applying capabilities).
+        DeclContextParam<"DeclCtx", "nullptr">,
     ]
 }
 

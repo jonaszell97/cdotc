@@ -68,11 +68,8 @@ QueryResult IsEquatableQuery::run()
       Result = true;
 
       if (!isa<ClassDecl>(T->getRecord())) {
-         if (auto Err = QC.ConformsTo(Result,
-                                      QC.Context.getRecordType(T->getRecord()),
-                                      QC.Sema->getEquatableDecl())) {
-            return Query::finish(Err);
-         }
+         Result = QC.Sema->ConformsTo(QC.Context.getRecordType(T->getRecord()),
+                                      QC.Sema->getEquatableDecl());
       }
 
       break;
@@ -135,11 +132,9 @@ QueryResult IsMoveOnlyQuery::run()
          if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
             return Query::finish(Err);
          }
-         if (auto Err = QC.ConformsTo(Result,
-                                      QC.Context.getRecordType(T->getRecord()),
-                                      QC.Sema->getMoveOnlyDecl())) {
-            return Query::finish(Err);
-         }
+
+         Result = QC.Sema->ConformsTo(QC.Context.getRecordType(T->getRecord()),
+                                      QC.Sema->getMoveOnlyDecl());
       }
 
       break;
@@ -214,11 +209,9 @@ QueryResult IsImplicitlyCopyableQuery::run()
          if (auto Err = QC.CheckBuiltinConformances(T->getRecord())) {
             return Query::finish(Err);
          }
-         if (auto Err = QC.ConformsTo(Result,
-                                      QC.Context.getRecordType(T->getRecord()),
-                                      QC.Sema->getImplicitlyCopyableDecl())) {
-            return Query::finish(Err);
-         }
+
+         Result = QC.Sema->ConformsTo(QC.Context.getRecordType(T->getRecord()),
+                                      QC.Sema->getImplicitlyCopyableDecl());
       }
 
       break;
@@ -395,7 +388,6 @@ QueryResult PassByValueQuery::run()
    case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
    case Type::FunctionTypeID:
       Result = true;
       break;
@@ -543,7 +535,6 @@ QueryResult IsTriviallyCopyableQuery::run()
    case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
    case Type::FunctionTypeID:
    case Type::MetaTypeID:
       Result = true;
@@ -621,7 +612,6 @@ QueryResult IsUnpopulatedQuery::run()
    case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
       QC.IsUnpopulated(Result, *T->child_begin());
       break;
    case Type::ArrayTypeID:
@@ -683,7 +673,6 @@ QueryResult IsPersistableQuery::run()
    }
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
       return finish(false);
    case Type::ArrayTypeID:
    case Type::TupleTypeID: {
@@ -776,7 +765,6 @@ QueryResult GetTypeStrideQuery::run()
    case Type::ReferenceTypeID:
    case Type::MutablePointerTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
    case Type::FunctionTypeID:
    case Type::LambdaTypeID:
       return finish(TI.getPointerSizeInBytes());
@@ -852,7 +840,6 @@ QueryResult GetTypeAlignmentQuery::run()
    case Type::MutablePointerTypeID:
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
    case Type::LambdaTypeID:
    case Type::FunctionTypeID:
    case Type::MetaTypeID:
@@ -944,79 +931,113 @@ QueryResult IsContravariantQuery::run()
 namespace {
 
 template <class SubClass>
-class AssociatedTypeSubstVisitorBase: public TypeBuilder<SubClass>
-{
+class AssociatedTypeSubstVisitorBase: public TypeBuilder<SubClass> {
    /// \brief The 'Self' type used to substitute abstract associated types.
    QualType Self;
 
+   /// The current declaration context.
+   DeclContext *CurCtx;
+
 public:
-   AssociatedTypeSubstVisitorBase(SemaPass &SP, QualType Self, SourceRange SR)
-      : TypeBuilder<SubClass>(SP, SR), Self(Self)
+   AssociatedTypeSubstVisitorBase(SemaPass &SP, QualType Self, SourceRange SR,
+                                  DeclContext *CurCtx = nullptr)
+      : TypeBuilder<SubClass>(SP, SR), Self(Self), CurCtx(CurCtx)
    {}
 
    QualType visitAssociatedType(AssociatedType *T)
    {
-      if (T->getDecl()->isImplementation() && !T->getDecl()->isDefault()) {
-         return T;
-      }
-
       if (!Self) {
          return T;
       }
 
       RecordDecl *DC;
-      if (auto *Outer = T->getOuterAT()) {
-         CanType OuterImpl = this->visit(Outer)->getCanonicalType();
+      QualType OuterImpl;
 
-         if (OuterImpl->isDependentType() || OuterImpl->isAssociatedType()) {
-            return T;
+      if (QualType Outer = T->getOuterAT()) {
+         OuterImpl = this->visit(Outer)->getCanonicalType();
+         if (auto *TP = OuterImpl->asTemplateParamType()) {
+            DC = TP->getCovariance()->getRecord();
          }
-
-         DC = OuterImpl->getRecord();
+         else if (auto *AT = OuterImpl->asAssociatedType()) {
+            DC = AT->getDecl()->getCovariance()->getRecord();
+         }
+         else {
+            DC = OuterImpl->getRecord();
+         }
       }
       else {
          DC = Self->getRecord();
       }
 
-      bool conforms;
-      if (this->SP.QC.ConformsTo(conforms, this->SP.Context.getRecordType(DC),
-                                 cast<ProtocolDecl>(T->getDecl()->getRecord()))) {
-         return T;
-      }
+      QualType LookupTy = this->SP.Context.getRecordType(DC);
+      bool conforms = this->SP.ConformsTo(LookupTy,
+                                          cast<ProtocolDecl>(T->getDecl()->getRecord()));
 
       // Don't substitute unrelated associated types.
       if (!conforms) {
          return T;
       }
 
+      if (T->getDecl()->isSelf()) {
+         if (this->SP.QC.DeclareSelfAlias(DC)) {
+            return T;
+         }
+      }
+
       QueryContext &QC = this->SP.QC;
-      AssociatedTypeDecl *AT;
+      auto Name = T->getDecl()->getDeclName();
 
-      if (QC.GetAssociatedType(AT, DC, T->getDecl()->getDeclName(),
-                               DC->getExtensions())) {
+      ConstraintSet *CS = nullptr;
+      if (CurCtx) {
+         CS = QC.Context.getNearestConstraintSet(CurCtx);
+      }
+
+      ArrayRef<ExtensionDecl*> extensions;
+      if (!QC.FindExtensions(LookupTy)) {
+         extensions = QC.Context.getExtensions(LookupTy);
+      }
+
+      AliasDecl *Impl;
+      if (QC.GetAssociatedTypeImpl(Impl, DC, Name, extensions, CS)) {
          return T;
       }
 
-      if (!AT /*|| AT->isDefault()*/) {
+      if (!Impl) {
+         if (auto *Proto = dyn_cast<ProtocolDecl>(DC)) {
+            AssociatedTypeDecl *Impl;
+            if (QC.GetAssociatedTypeDecl(Impl, Proto, Name, CS)) {
+               return T;
+            }
+
+            if (!Impl || Impl->getDeclContext() != DC) {
+               return T;
+            }
+
+            if (QC.PrepareDeclInterface(Impl)) {
+               return T;
+            }
+
+            return this->Ctx.getAssociatedType(Impl, OuterImpl);
+         }
+
          return T;
       }
 
-      auto *Inst = QC.template InstantiateTemplateMember<AssociatedTypeDecl>(
-         AT, DC);
-
+      auto *Inst = QC.InstantiateTemplateMember(Impl, DC);
       if (QC.PrepareDeclInterface(Inst)) {
          return T;
       }
 
-      return this->Ctx.getAssociatedType(Inst);
+      return this->Ctx.getTypedefType(Inst);
    }
 };
 
 class AssociatedTypeSubstVisitor:
       public AssociatedTypeSubstVisitorBase<AssociatedTypeSubstVisitor> {
 public:
-   AssociatedTypeSubstVisitor(SemaPass &SP, QualType Self, SourceRange SR)
-      : AssociatedTypeSubstVisitorBase(SP, Self, SR)
+   AssociatedTypeSubstVisitor(SemaPass &SP, QualType Self, SourceRange SR,
+                              DeclContext *CurCtx = nullptr)
+      : AssociatedTypeSubstVisitorBase(SP, Self, SR, CurCtx)
    {}
 };
 
@@ -1035,13 +1056,55 @@ class TemplateParamTypeSubstVisitor:
    /// The template arguments we are substituting with.
    const TemplateArgList &TemplateArgs;
 
+   /// The base type of the right hand side declaration.
+   QualType Self;
+
+   /// The left hand side declaration.
+   DeclContext *LHSDecl;
+
 public:
    TemplateParamTypeSubstVisitor(SemaPass &SP,
-                           const TemplateArgList &TemplateArgs,
-                           SourceRange SR)
+                                 const TemplateArgList &TemplateArgs,
+                                 SourceRange SR,
+                                 QualType Self = {},
+                                 DeclContext *LHSDecl = nullptr)
       : TypeBuilder<TemplateParamTypeSubstVisitor<TemplateArgList>>(SP, SR),
         TemplateArgs(TemplateArgs)
    {}
+
+   QualType visitDependentRecordTypeAlt(DependentRecordType *T)
+   {
+      auto  R = T->getRecord();
+      auto &TemplateArgs = T->getTemplateArgs();
+
+      return this->visitRecordTypeCommon(T, R, TemplateArgs);
+   }
+
+   QualType visitDependentRecordType(DependentRecordType *T)
+   {
+      if (!Self || !LHSDecl || !isa<NamedDecl>(LHSDecl)) {
+         return visitDependentRecordTypeAlt(T);
+      }
+
+      auto *R = cast<NamedDecl>(LHSDecl)->getRecord();
+      if (!R) {
+         return visitDependentRecordTypeAlt(T);
+      }
+
+      if (T->getRecord() != R) {
+         return visitDependentRecordTypeAlt(T);
+      }
+
+      if (Self->isRecordType() || !Self->getRecord()->isInstantiation()) {
+         return visitDependentRecordTypeAlt(T);
+      }
+
+      if (Self->getRecord()->getSpecializedTemplate() != R) {
+         return visitDependentRecordTypeAlt(T);
+      }
+
+      return Self;
+   }
 
    void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
    {
@@ -1432,28 +1495,12 @@ public:
       return T;
    }
 
-   QualType visitDependentRecordType(DependentRecordType *T)
-   {
-      auto  R = T->getRecord();
-      auto &TemplateArgs = T->getTemplateArgs();
-
-      return this->visitRecordTypeCommon(T, R, TemplateArgs);
-   }
-
    QualType visitDependentTypedefType(DependentTypedefType *T)
    {
       auto  td = T->getTypedef();
       auto &TemplateArgs = T->getTemplateArgs();
 
       return this->visitTypedefTypeCommon(T, td, TemplateArgs);
-   }
-
-   QualType visitAssociatedType(AssociatedType *T)
-   {
-      if (T->getDecl()->isImplementation())
-         return this->visit(T->getActualType());
-
-      return T;
    }
 };
 
@@ -1499,8 +1546,8 @@ public:
    bool visitAssociatedType(AssociatedType *LHS, QualType RHS)
    {
       if (auto *AT = RHS->asAssociatedType()) {
-         auto *LHSOuter = LHS->getOuterAT();
-         auto *RHSOuter = AT->getOuterAT();
+         QualType LHSOuter = LHS->getOuterAT();
+         QualType RHSOuter = AT->getOuterAT();
 
          if ((LHSOuter == nullptr) != (RHSOuter == nullptr)) {
             return false;
@@ -1521,16 +1568,26 @@ public:
 
 QueryResult CheckTypeEquivalenceQuery::run()
 {
-   AssociatedTypeSubstVisitor substVisitor(sema(), Self, {});
-   RHS = substVisitor.visit(RHS);
-   LHS = substVisitor.visit(LHS);
+   AssociatedTypeSubstVisitor substVisitor(sema(), Self, {}, DeclCtx);
+   CanType RHS = substVisitor.visit(this->RHS);
+   CanType LHS = substVisitor.visit(this->LHS);
+
+   if (DeclCtx) {
+      if (RHS->containsAssociatedType() || RHS->containsTemplateParamType()) {
+         RHS = QC.Sema->ApplyCapabilities(RHS, DeclCtx);
+      }
+      if (LHS->containsAssociatedType() || LHS->containsTemplateParamType()) {
+         LHS = QC.Sema->ApplyCapabilities(LHS, DeclCtx);
+      }
+   }
 
    if (Self->isRecordType() && Self->getRecord()->isInstantiation()) {
-      TemplateParamTypeSubstVisitor TemplateParamTypeSubstVisitor(
-         sema(), Self->getRecord()->getTemplateArgs(), {});
+      TemplateParamTypeSubstVisitor templateParamTypeSubstVisitor(
+         sema(), Self->getRecord()->getTemplateArgs(), {},
+         Self, LHSDecl);
 
-      RHS = TemplateParamTypeSubstVisitor.visit(RHS);
-      LHS = TemplateParamTypeSubstVisitor.visit(LHS);
+      RHS = templateParamTypeSubstVisitor.visit(RHS);
+      LHS = templateParamTypeSubstVisitor.visit(LHS);
    }
 
    return finish(TypeEquivalenceChecker().visit(LHS, RHS));
@@ -1548,9 +1605,6 @@ struct AssociatedTypeFinder: public RecursiveTypeVisitor<AssociatedTypeFinder> {
 
    bool visitAssociatedType(const AssociatedType *T)
    {
-      if (T->getDecl()->isImplementation())
-         return true;
-
       FoundAssociatedType = true;
       return false;
    }
@@ -1568,25 +1622,21 @@ QueryResult ContainsAssociatedTypeConstraintQuery::run()
 
 QueryResult CheckTypeCapabilitiesQuery::run()
 {
-   auto Constraints = QC.Context.getExtConstraints(ND);
-   if (Constraints.empty()) {
+   auto *Constraints = QC.Sema->getDeclConstraints(ND);
+   if (Constraints->empty()) {
       return finish({});
    }
 
    std::vector<TypeCapability> Capabilities;
-   for (auto *C : Constraints) {
-      if (auto Err = QC.VerifyConstraint(C, ND)) {
-         return Query::finish(Err);
-      }
-
+   for (auto *C : *Constraints) {
       QualType CT = C->getConstrainedType();
 
       if (C->getKind() == DeclConstraint::Concept) {
-         Capabilities.emplace_back(CT, C->getConceptRefExpr()->getAlias());
+         Capabilities.emplace_back(CT, C->getConcept());
          continue;
       }
 
-      QualType T = C->getType();
+      SourceType T = C->getType();
       switch (C->getKind()) {
       case DeclConstraint::TypeEquality:
          Capabilities.emplace_back(CT, T, TypeCapability::Equality);
@@ -1595,9 +1645,11 @@ QueryResult CheckTypeCapabilitiesQuery::run()
          Capabilities.emplace_back(CT, T, TypeCapability::Inequality);
          break;
       case DeclConstraint::TypePredicate: {
+         QualType SingleType = T;
+
          ArrayRef<QualType> Types;
          if (T->isRecordType()) {
-            Types = T;
+            Types = SingleType;
          }
          else {
             Types = T->asExistentialType()->getExistentials();
@@ -1617,9 +1669,11 @@ QueryResult CheckTypeCapabilitiesQuery::run()
          break;
       }
       case DeclConstraint::TypePredicateNegated: {
+         QualType SingleType = T;
+
          ArrayRef<QualType> Types;
          if (T->isRecordType()) {
-            Types = T;
+            Types = SingleType;
          }
          else {
             Types = T->asExistentialType()->getExistentials();
@@ -1747,7 +1801,6 @@ QueryResult ApplyCapabilitesQuery::run()
    switch (T->getTypeID()) {
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID:
       Stripped = cast<ReferenceType>(T)->getReferencedType();
       break;
    case Type::PointerTypeID:
@@ -1771,7 +1824,7 @@ QueryResult ApplyCapabilitesQuery::run()
    QualType Covariance;
    if (auto *AT = Stripped->asAssociatedType()) {
       auto *ATDecl = AT->getDecl();
-      if (QC.PrepareDeclInterface(ATDecl) || ATDecl->isImplementation()) {
+      if (QC.PrepareDeclInterface(ATDecl)) {
          return finish(T);
       }
 
@@ -1838,8 +1891,6 @@ QueryResult ApplyCapabilitesQuery::run()
       return finish(QC.Context.getReferenceType(NewTy));
    case Type::MutableReferenceTypeID:
       return finish(QC.Context.getMutableReferenceType(NewTy));
-   case Type::MutableBorrowTypeID:
-      return finish(QC.Context.getMutableBorrowType(NewTy));
    case Type::PointerTypeID:
       return finish(QC.Context.getPointerType(NewTy));
    case Type::MutablePointerTypeID:
@@ -1952,12 +2003,6 @@ QueryResult IsValidParameterValueQuery::run()
 {
    QualType givenType = this->givenType;
    QualType paramType = this->paramType;
-
-   // Implicit mut ref -> mut borrow for self argument
-   if (isSelf && paramType->isMutableBorrowType()
-       && givenType->getTypeID() == Type::MutableReferenceTypeID) {
-      givenType = QC.Sema->Context.getMutableBorrowType(givenType->getReferencedType());
-   }
 
    if (!paramType->containsTemplateParamType()) {
       IsImplicitlyConvertibleQuery::result_type result;

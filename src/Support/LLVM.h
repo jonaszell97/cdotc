@@ -22,6 +22,11 @@ namespace llvm {
    template <typename PT1, typename PT2> class PointerUnion;
    template <typename BaseTy, typename... TrailingTys> class TrailingObjects;
    template <typename EltTy> class TinyPtrVector;
+   template <typename ValueT, typename ValueInfoT> class DenseSet;
+   template <typename ValueT, unsigned InlineBuckets, typename ValueInfoT>
+   class SmallDenseSet;
+   template <typename ValueT, typename MapTy, typename ValueInfoT>
+   class DenseSetImpl;
 
    class raw_ostream;
    class APInt;
@@ -42,6 +47,10 @@ using llvm::ArrayRef;
 using llvm::MutableArrayRef;
 using llvm::TrailingObjects;
 using llvm::TinyPtrVector;
+
+using llvm::DenseSet;
+using llvm::SmallDenseSet;
+using llvm::DenseSetImpl;
 
 using llvm::MemoryBuffer;
 using llvm::APInt;

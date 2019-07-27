@@ -1780,7 +1780,7 @@ protected:
 
    void visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    {
-      visitType(D->getActualType());
+      visitType(D->getDefaultType());
    }
 
    void visitPropDecl(PropDecl *D)

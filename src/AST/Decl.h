@@ -101,89 +101,154 @@ protected:
    T *DefaultImpl = nullptr;
 };
 
-class DeclConstraint final: TrailingObjects<DeclConstraint, IdentifierInfo*> {
+class DeclConstraint final: public llvm::FoldingSetNode {
 public:
    enum Kind {
-      TypePredicate, TypePredicateNegated,
-      TypeEquality, TypeInequality,
+      /// \brief T is Protocol
+      TypePredicate,
+
+      /// \brief T !is Protocol
+      TypePredicateNegated,
+
+      /// \brief T == Type
+      TypeEquality,
+
+      /// \brief T != Type
+      TypeInequality,
+
+      /// \brief Concept<T>
       Concept,
-      Enum, Class, Struct,
+
+      /// \brief T is enum
+      Enum,
+
+      /// \brief T is class
+      Class,
+
+      /// \brief T is struct
+      Struct,
    };
 
    static DeclConstraint *Create(ASTContext &C,
                                  Kind K,
-                                 SourceRange SR,
-                                 ArrayRef<IdentifierInfo*> NameQual,
-                                 SourceType RHS);
+                                 QualType ConstrainedType,
+                                 QualType RHS);
 
    static DeclConstraint *Create(ASTContext &C,
-                                 SourceRange SR,
-                                 ArrayRef<IdentifierInfo*> NameQual,
-                                 IdentifierRefExpr *ConceptRef);
+                                 QualType ConstrainedType,
+                                 AliasDecl *Concept);
 
-   static DeclConstraint *Create(ASTContext &C,
-                                 Kind K,
-                                 SourceRange SR,
-                                 ArrayRef<IdentifierInfo*> NameQual);
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       Kind K,
+                       QualType ConstrainedType,
+                       QualType RHS);
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       QualType ConstrainedType,
+                       AliasDecl *Concept);
+
+   void Profile(llvm::FoldingSetNodeID &ID);
 
    Kind getKind() const { return K; }
-   SourceRange getSourceRange() const { return SR; }
 
-   const SourceType &getType() const
+   QualType getType() const
    {
       assert(K != Concept);
       return Type;
    }
 
-   IdentifierRefExpr *getConceptRefExpr() const
+   AliasDecl *getConcept() const
    {
       assert(K == Concept);
       return ConceptRef;
    }
 
    QualType getConstrainedType() const { return ConstrainedType; }
-   void setConstrainedType(QualType C){ ConstrainedType = C; }
 
-   ArrayRef<IdentifierInfo*> getNameQualifier() const
-   {
-      return { getTrailingObjects<IdentifierInfo*>(), NameQualifierSize };
-   }
+   void dump() const;
+   void print(llvm::raw_ostream &OS) const;
 
-   ArrayRef<AssociatedTypeDecl*> getReferencedAssociatedTypes() const
-   {
-      return ReferencedAssociatedTypes;
-   }
+private:
+   DeclConstraint(Kind K,
+                  QualType ConstrainedType,
+                  QualType RHS);
 
-   void setReferencedAssociatedTypes(ArrayRef<AssociatedTypeDecl*> V)
-   {
-      ReferencedAssociatedTypes = V;
-   }
+   DeclConstraint(QualType ConstrainedType,
+                  AliasDecl *Concept);
+
+   Kind K;
+   QualType ConstrainedType;
+
+   union {
+      QualType Type;
+      AliasDecl *ConceptRef;
+   };
+};
+
+class ConstraintSet final: public llvm::FoldingSetNode,
+                         llvm::TrailingObjects<ConstraintSet, DeclConstraint*> {
+   unsigned NumConstraints;
+   bool ContainsTemplateParam;
+
+   explicit ConstraintSet(ArrayRef<DeclConstraint*> constraints);
+
+public:
+   static ConstraintSet *Create(ASTContext &C,
+                                ArrayRef<DeclConstraint*> constraints);
+
+   static ConstraintSet *Combine(ASTContext &C,
+                                 ConstraintSet *C1,
+                                 ConstraintSet *C2);
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       ArrayRef<DeclConstraint*> constraints);
+
+   void Profile(llvm::FoldingSetNodeID &ID);
 
    friend TrailingObjects;
 
-private:
-   DeclConstraint(Kind K, SourceRange SR,
-                  ArrayRef<IdentifierInfo*> NameQual,
-                  SourceType RHS);
+   ArrayRef<DeclConstraint*> getConstraints() const
+   {
+      return { getTrailingObjects<DeclConstraint*>(), NumConstraints };
+   }
 
-   DeclConstraint(SourceRange SR,
-                  ArrayRef<IdentifierInfo*> NameQual,
-                  IdentifierRefExpr *ConceptRef);
+   using iterator = DeclConstraint* const*;
 
-   DeclConstraint(SourceRange SR,
-                  ArrayRef<IdentifierInfo*> NameQual,
-                  Kind K);
+   iterator begin() const
+   {
+      return getTrailingObjects<DeclConstraint*>();
+   }
+
+   iterator end() const
+   {
+      return getTrailingObjects<DeclConstraint*>() + NumConstraints;
+   }
+
+   unsigned size() const { return NumConstraints; }
+   bool empty() const { return NumConstraints == 0; }
+
+   bool containsTemplateParam() const { return ContainsTemplateParam; }
+
+   void dump() const;
+   void print(llvm::raw_ostream &OS) const;
+};
+
+class ParsedConstraint {
+public:
+   using Kind = DeclConstraint::Kind;
+
+   ParsedConstraint(Kind k,
+                    SourceRange SR,
+                    std::vector<IdentifierInfo*> &&nameQual,
+                    Expression *typeOrConceptExpr)
+      : K(k), SR(SR), NameQual(move(nameQual)),
+        TypeOrConceptExpr(typeOrConceptExpr)
+   { }
 
    Kind K;
    SourceRange SR;
-   QualType ConstrainedType;
-   unsigned NameQualifierSize;
-   ArrayRef<AssociatedTypeDecl*> ReferencedAssociatedTypes;
-
-   union {
-      SourceType Type;
-      IdentifierRefExpr *ConceptRef;
-   };
+   std::vector<IdentifierInfo*> NameQual;
+   Expression *TypeOrConceptExpr;
 };
 
 class UsingDecl final: public NamedDecl,
@@ -415,6 +480,7 @@ class LocalVarDecl: public VarDecl {
    bool IsNRVOCand : 1;
    bool InitIsMove : 1;
    bool variadicForDecl : 1;
+   bool IsBorrow : 1;
 
 public:
    static LocalVarDecl *Create(ASTContext &C,
@@ -428,6 +494,9 @@ public:
 
    static LocalVarDecl *CreateEmpty(ASTContext &C);
 
+   static bool classof(Decl const* T) { return classofKind(T->getKind()); }
+   static bool classofKind(DeclKind kind) { return kind == LocalVarDeclID; }
+
    bool isNRVOCandidate() const { return IsNRVOCand; }
    void setIsNRVOCandidate(bool NRVO) { IsNRVOCand = NRVO; }
 
@@ -436,8 +505,8 @@ public:
    bool isInitMove() const { return InitIsMove; }
    void setInitIsMove(bool IsMove) { InitIsMove = IsMove; }
 
-   static bool classof(Decl const* T) { return classofKind(T->getKind()); }
-   static bool classofKind(DeclKind kind) { return kind == LocalVarDeclID; }
+   bool isBorrow() const { return IsBorrow; }
+   void setIsBorrow(bool b) { IsBorrow = b; }
 
    bool isVariadicForDecl() const { return variadicForDecl; }
    void setVariadicForDecl(bool s) { variadicForDecl = s; }
@@ -1249,6 +1318,10 @@ public:
    const SourceType &getType() const { return Type; }
    void setType(SourceType Ty) { Type = Ty; }
 
+   bool isSelf() const;
+   bool isTypedef() const;
+   QualType getAliasedType() const;
+
    StaticExpr* getAliasExpr() const { return aliasExpr; }
    void setAliasExpr(StaticExpr *Expr) { aliasExpr = Expr; }
 
@@ -1789,6 +1862,9 @@ public:
    bool hasAssociatedTypeConstraint() const { return HasAssociatedTypeConstraint; }
    void setHasAssociatedTypeConstraint(bool V) { HasAssociatedTypeConstraint = V; }
 
+   bool hasStaticRequirements() const { return HasStaticRequirements; }
+   void setHasStaticRequirements(bool b) { HasStaticRequirements = b; }
+
 private:
    ProtocolDecl(AccessSpecifier access,
                 SourceLocation KeywordLoc,
@@ -1800,6 +1876,7 @@ private:
 
    bool HasAssociatedTypeConstraint : 1;
    bool IsAny                       : 1;
+   bool HasStaticRequirements       : 1;
 };
 
 class ExtensionDecl final: public NamedDecl,
@@ -2140,11 +2217,9 @@ class AssociatedTypeDecl: public NamedDecl,
 public:
    static AssociatedTypeDecl *Create(ASTContext &C,
                                      SourceLocation Loc,
-                                     IdentifierInfo *ProtoSpec,
                                      DeclarationName Name,
-                                     SourceType actualType,
-                                     SourceType covariance,
-                                     bool Implementation);
+                                     SourceType defaultVal,
+                                     SourceType covariance);
 
    static AssociatedTypeDecl *CreateEmpty(ASTContext &C);
 
@@ -2153,22 +2228,11 @@ public:
 
    SourceRange getSourceRange() const { return SourceRange(Loc); }
 
-   const SourceType &getActualType() const { return actualType; }
-   void setActualType(SourceType ty) { actualType = ty; }
+   const SourceType &getDefaultType() const { return defaultValue; }
+   void setDefaultType(SourceType ty) { defaultValue = ty; }
 
    const SourceType &getCovariance() const { return covariance; }
    void setCovariance(SourceType ty) { covariance = ty; }
-
-   IdentifierInfo *getProtoSpecInfo() const { return protocolSpecifier; }
-   llvm::StringRef getProtocolSpecifier() const
-   {
-      return protocolSpecifier->getIdentifier();
-   }
-
-   void setProtocolSpecifier(IdentifierInfo *II) { protocolSpecifier = II; }
-
-   bool isImplementation() const { return Implementation; }
-   void setImplementation(bool V) { Implementation = V; }
 
    bool isSelf() const { return Self; }
    void setSelf(bool V) { Self = V; }
@@ -2181,22 +2245,18 @@ public:
 
 private:
    AssociatedTypeDecl(SourceLocation Loc,
-                      IdentifierInfo *ProtoSpec,
                       DeclarationName Name,
-                      SourceType actualType,
-                      SourceType covariance,
-                      bool Implementation);
+                      SourceType defaultValue,
+                      SourceType covariance);
 
    AssociatedTypeDecl(EmptyShell Empty);
 
    SourceLocation Loc;
-   IdentifierInfo *protocolSpecifier;
-   SourceType actualType;
+   SourceType defaultValue;
    SourceType covariance;
    ProtocolDecl *Proto = nullptr;
 
-   bool Implementation : 4;
-   bool Self           : 4;
+   bool Self;
 };
 
 class PropDecl: public NamedDecl, public DefaultImplementable<PropDecl> {

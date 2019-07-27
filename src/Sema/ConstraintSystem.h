@@ -722,15 +722,21 @@ public:
 class DisjunctionConstraint final: public Constraint,
                              TrailingObjects<DisjunctionConstraint, Constraint*>
 {
-   DisjunctionConstraint(ArrayRef<Constraint*> Constraints, Locator Loc);
+   DisjunctionConstraint(ArrayRef<Constraint*> Constraints,
+                         Locator Loc,
+                         unsigned defaultValue);
 
    /// The number of contained constraints.
    unsigned NumConstraints;
 
+   /// The default overload to choose, or -1 if no default exists.
+   unsigned defaultValue;
+
 public:
    static DisjunctionConstraint *Create(ConstraintSystem &Sys,
                                         ArrayRef<Constraint*> Constraints,
-                                        Locator Loc);
+                                        Locator Loc,
+                                        unsigned defaultValue = -1);
 
    friend TrailingObjects;
 
@@ -745,6 +751,9 @@ public:
 
    /// \return the contained constraints.
    ArrayRef<Constraint*> getConstraints() const;
+
+   /// \return The default overload to choose.
+   unsigned getDefaultOverload() const { return defaultValue; }
 };
 
 /// A constraint that only holds if a particular overload is selected.
@@ -1022,7 +1031,8 @@ private:
 
    /// Try to simplify a single constraint.
    /// \return true if this constraint is unsolvable, false otherwise.
-   bool simplify(Constraint *C, SmallVectorImpl<Constraint*> &Worklist);
+   bool simplify(Constraint *C, SmallVectorImpl<Constraint*> &Worklist,
+                 SmallPtrSetImpl<Constraint*> &removedConstraints);
 
    /// Apply all concrete type variable bindings and check if all constraints
    /// are still satisfiable.
@@ -1170,10 +1180,11 @@ public:
                               ArrayRef<TypeVariableType*> TypeVars);
 
    /// Diagnose the constraint system failure.
-   bool diagnoseFailure();
+   bool diagnoseFailure(SolutionBindings &Bindings);
 
    /// Diagnose the constraint system failure for a function overload.
-   bool diagnoseCandidateFailure(CandidateSet::Candidate &Cand);
+   bool diagnoseCandidateFailure(CandidateSet::Candidate &Cand,
+                                 SolutionBindings &Bindings);
 
    /// Diagnose an ambiguous assignment.
    bool diagnoseAmbiguity(const Solution &S1, const Solution &S2);

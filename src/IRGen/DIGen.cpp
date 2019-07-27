@@ -243,8 +243,7 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
       break;
    }
    case Type::ReferenceTypeID:
-   case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID: {
+   case Type::MutableReferenceTypeID: {
       MD = DI->createReferenceType(
          llvm::dwarf::DW_TAG_reference_type,
          getTypeDI(ty->getReferencedType()),

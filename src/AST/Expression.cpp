@@ -29,6 +29,12 @@ Expression::Expression(NodeType typeID)
      AllowTemplate(false)
 {}
 
+void Expression::setExprType(QualType ty)
+{
+   assert((!ty || !ty->isUnknownAnyType()) && "shouldn't use UnknownAnyType!");
+   exprType = ty;
+}
+
 SourceRange Expression::getEllipsisRange() const
 {
    if (!EllipsisLoc)
@@ -1443,17 +1449,16 @@ IdentifierRefExpr::IdentifierRefExpr(EmptyShell)
 
 SourceRange IdentifierRefExpr::getSourceRange() const
 {
-   if (!ParentExpr)
-      return Loc;
-
-   return SourceRange(ParentExpr->getSourceRange().getStart(), Loc.getEnd());
+   return Loc;
 }
 
 DeclRefExpr::DeclRefExpr(NamedDecl *Decl, SourceRange SR)
    : Expression(DeclRefExprID), Decl(Decl), SR(SR),
      CaptureIdx(-1), AllowModuleRef(false)
 {
-
+   assert((!MemberRefExpr::needsMemberRefExpr(Decl->getKind())
+      || isa<AssociatedTypeDecl>(Decl))
+      && "should be a MemberRefExpr!");
 }
 
 DeclRefExpr::DeclRefExpr(EmptyShell Empty)
@@ -1480,7 +1485,7 @@ MemberRefExpr::MemberRefExpr(Expression *ParentExpr,
    : Expression(MemberRefExprID),
      ParentExpr(ParentExpr), MemberDecl(MemberDecl), SR(SR)
 {
-
+   assert(needsMemberRefExpr(MemberDecl->getKind()) && "should be a DeclRefExpr!");
 }
 
 MemberRefExpr::MemberRefExpr(EmptyShell Empty)
@@ -1495,6 +1500,23 @@ MemberRefExpr* MemberRefExpr::Create(ASTContext &C,
                                      NamedDecl *MemberDecl,
                                      SourceRange SR) {
    return new(C) MemberRefExpr(ParentExpr, MemberDecl, SR);
+}
+
+bool MemberRefExpr::needsMemberRefExpr(Decl::DeclKind K)
+{
+   switch (K) {
+   case Decl::AssociatedTypeDeclID:
+   case Decl::PropDeclID:
+   case Decl::SubscriptDeclID:
+   case Decl::FieldDeclID:
+   case Decl::EnumCaseDeclID:
+   case Decl::MethodDeclID:
+   case Decl::InitDeclID:
+   case Decl::DeinitDeclID:
+      return true;
+   default:
+      return false;
+   }
 }
 
 OverloadedDeclRefExpr::OverloadedDeclRefExpr(ArrayRef<NamedDecl*> Decls,

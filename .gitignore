@@ -1,4 +1,7 @@
+build/
+.history/
 .idea/
+.vscode/
 cmake-build-debug/
 cmake-build-release/
 xcode_build/

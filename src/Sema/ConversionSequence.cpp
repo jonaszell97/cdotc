@@ -12,7 +12,12 @@ using namespace cdot;
 QualType ConversionStep::getResultType() const
 {
    if (Kind == CastKind::ConversionOp) {
-      return getConversionOp()->getReturnType();
+      auto *convOp = getConversionOp();
+      if (convOp->isCompleteInitializer()) {
+         return convOp->getASTCtx().getRecordType(convOp->getRecord());
+      }
+
+      return convOp->getReturnType();
    }
 
    return QualType::getFromOpaquePtr(Data);

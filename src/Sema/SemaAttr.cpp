@@ -70,7 +70,7 @@ ExprResult SemaPass::visitAttributedExpr(AttributedExpr *Expr)
    }
 
    if (E->isInvalid()) {
-      E->setExprType(UnknownAnyTy);
+      E->setExprType(ErrorTy);
       Expr->setIsInvalid(true);
 
       return ExprError();

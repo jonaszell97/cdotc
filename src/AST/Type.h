@@ -832,7 +832,6 @@ public:
       switch (T->getTypeID()) {
       case ReferenceTypeID:
       case MutableReferenceTypeID:
-      case MutableBorrowTypeID:
          return true;
       default:
          return false;
@@ -851,8 +850,7 @@ class MutableReferenceType: public ReferenceType {
 public:
    static bool classof(Type const* T)
    {
-      return T->getTypeID() == MutableReferenceTypeID
-             || T->getTypeID() == MutableBorrowTypeID;
+      return T->getTypeID() == MutableReferenceTypeID;
    }
 
    friend class ast::ASTContext;
@@ -861,18 +859,6 @@ protected:
    MutableReferenceType(TypeID ID,
                         QualType referencedType,
                         Type *CanonicalType);
-};
-
-class MutableBorrowType: public MutableReferenceType {
-   MutableBorrowType(QualType borrowedType, Type *CanonicalType);
-
-public:
-   static bool classof(Type const* T)
-   {
-      return T->getTypeID() == MutableBorrowTypeID;
-   }
-
-   friend class ast::ASTContext;
 };
 
 class BoxType: public Type {
@@ -1029,6 +1015,8 @@ public:
    void Profile(llvm::FoldingSetNodeID &ID);
    static void Profile(llvm::FoldingSetNodeID &ID,
                        ArrayRef<QualType> Existentials);
+
+   bool contains(CanType T) const;
 
    static bool classof(Type const* T)
    {
@@ -1404,16 +1392,14 @@ public:
 };
 
 class AssociatedType: public Type, public llvm::FoldingSetNode {
-   AssociatedType(ast::AssociatedTypeDecl *AT, AssociatedType *OuterAT);
+   AssociatedType(ast::AssociatedTypeDecl *AT, QualType OuterAT);
 
    ast::AssociatedTypeDecl *AT;
-   AssociatedType *OuterAT;
+   QualType OuterAT;
 
 public:
    ast::AssociatedTypeDecl *getDecl() const { return AT; }
-   AssociatedType *getOuterAT() const { return OuterAT; }
-
-   QualType getActualType() const;
+   QualType getOuterAT() const { return OuterAT; }
 
    child_iterator child_begin() const { return child_iterator{}; }
    child_iterator child_end() const { return child_iterator{}; }
@@ -1424,9 +1410,9 @@ public:
    }
 
    static void Profile(llvm::FoldingSetNodeID &ID, ast::AssociatedTypeDecl *P,
-                       AssociatedType *OuterAT) {
+                       QualType OuterAT) {
       ID.AddPointer(P);
-      ID.AddPointer(OuterAT);
+      ID.AddPointer(OuterAT.getAsOpaquePtr());
    }
 
    static bool classof(Type const* T)

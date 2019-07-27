@@ -114,7 +114,7 @@ unsigned CandidateSet::Candidate::getNumConstraints() const
    if (isAnonymousCandidate())
       return 0;
 
-   return (unsigned)getFunc()->getConstraints().size();
+   return (unsigned)getFunc()->getConstraints()->size();
 }
 
 CandidateSet::CandidateSet(CandidateSet &&Other) noexcept
@@ -760,7 +760,7 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
       }
 
       SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
-                  true, 0, FuncName);
+                  (bool)FuncName, 0, FuncName);
    }
 
    SmallVector<Expression*, 4> ArgsWithSelf;
@@ -842,7 +842,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
    assert(Status != Success && "diagnosing successful candidate set!");
 
    SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
-               true, 2, AliasName);
+               (bool)AliasName, 2, AliasName);
 
    for (auto &Cand : Candidates) {
       switch (Cand.FR) {

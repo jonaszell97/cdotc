@@ -842,8 +842,7 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
       return getStorageType(pointee)->getPointerTo();
    }
    case Type::ReferenceTypeID:
-   case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID: {
+   case Type::MutableReferenceTypeID: {
       QualType referenced = Ty->getReferencedType();
       return getStorageType(referenced)->getPointerTo();
    }
@@ -1262,11 +1261,7 @@ void IRGen::visitFunction(Function &F)
 
       if (!BB.isEntryBlock() && !BB.getArgs().empty()) {
          for (const auto &arg : BB.getArgs()) {
-            auto ty = getStorageType(arg.getType());
-            if (ty->isStructTy()) {
-               ty = ty->getPointerTo();
-            }
-
+            auto ty = getParameterType(arg.getType());
             addMappedValue(&arg, Builder.CreatePHI(ty, 0));
          }
       }
@@ -1283,10 +1278,6 @@ void IRGen::visitFunction(Function &F)
 
    // Allocate structs that were passed destructured.
    Builder.SetInsertPoint(AllocaBB);
-
-   if (F.getName()=="_CNW4mainE5Int64C1ElL5value") {
-       NO_OP;
-   }
 
    for (auto &B : F.getBasicBlocks()) {
       if (B.hasNoPredecessors())
@@ -1617,10 +1608,9 @@ llvm::Value* IRGen::AccessField(ast::StructDecl *S,
                                 Value *Val,
                                 const DeclarationName &FieldName,
                                 bool load) {
-   if (isa<UnionDecl>(S)) {
-      auto GEP = Builder.CreateStructGEP(getStructTy(S), getLlvmValue(Val), 0);
-      return Builder.CreateBitCast(
-         GEP, getStorageType(getFieldType(S, FieldName))->getPointerTo());
+   // Ignore a previous load of the value.
+   if (auto *ld = dyn_cast<LoadInst>(Val)) {
+      Val = ld->getTarget();
    }
 
    auto offset = getFieldOffset(S, FieldName);
@@ -2369,6 +2359,11 @@ llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
    auto val = getLlvmValue(I.getVal());
 
    if (I.getVal()->getType()->removeReference()->isRecordType()) {
+      // Ignore a previous load of the value.
+      if (auto *ld = dyn_cast<llvm::LoadInst>(val)) {
+         val = ld->getOperand(0);
+      }
+
       auto R = I.getVal()->getType()->removeReference()->getRecord();
       assert(isa<ConstantInt>(I.getIndex()));
 
@@ -2387,7 +2382,21 @@ llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
 
       return Builder.CreateStructGEP(getStructTy(R), val, idx);
    }
+
    if (val->getType()->getPointerElementType()->isArrayTy()) {
+      // Ignore a previous load of the value.
+      if (auto *ld = dyn_cast<llvm::LoadInst>(val)) {
+         val = ld->getOperand(0);
+      }
+
+      if (val->getType()->isArrayTy()) {
+         auto *Val = Builder.CreateExtractElement(val, getLlvmValue(I.getIndex()));
+         auto *Alloc = Builder.CreateAlloca(Val->getType());
+         Builder.CreateStore(Val, Alloc);
+
+         return Alloc;
+      }
+
       return Builder.CreateInBoundsGEP(val, {
          wordSizedInt(0),
          getLlvmValue(I.getIndex())
@@ -2411,8 +2420,7 @@ llvm::Value *IRGen::visitCaptureExtractInst(const CaptureExtractInst &I)
 
 llvm::Value *IRGen::visitFieldRefInst(FieldRefInst const& I)
 {
-   return AccessField(I.getAccessedType(), I.getOperand(0),
-                      I.getFieldName());
+   return AccessField(I.getAccessedType(), I.getOperand(0), I.getFieldName());
 }
 
 llvm::Value *IRGen::visitTupleExtractInst(TupleExtractInst const& I)
@@ -2435,6 +2443,11 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst &I)
    auto Case = I.getCase();
    auto E = getLlvmValue(I.getOperand(0));
 
+   // Ignore a previous load of the value.
+   if (auto *ld = dyn_cast<llvm::LoadInst>(E)) {
+      E = ld->getOperand(0);
+   }
+
    unsigned idx = I.getCaseVal()->getU32();
    auto BeginPtr = Builder.CreateStructGEP(getStructTy(I.getEnumTy()), E, 1);
 
@@ -2452,14 +2465,21 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst &I)
 llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
 {
    auto E = getLlvmValue(I.getValue());
-   if (E->getType()->isIntegerTy())
+   if (E->getType()->isIntegerTy()) {
       return E;
+   }
 
-   auto Val = Builder.CreateStructGEP(E->getType()
-                                       ->getPointerElementType(), E, 0);
+   // Ignore a previous load of the value.
+   if (auto *ld = dyn_cast<llvm::LoadInst>(E)) {
+      E = ld->getOperand(0);
+   }
 
-   if (!I.getType()->isReferenceType())
+   auto Val = Builder.CreateStructGEP(
+      E->getType()->getPointerElementType(), E, 0);
+
+   if (!I.getType()->isReferenceType()) {
       return Builder.CreateLoad(Val);
+   }
 
    return Val;
 }
@@ -2470,16 +2490,33 @@ bool shouldReallyLoad(SemaPass &Sema, const LoadInst &I)
       return false;
    }
 
-   auto *singleUser = I.getSingleUser();
-   if (!singleUser) {
-      return true;
-   }
-
-   if (isa<GEPInst>(singleUser) || isa<FieldRefInst>(singleUser)) {
-      return false;
-   }
-
    return true;
+//
+//   auto *singleUser = I.getSingleUser();
+//   if (!singleUser) {
+//      return true;
+//   }
+//
+//   if (isa<FieldRefInst>(singleUser)) {
+//      return false;
+//   }
+//   if (auto *GEP = dyn_cast<GEPInst>(singleUser)) {
+//      return !GEP->getVal()->getType()->isRecordType();
+//   }
+//
+//   if (auto *call = dyn_cast<IntrinsicCallInst>(singleUser)) {
+//      switch (call->getCalledIntrinsic()) {
+//      case Intrinsic::memcpy:
+//      case Intrinsic::memset:
+//      case Intrinsic::memcmp:
+//      case Intrinsic::typeinfo_cmp:
+//         return false;
+//      default:
+//         return true;
+//      }
+//   }
+//
+//   return true;
 }
 
 llvm::Value *IRGen::visitLoadInst(LoadInst const& I)

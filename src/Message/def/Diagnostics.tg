@@ -202,7 +202,7 @@ def err_circular_global_value : Error<"type inferred global values $0 and $1 are
 def note_dependent_global_here : Note<"dependent global here">
 
 def err_value_is_not_enum : Error<"type $0 is not an enumeration">
-def err_record_is_not_enum : Error<"${ 0 | select(class,struct,enum,union,protocol) } $1 is not an enumeration">
+def err_record_is_not_enum : Error<"${ 0 | decl_kind } $1 is not an enumeration">
 
 def err_subscript_too_many_indices : Error<"too many indices for subscript operator">
 def err_vararg_cannot_pass_void : Error<"cannot pass 'void' to a vararg function">
@@ -246,8 +246,8 @@ def err_ambiguous_destructure : Error<"reference to destructuring operator is am
 /* FUNCTION / METHOD CALL ERRORS */
 def err_func_not_found : Error<"${ 0 | select(function, method) } '$1' not found">
 def err_method_not_found : Error<"method '$0' does not exist on ${ 1 | if(instances of ) }type '$2'">
-def err_no_matching_call : Error<"no matching call ${ 0 | if(for ${ 1 | select(function,method,alias) } '$2') } found">
-def err_no_matching_initializer : Error<"no ${ 0 | select(matching , accessible ) }initializer for ${ 1 | select(class,struct,enum,union,protocol) } '$2' found">
+def err_no_matching_call : Error<"no matching call ${ 0 | if(for ${ 1 | select(function,method,alias) } '$2' ) }found">
+def err_no_matching_initializer : Error<"no ${ 0 | select(matching , accessible ) }initializer for ${ 1 | decl_kind } '$2' found">
 
 def err_cannot_call : Error<"cannot call ${ 0 | select(typedef,namespace) }">
 def err_cannot_call_method_on : Error<"cannot call method on value of type $0">
@@ -292,7 +292,7 @@ def err_ambiguous_reference : Error<"reference to '$0' is ambiguous">
 def err_prop_does_not_have : Error<"property '$0' does not have a ${ 1 | select(getter, setter) }">
 def err_subscript_does_not_have : Error<"susbcript does not have a ${ 0 | select(getter, setter) }">
 
-def err_incompatible_template_args : Error<"incompatible template arguments for ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property) } $1">
+def err_incompatible_template_args : Error<"incompatible template arguments for ${ 0 | decl_kind } $1">
 
 def err_mutating_accessor_on_const : Error<"cannot access mutating ${ 0 | select(getter, setter) } on a 'let' constant">
 
@@ -307,7 +307,7 @@ def err_does_not_name_template_parm : Error<"$0 does not name a ${ 1 | if(variad
 /* TEMPLATES */
 def err_non_type_param_used_as_type : Error<"non-type template parameter $0 cannot be used as a type">
 
-def note_instantiation_of : Note<"in instantiation of ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace) } '$1'${ 2 | if( with template arguments <$3>) }">
+def note_instantiation_of : Note<"in instantiation of ${ 0 | decl_kind } '$1'${ 2 | if( with template arguments <$3>) }">
 
 def err_protocol_template_params : Error<"protocols may not be templated, use associated types instead">
 def err_invalid_pack_expansion : Error<"cannot apply pack expansion operator '...' to expression that does not contain a variadic template parameter or argument">
@@ -323,7 +323,7 @@ def err_variadic_field_index_integral : Error<"variadic field index must be a st
 
 def err_initializer_templ_args_must_be_inferrable : Error<"${ 0 | select(initializer) } template parameter '$1' must be used in the function signature">
 
-def err_not_a_template : Error<"${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace) } '$1' is not a template">
+def err_not_a_template : Error<"${ 0 | decl_kind } '$1' is not a template">
 
 // CTFE errors
 def err_ctfe_circular_dependence : Error<"functions '$0' and '$1' are circularly dependent on each others definition and cannot be statically evaluated">
@@ -339,7 +339,7 @@ def err_unreachable_during_ctfe : Error<"'unreachable' instruction encountered d
 
 def note_printf_ctfe : Note<"'printf' encountered during ctfe: $0">
 
-def err_size_not_known : Error<"size of ${ 0 | select(class,struct,enum,union,protocol) } '$1' is not known when requested here">
+def err_size_not_known : Error<"size of ${ 0 | decl_kind } '$1' is not known when requested here">
 
 def err_cannot_persist_type : Error<"static expression cannot return value of type '$0' because it is not persistable">
 def note_non_persistable_member_here : Error<"member of non-persistable type '$0' here">
@@ -360,17 +360,17 @@ def err_namespace_does_not_have_member : Error<"namespace $0 does not define mem
 def err_import_multiple_with_wildcard : Error<"cannot import multiple items when a wildcard ('*') import is present">
 def err_invalid_using_alias : Error<"cannot use named 'using' declaration when a wildcard import or multiple imported items are present">
 
-def err_cannot_lookup_member_in : Error<"cannot lookup member in ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property,typedef,module) } '$1'">
+def err_cannot_lookup_member_in : Error<"cannot lookup member in ${ 0 | decl_kind } '$1'">
 def err_using_target_ambiguous : Error<"target of 'using' declaration is ambiguous">
 
 /* CLASS / STRUCT ERRORS */
-def err_class_not_accessible : Error<"${ 0 | select(class,struct,enum,union,protocol) } $1 is not accessible">
+def err_class_not_accessible : Error<"${ 0 | decl_kind } $1 is not accessible">
 def err_class_not_found : Error<"class $0 not found">
 def err_instantiate_abstract_class : Error<"cannot instantiate abstract class $0">
-def err_member_not_found : Error<"${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace, module) } '$1' does not have a member named '$2'">
+def err_member_not_found : Error<"${ 0 | decl_kind } '$1' does not have a member named '$2'">
 def err_not_found : Error<"$0 not found">
 def err_member_needs_initializing : Error<"member $0 must be initialized in every constructor">
-def err_generic_type_not_found : Error<"${ 0 | select(class,struct,enum,union,protocol) } does not have a generic type $1">
+def err_generic_type_not_found : Error<"${ 0 | decl_kind } does not have a generic type $1">
 def err_generic_type_count : Error<"expected $0 generic type ${ 0 | plural_s(argument) }, $1 given">
 def err_generic_type_incompatible : Error<"generic type parameter $0 is not compatible with given type $1">
 def err_struct_member_of_self : Error<"structs cannot have members of their own type (use a pointer instead)">
@@ -378,7 +378,7 @@ def err_constant_field_setter : Error<"constant fields cannot have a setter">
 def err_self_outside_method : Error<"${ 0 | select(self, super, Self) } can only be used in instance methods">
 def err_super_without_base : Error<"cannot reference 'super' because class $0 does not have a base class">
 
-def err_no_template_method : Error<"${ 0 | select(class,struct,enum,union,protocol) } $1 does not have a templated method '$2'">
+def err_no_template_method : Error<"${ 0 | decl_kind } $1 does not have a templated method '$2'">
 
 def err_overload_generic_params : Error<"${ 0 | select(function, method) } overloads must have the same template arguments">
 def note_overload_generic_params : Note<"previous template argument list declared here">
@@ -394,7 +394,7 @@ def err_protocol_initializer : Error<"protocols cannot be initialized">
 def err_circular_data_members : Error<"circular dependency beetween fields of structs $0 and $1">
 def note_other_field_here : Error<"dependent field here">
 
-def err_non_static_member_accessed_statically : Error<"static ${ 0 | select(data member, property) } $1 of ${ 2 | select(class,struct,enum,union,protocol) } $3 cannot be accessed statically">
+def err_non_static_member_accessed_statically : Error<"static ${ 0 | select(data member, property) } $1 of ${ 2 | decl_kind } $3 cannot be accessed statically">
 
 def err_implicit_conformance_cannot_be_declared : Error<"'${ 0 | select(Equatable,Hashable,StringRepresentable, Copyable) }' conformance cannot be implicitly declared: data member '$1' is not ${ 0 | select(equatable,hashable,string representable, copyable) }">
 
@@ -402,7 +402,7 @@ def err_implicit_conformance_cannot_be_declared : Error<"'${ 0 | select(Equatabl
 def err_protocol_not_found : Error<"protocol $0 does not exist">
 def err_conforming_to_non_protocol : Error<"$0 is not a protocol">
 def err_protocol_property_get_set : Error<"property in protocol must require a getter or setter">
-def err_does_not_conform : Error<"${ 0 | select(class, struct, enum, union, protocol) } $1 does not conform to protocol $2">
+def err_does_not_conform : Error<"${ 0 | decl_kind } $1 does not conform to protocol $2">
 
 def err_constraint_always_false : Error<"constraint is always false">
 def err_cannot_be_used_as_concept : Error <"$0 '$1' cannot be used as a constraint">
@@ -414,10 +414,10 @@ def err_cannot_be_referenced_in_constraint : Error<"$0 '$1' cannot be referenced
 
 def err_protocol_cannot_be_used_as_type : Error<"protocol '$0' with associated type constraints can only be used as a generic constraint">
 
-def err_incorrect_protocol_impl : Error<"${ 0 | select(class, struct, enum, union, protocol) } $1 does not correctly implement protocol $2">
+def err_incorrect_protocol_impl : Error<"${ 0 | decl_kind } $1 does not correctly implement protocol $2">
 def note_incorrect_protocol_impl_prop : Note<"required ${ 0 | select(subscript, property) } ${ 0 | if('$1' ) }${ 2 | select(is missing, requires a getter, requires a setter, requires a getter and a setter) }">
 
-def note_incorrect_protocol_impl_method_missing : Note<"required method '$0' is missing">
+def note_incorrect_protocol_impl_missing : Note<"required ${ 0 | decl_kind } '$1' is missing">
 def note_incorrect_protocol_impl_method_num_args : Note<"candidate has incorrect number of arguments, expected ${ 0 | select(at least, at most) } $1, $2 given">
 def note_incorrect_protocol_impl_method_signature : Note<"candidate has incomaptible signature ('$0' expected for ${ 1 | ordinal } argument, found '$2')">
 def note_incorrect_protocol_impl_method_return_type : Note<"candidate has incomaptible return type ('$0' expected, found '$1')">
@@ -432,11 +432,11 @@ def note_conformance_chain : Note<"conformance chain: $0">
 def note_incorrect_protocol_impl_prop_type : Note<"${ 0 | select(subscript, property) } ${ 0 | if('$1' ) }has incompatible type, expected $2 but found $3">
 
 def err_definition_in_protocol : Error<"${ 0 | select(method, property, subscript, initializer) } in a protocol may not have a body, use an extension instead">
-def err_may_not_appear_in_protocol : Error<"${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property,typedef,module) } declaration cannot appear in a protocol">
+def err_may_not_appear_in_protocol : Error<"${ 0 | decl_kind } declaration cannot appear in a protocol">
 def err_protocol_extension_must_override : Error<"declaration in protocol extension must override a protocol requirement">
 
 def note_associated_type_missing : Note<"associated type '$0' must be defined">
-def err_no_such_associated_type : Error<"${ 0 | select(class, struct, enum, union, protocol) } '$1' does not conform to a protocol with an associated type named '$2'">
+def err_no_such_associated_type : Error<"${ 0 | decl_kind } '$1' does not conform to a protocol with an associated type named '$2'">
 def err_associated_type_ambiguous : Error<"reference to associated type '$0' is ambiguous">
 def err_associated_type_no_default : Error<"must specify a type for associated type '$0' because it does not have a default type">
 def err_associated_type_constraint : Error<"associated type '$0' (aka $1) does not satisfy constraint: $2">
@@ -475,10 +475,10 @@ def note_var_redeclaration : Note<"previous declaration is here">
 def err_undeclared_identifer : Error<"reference to undeclared identifier $0">
 
 /* ACCESS ERRORS */
-def err_private_access : Error<"private ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property,typedef,module) } '$1' is not accessible here">
-def err_fileprivate_access : Error<"fileprivate ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property,typedef,module) } '$1' can only be accessed within file '$2'">
-def err_protected_access : Error<"protected ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property,typedef,module) } '$1' can only be accessed within class '$2' or subclasses of it">
-def err_internal_access : Error<"internal ${ 0 | select(class,struct,enum,union,protocol,function,method,alias,namespace,field,property,typedef,module) } '$1' can only be accessed within module '$2'">
+def err_private_access : Error<"private ${ 0 | decl_kind } '$1' is not accessible here">
+def err_fileprivate_access : Error<"fileprivate ${ 0 | decl_kind } '$1' can only be accessed within file '$2'">
+def err_protected_access : Error<"protected ${ 0 | decl_kind } '$1' can only be accessed within class '$2' or subclasses of it">
+def err_internal_access : Error<"internal ${ 0 | decl_kind } '$1' can only be accessed within module '$2'">
 
 def note_access_spec_here : Note<"${ 0 | if(implicitly ) }declared ${ 1 | select(<<<should not happen>>>, public, private, protected, internal, fileprivate) } here">
 

@@ -451,7 +451,7 @@ BuiltinCandidateBuilder::fillCache(BuiltinKindMap &Map,
       if (!lhsType->isMutableReferenceType())
          lhsType = Context.getMutableReferenceType(lhsType->removeReference());
 
-      auto ResultTy = Context.getMutableBorrowType(
+      auto ResultTy = Context.getMutableReferenceType(
          lhsType->getReferencedType());
 
       FunctionType *FnTy = Context.getFunctionType(ResultTy, { lhsType });

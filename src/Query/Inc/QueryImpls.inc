@@ -66,16 +66,19 @@ bool Query::isPure() const
    case ResolveExtensionQueryID: return false;
    case ResolveConformanceToProtocolQueryID: return false;
    case ResolveExplicitConformancesQueryID: return false;
+   case ResolveConformancesToProtocolsQueryID: return false;
    case ResolveDeclaredConformancesQueryID: return false;
    case AddSingleConformanceQueryID: return false;
    case DeclareSelfAliasQueryID: return false;
    case ResolveAssociatedTypesQueryID: return false;
-   case GetReferencedAssociatedTypesQueryID: return false;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return false;
    case VerifyConstraintQueryID: return false;
+   case VerifyConstraintsQueryID: return false;
    case IsConstraintSatisfiedQueryID: return false;
    case GetConstrainedTypeQueryID: return false;
+   case IsSupersetOfQueryID: return false;
+   case GetReferencedAssociatedTypesQueryID: return false;
    case GetNeededAssociatedTypesQueryID: return false;
    case CheckConformancesQueryID: return false;
    case CheckSingleConformanceQueryID: return false;
@@ -164,16 +167,19 @@ bool Query::isPure() const
    case LookupSingleQueryID: return false;
    case MultiLevelLookupQueryID: return false;
    case MultiLevelTypeLookupQueryID: return false;
+   case RestrictedLookupQueryID: return true;
    case DirectLookupQueryID: return false;
    case NestedNameLookupQueryID: return false;
    case ResolveMacrosQueryID: return false;
    case ResolveStaticDeclarationsQueryID: return false;
    case ResolveWildcardDeclarationsQueryID: return false;
+   case ResolveMetaDeclarationsQueryID: return false;
    case PrepareTypeNameLookupQueryID: return false;
    case PrepareNameLookupQueryID: return false;
    case InstantiateFieldsQueryID: return false;
    case InstantiateCasesQueryID: return false;
-   case GetAssociatedTypeQueryID: return false;
+   case GetAssociatedTypeImplQueryID: return false;
+   case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return false;
    case InstantiateProtocolDefaultImplQueryID: return false;
    case InstantiateRecordQueryID: return false;
@@ -277,16 +283,19 @@ bool Query::canBeCached() const
    case ResolveExtensionQueryID: return true;
    case ResolveConformanceToProtocolQueryID: return true;
    case ResolveExplicitConformancesQueryID: return true;
+   case ResolveConformancesToProtocolsQueryID: return true;
    case ResolveDeclaredConformancesQueryID: return true;
    case AddSingleConformanceQueryID: return true;
    case DeclareSelfAliasQueryID: return true;
    case ResolveAssociatedTypesQueryID: return true;
-   case GetReferencedAssociatedTypesQueryID: return true;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return true;
    case VerifyConstraintQueryID: return true;
+   case VerifyConstraintsQueryID: return true;
    case IsConstraintSatisfiedQueryID: return true;
    case GetConstrainedTypeQueryID: return true;
+   case IsSupersetOfQueryID: return true;
+   case GetReferencedAssociatedTypesQueryID: return true;
    case GetNeededAssociatedTypesQueryID: return true;
    case CheckConformancesQueryID: return true;
    case CheckSingleConformanceQueryID: return true;
@@ -375,16 +384,19 @@ bool Query::canBeCached() const
    case LookupSingleQueryID: return true;
    case MultiLevelLookupQueryID: return false;
    case MultiLevelTypeLookupQueryID: return false;
+   case RestrictedLookupQueryID: return true;
    case DirectLookupQueryID: return true;
    case NestedNameLookupQueryID: return false;
    case ResolveMacrosQueryID: return true;
    case ResolveStaticDeclarationsQueryID: return true;
    case ResolveWildcardDeclarationsQueryID: return true;
+   case ResolveMetaDeclarationsQueryID: return true;
    case PrepareTypeNameLookupQueryID: return true;
    case PrepareNameLookupQueryID: return true;
    case InstantiateFieldsQueryID: return true;
    case InstantiateCasesQueryID: return true;
-   case GetAssociatedTypeQueryID: return false;
+   case GetAssociatedTypeImplQueryID: return false;
+   case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return true;
    case InstantiateProtocolDefaultImplQueryID: return true;
    case InstantiateRecordQueryID: return true;
@@ -488,16 +500,19 @@ bool Query::canBeSerialized() const
    case ResolveExtensionQueryID: return false;
    case ResolveConformanceToProtocolQueryID: return false;
    case ResolveExplicitConformancesQueryID: return false;
+   case ResolveConformancesToProtocolsQueryID: return false;
    case ResolveDeclaredConformancesQueryID: return false;
    case AddSingleConformanceQueryID: return false;
    case DeclareSelfAliasQueryID: return false;
    case ResolveAssociatedTypesQueryID: return false;
-   case GetReferencedAssociatedTypesQueryID: return false;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return false;
    case VerifyConstraintQueryID: return false;
+   case VerifyConstraintsQueryID: return false;
    case IsConstraintSatisfiedQueryID: return false;
    case GetConstrainedTypeQueryID: return false;
+   case IsSupersetOfQueryID: return false;
+   case GetReferencedAssociatedTypesQueryID: return false;
    case GetNeededAssociatedTypesQueryID: return false;
    case CheckConformancesQueryID: return false;
    case CheckSingleConformanceQueryID: return false;
@@ -586,16 +601,19 @@ bool Query::canBeSerialized() const
    case LookupSingleQueryID: return false;
    case MultiLevelLookupQueryID: return false;
    case MultiLevelTypeLookupQueryID: return false;
+   case RestrictedLookupQueryID: return false;
    case DirectLookupQueryID: return false;
    case NestedNameLookupQueryID: return false;
    case ResolveMacrosQueryID: return false;
    case ResolveStaticDeclarationsQueryID: return false;
    case ResolveWildcardDeclarationsQueryID: return false;
+   case ResolveMetaDeclarationsQueryID: return false;
    case PrepareTypeNameLookupQueryID: return false;
    case PrepareNameLookupQueryID: return false;
    case InstantiateFieldsQueryID: return false;
    case InstantiateCasesQueryID: return false;
-   case GetAssociatedTypeQueryID: return false;
+   case GetAssociatedTypeImplQueryID: return false;
+   case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return false;
    case InstantiateProtocolDefaultImplQueryID: return false;
    case InstantiateRecordQueryID: return false;
@@ -699,16 +717,19 @@ bool Query::canBeDependent() const
    case ResolveExtensionQueryID: return false;
    case ResolveConformanceToProtocolQueryID: return false;
    case ResolveExplicitConformancesQueryID: return false;
+   case ResolveConformancesToProtocolsQueryID: return false;
    case ResolveDeclaredConformancesQueryID: return false;
    case AddSingleConformanceQueryID: return true;
    case DeclareSelfAliasQueryID: return false;
    case ResolveAssociatedTypesQueryID: return false;
-   case GetReferencedAssociatedTypesQueryID: return false;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return false;
-   case VerifyConstraintQueryID: return true;
+   case VerifyConstraintQueryID: return false;
+   case VerifyConstraintsQueryID: return false;
    case IsConstraintSatisfiedQueryID: return true;
    case GetConstrainedTypeQueryID: return true;
+   case IsSupersetOfQueryID: return false;
+   case GetReferencedAssociatedTypesQueryID: return false;
    case GetNeededAssociatedTypesQueryID: return false;
    case CheckConformancesQueryID: return false;
    case CheckSingleConformanceQueryID: return false;
@@ -797,16 +818,19 @@ bool Query::canBeDependent() const
    case LookupSingleQueryID: return false;
    case MultiLevelLookupQueryID: return false;
    case MultiLevelTypeLookupQueryID: return false;
+   case RestrictedLookupQueryID: return false;
    case DirectLookupQueryID: return false;
    case NestedNameLookupQueryID: return false;
    case ResolveMacrosQueryID: return false;
    case ResolveStaticDeclarationsQueryID: return false;
    case ResolveWildcardDeclarationsQueryID: return false;
+   case ResolveMetaDeclarationsQueryID: return false;
    case PrepareTypeNameLookupQueryID: return false;
    case PrepareNameLookupQueryID: return false;
    case InstantiateFieldsQueryID: return false;
    case InstantiateCasesQueryID: return false;
-   case GetAssociatedTypeQueryID: return false;
+   case GetAssociatedTypeImplQueryID: return false;
+   case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return false;
    case InstantiateProtocolDefaultImplQueryID: return false;
    case InstantiateRecordQueryID: return false;
@@ -3750,7 +3774,68 @@ void ResolveExplicitConformancesQuery::Profile(llvm::FoldingSetNodeID &ID, QualT
    ID.AddPointer(T.getAsOpaquePtr());
 }
 
-ResolveDeclaredConformancesQuery::ResolveDeclaredConformancesQuery(QueryContext &QC, QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind) : Query(ResolveDeclaredConformancesQueryID, QC), T(T), Conformances(Conformances), Kind(Kind) {
+ResolveConformancesToProtocolsQuery::ResolveConformancesToProtocolsQuery(QueryContext &QC, QualType T, llvm::ArrayRef<ast::SourceType> Conformances) : Query(ResolveConformancesToProtocolsQueryID, QC), T(T), Conformances(Conformances) {
+
+}
+
+ArrayRef<ast::ProtocolDecl*> ResolveConformancesToProtocolsQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string ResolveConformancesToProtocolsQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "ResolveConformancesToProtocols";
+   return s;
+}
+
+std::string ResolveConformancesToProtocolsQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[ResolveConformancesToProtocols]"
+;   OS << " T = ";
+OS << "'" << T << "'";
+   OS << ',';
+   OS << " Conformances = ";
+OS << '[';
+   unsigned i = 0;
+   for (auto &El : Conformances) {
+      if (i == 5) { OS << ", ..."; break; }
+      if (i++ != 0) OS << ", ";
+      OS << El;
+   }
+   OS << ']';
+
+;
+
+   return OS.str();
+}
+
+QueryResult ResolveConformancesToProtocolsQuery::finish(llvm::SmallVector<ast::ProtocolDecl*, 2> &&Result, Status St)
+{
+   this->Result = std::move(Result);
+
+   return Query::finish(St);
+}
+
+void ResolveConformancesToProtocolsQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, T, Conformances);
+}
+
+void ResolveConformancesToProtocolsQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, llvm::ArrayRef<ast::SourceType> Conformances)
+{
+   ID.AddPointer(T.getAsOpaquePtr());
+   for (auto &El : Conformances)
+      El.Profile(ID);
+}
+
+ResolveDeclaredConformancesQuery::ResolveDeclaredConformancesQuery(QueryContext &QC, QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind, ast::ConstraintSet* CS) : Query(ResolveDeclaredConformancesQueryID, QC), T(T), Conformances(Conformances), Kind(Kind), CS(CS) {
 
 }
 
@@ -3785,6 +3870,9 @@ OS << '[';
    OS << ',';
    OS << " Kind = ";
 OS << (uint64_t)Kind;
+   OS << ',';
+   OS << " CS = ";
+OS << CS;
 ;
 
    return OS.str();
@@ -3792,18 +3880,19 @@ OS << (uint64_t)Kind;
 
 void ResolveDeclaredConformancesQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, T, Conformances, Kind);
+   Profile(ID, T, Conformances, Kind, CS);
 }
 
-void ResolveDeclaredConformancesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind)
+void ResolveDeclaredConformancesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind, ast::ConstraintSet* CS)
 {
    ID.AddPointer(T.getAsOpaquePtr());
    for (auto &El : Conformances)
       El.Profile(ID);
    ID.AddInteger((uint64_t)Kind);
+   ID.AddPointer(CS);
 }
 
-AddSingleConformanceQuery::AddSingleConformanceQuery(QueryContext &QC, QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, bool AddRecursiveConformances, llvm::function_ref<void(ast::ProtocolDecl*)> Callback) : Query(AddSingleConformanceQueryID, QC), T(T), Proto(Proto), Kind(Kind), AddRecursiveConformances(AddRecursiveConformances), Callback(Callback) {
+AddSingleConformanceQuery::AddSingleConformanceQuery(QueryContext &QC, QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, ast::ConstraintSet* CS, bool AddRecursiveConformances) : Query(AddSingleConformanceQueryID, QC), T(T), Proto(Proto), Kind(Kind), CS(CS), AddRecursiveConformances(AddRecursiveConformances) {
 
 }
 
@@ -3830,6 +3919,9 @@ OS << "'" << (Proto ? Proto->Decl::getNameAsString() : "<null>") << "'";
    OS << " Kind = ";
 OS << (uint64_t)Kind;
    OS << ',';
+   OS << " CS = ";
+OS << CS;
+   OS << ',';
    OS << " AddRecursiveConformances = ";
 OS << AddRecursiveConformances;
 ;
@@ -3839,14 +3931,15 @@ OS << AddRecursiveConformances;
 
 void AddSingleConformanceQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, T, Proto, Kind, AddRecursiveConformances);
+   Profile(ID, T, Proto, Kind, CS, AddRecursiveConformances);
 }
 
-void AddSingleConformanceQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, bool AddRecursiveConformances)
+void AddSingleConformanceQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, ast::ConstraintSet* CS, bool AddRecursiveConformances)
 {
    ID.AddPointer(T.getAsOpaquePtr());
    ID.AddPointer(Proto);
    ID.AddInteger((uint64_t)Kind);
+   ID.AddPointer(CS);
    ID.AddInteger(AddRecursiveConformances);
 }
 
@@ -3921,64 +4014,7 @@ void ResolveAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T
    ID.AddPointer(T.getAsOpaquePtr());
 }
 
-GetReferencedAssociatedTypesQuery::GetReferencedAssociatedTypesQuery(QueryContext &QC, ast::NamedDecl* ConstrainedDecl, ast::DeclConstraint* C) : Query(GetReferencedAssociatedTypesQueryID, QC), ConstrainedDecl(ConstrainedDecl), C(C) {
-assert(ConstrainedDecl && "parameter 'ConstrainedDecl' should not be null!");
-
-}
-
-ArrayRef<ast::AssociatedTypeDecl*> GetReferencedAssociatedTypesQuery::get() const
-{
-   assert(ok() && "query has not successfully completed!");
-   return Result.getValue();
-}
-
-std::string GetReferencedAssociatedTypesQuery::description() const
-{
-   std::string s;
-   s += "running ";
-   s += "GetReferencedAssociatedTypes";
-   return s;
-}
-
-std::string GetReferencedAssociatedTypesQuery::summary() const
-{
-   std::string s;
-   llvm::raw_string_ostream OS(s);
-
-   OS << "[GetReferencedAssociatedTypes]"
-;   OS << " ConstrainedDecl = ";
-OS << "'" << (ConstrainedDecl ? ConstrainedDecl->Decl::getNameAsString() : "<null>") << "'";
-   OS << ',';
-   OS << " C = ";
-OS << C;
-;
-
-   return OS.str();
-}
-
-QueryResult GetReferencedAssociatedTypesQuery::finish(SmallVector<ast::AssociatedTypeDecl*, 2> &&Result, Status St)
-{
-   this->Result = std::move(Result);
-
-        
-        C->setReferencedAssociatedTypes(this->Result.getValue());
-    
-   return Query::finish(St);
-}
-
-void GetReferencedAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID) const
-{
-   Profile(ID, ConstrainedDecl, C);
-}
-
-void GetReferencedAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, ast::NamedDecl* ConstrainedDecl, ast::DeclConstraint* C)
-{
-   ID.AddPointer(ConstrainedDecl);
-   ID.AddPointer(C);
-}
-
-ReferencedAssociatedTypesReadyQuery::ReferencedAssociatedTypesReadyQuery(QueryContext &QC, QualType T, ast::NamedDecl* ConstrainedDecl) : Query(ReferencedAssociatedTypesReadyQueryID, QC), T(T), ConstrainedDecl(ConstrainedDecl) {
-assert(ConstrainedDecl && "parameter 'ConstrainedDecl' should not be null!");
+ReferencedAssociatedTypesReadyQuery::ReferencedAssociatedTypesReadyQuery(QueryContext &QC, QualType T, ast::ConstraintSet* CS) : Query(ReferencedAssociatedTypesReadyQueryID, QC), T(T), CS(CS) {
 
 }
 
@@ -4005,8 +4041,8 @@ std::string ReferencedAssociatedTypesReadyQuery::summary() const
 ;   OS << " T = ";
 OS << "'" << T << "'";
    OS << ',';
-   OS << " ConstrainedDecl = ";
-OS << "'" << (ConstrainedDecl ? ConstrainedDecl->Decl::getNameAsString() : "<null>") << "'";
+   OS << " CS = ";
+OS << CS;
 ;
 
    return OS.str();
@@ -4071,9 +4107,15 @@ void CheckProtocolExtensionApplicabilityQuery::Profile(llvm::FoldingSetNodeID &I
    ID.AddPointer(Ext);
 }
 
-VerifyConstraintQuery::VerifyConstraintQuery(QueryContext &QC, ast::DeclConstraint* C, ast::NamedDecl* ConstrainedDecl) : Query(VerifyConstraintQueryID, QC), C(C), ConstrainedDecl(ConstrainedDecl) {
+VerifyConstraintQuery::VerifyConstraintQuery(QueryContext &QC, const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl) : Query(VerifyConstraintQueryID, QC), C(C), ConstrainedDecl(ConstrainedDecl) {
 assert(ConstrainedDecl && "parameter 'ConstrainedDecl' should not be null!");
 
+}
+
+ast::DeclConstraint* VerifyConstraintQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
 }
 
 std::string VerifyConstraintQuery::description() const
@@ -4100,18 +4142,74 @@ OS << "'" << (ConstrainedDecl ? ConstrainedDecl->Decl::getNameAsString() : "<nul
    return OS.str();
 }
 
+QueryResult VerifyConstraintQuery::finish(ast::DeclConstraint* Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
 void VerifyConstraintQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
    Profile(ID, C, ConstrainedDecl);
 }
 
-void VerifyConstraintQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclConstraint* C, ast::NamedDecl* ConstrainedDecl)
+void VerifyConstraintQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl)
 {
    ID.AddPointer(C);
    ID.AddPointer(ConstrainedDecl);
 }
 
-IsConstraintSatisfiedQuery::IsConstraintSatisfiedQuery(QueryContext &QC, ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup) : Query(IsConstraintSatisfiedQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl), PrepareNameLookup(PrepareNameLookup) {
+VerifyConstraintsQuery::VerifyConstraintsQuery(QueryContext &QC, ast::NamedDecl* ConstrainedDecl) : Query(VerifyConstraintsQueryID, QC), ConstrainedDecl(ConstrainedDecl) {
+assert(ConstrainedDecl && "parameter 'ConstrainedDecl' should not be null!");
+
+}
+
+ast::ConstraintSet* VerifyConstraintsQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string VerifyConstraintsQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "VerifyConstraints";
+   return s;
+}
+
+std::string VerifyConstraintsQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[VerifyConstraints]"
+;   OS << " ConstrainedDecl = ";
+OS << "'" << (ConstrainedDecl ? ConstrainedDecl->Decl::getNameAsString() : "<null>") << "'";
+;
+
+   return OS.str();
+}
+
+QueryResult VerifyConstraintsQuery::finish(ast::ConstraintSet* Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+void VerifyConstraintsQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, ConstrainedDecl);
+}
+
+void VerifyConstraintsQuery::Profile(llvm::FoldingSetNodeID &ID, ast::NamedDecl* ConstrainedDecl)
+{
+   ID.AddPointer(ConstrainedDecl);
+}
+
+IsConstraintSatisfiedQuery::IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup) : Query(IsConstraintSatisfiedQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl), PrepareNameLookup(PrepareNameLookup) {
 assert(OriginalDecl && "parameter 'OriginalDecl' should not be null!");
 
 }
@@ -4164,7 +4262,7 @@ void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID) const
    Profile(ID, C, Self, OriginalDecl, PrepareNameLookup);
 }
 
-void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
+void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
 {
    ID.AddPointer(C);
    ID.AddPointer(Self.getAsOpaquePtr());
@@ -4172,7 +4270,7 @@ void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclCo
    ID.AddInteger(PrepareNameLookup);
 }
 
-GetConstrainedTypeQuery::GetConstrainedTypeQuery(QueryContext &QC, ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl) : Query(GetConstrainedTypeQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl) {
+GetConstrainedTypeQuery::GetConstrainedTypeQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl) : Query(GetConstrainedTypeQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl) {
 assert(OriginalDecl && "parameter 'OriginalDecl' should not be null!");
 
 }
@@ -4222,11 +4320,111 @@ void GetConstrainedTypeQuery::Profile(llvm::FoldingSetNodeID &ID) const
    Profile(ID, C, Self, OriginalDecl);
 }
 
-void GetConstrainedTypeQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+void GetConstrainedTypeQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
 {
    ID.AddPointer(C);
    ID.AddPointer(Self.getAsOpaquePtr());
    ID.AddPointer(OriginalDecl);
+}
+
+IsSupersetOfQuery::IsSupersetOfQuery(QueryContext &QC, ast::ConstraintSet* C1, ast::ConstraintSet* C2) : Query(IsSupersetOfQueryID, QC), C1(C1), C2(C2) {
+
+}
+
+bool IsSupersetOfQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string IsSupersetOfQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "IsSupersetOf";
+   return s;
+}
+
+std::string IsSupersetOfQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[IsSupersetOf]"
+;   OS << " C1 = ";
+OS << C1;
+   OS << ',';
+   OS << " C2 = ";
+OS << C2;
+;
+
+   return OS.str();
+}
+
+QueryResult IsSupersetOfQuery::finish(bool Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+void IsSupersetOfQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, C1, C2);
+}
+
+void IsSupersetOfQuery::Profile(llvm::FoldingSetNodeID &ID, ast::ConstraintSet* C1, ast::ConstraintSet* C2)
+{
+   ID.AddPointer(C1);
+   ID.AddPointer(C2);
+}
+
+GetReferencedAssociatedTypesQuery::GetReferencedAssociatedTypesQuery(QueryContext &QC, ast::ConstraintSet* CS) : Query(GetReferencedAssociatedTypesQueryID, QC), CS(CS) {
+
+}
+
+llvm::ArrayRef<ast::AssociatedTypeDecl*> GetReferencedAssociatedTypesQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string GetReferencedAssociatedTypesQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "GetReferencedAssociatedTypes";
+   return s;
+}
+
+std::string GetReferencedAssociatedTypesQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[GetReferencedAssociatedTypes]"
+;   OS << " CS = ";
+OS << CS;
+;
+
+   return OS.str();
+}
+
+QueryResult GetReferencedAssociatedTypesQuery::finish(std::vector<ast::AssociatedTypeDecl*> &&Result, Status St)
+{
+   this->Result = std::move(Result);
+
+   return Query::finish(St);
+}
+
+void GetReferencedAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, CS);
+}
+
+void GetReferencedAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, ast::ConstraintSet* CS)
+{
+   ID.AddPointer(CS);
 }
 
 GetNeededAssociatedTypesQuery::GetNeededAssociatedTypesQuery(QueryContext &QC, ast::RecordDecl* R) : Query(GetNeededAssociatedTypesQueryID, QC), R(R) {
@@ -7750,7 +7948,66 @@ QueryResult MultiLevelTypeLookupQuery::finish(MultiLevelLookupResult &&Result, S
    return Query::finish(St);
 }
 
-DirectLookupQuery::DirectLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts) : Query(DirectLookupQueryID, QC), DC(DC), Name(Name), LookInExtensions(LookInExtensions), Opts(Opts) {
+RestrictedLookupQuery::RestrictedLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts) : Query(RestrictedLookupQueryID, QC), DC(DC), Name(Name), Opts(Opts) {
+assert(DC && "parameter 'DC' should not be null!");
+
+}
+
+const MultiLevelLookupResult* RestrictedLookupQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   
+        return &Result.getValue();
+    
+}
+
+std::string RestrictedLookupQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "RestrictedLookup";
+   return s;
+}
+
+std::string RestrictedLookupQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[RestrictedLookup]"
+;   OS << " DC = ";
+OS << "'" << (DC ? DC->getNameAsString() : "<null>") << "'";
+   OS << ',';
+   OS << " Name = ";
+OS << "'" << Name << "'";
+   OS << ',';
+   OS << " Opts = ";
+OS << Opts;
+;
+
+   return OS.str();
+}
+
+QueryResult RestrictedLookupQuery::finish(MultiLevelLookupResult &&Result, Status St)
+{
+   this->Result = std::move(Result);
+
+   return Query::finish(St);
+}
+
+void RestrictedLookupQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, DC, Name, Opts);
+}
+
+void RestrictedLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts)
+{
+   ID.AddPointer(DC);
+   ID.AddPointer(Name.getAsOpaquePtr());
+   ID.AddInteger((uint8_t)(Opts));
+}
+
+DirectLookupQuery::DirectLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints) : Query(DirectLookupQueryID, QC), DC(DC), Name(Name), LookInExtensions(LookInExtensions), Opts(Opts), Constraints(Constraints) {
 assert(DC && "parameter 'DC' should not be null!");
 
         NumDeclsInContext = DC->getAllNamedDecls().size();
@@ -7803,6 +8060,9 @@ OS << LookInExtensions;
    OS << ',';
    OS << " Opts = ";
 OS << Opts;
+   OS << ',';
+   OS << " Constraints = ";
+OS << Constraints;
 ;
 
    return OS.str();
@@ -7817,15 +8077,16 @@ QueryResult DirectLookupQuery::finish(MultiLevelLookupResult &&Result, Status St
 
 void DirectLookupQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, DC, Name, LookInExtensions, Opts);
+   Profile(ID, DC, Name, LookInExtensions, Opts, Constraints);
 }
 
-void DirectLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts)
+void DirectLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints)
 {
    ID.AddPointer(DC);
    ID.AddPointer(Name.getAsOpaquePtr());
    ID.AddInteger(LookInExtensions);
    ID.AddInteger((uint8_t)(Opts));
+   ID.AddPointer(Constraints);
 }
 
 NestedNameLookupQuery::NestedNameLookupQuery(QueryContext &QC, ast::DeclContext* DC, llvm::ArrayRef<DeclarationName> Names, LookupOpts Opts, SourceRange Loc) : Query(NestedNameLookupQueryID, QC), DC(DC), Names(Names), Opts(Opts), Loc(Loc) {
@@ -7992,6 +8253,42 @@ void ResolveWildcardDeclarationsQuery::Profile(llvm::FoldingSetNodeID &ID, ast::
    ID.AddPointer(DC);
 }
 
+ResolveMetaDeclarationsQuery::ResolveMetaDeclarationsQuery(QueryContext &QC, ast::DeclContext* DC) : Query(ResolveMetaDeclarationsQueryID, QC), DC(DC) {
+assert(DC && "parameter 'DC' should not be null!");
+
+}
+
+std::string ResolveMetaDeclarationsQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "ResolveMetaDeclarations";
+   return s;
+}
+
+std::string ResolveMetaDeclarationsQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[ResolveMetaDeclarations]"
+;   OS << " DC = ";
+OS << "'" << (DC ? DC->getNameAsString() : "<null>") << "'";
+;
+
+   return OS.str();
+}
+
+void ResolveMetaDeclarationsQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, DC);
+}
+
+void ResolveMetaDeclarationsQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC)
+{
+   ID.AddPointer(DC);
+}
+
 PrepareTypeNameLookupQuery::PrepareTypeNameLookupQuery(QueryContext &QC, ast::DeclContext* DC) : Query(PrepareTypeNameLookupQueryID, QC), DC(DC) {
 assert(DC && "parameter 'DC' should not be null!");
 
@@ -8136,31 +8433,31 @@ void InstantiateCasesQuery::Profile(llvm::FoldingSetNodeID &ID, ast::EnumDecl* E
    ID.AddPointer(E);
 }
 
-GetAssociatedTypeQuery::GetAssociatedTypeQuery(QueryContext &QC, ast::RecordDecl* R, DeclarationName Name, llvm::ArrayRef<ast::ExtensionDecl*> Extensions) : Query(GetAssociatedTypeQueryID, QC), R(R), Name(Name), Extensions(Extensions) {
+GetAssociatedTypeImplQuery::GetAssociatedTypeImplQuery(QueryContext &QC, ast::RecordDecl* R, DeclarationName Name, llvm::ArrayRef<ast::ExtensionDecl*> Extensions, ast::ConstraintSet* Constraints) : Query(GetAssociatedTypeImplQueryID, QC), R(R), Name(Name), Extensions(Extensions), Constraints(Constraints) {
 assert(R && "parameter 'R' should not be null!");
 
 }
 
-ast::AssociatedTypeDecl* GetAssociatedTypeQuery::get() const
+ast::AliasDecl* GetAssociatedTypeImplQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
    return Result.getValue();
 }
 
-std::string GetAssociatedTypeQuery::description() const
+std::string GetAssociatedTypeImplQuery::description() const
 {
    std::string s;
    s += "running ";
-   s += "GetAssociatedType";
+   s += "GetAssociatedTypeImpl";
    return s;
 }
 
-std::string GetAssociatedTypeQuery::summary() const
+std::string GetAssociatedTypeImplQuery::summary() const
 {
    std::string s;
    llvm::raw_string_ostream OS(s);
 
-   OS << "[GetAssociatedType]"
+   OS << "[GetAssociatedTypeImpl]"
 ;   OS << " R = ";
 OS << "'" << (R ? R->Decl::getNameAsString() : "<null>") << "'";
    OS << ',';
@@ -8177,20 +8474,66 @@ OS << '[';
    }
    OS << ']';
 
+   OS << ',';
+   OS << " Constraints = ";
+OS << Constraints;
 ;
 
    return OS.str();
 }
 
-QueryResult GetAssociatedTypeQuery::finish(ast::AssociatedTypeDecl* Result, Status St)
+QueryResult GetAssociatedTypeImplQuery::finish(ast::AliasDecl* Result, Status St)
 {
    this->Result = Result;
 
    return Query::finish(St);
 }
 
-CheckTypeEquivalenceQuery::CheckTypeEquivalenceQuery(QueryContext &QC, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl) : Query(CheckTypeEquivalenceQueryID, QC), LHS(LHS), RHS(RHS), Self(Self), LHSDecl(LHSDecl) {
-assert(LHSDecl && "parameter 'LHSDecl' should not be null!");
+GetAssociatedTypeDeclQuery::GetAssociatedTypeDeclQuery(QueryContext &QC, ast::ProtocolDecl* P, DeclarationName Name, ast::ConstraintSet* Constraints) : Query(GetAssociatedTypeDeclQueryID, QC), P(P), Name(Name), Constraints(Constraints) {
+
+}
+
+ast::AssociatedTypeDecl* GetAssociatedTypeDeclQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string GetAssociatedTypeDeclQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "GetAssociatedTypeDecl";
+   return s;
+}
+
+std::string GetAssociatedTypeDeclQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[GetAssociatedTypeDecl]"
+;   OS << " P = ";
+OS << "'" << (P ? P->Decl::getNameAsString() : "<null>") << "'";
+   OS << ',';
+   OS << " Name = ";
+OS << "'" << Name << "'";
+   OS << ',';
+   OS << " Constraints = ";
+OS << Constraints;
+;
+
+   return OS.str();
+}
+
+QueryResult GetAssociatedTypeDeclQuery::finish(ast::AssociatedTypeDecl* Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+CheckTypeEquivalenceQuery::CheckTypeEquivalenceQuery(QueryContext &QC, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl, ast::DeclContext* DeclCtx) : Query(CheckTypeEquivalenceQueryID, QC), LHS(LHS), RHS(RHS), Self(Self), LHSDecl(LHSDecl), DeclCtx(DeclCtx) {
 
 }
 
@@ -8225,6 +8568,9 @@ OS << "'" << Self << "'";
    OS << ',';
    OS << " LHSDecl = ";
 OS << "'" << (LHSDecl ? LHSDecl->getNameAsString() : "<null>") << "'";
+   OS << ',';
+   OS << " DeclCtx = ";
+OS << "'" << (DeclCtx ? DeclCtx->getNameAsString() : "<null>") << "'";
 ;
 
    return OS.str();
@@ -8239,15 +8585,16 @@ QueryResult CheckTypeEquivalenceQuery::finish(bool Result, Status St)
 
 void CheckTypeEquivalenceQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, LHS, RHS, Self, LHSDecl);
+   Profile(ID, LHS, RHS, Self, LHSDecl, DeclCtx);
 }
 
-void CheckTypeEquivalenceQuery::Profile(llvm::FoldingSetNodeID &ID, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl)
+void CheckTypeEquivalenceQuery::Profile(llvm::FoldingSetNodeID &ID, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl, ast::DeclContext* DeclCtx)
 {
    ID.AddPointer(LHS.getAsOpaquePtr());
    ID.AddPointer(RHS.getAsOpaquePtr());
    ID.AddPointer(Self.getAsOpaquePtr());
    ID.AddPointer(LHSDecl);
+   ID.AddPointer(DeclCtx);
 }
 
 InstantiateProtocolDefaultImplQuery::InstantiateProtocolDefaultImplQuery(QueryContext &QC, ast::NamedDecl* Impl, QualType Self, bool ActOnDecl) : Query(InstantiateProtocolDefaultImplQueryID, QC), Impl(Impl), Self(Self), ActOnDecl(ActOnDecl) {

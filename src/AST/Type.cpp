@@ -27,11 +27,10 @@ namespace cdot {
 bool TypeProperties::isDependent() const
 {
    static constexpr uint16_t DependentMask =
-      ContainsDependentNameType
-      | ContainsDependentSizeArrayType
-      | ContainsUnconstrainedGeneric
+      ContainsDependentSizeArrayType
       | ContainsUnknownAny
-      | ContainsTemplate;
+      | ContainsTemplateParamType
+      | ContainsAssociatedType;
 
    return (Props & DependentMask) != 0;
 }
@@ -365,12 +364,6 @@ QualType Type::getReferencedType() const
    return this->uncheckedAsReferenceType()->getReferencedType();
 }
 
-QualType Type::getBorrowedType() const
-{
-   assert(this->isMutableBorrowType() && "not a borrow type");
-   return this->uncheckedAsMutableBorrowType()->getReferencedType();
-}
-
 QualType Type::getBoxedType() const
 {
    assert(this->isBoxType() && "not a box type");
@@ -455,17 +448,12 @@ QualType Type::getDesugaredType() const
    switch (getTypeID()) {
    case Type::TypedefTypeID:
    case Type::DependentTypedefTypeID:
-      return asTypedefType()->getTypedef()->getType()->asMetaType()
-         ->getUnderlyingType()->getCanonicalType();
+      return getCanonicalType();
    case Type::TemplateParamTypeID:
       return cast<TemplateParamType>(this)->getCovariance();
    case Type::AssociatedTypeID: {
       auto *AT = cast<AssociatedType>(this)->getDecl();
-      if (!AT->isImplementation()) {
-         return AT->getCovariance().getResolvedType();
-      }
-
-      break;
+      return AT->getCovariance().getResolvedType();
    }
    default:
       break;
@@ -895,6 +883,7 @@ public:
 
    void visitTemplateParamType(const TemplateParamType *Ty)
    {
+      llvm::outs()<<"trying to print" << Ty->getParam()<<"\n";
       OS << Ty->getParam()->getDeclName();
       if (Ty->isVariadic())
          OS << "...";
@@ -936,11 +925,6 @@ public:
    void visitReferenceType(const ReferenceType *Ty)
    {
       OS << "&" << Ty->getReferencedType();
-   }
-
-   void visitMutableBorrowType(const MutableBorrowType *Ty)
-   {
-      OS << "&mut " << Ty->getBorrowedType();
    }
 
    void visitBoxType(const BoxType *Ty)
@@ -997,12 +981,6 @@ public:
       }
       else {
          OS << AT->getFullName();
-      }
-
-      if (AT->isImplementation()) {
-         OS << " (aka ";
-         visit(AT->getActualType().getResolvedType());
-         OS << ")";
       }
    }
 
@@ -1163,13 +1141,6 @@ MutableReferenceType::MutableReferenceType(TypeID ID,
                                            QualType referencedType,
                                            Type *CanonicalType)
    : ReferenceType(ID, referencedType, CanonicalType)
-{
-
-}
-
-MutableBorrowType::MutableBorrowType(QualType borrowedType,
-                                     Type *CanonicalType)
-   : MutableReferenceType(MutableBorrowTypeID, borrowedType, CanonicalType)
 {
 
 }
@@ -1347,6 +1318,17 @@ ArrayRef<QualType> ExistentialType::getExistentials() const
       NumExistentials };
 }
 
+bool ExistentialType::contains(CanType T) const
+{
+   for (CanType ext : getExistentials()) {
+      if (ext == T) {
+         return true;
+      }
+   }
+
+   return false;
+}
+
 void ExistentialType::Profile(llvm::FoldingSetNodeID &ID)
 {
    Profile(ID, getExistentials());
@@ -1496,30 +1478,14 @@ bool TemplateParamType::isVariadic() const
    return P->isVariadic();
 }
 
-AssociatedType::AssociatedType(AssociatedTypeDecl *AT, AssociatedType *OuterAT)
+AssociatedType::AssociatedType(AssociatedTypeDecl *AT, QualType OuterAT)
    : Type(AssociatedTypeID, nullptr),
      AT(AT), OuterAT(OuterAT)
 {
-   if (AT->isImplementation()) {
-      assert(AT->getActualType().isResolved());
-
-      this->CanonicalType = AT->getActualType()->getCanonicalType();
-      Bits.Props |= CanonicalType->properties();
+   Bits.Props |= TypeProperties::ContainsAssociatedType;
+   if (OuterAT) {
+      Bits.Props |= OuterAT->properties();
    }
-   else {
-      assert(AT->getCovariance().isResolved());
-
-      Bits.Props |= TypeProperties::ContainsAssociatedType;
-      Bits.Props |= AT->getCovariance()->properties();
-   }
-}
-
-QualType AssociatedType::getActualType() const
-{
-   if (!AT->isImplementation())
-      return QualType();
-
-   return AT->getActualType();
 }
 
 MetaType::MetaType(QualType forType, Type *CanonicalType)

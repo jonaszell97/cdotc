@@ -415,8 +415,9 @@ struct IfCondition {
       : K(Expression), ExprData{ E }
    {}
 
-   IfCondition(LocalVarDecl *D, CallableDecl *TryUnwrapFn = nullptr)
-      : K(Binding), BindingData{ D, TryUnwrapFn }
+   IfCondition(LocalVarDecl *D, CallableDecl *TryUnwrapFn = nullptr,
+               CallableDecl *HasValueFn = nullptr)
+      : K(Binding), BindingData{ D, TryUnwrapFn, HasValueFn }
    {}
 
    IfCondition(PatternExpr *Pat, ast::Expression *E = nullptr)
@@ -433,6 +434,7 @@ struct IfCondition {
    struct BindingDataType {
       LocalVarDecl *Decl = nullptr;
       CallableDecl *TryUnwrapFn = nullptr;
+      CallableDecl *HasValueFn = nullptr;
    };
 
    struct PatternDataType {

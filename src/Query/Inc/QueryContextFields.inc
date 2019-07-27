@@ -231,6 +231,10 @@ private:   llvm::DenseMap<QualType, ResolveExplicitConformancesQuery*> ResolveEx
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::FoldingSet<ResolveConformancesToProtocolsQuery> ResolveConformancesToProtocolsQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::FoldingSet<ResolveDeclaredConformancesQuery> ResolveDeclaredConformancesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
@@ -245,10 +249,6 @@ private:   llvm::DenseSet<ast::RecordDecl*> DeclareSelfAliasQueries;
 /// that query.
 private:   llvm::FoldingSet<ResolveAssociatedTypesQuery> ResolveAssociatedTypesQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:   llvm::FoldingSet<GetReferencedAssociatedTypesQuery> GetReferencedAssociatedTypesQueries;
-
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
@@ -260,11 +260,23 @@ private:   llvm::FoldingSet<VerifyConstraintQuery> VerifyConstraintQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::DenseMap<ast::NamedDecl*, VerifyConstraintsQuery*> VerifyConstraintsQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::FoldingSet<IsConstraintSatisfiedQuery> IsConstraintSatisfiedQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
 private:   llvm::FoldingSet<GetConstrainedTypeQuery> GetConstrainedTypeQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
+private:   llvm::DenseMap<std::pair<ast::ConstraintSet*, ast::ConstraintSet*>, bool> IsSupersetOfQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
+private:   llvm::DenseMap<ast::ConstraintSet*, GetReferencedAssociatedTypesQuery*> GetReferencedAssociatedTypesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
@@ -628,6 +640,10 @@ private:   llvm::FoldingSet<LookupSingleQuery> LookupSingleQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::FoldingSet<RestrictedLookupQuery> RestrictedLookupQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::FoldingSet<DirectLookupQuery> DirectLookupQueries;
 
 
@@ -645,6 +661,10 @@ private:   llvm::DenseSet<ast::DeclContext*> ResolveWildcardDeclarationsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::DenseMap<ast::DeclContext*, ResolveMetaDeclarationsQuery*> ResolveMetaDeclarationsQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::DenseMap<ast::DeclContext*, PrepareTypeNameLookupQuery*> PrepareTypeNameLookupQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
@@ -658,6 +678,7 @@ private:   llvm::DenseMap<ast::StructDecl*, InstantiateFieldsQuery*> Instantiate
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
 private:   llvm::DenseMap<ast::EnumDecl*, InstantiateCasesQuery*> InstantiateCasesQueries;
+
 
 
 /// \brief Maps from query kinds to a folding set containing instances of

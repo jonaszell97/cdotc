@@ -149,7 +149,7 @@ QueryResult DeclareMemberwiseInitQuery::run()
       if (!F->isStatic() && !F->getDefaultVal()) {
          SourceType T;
          if (QC.PrepareDeclInterface(F)) {
-            T = QC.Context.getUnknownAnyTy();
+            T = QC.Context.getErrorTy();
          }
          else {
             T = F->getType();
@@ -208,14 +208,6 @@ QueryResult PrepareStructInterfaceQuery::run()
 
    if (QC.DeclareImplicitInitializers(D)) {
       return fail();
-   }
-
-   finish();
-
-   if (!isa<ClassDecl>(D)) {
-      if (auto Err = QC.CheckAssociatedTypeConstraints(D)) {
-         return Query::finish(Err);
-      }
    }
 
    return finish();
@@ -337,12 +329,6 @@ QueryResult PrepareClassInterfaceQuery::run()
       return fail();
    }
 
-   finish();
-
-   if (auto Err = QC.CheckAssociatedTypeConstraints(D)) {
-      return Query::finish(Err);
-   }
-
    return finish();
 }
 
@@ -372,11 +358,7 @@ QueryResult ResolveRawTypeQuery::run()
          if (QC.GetBuiltinProtocol(Eq, GetBuiltinProtocolQuery::Equatable))
             llvm_unreachable("no 'Equatable' declaration!");
 
-         bool Conforms;
-         if (auto Err = QC.ConformsTo(Conforms, res.get(), Eq)) {
-            return Query::finish(Err);
-         }
-
+         bool Conforms = QC.Sema->ConformsTo(res.get(), Eq);
          if (!Conforms) {
             QC.Sema->diagnose(err_generic_error,
                               "enum raw type must conform to 'Equatable'");
@@ -492,11 +474,6 @@ QueryResult PrepareEnumInterfaceQuery::run()
       QC.DeclareImplicitDefaultDeinit(D);
    }
 
-   finish();
-   if (auto Err = QC.CheckAssociatedTypeConstraints(D)) {
-      return Query::finish(Err);
-   }
-
    return finish();
 }
 
@@ -521,7 +498,9 @@ QueryResult PrepareEnumCaseInterfaceQuery::run()
       D->copyStatusFlags(ArgDecl);
    }
 
+   D->setReturnType(SourceType(QC.Sema->Context.getRecordType(D->getRecord())));
    D->createFunctionType(sema());
+
    return finish();
 }
 
@@ -562,11 +541,11 @@ QueryResult PrepareExtensionInterfaceQuery::run()
       }
    }
 
-   if (auto Err = QC.PrepareDeclInterface(ExtendedDecl)) {
-      return Query::finish(Err);
-   }
-
    if (auto *P = dyn_cast_or_null<ProtocolDecl>(ExtendedDecl)) {
+      if (auto Err = QC.PrepareDeclInterface(ExtendedDecl)) {
+         return Query::finish(Err);
+      }
+
       finish();
 
       QC.Sema->checkProtocolExtension(D, P);
@@ -1044,7 +1023,6 @@ QueryResult PreparePropInterfaceQuery::run()
          }
       }
 
-      QC.Sema->ActOnDecl(Decl->getDeclContext(), Getter);
       Getter->setLexicalContext(Decl->getLexicalContext());
       Getter->setLogicalContext(Decl->getDeclContext());
 
@@ -1064,7 +1042,6 @@ QueryResult PreparePropInterfaceQuery::run()
       Setter->setProperty(true);
       Setter->getArgs()[1]->setType(Decl->getType());
 
-      QC.Sema->ActOnDecl(Decl->getDeclContext(), Setter);
       Setter->setLexicalContext(Decl->getLexicalContext());
       Setter->setLogicalContext(Decl->getDeclContext());
 
@@ -1449,18 +1426,21 @@ static void checkCopyableConformances(SemaPass &SP, RecordDecl *S,
 static void addRawRepresentableConformance(SemaPass &Sema, EnumDecl *E)
 {
    SourceLocation Loc = E->getSourceLoc();
-   const SourceType &Ty = E->getRawType();
 
    // Make sure the raw type is resolved.
    if (auto Err = Sema.QC.ResolveRawType(E)) {
       return;
    }
 
-   // associatedType RawType
-   auto *RawType = AssociatedTypeDecl::Create(Sema.Context, Loc, nullptr,
-                                              Sema.getIdentifier("RawType"),
-                                              Ty, SourceType(),
-                                              true);
+   SourceType Ty(E->getRawType());
+   SourceType MetaTy(Sema.Context.getMetaType(E->getRawType()));
+
+   // alias RawType
+   auto *typeExpr = new(Sema.Context) IdentifierRefExpr(Loc, IdentifierKind::MetaType, MetaTy);
+   auto *rawTypeExpr = StaticExpr::Create(Sema.Context, typeExpr);
+   auto *RawType = AliasDecl::Create(Sema.Context, Loc, AccessSpecifier::Public,
+                                     Sema.getIdentifier("RawType"), MetaTy,
+                                     rawTypeExpr, {});
 
    // init? (rawValue: RawType)
    auto *ArgName = Sema.getIdentifier("rawValue");
@@ -1588,8 +1568,6 @@ QueryResult CheckBuiltinConformancesQuery::run()
          }
 
          for (const auto &Val : C->getArgs()) {
-            AddRawRepresentable = false;
-
             auto &ArgTy = Val->getType();
             if (ArgTy->isDependentType()) {
                continue;

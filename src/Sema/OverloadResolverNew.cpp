@@ -33,13 +33,19 @@ static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
       return true;
    }
 
-   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
-      if ((!Ident->getParentExpr()
-           || isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
-          && Ident->getIdentInfo() == NeededLabel) {
+   if (auto *declRef = dyn_cast<DeclRefExpr>(E->ignoreParensAndImplicitCasts())) {
+      auto Name = declRef->getDecl()->getDeclName();
+      if (Name.isSimpleIdentifier() && Name.getIdentifierInfo() == NeededLabel) {
          return true;
       }
    }
+//   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
+//      if ((!Ident->getParentExpr()
+//           || isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
+//          && Ident->getIdentInfo() == NeededLabel) {
+//         return true;
+//      }
+//   }
 
    return false;
 }
@@ -387,9 +393,11 @@ public:
             Builder.Sys.setVariadicParamIdx(TV, j);
 
             if (Inferrable) {
-               auto *ParamVar = Builder.Bindings.ParamBindings[VariadicParam];
-               Builder.Sys.newConstraint<InferenceConstraint>(ParamVar, TV,
-                                                              nullptr);
+               auto it = Builder.Bindings.ParamBindings.find(VariadicParam);
+               if (it != Builder.Bindings.ParamBindings.end()) {
+                  Builder.Sys.newConstraint<InferenceConstraint>(it->getSecond(), TV,
+                                                                 nullptr);
+               }
             }
          }
       }
@@ -532,14 +540,16 @@ static bool createParamConstraints(ConstraintSystem &Sys,
             TypeVariableType *TV = Ty->asTypeVariableType();
             if (!TV) {
                TV = Sys.newTypeVariable();
-               Sys.newConstraint<TypeBindingConstraint>(TV, Ty, nullptr);
+               Sys.newConstraint<TypeBindingConstraint>(TV, Ty, Loc);
             }
 
             Sys.setVariadicParamIdx(TV, i);
 
             if (Inferrable) {
-               auto *ParamVar = Builder.Bindings.ParamBindings[Param];
-               Sys.newConstraint<InferenceConstraint>(ParamVar, TV, nullptr);
+               auto it = Builder.Bindings.ParamBindings.find(Param);
+               if (it != Builder.Bindings.ParamBindings.end()) {
+                  Sys.newConstraint<InferenceConstraint>(it->getSecond(), TV, nullptr);
+               }
             }
 
             ++i;
@@ -769,34 +779,12 @@ public:
 
 } // anonymous namespace
 
-static Expression *convertCStyleVarargParam(SemaPass &Sema, Expression *Expr)
-{
-   Expr = Sema.castToRValue(Expr);
-
-   QualType type = Expr->getExprType();
-
-   // (unsigned) char / short are promoted to int for c-style vararg functions.
-   if (type->isIntegerType() && type->getBitwidth() < 32) {
-      QualType promotedType = type->isUnsigned()
-                              ? Sema.Context.getUInt32Ty()
-                              : Sema.Context.getInt32Ty();
-
-      return Sema.forceCast(Expr, promotedType);
-   }
-
-   // float is promoted to double for c-style vararg functions.
-   if (type->isFloatTy()) {
-      return Sema.forceCast(Expr, Sema.Context.getDoubleTy());
-   }
-
-   return Expr;
-}
-
 static bool applyConversions(SemaPass &SP,
                              CandidateSet &CandSet,
                              CandidateSet::Candidate &Cand,
                              std::vector<StmtOrDecl> &ArgExprs,
                              Statement *Caller) {
+   bool isTemplate = false;
    ArrayRef<FuncArgDecl*> ArgDecls;
    if (!Cand.isAnonymousCandidate()) {
       if (Cand.getFunc()->isInvalid()) {
@@ -805,6 +793,7 @@ static bool applyConversions(SemaPass &SP,
       }
 
       ArgDecls = Cand.getFunc()->getArgs();
+      isTemplate = Cand.getFunc()->isTemplateOrInTemplate();
    }
 
    unsigned i = 0;
@@ -822,6 +811,24 @@ static bool applyConversions(SemaPass &SP,
          requiredType = ParamTys[i];
       }
 
+      if (isTemplate) {
+         if (SP.QC.SubstTemplateParamTypesNonFinal(requiredType, requiredType,
+                                                   Cand.InnerTemplateArgs,
+                                                   Caller->getSourceRange())) {
+            ++i;
+            continue;
+         }
+
+         if (Cand.OuterTemplateArgs) {
+            if (SP.QC.SubstTemplateParamTypes(requiredType, requiredType,
+                                              *Cand.OuterTemplateArgs,
+                                              Caller->getSourceRange())) {
+               ++i;
+               continue;
+            }
+         }
+      }
+
       // Make sure the expression type is resolved.
       auto Result = SP.typecheckExpr(E, requiredType, Caller);
       if (!Result) {
@@ -836,7 +843,7 @@ static bool applyConversions(SemaPass &SP,
          E = SP.implicitCastIfNecessary(E, ParamTys[i]);
       }
       else if (cstyleVararg) {
-         E = convertCStyleVarargParam(SP, E);
+         E = SP.convertCStyleVarargParam(E);
       }
 
       // Check argument convention and apply implicit conversion.
@@ -913,9 +920,9 @@ static bool replaceDefaultValues(SemaPass &SP,
    return false;
 }
 
-static bool compatibleReturnType(SemaPass &Sema,
-                                 CandidateSet::Candidate &Cand,
-                                 CanType RequiredType) {
+static void checkReturnType(SemaPass &Sema,
+                            CandidateSet::Candidate &Cand,
+                            CanType RequiredType) {
    QualType ReturnType;
    if (Cand.isAnonymousCandidate()) {
       ReturnType = Cand.getFunctionType()->getReturnType();
@@ -928,26 +935,25 @@ static bool compatibleReturnType(SemaPass &Sema,
    }
 
    if (ReturnType->containsTemplateParamType()) {
-      assert((Cand.getFunc()->isTemplate() || Cand.getFunc()->isInitializerOfTemplate()
-         || Cand.getFunc()->isCaseOfTemplatedEnum())
+      assert(Cand.getFunc()->isTemplateOrInTemplate()
          && "function not correctly instantiated!");
 
       if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType, Cand.InnerTemplateArgs, {})) {
-         return true;
+         return;
       }
    }
 
    IsImplicitlyConvertibleQuery::result_type result;
    if (Sema.QC.IsImplicitlyConvertible(result, ReturnType, RequiredType)) {
-      return true;
+      return;
    }
 
    if (!result.implicitlyConvertible) {
+      // An incompatible return type does not mean that this candidate can't be
+      // a valid overload choice, it just means that it loses priority over
+      // overloads with the correct return type.
       Cand.setHasIncompatibleReturnType(RequiredType, ReturnType);
-      return false;
    }
-
-   return true;
 }
 
 static void bindTemplateParams(SemaPass &Sema,
@@ -974,6 +980,22 @@ static void bindTemplateParams(SemaPass &Sema,
          templateArgList.inferFromType(AssignedTy, ParamTy);
       }
    }
+}
+
+static bool isBetterCandidate(CandidateSet::Candidate *BestCand,
+                              CandidateSet::Candidate &NewCand,
+                              ConstraintSystem::Solution &BestSolution,
+                              ConstraintSystem::Solution &NewSolution) {
+   if (!BestCand) {
+      return true;
+   }
+
+   if (BestCand->FR == CandidateSet::IncompatibleReturnType
+   && NewCand.FR == CandidateSet::None) {
+      return true;
+   }
+
+   return NewSolution.Score < BestSolution.Score;
 }
 
 static bool resolveCandidate(SemaPass &Sema,
@@ -1020,11 +1042,8 @@ static bool resolveCandidate(SemaPass &Sema,
    // Check if the returned type is viable.
    QualType ReturnType = Cand.getFunctionType()->getReturnType();
    bool DependentReturnType = ReturnType->containsTemplateParamType();
-
    if (RequiredType && !DependentReturnType) {
-      if (!compatibleReturnType(Sema, Cand, RequiredType)) {
-         return false;
-      }
+      checkReturnType(Sema, Cand, RequiredType);
    }
 
    // Check if the parameter amounts and labels match up.
@@ -1102,7 +1121,7 @@ static bool resolveCandidate(SemaPass &Sema,
       break;
    case ConstraintSystem::Failure:
       Sys.solve(Solutions, true);
-      if (!Sys.diagnoseCandidateFailure(Cand)) {
+      if (!Sys.diagnoseCandidateFailure(Cand, Cand.Builder->Bindings)) {
          // FIXME we need to still put some error here to prevent Sema
          //  from just moving on...
          Cand.setIsInvalid();
@@ -1145,20 +1164,18 @@ static bool resolveCandidate(SemaPass &Sema,
 
    // Check the return type again in case it was dependent.
    if (RequiredType && DependentReturnType && !isFunctionArgument) {
-      if (!compatibleReturnType(Sema, Cand, RequiredType)) {
-         return false;
-      }
+      checkReturnType(Sema, Cand, RequiredType);
    }
 
    // Check for ambiguity.
    auto &S = Solutions.front();
    S.Score += Cand.ConversionPenalty;
 
-   if (!BestCandidate || BestSolution.Score > S.Score) {
+   if (isBetterCandidate(BestCandidate, Cand, BestSolution, S)) {
+      CandSet.BestConversionPenalty = S.Score;
       BestCandidate = &Cand;
       BestSolution = move(S);
       BestMatchArgExprs = move(ArgExprs);
-      CandSet.BestConversionPenalty = S.Score;
 
       return true;
    }
@@ -1203,9 +1220,7 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
 
    // Check if the returned type is viable.
    if (RequiredType) {
-      if (!compatibleReturnType(Sema, Cand, RequiredType)) {
-         return false;
-      }
+      checkReturnType(Sema, Cand, RequiredType);
    }
 
    auto Params = FnTy->getParamTypes();
@@ -1259,7 +1274,7 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
       break;
    case ConstraintSystem::Failure:
       Sys.solve(Solutions, true);
-      if (!Sys.diagnoseCandidateFailure(Cand)) {
+      if (!Sys.diagnoseCandidateFailure(Cand, Cand.Builder->Bindings)) {
          // FIXME we need to still put some error here to prevent Sema
          //  from just moving on...
          Cand.setIsInvalid();
@@ -1415,6 +1430,8 @@ sema::resolveCandidateSet(SemaPass &Sema,
       return nullptr;
    }
 
+   // Might still have an incompatible return type.
+   BestCandidate->FR = CandidateSet::None;
    CandSet.foundMatch(bestMatchIdx);
 
    if (FoundAmbiguity) {

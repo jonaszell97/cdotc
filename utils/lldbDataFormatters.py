@@ -21,42 +21,62 @@ def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand('type summary add -w llvm '
                            '-F lldbDataFormatters.OptionalSummaryProvider '
                            '-x "^llvm::Optional<.+>$"')
+    debugger.HandleCommand('type summary add -w llvm '
+                           '-F lldbDataFormatters.SmallStringSummaryProvider '
+                           '-x "^llvm::SmallString<.+>$"')
+    debugger.HandleCommand('type summary add -w llvm '
+                           '-F lldbDataFormatters.StringRefSummaryProvider '
+                           '-x "^llvm::StringRef$"')
 
-    # cdot types
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.TupleTypeSynthProvider '
-                           '-x "^cdot::TupleType$"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.TupleTypeExprSynthProvider '
-                           '-x "^cdot::ast::TupleTypeExpr$"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.FunctionTypeSynthProvider '
-                           '-x "^cdot::FunctionType$"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.LambdaTypeSynthProvider '
-                           '-x "^cdot::LambdaType$"')
+    # cdot type summaries
+    debugger.HandleCommand('type summary add -w llvm '
+                           '-F lldbDataFormatters.DeclNameSummaryProvider '
+                           '-x "^cdot::DeclarationName$"')
+    # debugger.HandleCommand('type summary add -w llvm '
+    #                        '-F lldbDataFormatters.QualTypeSummaryProvider '
+    #                        '-x "^cdot::QualType$"')
+    # debugger.HandleCommand('type summary add -w llvm '
+    #                        '-F lldbDataFormatters.SourceTypeSummaryProvider '
+    #                        '-x "^cdot::ast::SourceType$"')
+    debugger.HandleCommand('type summary add -w llvm '
+                           '-F lldbDataFormatters.DeclSummaryProvider '
+                           '-x "^cdot::ast::[A-Za-z]*Decl$"')
+
+    # cdot type synths
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.TupleTypeSynthProvider '
+    #                        '-x "^cdot::TupleType$"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.TupleTypeExprSynthProvider '
+    #                        '-x "^cdot::ast::TupleTypeExpr$"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.FunctionTypeSynthProvider '
+    #                        '-x "^cdot::FunctionType$"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.LambdaTypeSynthProvider '
+    #                        '-x "^cdot::LambdaType$"')
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.QualTypeSynthProvider '
                            '-x "^cdot::QualType"')
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.DeclarationNameSynthProvider '
                            '-x "^cdot::DeclarationName$"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.ExprSequenceSynthProvider '
-                           '-x "^cdot::ast::ExprSequence$"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.AnonymousCallExprSynthProvider '
-                           '-x "^cdot::ast::AnonymousCallExpr"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l lldbDataFormatters.CompoundStmtSynthProvider '
-                           '-x "^cdot::ast::CompoundStmt$"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.ExprSequenceSynthProvider '
+    #                        '-x "^cdot::ast::ExprSequence$"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.AnonymousCallExprSynthProvider '
+    #                        '-x "^cdot::ast::AnonymousCallExpr"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l lldbDataFormatters.CompoundStmtSynthProvider '
+    #                        '-x "^cdot::ast::CompoundStmt$"')
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.DeclContextUnionSynthProvider '
                            '-x "^cdot::ast::Decl::DeclContextUnion$"')
-    debugger.HandleCommand('type synthetic add -w llvm '
-                           '-l '
-                           'lldbDataFormatters.FinalTemplateArgumentListSynthProvider '
-                           '-x "^cdot::sema::FinalTemplateArgumentList"')
+    # debugger.HandleCommand('type synthetic add -w llvm '
+    #                        '-l '
+    #                        'lldbDataFormatters.FinalTemplateArgumentListSynthProvider '
+    #                        '-x "^cdot::sema::FinalTemplateArgumentList"')
 
 # Pretty printer for llvm::SmallVector/llvm::SmallVectorImpl
 class SmallVectorSynthProvider:
@@ -284,6 +304,73 @@ def OptionalSummaryProvider(valobj, internal_dict):
     storage = valobj.GetChildMemberWithName('storage')
     return str(storage.Cast(underlying_type))
 
+def SmallStringSummaryProvider(valobj, internal_dict):
+    num_elements = valobj.GetNumChildren()
+    res = "\""
+    for i in range(0, num_elements):
+        res += valobj.GetChildAtIndex(i).GetValue().strip("'")
+    res += "\""
+    return res
+
+def StringRefSummaryProvider(valobj, internal_dict):
+    data_ptr = valobj.GetChildAtIndex(0)
+    length = valobj.GetChildAtIndex(1).GetValueAsUnsigned()
+    data = data_ptr.GetPointeeData(0, length)
+
+    error = lldb.SBError()
+    res = ""
+
+    for i in range(0, length):
+        res += chr(data.GetUnsignedInt8(error, i))
+        if error.Fail():
+            return '<error: ' + error.GetCString() + '>'
+
+    return res
+
+savedStringValues = dict()
+
+def stringifyValue(valobj, typeName, methodName):
+    address = valobj.AddressOf().GetValueAsUnsigned(0)
+    if address == 0:
+        return "<null>"
+
+    return hex(address)
+    #
+    # if address in savedStringValues:
+    #     return savedStringValues[address]
+    #
+    # expr = "((::cdot::" + typeName + "*)" + str(address) + ")->" + methodName + "()"
+    #
+    # options = lldb.SBExpressionOptions()
+    # result = valobj.GetFrame().EvaluateExpression(expr, options)
+    #
+    # res = result.GetSummary()
+    # savedStringValues[address] = res
+    #
+    # return res
+
+def QualTypeSummaryProvider(valobj, internal_dict):
+    opaquePtr = valobj.GetChildAtIndex(0).GetValueAsUnsigned(0)
+    if opaquePtr == 0:
+        return "<null>"
+
+    Module = valobj.GetFrame().GetModule()
+    typeType = Module.FindFirstType('cdot::Type').GetPointerType()
+
+    return str(valobj.CreateValueFromAddress("II", opaquePtr, typeType))
+
+    # return stringifyValue(valobj, "QualType", "toString")
+
+def SourceTypeSummaryProvider(valobj, internal_dict):
+    return valobj.GetChildAtIndex(1).GetSummary()
+
+def DeclSummaryProvider(valobj, internal_dict):
+    Name = valobj.GetChildMemberWithName('Name')
+    if not Name:
+        return hex(valobj.AddressOf().GetValueAsUnsigned(0))
+
+    return Name.GetSummary()
+
 # Extended Discriminator
 # NormalIdentifier = 0
 # ConstructorName = 1
@@ -301,6 +388,36 @@ def OptionalSummaryProvider(valobj, internal_dict):
 
 # PtrMask = 0x3
 
+def DeclNameSummaryProvider(valobj, internal_dict):
+    process = valobj.GetProcess()
+    endianness = process.GetByteOrder()
+    pointer_size = process.GetAddressByteSize()
+
+    Val = valobj.GetChildAtIndex(0) \
+        .GetChildAtIndex(0) \
+        .GetValueAsUnsigned(0)
+
+    Kind = Val & 3
+
+    Module = valobj.GetFrame().GetModule()
+    res = ""
+    if Kind == 0:
+        if Val in savedStringValues:
+            return savedStringValues[Val]
+
+        identifierInfoTy = Module.FindFirstType('cdot::IdentifierInfo')
+        identifierInfoPtr = valobj.GetChildAtIndex(2)
+        identifierInfo = identifierInfoPtr.CreateValueFromAddress(
+            "II", identifierInfoPtr.GetValueAsUnsigned(0), identifierInfoTy)
+
+        stringRef = identifierInfo.GetChildAtIndex(0)
+        res = stringRef.GetSummary()
+        savedStringValues[Val] = res
+
+        return res
+
+    return stringifyValue(valobj, "DeclarationName", "toString")
+
 class DeclarationNameSynthProvider:
     """ Provider for cdot::DeclarationName """
     def __init__(self, valobj, dict):
@@ -308,10 +425,11 @@ class DeclarationNameSynthProvider:
         process = valobj.GetProcess()
         self.endianness = process.GetByteOrder()
         self.pointer_size = process.GetAddressByteSize()
+        self.normalChildCount = 1 # union { Val, StoredKind }
         self.update()
 
     def num_children(self):
-        return 2
+        return self.normalChildCount + 2
 
     def get_child_index(self, name):
         return -1
@@ -323,9 +441,12 @@ class DeclarationNameSynthProvider:
         if index < 0 or index >= self.num_children():
             return None
 
+        if (index < self.normalChildCount):
+            return self.valobj.GetChildAtIndex(index)
+
         Module = self.valobj.GetFrame().GetModule()
 
-        if index == 0:
+        if index == self.normalChildCount:
             # get StoredKind type through second member of first field
             UnionVal = self.valobj.GetChildAtIndex(0)
             StoredKindVal = UnionVal.GetChildAtIndex(1)

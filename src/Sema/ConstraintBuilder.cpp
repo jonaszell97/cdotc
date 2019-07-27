@@ -138,7 +138,10 @@ public:
       }
 
       TypeDependent |= Result.get()->isTypeDependent();
-      return Result;
+      auto *ExprRes = Result.get();
+
+      ExprRes->setExprType(Sema.ApplyCapabilities(ExprRes->getExprType()));
+      return ExprRes;
    }
 
    ExprResult visitTemplateArgListExpr(TemplateArgListExpr *E)
@@ -190,7 +193,9 @@ public:
                     ConstraintSystem::SolutionBindings &Bindings)
       : TypeBuilder(Sema, SR),
         Builder(Builder), Bindings(Bindings)
-   { }
+   {
+      (void)this->Builder;
+   }
 
    void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &VariadicTys)
    {
@@ -200,11 +205,12 @@ public:
    QualType visitTemplateParamType(TemplateParamType *T)
    {
       auto *Param = T->getParam();
-      Builder.registerTemplateParam(Param);
-
       auto It = Bindings.ParamBindings.find(Param);
-      assert (It != Bindings.ParamBindings.end());
+      if (It == Bindings.ParamBindings.end()) {
+         return T;
+      }
 
+      assert(It->getSecond() && "bad type binding");
       return It->getSecond();
    }
 };
@@ -257,14 +263,18 @@ class TypeParamBinder: public TypeComparer<TypeParamBinder> {
    /// The template parameter bindings.
    ConstraintSystem::SolutionBindings &Bindings;
 
+   /// The locator to use for new constraints.
+   ConstraintLocator *Loc;
+
    /// The outer constraint builder.
    ConstraintBuilder *outerBuilder;
 
 public:
    TypeParamBinder(ConstraintSystem &Sys,
                    ConstraintSystem::SolutionBindings &Bindings,
+                   ConstraintLocator *Loc,
                    ConstraintBuilder *outerBuilder)
-      : Sys(Sys), Bindings(Bindings), outerBuilder(outerBuilder)
+      : Sys(Sys), Bindings(Bindings), Loc(Loc), outerBuilder(outerBuilder)
    { }
 
    bool visitTemplateParamType(TemplateParamType *GT, QualType RHS)
@@ -284,9 +294,10 @@ public:
 
       // Give a hint to the solver to try the actual type as the value of
       // the generic type to prevent the covariance from always being chosen.
-      Sys.newConstraint<DefaultableConstraint>(
-         Bindings.ParamBindings[GT->getParam()],
-         binding, Locator());
+      auto it = Bindings.ParamBindings.find(GT->getParam());
+      if (it != Bindings.ParamBindings.end()) {
+         Sys.newConstraint<DefaultableConstraint>(it->getSecond(), binding, Loc);
+      }
 
       return true;
    }
@@ -314,12 +325,13 @@ ExprResult ConstraintBuilder::rebuildExpression(Expression *E)
 ConstraintBuilder::GenerationResult
 ConstraintBuilder::generateConstraints(Expression *E,
                                        SourceType RequiredType,
-                                       ConstraintLocator *Locator) {
+                                       ConstraintLocator *Locator,
+                                       bool isHardRequirement) {
    if (E->isInvalid()) {
       return Failure;
    }
 
-   QualType T = visitExpr(E, RequiredType, Locator);
+   QualType T = visitExpr(E, RequiredType, Locator, isHardRequirement);
    if (EncounteredError) {
       return Failure;
    }
@@ -358,7 +370,7 @@ void ConstraintBuilder::registerTemplateParam(TemplateParamDecl *Param)
    TypeVariable ParamType = Sys.newTypeVariable(Flags);
 
    // Add an implicit conversion constraint for the covariance.
-   if (!Param->getCovariance()->isUnknownAnyType()) {
+   if (!Param->getCovariance()->isErrorType()) {
       auto *Loc = makeLocator(nullptr, PathElement::templateParam(Param));
       Sys.newConstraint<CovarianceConstraint>(ParamType,
                                               Param->getCovariance(),
@@ -372,7 +384,7 @@ void ConstraintBuilder::registerTemplateParam(TemplateParamDecl *Param)
 
 void ConstraintBuilder::addTemplateParamBinding(QualType Param, QualType Binding)
 {
-   TypeParamBinder Binder(Sys, Bindings, outerBuilder);
+   TypeParamBinder Binder(Sys, Bindings, nullptr, outerBuilder);
    Binder.visit(Param->removeReference(), Binding->removeReference());
 }
 
@@ -408,7 +420,8 @@ TypeVariableType* ConstraintBuilder::getClosureParam(DeclarationName Name)
 
 QualType ConstraintBuilder::visitExpr(Expression *Expr,
                                       SourceType RequiredType,
-                                      ConstraintLocator *Locator) {
+                                      ConstraintLocator *Locator,
+                                      bool isHardRequirement) {
    auto It = Bindings.ExprBindings.find(Expr);
    if (It != Bindings.ExprBindings.end()) {
       return It->getSecond();
@@ -416,11 +429,10 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
 
    if (QualType T = Expr->getExprType()) {
       Bindings.ExprBindings[Expr] = T;
-      TypeDependent |= T->isUnknownAnyType();
       EncounteredError |= Expr->isInvalid();
 
       if (RequiredType && RequiredType->containsTemplateParamType()) {
-         TypeParamBinder Binder(Sys, Bindings, outerBuilder);
+         TypeParamBinder Binder(Sys, Bindings, Locator, outerBuilder);
          Binder.visit(RequiredType->removeReference(), T->removeReference());
       }
 
@@ -428,7 +440,7 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
    }
 
    QualType contextualType;
-   bool shouldGenerateConversionConstraint = true;
+   bool shouldGenerateConversionConstraint = isHardRequirement;
 
    if (RequiredType) {
       if (GeneratingArgConstraints) {
@@ -482,11 +494,11 @@ QualType ConstraintBuilder::visitExpr(Expression *Expr,
       DesugaredTy = Builder.visit(RequiredType)->getDesugaredType();
 
       if (auto DirectBinding = Sys.getConstrainedBinding(Var)) {
-         TypeParamBinder Binder(Sys, Bindings, outerBuilder);
+         TypeParamBinder Binder(Sys, Bindings, Locator, outerBuilder);
          Binder.visit(RequiredType, DirectBinding);
       }
       else {
-         TypeParamBinder Binder(Sys, Bindings, outerBuilder);
+         TypeParamBinder Binder(Sys, Bindings, Locator, outerBuilder);
          Binder.visit(RequiredType, T);
       }
    }
@@ -1077,7 +1089,24 @@ ConstraintBuilder::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr,
    auto *Var = Sys.newTypeVariable(ConstraintSystem::IsOverloadChoice);
    SmallVector<Constraint*, 4> Constraints;
 
+   bool first = true;
+   unsigned defaultOverload = -1;
+
    for (auto *Ovl : Expr->getOverloads()) {
+      if (first) {
+         switch (Ovl->getKind()) {
+         case Decl::FunctionDeclID:
+         case Decl::MethodDeclID:
+         case Decl::InitDeclID:
+            break;
+         default:
+            defaultOverload = 0;
+            break;
+         }
+
+         first = false;
+      }
+
       QualType Ty = Sema.getTypeForDecl(Ovl);
       auto *Loc = makeLocator(
          Expr, PathElement::overloadedDeclLoc(Ovl->getSourceRange()));
@@ -1088,7 +1117,7 @@ ConstraintBuilder::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr,
    auto *Loc = makeLocator(Expr,
       PathElement::overloadedDecl(Expr->getOverloads().front()->getDeclName()));
 
-   Sys.newConstraint<DisjunctionConstraint>(Constraints, Loc);
+   Sys.newConstraint<DisjunctionConstraint>(Constraints, Loc, defaultOverload);
    return Var;
 }
 
@@ -1290,6 +1319,10 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr *Call, SourceType T,
       Ident = dyn_cast<IdentifierRefExpr>(ParentExpr);
    }
 
+   if (Ident) {
+      Name = Ident->getDeclName();
+   }
+
    ExprResult ParentResult;
    if (Ident) {
       Ident->setAllowOverloadRef(true);
@@ -1384,11 +1417,6 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr *Call, SourceType T,
    else {
       TypeDependent |= ParentExpr->isDependent();
 
-      if (Sema.QC.ApplyCapabilites(ParentType, ParentType,
-                                   &Sema.getDeclContext())) {
-         Call->setIsInvalid(true);
-      }
-
       if (addCandidateType(CandSet, Sema, ParentType, ParentExpr)) {
          Call->setIsInvalid(true);
          EncounteredError = true;
@@ -1426,7 +1454,8 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
 
    if (CandSet.Candidates.empty()) {
       EncounteredError = true;
-      Sema.diagnose(Call, err_no_matching_call, 0, Name, Call->getSourceRange());
+      Sema.diagnose(Call, err_no_matching_call, (bool)Name, 0,
+                    Name, Call->getParentExpr()->getSourceRange());
 
       for (auto *ND : Decls) {
          Sema.diagnose(
@@ -1468,15 +1497,14 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr *Call,
    }
 
    QualType ReturnType;
-   if (Cand->isAnonymousCandidate()
-       || !Cand->getFunc()->isCompleteInitializer()) {
+   if (Cand->isAnonymousCandidate() || !Cand->getFunc()->isCompleteInitializer()) {
       ReturnType = Cand->getFunctionType()->getReturnType();
    }
    else {
       ReturnType = Sema.Context.getRecordType(Cand->getFunc()->getRecord());
    }
 
-   if (Cand->getFunc()->isTemplate()) {
+   if (!Cand->isAnonymousCandidate() && Cand->getFunc()->isTemplate()) {
       if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType,
                                                   Cand->InnerTemplateArgs,
                                                   Call->getSourceRange())) {
@@ -1683,7 +1711,7 @@ QualType ConstraintBuilder::visitAddrOfExpr(AddrOfExpr *Expr, SourceType T)
       EncounteredError = true;
    }
 
-   return Sema.Context.getMutableBorrowType(ReferenceTy->removeReference());
+   return Sema.Context.getMutableReferenceType(ReferenceTy->removeReference());
 }
 
 QualType ConstraintBuilder::visitImplicitCastExpr(ImplicitCastExpr* Expr,
@@ -1703,17 +1731,23 @@ QualType ConstraintBuilder::visitIfExpr(IfExpr *Expr, SourceType T)
 {
    auto &Cond = Expr->getCond();
    switch (Cond.K) {
-   case IfCondition::Expression:
-      (void) visitExpr(Cond.ExprData.Expr, T);
+   case IfCondition::Expression: {
+      auto *condVar = getTypeVar(Cond.ExprData.Expr, true);
+      if (condVar) {
+         auto *truthValueProto = Sema.getTruthValueDecl();
+         Sys.newConstraint<ImplicitConversionConstraint>(
+            condVar, Sema.Context.getRecordType(truthValueProto),
+            makeLocator(Cond.ExprData.Expr));
+      }
+
       break;
+   }
    case IfCondition::Pattern:
-      (void) visitExpr(Cond.PatternData.Expr, T);
+      (void) visitExpr(Cond.PatternData.Expr);
       break;
    default:
       break;
    }
-
-   // TODO constraint for boolean-like values? maybe conformance constraint?
 
    auto *TrueVal = Expr->getTrueVal();
    auto *FalseVal = Expr->getFalseVal();

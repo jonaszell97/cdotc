@@ -309,6 +309,18 @@ LineColPair FileManager::getLineAndCol(SourceLocation loc)
    return getLineAndCol(loc, file);
 }
 
+FullSourceLoc FileManager::getFullSourceLoc(SourceLocation loc)
+{
+   if (!loc) {
+      return FullSourceLoc("<invalid sloc>", 0, 0);
+   }
+
+   auto fileName = getFileName(loc);
+   auto lineAndCol = getLineAndCol(loc);
+
+   return FullSourceLoc(fileName, lineAndCol.line, lineAndCol.col);
+}
+
 LineColPair FileManager::getLineAndCol(SourceLocation loc,
                                        llvm::MemoryBuffer *Buf) {
    auto ID = getSourceId(loc);

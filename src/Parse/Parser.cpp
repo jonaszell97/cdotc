@@ -947,9 +947,9 @@ Parser::parseFunctionType(SourceLocation BeginLoc,
 }
 
 void
-Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
+Parser::parseDeclConstraints(std::vector<ParsedConstraint> &Constraints)
 {
-   SmallVector<IdentifierInfo*, 2> NameQualifier;
+   std::vector<IdentifierInfo*> NameQualifier;
    while (currentTok().is(Ident_where)) {
       SourceLocation BeginLoc = consumeToken();
 
@@ -973,7 +973,7 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
          }
       }
 
-      DeclConstraint *DC = nullptr;
+      bool addedConstraint = false;
       if (currentTok().is(tok::smaller)) {
          IdentifierRefExpr *ParentExpr = nullptr;
          for (auto &Name : NameQualifier) {
@@ -1010,8 +1010,11 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
          }
 
          SourceLocation EndLoc = currentTok().getEndLoc();
-         DC = DeclConstraint::Create(Context, SourceRange(BeginLoc, EndLoc),
-                                     NameQualifier, ParentExpr);
+         Constraints.emplace_back(DeclConstraint::Concept,
+                                  SourceRange(BeginLoc, EndLoc),
+                                  move(NameQualifier), ParentExpr);
+
+         addedConstraint = true;
       }
       else {
          DeclConstraint::Kind K;
@@ -1029,25 +1032,31 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
                advance();
 
                SourceLocation EndLoc = currentTok().getEndLoc();
-               DC = DeclConstraint::Create(Context, DeclConstraint::Class,
-                                           SourceRange(BeginLoc, EndLoc),
-                                           NameQualifier);
+               Constraints.emplace_back(DeclConstraint::Class,
+                                        SourceRange(BeginLoc, EndLoc),
+                                        move(NameQualifier), nullptr);
+
+               addedConstraint = true;
             }
             else if (lookahead().is(tok::kw_enum)) {
                advance();
 
                SourceLocation EndLoc = currentTok().getEndLoc();
-               DC = DeclConstraint::Create(Context, DeclConstraint::Enum,
-                                           SourceRange(BeginLoc, EndLoc),
-                                           NameQualifier);
+               Constraints.emplace_back(DeclConstraint::Enum,
+                                        SourceRange(BeginLoc, EndLoc),
+                                        move(NameQualifier), nullptr);
+
+               addedConstraint = true;
             }
             else if (lookahead().is(tok::kw_struct)) {
                advance();
 
                SourceLocation EndLoc = currentTok().getEndLoc();
-               DC = DeclConstraint::Create(Context, DeclConstraint::Struct,
-                                           SourceRange(BeginLoc, EndLoc),
-                                           NameQualifier);
+               Constraints.emplace_back(DeclConstraint::Struct,
+                                        SourceRange(BeginLoc, EndLoc),
+                                        move(NameQualifier), nullptr);
+
+               addedConstraint = true;
             }
 
             K = DeclConstraint::TypePredicate;
@@ -1057,18 +1066,16 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
             break;
          }
 
-         if (!DC) {
+         if (!addedConstraint) {
             advance();
             auto Type = parseType();
 
             SourceLocation EndLoc = currentTok().getEndLoc();
-            DC = DeclConstraint::Create(Context, K,
-                                        SourceRange(BeginLoc, EndLoc),
-                                        NameQualifier, Type.tryGet());
+            Constraints.emplace_back(K, SourceRange(BeginLoc, EndLoc),
+                                     move(NameQualifier),
+                                     Type.tryGet().getTypeExpr());
          }
       }
-
-      Constraints.push_back(DC);
 
       if (!lookahead().is(Ident_where))
          break;
@@ -1162,7 +1169,7 @@ ParseResult Parser::parseAlias()
       aliasExpr = StaticExpr::Create(Context, ExprRes.getExpr());
    }
 
-   SmallVector<DeclConstraint*, 4> Constraints;
+   std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
@@ -1178,7 +1185,7 @@ ParseResult Parser::parseAlias()
    }
 
    aliasDecl->setAccessLoc(CurDeclAttrs.AccessLoc);
-   Context.setConstraints(aliasDecl, Constraints);
+   Context.setParsedConstraints(aliasDecl, move(Constraints));
 
    return ActOnDecl(aliasDecl);
 }
@@ -3478,7 +3485,7 @@ ParseResult Parser::parseFunctionDecl()
       returnType = SourceType(Context.getAutoType());
    }
 
-   SmallVector<DeclConstraint*, 4> Constraints;
+   std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
@@ -3503,7 +3510,7 @@ ParseResult Parser::parseFunctionDecl()
    funcDecl->setUnsafe(Unsafe);
    funcDecl->setBody(body);
 
-   Context.setConstraints(funcDecl, Constraints);
+   Context.setParsedConstraints(funcDecl, move(Constraints));
    return ActOnDecl(funcDecl);
 }
 
@@ -4343,13 +4350,15 @@ ParseResult Parser::parsePattern(int ExprFlags)
       return IsPattern::Create(Context, SR, TypeRes.get());
    }
 
-   auto AllowPattern = support::saveAndRestore(this->AllowPattern, true);
+   auto SAR = support::saveAndRestore(this->AllowPattern, true);
    auto ExprRes = parseExprSequence(ExprFlags);
-   if (!ExprRes)
+   if (!ExprRes) {
       return ParseError();
+   }
 
-   if (isa<PatternExpr>(ExprRes.getExpr()))
+   if (isa<PatternExpr>(ExprRes.getExpr())) {
       return ExprRes;
+   }
 
    return ExpressionPattern::Create(Context, lookahead().getSourceLoc(),
                                     ExprRes.getExpr());
@@ -5126,6 +5135,10 @@ void Parser::parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
          OnlyExprs = false;
          Args.emplace_back(VD, nullptr);
       }
+      else if (currentTok().is(tok::underscore)) {
+         OnlyExprs = false;
+         Args.emplace_back((LocalVarDecl*)nullptr);
+      }
       else if (currentTok().is(Ident_is)) {
          auto Loc = currentTok().getSourceLoc();
          advance();
@@ -5232,8 +5245,8 @@ ParseResult Parser::parseCallPattern(bool skipName,
    }
 
    if (!skipName) {
-      ParentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr, Name,
-                                                  pointerAccess);
+//      ParentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr, Name,
+//                                                  pointerAccess);
    }
 
    return CasePattern::Create(Context, SourceRange(IdentLoc, Parens.getEnd()),
@@ -5353,28 +5366,6 @@ ParseResult Parser::parseFunctionCall(bool skipName,
 
    return AnonymousCallExpr::Create(Context, Parens, ParentExpr, args.args,
                                     args.labels);
-}
-
-ParseResult Parser::parseEnumCaseExpr()
-{
-   auto PeriodLoc = currentTok().getSourceLoc();
-   if (!expect(tok::ident)) {
-      return ParseExprError();
-   }
-
-   auto ident = currentTok().getIdentifierInfo();
-
-   EnumCaseExpr* expr;
-   if (lookahead().is(tok::open_paren)) {
-      advance();
-      expr = new(Context) EnumCaseExpr(PeriodLoc, ident,
-                                       parseCallArguments().args);
-   }
-   else {
-      expr = new(Context) EnumCaseExpr(PeriodLoc, ident);
-   }
-
-   return expr;
 }
 
 Parser::ArgumentList Parser::parseCallArguments()
@@ -5680,7 +5671,9 @@ ParseResult Parser::parseNextDecl()
       Result = parseTopLevelDecl();
    }
 
+   assert((int)Prev.Access <= 5 && "bad access specifier");
    popDeclAttrs(Prev);
+
    return Result;
 }
 

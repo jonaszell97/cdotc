@@ -19,13 +19,19 @@
 
 #include <llvm/Support/CommandLine.h>
 
+#ifndef NDEBUG
+#  define DEFAULT_VERIFY true
+#else
+#  define DEFAULT_VERIFY false
+#endif
+
 namespace cl = llvm::cl;
 
 static cl::opt<bool> VerifyILFunctions("verify-il",
                                        cl::desc("Verify IL functions (for "
                                                 "compiler debugging purposes "
                                                 "only)"),
-                                       cl::init(false));
+                                       cl::init(DEFAULT_VERIFY));
 
 namespace cdot {
 namespace il {

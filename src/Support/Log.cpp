@@ -12,6 +12,7 @@ namespace cl = llvm::cl;
 namespace cdot {
 namespace support {
 namespace log {
+namespace detail {
 
 /// The main output file for the compilation.
 static cl::opt<std::string> DebugLog(
@@ -41,6 +42,7 @@ uint64_t ActiveLogs()
    return val;
 }
 
+} // namespace detail
 } // namespace log
 } // namespace support
 } // namespace cdot

@@ -98,7 +98,7 @@ set(CDOTC_TBLGENS_SOURCE_FILES
 set (RUNTIME_SUPPORT_SOURCE_FILES
         Runtime/RuntimeSupport.cpp)
 
-add_executable(cdotc src/Driver/main.cpp ${SOURCE_FILES} src/Support/Log.cpp src/Support/Log.h)
+add_executable(cdotc src/Driver/main.cpp ${SOURCE_FILES} src/Support/Log.cpp src/Support/Log.h src/Sema/SemaDebug.cpp src/Lex/SourceLocation.cpp)
 add_executable(cdotc_asan src/Driver/main.cpp ${SOURCE_FILES})
 add_executable(cdotc_ubsan src/Driver/main.cpp ${SOURCE_FILES})
 add_executable(cdot-tblgen ${TBLGEN_SOURCE_FILES})

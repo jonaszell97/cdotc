@@ -489,7 +489,7 @@ public:
 //      }
 
       auto ty = res.get()->getExprType();
-      if (isa<TypeExpr>(res.get()) || ty->isUnknownAnyType()) {
+      if (isa<TypeExpr>(res.get()) || ty->isErrorType()) {
          if (!P->isTypeName()) {
             Res.setHasIncompatibleKind(0, P);
             Out = TemplateArgument(P, nullptr, TA->getSourceLoc());

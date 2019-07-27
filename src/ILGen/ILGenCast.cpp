@@ -169,11 +169,10 @@ il::Value *ILGenPass::applySingleConversionStep(const ConversionStep &Step,
       auto *M = Step.getConversionOp();
       if (auto *I = dyn_cast<InitDecl>(M)) {
          if (isa<EnumDecl>(I->getRecord())) {
-            auto *Alloc = Builder.CreateLoad(Builder.CreateAlloca(
-               I->getRecord()->getType()));
-
+            auto *Alloc = Builder.CreateAlloca(I->getRecord()->getType());
             CreateCall(I, { Alloc, Val });
-            return Alloc;
+
+            return Builder.CreateLoad(Alloc);
          }
 
          return Builder.CreateStructInit(cast<StructDecl>(I->getRecord()),

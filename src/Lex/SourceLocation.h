@@ -7,6 +7,8 @@
 
 #include "Support/Config.h"
 
+#include <llvm/ADT/StringRef.h>
+
 #include <cassert>
 #include <cstdint>
 
@@ -108,12 +110,40 @@ private:
    SourceLocation end;
 };
 
+struct FullSourceLoc {
+private:
+   /// \brief The source file of this location.
+   llvm::StringRef fileName;
+
+   /// \brief The source line of this location.
+   unsigned line;
+
+   /// \brief The source column of this location.
+   unsigned column;
+
+public:
+   /// \brief Memberwise C'tor.
+   FullSourceLoc(llvm::StringRef fileName, unsigned line, unsigned column)
+      : fileName(fileName), line(line), column(column)
+   {}
+
+   /// \return The source file of this location.
+   llvm::StringRef getSourceFileName() const { return fileName; }
+
+   /// \return The source line of this location.
+   unsigned getLine() const { return line; }
+
+   /// \return The source column of this location.
+   unsigned getColumn() const { return column; }
+};
+
 } // namespace cdot
 
 namespace llvm {
 
 template <typename T> struct PointerLikeTypeTraits;
 template<class T> struct DenseMapInfo;
+class raw_ostream;
 
 template<>
 struct PointerLikeTypeTraits<::cdot::SourceLocation> {
@@ -156,5 +186,11 @@ template<> struct DenseMapInfo<::cdot::SourceLocation> {
 
 } // namespace llvm
 
+namespace cdot {
+
+::llvm::raw_ostream &operator<<(::llvm::raw_ostream &OS,
+                                const ::cdot::FullSourceLoc &loc);
+
+} // namespace cdot
 
 #endif //CDOT_SOURCELOCATION_H

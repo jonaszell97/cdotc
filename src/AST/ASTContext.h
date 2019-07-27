@@ -34,12 +34,14 @@ class Statement;
 class Decl;
 class DeclContext;
 class DeclConstraint;
+class ConstraintSet;
 class NamedDecl;
 class CallableDecl;
 class RecordDecl;
 class AliasDecl;
 class ExtensionDecl;
 class PrecedenceGroupDecl;
+class ParsedConstraint;
 
 class ASTContext {
 public:
@@ -82,6 +84,10 @@ public:
    mutable llvm::BumpPtrAllocator TmpAllocator;
 
    mutable llvm::SmallPtrSet<ExtensionDecl*, 16> UnresolvedExtensions;
+   mutable llvm::FoldingSet<DeclConstraint> DeclConstraints;
+   mutable llvm::FoldingSet<ConstraintSet> ConstraintSets;
+
+   mutable ConstraintSet *EmptyConstraintSet = nullptr;
 
 private:
    mutable ParentMap parentMap;
@@ -91,9 +97,10 @@ private:
    mutable TargetInfo TI;
 
    mutable llvm::DenseMap<const Decl*, AttrVec*> AttributeMap;
-   mutable llvm::DenseMap<const Decl*, ConstraintVec*> ConstraintMap;
-   mutable llvm::DenseMap<const Decl*, ExtConstraintVec*> ExtConstraintMap;
-   mutable llvm::DenseMap<QualType, ExtensionVec*> ExtensionMap;
+   mutable llvm::DenseMap<const Decl*, ConstraintSet*> ConstraintMap;
+   mutable llvm::DenseMap<const Decl*, std::vector<ParsedConstraint>> ParsedConstraintMap;
+   mutable llvm::DenseMap<const Decl*, llvm::DenseMap<const DeclConstraint*, SourceRange>> ConstraintLocs;
+   mutable llvm::DenseMap<CanType, ExtensionVec*> ExtensionMap;
    mutable llvm::DenseMap<const AssociatedTypeDecl*,
                           CovarianceVec*> CovarianceMap;
 
@@ -121,7 +128,6 @@ private:
    mutable llvm::FoldingSet<MutablePointerType> MutablePointerTypes;
    mutable llvm::FoldingSet<ReferenceType> ReferenceTypes;
    mutable llvm::FoldingSet<MutableReferenceType> MutableReferenceTypes;
-   mutable llvm::FoldingSet<MutableBorrowType> MutableBorrowTypes;
    mutable llvm::DenseMap<QualType, BoxType*> BoxTypes;
    mutable llvm::FoldingSet<ExistentialType> ExistentialTypes;
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
@@ -335,7 +341,6 @@ public:
 
    ReferenceType *getReferenceType(QualType referencedType) const;
    MutableReferenceType *getMutableReferenceType(QualType referencedType) const;
-   MutableBorrowType *getMutableBorrowType(QualType borrowedType) const;
 
    BoxType *getBoxType(QualType BoxedTy) const;
    QualType getExistentialType(ArrayRef<QualType> Existentials) const;
@@ -380,7 +385,7 @@ public:
 
    TemplateParamType *getTemplateArgType(TemplateParamDecl *Param) const;
    AssociatedType *getAssociatedType(AssociatedTypeDecl *AT,
-                                     AssociatedType *OuterAT = nullptr) const;
+                                     QualType OuterAT = QualType()) const;
 
    MetaType *getMetaType(QualType forType) const;
    TypedefType *getTypedefType(AliasDecl *TD) const;
@@ -438,19 +443,25 @@ public:
    void addAttribute(const Decl *D, Attr* attr) const;
    void addAttributes(const Decl *D, ArrayRef<Attr*> attrs) const;
 
-   ArrayRef<StaticExpr*> getConstraints(const Decl *D) const;
-   void setConstraints(const Decl *D, ArrayRef<StaticExpr*> cvec) const;
-   void addConstraint(const Decl *D, StaticExpr* C) const;
+   ArrayRef<ParsedConstraint> getParsedConstraints(const Decl *D) const;
+   void setParsedConstraints(const Decl *D, std::vector<ParsedConstraint> &&vec) const;
 
-   ArrayRef<DeclConstraint*> getExtConstraints(const Decl *D) const;
-   void setConstraints(const Decl *D, ArrayRef<DeclConstraint*> cvec) const;
-   void addConstraint(const Decl *D, DeclConstraint* C) const;
+   ConstraintSet *getExtConstraints(const Decl *D) const;
+   void setConstraints(const Decl *D, ConstraintSet *CS) const;
+
+   ConstraintSet *getNearestConstraintSet(const DeclContext *DC) const;
+
+   void updateConstraintLocs(const Decl *D,
+                             ArrayRef<ParsedConstraint> parsedConstraints,
+                             ArrayRef<DeclConstraint*> declConstraints);
+
+   SourceRange getConstraintLoc(const Decl *D, const DeclConstraint *DC) const;
 
    ArrayRef<RecordDecl*> getCovariance(const AssociatedTypeDecl *AT) const;
    void addCovariance(const AssociatedTypeDecl *AT, RecordDecl* Cov) const;
 
-   ArrayRef<ExtensionDecl*> getExtensions(QualType T) const;
-   void addExtension(QualType T, ExtensionDecl* E) const;
+   ArrayRef<ExtensionDecl*> getExtensions(CanType T) const;
+   void addExtension(CanType T, ExtensionDecl* E) const;
 };
 
 } // namespace ast

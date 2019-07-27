@@ -40,30 +40,21 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
       Pred->setLHS(lhsResult.get());
    }
 
-   auto lhs = Pred->getLHS()->getExprType();
-   bool result = false;
-   bool IsDirectType = true;
-   bool CompileTimeCheck = true;
-
-   if (lhs->containsTemplateParamType() || lhs->isDependentType()) {
-      if (PredExpr->getKind() == ConstraintExpr::Type) {
-         (void) visitSourceType(Pred->getRHS(),
-                                Pred->getRHS()->getTypeConstraint());
-
-         Pred->copyStatusFlags(Pred->getRHS());
-      }
-
-      Pred->getRHS()->setSemanticallyChecked(true);
-      Pred->setIsTypeDependent(true);
-      return Pred;
+   CanType lhs = Pred->getLHS()->getExprType();
+   if (lhs->isDependentType()) {
+      Pred->setNeedsInstantiation(true);
    }
 
-   QualType TypeToCheck;
-   if (auto Meta = dyn_cast<cdot::MetaType>(lhs)) {
+   bool result = false;
+   bool IsMetaType = true;
+   bool CompileTimeCheck = true;
+
+   CanType TypeToCheck;
+   if (auto Meta = dyn_cast<MetaType>(lhs)) {
       TypeToCheck = Meta->getUnderlyingType();
    }
    else {
-      IsDirectType = false;
+      IsMetaType = false;
       TypeToCheck = lhs->removeReference();
    }
 
@@ -77,56 +68,37 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
       if (!RhsResult)
          return ExprError();
 
-      auto rhs = RhsResult.get();
-      if (rhs->containsTemplateParamType() || rhs->isDependentType()) {
-         Pred->setIsTypeDependent(true);
+      CanType rhs = RhsResult.get();
+      if (rhs->isDependentType()) {
+         Pred->setNeedsInstantiation(true);
          return Pred;
       }
 
       if (TypeToCheck == rhs) {
          result = true;
       }
-      else if (!TypeToCheck->isRecordType() || !rhs->isRecordType()) {
+
+      if (!rhs->isRecordType()) {
          result = false;
+         break;
       }
-      else {
-         auto Self = TypeToCheck->getRecord();
-         auto Other = rhs->getRecord();
 
-         if (QC.PrepareDeclInterface(Self)) {
-            result = true;
+      auto *RHSRec = rhs->getRecord();
+      if (auto *proto = RHSRec->dyn_cast<ProtocolDecl>()) {
+         result = ConformsTo(lhs, proto);
+      }
+      else if (auto *baseClass = RHSRec->dyn_cast<ClassDecl>()) {
+         if (!lhs->isRecordType()) {
             break;
          }
-         if (QC.PrepareDeclInterface(Other)) {
-            result = true;
+         if (!IsMetaType) {
+            CompileTimeCheck = false;
             break;
          }
 
-         if (Self->isClass() && Other->isClass()) {
-            auto SelfClass = cast<ClassDecl>(Self);
-            auto OtherClass = cast<ClassDecl>(Other);
-
-            if (OtherClass->isBaseClassOf(SelfClass)) {
-               result = true;
-            }
-            else if (SelfClass->isBaseClassOf(OtherClass)) {
-               if (IsDirectType) {
-                  result = false;
-               }
-               else {
-                  CompileTimeCheck = false;
-               }
-            }
-            else {
-               result = false;
-            }
-         }
-         else if (!isa<ProtocolDecl>(Other)) {
-            result = false;
-         }
-         else {
-            auto &ConfTable = Context.getConformanceTable();
-            result = ConfTable.conformsTo(Self, cast<ProtocolDecl>(Other));
+         auto *C = lhs->getRecord()->cast<ClassDecl>();
+         if (C) {
+            result = IsSubClassOf(C, baseClass, true);
          }
       }
 
@@ -173,7 +145,7 @@ ExprResult SemaPass::visitExprSequence(ExprSequence *ExprSeq)
       if (ExprSeq->isInvalid())
          return ExprError();
 
-      ExprSeq->setExprType(UnknownAnyTy);
+      ExprSeq->setExprType(ErrorTy);
       return ExprSeq;
    }
 
@@ -528,7 +500,7 @@ ExprResult SemaPass::visitAddrOfExpr(AddrOfExpr *Expr)
                Expr->getSourceRange());
    }
 
-   Expr->setExprType(Context.getMutableBorrowType(T->removeReference()));
+   Expr->setExprType(Context.getMutableReferenceType(T->removeReference()));
    return Expr;
 }
 

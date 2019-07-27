@@ -932,13 +932,6 @@ void ItaniumLikeMangler::mangleType(const MutableReferenceType *T)
    mangleType(T->getReferencedType());
 }
 
-void ItaniumLikeMangler::mangleType(const MutableBorrowType *T)
-{
-   // <type> ::= R <type>   # reference-to
-   OS << 'R';
-   mangleType(T->getBorrowedType());
-}
-
 void ItaniumLikeMangler::mangleType(const BoxType *T)
 {
    OS << 'X';
@@ -980,12 +973,7 @@ void ItaniumLikeMangler::mangleType(const TemplateParamType *T)
 
 void ItaniumLikeMangler::mangleType(const AssociatedType *T)
 {
-   if (T->getDecl()->isImplementation()) {
-      mangleType(T->getActualType());
-   }
-   else {
-      llvm_unreachable("should not be mangled");
-   }
+   llvm_unreachable("should not be mangled");
 }
 
 void ItaniumLikeMangler::mangleType(const TupleType *T)

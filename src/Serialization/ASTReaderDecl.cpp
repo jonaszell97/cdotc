@@ -158,30 +158,22 @@ void ASTDeclReader::visitDecl(Decl *D)
 DeclConstraint* ASTDeclReader::ReadDeclConstraint()
 {
    auto Kind = Record.readEnum<DeclConstraint::Kind>();
-   auto SR = Record.readSourceRange();
-
-   auto NameQualSize = Record.readInt();
-   SmallVector<IdentifierInfo*, 2> NameQual;
-   NameQual.reserve(NameQualSize);
-
-   while (NameQualSize--)
-      NameQual.push_back(Record.getIdentifierInfo());
+   auto constrainedType = Record.readType();
 
    switch (Kind) {
    case DeclConstraint::Concept: {
-      auto *E = cast<IdentifierRefExpr>(Record.readExpr());
-      return DeclConstraint::Create(Reader.getContext(), SR, NameQual, E);
+      auto *Concept = Record.readDeclAs<AliasDecl>();
+      return DeclConstraint::Create(Reader.getContext(), constrainedType, Concept);
    }
    case DeclConstraint::TypeEquality:
    case DeclConstraint::TypeInequality:
    case DeclConstraint::TypePredicate:
    case DeclConstraint::TypePredicateNegated: {
-      auto Ty = Record.readSourceType();
-      return DeclConstraint::Create(Reader.getContext(), Kind, SR, NameQual,
-                                    Ty);
+      QualType Ty = Record.readType();
+      return DeclConstraint::Create(Reader.getContext(), Kind, constrainedType, Ty);
    }
    default:
-      return DeclConstraint::Create(Reader.getContext(), Kind, SR, NameQual);
+      return DeclConstraint::Create(Reader.getContext(), Kind, constrainedType, QualType());
    }
 }
 
@@ -193,18 +185,16 @@ void ASTDeclReader::visitNamedDecl(NamedDecl *ND)
    ND->setAccessLoc(ReadSourceLocation());
    ND->setName(Record.readDeclarationName());
 
-   SmallVector<StaticExpr*, 4> Constraints;
-   auto NumConstraints = Record.readInt();
-
-   while (NumConstraints--)
-      Constraints.push_back(cast<StaticExpr>(Record.readExpr()));
-
-   if (!Constraints.empty())
-      Reader.getContext().setConstraints(ND, Constraints);
-
    auto NumDeclConstraints = Record.readInt();
-   while (NumDeclConstraints--)
-      Reader.getContext().addConstraint(ND, ReadDeclConstraint());
+   if (NumDeclConstraints > 0) {
+      std::vector<DeclConstraint *> declConstraints((NumDeclConstraints));
+      while (NumDeclConstraints--) {
+         declConstraints.push_back(ReadDeclConstraint());
+      }
+
+      auto *CS = ConstraintSet::Create(Reader.getContext(), declConstraints);
+      Reader.getContext().setConstraints(ND, CS);
+   }
 
    SmallVector<Attr*, 4> Attrs;
    bool FoundInterestingAttr;
@@ -332,12 +322,11 @@ void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    visitNamedDecl(D);
 
    D->setSourceLoc(ReadSourceLocation());
-   D->setProtocolSpecifier(Record.getIdentifierInfo());
-   D->setActualType(Record.readSourceType());
+   D->setDefaultType(Record.readSourceType());
 
    D->setCovariance(Record.readSourceType());
    D->setProto(Record.readDeclAs<ProtocolDecl>());
-   D->setImplementation(Record.readBool());
+   D->setSelf(Record.readBool());
 
    D->setProtocolDefaultImpl(Record.readDeclAs<AssociatedTypeDecl>());
 
@@ -787,6 +776,7 @@ void ASTDeclReader::visitLocalVarDecl(LocalVarDecl *D)
    D->setIsNRVOCandidate((flags & 0x1) != 0);
    D->setInitIsMove((flags & 0x2) != 0);
    D->setVariadicForDecl((flags & 0x4) != 0);
+   D->setIsBorrow((flags & 0x8) != 0);
 }
 
 void ASTDeclReader::visitGlobalVarDecl(GlobalVarDecl *D)
@@ -989,8 +979,9 @@ void ASTDeclReader::visitProtocolDecl(ProtocolDecl *D)
    visitRecordDecl(D);
 
    uint64_t Flags = Record.readInt();
-   D->setIsAny((Flags & 1) != 0);
-   D->setHasAssociatedTypeConstraint((Flags & 2) != 0);
+   D->setIsAny((Flags & 0x1) != 0);
+   D->setHasAssociatedTypeConstraint((Flags & 0x2) != 0);
+   D->setHasStaticRequirements((Flags & 0x4) != 0);
 }
 
 void ASTDeclUpdateVisitor::visitProtocolDecl(ProtocolDecl *D)
@@ -1657,15 +1648,14 @@ void ASTReader::finalizeUnfinishedDecls()
                if (!Req)
                   continue;
 
-               // FIXME
-//               auto InnerNumImpls = Record[Idx++];
-//               while (InnerNumImpls) {
+               auto InnerNumImpls = Record[Idx++];
+               while (InnerNumImpls--) {
                   auto *Impl = cast_or_null<NamedDecl>(GetDecl(Record[Idx++]));
                   if (!Impl)
                      continue;
 
                   Context.addProtocolDefaultImpl(P, Req, Impl);
-//               }
+               }
             }
          }
 

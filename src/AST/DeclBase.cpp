@@ -136,8 +136,8 @@ void Decl::setLexicalContextUnchecked(DeclContext *Ctx)
 NamedDecl* Decl::getInstantiationScope() const
 {
    DeclContext const* ctx;
-   if (isa<DeclContext>(this)) {
-      ctx = cast<DeclContext>(this);
+   if (isa<DeclContext>()) {
+      ctx = cast<DeclContext>();
    }
    else {
       ctx = getDeclContext();
@@ -145,8 +145,8 @@ NamedDecl* Decl::getInstantiationScope() const
 
    while (ctx) {
       ctx = ctx->lookThroughExtension();
-      if (isa<NamedDecl>(ctx) && cast<NamedDecl>(ctx)->isInstantiation())
-         return cast<NamedDecl>(const_cast<DeclContext*>(ctx));
+      if (support::isa<NamedDecl>(ctx) && support::cast<NamedDecl>(ctx)->isInstantiation())
+         return support::cast<NamedDecl>(const_cast<DeclContext*>(ctx));
 
       ctx = ctx->getParentCtx();
    }
@@ -157,8 +157,8 @@ NamedDecl* Decl::getInstantiationScope() const
 NamedDecl* Decl::getProtocolDefaultImplScope() const
 {
    DeclContext const* ctx;
-   if (isa<DeclContext>(this)) {
-      ctx = cast<DeclContext>(this);
+   if (isa<DeclContext>()) {
+      ctx = cast<DeclContext>();
    }
    else {
       ctx = getDeclContext();
@@ -167,9 +167,9 @@ NamedDecl* Decl::getProtocolDefaultImplScope() const
    while (ctx) {
       ctx = ctx->lookThroughExtension();
 
-      if (isa<NamedDecl>(ctx)
-            && cast<NamedDecl>(ctx)->instantiatedFromProtocolDefaultImpl())
-         return cast<NamedDecl>(const_cast<DeclContext*>(ctx));
+      if (support::isa<NamedDecl>(ctx)
+            && support::cast<NamedDecl>(ctx)->instantiatedFromProtocolDefaultImpl())
+         return support::cast<NamedDecl>(const_cast<DeclContext*>(ctx));
 
       ctx = ctx->getParentCtx();
    }
@@ -195,19 +195,19 @@ SourceRange Decl::getSourceRange() const
 ASTContext& Decl::getASTCtx() const
 {
    DeclContext const* ctx;
-   if (isa<DeclContext>(this)) {
-      ctx = cast<DeclContext>(this);
+   if (support::isa<DeclContext>(this)) {
+      ctx = support::cast<DeclContext>(this);
    }
    else {
       ctx = getDeclContext();
    }
 
-   while (!isa<GlobalDeclContext>(ctx)) {
+   while (!support::isa<GlobalDeclContext>(ctx)) {
       ctx = ctx->getParentCtx();
       assert(ctx && "decl without a translation unit!");
    }
 
-   return cast<GlobalDeclContext>(ctx)->getCompilerInstance().getContext();
+   return support::cast<GlobalDeclContext>(ctx)->getCompilerInstance().getContext();
 }
 
 bool Decl::hasTrailingObjects() const
@@ -281,7 +281,7 @@ void Decl::setIsInvalid(bool error)
 bool Decl::isInExtension() const
 {
    auto Ctx = getNonTransparentDeclContext();
-   return isa<ExtensionDecl>(Ctx);
+   return support::isa<ExtensionDecl>(Ctx);
 }
 
 DeclContext* Decl::castToDeclContext(const Decl *D)
@@ -312,19 +312,19 @@ Decl* Decl::castFromDeclContext(const DeclContext *Ctx)
 
 RecordDecl* Decl::getRecord() const
 {
-   return dyn_cast<RecordDecl>(
+   return support::dyn_cast<RecordDecl>(
       getNonTransparentDeclContext()->lookThroughExtension());
 }
 
 ModuleDecl* Decl::getModule() const
 {
-   DeclContext *Ctx = dyn_cast<DeclContext>(const_cast<Decl*>(this));
+   DeclContext *Ctx = support::dyn_cast<DeclContext>(const_cast<Decl*>(this));
    if (!Ctx) {
       Ctx = getDeclContext();
    }
 
    for (; Ctx; Ctx = Ctx->getParentCtx())
-      if (auto Mod = dyn_cast<ModuleDecl>(Ctx))
+      if (auto Mod = support::dyn_cast<ModuleDecl>(Ctx))
          return Mod;
 
    llvm_unreachable("Decl without a module!");
@@ -342,8 +342,8 @@ bool Decl::inAnonymousNamespace() const
 bool Decl::inStdNamespace() const
 {
    for (auto ctx = getDeclContext(); ctx; ctx = ctx->getParentCtx())
-      if (auto NS = dyn_cast<NamespaceDecl>(ctx))
-         if (NS->getName() == "std" && isa<ModuleDecl>(NS->getParentCtx()))
+      if (auto NS = support::dyn_cast<NamespaceDecl>(ctx))
+         if (NS->getName() == "std" && support::isa<ModuleDecl>(NS->getParentCtx()))
             return true;
 
    return false;
@@ -351,12 +351,12 @@ bool Decl::inStdNamespace() const
 
 bool Decl::isGlobalDecl() const
 {
-   return isa<ModuleDecl>(getDeclContext());
+   return support::isa<ModuleDecl>(getDeclContext());
 }
 
 void Decl::dumpName() const
 {
-   if (auto ND = dyn_cast<NamedDecl>(this))
+   if (auto ND = support::dyn_cast<NamedDecl>(this))
       return ND->dumpName();
 
    llvm::outs() << "<unnamed decl>" << "\n";
@@ -381,7 +381,7 @@ void Decl::dumpSourceLine()
 
 std::string Decl::getNameAsString() const
 {
-   if (auto ND = dyn_cast<NamedDecl>(this))
+   if (auto ND = support::dyn_cast<NamedDecl>(this))
       return ND->getFullName();
 
    return "<unnamed decl>";
@@ -397,15 +397,20 @@ std::string Decl::getSourceLocAsString() const
    return getASTCtx().CI.getFileMgr().getSourceLocationAsString(getSourceLoc());
 }
 
+FullSourceLoc Decl::getFullSourceLoc() const
+{
+   return getASTCtx().CI.getFileMgr().getFullSourceLoc(getSourceLoc());
+}
+
 NamedDecl::NamedDecl(DeclKind typeID,
                      AccessSpecifier access,
                      DeclarationName DN)
    : Decl(typeID), access(access), Name(DN)
 {}
 
-llvm::ArrayRef<StaticExpr*> NamedDecl::getConstraints() const
+ConstraintSet *NamedDecl::getConstraints() const
 {
-   return getASTCtx().getConstraints(this);
+   return getASTCtx().getExtConstraints(this);
 }
 
 bool NamedDecl::isExported() const
@@ -419,38 +424,39 @@ bool NamedDecl::isExported() const
    return true;
 }
 
-std::string NamedDecl::getJoinedName(char join, bool includeFile) const
+std::string
+NamedDecl::getJoinedName(char join, bool includeFile, bool includeSignatures) const
 {
    std::string joinedName;
    llvm::raw_string_ostream OS(joinedName);
 
    auto *Ctx = getNonTransparentDeclContext()->lookThroughExtension();
-   if (isa<NamedDecl>(Ctx)) {
-      OS << cast<NamedDecl>(Ctx)->getJoinedName(join, includeFile);
+   if (support::isa<NamedDecl>(Ctx)) {
+      OS << support::cast<NamedDecl>(Ctx)->getJoinedName(join, includeFile);
       OS << join;
    }
 
-   if (auto *E = dyn_cast<ExtensionDecl>(this); E && E->getExtendedRecord()) {
+   if (auto *E = support::dyn_cast<ExtensionDecl>(this); E && E->getExtendedRecord()) {
       joinedName += "extension ";
       OS << E->getExtendedRecord()->getDeclName();
    }
-   else if (isa<ImportDecl>(this)) {
+   else if (support::isa<ImportDecl>(this)) {
       OS << "<import>";
    }
    else {
       OS << Name;
    }
 
-   auto *C = dyn_cast<CallableDecl>(this);
-   if (!C && isa<SubscriptDecl>(this)) {
-      auto *S = dyn_cast<SubscriptDecl>(this);
+   auto *C = support::dyn_cast<CallableDecl>(this);
+   if (!C && support::isa<SubscriptDecl>(this)) {
+      auto *S = support::dyn_cast<SubscriptDecl>(this);
       C = S->getGetterMethod();
 
       if (!C)
          C = S->getSetterMethod();
    }
 
-   if (C) {
+   if (C && includeSignatures) {
       unsigned i = 0;
       OS << "(";
 
@@ -567,7 +573,7 @@ bool NamedDecl::inDependentContext() const
       return true;
 
    for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+      if (auto ND = support::dyn_cast<NamedDecl>(Ctx)) {
          if (ND->isUnboundedTemplate())
             return true;
       }
@@ -582,11 +588,11 @@ bool NamedDecl::isTemplateOrInTemplate() const
       return true;
 
    for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+      if (auto ND = support::dyn_cast<NamedDecl>(Ctx)) {
          if (ND->isTemplate())
             return true;
 
-         if (auto Ext = dyn_cast<ExtensionDecl>(ND))
+         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND))
             if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
                return true;
       }
@@ -601,11 +607,11 @@ bool NamedDecl::isInUnboundedTemplate() const
       return true;
 
    for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
-      if (auto ND = dyn_cast<NamedDecl>(Ctx)) {
+      if (auto ND = support::dyn_cast<NamedDecl>(Ctx)) {
          if (ND->isUnboundedTemplate())
             return true;
 
-         if (auto Ext = dyn_cast<ExtensionDecl>(ND))
+         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND))
             if (Ext->getExtendedRecord()->isInUnboundedTemplate())
                return true;
       }
@@ -618,21 +624,21 @@ llvm::ArrayRef<TemplateParamDecl*> NamedDecl::getTemplateParams() const
 {
    switch (kind) {
    case AliasDeclID:
-      return cast<AliasDecl>(this)->getTemplateParams();
+      return support::cast<AliasDecl>(this)->getTemplateParams();
    case TypedefDeclID:
-      return cast<TypedefDecl>(this)->getTemplateParams();
+      return support::cast<TypedefDecl>(this)->getTemplateParams();
    case StructDeclID:
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
    case ProtocolDeclID:
-      return cast<RecordDecl>(this)->getTemplateParams();
+      return support::cast<RecordDecl>(this)->getTemplateParams();
    case FunctionDeclID:
    case MethodDeclID:
    case InitDeclID:
    case DeinitDeclID:
    case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getTemplateParams();
+      return support::cast<CallableDecl>(this)->getTemplateParams();
    default:
       return {};
    }
@@ -642,19 +648,19 @@ sema::FinalTemplateArgumentList& NamedDecl::getTemplateArgs() const
 {
    switch (kind) {
    case AliasDeclID:
-      return cast<AliasDecl>(this)->getTemplateArgs();
+      return support::cast<AliasDecl>(this)->getTemplateArgs();
    case StructDeclID:
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
    case ProtocolDeclID:
-      return cast<RecordDecl>(this)->getTemplateArgs();
+      return support::cast<RecordDecl>(this)->getTemplateArgs();
    case FunctionDeclID:
    case MethodDeclID:
    case InitDeclID:
    case DeinitDeclID:
    case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getTemplateArgs();
+      return support::cast<CallableDecl>(this)->getTemplateArgs();
    default:
       llvm_unreachable("not a template instantiation!");
    }
@@ -672,19 +678,19 @@ NamedDecl* NamedDecl::getSpecializedTemplate() const
 {
    switch (kind) {
    case AliasDeclID:
-      return cast<AliasDecl>(this)->getSpecializedTemplate();
+      return support::cast<AliasDecl>(this)->getSpecializedTemplate();
    case StructDeclID:
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
    case ProtocolDeclID:
-      return cast<RecordDecl>(this)->getSpecializedTemplate();
+      return support::cast<RecordDecl>(this)->getSpecializedTemplate();
    case FunctionDeclID:
    case MethodDeclID:
    case InitDeclID:
    case DeinitDeclID:
    case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getSpecializedTemplate();
+      return support::cast<CallableDecl>(this)->getSpecializedTemplate();
    default:
       return {};
    }
@@ -694,19 +700,19 @@ SourceLocation NamedDecl::getInstantiatedFrom() const
 {
    switch (kind) {
    case AliasDeclID:
-      return cast<AliasDecl>(this)->getInstantiatedFrom();
+      return support::cast<AliasDecl>(this)->getInstantiatedFrom();
    case StructDeclID:
    case ClassDeclID:
    case EnumDeclID:
    case UnionDeclID:
    case ProtocolDeclID:
-      return cast<RecordDecl>(this)->getInstantiatedFrom();
+      return support::cast<RecordDecl>(this)->getInstantiatedFrom();
    case FunctionDeclID:
    case MethodDeclID:
    case InitDeclID:
    case DeinitDeclID:
    case EnumCaseDeclID:
-      return cast<CallableDecl>(this)->getInstantiatedFrom();
+      return support::cast<CallableDecl>(this)->getInstantiatedFrom();
    default:
       return {};
    }
@@ -754,11 +760,13 @@ void DeclContext::addDecl(Decl *decl)
    assert(!decl->getNextDeclInContext());
 
    decl->setLexicalContext(this);
-   if (auto Ctx = support::dyn_cast<DeclContext>(decl))
+   if (auto Ctx = support::dyn_cast<DeclContext>(decl)) {
       Ctx->setParentCtx(this);
+   }
 
-   if (!firstDecl)
+   if (!firstDecl) {
       firstDecl = decl;
+   }
 
    if (lastAddedDecl) {
       assert(!lastAddedDecl->getNextDeclInContext());
@@ -811,7 +819,7 @@ DeclContext::AddDeclResultKind DeclContext::makeDeclAvailable(NamedDecl *decl)
 static bool shouldAddToOuterContext(DeclContext *This, NamedDecl *Decl)
 {
    // 'using' and 'import' declarations are private to the source file.
-   if (!isa<SourceFileDecl>(This)) {
+   if (!support::isa<SourceFileDecl>(This)) {
       return true;
    }
 
@@ -867,9 +875,9 @@ bool DeclContext::isTransparent() const
 {
    switch (declKind) {
    case Decl::NamespaceDeclID:
-      return cast<NamespaceDecl>(this)->isAnonymousNamespace();
+      return support::cast<NamespaceDecl>(this)->isAnonymousNamespace();
    case Decl::CompoundDeclID:
-      return cast<CompoundDecl>(this)->isTransparent();
+      return support::cast<CompoundDecl>(this)->isTransparent();
    case Decl::SourceFileDeclID:
       return true;
    default:
@@ -879,7 +887,7 @@ bool DeclContext::isTransparent() const
 
 bool DeclContext::isAnonymousNamespace() const
 {
-   auto NS = dyn_cast<NamespaceDecl>(this);
+   auto NS = support::dyn_cast<NamespaceDecl>(this);
    return NS && NS->isAnonymousNamespace();
 }
 
@@ -897,7 +905,7 @@ void DeclContext::setParentCtxUnchecked(cdot::ast::DeclContext *parent)
 
 DeclContext* DeclContext::lookThroughExtension() const
 {
-   if (auto *Ext = dyn_cast<ExtensionDecl>(this)) {
+   if (auto *Ext = support::dyn_cast<ExtensionDecl>(this)) {
       auto *R = Ext->getExtendedRecord();
       if (R)
          return R;
@@ -908,7 +916,7 @@ DeclContext* DeclContext::lookThroughExtension() const
 
 bool DeclContext::isLocalContext() const
 {
-   return isa<CallableDecl>(this);
+   return support::isa<CallableDecl>(this);
 }
 
 bool DeclContext::inLocalContext() const
@@ -964,12 +972,12 @@ void DeclContext::addImportedModule(Module *Mod)
 ASTContext& DeclContext::getDeclASTContext() const
 {
    DeclContext const* ctx = this;
-   while (!isa<GlobalDeclContext>(ctx)) {
+   while (!support::isa<GlobalDeclContext>(ctx)) {
       ctx = ctx->getParentCtx();
       assert(ctx && "decl without a translation unit!");
    }
 
-   return cast<GlobalDeclContext>(ctx)->getCompilerInstance().getContext();
+   return support::cast<GlobalDeclContext>(ctx)->getCompilerInstance().getContext();
 }
 
 void DeclContext::removeVisibleDecl(NamedDecl *D)
@@ -1027,25 +1035,25 @@ void DeclContext::replaceDecl(Decl *Orig, Decl *Rep)
 ModuleDecl *DeclContext::getDeclModule() const
 {
    auto current = const_cast<DeclContext*>(this);
-   while (!isa<ModuleDecl>(current)) {
+   while (!support::isa<ModuleDecl>(current)) {
       current = current->getParentCtx();
       assert(current && "no module!");
    }
 
-   return cast<ModuleDecl>(current);
+   return support::cast<ModuleDecl>(current);
 }
 
 NamespaceDecl* DeclContext::getClosestNamespace() const
 {
    auto current = const_cast<DeclContext*>(this);
-   while (current && !isa<NamespaceDecl>(current)) {
+   while (current && !support::isa<NamespaceDecl>(current)) {
       current = current->getParentCtx();
    }
 
    if (!current)
       return nullptr;
 
-   return cast<NamespaceDecl>(current);
+   return support::cast<NamespaceDecl>(current);
 }
 
 bool DeclContext::isGlobalDeclContext() const
@@ -1068,7 +1076,7 @@ bool DeclContext::isGlobalDeclContext() const
 
 void DeclContext::dumpName() const
 {
-   if (auto ND = dyn_cast<NamedDecl>(this))
+   if (auto ND = support::dyn_cast<NamedDecl>(this))
       return ND->dumpName();
 
    llvm::outs() << "<unnamed decl>" << "\n";
@@ -1076,7 +1084,7 @@ void DeclContext::dumpName() const
 
 void DeclContext::dumpSourceLine()
 {
-   if (auto ND = dyn_cast<NamedDecl>(this)) {
+   if (auto ND = support::dyn_cast<NamedDecl>(this)) {
       return ND->dumpSourceLine();
    }
 
@@ -1085,7 +1093,7 @@ void DeclContext::dumpSourceLine()
 
 std::string DeclContext::getNameAsString() const
 {
-   if (auto ND = dyn_cast<NamedDecl>(this))
+   if (auto ND = support::dyn_cast<NamedDecl>(this))
       return ND->getFullName();
 
    return "<unnamed decl context>";

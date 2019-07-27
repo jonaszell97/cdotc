@@ -60,7 +60,7 @@ public:
 
    struct PrecedenceResult {
       PrecedenceResult(DeclarationName OpName = DeclarationName(),
-                       SourceLocation OpLoc = SourceLocation(),
+                       SourceRange OpLoc = SourceRange(),
                        PrecedenceGroupDecl *PG = nullptr)
          : PG(PG), OpName(OpName), OpLoc(OpLoc)
       {}
@@ -72,7 +72,7 @@ public:
 
       PrecedenceGroupDecl *PG;
       DeclarationName OpName;
-      SourceLocation OpLoc;
+      SourceRange OpLoc;
       op::OperatorKind OpKind = op::UnknownOp;
    };
 
@@ -193,8 +193,10 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
                break;
             }
 
-            Target = new(SP.Context) IdentifierRefExpr(current().getLoc(), Op);
+            SourceLocation Loc = current().getLoc();
+            SourceRange SR(Loc, Loc.offsetBy(Op->getLength()));
 
+            Target = new(SP.Context) IdentifierRefExpr(SR, Op);
             break;
          }
          case SequenceElement::EF_Operator: {
@@ -257,12 +259,15 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
          Target = AddrOfExpr::Create(SP.Context, current().getLoc(), Target);
       }
       else {
-         SourceRange Loc = current().getLoc();
+         SourceLocation Loc = current().getLoc();
          DeclarationName DN = SP.Context.getDeclNameTable()
                                 .getPrefixOperatorName(*OpName);
 
-         auto *Ident = new(SP.Context) IdentifierRefExpr(Loc, Target, DN);
-         Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, {}, {});
+         SourceRange SR(Loc, Loc.offsetBy(OpName->getLength()));
+         auto *Ident = new(SP.Context) IdentifierRefExpr(SR, Target, DN);
+
+         SR = SourceRange(Loc, Target->getSourceRange().getEnd());
+         Target = AnonymousCallExpr::Create(SP.Context, SR, Ident, {}, {});
       }
    }
 
@@ -299,12 +304,15 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
                break;
             }
 
-            SourceRange Loc = Next.getLoc();
+            SourceLocation Loc = Next.getLoc();
             DeclarationName DN = SP.Context.getDeclNameTable()
                                    .getPostfixOperatorName(*OpName);
 
-            auto *Ident = new(SP.Context) IdentifierRefExpr(Loc, Target, DN);
-            Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, {}, {});
+            SourceRange SR(Loc, Loc.offsetBy(OpName->getLength()));
+            auto *Ident = new(SP.Context) IdentifierRefExpr(SR, Target, DN);
+
+            SR = SourceRange(Target->getSourceLoc(), SR.getEnd());
+            Target = AnonymousCallExpr::Create(SP.Context, SR, Ident, {}, {});
 
             advance();
             break;
@@ -334,9 +342,11 @@ ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
          auto *II = &SP.getContext().getIdentifiers().get(Next.asString());
          auto OpName = DeclNames.getInfixOperatorName(*II);
 
-         PrecedenceResult Result(OpName, Next.getLoc(), nullptr);
-         Result.OpKind = Next.getOperatorKind();
+         int length = Next.getOperatorKind() == op::As ? 2 : 3;
+         PrecedenceResult Result(OpName, SourceRange(
+            Next.getLoc(), Next.getLoc().offsetBy(length - 1)), nullptr);
 
+         Result.OpKind = Next.getOperatorKind();
          if (SP.QC.FindPrecedenceGroup(Result.PG,
                                        SP.getIdentifier("CastingPrecedence"))) {
             llvm_unreachable("no 'CastingPrecedence' decl!");
@@ -359,12 +369,13 @@ ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
 
    OperatorDecl *Decl;
    PrecedenceResult Res;
+   SourceRange SR(Next.getLoc(), Next.getLoc().offsetBy(OpStr.size() - 1));
 
    if (SP.QC.FindOperator(Decl, OpDeclName, false) || !Decl) {
-      Res = PrecedenceResult(OpName, Next.getLoc());
+      Res = PrecedenceResult(OpName, SR);
    }
    else {
-      Res = PrecedenceResult(OpName, Next.getLoc(), Decl->getPrecedenceGroup());
+      Res = PrecedenceResult(OpName, SR, Decl->getPrecedenceGroup());
    }
 
    Res.OpKind = OpKind;
@@ -385,7 +396,7 @@ static CastStrength getCastStrength(op::OperatorKind Kind)
 Expression* ExprResolverImpl::buildCastExpr(PrecedenceResult &Res,
                                             Expression *LHS,
                                             Expression *RHS) {
-   return CastExpr::Create(SP.getContext(), Res.OpLoc,
+   return CastExpr::Create(SP.getContext(), Res.OpLoc.getStart(),
                            getCastStrength(Res.OpKind),
                            LHS, SourceType(RHS));
 }
@@ -412,13 +423,13 @@ Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
       return buildCastExpr(Res, LHS, RHS);
    }
    case op::Assign: {
-      return AssignExpr::Create(SP.getContext(), Res.OpLoc, LHS, RHS);
+      return AssignExpr::Create(SP.getContext(), Res.OpLoc.getStart(), LHS, RHS);
    }
    default: {
-      auto *Ident = new(SP.Context) IdentifierRefExpr(Res.OpLoc, LHS,
-                                                      Res.OpName);
+      auto *Ident = new(SP.Context) IdentifierRefExpr(Res.OpLoc, LHS, Res.OpName);
 
-      return AnonymousCallExpr::Create(SP.Context, Res.OpLoc, Ident, {RHS},
+      SourceRange SR(LHS->getSourceLoc(), RHS->getSourceRange().getEnd());
+      return AnonymousCallExpr::Create(SP.Context, SR, Ident, {RHS},
                                        {});
    }
    }
@@ -441,7 +452,7 @@ ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
       return PrecedenceResult();
    case PrecedenceGroupDecl::Equal: {
       if (!HigherOrEqual) {
-         return PrecedenceResult(NextPrec.OpName);
+         return PrecedenceResult(NextPrec.OpName, NextPrec.OpLoc);
       }
 
       LLVM_FALLTHROUGH;
@@ -449,7 +460,7 @@ ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
    case PrecedenceGroupDecl::Higher:
       return NextPrec;
    case PrecedenceGroupDecl::Lower:
-      return PrecedenceResult(NextPrec.OpName);
+      return PrecedenceResult(NextPrec.OpName, NextPrec.OpLoc);
    }
 }
 

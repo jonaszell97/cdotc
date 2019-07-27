@@ -2,12 +2,14 @@
 #include "Module.h"
 
 #include "AST/ASTContext.h"
+#include "AST/DeclBase.h"
 
 using namespace cdot;
 using namespace cdot::ast;
 
 Module::Module(IdentifierInfo *Name, SourceRange Loc, Module *ParentModule)
-   : Name(Name), Loc(Loc), ParentModule(ParentModule)
+   : Name(Name), Loc(Loc), DefaultAccess(AccessSpecifier::Public),
+     ParentModule(ParentModule)
 {
    if (ParentModule) {
       ParentModule->SubModules.push_back(this);
@@ -21,7 +23,8 @@ Module::Module(IdentifierInfo *ModulePath,
                IdentifierInfo *Name,
                SourceRange Loc,
                Module *ParentModule)
-   : Name(Name), Loc(Loc), ModulePath(ModulePath), ParentModule(ParentModule),
+   : Name(Name), Loc(Loc),  DefaultAccess(AccessSpecifier::Public),
+     ModulePath(ModulePath), ParentModule(ParentModule),
      ImportedFrom(ImportedFrom)
 {
    if (ParentModule) {

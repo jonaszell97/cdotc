@@ -1182,16 +1182,6 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl *C)
       }
    }
 
-   // Add Generic environment argument for generic functions.
-//   if ((!args.empty() || isa<FunctionDecl>(C)) && C->isTemplateOrInTemplate()) {
-//      QualType Ty = Context.getRecordType(SP.getGenericEnvironmentDecl());
-//      il::Argument *Env = Builder.CreateArgument(Ty);
-//      Env->setGenericEnvironment(true);
-//      Env->setSourceLoc(C->getSourceLoc());
-//
-//      args.push_back(Env);
-//   }
-
    for (const auto &arg : C->getArgs()) {
       if (arg->isSelf() && C->isFallibleInit()) {
          addDeclValuePair(arg, args.front());
@@ -1205,14 +1195,6 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl *C)
             argType = SP.getContext().getLambdaType(argType, { });
          }
 
-         if (arg->getConvention() == ArgumentConvention::MutableRef
-             && !argType->isMutableBorrowType()) {
-            argType = SP.getContext().getMutableBorrowType(argType);
-         }
-         else if (arg->getConvention() == ArgumentConvention::ImmutableRef) {
-            argType = SP.getContext().getReferenceType(argType);
-         }
-
          auto A = Builder.CreateArgument(argType, arg->getConvention());
          A->setSourceLoc(arg->getSourceLoc());
          A->setSelf(arg->isSelf());
@@ -1220,18 +1202,6 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl *C)
          args.push_back(A);
          addDeclValuePair(arg, A);
       }
-
-//      if (arg->isSelf()) {
-//         // Add Generic environment argument for generic functions.
-//         if (C->isTemplateOrInTemplate()) {
-//            QualType Ty = SP.getGenericEnvironmentDecl()->getType();
-//            il::Argument *Env = Builder.CreateArgument(Ty);
-//            Env->setGenericEnvironment(true);
-//            Env->setSourceLoc(C->getSourceLoc());
-//
-//            args.push_back(Env);
-//         }
-//      }
    }
 
    std::string MangledName;
@@ -1384,18 +1354,11 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    // insert implicit call to the default initializer if necessary
    if (auto M = dyn_cast<il::Initializer>(func)) {
       if (cast<InitDecl>(CD)->isCompleteInitializer() && !CD->isFallibleInit()) {
-         if (auto S = cast<StructDecl>(M->getRecordType())) {
+         if (auto S = dyn_cast<StructDecl>(M->getRecordType())) {
             il::Value *Self = func->getEntryBlock()->getBlockArg(0);
 
-            il::CallInst *Call;
-            if (auto *Env = getCurrentGenericEnvironment()) {
-               Call = Builder.CreateCall(getFunc(S->getDefaultInitializer()),
-                                         {Self, Env});
-            }
-            else {
-               Call = Builder.CreateCall(getFunc(S->getDefaultInitializer()),
-                                         Self);
-            }
+            il::CallInst *Call = Builder.CreateCall(
+               getFunc(S->getDefaultInitializer()), Self);
 
             Call->setSynthesized(true);
          }
@@ -2157,7 +2120,6 @@ il::Value* ILGenPass::CreateCopy(il::Value *Val)
       case Type::MutablePointerTypeID:
       case Type::ReferenceTypeID:
       case Type::MutableReferenceTypeID:
-      case Type::MutableBorrowTypeID:
          return Val;
       case Type::TupleTypeID:
          if (Ty->isEmptyTupleType())
@@ -3034,7 +2996,7 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl *Decl)
    DeclarationName DN = Decl->getDeclName();
    QualType DeclTy = getSubstitution(Decl->getType());
 
-   if (Decl->getType()->isMutableBorrowType()) {
+   if (Decl->isBorrow()) {
       il::Value *Val;
       {
          ExprCleanupRAII EC(*this);
@@ -3654,10 +3616,8 @@ il::Value* ILGenPass::visitDeclRefExpr(DeclRefExpr *Expr)
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:
    case Decl::PropDeclID:
-      llvm_unreachable("should be a MemberRefExpr!");
    case Decl::EnumCaseDeclID:
-      return Builder.CreateEnumInit(cast<EnumDecl>(ND->getRecord()),
-                                    cast<EnumCaseDecl>(ND), {});
+      llvm_unreachable("should be a MemberRefExpr!");
    default:
       return getValueForDecl(Expr->getDecl());
    }
@@ -3735,6 +3695,9 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr *Expr)
 
       return V;
    }
+   case Decl::EnumCaseDeclID:
+      return Builder.CreateEnumInit(cast<EnumDecl>(ND->getRecord()),
+                                    cast<EnumCaseDecl>(ND), {});
    default:
       llvm_unreachable("bad member reference kind!");
    }
@@ -4250,7 +4213,13 @@ il::Value *ILGenPass::visitCallExpr(CallExpr *Expr,
    case CallKind::NamedFunctionCall:
    case CallKind::StaticMethodCall:
    case CallKind::CallOperator: {
-      V = CreateCall(CalledFn, args, Expr, Expr->isDirectCall(), GenericArgs);
+      if (auto *Case = dyn_cast<EnumCaseDecl>(CalledFn)) {
+         V = Builder.CreateEnumInit(cast<EnumDecl>(Case->getRecord()), Case, args);
+      }
+      else {
+         V = CreateCall(CalledFn, args, Expr, Expr->isDirectCall(), GenericArgs);
+      }
+
       break;
    }
    }
@@ -4398,7 +4367,7 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr *node)
    }
    case Builtin::addressOf: {
       auto *val = LookThroughLoad(args[0]);
-      if (!val->getType()->isMutableBorrowType()) {
+      if (!val->getType()->isMutableReferenceType()) {
          val =  Builder.CreateBitCast(
             CastKind::BitCast, val,
             SP.getContext().getReferenceType(val->getType()->getReferencedType()));
@@ -5021,15 +4990,13 @@ il::BasicBlock *ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
          Builder.SetDebugLoc(C.ExprData.Expr->getSourceLoc());
 
          auto *ExprVal = visit(C.ExprData.Expr);
-         if (ExprVal->getType()->isIntegerType()) {
-            NextConditionVal = ExprVal;
-            break;
-         }
-
          if (!C.ExprData.TruthValueFn) {
-            NextConditionVal =
-               Builder.CreateLoad(Builder.CreateStructGEP(ExprVal, 0, true));
+            if (!ExprVal->getType()->isInt1Ty()) {
+               ExprVal = Builder.CreateLoad(
+                  Builder.CreateStructGEP(ExprVal, 0, true));
+            }
 
+            NextConditionVal = ExprVal;
             break;
          }
 
@@ -5043,19 +5010,33 @@ il::BasicBlock *ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
       }
       case IfCondition::Binding: {
          auto *VarDecl = C.BindingData.Decl;
+         if (!VarDecl) {
+            NextConditionVal = Builder.GetTrue();
+            break;
+         }
+
          Builder.SetDebugLoc(VarDecl->getSourceLoc());
 
-         visit(VarDecl);
+         auto CondVal = visit(VarDecl->getValue());
+         if (!C.BindingData.TryUnwrapFn->hasMutableSelf()) {
+            CondVal = Builder.CreateLoad(CondVal);
+         }
+         else if (!CondVal->getType()->isMutableReferenceType()) {
+            auto *Alloc = Builder.CreateAlloca(CondVal->getType());
+            Builder.CreateStore(CondVal, Alloc);
 
-         auto CondExpr = Builder.CreateLoad(getValueForDecl(VarDecl));
-         auto *Opt = CreateCall(C.BindingData.TryUnwrapFn, CondExpr,
+            CondVal = Alloc;
+         }
+
+         auto *Opt = CreateCall(C.BindingData.TryUnwrapFn, CondVal,
                                 VarDecl->getValue());
 
          QualType OptTy = Opt->getType();
-         auto *hasValueFn = SP.QC.LookupSingleAs<MethodDecl>(
-            OptTy->getRecord(), SP.getIdentifier("hasValue"));
+         NextConditionVal = CreateCall(C.BindingData.HasValueFn, Opt,
+                                       VarDecl->getValue());
 
-         NextConditionVal = CreateCall(hasValueFn, Opt, VarDecl->getValue());
+         NextConditionVal = Builder.CreateLoad(
+            Builder.CreateStructGEP(NextConditionVal, 0, true));
 
          InsertPointRAII IPR(*this, NextBB);
          auto *SomeCase = cast<EnumDecl>(OptTy->getRecord())->getSomeCase();
@@ -5392,6 +5373,11 @@ il::Value* ILGenPass::visitExpressionPattern(ExpressionPattern *node,
       Eq = CreateEqualityComp(MatchVal, Expr);
    }
 
+   if (!Eq->getType()->isInt1Ty()) {
+      Eq = Builder.CreateStructGEP(Eq, 0);
+      Eq = Builder.CreateLoad(Eq);
+   }
+
    return Builder.CreateCondBr(Eq, MatchBB, NoMatchBB, MatchArgs, NoMatchArgs);
 }
 
@@ -5432,19 +5418,21 @@ static void visitEnumPattern(ILGenPass &ILGen,
          break;
       }
       case IfCondition::Binding: {
-         // Bind the declaration to the case value.
-         auto *GivenVal = Builder.CreateEnumExtract(
-            MatchVal, Case, i, Arg.BindingData.Decl->isConst());
+         if (auto *Decl = Arg.BindingData.Decl) {
+            // Bind the declaration to the case value.
+            auto *GivenVal = Builder.CreateEnumExtract(
+               MatchVal, Case, i, Decl->isConst());
 
-         if (Builder.emitDebugInfo()) {
-            Builder.CreateDebugLocal(
-               Arg.BindingData.Decl->getDeclName().getIdentifierInfo(),
-               GivenVal);
+            if (Builder.emitDebugInfo()) {
+               Builder.CreateDebugLocal(
+                  Decl->getDeclName().getIdentifierInfo(),
+                  GivenVal);
+            }
+
+            ILGen.addDeclValuePair(Decl, GivenVal);
          }
 
-         ILGen.addDeclValuePair(Arg.BindingData.Decl, GivenVal);
          Builder.CreateBr(NextCmpBB);
-
          break;
       }
       case IfCondition::Pattern: {
@@ -6593,7 +6581,6 @@ il::Value *ILGenPass::visitIfExpr(IfExpr *node)
       CS.popWithoutEmittingCleanups();
    }
 
-   // HACK
    auto *CondVal = cast<BrInst>(FirstBB->getTerminator())->getCondition();
    Cleanups.pushCleanup<ConditionalCleanup>(CondVal, Val, EmitOnTrue,
                                             EmitOnFalse);
@@ -6674,8 +6661,8 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value *lhs, il::Value *rhs)
       SP.getContext().getUIntTy(),
       getTargetInfo().getSizeOfType(lhs->getType()));
 
-   auto MemCmp = Builder.CreateIntrinsicCall(Intrinsic::memcmp,
-                                             { lhs, rhs, size });
+   auto MemCmp = Builder.CreateIntrinsicCall(
+      Intrinsic::memcmp, { LookThroughLoad(lhs), LookThroughLoad(rhs), size });
 
    return Builder.CreateIsZero(MemCmp);
 }

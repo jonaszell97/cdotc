@@ -265,9 +265,6 @@ void PrettyPrinterImpl::visitAliasDecl(AliasDecl* stmt)
    WriteList(stmt->getTemplateParams(),
              &PrettyPrinterImpl::visitTemplateParamDecl, "[", ", ", "]", true);
 
-   WriteList(stmt->getConstraints(), &PrettyPrinterImpl::visitExpr,
-             "", " ", "");
-
    out << " = ";
    visitExpr(stmt->getAliasExpr());
 }

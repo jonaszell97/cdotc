@@ -128,6 +128,77 @@ static bool diagnoseConversionFailure(ConstraintSystem &Sys,
    return true;
 }
 
+static bool diagnoseCovarianceFailure(ConstraintSystem &Sys,
+                                      CovarianceConstraint *C,
+                                      ConstraintSystem::SolutionBindings &Bindings,
+                                      OverloadCandidate *Cand) {
+   QualType BoundTy = Sys.getConcreteType(C->getConstrainedType());
+   QualType RHSTy = Sys.getConcreteType(C->getRHSType(), C->getConstrainedType());
+
+   SourceRange ExprLoc;
+   SourceRange TypeLoc;
+
+   if (auto *L = C->getLocator()) {
+      auto Elements = L->getPathElements();
+      if (!Elements.empty()
+          && Elements.back().getKind() == ConstraintLocator::ContextualType) {
+         TypeLoc = Elements.front().getSourceRange();
+      }
+   }
+
+   auto *Loc = C->getLocator();
+   auto Elements = Loc->getPathElements();
+
+   if (Elements.empty()
+   || Elements.back().getKind() != ConstraintLocator::TemplateParam) {
+      return false;
+   }
+
+   auto *param = Elements.back().getTemplateParamDecl();
+   (void) param;
+
+   if (Cand) {
+      FuncArgDecl *argDecl = nullptr;
+      for (auto *cs : Sys.getConstraintGraph().getActiveConstraints()) {
+         if (cs->getConstrainedType() != C->getConstrainedType()) {
+            continue;
+         }
+
+         auto *otherLoc = cs->getLocator();
+         auto otherElements = otherLoc->getPathElements();
+
+         if (otherElements.empty()
+         || otherElements.back().getKind() != ConstraintLocator::ParameterType) {
+            continue;
+         }
+
+         argDecl = otherElements.back().getParamDecl();
+         break;
+      }
+
+      if (!argDecl) {
+         return false;
+      }
+
+      unsigned Index = 0;
+      for (auto *Decl : cast<CallableDecl>(argDecl->getDeclContext())->getArgs()) {
+         if (Decl == argDecl) {
+            break;
+         }
+
+         ++Index;
+      }
+
+      Cand->setHasIncompatibleArgument(Index, BoundTy, RHSTy);
+   }
+   else {
+      Sys.QC.Sema->diagnose(err_no_implicit_conv, ExprLoc, TypeLoc,
+                            BoundTy, RHSTy);
+   }
+
+   return true;
+}
+
 static bool diagnoseMemberFailure(ConstraintSystem &Sys,
                                   MemberConstraint *C,
                                   OverloadCandidate *Cand) {
@@ -300,7 +371,7 @@ public:
 
    bool visitReferenceType(ReferenceType *LHS, QualType RHS)
    {
-      if (!RHS->isReferenceType()) {
+      if (RHS->getTypeID() != Type::ReferenceTypeID) {
          Sys.QC.Sema->diagnose(
             err_generic_error,
             "reference type expected", getSourceRange());
@@ -314,24 +385,10 @@ public:
 
    bool visitMutableReferenceType(MutableReferenceType *LHS, QualType RHS)
    {
-      if (!RHS->isMutableReferenceType()) {
+      if (RHS->getTypeID() != Type::MutableReferenceTypeID) {
          Sys.QC.Sema->diagnose(
             err_generic_error,
             "mutable reference type expected", getSourceRange());
-
-         diagnosedIssue = true;
-         return false;
-      }
-
-      return false;
-   }
-
-   bool visitMutableBorrowType(MutableBorrowType *LHS, QualType RHS)
-   {
-      if (!RHS->isMutableBorrowType()) {
-         Sys.QC.Sema->diagnose(
-            err_generic_error,
-            "mutable borrow type expected", getSourceRange());
 
          diagnosedIssue = true;
          return false;
@@ -432,8 +489,17 @@ static bool checkIncompleteInformation(ConstraintSystem &Sys,
 
 static bool diagnoseFailureImpl(ConstraintSystem &Sys,
                                 Constraint *FailedConstraint,
+                                ConstraintSystem::SolutionBindings &Bindings,
                                 OverloadCandidate *Cand = nullptr) {
    switch (FailedConstraint->getKind()) {
+   case Constraint::CovarianceID: {
+      auto *Cov = cast<CovarianceConstraint>(FailedConstraint);
+      if (diagnoseCovarianceFailure(Sys, Cov, Bindings, Cand)) {
+         return true;
+      }
+
+      break;
+   }
    case Constraint::ImplicitConversionID: {
       auto *Conv = cast<ImplicitConversionConstraint>(FailedConstraint);
       if (diagnoseConversionFailure(Sys, Conv, Cand)) {
@@ -478,7 +544,7 @@ static bool diagnoseFailureImpl(ConstraintSystem &Sys,
          case Constraint::MemberID:
          case Constraint::LiteralID:
          case Constraint::TypeEqualityID:
-            return diagnoseFailureImpl(Sys, C, Cand);
+            return diagnoseFailureImpl(Sys, C, Bindings, Cand);
          default:
             break;
          }
@@ -494,6 +560,7 @@ static bool diagnoseFailureImpl(ConstraintSystem &Sys,
 }
 
 static bool diagnoseFailureImpl(ConstraintSystem &Sys,
+                                ConstraintSystem::SolutionBindings &Bindings,
                                 OverloadCandidate *Cand = nullptr) {
    // Check if there was incomplete contextual information for a constraint.
    if (checkIncompleteInformation(Sys, Cand)) {
@@ -508,17 +575,18 @@ static bool diagnoseFailureImpl(ConstraintSystem &Sys,
       return false;
    }
 
-   return diagnoseFailureImpl(Sys, FailedConstraint, Cand);
+   return diagnoseFailureImpl(Sys, FailedConstraint, Bindings, Cand);
 }
 
-bool ConstraintSystem::diagnoseFailure()
+bool ConstraintSystem::diagnoseFailure(SolutionBindings &Bindings)
 {
-   return diagnoseFailureImpl(*this);
+   return diagnoseFailureImpl(*this, Bindings);
 }
 
-bool ConstraintSystem::diagnoseCandidateFailure(CandidateSet::Candidate &Cand)
+bool ConstraintSystem::diagnoseCandidateFailure(CandidateSet::Candidate &Cand,
+                                                SolutionBindings &Bindings)
 {
-   return diagnoseFailureImpl(*this, &Cand);
+   return diagnoseFailureImpl(*this, Bindings, &Cand);
 }
 
 bool diagnoseAmbiguousOverloadChoice(ConstraintSystem &Sys,

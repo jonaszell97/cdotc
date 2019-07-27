@@ -18,7 +18,9 @@ using namespace cdot::ast;
 using namespace cdot::diag;
 using namespace cdot::support;
 
-LookupOpts cdot::DefaultLookupOpts = LookupOpts::PrepareNameLookup;
+LookupOpts cdot::DefaultLookupOpts =
+   LookupOpts::PrepareNameLookup
+   | LookupOpts::LookInConformances;
 
 llvm::raw_ostream &cdot::operator<<(llvm::raw_ostream &OS, LookupOpts Opts)
 {

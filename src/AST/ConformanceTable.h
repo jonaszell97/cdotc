@@ -15,6 +15,8 @@
 namespace cdot {
 namespace ast {
    class ASTContext;
+   class ExtensionDecl;
+   class ConstraintSet;
 } // namespace ast
 
 enum class ConformanceKind : unsigned char {
@@ -40,13 +42,18 @@ class Conformance {
    ConformanceKind Kind;
    ast::ProtocolDecl *Proto;
 
+   // The constraints of this conformance (only for conditional conformances).
+   ast::ConstraintSet *constraints;
+
 public:
-   Conformance(ConformanceKind Kind, ast::ProtocolDecl *Proto)
-      : Kind(Kind), Proto(Proto)
+   Conformance(ConformanceKind Kind, ast::ProtocolDecl *Proto,
+               ast::ConstraintSet *constraints = nullptr)
+      : Kind(Kind), Proto(Proto), constraints(constraints)
    { }
 
    ConformanceKind getKind() const { return Kind; }
    ast::ProtocolDecl *getProto() const { return Proto; }
+   ast::ConstraintSet *getConstraints() const { return constraints; }
 
    bool isConditional() const { return Kind == ConformanceKind::Conditional; }
 };
@@ -84,7 +91,9 @@ public:
    bool addConformance(ast::ASTContext &C,
                        ConformanceKind Kind,
                        ast::RecordDecl *Decl,
-                       ast::ProtocolDecl *P);
+                       ast::ProtocolDecl *P,
+                       ast::ConstraintSet *constraints = nullptr,
+                       Conformance **NewConf = nullptr);
 
    bool addExplicitConformance(ast::ASTContext &C,
                                ast::RecordDecl *Decl,

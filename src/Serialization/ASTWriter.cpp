@@ -458,11 +458,6 @@ void ASTTypeWriter::visitMetaType(const MetaType *Ty)
    Record.AddTypeRef(Ty->getUnderlyingType());
 }
 
-void ASTTypeWriter::visitMutableBorrowType(const MutableBorrowType *Ty)
-{
-   Record.AddTypeRef(Ty->getReferencedType());
-}
-
 void ASTTypeWriter::visitMutablePointerType(const MutablePointerType *Ty)
 {
    Record.AddTypeRef(Ty->getPointeeType());

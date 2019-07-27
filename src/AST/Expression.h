@@ -69,7 +69,7 @@ public:
    }
 
    QualType getExprType() const { return exprType; }
-   void setExprType(QualType ty) { exprType = ty; }
+   void setExprType(QualType ty);
 
    bool isUnknownAny() const
    {
@@ -2001,6 +2001,8 @@ public:
 
    bool isCalled() const { return called; }
    void setCalled(bool b) { called = b; }
+
+   static bool needsMemberRefExpr(Decl::DeclKind K);
 };
 
 class OverloadedDeclRefExpr final: public Expression,

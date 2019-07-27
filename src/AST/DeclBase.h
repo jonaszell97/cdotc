@@ -49,6 +49,7 @@ class DeclContext;
 class ModuleDecl;
 class Statement;
 class NamedDecl;
+class ConstraintSet;
 
 class LLVM_ALIGNAS(sizeof(void*)) Decl {
 public:
@@ -404,9 +405,40 @@ public:
    void dumpSourceLine();
 
    std::string getNameAsString() const;
-
    std::string getSourceLocAsString() const;
    StringRef getFileName() const;
+
+   FullSourceLoc getFullSourceLoc() const;
+
+   template<class T>
+   bool isa() const
+   {
+      return support::isa<T>(this);
+   }
+
+   template<class T>
+   T *dyn_cast()
+   {
+      return support::dyn_cast<T>(this);
+   }
+
+   template<class T>
+   const T *dyn_cast() const
+   {
+      return support::dyn_cast<T>(this);
+   }
+
+   template<class T>
+   T *cast()
+   {
+      return support::cast<T>(this);
+   }
+
+   template<class T>
+   const T *cast() const
+   {
+      return support::dyn_cast<T>(this);
+   }
 
    static bool classofKind(DeclKind kind) { return kind != NotDecl; }
    static bool classof(const Decl *T) { return classofKind(T->getKind()); }
@@ -466,7 +498,7 @@ public:
    bool isOverloadable() const;
    bool isRedeclarable() const;
 
-   llvm::ArrayRef<StaticExpr*> getConstraints() const;
+   ConstraintSet *getConstraints() const;
 
    bool isTemplate() const;
    bool inDependentContext() const;
@@ -483,8 +515,13 @@ public:
    NamedDecl *getSpecializedTemplate() const;
    SourceLocation getInstantiatedFrom() const;
 
-   std::string getFullName() const { return getJoinedName('.'); }
-   std::string getJoinedName(char join, bool includeFile = false) const;
+   std::string getFullName(bool includeSignatures = false) const
+   {
+      return getJoinedName('.', includeSignatures);
+   }
+
+   std::string getJoinedName(char join, bool includeFile = false,
+                             bool includeSignatures = false) const;
 
    void dumpName() const;
 

@@ -109,7 +109,8 @@ public:
    /// Generate constraints for an expression.
    QualType visitExpr(ast::Expression *Expr,
                       ast::SourceType RequiredType = ast::SourceType(),
-                      ConstraintLocator *Locator = nullptr);
+                      ConstraintLocator *Locator = nullptr,
+                      bool isHardRequirement = true);
 
    /// Create a locator for an expression.
    Locator makeLocator(ast::Expression *E,
@@ -168,7 +169,8 @@ public:
    GenerationResult generateConstraints(ast::Expression *E,
                                         ast::SourceType RequiredType
                                           = ast::SourceType(),
-                                        ConstraintLocator *Locator = nullptr);
+                                        ConstraintLocator *Locator = nullptr,
+                                        bool isHardRequirement = true);
 
    /// Generate constraints for a function argument.
    [[nodiscard]]

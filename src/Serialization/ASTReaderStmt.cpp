@@ -892,12 +892,17 @@ IfCondition ASTStmtReader::ReadIfCondition()
    case IfCondition::Binding: {
       auto *D = Record.readDeclAs<LocalVarDecl>();
 
-      CallableDecl *Fn = nullptr;
+      CallableDecl *TryUnwrapFn = nullptr;
       if (Record.readBool()) {
-         Fn = Record.readDeclAs<CallableDecl>();
+         TryUnwrapFn = Record.readDeclAs<CallableDecl>();
       }
 
-      return IfCondition(D, Fn);
+      CallableDecl *HasValueFn = nullptr;
+      if (Record.readBool()) {
+         HasValueFn = Record.readDeclAs<CallableDecl>();
+      }
+
+      return IfCondition(D, TryUnwrapFn, HasValueFn);
    }
    case IfCondition::Pattern: {
       auto *Pat = cast<PatternExpr>(Record.readExpr());

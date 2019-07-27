@@ -6,6 +6,9 @@
 
 #include "AST/ASTContext.h"
 #include "AST/Decl.h"
+#include "Support/Log.h"
+
+#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::ast;
 
@@ -55,15 +58,35 @@ bool ConformanceTable::registerConformance(ast::ASTContext &C,
    return SingleOrMultiple.get<ConformanceSet*>()->insert(P).second;
 }
 
+static StringRef conformanceKindToString(ConformanceKind K)
+{
+   switch (K) {
+   case ConformanceKind::None: return "non-existant";
+   case ConformanceKind::Implicit: return "implicit";
+   case ConformanceKind::Explicit: return "explicit";
+   case ConformanceKind::Inherited: return "inherited";
+   case ConformanceKind::Conditional: return "conditional";
+   }
+}
+
 void ConformanceTable::insertConformance(RecordDecl *Rec, Conformance *Conf)
 {
    Conformances[Rec].push_back(Conf);
+
+   LOG(ProtocolConformances, "registered ",
+       conformanceKindToString(Conf->getKind()),
+       " conformance of ", Rec->getDeclName(), " to protocol ",
+       Conf->getProto()->getFullName(), Conf->isConditional() ? " (where " : "",
+       Conf->isConditional() ? *Conf->getConstraints() : *Rec->getASTCtx().EmptyConstraintSet,
+       Conf->isConditional() ? ")" : "");
 }
 
 bool ConformanceTable::addConformance(ASTContext &C,
                                       ConformanceKind Kind,
                                       RecordDecl *Decl,
-                                      ProtocolDecl *P) {
+                                      ProtocolDecl *P,
+                                      ast::ConstraintSet *constraints,
+                                      Conformance **NewConf) {
    assert(Kind != ConformanceKind::None && "invalid conformance kind!");
    if (Kind != ConformanceKind::Conditional) {
       if (!registerConformance(C, Decl, P)) {
@@ -71,8 +94,12 @@ bool ConformanceTable::addConformance(ASTContext &C,
       }
    }
 
-   Conformance *Conf = new (C) Conformance(Kind, P);
+   Conformance *Conf = new (C) Conformance(Kind, P, constraints);
    insertConformance(Decl, Conf);
+
+   if (NewConf) {
+      *NewConf = Conf;
+   }
 
    return true;
 }

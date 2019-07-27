@@ -203,17 +203,11 @@ void ASTDeclWriter::visitDecl(Decl *D)
 void ASTDeclWriter::WriteDeclConstraint(const DeclConstraint &C)
 {
    Record.push_back(C.getKind());
-   Record.AddSourceRange(C.getSourceRange());
-
-   auto NameQual = C.getNameQualifier();
-   Record.push_back(NameQual.size());
-
-   for (auto *II : NameQual)
-      Record.AddIdentifierRef(II);
+   Record.AddTypeRef(C.getConstrainedType());
 
    switch (C.getKind()) {
    case DeclConstraint::Concept:
-      Record.AddStmt(C.getConceptRefExpr());
+      Record.AddDeclRef(C.getConcept());
       break;
    case DeclConstraint::TypeEquality:
    case DeclConstraint::TypeInequality:
@@ -234,17 +228,12 @@ void ASTDeclWriter::visitNamedDecl(NamedDecl *D)
    Record.AddSourceLocation(D->getAccessLoc());
    Record.AddDeclarationName(D->getDeclName());
 
-   auto Constraints = D->getConstraints();
-   Record.push_back(Constraints.size());
-
-   for (auto C : Constraints)
-      Record.AddStmt(C);
-
    auto DeclConstraints = Context.getExtConstraints(D);
-   Record.push_back(DeclConstraints.size());
+   Record.push_back(DeclConstraints->size());
 
-   for (auto &C : DeclConstraints)
+   for (auto &C : *DeclConstraints) {
       WriteDeclConstraint(*C);
+   }
 
    auto Attrs = D->getAttributes();
    Record.AddAttributes(Attrs);
@@ -349,11 +338,10 @@ void ASTDeclWriter::visitAssociatedTypeDecl(AssociatedTypeDecl *D)
    visitNamedDecl(D);
 
    Record.AddSourceLocation(D->getSourceLoc());
-   Record.AddIdentifierRef(D->getProtoSpecInfo());
-   Record.AddTypeRef(D->getActualType());
+   Record.AddTypeRef(D->getDefaultType());
    Record.AddTypeRef(D->getCovariance());
    Record.AddDeclRef(D->getProto());
-   Record.push_back(D->isImplementation());
+   Record.push_back(D->isSelf());
 
    Record.AddDeclRef(D->getProtocolDefaultImpl());
 
@@ -721,6 +709,7 @@ void ASTDeclWriter::visitLocalVarDecl(LocalVarDecl *D)
    flags |= D->isNRVOCandidate();
    flags |= (D->isInitMove() << 1);
    flags |= (D->isVariadicForDecl() << 2);
+   flags |= (D->isBorrow() << 3);
 
    Record.push_back(flags);
 }
@@ -871,7 +860,13 @@ void ASTDeclWriter::visitUnionDecl(UnionDecl *D)
 void ASTDeclWriter::visitProtocolDecl(ProtocolDecl *D)
 {
    visitRecordDecl(D);
-   Record.push_back(D->isAny() | (D->hasAssociatedTypeConstraint() << 1));
+
+   uint8_t flags = 0;
+   flags |= (D->isAny() << 0);
+   flags |= (D->hasAssociatedTypeConstraint() << 1);
+   flags |= (D->hasStaticRequirements() << 2);
+
+   Record.push_back(flags);
 }
 
 void ASTDeclWriter::visitExtensionDecl(ExtensionDecl *D)

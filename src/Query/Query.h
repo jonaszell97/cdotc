@@ -16,38 +16,41 @@
 
 namespace cdot {
 namespace ast {
-#  define CDOT_DECL(NAME) class NAME;
-#  include "AST/Decl.def"
+#define CDOT_DECL(NAME) class NAME;
+#include "AST/Decl.def"
 
-   class CallableDecl;
-   class DeclConstraint;
-   class SemaPass;
-   class VarDecl;
-   enum class ImplicitConformanceKind: unsigned char;
+class CallableDecl;
+class DeclConstraint;
+class ConstraintSet;
+class ParsedConstraint;
+class SemaPass;
+class VarDecl;
+enum class ImplicitConformanceKind : unsigned char;
 } // namespace ast
 } // namespace cdot
 
 namespace llvm {
-   class Module;
+class Module;
 } // namespace llvm
 
 namespace cdot {
 namespace il {
-   class Constant;
-   class Function;
-   class GlobalVariable;
-   class IRGen;
-   class Module;
+class Constant;
+class Function;
+class GlobalVariable;
+class IRGen;
+class Module;
 } // namespace il
 
 namespace lex {
-   struct Token;
+struct Token;
 } // namespace lex
 
 class CompilerInstance;
 class ConversionSequence;
 class Module;
 class QueryContext;
+class Conformance;
 
 enum class ConformanceKind : unsigned char;
 
@@ -55,20 +58,15 @@ enum class ConformanceKind : unsigned char;
 /// of in the record itself to avoid access to these flags before they are
 /// computed.
 struct RecordMetaInfo {
-   RecordMetaInfo() :
-      ManualAlignment(false),
-      Opaque(false),
-      NeedsRetainOrRelease(false),
-      IsBuiltinIntegerType(false),
-      IsBuiltinFloatingPointType(false),
-      IsBuiltinBoolType(false),
-      IsTriviallyCopyable(false),
-      IsImplicitlyEquatable(false),
-      IsImplicitlyHashable(false),
-      IsImplicitlyCopyable(false),
-      IsImplicitlyStringRepresentable(false),
-      IsImplicitlyRawRepresentable(false)
-   {}
+   RecordMetaInfo()
+       : ManualAlignment(false), Opaque(false), NeedsRetainOrRelease(false),
+         IsBuiltinIntegerType(false), IsBuiltinFloatingPointType(false),
+         IsBuiltinBoolType(false), IsTriviallyCopyable(false),
+         IsImplicitlyEquatable(false), IsImplicitlyHashable(false),
+         IsImplicitlyCopyable(false), IsImplicitlyStringRepresentable(false),
+         IsImplicitlyRawRepresentable(false)
+   {
+   }
 
    unsigned Size = 0;
    unsigned short Alignment = 1;
@@ -102,7 +100,7 @@ struct RecordMetaInfo {
 /// Represents additional capabilities that a type has at a point in the
 /// program.
 struct TypeCapability {
-   enum Kind: uint8_t {
+   enum Kind : uint8_t {
       /// \brief This type is known to equal a specific type.
       Equality,
 
@@ -196,7 +194,7 @@ private:
 };
 
 /// Flags that are common to all lookup queries.
-enum class LookupOpts: uint8_t {
+enum class LookupOpts : uint8_t {
    /// \brief No options set.
    None = 0x0,
 
@@ -211,6 +209,9 @@ enum class LookupOpts: uint8_t {
 
    /// \brief Whether to issue a diagnostic if no result is found.
    IssueDiag = 0x8,
+
+   /// \brief Whether or not to look in protocol conformances.
+   LookInConformances = 0x10,
 };
 
 extern LookupOpts DefaultLookupOpts;
@@ -222,20 +223,26 @@ inline LookupOpts operator~(LookupOpts LHS)
 
 inline LookupOpts operator&(LookupOpts LHS, LookupOpts RHS)
 {
-   return static_cast<LookupOpts>(static_cast<uint8_t>(LHS)
-                                  & static_cast<uint8_t>(RHS));
+   return static_cast<LookupOpts>(static_cast<uint8_t>(LHS) &
+                                  static_cast<uint8_t>(RHS));
+}
+
+inline LookupOpts &operator&=(LookupOpts &LHS, LookupOpts RHS)
+{
+   return LHS = static_cast<LookupOpts>(static_cast<uint8_t>(LHS) &
+                                        static_cast<uint8_t>(RHS));
 }
 
 inline LookupOpts operator|(LookupOpts LHS, LookupOpts RHS)
 {
-   return static_cast<LookupOpts>(static_cast<uint8_t>(LHS)
-                                  | static_cast<uint8_t>(RHS));
+   return static_cast<LookupOpts>(static_cast<uint8_t>(LHS) |
+                                  static_cast<uint8_t>(RHS));
 }
 
 inline LookupOpts &operator|=(LookupOpts &LHS, LookupOpts RHS)
 {
-   return LHS = static_cast<LookupOpts>(static_cast<uint8_t>(LHS)
-                                         | static_cast<uint8_t>(RHS));
+   return LHS = static_cast<LookupOpts>(static_cast<uint8_t>(LHS) |
+                                        static_cast<uint8_t>(RHS));
 }
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, LookupOpts Opts);
@@ -254,8 +261,7 @@ struct QueryResult {
       Dependent,
    };
 
-   explicit QueryResult(ResultKind K) : K(K)
-   {}
+   explicit QueryResult(ResultKind K) : K(K) {}
 
    /// \brief Implicit conversion to bool to allow being used in
    /// `if`-conditions.
@@ -274,24 +280,23 @@ struct QueryResult {
    static void update(ResultKind &Previous, ResultKind New);
 };
 
-template<class T>
-struct SimpleQueryResult: public QueryResult {
+template<class T> struct SimpleQueryResult : public QueryResult {
    SimpleQueryResult(T &&Val, ResultKind RK = Success)
-      : QueryResult(RK), Value(std::move(Val))
-   {}
+       : QueryResult(RK), Value(std::move(Val))
+   {
+   }
 
    SimpleQueryResult(const T &Val, ResultKind RK = Success)
-      : QueryResult(RK), Value(Val)
-   {}
+       : QueryResult(RK), Value(Val)
+   {
+   }
 
-   /*implicit*/ SimpleQueryResult(ResultKind RK)
-      : QueryResult(RK)
+   /*implicit*/ SimpleQueryResult(ResultKind RK) : QueryResult(RK)
    {
       assert(RK != Success && "must provide a value!");
    }
 
-   /*implicit*/ SimpleQueryResult(QueryResult R)
-      : QueryResult(R.K)
+   /*implicit*/ SimpleQueryResult(QueryResult R) : QueryResult(R.K)
    {
       assert(R.K != Success && "must provide a value!");
    }
@@ -310,8 +315,8 @@ private:
 class Query {
 public:
    enum Kind : uint8_t {
-#  define CDOT_QUERY(NAME) NAME##ID,
-#  include "Inc/Queries.def"
+#define CDOT_QUERY(NAME) NAME##ID,
+#include "Inc/Queries.def"
    };
 
    enum Status : uint8_t {
@@ -418,4 +423,4 @@ public:
 
 } // namespace cdot
 
-#endif //CDOT_QUERY_H
+#endif // CDOT_QUERY_H

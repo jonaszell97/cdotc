@@ -81,11 +81,6 @@ public:
       return Ctx.getMutableReferenceType(visit(T->getReferencedType()));
    }
 
-   QualType visitMutableBorrowType(MutableBorrowType *T)
-   {
-      return Ctx.getMutableBorrowType(visit(T->getReferencedType()));
-   }
-
    QualType visitMetaType(cdot::MetaType *T)
    {
       return Ctx.getMetaType(visit(T->getUnderlyingType()));
@@ -343,7 +338,7 @@ public:
                                        td->getTemplateArgs());
       }
 
-      return T;
+      return visit(T->getDesugaredType());
    }
 
    QualType visitBoxType(BoxType *T)

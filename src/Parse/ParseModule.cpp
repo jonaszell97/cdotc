@@ -14,7 +14,7 @@ using namespace cdot::diag;
 using namespace cdot::lex;
 using namespace cdot::parse;
 
-Module *Parser::parseModuleFile(Module *ParentMod)
+Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
 {
    skipWhitespace();
 
@@ -47,6 +47,10 @@ Module *Parser::parseModuleFile(Module *ParentMod)
    }
    else {
       Mod = Mgr.CreateModule(Loc, Name);
+   }
+
+   if (IsMainModule) {
+      SP.getCompilationUnit().setCompilationModule(Mod);
    }
 
    while (true) {

@@ -66,7 +66,6 @@ public:
          Decl = Expr->getOverloads()[directBindingIt->getSecond().ChosenIndex];
       }
       else {
-
          auto It = Bindings.ExprBindings.find(Expr);
          assert(It != Bindings.ExprBindings.end() && "");
 
@@ -78,13 +77,11 @@ public:
          Decl = Expr->getOverloads()[ChoiceIt->getSecond().ChosenIndex];
       }
 
-      if (auto *EC = dyn_cast<EnumCaseDecl>(Decl)) {
-         return new(Sys.QC.Context) EnumCaseExpr(Expr->getSourceLoc(), EC);
-      }
-
       if (auto *PE = Expr->getParentExpr()) {
-         return MemberRefExpr::Create(Sys.QC.Context, PE, Decl,
-                                      Expr->getSourceRange());
+         if (MemberRefExpr::needsMemberRefExpr(Decl->getKind())) {
+            return MemberRefExpr::Create(Sys.QC.Context, PE, Decl,
+                                         Expr->getSourceRange());
+         }
       }
 
       return DeclRefExpr::Create(Sys.QC.Context, Decl, Expr->getSourceRange());
@@ -121,12 +118,6 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
 
    if (!Cand.isAnonymousCandidate()) {
       auto *Fn = Cand.getFunc();
-      if (auto *EC = dyn_cast<EnumCaseDecl>(Fn)) {
-         return new(Sys.QC.Context) EnumCaseExpr(
-            Expr->getSourceLoc(), EC,
-            ASTVector<Expression*>(Sys.QC.Context, Data.CandSet.ResolvedArgs));
-      }
-
       auto *callExpr = Sys.QC.Sema->CreateCall(Fn, Data.CandSet.ResolvedArgs,
                                                Expr->getSourceLoc());
 

@@ -19,6 +19,12 @@ bool SingleLevelLookupResult::unique() const
    return true;
 }
 
+ast::NamedDecl* SingleLevelLookupResult::uniqueDecl() const
+{
+   assert(unique() && "lookup result is not unique!");
+   return front();
+}
+
 bool MultiLevelLookupResult::unique() const
 {
    NamedDecl *UniqueDecl = nullptr;
@@ -32,4 +38,10 @@ bool MultiLevelLookupResult::unique() const
    }
 
    return true;
+}
+
+ast::NamedDecl* MultiLevelLookupResult::uniqueDecl() const
+{
+   assert(unique() && "lookup result is not unique!");
+   return front().front();
 }

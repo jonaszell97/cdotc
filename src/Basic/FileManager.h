@@ -82,6 +82,9 @@ public:
 
    LineColPair getLineAndCol(SourceLocation loc);
    LineColPair getLineAndCol(SourceLocation loc, llvm::MemoryBuffer *Buf);
+
+   FullSourceLoc getFullSourceLoc(SourceLocation loc);
+
    llvm::ArrayRef<SourceOffset> getLineOffsets(SourceID sourceID);
 
    SourceLocation getAliasLoc(SourceLocation loc)

@@ -205,6 +205,15 @@ void SemaPass::lookupFunction(CandidateSet &CandSet,
                               ArrayRef<IdentifierInfo*> labels,
                               Statement *Expr,
                               bool suppressDiags) {
+   if (CandSet.Candidates.empty()) {
+      if (!suppressDiags) {
+         diagnose(Expr, err_func_not_found, Expr->getSourceRange(),
+                  0, name);
+      }
+
+      return;
+   }
+
    auto *BestCand = sema::resolveCandidateSet(*this, CandSet, SelfArg, args,
                                               labels, templateArgs,
                                               SourceType(), Expr,
@@ -272,13 +281,13 @@ MethodDecl *SemaPass::getEquivalentMethod(MethodDecl *Orig,
 bool SemaPass::maybeInstantiateRecord(CandidateSet::Candidate &Cand,
                                       const TemplateArgList &templateArgs,
                                       Statement *Caller) {
-   if (templateArgs.isStillDependent()) {
-      return true;
-   }
-
    auto F = Cand.getFunc();
    Cand.OuterTemplateArgs = FinalTemplateArgumentList::Create(Context,
                                                               templateArgs);
+
+   if (templateArgs.isStillDependent()) {
+      return true;
+   }
 
    if (auto Case = dyn_cast<EnumCaseDecl>(F)) {
       if (!Case->getRecord()->isTemplate())
@@ -569,6 +578,28 @@ static ExprResult CreateAnonymousCall(SemaPass &Sema, CallExpr *Call,
    llvm_unreachable("don't do it!");
 }
 
+Expression *SemaPass::convertCStyleVarargParam(Expression *Expr)
+{
+   Expr = castToRValue(Expr);
+   QualType type = Expr->getExprType();
+
+   // (unsigned) char / short are promoted to int for c-style vararg functions.
+   if (type->isIntegerType() && type->getBitwidth() < 32) {
+      QualType promotedType = type->isUnsigned()
+                              ? Context.getUInt32Ty()
+                              : Context.getInt32Ty();
+
+      return forceCast(Expr, promotedType);
+   }
+
+   // float is promoted to double for c-style vararg functions.
+   if (type->isFloatTy()) {
+      return forceCast(Expr, Context.getDoubleTy());
+   }
+
+   return Expr;
+}
+
 ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
 {
    CallableDecl *C = Call->getFunc();
@@ -580,8 +611,11 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
    }
 
    QualType ExprType;
-   if (auto F = dyn_cast<FunctionDecl>(C)) {
+   if (auto *F = dyn_cast<FunctionDecl>(C)) {
       ExprType = F->getReturnType();
+   }
+   else if (auto *Case = dyn_cast<EnumCaseDecl>(C)) {
+      ExprType = Context.getRecordType(Case->getRecord());
    }
    else {
       auto M = cast<MethodDecl>(C);
@@ -610,18 +644,20 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
    MutableArrayRef<FuncArgDecl*> params = C->getArgs();
 
    for (Expression *&argVal : Call->getArgs()) {
-      FuncArgDecl *param;
+      QualType neededType;
+      bool cstyleVararg = false;
+
       if (i < params.size()) {
-         param = params[i];
+         neededType = params[i]->getType();
       }
       else if (C->isCstyleVararg()) {
-         break;
+         cstyleVararg = true;
       }
       else {
-         param = params.back();
+         neededType = params.back()->getType();
       }
 
-      auto typecheckResult = typecheckExpr(argVal, param->getType(), Call);
+      auto typecheckResult = typecheckExpr(argVal, neededType, Call);
       if (!typecheckResult) {
          Call->setIsInvalid(true);
          ++i;
@@ -629,7 +665,13 @@ ExprResult SemaPass::visitCallExpr(CallExpr *Call, TemplateArgListExpr *ArgExpr)
          continue;
       }
 
-      argVal = implicitCastIfNecessary(argVal, param->getType());
+      if (cstyleVararg) {
+         argVal = convertCStyleVarargParam(argVal);
+      }
+      else {
+         argVal = implicitCastIfNecessary(argVal, neededType);
+      }
+
       ++i;
    }
 
@@ -1145,13 +1187,6 @@ ExprResult SemaPass::HandleStaticTypeCall(CallExpr *Call,
                                           bool AllowProtocol) {
    if (auto *ATT = Ty->asAssociatedType()) {
       auto *AT = ATT->getDecl();
-      if (AT->isImplementation()) {
-         QualType T = AT->getActualType()->getCanonicalType()
-                        ->getDesugaredType();
-
-         return HandleStaticTypeCall(Call, ArgExpr, T);
-      }
-
       Call->setContainsAssociatedType(true);
 
       QualType CapableTy = ATT;
@@ -1523,6 +1558,9 @@ CallExpr *SemaPass::CreateCall(CallableDecl *C,
                                SourceLocation Loc) {
    CallKind K;
    if (auto F = dyn_cast<FunctionDecl>(C)) {
+      K = CallKind::NamedFunctionCall;
+   }
+   else if (isa<EnumCaseDecl>(C)) {
       K = CallKind::NamedFunctionCall;
    }
    else {

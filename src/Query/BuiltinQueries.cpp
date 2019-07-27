@@ -26,6 +26,13 @@ QueryResult GetBuiltinModuleQuery::run()
       return finish(M);
    }
 
+   if (Mod == Policy) {
+      auto *II = QC.Sema->getIdentifier("policy");
+      auto *M = ModuleMgr.LookupModule(Loc, Loc, II);
+
+      return finish(M);
+   }
+
    if (Mod == Prelude) {
       auto *II = QC.Sema->getIdentifier("core");
       auto *M = ModuleMgr.LookupModule(Loc, Loc, II);
@@ -48,6 +55,7 @@ QueryResult GetBuiltinModuleQuery::run()
    case Std:
    case Prelude:
    case Builtin:
+   case Policy:
       llvm_unreachable("already handled!");
    case Reflect:
       Idents[1] = sema().getIdentifier("reflect");
@@ -504,8 +512,8 @@ QueryResult GetBuiltinRecordQuery::run()
          auto *Not = UnaryOperator::Create(QC.Context, Loc, op::UnaryLNot,
                                            FnTy, ValueRef, true);
 
-         auto *Ref = DeclRefExpr::Create(QC.Context,
-                                         S->getMemberwiseInitializer(), Loc);
+         auto *Ref = MemberRefExpr::Create(QC.Context, Self,
+                                            S->getMemberwiseInitializer(), Loc);
 
          auto *Call = AnonymousCallExpr::Create(QC.Context, Loc, Ref, Not,
                                                 ValName);
@@ -915,11 +923,12 @@ QueryResult GetBuiltinProtocolQuery::run()
                                         Loc, Idents.get("RawRepresentable"),
                                         {}, {});
 
+         QC.DeclareSelfAlias(P);
+
          // associatedType RawType
-         auto *RawType = AssociatedTypeDecl::Create(QC.Context, Loc, nullptr,
+         auto *RawType = AssociatedTypeDecl::Create(QC.Context, Loc,
                                                     Sema.getIdentifier("RawType"),
-                                                    SourceType(), SourceType(),
-                                                    false);
+                                                    SourceType(), SourceType());
 
          Sema.ActOnDecl(P, RawType);
          Sema.ActOnDecl(NS, P);
@@ -966,27 +975,27 @@ QueryResult GetBuiltinProtocolQuery::run()
    IdentifierInfo *II;
 
    switch (P) {
-#  define PRELUDE_RECORD(NAME)                                          \
+#  define PRELUDE_RECORD(NAME, MODULE)                                  \
    case NAME:                                                           \
-      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Prelude)) {   \
+      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::MODULE)) {    \
          return fail();                                                 \
       }                                                                 \
                                                                         \
       II = sema().getIdentifier(#NAME);                                 \
       break;
 
-   PRELUDE_RECORD(Any)
-   PRELUDE_RECORD(Hashable)
-   PRELUDE_RECORD(Equatable)
-   PRELUDE_RECORD(Copyable)
-   PRELUDE_RECORD(MoveOnly)
-   PRELUDE_RECORD(ImplicitlyCopyable)
-   PRELUDE_RECORD(StringRepresentable)
-   PRELUDE_RECORD(TruthValue)
-   PRELUDE_RECORD(RawRepresentable)
-   PRELUDE_RECORD(Persistable)
-   PRELUDE_RECORD(Dereferenceable)
-   PRELUDE_RECORD(Unwrappable)
+   PRELUDE_RECORD(Any, Policy)
+   PRELUDE_RECORD(Hashable, Prelude)
+   PRELUDE_RECORD(Equatable, Prelude)
+   PRELUDE_RECORD(Copyable, Policy)
+   PRELUDE_RECORD(MoveOnly, Policy)
+   PRELUDE_RECORD(ImplicitlyCopyable, Policy)
+   PRELUDE_RECORD(StringRepresentable, Prelude)
+   PRELUDE_RECORD(TruthValue, Prelude)
+   PRELUDE_RECORD(RawRepresentable, Prelude)
+   PRELUDE_RECORD(Persistable, Prelude)
+   PRELUDE_RECORD(Dereferenceable, Prelude)
+   PRELUDE_RECORD(Unwrappable, Prelude)
 
 #  undef PRELUDE_RECORD
    case Awaiter:

@@ -376,6 +376,11 @@ static void addBinding(ConstraintSystem &Sys,
       }
    }
 
+   // Prefer binding to non-reference types.
+   if (T->isReferenceType()) {
+      Score += 1;
+   }
+
    Bindings.emplace_back(T, Score, OverloadIndex);
 }
 
@@ -697,10 +702,10 @@ DisjunctionBindingProducer::DisjunctionBindingProducer(ConstraintSystem &Sys,
 void DisjunctionBindingProducer::computeInitialBindings(ConstraintSystem &Sys,
                                            DisjunctionConstraint *Disjunction) {
    SmallPtrSet<CanType, 4> FoundBindings;
-   unsigned Score = 0;
 
    unsigned Index = 0;
    for (auto *C : Disjunction->getConstraints()) {
+      unsigned Score = Index == Disjunction->getDefaultOverload() ? 0 : 1;
       findBindings(Sys, C, C->getConstrainedType(), Bindings,
                    FoundBindings, Score, Index++);
    }

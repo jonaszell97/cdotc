@@ -10,6 +10,9 @@ QueryResult QueryContext::CompileModule()
       CompileModuleInstance = new(*this) CompileModuleQuery(*this);
 auto *_Q = CompileModuleInstance;
 
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -56,6 +59,9 @@ QueryResult QueryContext::ParseModuleFile(Module* &Result, StringRef FileName)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -95,6 +101,9 @@ QueryResult QueryContext::CreateDefaultModule(Module* &Result)
       CreateDefaultModuleInstance = new(*this) CreateDefaultModuleQuery(*this);
 auto *_Q = CreateDefaultModuleInstance;
 
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -141,6 +150,9 @@ QueryResult QueryContext::ParseSourceFile(ast::SourceFileDecl* &Result, Module* 
       _Q = new(*this) ParseSourceFileQuery(*this, Mod, FileName);
       ParseSourceFileQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -187,6 +199,9 @@ QueryResult QueryContext::ParseMainSourceFile(ast::SourceFileDecl* &Result, Modu
       _Q = new(*this) ParseMainSourceFileQuery(*this, Mod, FileName);
       ParseMainSourceFileQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -233,6 +248,9 @@ QueryResult QueryContext::ParseSourceFiles(Module* Mod)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -279,6 +297,9 @@ QueryResult QueryContext::CreateILModule(il::Module* &Result, Module* Mod)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -318,6 +339,9 @@ QueryResult QueryContext::SetupIRGen(il::IRGen* &Result)
       SetupIRGenInstance = new(*this) SetupIRGenQuery(*this);
 auto *_Q = SetupIRGenInstance;
 
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -364,6 +388,9 @@ QueryResult QueryContext::CreateLLVMModule(llvm::Module* &Result, Module* Mod)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -395,6 +422,9 @@ QueryResult QueryContext::CreateObject(llvm::raw_ostream& OS)
 
 {
    auto *_Q = new(*this) CreateObjectQuery(*this, OS);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -426,6 +456,9 @@ QueryResult QueryContext::CreateStaticLib(StringRef OutFile)
 
 {
    auto *_Q = new(*this) CreateStaticLibQuery(*this, OutFile);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -457,6 +490,9 @@ QueryResult QueryContext::CreateDynamicLib(StringRef OutFile)
 
 {
    auto *_Q = new(*this) CreateDynamicLibQuery(*this, OutFile);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -488,6 +524,9 @@ QueryResult QueryContext::CreateExecutable(StringRef OutFile)
 
 {
    auto *_Q = new(*this) CreateExecutableQuery(*this, OutFile);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -519,6 +558,9 @@ QueryResult QueryContext::EmitIL(llvm::raw_ostream& OS)
 
 {
    auto *_Q = new(*this) EmitILQuery(*this, OS);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -550,6 +592,9 @@ QueryResult QueryContext::EmitIR(llvm::raw_ostream& OS)
 
 {
    auto *_Q = new(*this) EmitIRQuery(*this, OS);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -581,6 +626,9 @@ QueryResult QueryContext::PrintUsedMemory()
 
 {
    auto *_Q = new(*this) PrintUsedMemoryQuery(*this);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -627,6 +675,9 @@ QueryResult QueryContext::MeasureExecutionTime(long long &Result, Query* Q)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -673,6 +724,9 @@ QueryResult QueryContext::IsPersistable(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -719,6 +773,9 @@ QueryResult QueryContext::IsEquatable(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -765,6 +822,9 @@ QueryResult QueryContext::IsCopyable(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -811,6 +871,9 @@ QueryResult QueryContext::IsMoveOnly(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -857,6 +920,9 @@ QueryResult QueryContext::IsUnpopulated(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -903,6 +969,9 @@ QueryResult QueryContext::IsImplicitlyCopyable(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -949,6 +1018,9 @@ QueryResult QueryContext::IsTriviallyCopyable(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -995,6 +1067,9 @@ QueryResult QueryContext::NeedsRetainOrRelease(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1041,6 +1116,9 @@ QueryResult QueryContext::NeedsDeinitilization(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1087,6 +1165,9 @@ QueryResult QueryContext::NeedsStructReturn(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1133,6 +1214,9 @@ QueryResult QueryContext::PassByValue(bool &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1179,6 +1263,9 @@ QueryResult QueryContext::ContainsAssociatedTypeConstraint(bool &Result, CanType
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1211,10 +1298,11 @@ QueryResult QueryContext::IsImplicitlyConvertible(IsImplicitlyConvertibleQuery::
 {
    auto Key = std::make_pair(From, To);
    auto It = IsImplicitlyConvertibleQueries.find(Key);
-   if (It != IsImplicitlyConvertibleQueries.end()) {
+   if (It != IsImplicitlyConvertibleQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 IsImplicitlyConvertibleQuery _Q(*this, From, To);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1228,10 +1316,11 @@ QueryResult QueryContext::IsValidParameterValue(IsValidParameterValueQuery::Resu
 {
    auto Key = std::make_pair(givenType, std::make_pair(paramType, isSelf));
    auto It = IsValidParameterValueQueries.find(Key);
-   if (It != IsValidParameterValueQueries.end()) {
+   if (It != IsValidParameterValueQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 IsValidParameterValueQuery _Q(*this, givenType, paramType, isSelf);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1245,10 +1334,11 @@ QueryResult QueryContext::GetConversionSequence(ConversionSequence* &Result, Qua
 {
    auto Key = std::make_pair(From, To);
    auto It = GetConversionSequenceQueries.find(Key);
-   if (It != GetConversionSequenceQueries.end()) {
+   if (It != GetConversionSequenceQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 GetConversionSequenceQuery _Q(*this, From, To);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1262,6 +1352,7 @@ QueryResult QueryContext::SubstTypeVariables(QualType &Result, QualType T, const
 {
 SubstTypeVariablesQuery _Q(*this, T, ReplacementMap, SR);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1288,6 +1379,9 @@ QueryResult QueryContext::SubstAssociatedTypes(QualType &Result, QualType T, Qua
       _Q = new(*this) SubstAssociatedTypesQuery(*this, T, Self, SR);
       SubstAssociatedTypesQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1334,6 +1428,9 @@ QueryResult QueryContext::SubstTemplateParamTypes(QualType &Result, QualType T, 
       _Q = new(*this) SubstTemplateParamTypesQuery(*this, T, std::move(TemplateArgs), SR);
       SubstTemplateParamTypesQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1366,6 +1463,7 @@ QueryResult QueryContext::SubstTemplateParamTypesNonFinal(QualType &Result, Qual
 {
 SubstTemplateParamTypesNonFinalQuery _Q(*this, T, TemplateArgs, SR);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1378,10 +1476,11 @@ QueryResult QueryContext::CheckTypeCapabilities(ArrayRef<TypeCapability> &Result
 {
    auto Key = ND;
    auto It = CheckTypeCapabilitiesQueries.find(Key);
-   if (It != CheckTypeCapabilitiesQueries.end()) {
+   if (It != CheckTypeCapabilitiesQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 CheckTypeCapabilitiesQuery _Q(*this, ND);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1395,10 +1494,11 @@ QueryResult QueryContext::ApplyCapabilites(QualType &Result, QualType T, ast::De
 {
    auto Key = std::make_pair(T, DC);
    auto It = ApplyCapabilitesQueries.find(Key);
-   if (It != ApplyCapabilitesQueries.end()) {
+   if (It != ApplyCapabilitesQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 ApplyCapabilitesQuery _Q(*this, T, DC);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -1426,6 +1526,9 @@ QueryResult QueryContext::GetBuiltinModule(Module* &Result, GetBuiltinModuleQuer
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1472,6 +1575,9 @@ QueryResult QueryContext::GetBuiltinFunc(ast::CallableDecl* &Result, GetBuiltinF
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1518,6 +1624,9 @@ QueryResult QueryContext::GetBuiltinAlias(ast::AliasDecl* &Result, GetBuiltinAli
       _Q = new(*this) GetBuiltinAliasQuery(*this, K, DC);
       GetBuiltinAliasQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1564,6 +1673,9 @@ QueryResult QueryContext::GetBuiltinRecord(ast::RecordDecl* &Result, GetBuiltinR
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1610,6 +1722,9 @@ QueryResult QueryContext::GetBuiltinProtocol(ast::ProtocolDecl* &Result, GetBuil
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1656,6 +1771,9 @@ QueryResult QueryContext::FindPrecedenceGroup(ast::PrecedenceGroupDecl* &Result,
       _Q = new(*this) FindPrecedenceGroupQuery(*this, Name, DiagOnError, Loc);
       FindPrecedenceGroupQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1702,6 +1820,9 @@ QueryResult QueryContext::FindOperator(ast::OperatorDecl* &Result, DeclarationNa
       _Q = new(*this) FindOperatorQuery(*this, Name, DiagOnError, Loc);
       FindOperatorQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1748,6 +1869,9 @@ QueryResult QueryContext::ResolveImport(ast::ImportDecl* I, llvm::SmallVectorImp
       _Q = new(*this) ResolveImportQuery(*this, I, FoundDecls);
       ResolveImportQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1794,6 +1918,9 @@ QueryResult QueryContext::ResolveUsing(ast::UsingDecl* U, llvm::SmallVectorImpl<
       _Q = new(*this) ResolveUsingQuery(*this, U, FoundDecls);
       ResolveUsingQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1840,6 +1967,9 @@ QueryResult QueryContext::ResolveStaticIf(ast::Decl* &Result, ast::StaticIfDecl*
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1886,6 +2016,9 @@ QueryResult QueryContext::ResolveStaticFor(ast::Decl* &Result, ast::StaticForDec
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1932,6 +2065,9 @@ QueryResult QueryContext::ResolveStaticAssert(ast::StaticAssertDecl* Decl)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -1978,6 +2114,9 @@ QueryResult QueryContext::ResolveStaticPrint(ast::StaticPrintDecl* Decl)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2024,6 +2163,9 @@ QueryResult QueryContext::ResolveStaticExpr(il::Constant* &Result, ast::StaticEx
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2070,6 +2212,9 @@ QueryResult QueryContext::ResolveStaticExprToBool(bool &Result, ast::StaticExpr*
       _Q = new(*this) ResolveStaticExprToBoolQuery(*this, Expr, DiagOnError);
       ResolveStaticExprToBoolQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2116,6 +2261,9 @@ QueryResult QueryContext::ExpandMacro(StmtOrDecl &Result, StmtOrDecl SOD, Declar
       _Q = new(*this) ExpandMacroQuery(*this, SOD, Name, DC, Delim, Tokens, ExpectedKind);
       ExpandMacroQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2162,6 +2310,9 @@ QueryResult QueryContext::ExpandMacroDecl(ast::Decl* &Result, ast::MacroExpansio
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2208,6 +2359,9 @@ QueryResult QueryContext::ExpandMacros(StringRef SourceFile)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2254,6 +2408,9 @@ QueryResult QueryContext::ImportExternalSourceFile(StringRef FileName, ImportExt
       _Q = new(*this) ImportExternalSourceFileQuery(*this, FileName, Kind, DC, Loc, Optional);
       ImportExternalSourceFileQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2300,6 +2457,9 @@ QueryResult QueryContext::FindExtensions(QualType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2346,6 +2506,9 @@ QueryResult QueryContext::GetExtensionTypeKind(GetExtensionTypeKindQuery::Result
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2392,6 +2555,9 @@ QueryResult QueryContext::MatchExtensionType(MatchExtensionTypeQuery::ResultKind
       _Q = new(*this) MatchExtensionTypeQuery(*this, T, PatternTy);
       MatchExtensionTypeQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2438,6 +2604,9 @@ QueryResult QueryContext::ExtensionApplies(MatchExtensionTypeQuery::ResultKind &
       _Q = new(*this) ExtensionAppliesQuery(*this, Ext, T);
       ExtensionAppliesQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2484,6 +2653,9 @@ QueryResult QueryContext::GetExtendedDecl(ast::NamedDecl* &Result, ast::SourceTy
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2530,6 +2702,9 @@ QueryResult QueryContext::ResolveExtension(ast::ExtensionDecl* Ext)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2576,6 +2751,9 @@ QueryResult QueryContext::ResolveConformanceToProtocol(ast::ProtocolDecl* &Resul
       _Q = new(*this) ResolveConformanceToProtocolQuery(*this, T, Conf);
       ResolveConformanceToProtocolQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2622,6 +2800,9 @@ QueryResult QueryContext::ResolveExplicitConformances(QualType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2649,25 +2830,77 @@ QueryResult QueryContext::ResolveExplicitConformances(QualType T)
 
 }
 
-template<> ResolveDeclaredConformancesQuery *QueryContext::getQuery<ResolveDeclaredConformancesQuery>(QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind)
+template<> ResolveConformancesToProtocolsQuery *QueryContext::getQuery<ResolveConformancesToProtocolsQuery>(QualType T, llvm::ArrayRef<ast::SourceType> Conformances)
 {
    llvm::FoldingSetNodeID ID;
-   ResolveDeclaredConformancesQuery::Profile(ID, T, Conformances, Kind);
+   ResolveConformancesToProtocolsQuery::Profile(ID, T, Conformances);
+   void *InsertPos;
+   return ResolveConformancesToProtocolsQueries.FindNodeOrInsertPos(ID, InsertPos);
+}
+
+QueryResult QueryContext::ResolveConformancesToProtocols(ArrayRef<ast::ProtocolDecl*> &Result, QualType T, llvm::ArrayRef<ast::SourceType> Conformances)
+
+{
+   llvm::FoldingSetNodeID ID;
+   ResolveConformancesToProtocolsQuery::Profile(ID, T, Conformances);
+   void *InsertPos;
+   auto *_Q = ResolveConformancesToProtocolsQueries.FindNodeOrInsertPos(ID, InsertPos);
+   if (!_Q) {
+      _Q = new(*this) ResolveConformancesToProtocolsQuery(*this, T, Conformances);
+      ResolveConformancesToProtocolsQueries.InsertNode(_Q, InsertPos);
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+template<> ResolveDeclaredConformancesQuery *QueryContext::getQuery<ResolveDeclaredConformancesQuery>(QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind, ast::ConstraintSet* CS)
+{
+   llvm::FoldingSetNodeID ID;
+   ResolveDeclaredConformancesQuery::Profile(ID, T, Conformances, Kind, CS);
    void *InsertPos;
    return ResolveDeclaredConformancesQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::ResolveDeclaredConformances(QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind)
+QueryResult QueryContext::ResolveDeclaredConformances(QualType T, llvm::ArrayRef<ast::SourceType> Conformances, ConformanceKind Kind, ast::ConstraintSet* CS)
 
 {
    llvm::FoldingSetNodeID ID;
-   ResolveDeclaredConformancesQuery::Profile(ID, T, Conformances, Kind);
+   ResolveDeclaredConformancesQuery::Profile(ID, T, Conformances, Kind, CS);
    void *InsertPos;
    auto *_Q = ResolveDeclaredConformancesQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) ResolveDeclaredConformancesQuery(*this, T, Conformances, Kind);
+      _Q = new(*this) ResolveDeclaredConformancesQuery(*this, T, Conformances, Kind, CS);
       ResolveDeclaredConformancesQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2695,25 +2928,28 @@ QueryResult QueryContext::ResolveDeclaredConformances(QualType T, llvm::ArrayRef
 
 }
 
-template<> AddSingleConformanceQuery *QueryContext::getQuery<AddSingleConformanceQuery>(QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, bool AddRecursiveConformances)
+template<> AddSingleConformanceQuery *QueryContext::getQuery<AddSingleConformanceQuery>(QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, ast::ConstraintSet* CS, bool AddRecursiveConformances)
 {
    llvm::FoldingSetNodeID ID;
-   AddSingleConformanceQuery::Profile(ID, T, Proto, Kind, AddRecursiveConformances);
+   AddSingleConformanceQuery::Profile(ID, T, Proto, Kind, CS, AddRecursiveConformances);
    void *InsertPos;
    return AddSingleConformanceQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::AddSingleConformance(QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, bool AddRecursiveConformances, llvm::function_ref<void(ast::ProtocolDecl*)> Callback)
+QueryResult QueryContext::AddSingleConformance(QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, ast::ConstraintSet* CS, bool AddRecursiveConformances)
 
 {
    llvm::FoldingSetNodeID ID;
-   AddSingleConformanceQuery::Profile(ID, T, Proto, Kind, AddRecursiveConformances);
+   AddSingleConformanceQuery::Profile(ID, T, Proto, Kind, CS, AddRecursiveConformances);
    void *InsertPos;
    auto *_Q = AddSingleConformanceQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) AddSingleConformanceQuery(*this, T, Proto, Kind, AddRecursiveConformances, Callback);
+      _Q = new(*this) AddSingleConformanceQuery(*this, T, Proto, Kind, CS, AddRecursiveConformances);
       AddSingleConformanceQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2746,10 +2982,11 @@ QueryResult QueryContext::DeclareSelfAlias(ast::RecordDecl* R)
 {
    auto Key = R;
    auto It = DeclareSelfAliasQueries.find(Key);
-   if (It != DeclareSelfAliasQueries.end()) {
+   if (It != DeclareSelfAliasQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 DeclareSelfAliasQuery _Q(*this, R);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -2776,6 +3013,9 @@ QueryResult QueryContext::ResolveAssociatedTypes(QualType T, bool FinishImmediat
       _Q = new(*this) ResolveAssociatedTypesQuery(*this, T, FinishImmediately);
       ResolveAssociatedTypesQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2803,56 +3043,18 @@ QueryResult QueryContext::ResolveAssociatedTypes(QualType T, bool FinishImmediat
 
 }
 
-template<> GetReferencedAssociatedTypesQuery *QueryContext::getQuery<GetReferencedAssociatedTypesQuery>(ast::NamedDecl* ConstrainedDecl, ast::DeclConstraint* C)
-{
-   llvm::FoldingSetNodeID ID;
-   GetReferencedAssociatedTypesQuery::Profile(ID, ConstrainedDecl, C);
-   void *InsertPos;
-   return GetReferencedAssociatedTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
-}
-
-QueryResult QueryContext::GetReferencedAssociatedTypes(ArrayRef<ast::AssociatedTypeDecl*> &Result, ast::NamedDecl* ConstrainedDecl, ast::DeclConstraint* C)
+QueryResult QueryContext::ReferencedAssociatedTypesReady(ReferencedAssociatedTypesReadyQuery::ResultKind &Result, QualType T, ast::ConstraintSet* CS)
 
 {
-   llvm::FoldingSetNodeID ID;
-   GetReferencedAssociatedTypesQuery::Profile(ID, ConstrainedDecl, C);
-   void *InsertPos;
-   auto *_Q = GetReferencedAssociatedTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
-   if (!_Q) {
-      _Q = new(*this) GetReferencedAssociatedTypesQuery(*this, ConstrainedDecl, C);
-      GetReferencedAssociatedTypesQueries.InsertNode(_Q, InsertPos);
-   }
-   switch (_Q->status()) {
-   case Query::Running:
-      diagnoseCircularDependency(_Q);
-      return QueryResult(QueryResult::Error);
-   case Query::Idle:
-      {
-         ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Running;
-         if (auto _R = _Q->run()) {
-            return _R;
-         }
-      }
 
-      Result = _Q->get();
-      return QueryResult(QueryResult::Success);
-   case Query::Done:
-   case Query::DoneWithError:
-      Result = _Q->get();
-      return QueryResult(QueryResult::Success);
-   case Query::Aborted:
-      return QueryResult(QueryResult::Error);
-   case Query::Dependent:
-      return QueryResult(QueryResult::Dependent);
-   }
-
-}
-
-QueryResult QueryContext::ReferencedAssociatedTypesReady(ReferencedAssociatedTypesReadyQuery::ResultKind &Result, QualType T, ast::NamedDecl* ConstrainedDecl)
-
-{
-   auto *_Q = new(*this) ReferencedAssociatedTypesReadyQuery(*this, T, ConstrainedDecl);
+        if (!CS) {
+            Result = ReferencedAssociatedTypesReadyQuery::ResultKind::Ready;
+            return QueryResult(QueryResult::Success);
+        }
+       auto *_Q = new(*this) ReferencedAssociatedTypesReadyQuery(*this, T, CS);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2899,6 +3101,9 @@ QueryResult QueryContext::CheckProtocolExtensionApplicability(CheckProtocolExten
       _Q = new(*this) CheckProtocolExtensionApplicabilityQuery(*this, T, Ext);
       CheckProtocolExtensionApplicabilityQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2926,7 +3131,7 @@ QueryResult QueryContext::CheckProtocolExtensionApplicability(CheckProtocolExten
 
 }
 
-template<> VerifyConstraintQuery *QueryContext::getQuery<VerifyConstraintQuery>(ast::DeclConstraint* C, ast::NamedDecl* ConstrainedDecl)
+template<> VerifyConstraintQuery *QueryContext::getQuery<VerifyConstraintQuery>(const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl)
 {
    llvm::FoldingSetNodeID ID;
    VerifyConstraintQuery::Profile(ID, C, ConstrainedDecl);
@@ -2934,7 +3139,7 @@ template<> VerifyConstraintQuery *QueryContext::getQuery<VerifyConstraintQuery>(
    return VerifyConstraintQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::VerifyConstraint(ast::DeclConstraint* C, ast::NamedDecl* ConstrainedDecl)
+QueryResult QueryContext::VerifyConstraint(ast::DeclConstraint* &Result, const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl)
 
 {
    llvm::FoldingSetNodeID ID;
@@ -2945,6 +3150,9 @@ QueryResult QueryContext::VerifyConstraint(ast::DeclConstraint* C, ast::NamedDec
       _Q = new(*this) VerifyConstraintQuery(*this, C, ConstrainedDecl);
       VerifyConstraintQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -2958,11 +3166,11 @@ QueryResult QueryContext::VerifyConstraint(ast::DeclConstraint* C, ast::NamedDec
          }
       }
 
-      
+      Result = _Q->get();
       return QueryResult(QueryResult::Success);
    case Query::Done:
    case Query::DoneWithError:
-      
+      Result = _Q->get();
       return QueryResult(QueryResult::Success);
    case Query::Aborted:
       return QueryResult(QueryResult::Error);
@@ -2972,7 +3180,56 @@ QueryResult QueryContext::VerifyConstraint(ast::DeclConstraint* C, ast::NamedDec
 
 }
 
-template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
+template<> VerifyConstraintsQuery *QueryContext::getQuery<VerifyConstraintsQuery>(ast::NamedDecl* ConstrainedDecl)
+{
+   auto It = VerifyConstraintsQueries.find(ConstrainedDecl);
+   if (It != VerifyConstraintsQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::VerifyConstraints(ast::ConstraintSet* &Result, ast::NamedDecl* ConstrainedDecl)
+
+{
+   auto Key = ConstrainedDecl;
+   auto It = VerifyConstraintsQueries.find(Key);
+   VerifyConstraintsQuery *_Q;
+   if (It == VerifyConstraintsQueries.end()) {
+      _Q = new(*this) VerifyConstraintsQuery(*this, ConstrainedDecl);
+      VerifyConstraintsQueries[_Q->ConstrainedDecl] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
 {
    llvm::FoldingSetNodeID ID;
    IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl, PrepareNameLookup);
@@ -2980,7 +3237,7 @@ template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisf
    return IsConstraintSatisfiedQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::IsConstraintSatisfied(bool &Result, ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
+QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
 
 {
    llvm::FoldingSetNodeID ID;
@@ -2991,6 +3248,9 @@ QueryResult QueryContext::IsConstraintSatisfied(bool &Result, ast::DeclConstrain
       _Q = new(*this) IsConstraintSatisfiedQuery(*this, C, Self, OriginalDecl, PrepareNameLookup);
       IsConstraintSatisfiedQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3018,7 +3278,7 @@ QueryResult QueryContext::IsConstraintSatisfied(bool &Result, ast::DeclConstrain
 
 }
 
-template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
 {
    llvm::FoldingSetNodeID ID;
    GetConstrainedTypeQuery::Profile(ID, C, Self, OriginalDecl);
@@ -3026,7 +3286,7 @@ template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQue
    return GetConstrainedTypeQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::GetConstrainedType(QualType &Result, ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+QueryResult QueryContext::GetConstrainedType(QualType &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
 
 {
    llvm::FoldingSetNodeID ID;
@@ -3037,6 +3297,86 @@ QueryResult QueryContext::GetConstrainedType(QualType &Result, ast::DeclConstrai
       _Q = new(*this) GetConstrainedTypeQuery(*this, C, Self, OriginalDecl);
       GetConstrainedTypeQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+bool QueryContext::IsSupersetOf(ast::ConstraintSet* C1, ast::ConstraintSet* C2)
+
+{
+
+        if (!C2 || C2->empty()) {
+            return true;
+        }
+        if (!C1 || C1->empty()) {
+            return C2->empty();
+        }
+        if (C1 == C2) {
+            return true;
+        }
+       auto Key = std::make_pair(C1, C2);
+   auto It = IsSupersetOfQueries.find(Key);
+   if (It != IsSupersetOfQueries.end() && !shouldReset()) {
+      return It->getSecond();   }
+IsSupersetOfQuery _Q(*this, C1, C2);
+
+ExecutingQuery EQ(*this, &_Q);
+auto MaybeErr = _Q.run();
+if (MaybeErr.isErr()) llvm_unreachable("infallible query failed!");
+
+auto Result = _Q.get();
+IsSupersetOfQueries[Key] = Result;
+return Result;
+}
+
+template<> GetReferencedAssociatedTypesQuery *QueryContext::getQuery<GetReferencedAssociatedTypesQuery>(ast::ConstraintSet* CS)
+{
+   auto It = GetReferencedAssociatedTypesQueries.find(CS);
+   if (It != GetReferencedAssociatedTypesQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::GetReferencedAssociatedTypes(llvm::ArrayRef<ast::AssociatedTypeDecl*> &Result, ast::ConstraintSet* CS)
+
+{
+   auto Key = CS;
+   auto It = GetReferencedAssociatedTypesQueries.find(Key);
+   GetReferencedAssociatedTypesQuery *_Q;
+   if (It == GetReferencedAssociatedTypesQueries.end()) {
+      _Q = new(*this) GetReferencedAssociatedTypesQuery(*this, CS);
+      GetReferencedAssociatedTypesQueries[_Q->CS] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3083,6 +3423,9 @@ QueryResult QueryContext::GetNeededAssociatedTypes(llvm::ArrayRef<ast::Associate
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3129,6 +3472,9 @@ QueryResult QueryContext::CheckConformances(QualType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3175,6 +3521,9 @@ QueryResult QueryContext::CheckSingleConformance(QualType T, ast::ProtocolDecl* 
       _Q = new(*this) CheckSingleConformanceQuery(*this, T, P);
       CheckSingleConformanceQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3221,6 +3570,9 @@ QueryResult QueryContext::CheckAssociatedTypeConstraints(ast::RecordDecl* R)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3267,6 +3619,9 @@ QueryResult QueryContext::TypecheckConstraints(ast::NamedDecl* ND)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3313,6 +3668,9 @@ QueryResult QueryContext::ConformsTo(bool &Result, CanType T, ast::ProtocolDecl*
       _Q = new(*this) ConformsToQuery(*this, T, P);
       ConformsToQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3359,6 +3717,9 @@ QueryResult QueryContext::IsCovariant(bool &Result, QualType T, QualType Covar)
       _Q = new(*this) IsCovariantQuery(*this, T, Covar);
       IsCovariantQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3405,6 +3766,9 @@ QueryResult QueryContext::IsContravariant(bool &Result, QualType T, QualType Con
       _Q = new(*this) IsContravariantQuery(*this, T, Contravar);
       IsContravariantQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3451,6 +3815,9 @@ QueryResult QueryContext::GetTypeSize(unsigned &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3497,6 +3864,9 @@ QueryResult QueryContext::GetTypeAlignment(unsigned short &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3543,6 +3913,9 @@ QueryResult QueryContext::GetTypeStride(unsigned &Result, CanType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3589,6 +3962,9 @@ QueryResult QueryContext::CalculateRecordSize(unsigned &Result, ast::RecordDecl*
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3621,6 +3997,7 @@ QueryResult QueryContext::GetRecordMeta(const RecordMetaInfo* &Result, ast::Reco
 {
 GetRecordMetaQuery _Q(*this, R, Initialize);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -3633,10 +4010,11 @@ bool QueryContext::IsBuiltinIntegerType(ast::RecordDecl* R)
 {
    auto Key = R;
    auto It = IsBuiltinIntegerTypeQueries.find(Key);
-   if (It != IsBuiltinIntegerTypeQueries.end()) {
+   if (It != IsBuiltinIntegerTypeQueries.end() && !shouldReset()) {
       return It->getSecond();   }
 IsBuiltinIntegerTypeQuery _Q(*this, R);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) llvm_unreachable("infallible query failed!");
 
@@ -3650,10 +4028,11 @@ bool QueryContext::IsBuiltinFloatingPointType(ast::RecordDecl* R)
 {
    auto Key = R;
    auto It = IsBuiltinFloatingPointTypeQueries.find(Key);
-   if (It != IsBuiltinFloatingPointTypeQueries.end()) {
+   if (It != IsBuiltinFloatingPointTypeQueries.end() && !shouldReset()) {
       return It->getSecond();   }
 IsBuiltinFloatingPointTypeQuery _Q(*this, R);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) llvm_unreachable("infallible query failed!");
 
@@ -3667,10 +4046,11 @@ bool QueryContext::IsBuiltinBoolType(ast::RecordDecl* R)
 {
    auto Key = R;
    auto It = IsBuiltinBoolTypeQueries.find(Key);
-   if (It != IsBuiltinBoolTypeQueries.end()) {
+   if (It != IsBuiltinBoolTypeQueries.end() && !shouldReset()) {
       return It->getSecond();   }
 IsBuiltinBoolTypeQuery _Q(*this, R);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) llvm_unreachable("infallible query failed!");
 
@@ -3684,10 +4064,11 @@ QueryResult QueryContext::AddImplicitConformance(ast::MethodDecl* &Result, ast::
 {
    auto Key = std::make_pair(R, std::make_pair(K, Impl));
    auto It = AddImplicitConformanceQueries.find(Key);
-   if (It != AddImplicitConformanceQueries.end()) {
+   if (It != AddImplicitConformanceQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 AddImplicitConformanceQuery _Q(*this, R, K, Impl);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -3701,6 +4082,7 @@ QueryResult QueryContext::GetImplicitConformance(ast::MethodDecl* &Result, ast::
 {
 GetImplicitConformanceQuery _Q(*this, R, K);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -3727,6 +4109,9 @@ QueryResult QueryContext::CheckBuiltinConformances(ast::RecordDecl* R)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3773,6 +4158,9 @@ QueryResult QueryContext::IsAccessible(bool &Result, ast::DeclContext* DC, ast::
       _Q = new(*this) IsAccessibleQuery(*this, DC, ND);
       IsAccessibleQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3819,6 +4207,9 @@ QueryResult QueryContext::CheckAccessibility(ast::DeclContext* DC, ast::NamedDec
       _Q = new(*this) CheckAccessibilityQuery(*this, DC, ND, Loc);
       CheckAccessibilityQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3865,6 +4256,9 @@ QueryResult QueryContext::ResolveNestedNameSpecToType(QualType &Result, NestedNa
       _Q = new(*this) ResolveNestedNameSpecToTypeQuery(*this, Name, DC, IssueDiag);
       ResolveNestedNameSpecToTypeQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3911,6 +4305,9 @@ QueryResult QueryContext::ResolveNestedNameSpecToDecl(ast::NamedDecl* &Result, N
       _Q = new(*this) ResolveNestedNameSpecToDeclQuery(*this, Name, DC, IssueDiag);
       ResolveNestedNameSpecToDeclQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3957,6 +4354,9 @@ QueryResult QueryContext::TypeCheckDeclContext(ast::DeclContext* DC)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -3989,10 +4389,11 @@ QueryResult QueryContext::PrepareDeclInterface(ast::Decl* D)
 {
    auto Key = D;
    auto It = PrepareDeclInterfaceQueries.find(Key);
-   if (It != PrepareDeclInterfaceQueries.end()) {
+   if (It != PrepareDeclInterfaceQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 PrepareDeclInterfaceQuery _Q(*this, D);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -4005,10 +4406,11 @@ QueryResult QueryContext::TypecheckDecl(ast::Decl* D)
 {
    auto Key = D;
    auto It = TypecheckDeclQueries.find(Key);
-   if (It != TypecheckDeclQueries.end()) {
+   if (It != TypecheckDeclQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 TypecheckDeclQuery _Q(*this, D);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -4035,6 +4437,9 @@ QueryResult QueryContext::PreparePrecedenceGroupInterface(ast::PrecedenceGroupDe
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4081,6 +4486,9 @@ QueryResult QueryContext::TypecheckPrecedenceGroup(ast::PrecedenceGroupDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4127,6 +4535,9 @@ QueryResult QueryContext::PrepareOperatorInterface(ast::OperatorDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4173,6 +4584,9 @@ QueryResult QueryContext::TypecheckOperator(ast::OperatorDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4219,6 +4633,9 @@ QueryResult QueryContext::PrepareGlobalVarInterface(ast::GlobalVarDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4265,6 +4682,9 @@ QueryResult QueryContext::TypecheckGlobalVar(ast::GlobalVarDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4311,6 +4731,9 @@ QueryResult QueryContext::PrepareCallableInterface(ast::CallableDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4357,6 +4780,9 @@ QueryResult QueryContext::TypecheckCallable(ast::CallableDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4403,6 +4829,9 @@ QueryResult QueryContext::PrepareFunctionInterface(ast::FunctionDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4449,6 +4878,9 @@ QueryResult QueryContext::TypecheckFunction(ast::FunctionDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4495,6 +4927,9 @@ QueryResult QueryContext::PrepareMethodInterface(ast::MethodDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4541,6 +4976,9 @@ QueryResult QueryContext::TypecheckMethod(ast::MethodDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4587,6 +5025,9 @@ QueryResult QueryContext::PrepareInitInterface(ast::InitDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4633,6 +5074,9 @@ QueryResult QueryContext::TypecheckInit(ast::InitDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4679,6 +5123,9 @@ QueryResult QueryContext::PrepareDeinitInterface(ast::DeinitDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4725,6 +5172,9 @@ QueryResult QueryContext::TypecheckDeinit(ast::DeinitDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4771,6 +5221,9 @@ QueryResult QueryContext::PrepareFuncArgInterface(ast::FuncArgDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4817,6 +5270,9 @@ QueryResult QueryContext::TypecheckFuncArg(ast::FuncArgDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4863,6 +5319,9 @@ QueryResult QueryContext::PrepareTemplateParamInterface(ast::TemplateParamDecl* 
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4909,6 +5368,9 @@ QueryResult QueryContext::TypecheckTemplateParam(ast::TemplateParamDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -4955,6 +5417,9 @@ QueryResult QueryContext::PrepareAssociatedTypeInterface(ast::AssociatedTypeDecl
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5001,6 +5466,9 @@ QueryResult QueryContext::TypecheckAssociatedType(ast::AssociatedTypeDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5047,6 +5515,9 @@ QueryResult QueryContext::PrepareAliasInterface(ast::AliasDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5093,6 +5564,9 @@ QueryResult QueryContext::TypecheckAlias(ast::AliasDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5139,6 +5613,9 @@ QueryResult QueryContext::PrepareRecordInterface(ast::RecordDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5185,6 +5662,9 @@ QueryResult QueryContext::TypecheckRecord(ast::RecordDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5231,6 +5711,9 @@ QueryResult QueryContext::PrepareStructInterface(ast::StructDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5277,6 +5760,9 @@ QueryResult QueryContext::TypecheckStruct(ast::StructDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5323,6 +5809,9 @@ QueryResult QueryContext::PrepareClassInterface(ast::ClassDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5369,6 +5858,9 @@ QueryResult QueryContext::TypecheckClass(ast::ClassDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5415,6 +5907,9 @@ QueryResult QueryContext::PrepareEnumInterface(ast::EnumDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5461,6 +5956,9 @@ QueryResult QueryContext::TypecheckEnum(ast::EnumDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5507,6 +6005,9 @@ QueryResult QueryContext::PrepareProtocolInterface(ast::ProtocolDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5553,6 +6054,9 @@ QueryResult QueryContext::TypecheckProtocol(ast::ProtocolDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5599,6 +6103,9 @@ QueryResult QueryContext::PrepareExtensionInterface(ast::ExtensionDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5645,6 +6152,9 @@ QueryResult QueryContext::TypecheckExtension(ast::ExtensionDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5691,6 +6201,9 @@ QueryResult QueryContext::PrepareFieldInterface(ast::FieldDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5737,6 +6250,9 @@ QueryResult QueryContext::TypecheckField(ast::FieldDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5783,6 +6299,9 @@ QueryResult QueryContext::PreparePropInterface(ast::PropDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5829,6 +6348,9 @@ QueryResult QueryContext::TypecheckProp(ast::PropDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5875,6 +6397,9 @@ QueryResult QueryContext::PrepareSubscriptInterface(ast::SubscriptDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5921,6 +6446,9 @@ QueryResult QueryContext::TypecheckSubscript(ast::SubscriptDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -5967,6 +6495,9 @@ QueryResult QueryContext::PrepareEnumCaseInterface(ast::EnumCaseDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6013,6 +6544,9 @@ QueryResult QueryContext::TypecheckEnumCase(ast::EnumCaseDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6059,6 +6593,9 @@ QueryResult QueryContext::PrepareNamespaceInterface(ast::NamespaceDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6105,6 +6642,9 @@ QueryResult QueryContext::TypecheckNamespace(ast::NamespaceDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6151,6 +6691,9 @@ QueryResult QueryContext::PrepareCompoundInterface(ast::CompoundDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6197,6 +6740,9 @@ QueryResult QueryContext::TypecheckCompound(ast::CompoundDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6243,6 +6789,9 @@ QueryResult QueryContext::PrepareModuleInterface(ast::ModuleDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6289,6 +6838,9 @@ QueryResult QueryContext::TypecheckModule(ast::ModuleDecl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6335,6 +6887,9 @@ QueryResult QueryContext::PrepareTemplateParameters(ast::NamedDecl* Decl)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6381,6 +6936,9 @@ QueryResult QueryContext::DeclareImplicitInitializers(ast::RecordDecl* R)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6427,6 +6985,9 @@ QueryResult QueryContext::DeclareImplicitDefaultInit(ast::StructDecl* S)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6473,6 +7034,9 @@ QueryResult QueryContext::DeclareMemberwiseInit(ast::StructDecl* S)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6519,6 +7083,9 @@ QueryResult QueryContext::DeclareImplicitDefaultDeinit(ast::RecordDecl* S)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6565,6 +7132,9 @@ QueryResult QueryContext::ResolveRawType(ast::EnumDecl* E)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6611,6 +7181,9 @@ QueryResult QueryContext::AssignInitName(ast::InitDecl* Init)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6643,10 +7216,11 @@ QueryResult QueryContext::CreateBaseInit(ast::InitDecl* D)
 {
    auto Key = D;
    auto It = CreateBaseInitQueries.find(Key);
-   if (It != CreateBaseInitQueries.end()) {
+   if (It != CreateBaseInitQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 CreateBaseInitQuery _Q(*this, D);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -6674,6 +7248,9 @@ QueryResult QueryContext::LookupFirst(const SingleLevelLookupResult* &Result, as
       LookupFirstQueries.InsertNode(_Q, InsertPos);
    }   _Q->refresh();
 
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6721,6 +7298,9 @@ QueryResult QueryContext::LookupSingle(ast::NamedDecl* &Result, ast::DeclContext
       LookupSingleQueries.InsertNode(_Q, InsertPos);
    }   _Q->refresh();
 
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6752,6 +7332,9 @@ QueryResult QueryContext::MultiLevelLookup(const MultiLevelLookupResult* &Result
 
 {
    auto *_Q = new(*this) MultiLevelLookupQuery(*this, DC, Name, Opts);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6783,6 +7366,9 @@ QueryResult QueryContext::MultiLevelTypeLookup(const MultiLevelLookupResult* &Re
 
 {
    auto *_Q = new(*this) MultiLevelTypeLookupQuery(*this, T, Name, Opts);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6810,26 +7396,78 @@ QueryResult QueryContext::MultiLevelTypeLookup(const MultiLevelLookupResult* &Re
 
 }
 
-template<> DirectLookupQuery *QueryContext::getQuery<DirectLookupQuery>(ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts)
+template<> RestrictedLookupQuery *QueryContext::getQuery<RestrictedLookupQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts)
 {
    llvm::FoldingSetNodeID ID;
-   DirectLookupQuery::Profile(ID, DC, Name, LookInExtensions, Opts);
+   RestrictedLookupQuery::Profile(ID, DC, Name, Opts);
+   void *InsertPos;
+   return RestrictedLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
+}
+
+QueryResult QueryContext::RestrictedLookup(const MultiLevelLookupResult* &Result, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts)
+
+{
+   llvm::FoldingSetNodeID ID;
+   RestrictedLookupQuery::Profile(ID, DC, Name, Opts);
+   void *InsertPos;
+   auto *_Q = RestrictedLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
+   if (!_Q) {
+      _Q = new(*this) RestrictedLookupQuery(*this, DC, Name, Opts);
+      RestrictedLookupQueries.InsertNode(_Q, InsertPos);
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Idle;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+template<> DirectLookupQuery *QueryContext::getQuery<DirectLookupQuery>(ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints)
+{
+   llvm::FoldingSetNodeID ID;
+   DirectLookupQuery::Profile(ID, DC, Name, LookInExtensions, Opts, Constraints);
    void *InsertPos;
    return DirectLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::DirectLookup(const MultiLevelLookupResult* &Result, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts)
+QueryResult QueryContext::DirectLookup(const MultiLevelLookupResult* &Result, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints)
 
 {
    llvm::FoldingSetNodeID ID;
-   DirectLookupQuery::Profile(ID, DC, Name, LookInExtensions, Opts);
+   DirectLookupQuery::Profile(ID, DC, Name, LookInExtensions, Opts, Constraints);
    void *InsertPos;
    auto *_Q = DirectLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) DirectLookupQuery(*this, DC, Name, LookInExtensions, Opts);
+      _Q = new(*this) DirectLookupQuery(*this, DC, Name, LookInExtensions, Opts, Constraints);
       DirectLookupQueries.InsertNode(_Q, InsertPos);
    }   _Q->refresh();
 
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6861,6 +7499,9 @@ QueryResult QueryContext::NestedNameLookup(const MultiLevelLookupResult* &Result
 
 {
    auto *_Q = new(*this) NestedNameLookupQuery(*this, DC, Names, Opts, Loc);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -6893,10 +7534,11 @@ QueryResult QueryContext::ResolveMacros(ast::DeclContext* DC)
 {
    auto Key = DC;
    auto It = ResolveMacrosQueries.find(Key);
-   if (It != ResolveMacrosQueries.end()) {
+   if (It != ResolveMacrosQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 ResolveMacrosQuery _Q(*this, DC);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -6909,10 +7551,11 @@ QueryResult QueryContext::ResolveStaticDeclarations(ast::DeclContext* DC)
 {
    auto Key = DC;
    auto It = ResolveStaticDeclarationsQueries.find(Key);
-   if (It != ResolveStaticDeclarationsQueries.end()) {
+   if (It != ResolveStaticDeclarationsQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 ResolveStaticDeclarationsQuery _Q(*this, DC);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -6925,15 +7568,65 @@ QueryResult QueryContext::ResolveWildcardDeclarations(ast::DeclContext* DC)
 {
    auto Key = DC;
    auto It = ResolveWildcardDeclarationsQueries.find(Key);
-   if (It != ResolveWildcardDeclarationsQueries.end()) {
+   if (It != ResolveWildcardDeclarationsQueries.end() && !shouldReset()) {
       return QueryResult(QueryResult::Success);   }
 ResolveWildcardDeclarationsQuery _Q(*this, DC);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
 ResolveWildcardDeclarationsQueries.insert(DC);
 return QueryResult(QueryResult::Success);
+}
+
+template<> ResolveMetaDeclarationsQuery *QueryContext::getQuery<ResolveMetaDeclarationsQuery>(ast::DeclContext* DC)
+{
+   auto It = ResolveMetaDeclarationsQueries.find(DC);
+   if (It != ResolveMetaDeclarationsQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::ResolveMetaDeclarations(ast::DeclContext* DC)
+
+{
+   auto Key = DC;
+   auto It = ResolveMetaDeclarationsQueries.find(Key);
+   ResolveMetaDeclarationsQuery *_Q;
+   if (It == ResolveMetaDeclarationsQueries.end()) {
+      _Q = new(*this) ResolveMetaDeclarationsQuery(*this, DC);
+      ResolveMetaDeclarationsQueries[_Q->DC] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
 }
 
 template<> PrepareTypeNameLookupQuery *QueryContext::getQuery<PrepareTypeNameLookupQuery>(ast::DeclContext* DC)
@@ -6955,6 +7648,9 @@ QueryResult QueryContext::PrepareTypeNameLookup(ast::DeclContext* DC)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7001,6 +7697,9 @@ QueryResult QueryContext::PrepareNameLookup(ast::DeclContext* DC)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7047,6 +7746,9 @@ QueryResult QueryContext::InstantiateFields(ast::StructDecl* S)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7093,6 +7795,9 @@ QueryResult QueryContext::InstantiateCases(ast::EnumDecl* E)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7120,10 +7825,13 @@ QueryResult QueryContext::InstantiateCases(ast::EnumDecl* E)
 
 }
 
-QueryResult QueryContext::GetAssociatedType(ast::AssociatedTypeDecl* &Result, ast::RecordDecl* R, DeclarationName Name, llvm::ArrayRef<ast::ExtensionDecl*> Extensions)
+QueryResult QueryContext::GetAssociatedTypeImpl(ast::AliasDecl* &Result, ast::RecordDecl* R, DeclarationName Name, llvm::ArrayRef<ast::ExtensionDecl*> Extensions, ast::ConstraintSet* Constraints)
 
 {
-   auto *_Q = new(*this) GetAssociatedTypeQuery(*this, R, Name, Extensions);
+   auto *_Q = new(*this) GetAssociatedTypeImplQuery(*this, R, Name, Extensions, Constraints);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7151,25 +7859,62 @@ QueryResult QueryContext::GetAssociatedType(ast::AssociatedTypeDecl* &Result, as
 
 }
 
-template<> CheckTypeEquivalenceQuery *QueryContext::getQuery<CheckTypeEquivalenceQuery>(QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl)
+QueryResult QueryContext::GetAssociatedTypeDecl(ast::AssociatedTypeDecl* &Result, ast::ProtocolDecl* P, DeclarationName Name, ast::ConstraintSet* Constraints)
+
+{
+   auto *_Q = new(*this) GetAssociatedTypeDeclQuery(*this, P, Name, Constraints);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+template<> CheckTypeEquivalenceQuery *QueryContext::getQuery<CheckTypeEquivalenceQuery>(QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl, ast::DeclContext* DeclCtx)
 {
    llvm::FoldingSetNodeID ID;
-   CheckTypeEquivalenceQuery::Profile(ID, LHS, RHS, Self, LHSDecl);
+   CheckTypeEquivalenceQuery::Profile(ID, LHS, RHS, Self, LHSDecl, DeclCtx);
    void *InsertPos;
    return CheckTypeEquivalenceQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::CheckTypeEquivalence(bool &Result, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl)
+QueryResult QueryContext::CheckTypeEquivalence(bool &Result, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl, ast::DeclContext* DeclCtx)
 
 {
    llvm::FoldingSetNodeID ID;
-   CheckTypeEquivalenceQuery::Profile(ID, LHS, RHS, Self, LHSDecl);
+   CheckTypeEquivalenceQuery::Profile(ID, LHS, RHS, Self, LHSDecl, DeclCtx);
    void *InsertPos;
    auto *_Q = CheckTypeEquivalenceQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) CheckTypeEquivalenceQuery(*this, LHS, RHS, Self, LHSDecl);
+      _Q = new(*this) CheckTypeEquivalenceQuery(*this, LHS, RHS, Self, LHSDecl, DeclCtx);
       CheckTypeEquivalenceQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7216,6 +7961,9 @@ QueryResult QueryContext::InstantiateProtocolDefaultImpl(ast::NamedDecl* &Result
       _Q = new(*this) InstantiateProtocolDefaultImplQuery(*this, Impl, Self, ActOnDecl);
       InstantiateProtocolDefaultImplQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7262,6 +8010,9 @@ QueryResult QueryContext::InstantiateRecord(ast::RecordDecl* &Result, ast::Recor
       _Q = new(*this) InstantiateRecordQuery(*this, Template, TemplateArgs, PointOfInstantiation, OuterInst);
       InstantiateRecordQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7308,6 +8059,9 @@ QueryResult QueryContext::InstantiateAlias(ast::AliasDecl* &Result, ast::AliasDe
       _Q = new(*this) InstantiateAliasQuery(*this, Template, TemplateArgs, PointOfInstantiation);
       InstantiateAliasQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7354,6 +8108,9 @@ QueryResult QueryContext::InstantiateCallable(ast::CallableDecl* &Result, ast::C
       _Q = new(*this) InstantiateCallableQuery(*this, Template, TemplateArgs, PointOfInstantiation);
       InstantiateCallableQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7400,6 +8157,9 @@ QueryResult QueryContext::InstantiateFunction(ast::FunctionDecl* &Result, ast::F
       _Q = new(*this) InstantiateFunctionQuery(*this, Template, TemplateArgs, PointOfInstantiation);
       InstantiateFunctionQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7446,6 +8206,9 @@ QueryResult QueryContext::InstantiateMethod(ast::MethodDecl* &Result, ast::Metho
       _Q = new(*this) InstantiateMethodQuery(*this, Template, TemplateArgs, PointOfInstantiation);
       InstantiateMethodQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7492,6 +8255,9 @@ QueryResult QueryContext::InstantiateMethodBody(ast::CallableDecl* Inst)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7538,6 +8304,9 @@ QueryResult QueryContext::InstantiateDecl(ast::Decl* &Result, ast::Decl* Templat
       _Q = new(*this) InstantiateDeclQuery(*this, Template, std::move(TemplateArgs));
       InstantiateDeclQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7584,6 +8353,9 @@ QueryResult QueryContext::CheckTemplateExtensionApplicability(bool &Result, ast:
       _Q = new(*this) CheckTemplateExtensionApplicabilityQuery(*this, Inst, Ext);
       CheckTemplateExtensionApplicabilityQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7630,6 +8402,9 @@ QueryResult QueryContext::PrepareDeclForInstantiation(ast::NamedDecl* ND)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7676,6 +8451,9 @@ QueryResult QueryContext::InstantiateTemplateMember(ast::NamedDecl* &Result, ast
       _Q = new(*this) InstantiateTemplateMemberQuery(*this, TemplateMember, Inst, TemplateArgs, PointOfInstantiation);
       InstantiateTemplateMemberQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7722,6 +8500,9 @@ QueryResult QueryContext::PrepareInstantiationForNameLookup(ast::RecordDecl* Ins
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7768,6 +8549,9 @@ QueryResult QueryContext::GetILModuleForDecl(il::Module* &Result, ast::Decl* D)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7814,6 +8598,9 @@ QueryResult QueryContext::GenerateILForContext(ast::DeclContext* DC)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7860,6 +8647,9 @@ QueryResult QueryContext::GenerateRecordIL(ast::RecordDecl* R)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7906,6 +8696,9 @@ QueryResult QueryContext::GetILGlobal(il::GlobalVariable* &Result, ast::VarDecl*
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7952,6 +8745,9 @@ QueryResult QueryContext::GenerateLazyILGlobalDefinition(ast::VarDecl* GV)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -7998,6 +8794,9 @@ QueryResult QueryContext::GetILFunction(il::Function* &Result, ast::CallableDecl
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8044,6 +8843,9 @@ QueryResult QueryContext::GenerateILFunctionBody(ast::CallableDecl* C)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8090,6 +8892,9 @@ QueryResult QueryContext::GetILTypeInfo(il::GlobalVariable* &Result, QualType T)
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8136,6 +8941,9 @@ QueryResult QueryContext::CreateILBasicTypeInfo(il::Constant* &Result, QualType 
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8182,6 +8990,9 @@ QueryResult QueryContext::CreateILRecordTypeInfo(il::Constant* &Result, ast::Rec
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8214,10 +9025,11 @@ QueryResult QueryContext::GetBoolValue(bool &Result, il::Constant* C, uint8_t Al
 {
    auto Key = std::make_pair(C, AllowWrapperTypes);
    auto It = GetBoolValueQueries.find(Key);
-   if (It != GetBoolValueQueries.end()) {
+   if (It != GetBoolValueQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 GetBoolValueQuery _Q(*this, C, AllowWrapperTypes);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -8231,10 +9043,11 @@ QueryResult QueryContext::GetStringValue(llvm::StringRef &Result, il::Constant* 
 {
    auto Key = std::make_pair(C, AllowWrapperTypes);
    auto It = GetStringValueQueries.find(Key);
-   if (It != GetStringValueQueries.end()) {
+   if (It != GetStringValueQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 GetStringValueQuery _Q(*this, C, AllowWrapperTypes);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -8248,10 +9061,11 @@ QueryResult QueryContext::GetIntValue(llvm::APSInt &Result, il::Constant* C, uin
 {
    auto Key = std::make_pair(C, AllowWrapperTypes);
    auto It = GetIntValueQueries.find(Key);
-   if (It != GetIntValueQueries.end()) {
+   if (It != GetIntValueQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
 GetIntValueQuery _Q(*this, C, AllowWrapperTypes);
 
+ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
 if (MaybeErr.isErr()) return MaybeErr;
 
@@ -8279,6 +9093,9 @@ QueryResult QueryContext::OpenFileForRead(llvm::MemoryBuffer* &Result, StringRef
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8310,6 +9127,9 @@ QueryResult QueryContext::OpenTmpFile(llvm::raw_ostream* &Result, StringRef Exte
 
 {
    auto *_Q = new(*this) OpenTmpFileQuery(*this, Extension);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8356,6 +9176,9 @@ QueryResult QueryContext::GetDefaultTemplateArg(const sema::TemplateArgument* &R
    } else {
       _Q = It->getSecond();
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8387,6 +9210,9 @@ QueryResult QueryContext::CreateSelfArgument(ast::FuncArgDecl* &Result, QualType
 
 {
    auto *_Q = new(*this) CreateSelfArgumentQuery(*this, Self, SelfLoc);
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8433,6 +9259,9 @@ QueryResult QueryContext::FindEquivalentDecl(ast::NamedDecl* &Result, ast::Named
       _Q = new(*this) FindEquivalentDeclQuery(*this, Decl, DC, Self, LookInExtensions);
       FindEquivalentDeclQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);
@@ -8479,6 +9308,9 @@ QueryResult QueryContext::EquivalentSignatures(EquivalentSignaturesQuery::Result
       _Q = new(*this) EquivalentSignaturesQuery(*this, C1, C2, Self);
       EquivalentSignaturesQueries.InsertNode(_Q, InsertPos);
    }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);

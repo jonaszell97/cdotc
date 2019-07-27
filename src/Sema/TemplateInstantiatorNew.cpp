@@ -1456,11 +1456,9 @@ InstantiatorImpl::visitAssociatedTypeDecl(AssociatedTypeDecl *Decl)
    }
 
    auto Inst = AssociatedTypeDecl::Create(Context, Decl->getSourceLoc(),
-                                          Decl->getProtoSpecInfo(),
                                           Decl->getDeclName(),
                                           ActualType,
-                                          visit(Decl->getCovariance()),
-                                          Decl->isImplementation());
+                                          visit(Decl->getCovariance()));
 
    Context.setConstraints(Inst, cloneVector(Decl->getConstraints()));
    return Inst;

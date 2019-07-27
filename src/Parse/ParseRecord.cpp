@@ -66,7 +66,7 @@ ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind)
       llvm_unreachable("not a record decl!");
    }
 
-   Context.setConstraints(decl, head.constraints);
+   Context.setParsedConstraints(decl, move(head.constraints));
 
    decl->setAccessLoc(CurDeclAttrs.AccessLoc);
    decl->setHasDefinition(head.hasDefinition);
@@ -112,7 +112,7 @@ ParseResult Parser::parseExtension()
       }
    }
 
-   SmallVector<DeclConstraint*, 4> Constraints;
+   std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
@@ -121,7 +121,7 @@ ParseResult Parser::parseExtension()
    ExtensionDecl *decl = ExtensionDecl::Create(Context, CurDeclAttrs.Access,Loc,
                                                ExtendedType, Conformances);
 
-   Context.setConstraints(decl, Constraints);
+   Context.setParsedConstraints(decl, move(Constraints));
    decl->setAccessLoc(CurDeclAttrs.AccessLoc);
 
    if (!expect(tok::open_brace)) {
@@ -487,13 +487,13 @@ ParseResult Parser::parseConstrDecl()
                                  move(params), nullptr, DeclarationName(),
                                  IsFallible);
 
-   SmallVector<DeclConstraint*, 4> Constraints;
+   std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
    }
 
-   Context.setConstraints(Init, Constraints);
+   Context.setParsedConstraints(Init, move(Constraints));
 
    Statement* body = nullptr;
    if (lexer->lookahead().is(tok::open_brace)) {
@@ -506,6 +506,10 @@ ParseResult Parser::parseConstrDecl()
       EnterFunctionScope EF(*this);
 
       body = parseCompoundStmt().tryGetStatement();
+   }
+   else if (!ParsingProtocol) {
+      SP.diagnose(Init, err_generic_error, "initializer must have a definition",
+                  Init->getSourceLoc());
    }
 
    Init->setBody(body);
@@ -935,19 +939,14 @@ ParseResult Parser::parseSubscriptDecl()
 
 ParseResult Parser::parseAssociatedType()
 {
+   if (!ParsingProtocol) {
+      SP.diagnose(err_generic_error,
+         "'associatedType' declarations may only appear in protocols, implement them with an alias instead",
+         currentTok().getSourceLoc());
+   }
+
    auto Loc = currentTok().getSourceLoc();
    consumeToken(tok::kw_associatedType);
-
-   IdentifierInfo *protoSpecifier = nullptr;
-   while (lookahead().is(tok::period)) {
-//      if (!protoSpecifier.empty())
-//         protoSpecifier += '.';
-
-//      protoSpecifier += lexer->getCurrentIdentifier();
-
-      advance();
-      advance();
-   }
 
    auto name = currentTok().getIdentifierInfo();
 
@@ -972,18 +971,35 @@ ParseResult Parser::parseAssociatedType()
       actualType = parseType().tryGet();
    }
 
-   SmallVector<DeclConstraint*, 4> Constraints;
+   std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
    }
 
-   auto AT = AssociatedTypeDecl::Create(Context, Loc, protoSpecifier,
-                                        name, actualType, covariance,
-                                        !ParsingProtocol);
+   NamedDecl *decl;
+   if (!ParsingProtocol) {
+      // Pretend the programmer used an alias.
+      SourceType metaTy;
+      if (actualType) {
+         metaTy = actualType;
+      }
+      else {
+         metaTy = covariance;
+      }
 
-   Context.setConstraints(AT, Constraints);
-   return ActOnDecl(AT);
+      decl = AliasDecl::Create(
+         Context, Loc, AccessSpecifier::Public, name, metaTy, nullptr, {});
+
+      decl->setIsInvalid(true);
+   }
+   else {
+      decl = AssociatedTypeDecl::Create(
+         Context, Loc, name, actualType, covariance);
+   }
+
+   Context.setParsedConstraints(decl, move(Constraints));
+   return ActOnDecl(decl);
 }
 
 DeclarationName Parser::parseOperatorName(FixKind Fix,
@@ -1149,7 +1165,7 @@ ParseResult Parser::parseMethodDecl()
       returnType = SourceType(Context.getAutoType());
    }
 
-   SmallVector<DeclConstraint*, 4> Constraints;
+   std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
       advance();
       parseDeclConstraints(Constraints);
@@ -1188,6 +1204,11 @@ ParseResult Parser::parseMethodDecl()
       if (IsAbstract)
          body = nullptr;
    }
+   else if (!ParsingProtocol && !IsAbstract) {
+      SP.diagnose(methodDecl, err_generic_error,
+                  "method must have a definition",
+                  methodDecl->getSourceLoc());
+   }
 
    methodDecl->setVararg(varargLoc.isValid());
    methodDecl->setBody(body);
@@ -1199,8 +1220,7 @@ ParseResult Parser::parseMethodDecl()
    methodDecl->setUnsafe(Unsafe);
    methodDecl->setAbstract(IsAbstract);
 
-   Context.setConstraints(methodDecl, Constraints);
-
+   Context.setParsedConstraints(methodDecl, move(Constraints));
    return ActOnDecl(methodDecl);
 }
 

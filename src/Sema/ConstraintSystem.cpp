@@ -493,9 +493,10 @@ QualType LiteralConstraint::getDefaultLiteralType(QueryContext &QC)
 }
 
 DisjunctionConstraint::DisjunctionConstraint(ArrayRef<Constraint*> Constraints,
-                                             Locator Loc)
+                                             Locator Loc,
+                                             unsigned defaultValue)
    : Constraint(DisjunctionID, Constraints.front()->getConstrainedType(), Loc),
-     NumConstraints((unsigned)Constraints.size())
+     NumConstraints((unsigned)Constraints.size()), defaultValue(defaultValue)
 {
    std::copy(Constraints.begin(), Constraints.end(),
              getTrailingObjects<Constraint*>());
@@ -504,11 +505,12 @@ DisjunctionConstraint::DisjunctionConstraint(ArrayRef<Constraint*> Constraints,
 DisjunctionConstraint*
 DisjunctionConstraint::Create(ConstraintSystem &Sys,
                               ArrayRef<Constraint*> Constraints,
-                              Locator Loc) {
+                              Locator Loc,
+                              unsigned defaultValue) {
    size_t Size = totalSizeToAlloc<Constraint*>(Constraints.size());
    void *Mem = Sys.Allocate(Size, alignof(DisjunctionConstraint));
 
-   return new(Mem) DisjunctionConstraint(Constraints, Loc);
+   return new(Mem) DisjunctionConstraint(Constraints, Loc, defaultValue);
 }
 
 ArrayRef<Constraint*> DisjunctionConstraint::getConstraints() const
@@ -1027,13 +1029,7 @@ bool ConstraintSystem::isSatisfied(ConformanceConstraint *C)
       return true;
    }
 
-   bool Conforms;
-   if (auto Err = QC.ConformsTo(Conforms, LHS, C->getProtoDecl())) {
-      updateStatus(Err.K);
-      return true;
-   }
-
-   return Conforms;
+   return QC.Sema->ConformsTo(LHS, C->getProtoDecl());
 }
 
 bool ConstraintSystem::isSatisfied(ClassConstraint *C)
@@ -1105,24 +1101,14 @@ static bool isExpressibleBy(SemaPass &Sema,
 
    RecordDecl *ConformingRec = nullptr;
    if (auto *RT = Desugared->asRecordType()) {
-      bool ConformsTo;
-      if (Sema.QC.ConformsTo(ConformsTo, Desugared, InitializableByDecl)) {
-         EncounteredError = true;
-         return ExprError();
-      }
-
+      bool ConformsTo = Sema.ConformsTo(Desugared, InitializableByDecl);
       if (ConformsTo) {
          ConformingRec = RT->getRecord();
       }
    }
    else if (auto *Ext = Desugared->asExistentialType()) {
       for (auto ET : Ext->getExistentials()) {
-         bool ConformsTo;
-         if (Sema.QC.ConformsTo(ConformsTo, ET, InitializableByDecl)) {
-            EncounteredError = true;
-            return ExprError();
-         }
-
+         bool ConformsTo = Sema.ConformsTo(ET, InitializableByDecl);
          if (ConformsTo) {
             ConformingRec = ET->getRecord();
             break;
@@ -1324,11 +1310,16 @@ class TypeEquivalenceBuilder: public TypeComparer<TypeEquivalenceBuilder> {
    /// Worklist of constraints to simplify.
    SmallVectorImpl<Constraint*> &Worklist;
 
+   /// Whether or not to compare for a strict match of the mutability of pointer /
+   /// reference types.
+   bool strict;
+
 public:
    TypeEquivalenceBuilder(ConstraintSystem &Sys,
                           Constraint *C,
-                          SmallVectorImpl<Constraint*> &Worklist)
-      : Sys(Sys), C(C), Worklist(Worklist)
+                          SmallVectorImpl<Constraint*> &Worklist,
+                          bool strict)
+      : Sys(Sys), C(C), Worklist(Worklist), strict(strict)
    { }
 
    bool visitTypeVariableType(TypeVariableType *LHS, QualType RHS)
@@ -1377,12 +1368,59 @@ public:
 
       return true;
    }
+
+   bool visitPointerType(PointerType *LHS, QualType RHS)
+   {
+      if (strict) {
+         if (RHS->getTypeID() == Type::PointerTypeID) {
+            return visit(LHS->getPointeeType(), RHS->getPointeeType());
+         }
+      }
+      else if (auto *Ptr = RHS->asPointerType()) {
+         return visit(LHS->getPointeeType(), Ptr->getPointeeType());
+      }
+
+      return false;
+   }
+
+   bool visitReferenceType(ReferenceType *LHS, QualType RHS)
+   {
+      if (strict) {
+         if (RHS->getTypeID() == Type::ReferenceTypeID) {
+            return visit(LHS->getReferencedType(), RHS->getReferencedType());
+         }
+      }
+      else if (auto *Ptr = RHS->asReferenceType()) {
+         return visit(LHS->getReferencedType(), Ptr->getReferencedType());
+      }
+
+      return false;
+   }
+
+   bool visitMutableReferenceType(MutableReferenceType *LHS, QualType RHS)
+   {
+      if (strict) {
+         if (RHS->getTypeID() == Type::MutableReferenceTypeID) {
+            return visit(LHS->getReferencedType(), RHS->getReferencedType());
+         }
+      }
+      else if (auto *Ref = RHS->asMutableReferenceType()) {
+         return visit(LHS->getReferencedType(), Ref->getReferencedType());
+      }
+
+      return false;
+   }
 };
 
 } // anonymous namespace
 
 bool ConstraintSystem::simplify(Constraint *C,
-                                SmallVectorImpl<Constraint*> &Worklist) {
+                                SmallVectorImpl<Constraint*> &Worklist,
+                                SmallPtrSetImpl<Constraint*> &removedConstraints) {
+   if (removedConstraints.count(C) != 0) {
+      return false;
+   }
+
    switch (C->getKind()) {
    case Constraint::TypeBindingID:
    case Constraint::TypeEqualityID:
@@ -1415,6 +1453,7 @@ bool ConstraintSystem::simplify(Constraint *C,
       }
 
       // Implicit conversion constraints are only transitive for tuple types.
+      bool strict = !isa<ImplicitConversionConstraint>(C);
       if ((isa<ImplicitConversionConstraint>(C)
       && !Concrete->isTupleType()
       && !Concrete->isFunctionType())) {
@@ -1427,7 +1466,7 @@ bool ConstraintSystem::simplify(Constraint *C,
       // we can form new equality constraints for T1 and T2 if T0 is known
       // and of tuple type. If the structure doesn't match, we know that the
       // solution is invalid.
-      return !TypeEquivalenceBuilder(*this, C, Worklist)
+      return !TypeEquivalenceBuilder(*this, C, Worklist, strict)
          .visit(Inconcrete, Concrete);
    }
    case Constraint::FunctionReturnTypeID: {
@@ -1503,11 +1542,12 @@ bool ConstraintSystem::simplify(Constraint *C,
          bindTypeVariable(TypeVar, RHS);
       }
 
-      CG.removeConstraint(C);
-
       // Revisit the constraints that mention this type variable.
       auto Constraints = CG.getOrAddNode(TypeVar)->getConstraints();
       Worklist.append(Constraints.begin(), Constraints.end());
+
+      CG.removeConstraint(C);
+      removedConstraints.insert(C);
 
       return false;
    }
@@ -1520,18 +1560,19 @@ bool ConstraintSystem::simplify(Constraint *C,
 bool ConstraintSystem::applyConcreteBindings()
 {
    for (auto &binding : DirectBindingMap) {
-      if (QualType concreteType = CG.getBinding(binding.getFirst())) {
-         if (binding.getSecond() != concreteType) {
-            return true;
-         }
-      }
-      else {
-         bindTypeVariable(binding.getFirst(), binding.getSecond());
-      }
+//      if (QualType concreteType = CG.getBinding(binding.getFirst())) {
+//         if (binding.getSecond() != concreteType) {
+//            return true;
+//         }
+//      }
+//      else {
+//         bindTypeVariable(binding.getFirst(), binding.getSecond());
+//      }
+      bindTypeVariable(binding.getFirst(), binding.getSecond());
+   }
 
-      if (auto *failed = simplifyConstraints(binding.getFirst())) {
-         return true;
-      }
+   if (auto *failed = simplifyConstraints()) {
+      return true;
    }
 
    return false;
@@ -1620,9 +1661,11 @@ Constraint *ConstraintSystem::simplifyConstraints(TypeVariableType *Modified)
    }
 
    unsigned i = 0;
+   SmallPtrSet<Constraint*, 2> removedConstraints;
+
    while (i < Worklist.size()) {
       auto *C = Worklist[i++];
-      if (simplify(C, Worklist)) {
+      if (simplify(C, Worklist, removedConstraints)) {
          FailedConstraint = C;
          return C;
       }

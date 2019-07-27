@@ -91,6 +91,14 @@ static void WriteIfCondition(const IfCondition &C, ASTRecordWriter &Record)
          Record.push_back(false);
       }
 
+      if (C.BindingData.HasValueFn) {
+         Record.push_back(true);
+         Record.AddDeclRef(C.BindingData.HasValueFn);
+      }
+      else {
+         Record.push_back(false);
+      }
+
       break;
    case IfCondition::Pattern:
       Record.AddStmt(C.PatternData.Pattern);

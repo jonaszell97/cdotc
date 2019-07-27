@@ -317,6 +317,10 @@ void ILGenPass::AppendDefaultDeinitializer(Method *M)
       Builder.CreateRetVoid();
    }
 
+#ifndef NDEBUG
+   getMandatoryPassManager().runPassesOnFunction(*DeinitFn);
+#endif
+
    for (auto &BB : M->getBasicBlocks()) {
       if (!BB.isExitBlock())
          continue;
@@ -502,15 +506,6 @@ il::Method* ILGenPass::createProtocolRequirementImplStub(MethodDecl *Req,
       if (Arg->hasAttribute<AutoClosureAttr>()) {
          argType = SP.getContext().getLambdaType(argType, { });
       }
-
-      if (Arg->getConvention() == ArgumentConvention::MutableRef
-          && !argType->isMutableBorrowType()) {
-         argType = SP.getContext().getMutableBorrowType(argType);
-      }
-      else if (Arg->getConvention() == ArgumentConvention::ImmutableRef) {
-         argType = SP.getContext().getReferenceType(argType);
-      }
-
 
       auto A = Builder.CreateArgument(Arg->getType(), Arg->getConvention());
       A->setSourceLoc(Arg->getSourceLoc());
@@ -1092,6 +1087,8 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl *M, RecordDecl *R)
          auto Cpy = CreateCopy(Builder.CreateLoad(Src));
          Builder.CreateInit(Cpy, Dst);
       }
+
+      Res = Builder.CreateLoad(Alloc);
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       if (E->isRawEnum()) {

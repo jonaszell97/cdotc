@@ -401,15 +401,6 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       auto Ty = readType(Record, Idx);
       return Context.getMetaType(Ty);
    }
-   case Type::MutableBorrowTypeID: {
-      if (Record.size() != 1) {
-         Error("bad reference type encoding");
-         return QualType();
-      }
-
-      auto Ty = readType(Record, Idx);
-      return Context.getMutableBorrowType(Ty);
-   }
    case Type::MutableReferenceTypeID: {
       if (Record.size() != 1) {
          Error("bad reference type encoding");

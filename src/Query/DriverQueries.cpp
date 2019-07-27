@@ -39,6 +39,10 @@ QueryResult CompileModuleQuery::run()
       return Query::finish(Err);
    }
 
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
    // Create the LLVM module.
    llvm::Module *LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
@@ -67,20 +71,23 @@ QueryResult ParseModuleFileQuery::run()
              File.Buf, File.SourceId, File.BaseOffset);
 
    Parser parser(QC.Context, &lex, *QC.Sema);
-   auto *Mod = parser.parseModuleFile();
-
+   auto *Mod = parser.parseModuleFile(nullptr, true);
    if (!Mod) {
       return fail();
    }
 
    QC.CI.setCompilationModule(Mod);
 
-   // If the user asked not to import core, import cdot_policy so operators
+   // If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
    auto &Opts = QC.CI.getOptions();
    if (Opts.noPrelude() && !Opts.isStdLib()) {
-      QC.CI.getModuleMgr().LookupModule(
-         Start, Start, QC.Sema->getIdentifier("cdot_policy"));
+      auto *policy = QC.CI.getModuleMgr().LookupModule(
+         Start, Start, QC.Sema->getIdentifier("policy"));
+
+      if (policy && policy != Mod) {
+         Mod->getDecl()->addImportedModule(policy);
+      }
    }
 
    return finish(Mod);
@@ -153,6 +160,11 @@ QueryResult ParseSourceFileQuery::run()
    Parser parser(Context, &lex, Sema);
 
    parser.parse();
+
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
    return finish(FileDecl);
 }
 
@@ -175,12 +187,16 @@ QueryResult ParseMainSourceFileQuery::run()
    SourceLocation Start(File.BaseOffset);
    CI.setMainFileLoc(Start);
 
-   /// If the user asked not to import core, import cdot_policy so operators
+   /// If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
    auto &Opts = QC.CI.getOptions();
    if (Opts.noPrelude() && !Opts.isStdLib()) {
-      QC.CI.getModuleMgr().LookupModule(
-         Start, Start, QC.Sema->getIdentifier("cdot_policy"));
+      auto *policy = QC.CI.getModuleMgr().LookupModule(
+         Start, Start, QC.Sema->getIdentifier("policy"));
+
+      if (policy && policy != Mod) {
+         Mod->getDecl()->addImportedModule(policy);
+      }
    }
 
    SourceLocation End(File.BaseOffset + File.Buf->getBufferSize());
@@ -197,6 +213,11 @@ QueryResult ParseMainSourceFileQuery::run()
    Parser parser(Context, &lex, Sema);
 
    parser.parseMainFile();
+
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
    return finish(FileDecl);
 }
 

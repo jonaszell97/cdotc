@@ -101,11 +101,6 @@ private:
       return visit(T->getReferencedType());
    }
 
-   void visitMutableBorrowTypeChildren(MutableBorrowType *T)
-   {
-      return visit(T->getReferencedType());
-   }
-
    void visitMetaTypeChildren(cdot::MetaType *T)
    {
       return visit(T->getUnderlyingType());
@@ -316,15 +311,6 @@ protected:
    bool visitMutableReferenceType(MutableReferenceType *LHS, QualType RHS)
    {
       if (auto *Ptr = RHS->asMutableReferenceType()) {
-         return visit(LHS->getReferencedType(), Ptr->getReferencedType());
-      }
-
-      return false;
-   }
-
-   bool visitMutableBorrowType(MutableBorrowType *LHS, QualType RHS)
-   {
-      if (auto *Ptr = RHS->asMutableBorrowType()) {
          return visit(LHS->getReferencedType(), Ptr->getReferencedType());
       }
 

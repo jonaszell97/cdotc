@@ -22,6 +22,31 @@ llvm::SaveAndRestore<T> saveAndRestore(T &X, const T &NewValue)
    return llvm::SaveAndRestore<T>(X, NewValue);
 }
 
+namespace detail
+{
+   template<class T, class Container>
+   struct StackRestore {
+      StackRestore(T &&el, Container &container) : container(container)
+      {
+         container.push_back(el);
+      }
+
+      ~StackRestore()
+      {
+         container.pop_back();
+      }
+
+   private:
+      Container &container;
+   };
+}
+
+template<class T, class Container>
+detail::StackRestore<T, Container> stackRestore(T &&el, Container &container)
+{
+   return detail::StackRestore<T, Container>(std::move(el), container);
+}
+
 } // namespace support
 } // namespace cdot
 

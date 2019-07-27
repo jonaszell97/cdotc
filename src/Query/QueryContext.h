@@ -85,6 +85,11 @@ public:
    /// \brief Keeps track of queries that are currently being evaluated.
    SmallVector<Query*, 8> QueryStack;
 
+#ifndef NDEBUG
+   /// \brief If true, ignore query status and re-execute every query.
+   bool rerunQueries = false;
+#endif
+
 private:
 #  include "Inc/QueryContextFields.inc"
 
@@ -101,6 +106,12 @@ private:
    private:
       QueryContext &QC;
    };
+
+#ifndef NDEBUG
+   bool shouldReset() const { return rerunQueries; }
+#else
+   bool shouldReset() const { return false; }
+#endif
 
 public:
    /// \brief Creates a new query context associated with the compiler instance

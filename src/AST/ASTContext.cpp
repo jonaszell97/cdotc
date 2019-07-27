@@ -9,6 +9,7 @@
 #include "Query/QueryContext.h"
 #include "Serialization/ModuleFile.h"
 #include "Support/Casting.h"
+#include "Support/Log.h"
 
 using namespace cdot::support;
 
@@ -55,60 +56,79 @@ void ASTContext::addAttribute(const Decl *D, Attr *attr) const
    }
 }
 
-ArrayRef<StaticExpr*> ASTContext::getConstraints(const Decl *D) const
+void ASTContext::setParsedConstraints(const Decl *D,
+                                      std::vector<ParsedConstraint> &&vec) const {
+   ParsedConstraintMap.try_emplace(D, std::move(vec));
+}
+
+ArrayRef<ParsedConstraint> ASTContext::getParsedConstraints(const Decl *D) const
+{
+   auto it = ParsedConstraintMap.find(D);
+   if (it == ParsedConstraintMap.end()) {
+      return {};
+   }
+
+   return it->getSecond();
+}
+
+ConstraintSet *ASTContext::getExtConstraints(const Decl *D) const
 {
    auto it = ConstraintMap.find(D);
-   if (it == ConstraintMap.end() || !it->getSecond())
-      return {};
-
-   return *it->getSecond();
-}
-
-void ASTContext::setConstraints(const Decl *D,
-                                ArrayRef<StaticExpr *> cvec) const {
-   ConstraintMap[D] = new(*this) ConstraintVec(cvec.begin(), cvec.end());
-}
-
-void ASTContext::addConstraint(const Decl *D,
-                               StaticExpr *C) const {
-   auto it = ConstraintMap.find(D);
-   if (it != ConstraintMap.end()) {
-      it->getSecond()->push_back(C);
+   if (it == ConstraintMap.end() || !it->getSecond()) {
+      return EmptyConstraintSet;
    }
-   else {
-      auto Vec = new(*this) ConstraintVec;
-      Vec->push_back(C);
 
-      ConstraintMap[D] = Vec;
-   }
+   return it->getSecond();
 }
 
-ArrayRef<DeclConstraint*> ASTContext::getExtConstraints(const Decl *D) const
+void ASTContext::setConstraints(const Decl *D, ConstraintSet *CS) const
 {
-   auto it = ExtConstraintMap.find(D);
-   if (it == ExtConstraintMap.end() || !it->getSecond())
-      return {};
-
-   return *it->getSecond();
+   ConstraintMap[D] = CS;
 }
 
-void ASTContext::setConstraints(const Decl *D,
-                                ArrayRef<DeclConstraint *> cvec) const {
-   ExtConstraintMap[D] = new(*this) ExtConstraintVec(cvec.begin(), cvec.end());
+void ASTContext::updateConstraintLocs(const Decl *D,
+                                      ArrayRef<ParsedConstraint> parsedConstraints,
+                                      ArrayRef<DeclConstraint*> declConstraints) {
+   assert(parsedConstraints.size() == declConstraints.size());
+
+   auto map = ConstraintLocs[D];
+   for (int i = 0; i < parsedConstraints.size(); ++i) {
+      if (!parsedConstraints[i].SR) {
+          NO_OP;
+      }
+      map[declConstraints[i]] = parsedConstraints[i].SR;
+   }
 }
 
-void ASTContext::addConstraint(const Decl *D,
-                               DeclConstraint *C) const {
-   auto it = ExtConstraintMap.find(D);
-   if (it != ExtConstraintMap.end()) {
-      it->getSecond()->push_back(C);
+SourceRange ASTContext::getConstraintLoc(const Decl *D,
+                                         const DeclConstraint *DC) const {
+   auto it = ConstraintLocs.find(D);
+   if (it == ConstraintLocs.end()) {
+      return SourceRange();
    }
-   else {
-      auto Vec = new(*this) ExtConstraintVec;
-      Vec->push_back(C);
 
-      ExtConstraintMap[D] = Vec;
+   auto it2 = it->getSecond().find(DC);
+   if (it2 == it->getSecond().end()) {
+      return SourceRange();
    }
+
+   return it2->getSecond();
+}
+
+ConstraintSet *ASTContext::getNearestConstraintSet(const DeclContext *DC) const
+{
+   while (DC) {
+      if (auto *decl = dyn_cast<Decl>(DC)) {
+         auto *CS = getExtConstraints(decl);
+         if (!CS->empty()) {
+            return CS;
+         }
+      }
+
+      DC = DC->getParentCtx();
+   }
+
+   return 0;
 }
 
 ArrayRef<RecordDecl*>
@@ -136,7 +156,7 @@ void ASTContext::addCovariance(const AssociatedTypeDecl *AT,
 }
 
 ArrayRef<ExtensionDecl*>
-ASTContext::getExtensions(QualType T) const
+ASTContext::getExtensions(CanType T) const
 {
    auto it = ExtensionMap.find(T);
    if (it == ExtensionMap.end() || !it->getSecond())
@@ -145,8 +165,8 @@ ASTContext::getExtensions(QualType T) const
    return *it->getSecond();
 }
 
-void ASTContext::addExtension(QualType T,
-                              ExtensionDecl *E) const {
+void ASTContext::addExtension(CanType T, ExtensionDecl *E) const
+{
    auto it = ExtensionMap.find(T);
    if (it != ExtensionMap.end()) {
       it->getSecond()->push_back(E);
@@ -189,6 +209,10 @@ void ASTContext::addProtocolImpl(const RecordDecl *R,
                                  const NamedDecl *Req,
                                  NamedDecl *Impl) {
    ProtocolImplMap[R][Req] = Impl;
+
+   LOG(ProtocolImpls, "implementation of '", Req->getFullName(), "' for '",
+      R->getFullName(), "': ", Impl->getFullName(), " [",
+      CI.getFileMgr().getFullSourceLoc(Impl->getSourceLoc()), "]");
 }
 
 NamedDecl*
@@ -324,35 +348,6 @@ ASTContext::getMutableReferenceType(QualType referencedType) const
    }
 #endif
 
-   return New;
-}
-
-MutableBorrowType*
-ASTContext::getMutableBorrowType(QualType referencedType) const
-{
-   assert(!referencedType->isReferenceType() && "reference to reference type!");
-
-   llvm::FoldingSetNodeID ID;
-   MutableBorrowType::Profile(ID, referencedType);
-
-   void *insertPos = nullptr;
-   if (auto *Ptr = MutableBorrowTypes.FindNodeOrInsertPos(ID, insertPos))
-      return Ptr;
-
-   Type *CanonicalTy = nullptr;
-   if (!referencedType.isCanonical()) {
-      CanonicalTy = getMutableBorrowType(referencedType.getCanonicalType());
-
-      // We need to get the insert position again since the folding set might
-      // have grown.
-      auto *NewTy = MutableBorrowTypes.FindNodeOrInsertPos(ID, insertPos);
-      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
-   }
-
-   auto New = new (*this, TypeAlignment) MutableBorrowType(referencedType,
-                                                           CanonicalTy);
-
-   MutableBorrowTypes.InsertNode(New, insertPos);
    return New;
 }
 
@@ -808,7 +803,15 @@ TemplateParamType* ASTContext::getTemplateArgType(TemplateParamDecl *Param) cons
 }
 
 AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl *AT,
-                                              AssociatedType *OuterAT) const {
+                                              QualType OuterAT) const {
+   if (!OuterAT && !AT->isSelf()) {
+      CI.getQueryContext().DeclareSelfAlias(AT->getRecord());
+      auto *SelfDecl = AT->getRecord()->lookupSingle<AssociatedTypeDecl>(
+         Identifiers.get("Self"));
+
+      OuterAT = getAssociatedType(SelfDecl);
+   }
+
    llvm::FoldingSetNodeID ID;
    AssociatedType::Profile(ID, AT, OuterAT);
 
@@ -910,37 +913,6 @@ DependentTypedefType* ASTContext::getDependentTypedefType(
 
    QualType CanonicalType = td->getType()->asMetaType()->getUnderlyingType()->getCanonicalType();
    CI.getQueryContext().SubstTemplateParamTypes(CanonicalType, CanonicalType, *args, td->getSourceRange());
-
-//   bool Canonical = true;
-//   for (auto &Arg : *args) {
-//      if (!isCanonical(Arg)) {
-//         Canonical = false;
-//         break;
-//      }
-//   }
-//
-//   DependentTypedefType *CanonicalType = nullptr;
-//   if (!Canonical) {
-//      SmallVector<sema::TemplateArgument, 4> CanonicalArgs;
-//      CanonicalArgs.reserve(args->size());
-//
-//      for (auto &Arg : *args) {
-//         CanonicalArgs.emplace_back(makeCanonical(Arg));
-//      }
-//
-//      auto *CanonicalList = sema::FinalTemplateArgumentList::Create(
-//         const_cast<ASTContext&>(*this), CanonicalArgs, true);
-//
-//      CanonicalType = getDependentTypedefType(td, CanonicalList,
-//                                             Parent
-//                                             ? Parent->getCanonicalType()
-//                                             : QualType());
-//
-//      // We need to get the insert position again since the folding set might
-//      // have grown.
-//      auto *NewTy = DependentTypedefTypes.FindNodeOrInsertPos(ID, insertPos);
-//      assert(!NewTy && "type shouldn't exist!"); (void) NewTy;
-//   }
 
    auto New = new(*this, TypeAlignment) DependentTypedefType(td, args, Parent,
                                                              CanonicalType);
@@ -1103,9 +1075,6 @@ void ASTContext::cleanup()
    for (auto &AttrPair : AttributeMap) {
       AttrPair.second->~SmallVector();
    }
-   for (auto &ConstraintPair : ConstraintMap) {
-      ConstraintPair.second->~SmallVector();
-   }
    for (auto &ExtensionPair : ExtensionMap) {
       ExtensionPair.second->~SmallVector();
    }
@@ -1120,6 +1089,7 @@ ASTContext::ASTContext(CompilerInstance &CI)
    PointerTypes{}
 {
    EmptyTupleTy = getTupleType({});
+   EmptyConstraintSet = ConstraintSet::Create(*this, {});
 }
 
 } // namespace ast

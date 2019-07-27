@@ -73,7 +73,9 @@ class QueryClassEmitter {
                  bool InnerType, bool Excluded, bool Nullable)
          : Type(Type), Name(std::move(Name)), DefaultVal(DefaultVal),
            InnerType(InnerType), Excluded(Excluded), Nullable(Nullable)
-      {}
+      {
+         this->Nullable |= DefaultVal == "nullptr";
+      }
 
       std::string Type;
       StringRef Name;
@@ -130,6 +132,7 @@ class QueryClassEmitter {
       StringRef CustomAssign;
       StringRef CustomHeaderCode;
       StringRef CustomPreReturnCode;
+      StringRef EarlyExitCode;
       StringRef ConstructorCode;
       StringRef CustomImplCode;
       StringRef PersistentState;
@@ -223,6 +226,8 @@ void QueryClassEmitter::Setup()
          Query->getFieldValue("customHeaderCode"))->getCode();
       Info.CustomPreReturnCode = cast<CodeBlock>(
          Query->getFieldValue("customPreReturnCode"))->getCode();
+      Info.EarlyExitCode = cast<CodeBlock>(
+         Query->getFieldValue("earlyExitCode"))->getCode();
       Info.ConstructorCode = cast<CodeBlock>(
          Query->getFieldValue("constructorCode"))->getCode();
       Info.PersistentState = cast<CodeBlock>(
@@ -472,6 +477,8 @@ QueryClassEmitter::ParamKind QueryClassEmitter::getParamKind(StringRef Str)
       .Case("int32_t", Integer)
       .Case("uint64_t", Integer)
       .Case("int64_t", Integer)
+      .Case("intptr_t", Integer)
+      .Case("uintptr_t", Integer)
       .Case("size_t", Integer)
       .Case("QualType", QualType)
       .Case("StringRef", String)
@@ -1115,7 +1122,7 @@ void QueryClassEmitter::EmitQueryContextImpls()
             << Info.ParamStr << ")\n";
       }
 
-      OS << "\n{\n";
+      OS << "\n{\n" << Info.EarlyExitCode;
 
       std::string DenseMapKey;
       if (Info.CanBeCached && !Info.Params.empty()) {
@@ -1163,7 +1170,7 @@ void QueryClassEmitter::EmitQueryContextImpls()
             OS << "   auto It = " << HashMap << ".find(Key);\n";
 
             if (Info.SimpleQuery) {
-               OS << "   if (It != " << HashMap << ".end()) {\n";
+               OS << "   if (It != " << HashMap << ".end() && !shouldReset()) {\n";
 
                if (Info.Infallible) {
                   if (!Info.CustomPreReturnCode.empty()) {
@@ -1236,13 +1243,13 @@ void QueryClassEmitter::EmitQueryContextImpls()
             Instance = string("Ran") + Q->getName().str();
 
             if (Info.Infallible) {
-               OS << "   if (" << Instance << ") {\n"
+               OS << "   if (" << Instance << " && !shouldReset()) {\n"
                   << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      return;"
                   << "   }\n";
             }
             else {
-               OS << "   if (" << Instance << ") {\n"
+               OS << "   if (" << Instance << " && !shouldReset()) {\n"
                   << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      return QueryResult(QueryResult::Success);"
                   << "   }\n";
@@ -1252,13 +1259,13 @@ void QueryClassEmitter::EmitQueryContextImpls()
             Instance += "Result";
 
             if (Info.Infallible) {
-               OS << "   if (" << Instance << ") {\n"
+               OS << "   if (" << Instance << " && !shouldReset()) {\n"
                   << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      return Instance.getValue();"
                   << "   }\n";
             }
             else {
-               OS << "   if (" << Instance << ") {\n"
+               OS << "   if (" << Instance << " && !shouldReset()) {\n"
                   << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
                   << "      Result = Instance.getValue();"
                   << "      return QueryResult(QueryResult::Success);"
@@ -1292,6 +1299,7 @@ void QueryClassEmitter::EmitQueryContextImpls()
             << (Info.ParamStrNoTypes.empty() ? "" : ", ")
             << Info.ParamStrNoTypes
             << ");\n\n"
+            << "ExecutingQuery EQ(*this, &_Q);\n"
             << "auto MaybeErr = _Q.run();\n"
             << "if (MaybeErr.isErr()) ";
 
@@ -1329,6 +1337,7 @@ void QueryClassEmitter::EmitQueryContextImpls()
             << (Info.ParamStrNoTypes.empty() ? "" : ", ")
             << Info.ParamStrNoTypes
             << ");\n\n"
+            << "ExecutingQuery EQ(*this, &_Q);\n"
             << "auto MaybeErr = _Q.run();\n"
             << "if (MaybeErr.isErr()) ";
 
@@ -1394,6 +1403,9 @@ void QueryClassEmitter::EmitQueryContextImpls()
          }
 
          OS << R"__(
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       llvm_unreachable("circular dependency in infallible query!");
@@ -1436,6 +1448,9 @@ void QueryClassEmitter::EmitQueryContextImpls()
          }
 
          OS << R"__(
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
    switch (_Q->status()) {
    case Query::Running:
       diagnoseCircularDependency(_Q);

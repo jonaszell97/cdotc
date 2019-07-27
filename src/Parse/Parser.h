@@ -241,7 +241,7 @@ public:
    void parse();
    void parseMainFile();
 
-   Module *parseModuleFile(Module *ParentMod = nullptr);
+   Module *parseModuleFile(Module *ParentMod = nullptr, bool IsMainModule = false);
 
    ParseResult parseFunctionDecl();
    ParseResult parseGlobalCtor();
@@ -663,7 +663,7 @@ private:
    void maybeParseConvention(ArgumentConvention &Conv,
                              SourceLocation &Loc);
 
-   void parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints);
+   void parseDeclConstraints(std::vector<ParsedConstraint> &Constraints);
 
    ParseResult parseMacro();
 
@@ -723,8 +723,6 @@ private:
                                  bool pointerAccess = false,
                                  DeclarationName Name = {});
 
-   ParseResult parseEnumCaseExpr();
-
    struct ArgumentList {
       std::vector<IdentifierInfo*> labels;
       ASTVector<Expression*> args;
@@ -752,7 +750,7 @@ private:
 
       DeclarationName recordName;
       ASTVector<SourceType> conformances;
-      llvm::SmallVector<DeclConstraint*, 2> constraints;
+      std::vector<ParsedConstraint> constraints;
       ASTVector<TemplateParamDecl*> templateParams;
 
       union {

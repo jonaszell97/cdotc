@@ -24,6 +24,10 @@ QueryResult CreateILModuleQuery::run()
 
    QC.PrintUsedMemory();
 
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
    // Typecheck the source files.
    if (auto Err = QC.TypeCheckDeclContext(Mod->getDecl())) {
       return Query::finish(Err);
@@ -43,6 +47,11 @@ QueryResult CreateILModuleQuery::run()
    // Generate IL for the source files.
    if (auto Err = QC.GenerateILForContext(Mod->getDecl())) {
       return Query::finish(Err);
+   }
+
+   // Bail out now if we encountered any errors.
+   if (QC.Sema->encounteredError()) {
+      return fail();
    }
 
    return finish(ILMod);
@@ -238,6 +247,10 @@ QueryResult GenerateRecordILQuery::run()
          }
 
          ILGen.AppendDefaultDeinitializer(cast<il::Method>(F));
+
+#ifndef NDEBUG
+         ILGen.getMandatoryPassManager().runPassesOnFunction(*F);
+#endif
       }
    }
 
