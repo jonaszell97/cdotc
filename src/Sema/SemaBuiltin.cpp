@@ -1,11 +1,10 @@
-#include "SemaPass.h"
-
-#include "Basic/Builtins.h"
-#include "IL/Constants.h"
-#include "IL/ILBuilder.h"
-#include "ILGen/ILGenPass.h"
-#include "Module/Module.h"
-#include "Query/QueryContext.h"
+#include "cdotc/Basic/Builtins.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/ILBuilder.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot::builtin;
 using namespace cdot::diag;
@@ -17,10 +16,10 @@ namespace ast {
 void SemaPass::initBuiltinIdents()
 {
    static_assert(sizeof(BuiltinIdents) / sizeof(IdentifierInfo*)
-                    > (unsigned)_lastBuiltin,
+                     > (unsigned)_lastBuiltin,
                  "not enough space for Builtin identifiers!");
 
-   auto &Idents = Context.getIdentifiers();
+   auto& Idents = Context.getIdentifiers();
 
    BuiltinIdents[allocStack] = &Idents.get("allocStack");
    BuiltinIdents[addressOf] = &Idents.get("addressOf");
@@ -70,17 +69,17 @@ void SemaPass::initBuiltinIdents()
    BuiltinIdentsInitialized = true;
 }
 
-ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
+ExprResult SemaPass::HandleBuiltinCall(CallExpr* C)
 {
    if (!BuiltinIdentsInitialized)
       initBuiltinIdents();
 
-   auto *Fn = C->getFunc();
+   auto* Fn = C->getFunc();
    if (!isa<FunctionDecl>(Fn) || Fn->willHaveDefinition()) {
       return C;
    }
 
-   const IdentifierInfo *II;
+   const IdentifierInfo* II;
    if (Fn->getDeclName().isSimpleIdentifier()) {
       II = C->getFunc()->getDeclName().getIdentifierInfo();
    }
@@ -92,7 +91,7 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
    }
 
    unsigned i = 0;
-   for (auto &Ident : BuiltinIdents) {
+   for (auto& Ident : BuiltinIdents) {
       if (Ident == II) {
          C->setBuiltinKind(i);
          break;
@@ -103,19 +102,20 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
 
    switch ((builtin::Builtin)C->getBuiltinKind()) {
    case addressOf: {
-      auto Ty = C->getArgs().front()->ignoreParensAndImplicitCasts()
-         ->getExprType();
+      auto Ty
+          = C->getArgs().front()->ignoreParensAndImplicitCasts()->getExprType();
 
       if (!Ty->isReferenceType()) {
          diagnose(C, diag::err_type_mismatch,
-                  C->getArgs().front()->getSourceLoc(),
-                  Ty, Context.getReferenceType(Ty));
+                  C->getArgs().front()->getSourceLoc(), Ty,
+                  Context.getReferenceType(Ty));
       }
 
       break;
    }
    case llvm_intrinsic:
-      assert(support::isa<StringLiteral>(C->getArgs().front()->ignoreParensAndImplicitCasts()));
+      assert(support::isa<StringLiteral>(
+          C->getArgs().front()->ignoreParensAndImplicitCasts()));
       break;
    default:
       break;
@@ -125,7 +125,7 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr *C)
    return C;
 }
 
-ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
+ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
 {
    if (!BuiltinIdentsInitialized)
       initBuiltinIdents();
@@ -139,7 +139,7 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    if (It != ReflectionValues.end())
       return It->getSecond();
 
-   auto *BuiltinMod = getBuiltinModule();
+   auto* BuiltinMod = getBuiltinModule();
    if (!BuiltinMod) {
       diagnose(Expr, err_compiler_ns_unknown_entity, Alias->getDeclName(),
                Alias->getSourceRange());
@@ -147,9 +147,9 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
       return ExprError();
    }
 
-//   if (ensureDeclared(BuiltinMod)) {
-//      return ExprError();
-//   }
+   //   if (ensureDeclared(BuiltinMod)) {
+   //      return ExprError();
+   //   }
 
    auto Name = Alias->getDeclName().getManglingName();
    if (!Name.isSimpleIdentifier()) {
@@ -159,31 +159,32 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
       return ExprError();
    }
 
-   auto *II = Name.getIdentifierInfo();
+   auto* II = Name.getIdentifierInfo();
 
    // look the declaration up to make sure it's deserialized.
-   const MultiLevelLookupResult *LookupRes;
+   const MultiLevelLookupResult* LookupRes;
    if (QC.DirectLookup(LookupRes, BuiltinMod->getDecl(), II)) {
       return ExprError();
    }
 
-//   bool DoCache = true;
-   Expression *ResultExpr = nullptr;
+   //   bool DoCache = true;
+   Expression* ResultExpr = nullptr;
 
    if (II == BuiltinIdents[builtin::TokenType]) {
-      ResultExpr = new(Context) IdentifierRefExpr(
-         Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getTypedefType(Alias)));
+      ResultExpr = new (Context)
+          IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
+                            Context.getMetaType(Context.getTypedefType(Alias)));
    }
    else if (II == BuiltinIdents[builtin::CVoid]) {
-      ResultExpr = new(Context) IdentifierRefExpr(
-         Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getTypedefType(Alias)));
+      ResultExpr = new (Context)
+          IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
+                            Context.getMetaType(Context.getTypedefType(Alias)));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer] && !Alias->isInstantiation()) {
-      ResultExpr = new(Context) IdentifierRefExpr(
-         Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getTypedefType(Alias)));
+   else if (II == BuiltinIdents[builtin::RawPointer]
+            && !Alias->isInstantiation()) {
+      ResultExpr = new (Context)
+          IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
+                            Context.getMetaType(Context.getTypedefType(Alias)));
    }
    else if (II == BuiltinIdents[builtin::RawPointer]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -194,15 +195,16 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
-      ResultExpr = new(Context) IdentifierRefExpr(
-         Expr->getSourceRange(), IdentifierKind::MetaType,
-         Context.getMetaType(Context.getTypedefType(Alias)));
+      ResultExpr = new (Context)
+          IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
+                            Context.getMetaType(Context.getTypedefType(Alias)));
    }
-#  define CDOT_BUILTIN_TYPE(NAME)                                              \
-   else if (II == BuiltinIdents[builtin::NAME]) {                              \
-      ResultExpr = new(Context) IdentifierRefExpr(                             \
-         Expr->getSourceRange(), IdentifierKind::MetaType,                     \
-         Context.getMetaType(Context.getTypedefType(Alias)));                  \
+#define CDOT_BUILTIN_TYPE(NAME)                                                \
+   else if (II == BuiltinIdents[builtin::NAME])                                \
+   {                                                                           \
+      ResultExpr = new (Context) IdentifierRefExpr(                            \
+          Expr->getSourceRange(), IdentifierKind::MetaType,                    \
+          Context.getMetaType(Context.getTypedefType(Alias)));                 \
    }
    CDOT_BUILTIN_TYPE(Int1)
    CDOT_BUILTIN_TYPE(Int8)
@@ -217,8 +219,9 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    CDOT_BUILTIN_TYPE(UInt128)
    CDOT_BUILTIN_TYPE(Float32)
    CDOT_BUILTIN_TYPE(Float64)
-#  undef CDOT_BUILTIN_TYPE
-   else if (II == BuiltinIdents[builtin::undefValue]) {
+#undef CDOT_BUILTIN_TYPE
+   else if (II == BuiltinIdents[builtin::undefValue])
+   {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
           || !Alias->getTemplateArgs().front().isType()) {
          diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
@@ -235,7 +238,7 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
          return Expr;
       }
 
-      il::Constant *Val = ILGen->Builder.GetUndefValue(Ty);
+      il::Constant* Val = ILGen->Builder.GetUndefValue(Ty);
       ResultExpr = StaticExpr::Create(Context, Ty, Expr->getSourceRange(), Val);
    }
 
@@ -249,29 +252,28 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl *Alias, Expression *Expr)
    auto Res = visitExpr(ResultExpr);
 
    // FIXME can't cache because of source locations
-//   if (DoCache)
-//      ReflectionValues.try_emplace(Alias, Res.get());
+   //   if (DoCache)
+   //      ReflectionValues.try_emplace(Alias, Res.get());
 
    return Res;
 }
 
-void SemaPass::SetBuiltinAliasType(AliasDecl *A)
+void SemaPass::SetBuiltinAliasType(AliasDecl* A)
 {
    if (!BuiltinIdentsInitialized)
       initBuiltinIdents();
 
-   auto *II = A->getDeclName().getIdentifierInfo();
+   auto* II = A->getDeclName().getIdentifierInfo();
    if (II == BuiltinIdents[builtin::TokenType]) {
       A->setType(SourceType(Context.getMetaType(Context.getTokenType())));
    }
    else if (II == BuiltinIdents[builtin::CVoid]) {
       A->setType(SourceType(Context.getMetaType(Context.getVoidType())));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer]
-   && !A->isInstantiation()
-   && !A->isTemplate()) {
-      A->setType(SourceType(Context.getMetaType(
-         Context.getVoidType()->getPointerTo(Context))));
+   else if (II == BuiltinIdents[builtin::RawPointer] && !A->isInstantiation()
+            && !A->isTemplate()) {
+      A->setType(SourceType(
+          Context.getMetaType(Context.getVoidType()->getPointerTo(Context))));
    }
    else if (II == BuiltinIdents[builtin::RawPointer] && A->isTemplate()) {
       QualType Ty = Context.getTemplateArgType(A->getTemplateParams().front());
@@ -279,7 +281,7 @@ void SemaPass::SetBuiltinAliasType(AliasDecl *A)
    }
    else if (II == BuiltinIdents[builtin::RawPointer]) {
       if (!A->isInstantiation() || A->getTemplateArgs().size() != 1
-      || !A->getTemplateArgs().front().isType()) {
+          || !A->getTemplateArgs().front().isType()) {
          diagnose(err_compiler_ns_bad_def, A->getDeclName(),
                   A->getSourceRange());
 
@@ -289,8 +291,9 @@ void SemaPass::SetBuiltinAliasType(AliasDecl *A)
       QualType Ty = A->getTemplateArgs().front().getType();
       A->setType(SourceType(Context.getMetaType(Ty->getPointerTo(Context))));
    }
-#  define CDOT_BUILTIN_TYPE(NAME)                                              \
-   else if (II == BuiltinIdents[builtin::NAME]) {                              \
+#define CDOT_BUILTIN_TYPE(NAME)                                                \
+   else if (II == BuiltinIdents[builtin::NAME])                                \
+   {                                                                           \
       A->setType(SourceType(Context.getMetaType(Context.get##NAME##Ty())));    \
    }
    CDOT_BUILTIN_TYPE(Int1)
@@ -306,7 +309,7 @@ void SemaPass::SetBuiltinAliasType(AliasDecl *A)
    CDOT_BUILTIN_TYPE(UInt128)
    CDOT_BUILTIN_TYPE(Float32)
    CDOT_BUILTIN_TYPE(Float64)
-#  undef CDOT_BUILTIN_TYPE
+#undef CDOT_BUILTIN_TYPE
 }
 
 } // namespace ast

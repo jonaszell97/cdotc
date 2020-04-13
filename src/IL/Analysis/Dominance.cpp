@@ -1,4 +1,4 @@
-#include "Dominance.h"
+#include "cdotc/IL/Analysis/Dominance.h"
 
 #include <llvm/Support/GenericDomTreeConstruction.h>
 
@@ -14,8 +14,8 @@ namespace DomTreeBuilder {
 using ILDomTree = llvm::DomTreeBase<cdot::il::BasicBlock>;
 using ILPostDomTree = llvm::PostDomTreeBase<cdot::il::BasicBlock>;
 
-template void Calculate<ILDomTree>(ILDomTree &DT);
-template void Calculate<ILPostDomTree>(ILPostDomTree &DT);
+template void Calculate<ILDomTree>(ILDomTree& DT);
+template void Calculate<ILPostDomTree>(ILPostDomTree& DT);
 
 } // namespace DomTreeBuilder
 } // namespace llvm
@@ -24,15 +24,14 @@ namespace cdot {
 namespace il {
 
 /// Compute the immediate-dominators map.
-DominanceInfo::DominanceInfo(il::Function *F)
-   : DominatorTreeBase()
+DominanceInfo::DominanceInfo(il::Function* F) : DominatorTreeBase()
 {
-   assert(!F->isDeclared() &&
-          "Make sure the function is a definition and not a declaration.");
+   assert(!F->isDeclared()
+          && "Make sure the function is a definition and not a declaration.");
    recalculate(*F);
 }
 
-bool DominanceInfo::properlyDominates(il::Instruction *a, il::Instruction *b)
+bool DominanceInfo::properlyDominates(il::Instruction* a, il::Instruction* b)
 {
    auto aBlock = a->getParent(), bBlock = b->getParent();
 
@@ -56,12 +55,12 @@ bool DominanceInfo::properlyDominates(il::Instruction *a, il::Instruction *b)
 }
 
 /// Does value A properly dominate instruction B?
-bool DominanceInfo::properlyDominates(il::Value *a, il::Instruction *b)
+bool DominanceInfo::properlyDominates(il::Value* a, il::Instruction* b)
 {
-   if (auto *Inst = dyn_cast<Instruction>(a)) {
+   if (auto* Inst = dyn_cast<Instruction>(a)) {
       return properlyDominates(Inst, b);
    }
-   if (auto *Arg = dyn_cast<il::Argument>(a)) {
+   if (auto* Arg = dyn_cast<il::Argument>(a)) {
       return dominates(Arg->getParent(), b->getParent());
    }
 
@@ -71,7 +70,7 @@ bool DominanceInfo::properlyDominates(il::Value *a, il::Instruction *b)
 void DominanceInfo::verify() const
 {
    // Recompute.
-   auto *F = getRoot()->getParent();
+   auto* F = getRoot()->getParent();
    DominanceInfo OtherDT(F);
 
    // And compare.
@@ -85,16 +84,15 @@ void DominanceInfo::verify() const
 }
 
 /// Compute the immediate-post-dominators map.
-PostDominanceInfo::PostDominanceInfo(il::Function *F)
-   : PostDominatorTreeBase()
+PostDominanceInfo::PostDominanceInfo(il::Function* F) : PostDominatorTreeBase()
 {
-   assert(!F->isDeclared() &&
-          "Cannot construct a post dominator tree for a declaration");
+   assert(!F->isDeclared()
+          && "Cannot construct a post dominator tree for a declaration");
    recalculate(*F);
 }
 
-bool
-PostDominanceInfo::properlyDominates(il::Instruction *I1, il::Instruction *I2)
+bool PostDominanceInfo::properlyDominates(il::Instruction* I1,
+                                          il::Instruction* I2)
 {
    il::BasicBlock *BB1 = I1->getParent(), *BB2 = I2->getParent();
 
@@ -120,7 +118,7 @@ void PostDominanceInfo::verify() const
    //
    // Even though at the IL level we have "one" return function, we can have
    // multiple exits provided by no-return functions.
-   auto *F = getRoots()[0]->getParent();
+   auto* F = getRoots()[0]->getParent();
    PostDominanceInfo OtherDT(F);
 
    // And compare.

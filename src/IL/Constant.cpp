@@ -1,10 +1,10 @@
-#include "Constants.h"
+#include "cdotc/IL/Constants.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "BasicBlock.h"
-#include "Function.h"
-#include "GlobalVariable.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/BasicBlock.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/GlobalVariable.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/raw_ostream.h>
@@ -14,7 +14,7 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-void Constant::handleReplacement(Value *with)
+void Constant::handleReplacement(Value* with)
 {
    for (auto it = op_begin(); it != op_end(); ++it) {
       (*it)->replaceUser(this, with);
@@ -24,10 +24,10 @@ void Constant::handleReplacement(Value *with)
 unsigned Constant::getNumOperands() const
 {
    switch (id) {
-#  define CDOT_CONSTANT(Name)                                           \
-      case Name##ID:                                                    \
-         return static_cast<const Name*>(this)->getNumOperandsImpl();
-#  include "Instructions.def"
+#define CDOT_CONSTANT(Name)                                                    \
+   case Name##ID:                                                              \
+      return static_cast<const Name*>(this)->getNumOperandsImpl();
+#include "cdotc/IL/Instructions.def"
 
    default:
       llvm_unreachable("bad inst kind");
@@ -47,7 +47,7 @@ Value* Constant::getOperand(unsigned idx) const
    return *it;
 }
 
-void Constant::setOperand(unsigned idx, Constant *V)
+void Constant::setOperand(unsigned idx, Constant* V)
 {
    assert(idx < getNumOperands());
    op_begin()[idx] = V;
@@ -56,10 +56,10 @@ void Constant::setOperand(unsigned idx, Constant *V)
 Constant::op_iterator Constant::op_begin()
 {
    switch (id) {
-#  define CDOT_CONSTANT(Name) \
-      case Name##ID: \
-         return static_cast<Name*>(this)->op_begin_impl();
-#  include "Instructions.def"
+#define CDOT_CONSTANT(Name)                                                    \
+   case Name##ID:                                                              \
+      return static_cast<Name*>(this)->op_begin_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
       llvm_unreachable("bad inst kind");
@@ -69,10 +69,10 @@ Constant::op_iterator Constant::op_begin()
 Constant::op_iterator Constant::op_end()
 {
    switch (id) {
-#  define CDOT_CONSTANT(Name) \
-      case Name##ID: \
-         return static_cast<Name*>(this)->op_end_impl();
-#  include "Instructions.def"
+#define CDOT_CONSTANT(Name)                                                    \
+   case Name##ID:                                                              \
+      return static_cast<Name*>(this)->op_end_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
       llvm_unreachable("bad inst kind");
@@ -82,10 +82,10 @@ Constant::op_iterator Constant::op_end()
 Constant::op_const_iterator Constant::op_begin() const
 {
    switch (id) {
-#  define CDOT_CONSTANT(Name) \
-      case Name##ID: \
-         return static_cast<Name*>(const_cast<Constant*>(this))->op_begin_impl();
-#  include "Instructions.def"
+#define CDOT_CONSTANT(Name)                                                    \
+   case Name##ID:                                                              \
+      return static_cast<Name*>(const_cast<Constant*>(this))->op_begin_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
       llvm_unreachable("bad inst kind");
@@ -95,17 +95,17 @@ Constant::op_const_iterator Constant::op_begin() const
 Constant::op_const_iterator Constant::op_end() const
 {
    switch (id) {
-#  define CDOT_CONSTANT(Name) \
-      case Name##ID: \
-         return static_cast<const Name*>(this)->op_end_impl();
-#  include "Instructions.def"
+#define CDOT_CONSTANT(Name)                                                    \
+   case Name##ID:                                                              \
+      return static_cast<const Name*>(this)->op_end_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
       llvm_unreachable("bad inst kind");
    }
 }
 
-void Constant::replaceOperand(Constant *Prev, Constant *New)
+void Constant::replaceOperand(Constant* Prev, Constant* New)
 {
    unsigned idx = 0;
    for (auto it = op_begin(); it != op_end(); ++it, ++idx) {
@@ -117,7 +117,7 @@ void Constant::replaceOperand(Constant *Prev, Constant *New)
    llvm_unreachable("operand not found!");
 }
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, il::Constant& C)
 {
    if (isa<BasicBlock>(C)) {
       return OS << "label " << cast<BasicBlock>(C).getName();
@@ -132,7 +132,7 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)
       OS << C.getName();
       break;
    case Value::ConstantIntID: {
-      auto &Int = cast<ConstantInt>(C);
+      auto& Int = cast<ConstantInt>(C);
       if (Int.getType()->getBitwidth() == 1) {
          OS << (Int.getBoolValue() ? "true" : "false");
       }
@@ -176,8 +176,9 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)
       OS << "[";
 
       unsigned i = 0;
-      for (auto &El : Elements) {
-         if (i++ != 0) OS << ", ";
+      for (auto& El : Elements) {
+         if (i++ != 0)
+            OS << ", ";
          OS << *El;
       }
 
@@ -189,8 +190,9 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)
       OS << "{ ";
 
       unsigned i = 0;
-      for (auto &El : Elements) {
-         if (i++ != 0) OS << ", ";
+      for (auto& El : Elements) {
+         if (i++ != 0)
+            OS << ", ";
          OS << *El;
       }
 
@@ -208,10 +210,10 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)
             OS << ", ";
       }
 
-
       unsigned i = 0;
-      for (auto &El : Elements) {
-         if (i++ != 0) OS << ", ";
+      for (auto& El : Elements) {
+         if (i++ != 0)
+            OS << ", ";
          OS << *El;
       }
 
@@ -234,8 +236,9 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, il::Constant &C)
          OS << "(";
 
          unsigned i = 0;
-         for (auto &V : Vals) {
-            if (i++ != 0) OS << ", ";
+         for (auto& V : Vals) {
+            if (i++ != 0)
+               OS << ", ";
             OS << *V;
          }
 

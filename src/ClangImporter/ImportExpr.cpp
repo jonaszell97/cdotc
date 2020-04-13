@@ -1,31 +1,32 @@
 #include "ImporterImpl.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Expression.h"
-#include "Driver/Compiler.h"
-#include "Lex/Lexer.h"
-#include "Parse/Parser.h"
-#include "Sema/SemaPass.h"
-#include "Support/LiteralParser.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Expression.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/Lex/Lexer.h"
+#include "cdotc/Parse/Parser.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/LiteralParser.h"
 
 #include <clang/Basic/TargetInfo.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Lex/LiteralSupport.h>
-#include <clang/Lex/Token.h>
 #include <clang/Lex/Preprocessor.h>
+#include <clang/Lex/Token.h>
 
 using namespace cdot;
 using namespace cdot::ast;
 
 using ImporterImpl = ClangImporter::ImporterImpl;
 
-static Expression *expressionFromNumericConstantToken(ImporterImpl &I,
-                                                      const clang::Token &Tok) {
+static Expression* expressionFromNumericConstantToken(ImporterImpl& I,
+                                                      const clang::Token& Tok)
+{
    SmallString<128> SpellingBuffer;
    SpellingBuffer.resize(Tok.getLength() + 1);
 
-   auto &PP = I.Instance->getPreprocessor();
-   auto &Ctx = I.CI.getContext();
+   auto& PP = I.Instance->getPreprocessor();
+   auto& Ctx = I.CI.getContext();
 
    // Get the spelling of the token, which eliminates trigraphs, etc.
    bool Invalid = false;
@@ -60,7 +61,7 @@ static Expression *expressionFromNumericConstantToken(ImporterImpl &I,
       auto Status = Literal.GetFloatValue(APF);
 
       // FIXME handle errors
-      (void) Status;
+      (void)Status;
 
       return FPLiteral::Create(Ctx, SR, Ty, APF);
    }
@@ -77,8 +78,10 @@ static Expression *expressionFromNumericConstantToken(ImporterImpl &I,
 
    if (Literal.GetIntegerValue(ResultVal)) {
       // If this value didn't fit into uintmax_t, error and force to ull.
-      I.CI.getSema().diagnose(diag::err_generic_error, "integer literal too "
-                                                       "wide", SR);
+      I.CI.getSema().diagnose(diag::err_generic_error,
+                              "integer literal too "
+                              "wide",
+                              SR);
 
       Ty = Ctx.getUInt128Ty();
    }
@@ -98,7 +101,8 @@ static Expression *expressionFromNumericConstantToken(ImporterImpl &I,
          if (Literal.MicrosoftInteger == 8 && !Literal.isUnsigned) {
             Width = 8;
             Ty = Ctx.getInt8Ty();
-         } else {
+         }
+         else {
             Width = Literal.MicrosoftInteger;
             Ty = Ctx.getIntegerTy(Width, Literal.isUnsigned);
          }
@@ -132,8 +136,9 @@ static Expression *expressionFromNumericConstantToken(ImporterImpl &I,
                                  llvm::APSInt(ResultVal, Ty->isUnsigned()));
 }
 
-static Expression *expressionFromCharToken(ImporterImpl &I,
-                                           const clang::Token &Tok) {
+static Expression* expressionFromCharToken(ImporterImpl& I,
+                                           const clang::Token& Tok)
+{
    LiteralParser LP(StringRef(Tok.getLiteralData() + 1, Tok.getLength() - 2));
    auto Result = LP.parseCharacter();
 
@@ -145,21 +150,22 @@ static Expression *expressionFromCharToken(ImporterImpl &I,
                               (char)Result.Char);
 }
 
-static Expression *expressionFromStringToken(ImporterImpl &I,
-                                             const clang::Token &Tok) {
+static Expression* expressionFromStringToken(ImporterImpl& I,
+                                             const clang::Token& Tok)
+{
    LiteralParser LP(StringRef(Tok.getLiteralData(), Tok.getLength()));
    auto Result = LP.parseString();
 
    auto SR = SourceRange(I.getSourceLoc(Tok.getLocation()),
                          I.getSourceLoc(Tok.getEndLoc()));
 
-   auto *S = StringLiteral::Create(I.CI.getContext(), SR, move(Result.Str));
+   auto* S = StringLiteral::Create(I.CI.getContext(), SR, move(Result.Str));
    S->setCString(true);
 
    return S;
 }
 
-Expression *ImporterImpl::expressionFromLiteralToken(const clang::Token &Tok)
+Expression* ImporterImpl::expressionFromLiteralToken(const clang::Token& Tok)
 {
    switch (Tok.getKind()) {
    case clang::tok::numeric_constant: {
@@ -181,13 +187,13 @@ Expression *ImporterImpl::expressionFromLiteralToken(const clang::Token &Tok)
    }
 }
 
-Expression *ImporterImpl::parseExpression(ArrayRef<clang::Token> Toks)
+Expression* ImporterImpl::parseExpression(ArrayRef<clang::Token> Toks)
 {
    // FIXME this is pretty inefficient.
    SmallVector<lex::Token, 64> TranslatedToks;
    TranslatedToks.reserve(Toks.size());
 
-   for (auto &Tok : Toks) {
+   for (auto& Tok : Toks) {
       TranslatedToks.push_back(getToken(Tok));
    }
 
@@ -195,8 +201,7 @@ Expression *ImporterImpl::parseExpression(ArrayRef<clang::Token> Toks)
    TranslatedToks.emplace_back(lex::tok::eof);
 
    // Create a token lexer.
-   lex::Lexer Lexer(CI.getContext().getIdentifiers(),
-                    CI.getSema().getDiags(),
+   lex::Lexer Lexer(CI.getContext().getIdentifiers(), CI.getSema().getDiags(),
                     TranslatedToks, SourceID, BaseOffset);
 
    // Create a parser.

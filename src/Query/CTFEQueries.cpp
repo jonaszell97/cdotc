@@ -1,22 +1,19 @@
-#include "Query.h"
+#include "cdotc/Query/Query.h"
 
-#include "IL/Constants.h"
-#include "QueryContext.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::diag;
 using namespace cdot::support;
 
-QueryResult ResolveStaticExprQuery::run()
-{
-   llvm_unreachable("unimplemented");
-}
+QueryResult ResolveStaticExprQuery::run() { llvm_unreachable("unimplemented"); }
 
 QueryResult ResolveStaticExprToBoolQuery::run()
 {
-   il::Constant *Result;
+   il::Constant* Result;
    if (QC.ResolveStaticExpr(Result, Expr)) {
       return fail();
    }

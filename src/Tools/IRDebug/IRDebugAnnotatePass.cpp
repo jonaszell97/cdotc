@@ -1,5 +1,5 @@
-#include "Basic/FileUtils.h"
-#include "Support/Casting.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Support/Casting.h"
 
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 #include <llvm/IR/BasicBlock.h>
@@ -17,39 +17,38 @@ using namespace cdot::support;
 
 namespace {
 
-class IRDebugAnnotatePass: public llvm::ModulePass  {
+class IRDebugAnnotatePass : public llvm::ModulePass {
    llvm::StringRef OutFile;
    unsigned CurLine = 1;
-   llvm::DICompileUnit *CU = nullptr;
-   llvm::DIFile *DebugScope = nullptr;
+   llvm::DICompileUnit* CU = nullptr;
+   llvm::DIFile* DebugScope = nullptr;
    std::unique_ptr<llvm::DIBuilder> DI;
-   const llvm::DataLayout *DL = nullptr;
+   const llvm::DataLayout* DL = nullptr;
    llvm::DenseMap<llvm::Type*, llvm::DIType*> TypeMap;
    llvm::DenseMap<uintptr_t, llvm::DISubprogram*> DIFuncMap;
 
-   void writeModule(llvm::Module &M);
+   void writeModule(llvm::Module& M);
 
-   llvm::DIType *getTypeDIImpl(llvm::Type *T);
-   llvm::DIType *getTypeDI(llvm::Type *T);
+   llvm::DIType* getTypeDIImpl(llvm::Type* T);
+   llvm::DIType* getTypeDI(llvm::Type* T);
 
-   llvm::DISubprogram *annotateFunction(llvm::Function &F);
-   void annotateInstruction(llvm::Instruction &I, llvm::DIScope *FnDI,
-                            unsigned &i);
+   llvm::DISubprogram* annotateFunction(llvm::Function& F);
+   void annotateInstruction(llvm::Instruction& I, llvm::DIScope* FnDI,
+                            unsigned& i);
 
 public:
    IRDebugAnnotatePass(llvm::StringRef OutFile = "")
-      : ModulePass(ID),
-        OutFile(OutFile)
+       : ModulePass(ID), OutFile(OutFile)
    {
    }
 
    static char ID;
-   bool runOnModule(llvm::Module &M) override;
+   bool runOnModule(llvm::Module& M) override;
 };
 
 } // anonymous namespace
 
-void IRDebugAnnotatePass::writeModule(llvm::Module &M)
+void IRDebugAnnotatePass::writeModule(llvm::Module& M)
 {
    /// Dump the IR to a temporary file.
    std::error_code EC;
@@ -63,20 +62,14 @@ void IRDebugAnnotatePass::writeModule(llvm::Module &M)
    M.print(OS, &AAW);
 }
 
-bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
+bool IRDebugAnnotatePass::runOnModule(llvm::Module& M)
 {
    DL = &M.getDataLayout();
    DI = std::make_unique<llvm::DIBuilder>(M);
    DebugScope = DI->createFile(OutFile, fs::getPath(OutFile));
 
-   CU = DI->createCompileUnit(
-      llvm::dwarf::DW_LANG_C,
-      DebugScope,
-      "cdotc v0.1",
-      false,
-      "",
-      0
-   );
+   CU = DI->createCompileUnit(llvm::dwarf::DW_LANG_C, DebugScope, "cdotc v0.1",
+                              false, "", 0);
 
    // Every module starts with a '; Module ID:' line, followed by the
    // source file name.
@@ -96,13 +89,13 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
    ++CurLine;
 
    // One line for each named structure type.
-   CurLine += (unsigned) M.getIdentifiedStructTypes().size();
+   CurLine += (unsigned)M.getIdentifiedStructTypes().size();
 
    // One empty line after the types.
    ++CurLine;
 
    // Start annotating globals, one on each line.
-   for (auto &G : M.getGlobalList()) {
+   for (auto& G : M.getGlobalList()) {
       (void)G;
       ++CurLine;
    }
@@ -111,8 +104,8 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
    ++CurLine;
 
    // Now annotate functions.
-   for (llvm::Function &F : M) {
-      auto *FnDI = annotateFunction(F);
+   for (llvm::Function& F : M) {
+      auto* FnDI = annotateFunction(F);
 
       // One line function header.
       ++CurLine;
@@ -121,14 +114,15 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
       if (F.isMaterializable())
          ++CurLine;
 
-      const llvm::AttributeList &Attrs = F.getAttributes();
+      const llvm::AttributeList& Attrs = F.getAttributes();
       if (Attrs.hasAttributes(llvm::AttributeList::FunctionIndex)) {
          llvm::AttributeSet AS = Attrs.getFnAttributes();
          std::string AttrStr;
 
-         for (const llvm::Attribute &Attr : AS) {
+         for (const llvm::Attribute& Attr : AS) {
             if (!Attr.isStringAttribute()) {
-               if (!AttrStr.empty()) AttrStr += ' ';
+               if (!AttrStr.empty())
+                  AttrStr += ' ';
                AttrStr += Attr.getAsString();
             }
          }
@@ -137,18 +131,17 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
             ++CurLine;
       }
 
-
       unsigned i = 0;
       unsigned UnnamedInstCount = 0;
 
       if (!F.isDeclaration()) {
-         for (auto &A : F.args()) {
+         for (auto& A : F.args()) {
             if (A.getName().empty())
                ++UnnamedInstCount;
          }
       }
 
-      for (llvm::BasicBlock &B : F) {
+      for (llvm::BasicBlock& B : F) {
          // One line break between basic blocks.
          if (i++ != 0)
             ++CurLine;
@@ -156,7 +149,7 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
          // One line for the basic block name.
          ++CurLine;
 
-         for (llvm::Instruction &I : B) {
+         for (llvm::Instruction& I : B) {
             annotateInstruction(I, FnDI, UnnamedInstCount);
          }
       }
@@ -184,29 +177,20 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module &M)
    return true;
 }
 
-llvm::DISubprogram *IRDebugAnnotatePass::annotateFunction(llvm::Function &F)
+llvm::DISubprogram* IRDebugAnnotatePass::annotateFunction(llvm::Function& F)
 {
    std::vector<llvm::Metadata*> argTypes;
    for (auto& arg : F.args()) {
       argTypes.push_back(getTypeDI(arg.getType()));
    }
 
-   llvm::DISubroutineType *funcTy = DI->createSubroutineType(
-      DI->getOrCreateTypeArray(argTypes)
-   );
+   llvm::DISubroutineType* funcTy
+       = DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes));
 
    unsigned int scopeStart = 0;
-   llvm::DISubprogram *MD = DI->createFunction(
-      CU,
-      F.getName(),
-      F.getName(),
-      DebugScope,
-      CurLine,
-      funcTy,
-      false,
-      !F.isDeclaration(),
-      scopeStart
-   );
+   llvm::DISubprogram* MD
+       = DI->createFunction(CU, F.getName(), F.getName(), DebugScope, CurLine,
+                            funcTy, false, !F.isDeclaration(), scopeStart);
 
    if (!F.isDeclaration()) {
       F.setSubprogram(MD);
@@ -216,14 +200,14 @@ llvm::DISubprogram *IRDebugAnnotatePass::annotateFunction(llvm::Function &F)
    return MD;
 }
 
-void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction &I,
-                                              llvm::DIScope *FnDI,
-                                              unsigned &i) {
+void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction& I,
+                                              llvm::DIScope* FnDI, unsigned& i)
+{
    I.setDebugLoc(llvm::DebugLoc::get(CurLine, 1, FnDI));
 
    switch (I.getOpcode()) {
    case llvm::Instruction::Switch: {
-      auto &Sw = cast<llvm::SwitchInst>(I);
+      auto& Sw = cast<llvm::SwitchInst>(I);
       CurLine += 2; // Header, closing bracket
       CurLine += Sw.getNumCases();
 
@@ -240,21 +224,12 @@ void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction &I,
       }
 
       auto DIVar = DI->createAutoVariable(
-         FnDI,
-         Name,
-         DebugScope,
-         I.getDebugLoc()->getLine(),
-         getTypeDI(I.getType()->getPointerElementType())
-      );
+          FnDI, Name, DebugScope, I.getDebugLoc()->getLine(),
+          getTypeDI(I.getType()->getPointerElementType()));
 
       assert(I.getNextNode() && "terminator with non-void type?");
-      DI->insertDeclare(
-         &I,
-         DIVar,
-         DI->createExpression(),
-         I.getDebugLoc(),
-         I.getNextNode()
-      );
+      DI->insertDeclare(&I, DIVar, DI->createExpression(), I.getDebugLoc(),
+                        I.getNextNode());
 
       ++CurLine;
 
@@ -271,19 +246,19 @@ void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction &I,
       ++i;
 }
 
-llvm::DIType* IRDebugAnnotatePass::getTypeDI(llvm::Type *T)
+llvm::DIType* IRDebugAnnotatePass::getTypeDI(llvm::Type* T)
 {
    auto It = TypeMap.find(T);
    if (It != TypeMap.end())
       return It->getSecond();
 
-   auto *DI = getTypeDIImpl(T);
+   auto* DI = getTypeDIImpl(T);
    TypeMap[T] = DI;
 
    return DI;
 }
 
-llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type *T)
+llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
 {
    switch (T->getTypeID()) {
    case llvm::Type::IntegerTyID: {
@@ -316,10 +291,9 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type *T)
                                  llvm::dwarf::DW_ATE_unsigned);
    case llvm::Type::PointerTyID:
       return DI->createPointerType(
-         getTypeDI(T->getPointerElementType()),
-         DL->getPointerTypeSizeInBits(T),
-         DL->getPointerPrefAlignment(T->getPointerAddressSpace())
-      );
+          getTypeDI(T->getPointerElementType()),
+          DL->getPointerTypeSizeInBits(T),
+          DL->getPointerPrefAlignment(T->getPointerAddressSpace()));
    case llvm::Type::VoidTyID:
    case llvm::Type::TokenTyID:
    case llvm::Type::LabelTyID:
@@ -332,23 +306,16 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type *T)
       }
 
       return DI->createPointerType(
-         DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes)),
-         DL->getPointerSizeInBits(0),
-         DL->getPointerPrefAlignment(0)
-      );
+          DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes)),
+          DL->getPointerSizeInBits(0), DL->getPointerPrefAlignment(0));
    }
    case llvm::Type::StructTyID: {
-      auto *S = cast<llvm::StructType>(T);
+      auto* S = cast<llvm::StructType>(T);
       auto flags = llvm::DINode::DIFlags::FlagZero;
       llvm::SmallVector<llvm::Metadata*, 4> containedTypes;
 
-      llvm::DICompositeType *forwardDecl = DI->createReplaceableCompositeType(
-         llvm::dwarf::DW_TAG_structure_type,
-         "",
-         CU,
-         DebugScope,
-         0
-      );
+      llvm::DICompositeType* forwardDecl = DI->createReplaceableCompositeType(
+          llvm::dwarf::DW_TAG_structure_type, "", CU, DebugScope, 0);
 
       TypeMap[T] = forwardDecl;
 
@@ -365,69 +332,47 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type *T)
       }
 
       for (unsigned i = 0; i < S->getNumContainedTypes(); ++i) {
-         auto *cont = S->getContainedType(i);
+         auto* cont = S->getContainedType(i);
 
          auto size = DL->getTypeSizeInBits(cont);
          auto elementDI = DI->createMemberType(
-            forwardDecl,
-            std::to_string(i++),
-            DebugScope,
-            1,
-            size,
-            DL->getPrefTypeAlignment(cont),
-            offset,
-            flags,
-            getTypeDI(cont)
-         );
+             forwardDecl, std::to_string(i++), DebugScope, 1, size,
+             DL->getPrefTypeAlignment(cont), offset, flags, getTypeDI(cont));
 
          offset += size;
          containedTypes.push_back(elementDI);
       }
 
-      auto *MD = DI->createStructType(
-         CU,
-         OS.str(),
-         DebugScope,
-         1,
-         DL->getTypeSizeInBits(T),
-         DL->getPrefTypeAlignment(T),
-         flags,
-         nullptr,
-         DI->getOrCreateArray(containedTypes)
-      );
+      auto* MD = DI->createStructType(
+          CU, OS.str(), DebugScope, 1, DL->getTypeSizeInBits(T),
+          DL->getPrefTypeAlignment(T), flags, nullptr,
+          DI->getOrCreateArray(containedTypes));
 
       DI->replaceTemporary(llvm::TempDIType(forwardDecl), MD);
       return MD;
    }
    case llvm::Type::ArrayTyID: {
       return DI->createArrayType(
-         T->getArrayNumElements(),
-         DL->getPrefTypeAlignment(T),
-         getTypeDI(T->getArrayElementType()),
-         DI->getOrCreateArray({})
-      );
+          T->getArrayNumElements(), DL->getPrefTypeAlignment(T),
+          getTypeDI(T->getArrayElementType()), DI->getOrCreateArray({}));
    }
    case llvm::Type::VectorTyID: {
       return DI->createVectorType(
-         T->getVectorNumElements(),
-         DL->getPrefTypeAlignment(T),
-         getTypeDI(T->getVectorElementType()),
-         DI->getOrCreateArray({})
-      );
+          T->getVectorNumElements(), DL->getPrefTypeAlignment(T),
+          getTypeDI(T->getVectorElementType()), DI->getOrCreateArray({}));
    }
    }
 }
 
 char IRDebugAnnotatePass::ID = 0;
 
-static llvm::RegisterPass<IRDebugAnnotatePass> X(
-   "ir-debug-info",
-   "Annotate an LLVM module with meta debug information",
-   false, false);
+static llvm::RegisterPass<IRDebugAnnotatePass>
+    X("ir-debug-info", "Annotate an LLVM module with meta debug information",
+      false, false);
 
 namespace cdot {
 
-void addIRDebugInfo(llvm::Module &M, llvm::StringRef ToFile)
+void addIRDebugInfo(llvm::Module& M, llvm::StringRef ToFile)
 {
    llvm::legacy::PassManager PM;
    PM.add(new IRDebugAnnotatePass(ToFile));

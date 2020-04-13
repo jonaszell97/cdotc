@@ -1,7 +1,7 @@
-#include "AST/ASTVisitor.h"
-#include "ConstraintBuilder.h"
-#include "Query/QueryContext.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/ASTVisitor.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/ConstraintBuilder.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -10,36 +10,36 @@ using namespace cdot::support;
 
 namespace {
 
-using UnresolvedCallMap = llvm::DenseMap<
-   ast::AnonymousCallExpr*, ConstraintBuilder::UnresolvedCallExpr>;
+using UnresolvedCallMap = llvm::DenseMap<ast::AnonymousCallExpr*,
+                                         ConstraintBuilder::UnresolvedCallExpr>;
 
-class SolutionApplier: public StmtBuilder<SolutionApplier> {
+class SolutionApplier : public StmtBuilder<SolutionApplier> {
    /// The constraint system.
-   ConstraintSystem &Sys;
+   ConstraintSystem& Sys;
 
    /// The solution.
-   const ConstraintSystem::Solution &S;
+   const ConstraintSystem::Solution& S;
 
    /// The solution bindings
-   const ConstraintSystem::SolutionBindings &Bindings;
+   const ConstraintSystem::SolutionBindings& Bindings;
 
    /// Unresolved call expressions.
-   UnresolvedCallMap &UnresolvedCalls;
+   UnresolvedCallMap& UnresolvedCalls;
 
 public:
-   SolutionApplier(ConstraintSystem &Sys,
-                   const ConstraintSystem::Solution &S,
-                   const ConstraintSystem::SolutionBindings &Bindings,
-                   UnresolvedCallMap &UnresolvedCalls)
-      : Sys(Sys), S(S), Bindings(Bindings), UnresolvedCalls(UnresolvedCalls)
-   {}
+   SolutionApplier(ConstraintSystem& Sys, const ConstraintSystem::Solution& S,
+                   const ConstraintSystem::SolutionBindings& Bindings,
+                   UnresolvedCallMap& UnresolvedCalls)
+       : Sys(Sys), S(S), Bindings(Bindings), UnresolvedCalls(UnresolvedCalls)
+   {
+   }
 
-   ExprResult visitExpr(Expression *Expr)
+   ExprResult visitExpr(Expression* Expr)
    {
       auto TypeVarIt = Bindings.ExprBindings.find(Expr);
       if (TypeVarIt != Bindings.ExprBindings.end()) {
          QualType T = TypeVarIt->getSecond();
-         if (auto *Var = T->asTypeVariableType()) {
+         if (auto* Var = T->asTypeVariableType()) {
             auto It = S.AssignmentMap.find(Var);
             if (It != S.AssignmentMap.end()) {
                Expr->setContextualType(It->getSecond());
@@ -53,9 +53,9 @@ public:
       return StmtBuilder::visitExpr(Expr);
    }
 
-   ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr)
+   ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* Expr)
    {
-      NamedDecl *Decl;
+      NamedDecl* Decl;
 
       auto directBindingIt = Bindings.OverloadChoices.find(Expr);
       if (directBindingIt != Bindings.OverloadChoices.end()) {
@@ -73,7 +73,7 @@ public:
          Decl = Expr->getOverloads()[ChoiceIt->getSecond().ChosenIndex];
       }
 
-      if (auto *PE = Expr->getParentExpr()) {
+      if (auto* PE = Expr->getParentExpr()) {
          if (MemberRefExpr::needsMemberRefExpr(Decl->getKind())) {
             return MemberRefExpr::Create(Sys.QC.Context, PE, Decl,
                                          Expr->getSourceRange());
@@ -83,12 +83,12 @@ public:
       return DeclRefExpr::Create(Sys.QC.Context, Decl, Expr->getSourceRange());
    }
 
-   ExprResult visitAnonymousCallExpr(AnonymousCallExpr *Expr);
+   ExprResult visitAnonymousCallExpr(AnonymousCallExpr* Expr);
 };
 
 } // anonymous namespace
 
-ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
+ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
 {
    // Get the call data.
    auto CallIt = UnresolvedCalls.find(Expr);
@@ -97,7 +97,7 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
    // overload first, now we can resolve the call.
    if (CallIt == UnresolvedCalls.end()) {
       if (isa<IdentifierRefExpr>(Expr->getParentExpr())
-      && cast<IdentifierRefExpr>(Expr->getParentExpr())->hasLeadingDot()) {
+          && cast<IdentifierRefExpr>(Expr->getParentExpr())->hasLeadingDot()) {
          auto ParentRes = visitExpr(Expr->getParentExpr());
          if (!ParentRes) {
             return ExprError();
@@ -109,17 +109,17 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
       return Sys.QC.Sema->typecheckExpr(Expr);
    }
 
-   auto &Data = CallIt->getSecond();
-   auto &Cand = *Data.BestCand;
+   auto& Data = CallIt->getSecond();
+   auto& Cand = *Data.BestCand;
 
    if (!Cand.isAnonymousCandidate()) {
-      auto *Fn = Cand.getFunc();
-      auto *callExpr = Sys.QC.Sema->CreateCall(Fn, Data.CandSet.ResolvedArgs,
+      auto* Fn = Cand.getFunc();
+      auto* callExpr = Sys.QC.Sema->CreateCall(Fn, Data.CandSet.ResolvedArgs,
                                                Expr->getSourceLoc());
 
       if (Fn->isTemplate()) {
-         auto *templateArgs = FinalTemplateArgumentList::Create(
-            Sys.QC.Context, Cand.InnerTemplateArgs);
+         auto* templateArgs = FinalTemplateArgumentList::Create(
+             Sys.QC.Context, Cand.InnerTemplateArgs);
 
          callExpr->setTemplateArgs(templateArgs);
       }
@@ -127,7 +127,8 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
       if (Expr->needsInstantiation() || Fn->isTemplateOrInTemplate()) {
          callExpr->setNeedsInstantiation(true);
 
-         if (auto *Ovl = dyn_cast_or_null<OverloadedDeclRefExpr>(Expr->getParentExpr())) {
+         if (auto* Ovl
+             = dyn_cast_or_null<OverloadedDeclRefExpr>(Expr->getParentExpr())) {
             callExpr->setParentExpr(visitExpr(Ovl).getValue());
          }
          else {
@@ -138,16 +139,16 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
       return callExpr;
    }
 
-   if (auto *Ovl = dyn_cast<OverloadedDeclRefExpr>(Expr->getParentExpr())) {
-      NamedDecl *ReferencedDecl = nullptr;
-      for (auto *ND : Ovl->getOverloads()) {
-         auto *Var = dyn_cast<VarDecl>(ND);
+   if (auto* Ovl = dyn_cast<OverloadedDeclRefExpr>(Expr->getParentExpr())) {
+      NamedDecl* ReferencedDecl = nullptr;
+      for (auto* ND : Ovl->getOverloads()) {
+         auto* Var = dyn_cast<VarDecl>(ND);
          if (Var && Var->getType() == Cand.getFunctionType()) {
             ReferencedDecl = Var;
             break;
          }
 
-         auto *Alias = dyn_cast<AliasDecl>(ND);
+         auto* Alias = dyn_cast<AliasDecl>(ND);
          if (Alias && Alias->getType() == Cand.getFunctionType()) {
             ReferencedDecl = Alias;
             break;
@@ -155,7 +156,7 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
       }
 
       assert(ReferencedDecl && "decl does not exist!");
-      Expression *DeclRef = DeclRefExpr::Create(Sys.QC.Context, ReferencedDecl,
+      Expression* DeclRef = DeclRefExpr::Create(Sys.QC.Context, ReferencedDecl,
                                                 Ovl->getSourceRange());
 
       auto Result = Sys.QC.Sema->typecheckExpr(DeclRef);
@@ -173,12 +174,13 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr *Expr)
    return Expr;
 }
 
-bool ConstraintBuilder::applySolution(const ConstraintSystem::Solution &S,
-                                      MutableArrayRef<ast::Expression*> Exprs) {
+bool ConstraintBuilder::applySolution(const ConstraintSystem::Solution& S,
+                                      MutableArrayRef<ast::Expression*> Exprs)
+{
    SolutionApplier Applier(Sys, S, Bindings, UnresolvedCalls);
 
    bool Invalid = false;
-   for (auto &Expr : Exprs) {
+   for (auto& Expr : Exprs) {
       auto Result = Applier.visitExpr(Expr);
       if (Result) {
          Expr = Result.get();

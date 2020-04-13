@@ -1,16 +1,16 @@
 
-#include "ModuleWriter.h"
+#include "cdotc/Serialization/ModuleWriter.h"
 
-#include "ASTCommon.h"
-#include "ASTWriter.h"
-#include "AST/TypeVisitor.h"
-#include "Driver/Compiler.h"
-#include "ILWriter.h"
-#include "Lex/Token.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Sema/SemaPass.h"
-#include "IncrementalCompilation.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/Lex/Token.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ASTCommon.h"
+#include "cdotc/Serialization/ASTWriter.h"
+#include "cdotc/Serialization/ILWriter.h"
+#include "cdotc/Serialization/IncrementalCompilation.h"
 
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/SmallString.h>
@@ -25,33 +25,30 @@ using namespace cdot::ast;
 using namespace cdot::sema;
 using namespace cdot::serial;
 
-ModuleWriter::ModuleWriter(CompilerInstance &CI, llvm::BitstreamWriter &Stream,
+ModuleWriter::ModuleWriter(CompilerInstance& CI, llvm::BitstreamWriter& Stream,
                            unsigned SourceID,
-                           IncrementalCompilationManager *IncMgr)
-   : CI(CI), Stream(Stream),
-     ASTWriter(*this), ILWriter(ASTWriter, Stream, CI.getILCtx()),
-     SourceID(SourceID), Mod(CI.getCompilationModule()),
-     IncMgr(IncMgr)
+                           IncrementalCompilationManager* IncMgr)
+    : CI(CI), Stream(Stream), ASTWriter(*this),
+      ILWriter(ASTWriter, Stream, CI.getILCtx()), SourceID(SourceID),
+      Mod(CI.getCompilationModule()), IncMgr(IncMgr)
 {
    ASTWriter.SourceID = SourceID;
    ILWriter.SourceID = SourceID;
 }
 
-ModuleWriter::ModuleWriter(CompilerInstance &CI, llvm::BitstreamWriter &Stream,
-                           ModuleWriter &MainWriter,
-                           IncrementalCompilationManager *IncMgr)
-   : CI(CI), Stream(Stream),
-     ASTWriter(*this, MainWriter.ASTWriter),
-     ILWriter(ASTWriter, Stream, CI.getILCtx()),
-     Mod(CI.getCompilationModule()),
-     IncMgr(IncMgr)
+ModuleWriter::ModuleWriter(CompilerInstance& CI, llvm::BitstreamWriter& Stream,
+                           ModuleWriter& MainWriter,
+                           IncrementalCompilationManager* IncMgr)
+    : CI(CI), Stream(Stream), ASTWriter(*this, MainWriter.ASTWriter),
+      ILWriter(ASTWriter, Stream, CI.getILCtx()),
+      Mod(CI.getCompilationModule()), IncMgr(IncMgr)
 {
-
 }
 
-static void EmitBlockID(unsigned ID, const char *Name,
-                        llvm::BitstreamWriter &Stream,
-                        ASTWriter::RecordDataImpl &Record) {
+static void EmitBlockID(unsigned ID, const char* Name,
+                        llvm::BitstreamWriter& Stream,
+                        ASTWriter::RecordDataImpl& Record)
+{
    Record.clear();
    Record.push_back(ID);
    Stream.EmitRecord(llvm::bitc::BLOCKINFO_CODE_SETBID, Record);
@@ -65,9 +62,10 @@ static void EmitBlockID(unsigned ID, const char *Name,
    Stream.EmitRecord(llvm::bitc::BLOCKINFO_CODE_BLOCKNAME, Record);
 }
 
-static void EmitRecordID(unsigned ID, const char *Name,
-                         llvm::BitstreamWriter &Stream,
-                         ASTWriter::RecordDataImpl &Record) {
+static void EmitRecordID(unsigned ID, const char* Name,
+                         llvm::BitstreamWriter& Stream,
+                         ASTWriter::RecordDataImpl& Record)
+{
    Record.clear();
    Record.push_back(ID);
    while (*Name)
@@ -75,17 +73,19 @@ static void EmitRecordID(unsigned ID, const char *Name,
    Stream.EmitRecord(llvm::bitc::BLOCKINFO_CODE_SETRECORDNAME, Record);
 }
 
-static void AddStmtsExprs(llvm::BitstreamWriter &Stream,
-                          ASTWriter::RecordDataImpl &Record) {
-#  define RECORD(NAME) EmitRecordID(NAME, #NAME, Stream, Record)
+static void AddStmtsExprs(llvm::BitstreamWriter& Stream,
+                          ASTWriter::RecordDataImpl& Record)
+{
+#define RECORD(NAME) EmitRecordID(NAME, #NAME, Stream, Record)
    RECORD(STMT_REF_PTR);
    RECORD(STMT_NULL_PTR);
    RECORD(STMT_STOP);
 
-#  undef RECORD
+#undef RECORD
 
-#  define CDOT_STMT(NAME) EmitRecordID(Statement::NAME##ID, #NAME, Stream, Record);
-#  include "AST/AstNode.def"
+#define CDOT_STMT(NAME)                                                        \
+   EmitRecordID(Statement::NAME##ID, #NAME, Stream, Record);
+#include "cdotc/AST/AstNode.def"
 }
 
 void ModuleWriter::WriteBlockInfoBlock()
@@ -93,77 +93,78 @@ void ModuleWriter::WriteBlockInfoBlock()
    RecordData Record;
    Stream.EnterBlockInfoBlock();
 
-#  define BLOCK(X)  EmitBlockID(X ## _ID, #X, Stream, Record)
-#  define RECORD(X) EmitRecordID(X, #X, Stream, Record)
+#define BLOCK(X) EmitBlockID(X##_ID, #X, Stream, Record)
+#define RECORD(X) EmitRecordID(X, #X, Stream, Record)
 
    BLOCK(CONTROL_BLOCK);
-      RECORD(CACHE_FILE);
+   RECORD(CACHE_FILE);
 
    BLOCK(OPTIONS_BLOCK);
-      RECORD(LANGUAGE_OPTIONS);
-      RECORD(TARGET_OPTIONS);
+   RECORD(LANGUAGE_OPTIONS);
+   RECORD(TARGET_OPTIONS);
 
    BLOCK(MODULE_BLOCK);
-      RECORD(MODULE_NAME);
-      RECORD(MODULE_DIRECTORY);
-      RECORD(METADATA);
-      RECORD(INPUT_FILES);
-      RECORD(IMPORTS);
-      RECORD(IMPLICIT_IMPORTS);
-      RECORD(MODULE_DECL);
+   RECORD(MODULE_NAME);
+   RECORD(MODULE_DIRECTORY);
+   RECORD(METADATA);
+   RECORD(INPUT_FILES);
+   RECORD(IMPORTS);
+   RECORD(IMPLICIT_IMPORTS);
+   RECORD(MODULE_DECL);
 
    BLOCK(FILE_MANAGER_BLOCK);
-      RECORD(MACRO_EXPANSIONS);
-      RECORD(SOURCE_FILES);
+   RECORD(MACRO_EXPANSIONS);
+   RECORD(SOURCE_FILES);
 
    BLOCK(AST_BLOCK);
-      RECORD(GLOBAL_DECL_CONTEXT);
-      RECORD(OPERATOR_PRECEDENCE_DECLS);
-      RECORD(INSTANTIATION_TABLE);
-      RECORD(CACHE_LOOKUP_TABLE);
+   RECORD(GLOBAL_DECL_CONTEXT);
+   RECORD(OPERATOR_PRECEDENCE_DECLS);
+   RECORD(INSTANTIATION_TABLE);
+   RECORD(CACHE_LOOKUP_TABLE);
 
    // Decls and Types block.
    BLOCK(DECL_TYPES_BLOCK);
-      RECORD(DECL_EXTERNAL);
-      RECORD(DECL_CACHED);
-      RECORD(DECL_CONTEXT_LEXICAL);
-      RECORD(DECL_CONTEXT_VISIBLE);
+   RECORD(DECL_EXTERNAL);
+   RECORD(DECL_CACHED);
+   RECORD(DECL_CONTEXT_LEXICAL);
+   RECORD(DECL_CONTEXT_VISIBLE);
 
-#  define CDOT_TYPE(NAME, PARENT) EmitRecordID(Type::NAME##ID, #NAME, Stream, Record);
-#  include "AST/Types.def"
+#define CDOT_TYPE(NAME, PARENT)                                                \
+   EmitRecordID(Type::NAME##ID, #NAME, Stream, Record);
+#include "cdotc/AST/Types.def"
 
-#  define CDOT_DECL(NAME) EmitRecordID(DECL_##NAME, #NAME, Stream, Record);
-#  include "AST/Decl.def"
+#define CDOT_DECL(NAME) EmitRecordID(DECL_##NAME, #NAME, Stream, Record);
+#include "cdotc/AST/Decl.def"
 
-      // Statements and Exprs can occur in the Decls and Types block.
-      AddStmtsExprs(Stream, Record);
+   // Statements and Exprs can occur in the Decls and Types block.
+   AddStmtsExprs(Stream, Record);
 
    BLOCK(OFFSET_BLOCK);
-      RECORD(DECL_OFFSET);
-      RECORD(SCOPE_OFFSET);
-      RECORD(TYPE_OFFSET);
-      RECORD(IL_VALUE_OFFSETS);
+   RECORD(DECL_OFFSET);
+   RECORD(SCOPE_OFFSET);
+   RECORD(TYPE_OFFSET);
+   RECORD(IL_VALUE_OFFSETS);
 
    BLOCK(OFFSET_RANGE_BLOCK);
-      RECORD(OFFSET_RANGES);
+   RECORD(OFFSET_RANGES);
 
    BLOCK(CONFORMANCE_BLOCK);
-      RECORD(CONFORMANCE_TABLE);
-      RECORD(CONFORMANCE_DATA);
+   RECORD(CONFORMANCE_TABLE);
+   RECORD(CONFORMANCE_DATA);
 
    BLOCK(IL_MODULE_BLOCK);
-      RECORD(IL_METADATA);
-      RECORD(IL_SYMBOL_TABLE);
+   RECORD(IL_METADATA);
+   RECORD(IL_SYMBOL_TABLE);
 
    BLOCK(IDENTIFIER_BLOCK);
-      RECORD(IDENTIFIER_OFFSET);
-      RECORD(IDENTIFIER_TABLE);
+   RECORD(IDENTIFIER_OFFSET);
+   RECORD(IDENTIFIER_TABLE);
 
    BLOCK(STATIC_LIB_BLOCK);
-      RECORD(STATIC_LIB_DATA);
+   RECORD(STATIC_LIB_DATA);
 
-#  undef BLOCK
-#  undef RECORD
+#undef BLOCK
+#undef RECORD
 
    Stream.ExitBlock();
 }
@@ -190,7 +191,7 @@ void ModuleWriter::WriteControlBlock(ASTContext&)
    Stream.ExitBlock(); // Control block
 }
 
-void ModuleWriter::WriteModuleInfo(Module *Mod)
+void ModuleWriter::WriteModuleInfo(Module* Mod)
 {
    RecordData Record;
    Stream.EnterSubblock(MODULE_BLOCK_ID, 5);
@@ -215,7 +216,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
    {
       Record.clear();
 
-      if (auto *Path = Mod->getModulePath()) {
+      if (auto* Path = Mod->getModulePath()) {
          auto ModPath = Path->getIdentifier();
          Record.push_back(ModPath.size());
          Record.append(ModPath.begin(), ModPath.end());
@@ -254,7 +255,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
       auto Files = Mod->getSourceFiles();
       Record.push_back(Files.size());
 
-      for (auto &F : Files) {
+      for (auto& F : Files) {
          Record.push_back(F.getValue().LastModified);
          Record.push_back(F.getValue().OriginalSourceID);
          Record.push_back(F.getValue().OriginalOffset);
@@ -269,14 +270,14 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
    {
       Record.clear();
 
-      auto &Imports = Mod->getImports();
+      auto& Imports = Mod->getImports();
 
       auto Idx = Record.size();
       Record.emplace_back();
 
       unsigned NumImports = 0;
-      for (auto *I : Imports) {
-         auto *BaseMod = I->getBaseModule();
+      for (auto* I : Imports) {
+         auto* BaseMod = I->getBaseModule();
          if (BaseMod == this->Mod)
             continue;
 
@@ -300,7 +301,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
       unsigned NumImports = 0;
       SmallVector<IdentifierInfo*, 2> ModuleName;
 
-      for (auto *I : Imports) {
+      for (auto* I : Imports) {
          while (I) {
             ModuleName.push_back(I->getName());
             I = I->getParentModule();
@@ -309,7 +310,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
          std::reverse(ModuleName.begin(), ModuleName.end());
 
          Record.push_back(ModuleName.size());
-         for (auto *II : ModuleName) {
+         for (auto* II : ModuleName) {
             Record.push_back(getIdentifierRef(II));
          }
 
@@ -324,7 +325,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
    // Submodules
    {
       auto SubModules = Mod->getSubModules();
-      for (auto *SubMod : SubModules) {
+      for (auto* SubMod : SubModules) {
          WriteModuleInfo(SubMod);
       }
    }
@@ -342,7 +343,7 @@ void ModuleWriter::WriteModuleInfo(Module *Mod)
 
 void ModuleWriter::WriteFileManagerBlock()
 {
-   auto &FileMgr = CI.getFileMgr();
+   auto& FileMgr = CI.getFileMgr();
 
    Stream.EnterSubblock(FILE_MANAGER_BLOCK_ID, 4);
 
@@ -351,10 +352,10 @@ void ModuleWriter::WriteFileManagerBlock()
 
    // Source files.
    {
-      auto &SourceFiles = FileMgr.getSourceFiles();
+      auto& SourceFiles = FileMgr.getSourceFiles();
       Record.push_back(SourceFiles.size());
 
-      for (auto &FilePair : SourceFiles) {
+      for (auto& FilePair : SourceFiles) {
          Record.AddString(FilePair.getKey());
          Record.push_back(FilePair.getValue().SourceId);
          Record.push_back(FilePair.getValue().BaseOffset);
@@ -367,11 +368,11 @@ void ModuleWriter::WriteFileManagerBlock()
    {
       Record.clear();
 
-      auto &Expansions = FileMgr.getMacroExpansionLocs();
+      auto& Expansions = FileMgr.getMacroExpansionLocs();
       Record.push_back(Expansions.size());
 
-      for (auto &ExpPair : Expansions) {
-         auto &Exp = ExpPair.getSecond();
+      for (auto& ExpPair : Expansions) {
+         auto& Exp = ExpPair.getSecond();
 
          Record.push_back(Exp.SourceID);
          Record.push_back(Exp.BaseOffset);
@@ -407,14 +408,14 @@ void ModuleWriter::WriteCacheControlBlock()
    {
       Record.clear();
 
-      auto &Imports = Mod->getImports();
+      auto& Imports = Mod->getImports();
 
       auto Idx = Record.size();
       Record.emplace_back();
 
       unsigned NumImports = 0;
-      for (auto *I : Imports) {
-         auto *BaseMod = I->getBaseModule();
+      for (auto* I : Imports) {
+         auto* BaseMod = I->getBaseModule();
          if (BaseMod == Mod)
             continue;
 
@@ -429,25 +430,27 @@ void ModuleWriter::WriteCacheControlBlock()
    Stream.ExitBlock(); // Control block
 }
 
-void ModuleWriter::AddIdentifierRef(const IdentifierInfo *II,
-                                    RecordDataImpl &Record) {
+void ModuleWriter::AddIdentifierRef(const IdentifierInfo* II,
+                                    RecordDataImpl& Record)
+{
    Record.push_back(getIdentifierRef(II));
 }
 
-unsigned ModuleWriter::getIdentifierRef(const IdentifierInfo *II)
+unsigned ModuleWriter::getIdentifierRef(const IdentifierInfo* II)
 {
    if (!II)
       return 0;
 
-   unsigned &ID = IdentIDMap[II];
+   unsigned& ID = IdentIDMap[II];
    if (ID == 0)
       ID = NextIdentID++;
 
    return ID;
 }
 
-void ModuleWriter::SetIdentifierOffset(const IdentifierInfo *II,
-                                      uint32_t Offset) {
+void ModuleWriter::SetIdentifierOffset(const IdentifierInfo* II,
+                                       uint32_t Offset)
+{
    auto ID = IdentIDMap[II];
    if (IdentifierOffsets.size() < ID)
       IdentifierOffsets.resize(ID);
@@ -458,22 +461,20 @@ void ModuleWriter::SetIdentifierOffset(const IdentifierInfo *II,
 namespace {
 
 class ModuleIdentifierTableTrait {
-   ModuleWriter &Writer;
+   ModuleWriter& Writer;
 
 public:
-   using key_type     = IdentifierInfo*;
+   using key_type = IdentifierInfo*;
    using key_type_ref = key_type;
 
    /// A start and end index into DeclIDs, representing a sequence of decls.
-   using data_type     = unsigned;
-   using data_type_ref = const data_type &;
+   using data_type = unsigned;
+   using data_type_ref = const data_type&;
 
    using hash_value_type = unsigned;
-   using offset_type     = unsigned;
+   using offset_type = unsigned;
 
-   ModuleIdentifierTableTrait(ModuleWriter &Writer)
-      : Writer(Writer)
-   { }
+   ModuleIdentifierTableTrait(ModuleWriter& Writer) : Writer(Writer) {}
 
    hash_value_type ComputeHash(key_type_ref Key)
    {
@@ -481,7 +482,8 @@ public:
    }
 
    std::pair<unsigned, unsigned>
-   EmitKeyDataLength(llvm::raw_ostream& Out, IdentifierInfo* II, unsigned ID) {
+   EmitKeyDataLength(llvm::raw_ostream& Out, IdentifierInfo* II, unsigned ID)
+   {
       unsigned KeyLen = II->getLength() + 1;
       unsigned DataLen = 4;
 
@@ -499,15 +501,17 @@ public:
    }
 
    void EmitKey(llvm::raw_ostream& Out, const IdentifierInfo* II,
-                unsigned KeyLen) {
+                unsigned KeyLen)
+   {
       // Record the location of the key data.  This is used when generating
       // the mapping from persistent IDs to strings.
       Writer.SetIdentifierOffset(II, Out.tell());
       Out.write(II->getNameStart(), KeyLen);
    }
 
-   void EmitData(llvm::raw_ostream& Out, IdentifierInfo* II,
-                 unsigned ID, unsigned) {
+   void EmitData(llvm::raw_ostream& Out, IdentifierInfo* II, unsigned ID,
+                 unsigned)
+   {
       using namespace llvm::support;
 
       endian::Writer<little> LE(Out);
@@ -520,7 +524,7 @@ public:
 void ModuleWriter::WriteValuesTypesAndDecls()
 {
    // Keep writing declarations until we've emitted all of them.
-   Stream.EnterSubblock(DECL_TYPES_BLOCK_ID, /*bits for abbreviations*/5);
+   Stream.EnterSubblock(DECL_TYPES_BLOCK_ID, /*bits for abbreviations*/ 5);
 
    ASTWriter.WriteDeclAbbrevs();
    ASTWriter.WriteTypeAbbrevs();
@@ -547,7 +551,7 @@ void ModuleWriter::WriteValuesTypesAndDecls()
 void ModuleWriter::WriteValuesAndTypes()
 {
    // Keep writing declarations until we've emitted all of them.
-   Stream.EnterSubblock(DECL_TYPES_BLOCK_ID, /*bits for abbreviations*/5);
+   Stream.EnterSubblock(DECL_TYPES_BLOCK_ID, /*bits for abbreviations*/ 5);
 
    ASTWriter.WriteTypeAbbrevs();
 
@@ -592,13 +596,14 @@ void ModuleWriter::WriteIdentifierBlock()
    // Create and write out the blob that contains the identifier
    // strings.
    {
-      llvm::OnDiskChainedHashTableGenerator<ModuleIdentifierTableTrait> Generator;
+      llvm::OnDiskChainedHashTableGenerator<ModuleIdentifierTableTrait>
+          Generator;
       ModuleIdentifierTableTrait Trait(*this);
 
       // Create the on-disk hash table representation. We only store offsets
       // for identifiers that appear here for the first time.
       for (auto IdentIDPair : IdentIDMap) {
-         auto *II = const_cast<IdentifierInfo *>(IdentIDPair.first);
+         auto* II = const_cast<IdentifierInfo*>(IdentIDPair.first);
          unsigned ID = IdentIDPair.second;
 
          assert(II && "NULL identifier in identifier table");
@@ -628,8 +633,8 @@ void ModuleWriter::WriteIdentifierBlock()
       assert(IdentifierOffsets[I] && "Missing identifier offset?");
 #endif
 
-   RecordData::value_type Record[] = {IDENTIFIER_OFFSET,
-      IdentifierOffsets.size()};
+   RecordData::value_type Record[]
+       = {IDENTIFIER_OFFSET, IdentifierOffsets.size()};
 
    Stream.EmitRecordWithBlob(IdentifierOffsetAbbrev, Record,
                              bytes(IdentifierOffsets));
@@ -637,7 +642,7 @@ void ModuleWriter::WriteIdentifierBlock()
    Stream.ExitBlock(); // IDENTIFIER_BLOCK
 }
 
-void ModuleWriter::WriteStaticLibraryData(llvm::MemoryBuffer *Buf)
+void ModuleWriter::WriteStaticLibraryData(llvm::MemoryBuffer* Buf)
 {
    using namespace llvm;
 
@@ -648,7 +653,7 @@ void ModuleWriter::WriteStaticLibraryData(llvm::MemoryBuffer *Buf)
    Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));
    auto AbbrevID = Stream.EmitAbbrev(move(Abv));
 
-   RecordData::value_type Data[] = { STATIC_LIB_DATA };
+   RecordData::value_type Data[] = {STATIC_LIB_DATA};
    Stream.EmitRecordWithBlob(AbbrevID, Data, Buf->getBuffer());
 
    Stream.ExitBlock();
@@ -662,20 +667,19 @@ static long long getCurrentTimeMillis()
 
 namespace {
 
-class ModuleWriterStackTraceEntry: public llvm::PrettyStackTraceEntry {
-   Module *Mod;
-   IdentifierInfo *FileName;
+class ModuleWriterStackTraceEntry : public llvm::PrettyStackTraceEntry {
+   Module* Mod;
+   IdentifierInfo* FileName;
 
 public:
-   ModuleWriterStackTraceEntry(Module *Mod)
-      : Mod(Mod), FileName(nullptr)
-   {}
+   ModuleWriterStackTraceEntry(Module* Mod) : Mod(Mod), FileName(nullptr) {}
 
-   ModuleWriterStackTraceEntry(IdentifierInfo *FileName)
-      : Mod(nullptr), FileName(FileName)
-   {}
+   ModuleWriterStackTraceEntry(IdentifierInfo* FileName)
+       : Mod(nullptr), FileName(FileName)
+   {
+   }
 
-   void print(raw_ostream &OS) const override
+   void print(raw_ostream& OS) const override
    {
       if (Mod) {
          OS << "while writing module '" << Mod->getFullName() << "'\n";
@@ -689,7 +693,7 @@ public:
 
 } // anonymous namespace
 
-void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
+void ModuleWriter::WriteModule(Module* Mod, llvm::MemoryBuffer* LibBuf)
 {
    ModuleWriterStackTraceEntry MRST(Mod);
 
@@ -725,19 +729,19 @@ void ModuleWriter::WriteModule(Module *Mod, llvm::MemoryBuffer *LibBuf)
 
    // Emit the offset tables
    Stream.EnterSubblock(OFFSET_BLOCK_ID, 5);
-      ASTWriter.WriteOffsetAbbrevs();
-      ASTWriter.WriteDeclOffsets();
-      ASTWriter.WriteTypeOffsets();
-      ILWriter.WriteValueOffsets();
+   ASTWriter.WriteOffsetAbbrevs();
+   ASTWriter.WriteDeclOffsets();
+   ASTWriter.WriteTypeOffsets();
+   ILWriter.WriteValueOffsets();
    Stream.ExitBlock();
 
    DoneWriting = true;
 
    // Emit the module's conformance table
    Stream.EnterSubblock(CONFORMANCE_BLOCK_ID, 4);
-      ASTWriter.WriteConformanceAbbrevs();
-      ASTWriter.WriteConformanceData();
-      ASTWriter.WriteConformanceTable();
+   ASTWriter.WriteConformanceAbbrevs();
+   ASTWriter.WriteConformanceData();
+   ASTWriter.WriteConformanceTable();
    Stream.ExitBlock();
 
    // emit identifiers
@@ -793,26 +797,26 @@ void ModuleWriter::WriteCacheFile()
 
    // Emit the offset tables
    Stream.EnterSubblock(OFFSET_BLOCK_ID, 5);
-      ASTWriter.WriteOffsetAbbrevs();
-      ASTWriter.WriteDeclOffsets();
-      ASTWriter.WriteTypeOffsets();
-      ILWriter.WriteValueOffsets();
+   ASTWriter.WriteOffsetAbbrevs();
+   ASTWriter.WriteDeclOffsets();
+   ASTWriter.WriteTypeOffsets();
+   ILWriter.WriteValueOffsets();
    Stream.ExitBlock();
 
    // Emit the module's conformance table
    Stream.EnterSubblock(CONFORMANCE_BLOCK_ID, 4);
-      ASTWriter.WriteConformanceAbbrevs();
-      ASTWriter.WriteConformanceData();
-      ASTWriter.WriteConformanceTable();
+   ASTWriter.WriteConformanceAbbrevs();
+   ASTWriter.WriteConformanceData();
+   ASTWriter.WriteConformanceTable();
    Stream.ExitBlock();
 
    // emit identifiers
    WriteIdentifierBlock();
 }
 
-unsigned ModuleWriter::getSourceIDForDecl(const Decl *ConstDecl)
+unsigned ModuleWriter::getSourceIDForDecl(const Decl* ConstDecl)
 {
-   auto *D = const_cast<Decl*>(ConstDecl);
+   auto* D = const_cast<Decl*>(ConstDecl);
    return CI.getSema().getSerializationFile(D);
 }
 
@@ -860,21 +864,25 @@ void ModuleWriter::printStatistics() const
    llvm::errs() << "   writing took " << (EndTime - StartTime) << "ms.\n";
 
    llvm::errs() << "   " << DeclsWritten << " decls written.\n";
-   llvm::errs() << "   " << NumOpPGDecls << " Operators / Precedence Groups "
-                                            "written.\n";
+   llvm::errs() << "   " << NumOpPGDecls
+                << " Operators / Precedence Groups "
+                   "written.\n";
    llvm::errs() << "   " << NumStatements << " statements written.\n";
 
    llvm::errs() << "   " << ASTWriter.TypeOffsets.size() << " types written.\n";
    llvm::errs() << "   " << IdentifierOffsets.size()
                 << " identifiers written.\n";
 
-   llvm::errs() << "   " << ILWriter.ValueOffsets.size() << " IL values written"
-                                                            ".\n";
+   llvm::errs() << "   " << ILWriter.ValueOffsets.size()
+                << " IL values written"
+                   ".\n";
 
-   llvm::errs() << "   " << ILWriter.NumGlobalVariables <<" globals written.\n";
+   llvm::errs() << "   " << ILWriter.NumGlobalVariables
+                << " globals written.\n";
    llvm::errs() << "   " << ILWriter.NumFunctions << " IL functions written.\n";
-   llvm::errs() << "   " << ILWriter.NumInstructions << " IL instructions "
-                                                        "written.\n";
+   llvm::errs() << "   " << ILWriter.NumInstructions
+                << " IL instructions "
+                   "written.\n";
    llvm::errs() << "   " << ILWriter.NumConstants << " IL constants written.\n";
 
    llvm::errs() << "   " << Stream.GetCurrentBitNo() / 8 << " bytes written.\n";

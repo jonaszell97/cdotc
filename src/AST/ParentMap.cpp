@@ -1,6 +1,6 @@
-#include "ParentMap.h"
+#include "cdotc/AST/ParentMap.h"
 
-#include "Statement.h"
+#include "cdotc/AST/Statement.h"
 
 #include <llvm/ADT/DenseMap.h>
 
@@ -10,25 +10,25 @@ namespace {
 
 class ParentMapImpl {
 public:
-   void updateParentMap(Statement *Stmt)
+   void updateParentMap(Statement* Stmt)
    {
-//      visitDirectChildren(Stmt, [Stmt, this](Statement *Child) {
-//         if (Child) {
-//            Map[Child] = Stmt;
-//            return updateParentMap(Child);
-//         }
-//      });
+      //      visitDirectChildren(Stmt, [Stmt, this](Statement *Child) {
+      //         if (Child) {
+      //            Map[Child] = Stmt;
+      //            return updateParentMap(Child);
+      //         }
+      //      });
    }
 
-   Statement *getParent(Statement *Child)
+   Statement* getParent(Statement* Child)
    {
       auto it = Map.find(Child);
-      assert (it != Map.end() && "didn't update parent map for child");
+      assert(it != Map.end() && "didn't update parent map for child");
 
       return it->getSecond();
    }
 
-   void updateParent(Statement *Child, Statement *Parent)
+   void updateParent(Statement* Child, Statement* Parent)
    {
       Map[Child] = Parent;
    }
@@ -39,28 +39,21 @@ private:
 
 } // anonymous namespace
 
-ParentMap::ParentMap()
-   : pImpl(new ParentMapImpl)
-{
+ParentMap::ParentMap() : pImpl(new ParentMapImpl) {}
 
-}
+ParentMap::~ParentMap() { delete reinterpret_cast<ParentMapImpl*>(pImpl); }
 
-ParentMap::~ParentMap()
-{
-   delete reinterpret_cast<ParentMapImpl*>(pImpl);
-}
-
-void ParentMap::updateParentMap(Statement *Stmt)
+void ParentMap::updateParentMap(Statement* Stmt)
 {
    reinterpret_cast<ParentMapImpl*>(pImpl)->updateParentMap(Stmt);
 }
 
-Statement* ParentMap::getParent(Statement *Child)
+Statement* ParentMap::getParent(Statement* Child)
 {
    return reinterpret_cast<ParentMapImpl*>(pImpl)->getParent(Child);
 }
 
-void ParentMap::updateParent(Statement *Child, Statement *Parent)
+void ParentMap::updateParent(Statement* Child, Statement* Parent)
 {
    reinterpret_cast<ParentMapImpl*>(pImpl)->updateParent(Child, Parent);
 }

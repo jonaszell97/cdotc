@@ -1,6 +1,7 @@
-#include "SemaPass.h"
-#include "IL/Constants.h"
-#include "Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+
+#include "cdotc/IL/Constants.h"
+#include "cdotc/Query/QueryContext.h"
 
 using namespace cdot::diag;
 using namespace cdot::support;
@@ -8,16 +9,18 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-void SemaPass::checkDeclAttrs(Decl *D, Attr::VisitationPoint VP)
+void SemaPass::checkDeclAttrs(Decl* D, Attr::VisitationPoint VP)
 {
-   for (auto &A : D->getAttributes()) {
+   for (auto& A : D->getAttributes()) {
       if (VP != A->getVisitationPoint())
          continue;
 
       switch (A->getKind()) {
-#     define CDOT_DECL_ATTR(Name, Spelling)                                   \
-      case AttrKind::Name: check##Name##Attr(D, cast<Name##Attr>(A)); break;
-#     include "AST/Attributes.def"
+#define CDOT_DECL_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      check##Name##Attr(D, cast<Name##Attr>(A));                               \
+      break;
+#include "cdotc/AST/Attributes.def"
 
       default:
          llvm_unreachable("bad expr attr");
@@ -27,14 +30,16 @@ void SemaPass::checkDeclAttrs(Decl *D, Attr::VisitationPoint VP)
    D->setCheckedAttrs(true);
 }
 
-StmtResult SemaPass::visitAttributedStmt(AttributedStmt *Stmt)
+StmtResult SemaPass::visitAttributedStmt(AttributedStmt* Stmt)
 {
    auto S = Stmt->getStatement();
-   for (auto &A : Stmt->getAttributes()) {
+   for (auto& A : Stmt->getAttributes()) {
       switch (A->getKind()) {
-#     define CDOT_STMT_ATTR(Name, Spelling)                                    \
-      case AttrKind::Name: check##Name##Attr(S, cast<Name##Attr>(A)); break;
-#     include "AST/Attributes.def"
+#define CDOT_STMT_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      check##Name##Attr(S, cast<Name##Attr>(A));                               \
+      break;
+#include "cdotc/AST/Attributes.def"
 
       default:
          llvm_unreachable("bad expr attr");
@@ -49,16 +54,20 @@ StmtResult SemaPass::visitAttributedStmt(AttributedStmt *Stmt)
    return Stmt;
 }
 
-ExprResult SemaPass::visitAttributedExpr(AttributedExpr *Expr)
+ExprResult SemaPass::visitAttributedExpr(AttributedExpr* Expr)
 {
    auto E = Expr->getExpr();
-   for (auto &A : Expr->getAttributes()) {
+   for (auto& A : Expr->getAttributes()) {
       switch (A->getKind()) {
-#     define CDOT_EXPR_ATTR(Name, Spelling)                                    \
-      case AttrKind::Name: check##Name##Attr(E, cast<Name##Attr>(A)); break;
-#     define CDOT_TYPE_ATTR(Name, Spelling)                                    \
-      case AttrKind::Name: check##Name##Attr(E, cast<Name##Attr>(A)); break;
-#     include "AST/Attributes.def"
+#define CDOT_EXPR_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      check##Name##Attr(E, cast<Name##Attr>(A));                               \
+      break;
+#define CDOT_TYPE_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      check##Name##Attr(E, cast<Name##Attr>(A));                               \
+      break;
+#include "cdotc/AST/Attributes.def"
 
       default:
          llvm_unreachable("bad expr attr");
@@ -82,7 +91,7 @@ ExprResult SemaPass::visitAttributedExpr(AttributedExpr *Expr)
    return Expr;
 }
 
-void SemaPass::checkExternAttr(Decl *D, ExternAttr *A)
+void SemaPass::checkExternAttr(Decl* D, ExternAttr* A)
 {
    switch (A->getLang()) {
    case ExternAttr::C:
@@ -94,12 +103,9 @@ void SemaPass::checkExternAttr(Decl *D, ExternAttr *A)
    }
 }
 
-void SemaPass::checkInlineAttr(Decl *D, InlineAttr *A)
-{
+void SemaPass::checkInlineAttr(Decl* D, InlineAttr* A) {}
 
-}
-
-void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
+void SemaPass::checkAlignAttr(Decl* D, AlignAttr* A)
 {
    static constexpr auto MaxAlign = 268'435'456llu;
 
@@ -113,7 +119,7 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
                       /*must be integral*/ 0);
    }
 
-   auto &APS = cast<il::ConstantInt>(Val)->getValue();
+   auto& APS = cast<il::ConstantInt>(Val)->getValue();
 
    if (APS > MaxAlign) {
       return diagnose(A->getAlignment(), err_attr_align_too_high);
@@ -131,8 +137,7 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
 
    unsigned short NaturalAlignment;
    if (auto VD = cast<VarDecl>(D)) {
-      NaturalAlignment = Context.getTargetInfo()
-                                .getAlignOfType(VD->getType());
+      NaturalAlignment = Context.getTargetInfo().getAlignOfType(VD->getType());
    }
    else {
       QC.GetTypeAlignment(NaturalAlignment, VD->getType());
@@ -144,7 +149,7 @@ void SemaPass::checkAlignAttr(Decl *D, AlignAttr *A)
    }
 }
 
-void SemaPass::checkImplicitAttr(Decl *D, ImplicitAttr*)
+void SemaPass::checkImplicitAttr(Decl* D, ImplicitAttr*)
 {
    auto C = cast<CallableDecl>(D);
    if (!isa<InitDecl>(C) && !C->isConversionOp()) {
@@ -152,18 +157,18 @@ void SemaPass::checkImplicitAttr(Decl *D, ImplicitAttr*)
    }
 }
 
-void SemaPass::checkThinAttr(Expression *E, ThinAttr *A)
+void SemaPass::checkThinAttr(Expression* E, ThinAttr* A)
 {
    if (auto Fn = dyn_cast_or_null<FunctionTypeExpr>(E)) {
       Fn->setThin(true);
       return;
    }
 
-   diagnose(E, err_attr_can_only_be_used, "thin", /*function types*/3,
+   diagnose(E, err_attr_can_only_be_used, "thin", /*function types*/ 3,
             E->getSourceRange());
 }
 
-void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr *A)
+void SemaPass::check_BuiltinAttr(Decl* D, _BuiltinAttr* A)
 {
    auto ND = cast<NamedDecl>(D);
    ND->setAccess(AccessSpecifier::Public);
@@ -176,11 +181,11 @@ void SemaPass::check_BuiltinAttr(Decl *D, _BuiltinAttr *A)
    }
 }
 
-void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
+void SemaPass::check_SemanticsAttr(Decl* D, _SemanticsAttr* A)
 {
    StringRef K = A->getSemanticsKind();
    if (K == "builtin_integer_type") {
-      const RecordMetaInfo *Info;
+      const RecordMetaInfo* Info;
       if (QC.GetRecordMeta(Info, cast<RecordDecl>(D), false)) {
          return;
       }
@@ -188,7 +193,7 @@ void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
       Info->IsBuiltinIntegerType = true;
    }
    else if (K == "builtin_bool_type") {
-      const RecordMetaInfo *Info;
+      const RecordMetaInfo* Info;
       if (QC.GetRecordMeta(Info, cast<RecordDecl>(D), false)) {
          return;
       }
@@ -196,7 +201,7 @@ void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
       Info->IsBuiltinBoolType = true;
    }
    else if (K == "builtin_fp_type") {
-      const RecordMetaInfo *Info;
+      const RecordMetaInfo* Info;
       if (QC.GetRecordMeta(Info, cast<RecordDecl>(D), false)) {
          return;
       }
@@ -205,7 +210,7 @@ void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
    }
 }
 
-//void SemaPass::checkTemplateAttr(Decl *D, TemplateAttr *A)
+// void SemaPass::checkTemplateAttr(Decl *D, TemplateAttr *A)
 //{
 //   auto *ND = cast<NamedDecl>(D);
 //   if (!ND->isTemplate()) {
@@ -217,23 +222,17 @@ void SemaPass::check_SemanticsAttr(Decl *D, _SemanticsAttr *A)
 //   ND->setUnboundedTemplate(true);
 //}
 
-void SemaPass::checkStrongAttr(Decl *D, StrongAttr*)
+void SemaPass::checkStrongAttr(Decl* D, StrongAttr*)
 {
    cast<AliasDecl>(D)->setStrong(true);
 }
 
-void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*)
-{
+void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*) {}
 
-}
-
-void SemaPass::checkVersionDeclAttr(Decl*, VersionDeclAttr*)
-{
-
-}
+void SemaPass::checkVersionDeclAttr(Decl*, VersionDeclAttr*) {}
 
 #define CDOT_ATTR_SEMA
-#include "AST/Attr.inc"
+#include "cdotc/AST/Attr.inc"
 
 } // namespace ast
 } // namespace cdot

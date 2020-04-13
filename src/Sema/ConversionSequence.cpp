@@ -1,14 +1,14 @@
-#include "ConversionSequence.h"
+#include "cdotc/Sema/ConversionSequence.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
 
 using namespace cdot;
 
 QualType ConversionStep::getResultType() const
 {
    if (Kind == CastKind::ConversionOp) {
-      auto *convOp = getConversionOp();
+      auto* convOp = getConversionOp();
       if (convOp->isCompleteInitializer()) {
          return convOp->getASTCtx().getRecordType(convOp->getRecord());
       }
@@ -71,7 +71,7 @@ unsigned cdot::getPenalty(CastKind kind)
 static unsigned getConversionPenalty(ArrayRef<ConversionStep> steps)
 {
    unsigned penalty = 0;
-   for (const auto &C : steps) {
+   for (const auto& C : steps) {
       penalty += getPenalty(C.getKind());
    }
 
@@ -79,29 +79,31 @@ static unsigned getConversionPenalty(ArrayRef<ConversionStep> steps)
 }
 
 ConversionSequence*
-ConversionSequence::Create(ast::ASTContext &C,
-                           const ConversionSequenceBuilder &Builder,
-                           QualType finalType) {
-   void *Mem = C.Allocate(totalSizeToAlloc<ConversionStep>(
-                             Builder.getSteps().size()),
-                          alignof(ConversionSequence));
+ConversionSequence::Create(ast::ASTContext& C,
+                           const ConversionSequenceBuilder& Builder,
+                           QualType finalType)
+{
+   void* Mem
+       = C.Allocate(totalSizeToAlloc<ConversionStep>(Builder.getSteps().size()),
+                    alignof(ConversionSequence));
 
-   return new(Mem) ConversionSequence(Builder, finalType);
+   return new (Mem) ConversionSequence(Builder, finalType);
 }
 
-ConversionSequence* ConversionSequence::Create(ast::ASTContext &C,
+ConversionSequence* ConversionSequence::Create(ast::ASTContext& C,
                                                CastStrength Strength,
-                                               ArrayRef<ConversionStep> Steps) {
-   void *Mem = C.Allocate(totalSizeToAlloc<ConversionStep>(Steps.size()),
+                                               ArrayRef<ConversionStep> Steps)
+{
+   void* Mem = C.Allocate(totalSizeToAlloc<ConversionStep>(Steps.size()),
                           alignof(ConversionSequence));
 
-   return new(Mem) ConversionSequence(Strength, Steps);
+   return new (Mem) ConversionSequence(Strength, Steps);
 }
 
-ConversionSequence::ConversionSequence(const ConversionSequenceBuilder &Builder,
+ConversionSequence::ConversionSequence(const ConversionSequenceBuilder& Builder,
                                        QualType finalType)
-   : Strength(Builder.getStrength()), NumSteps(0),
-     Penalty(Builder.getPenalty())
+    : Strength(Builder.getStrength()), NumSteps(0),
+      Penalty(Builder.getPenalty())
 {
    auto Steps = Builder.getSteps();
    NumSteps = (unsigned)Steps.size();
@@ -115,8 +117,8 @@ ConversionSequence::ConversionSequence(const ConversionSequenceBuilder &Builder,
 
 ConversionSequence::ConversionSequence(CastStrength Strength,
                                        ArrayRef<ConversionStep> Steps)
-   : Strength(Strength), NumSteps((unsigned)Steps.size()),
-     Penalty(getConversionPenalty(Steps))
+    : Strength(Strength), NumSteps((unsigned)Steps.size()),
+      Penalty(getConversionPenalty(Steps))
 {
    std::copy(Steps.begin(), Steps.end(), getTrailingObjects<ConversionStep>());
 }

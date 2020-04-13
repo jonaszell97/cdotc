@@ -1,0 +1,11 @@
+
+#ifndef CDOT_ANALYSIS
+#error "must define CDOT_ANALYSIS before including this file!"
+#endif
+
+CDOT_ANALYSIS(DominanceAnalysis, "dominance-analysis")
+CDOT_ANALYSIS(PostDominanceAnalysis, "post-dominance-analysis")
+CDOT_ANALYSIS(EscapeAnalysis, "escape-analysis")
+CDOT_ANALYSIS(UnsafeAnalysis, "unsafe-analysis")
+
+#undef CDOT_ANALYSIS

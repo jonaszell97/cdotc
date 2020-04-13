@@ -1,18 +1,18 @@
-#include "ConstraintStep.h"
+#include "cdotc/Sema/ConstraintStep.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "Query/QueryContext.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
 
 #include <llvm/Support/raw_ostream.h>
 
 #ifndef NDEBUG
-#  define LOG_ERR(...) log(indent_t{Indent * 3, false}, __VA_ARGS__);
-#  define LOG(...) log(indent_t{Indent * 3, true}, __VA_ARGS__);
+#define LOG_ERR(...) log(indent_t{Indent * 3, false}, __VA_ARGS__);
+#define LOG(...) log(indent_t{Indent * 3, true}, __VA_ARGS__);
 #else
-#  define LOG_ERR(...)
-#  define LOG(...)
+#define LOG_ERR(...)
+#define LOG(...)
 #endif
 
 using namespace cdot;
@@ -20,25 +20,20 @@ using namespace cdot::ast;
 using namespace cdot::sema;
 using namespace cdot::support;
 
-SolverStep::SolverStep(ConstraintSystem &Sys,
-                       SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                       SmallVectorImpl<SolverStep*> &NextSteps,
-                       unsigned Indent)
-   : Sys(Sys), Solutions(Solutions), NextSteps(NextSteps),
+SolverStep::SolverStep(ConstraintSystem& Sys,
+                       SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+                       SmallVectorImpl<SolverStep*>& NextSteps, unsigned Indent)
+    : Sys(Sys), Solutions(Solutions), NextSteps(NextSteps),
 #ifndef NDEBUG
-     Indent(Indent),
+      Indent(Indent),
 #endif
-     State(Idle)
+      State(Idle)
 {
-
 }
 
-void SolverStep::done(bool IsFailure)
-{
-   transition(IsFailure ? Error : Done);
-}
+void SolverStep::done(bool IsFailure) { transition(IsFailure ? Error : Done); }
 
-void SolverStep::suspend(SolverStep *NextStep)
+void SolverStep::suspend(SolverStep* NextStep)
 {
    NextSteps.push_back(this);
    if (NextStep) {
@@ -57,7 +52,8 @@ void SolverStep::transition(SolverStepState ToState)
       assert((State == Idle || State == Suspended) && "bad state transition!");
       break;
    case Suspended:
-      assert((State == Active || State == Suspended)&& "bad state transition!");
+      assert((State == Active || State == Suspended)
+             && "bad state transition!");
       break;
    case Done:
       assert(State == Active && "bad state transition!");
@@ -88,13 +84,12 @@ void SolverStep::applyIndent(unsigned Indent, bool List)
 
 #endif
 
-SplitterStep::SplitterStep(ConstraintSystem &Sys,
-                           SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                           SmallVectorImpl<SolverStep*> &NextSteps,
-                           unsigned Indent)
-   : SolverStep(Sys, Solutions, NextSteps, Indent)
+SplitterStep::SplitterStep(
+    ConstraintSystem& Sys,
+    SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+    SmallVectorImpl<SolverStep*>& NextSteps, unsigned Indent)
+    : SolverStep(Sys, Solutions, NextSteps, Indent)
 {
-
 }
 
 void SplitterStep::execute(bool PrevFailed)
@@ -105,13 +100,13 @@ void SplitterStep::execute(bool PrevFailed)
    auto AllTypeVars = Sys.getTypeVariables();
 
    SmallVector<unsigned, 4> Components;
-   unsigned NumComponents = Sys.getConstraintGraph()
-      .computeConnectedComponents(AllTypeVars, Components);
+   unsigned NumComponents = Sys.getConstraintGraph().computeConnectedComponents(
+       AllTypeVars, Components);
 
    PartialSolutions.reserve(NumComponents);
 
 #ifndef NDEBUG
-   if (auto *OSPtr = Sys.getLoggingStream()) {
+   if (auto* OSPtr = Sys.getLoggingStream()) {
       (*OSPtr) << "components: ";
    }
 #endif
@@ -125,19 +120,21 @@ void SplitterStep::execute(bool PrevFailed)
       }
 
 #ifndef NDEBUG
-      if (auto *OSPtr = Sys.getLoggingStream()) {
-         if (i != 0) (*OSPtr) << ", ";
+      if (auto* OSPtr = Sys.getLoggingStream()) {
+         if (i != 0)
+            (*OSPtr) << ", ";
          (*OSPtr) << "(";
          unsigned k = 0;
-         for (auto *TV : TypeVars) {
-            if (k++ != 0) (*OSPtr) << ", ";
+         for (auto* TV : TypeVars) {
+            if (k++ != 0)
+               (*OSPtr) << ", ";
             (*OSPtr) << QualType(TV);
          }
          (*OSPtr) << ")";
       }
 #endif
 
-      auto Comp = [&](TypeVariableType *LHS, TypeVariableType *RHS) {
+      auto Comp = [&](TypeVariableType* LHS, TypeVariableType* RHS) {
          if (LHS == RHS) {
             return LHS->getVariableID() < RHS->getVariableID();
          }
@@ -160,17 +157,17 @@ void SplitterStep::execute(bool PrevFailed)
       std::sort(TypeVars.begin(), TypeVars.end(), Comp);
 
       // Resume this step after each component.
-      TypeVariableType **Mem = Sys.Allocate<TypeVariableType*>(TypeVars.size());
+      TypeVariableType** Mem = Sys.Allocate<TypeVariableType*>(TypeVars.size());
       std::copy(TypeVars.begin(), TypeVars.end(), Mem);
 
-      suspend(new(Sys) FindSolutionStep(Sys, SolutionCache, NextSteps,
-                                        { Mem, TypeVars.size() }, Indent));
+      suspend(new (Sys) FindSolutionStep(Sys, SolutionCache, NextSteps,
+                                         {Mem, TypeVars.size()}, Indent));
 
       TypeVars.clear();
    }
 
 #ifndef NDEBUG
-   if (auto *OSPtr = Sys.getLoggingStream()) {
+   if (auto* OSPtr = Sys.getLoggingStream()) {
       (*OSPtr) << "\n";
    }
 #endif
@@ -191,13 +188,13 @@ void SplitterStep::resume(bool PrevFailed)
    SmallVector<ConstraintSystem::Solution, 2> ValidSolutions;
 
    unsigned BestScore = -1;
-   for (auto &S : SolutionCache) {
+   for (auto& S : SolutionCache) {
       if (S.Score < BestScore) {
          BestScore = S.Score;
       }
    }
 
-   for (auto &S : SolutionCache) {
+   for (auto& S : SolutionCache) {
       if (S.Score != BestScore) {
          continue;
       }
@@ -206,7 +203,7 @@ void SplitterStep::resume(bool PrevFailed)
          ValidSolutions.emplace_back(move(S));
       }
       else {
-         auto &Other = ValidSolutions.front();
+         auto& Other = ValidSolutions.front();
          auto CompResult = Sys.compareSolutions(Other, S);
          switch (CompResult) {
          case ConstraintSystem::EquivalentSolution:
@@ -233,21 +230,22 @@ void SplitterStep::resume(bool PrevFailed)
    transition(Suspended);
 }
 
-static void addPartialSolution(ConstraintSystem::Solution &S,
-                               ConstraintSystem::Solution &PartialSolution) {
+static void addPartialSolution(ConstraintSystem::Solution& S,
+                               ConstraintSystem::Solution& PartialSolution)
+{
    S.Score += PartialSolution.Score;
 
-   for (auto &Assignment : PartialSolution.AssignmentMap) {
+   for (auto& Assignment : PartialSolution.AssignmentMap) {
       S.AssignmentMap.insert(Assignment);
    }
-   for (auto &Choice : PartialSolution.OverloadChoices) {
+   for (auto& Choice : PartialSolution.OverloadChoices) {
       S.OverloadChoices.insert(Choice);
    }
 }
 
-static void split(SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                  unsigned NumPartialSolutions,
-                  unsigned StartIndex) {
+static void split(SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+                  unsigned NumPartialSolutions, unsigned StartIndex)
+{
    unsigned NumSolutions = Solutions.size() - StartIndex;
 
    unsigned i = StartIndex;
@@ -263,7 +261,7 @@ void SplitterStep::mergePartialSolutions()
    Solutions.emplace_back();
    Solutions.back().Score = 0;
 
-   for (auto &SolutionsAndScore : PartialSolutions) {
+   for (auto& SolutionsAndScore : PartialSolutions) {
       unsigned NumPartialSolutions = SolutionsAndScore.Solutions.size();
       split(Solutions, NumPartialSolutions, Index);
 
@@ -274,15 +272,14 @@ void SplitterStep::mergePartialSolutions()
    }
 }
 
-FindSolutionStep::FindSolutionStep(ConstraintSystem &Sys,
-                                   SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                                   SmallVectorImpl<SolverStep*> &NextSteps,
-                                   ArrayRef<TypeVariableType*> TypeVariables,
-                                   unsigned Indent)
-   : SolverStep(Sys, Solutions, NextSteps, Indent),
-     TypeVariables(TypeVariables)
+FindSolutionStep::FindSolutionStep(
+    ConstraintSystem& Sys,
+    SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+    SmallVectorImpl<SolverStep*>& NextSteps,
+    ArrayRef<TypeVariableType*> TypeVariables, unsigned Indent)
+    : SolverStep(Sys, Solutions, NextSteps, Indent),
+      TypeVariables(TypeVariables)
 {
-
 }
 
 void FindSolutionStep::execute(bool PrevFailed)
@@ -292,7 +289,7 @@ void FindSolutionStep::execute(bool PrevFailed)
    bool FoundUnassigned = false;
    bool FoundPotentialBindings = false;
 
-   for (auto *TypeVar : TypeVariables) {
+   for (auto* TypeVar : TypeVariables) {
       if (Sys.isAssigned(TypeVar)) {
          continue;
       }
@@ -300,9 +297,10 @@ void FindSolutionStep::execute(bool PrevFailed)
       FoundUnassigned = true;
 
       if (Sys.isOverloadChoice(TypeVar)) {
-         DisjunctionConstraint *Disjunction = nullptr;
-         for (auto *C : Sys.getConstraintGraph().getOrAddNode(TypeVar)
-                           ->getConstraints()) {
+         DisjunctionConstraint* Disjunction = nullptr;
+         for (auto* C : Sys.getConstraintGraph()
+                            .getOrAddNode(TypeVar)
+                            ->getConstraints()) {
             Disjunction = dyn_cast<DisjunctionConstraint>(C);
             if (Disjunction) {
                break;
@@ -312,11 +310,8 @@ void FindSolutionStep::execute(bool PrevFailed)
          assert(Disjunction && "not a disjunction type variable!");
 
          FoundPotentialBindings = true;
-         NextSteps.push_back(new(Sys) DisjunctionChoiceStep(Sys, Solutions,
-                                                            NextSteps,
-                                                            Disjunction,
-                                                            TypeVariables,
-                                                            Indent));
+         NextSteps.push_back(new (Sys) DisjunctionChoiceStep(
+             Sys, Solutions, NextSteps, Disjunction, TypeVariables, Indent));
       }
       else {
          TypeVariableBindingProducer Producer(TypeVar, Sys);
@@ -325,11 +320,9 @@ void FindSolutionStep::execute(bool PrevFailed)
          }
 
          FoundPotentialBindings = true;
-         NextSteps.push_back(new(Sys) BindTypeVariableStep(Sys, Solutions,
-                                                           NextSteps, TypeVar,
-                                                           std::move(Producer),
-                                                           TypeVariables,
-                                                           Indent));
+         NextSteps.push_back(new (Sys) BindTypeVariableStep(
+             Sys, Solutions, NextSteps, TypeVar, std::move(Producer),
+             TypeVariables, Indent));
       }
    }
 
@@ -352,17 +345,16 @@ void FindSolutionStep::resume(bool)
    llvm_unreachable("step does not suspend!");
 }
 
-TypeVariableBindingProducer::TypeVariableBindingProducer(TypeVariableType *T,
-                                                        ConstraintSystem &Sys) {
+TypeVariableBindingProducer::TypeVariableBindingProducer(TypeVariableType* T,
+                                                         ConstraintSystem& Sys)
+{
    computeInitialBindings(T, Sys);
 }
 
-static void addBinding(ConstraintSystem &Sys,
-                       TypeVariableType *TypeVar,
-                       CanType T,
-                       SmallVectorImpl<PotentialBinding> &Bindings,
-                       unsigned Score,
-                       unsigned OverloadIndex) {
+static void addBinding(ConstraintSystem& Sys, TypeVariableType* TypeVar,
+                       CanType T, SmallVectorImpl<PotentialBinding>& Bindings,
+                       unsigned Score, unsigned OverloadIndex)
+{
    if (Sys.representsTemplateParam(TypeVar)) {
       if (T->isReferenceType()) {
          return;
@@ -380,13 +372,12 @@ static void addBinding(ConstraintSystem &Sys,
    Bindings.emplace_back(T, Score, OverloadIndex);
 }
 
-static void findBindings(ConstraintSystem &Sys,
-                         Constraint *C,
-                         TypeVariableType *TypeVar,
-                         SmallVectorImpl<PotentialBinding> &Bindings,
-                         SmallPtrSetImpl<CanType> &FoundBindings,
-                         unsigned Score,
-                         unsigned OverloadIndex = -1) {
+static void findBindings(ConstraintSystem& Sys, Constraint* C,
+                         TypeVariableType* TypeVar,
+                         SmallVectorImpl<PotentialBinding>& Bindings,
+                         SmallPtrSetImpl<CanType>& FoundBindings,
+                         unsigned Score, unsigned OverloadIndex = -1)
+{
    switch (C->getKind()) {
    default:
       break;
@@ -417,7 +408,7 @@ static void findBindings(ConstraintSystem &Sys,
       break;
    }
    case Constraint::LiteralID: {
-      auto *Lit = cast<LiteralConstraint>(C);
+      auto* Lit = cast<LiteralConstraint>(C);
 
       QualType T = Lit->getDefaultLiteralType(Sys.QC);
       if (T && FoundBindings.insert(T).second) {
@@ -427,7 +418,7 @@ static void findBindings(ConstraintSystem &Sys,
       break;
    }
    case Constraint::MemberID: {
-      auto *MC = cast<MemberConstraint>(C);
+      auto* MC = cast<MemberConstraint>(C);
 
       // If we know the type of the member, we can guess the parent type
       // based on that.
@@ -442,39 +433,39 @@ static void findBindings(ConstraintSystem &Sys,
 
       // We can also guess based on the parent type if we know it and the
       // member is unambiguous.
-//      QualType ParentTy = getConcreteType(MC->getConstrainedType());
-//      if ((Cnt & GuessedBasedOnParentType) == 0
-//          && MemberTy->isTypeVariableType()
-//          && !ParentTy->containsTypeVariable()) {
-//         Cnt |= GuessedBasedOnParentType;
-//
-//         const MultiLevelLookupResult *LookupRes;
-//         if (auto Err = QC.MultiLevelTypeLookup(LookupRes, ParentTy,
-//                                                MC->getMemberName())) {
-//            updateStatus(Err.K);
-//            return true;
-//         }
-//
-//         if (LookupRes->empty() || !LookupRes->unique()) {
-//            return false;
-//         }
-//
-//         auto *ND = LookupRes->front().front();
-//         QualType T = getTypeFor(ND, QC);
-//
-//         if (!T) {
-//            return false;
-//         }
-//
-//         pushAssignment(MemberTy->asTypeVariableType(), T);
-//         return true;
-//      }
-//
-//      return false;
+      //      QualType ParentTy = getConcreteType(MC->getConstrainedType());
+      //      if ((Cnt & GuessedBasedOnParentType) == 0
+      //          && MemberTy->isTypeVariableType()
+      //          && !ParentTy->containsTypeVariable()) {
+      //         Cnt |= GuessedBasedOnParentType;
+      //
+      //         const MultiLevelLookupResult *LookupRes;
+      //         if (auto Err = QC.MultiLevelTypeLookup(LookupRes, ParentTy,
+      //                                                MC->getMemberName())) {
+      //            updateStatus(Err.K);
+      //            return true;
+      //         }
+      //
+      //         if (LookupRes->empty() || !LookupRes->unique()) {
+      //            return false;
+      //         }
+      //
+      //         auto *ND = LookupRes->front().front();
+      //         QualType T = getTypeFor(ND, QC);
+      //
+      //         if (!T) {
+      //            return false;
+      //         }
+      //
+      //         pushAssignment(MemberTy->asTypeVariableType(), T);
+      //         return true;
+      //      }
+      //
+      //      return false;
    }
    case Constraint::ConditionalID: {
-      auto *Cond = cast<ConditionalConstraint>(C);
-      auto *DJ = Cond->getDisjunctionVar();
+      auto* Cond = cast<ConditionalConstraint>(C);
+      auto* DJ = Cond->getDisjunctionVar();
 
       if (!Sys.isAssigned(DJ)) {
          break;
@@ -483,27 +474,27 @@ static void findBindings(ConstraintSystem &Sys,
       auto Choice = Sys.getConstraintGraph().getOverloadChoice(DJ);
       assert(Choice != -1 && "no overload selected!");
 
-      return findBindings(Sys, Cond->getConstraintAt(Choice), TypeVar,
-                          Bindings, FoundBindings, Score,
-                          OverloadIndex);
+      return findBindings(Sys, Cond->getConstraintAt(Choice), TypeVar, Bindings,
+                          FoundBindings, Score, OverloadIndex);
    }
    }
 }
 
-void TypeVariableBindingProducer::computeInitialBindings(TypeVariableType *T,
-                                                         ConstraintSystem &Sys){
+void TypeVariableBindingProducer::computeInitialBindings(TypeVariableType* T,
+                                                         ConstraintSystem& Sys)
+{
    assert(!Sys.isAssigned(T) && "don't call this on assigned type variables!");
 
    // If this variable has a direct binding, use only that one.
    if (Sys.hasConcreteBinding(T)) {
-      auto *C = Sys.getFirstConstraint<TypeBindingConstraint>(T);
+      auto* C = Sys.getFirstConstraint<TypeBindingConstraint>(T);
       findBindings(Sys, C, T, Bindings, FoundBindings, 0);
       hasConcreteBinding = true;
 
       return;
    }
 
-   auto &CG = Sys.getConstraintGraph();
+   auto& CG = Sys.getConstraintGraph();
 
    unsigned Score = 0;
    if (QualType Pref = Sys.getPreferredBinding(T)) {
@@ -517,7 +508,7 @@ void TypeVariableBindingProducer::computeInitialBindings(TypeVariableType *T,
    ArrayRef<Constraint*> Constraints = CG.getOrAddNode(T)->getConstraints();
 
    // Walk over all constraints and see which types can be inferred from them.
-   for (auto *C : Constraints) {
+   for (auto* C : Constraints) {
       findBindings(Sys, C, T, Bindings, FoundBindings, Score);
    }
 }
@@ -534,14 +525,21 @@ PotentialBinding* TypeVariableBindingProducer::operator()()
 void TypeVariableBindingProducer::nextStage()
 {
    switch (Stage) {
-   case Initial: Stage = BaseClasses; break;
-   case BaseClasses: Stage = Protocols; break;
-   case Protocols: Stage = Any; break;
-   case Any: llvm_unreachable("should not move on from Any!");
+   case Initial:
+      Stage = BaseClasses;
+      break;
+   case BaseClasses:
+      Stage = Protocols;
+      break;
+   case Protocols:
+      Stage = Any;
+      break;
+   case Any:
+      llvm_unreachable("should not move on from Any!");
    }
 }
 
-bool TypeVariableBindingProducer::computeFollowupBindings(ConstraintSystem &Sys)
+bool TypeVariableBindingProducer::computeFollowupBindings(ConstraintSystem& Sys)
 {
    if (hasConcreteBinding || Stage == Any) {
       return false;
@@ -555,17 +553,17 @@ bool TypeVariableBindingProducer::computeFollowupBindings(ConstraintSystem &Sys)
    }
    case BaseClasses: {
       bool FoundNew = false;
-      auto &&Bindings = this->Bindings;
+      auto&& Bindings = this->Bindings;
       this->Bindings.clear();
 
-      for (auto &Binding : Bindings) {
+      for (auto& Binding : Bindings) {
          if (!Binding.Type->isClass()) {
             continue;
          }
 
          unsigned Score = Binding.Score;
-         auto *Base = cast<ClassDecl>(Binding.Type->getRecord())
-            ->getParentClass();
+         auto* Base
+             = cast<ClassDecl>(Binding.Type->getRecord())->getParentClass();
 
          while (Base) {
             Score += 1;
@@ -594,7 +592,7 @@ bool TypeVariableBindingProducer::computeFollowupBindings(ConstraintSystem &Sys)
       this->Bindings.clear();
 
       // Finally, try the 'Any' type as a binding.
-      ProtocolDecl *AnyDecl;
+      ProtocolDecl* AnyDecl;
       Sys.QC.GetBuiltinProtocol(AnyDecl, GetBuiltinProtocolQuery::Any);
 
       QualType Any = Sys.QC.Context.getRecordType(AnyDecl);
@@ -613,18 +611,14 @@ bool TypeVariableBindingProducer::computeFollowupBindings(ConstraintSystem &Sys)
 }
 
 BindTypeVariableStep::BindTypeVariableStep(
-                        ConstraintSystem &Sys,
-                        SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                        SmallVectorImpl<SolverStep*> &NextSteps,
-                        TypeVariableType *TypeVar,
-                        TypeVariableBindingProducer &&Producer,
-                        ArrayRef<TypeVariableType*> TypeVariables,
-                        unsigned Indent)
-   : SolverStep(Sys, Solutions, NextSteps, Indent),
-     TypeVar(TypeVar), Producer(std::move(Producer)),
-     TypeVariables(TypeVariables)
+    ConstraintSystem& Sys,
+    SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+    SmallVectorImpl<SolverStep*>& NextSteps, TypeVariableType* TypeVar,
+    TypeVariableBindingProducer&& Producer,
+    ArrayRef<TypeVariableType*> TypeVariables, unsigned Indent)
+    : SolverStep(Sys, Solutions, NextSteps, Indent), TypeVar(TypeVar),
+      Producer(std::move(Producer)), TypeVariables(TypeVariables)
 {
-
 }
 
 void BindTypeVariableStep::execute(bool PrevFailed)
@@ -634,7 +628,7 @@ void BindTypeVariableStep::execute(bool PrevFailed)
 
 void BindTypeVariableStep::resume(bool PrevFailed)
 {
-   PotentialBinding *NextBinding = Producer();
+   PotentialBinding* NextBinding = Producer();
    if (!NextBinding) {
       // Don't produce follow-up bindings if we already found a solution
       // because their score will always be higher.
@@ -651,7 +645,7 @@ void BindTypeVariableStep::resume(bool PrevFailed)
    Scope = std::make_unique<ConstraintSystem::SolverScope>(Sys);
 
    // Perform the next binding.
-   auto &Binding = *NextBinding;
+   auto& Binding = *NextBinding;
    Sys.bindTypeVariable(TypeVar, Binding.Type);
    Sys.increaseScore(Binding.Score);
 
@@ -668,7 +662,7 @@ void BindTypeVariableStep::resume(bool PrevFailed)
 
    // If this solution is already not solvable, bail out and try the next
    // binding.
-   if (auto *FailedConstraint = Sys.simplifyConstraints(TypeVar)) {
+   if (auto* FailedConstraint = Sys.simplifyConstraints(TypeVar)) {
       if (Sys.stopAfterFirstFailure()) {
          LOG_ERR("failed constraint: ", *FailedConstraint, ", stopping...\n");
          return done(/*IsFailure=*/true);
@@ -686,28 +680,30 @@ void BindTypeVariableStep::resume(bool PrevFailed)
    }
 
    // Create a new solver step within the scope of this binding.
-   return suspend(new(Sys) FindSolutionStep(Sys, Solutions, NextSteps,
-                                            TypeVariables, Indent + 1));
+   return suspend(new (Sys) FindSolutionStep(Sys, Solutions, NextSteps,
+                                             TypeVariables, Indent + 1));
 }
 
-DisjunctionBindingProducer::DisjunctionBindingProducer(ConstraintSystem &Sys,
-                                           DisjunctionConstraint *Disjunction) {
+DisjunctionBindingProducer::DisjunctionBindingProducer(
+    ConstraintSystem& Sys, DisjunctionConstraint* Disjunction)
+{
    computeInitialBindings(Sys, Disjunction);
 }
 
-void DisjunctionBindingProducer::computeInitialBindings(ConstraintSystem &Sys,
-                                           DisjunctionConstraint *Disjunction) {
+void DisjunctionBindingProducer::computeInitialBindings(
+    ConstraintSystem& Sys, DisjunctionConstraint* Disjunction)
+{
    SmallPtrSet<CanType, 4> FoundBindings;
 
    unsigned Index = 0;
-   for (auto *C : Disjunction->getConstraints()) {
+   for (auto* C : Disjunction->getConstraints()) {
       unsigned Score = Index == Disjunction->getDefaultOverload() ? 0 : 1;
-      findBindings(Sys, C, C->getConstrainedType(), Bindings,
-                   FoundBindings, Score, Index++);
+      findBindings(Sys, C, C->getConstrainedType(), Bindings, FoundBindings,
+                   Score, Index++);
    }
 }
 
-PotentialBinding *DisjunctionBindingProducer::operator()()
+PotentialBinding* DisjunctionBindingProducer::operator()()
 {
    if (Index < Bindings.size()) {
       return &Bindings[Index++];
@@ -716,18 +712,15 @@ PotentialBinding *DisjunctionBindingProducer::operator()()
    return nullptr;
 }
 
-DisjunctionChoiceStep::DisjunctionChoiceStep(ConstraintSystem &Sys,
-                                             SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                                             SmallVectorImpl<SolverStep*> &NextSteps,
-                                             DisjunctionConstraint *Disjunction,
-                                             ArrayRef<TypeVariableType*> TypeVariables,
-                                             unsigned Indent)
-   : SolverStep(Sys, Solutions, NextSteps, Indent),
-     TypeVar(Disjunction->getConstrainedType()),
-     Producer(Sys, Disjunction),
-     TypeVariables(TypeVariables)
+DisjunctionChoiceStep::DisjunctionChoiceStep(
+    ConstraintSystem& Sys,
+    SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+    SmallVectorImpl<SolverStep*>& NextSteps, DisjunctionConstraint* Disjunction,
+    ArrayRef<TypeVariableType*> TypeVariables, unsigned Indent)
+    : SolverStep(Sys, Solutions, NextSteps, Indent),
+      TypeVar(Disjunction->getConstrainedType()), Producer(Sys, Disjunction),
+      TypeVariables(TypeVariables)
 {
-
 }
 
 void DisjunctionChoiceStep::execute(bool PrevFailed)
@@ -737,7 +730,7 @@ void DisjunctionChoiceStep::execute(bool PrevFailed)
 
 void DisjunctionChoiceStep::resume(bool PrevFailed)
 {
-   PotentialBinding *NextBinding = Producer();
+   PotentialBinding* NextBinding = Producer();
    if (!NextBinding) {
       Scope = nullptr;
       return done();
@@ -748,7 +741,7 @@ void DisjunctionChoiceStep::resume(bool PrevFailed)
    Scope = std::make_unique<ConstraintSystem::SolverScope>(Sys);
 
    // Perform the next binding.
-   auto &Binding = *NextBinding;
+   auto& Binding = *NextBinding;
    Sys.bindTypeVariable(TypeVar, Binding.Type, Binding.OverloadIndex);
    Sys.increaseScore(Binding.Score);
 
@@ -765,7 +758,7 @@ void DisjunctionChoiceStep::resume(bool PrevFailed)
 
    // If this solution is already not solvable, bail out and try the next
    // binding.
-   if (auto *FailedConstraint = Sys.simplifyConstraints(TypeVar)) {
+   if (auto* FailedConstraint = Sys.simplifyConstraints(TypeVar)) {
       if (Sys.stopAfterFirstFailure()) {
          LOG_ERR("failed constraint: ", *FailedConstraint, ", stopping...\n");
          return done(/*IsFailure=*/true);
@@ -778,6 +771,6 @@ void DisjunctionChoiceStep::resume(bool PrevFailed)
    }
 
    // Create a new solver step within the scope of this binding.
-   return suspend(new(Sys) FindSolutionStep(Sys, Solutions, NextSteps,
-                                            TypeVariables, Indent + 1));
+   return suspend(new (Sys) FindSolutionStep(Sys, Solutions, NextSteps,
+                                             TypeVariables, Indent + 1));
 }

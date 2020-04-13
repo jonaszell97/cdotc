@@ -32,15 +32,15 @@
 //#include "../../../Variant/Type/IntegerType.h"
 //#include "../../../Files/FileManager.h"
 //
-//using namespace cdot::fs;
-//using namespace cdot::ast;
+// using namespace cdot::fs;
+// using namespace cdot::ast;
 //
-//namespace cdot {
-//namespace codegen {
+// namespace cdot {
+// namespace codegen {
 //
-//using namespace cl;
+// using namespace cl;
 //
-//DebugInfo::DebugInfo(const CompilerInstance &CU, llvm::IRBuilder<> &Builder)
+// DebugInfo::DebugInfo(const CompilerInstance &CU, llvm::IRBuilder<> &Builder)
 //   : DI(*CU.Module), Builder(Builder), Module(CU.Module)
 //{
 //   File = DI.createFile(
@@ -51,7 +51,7 @@
 //   ScopeStack.push((llvm::DIScope*)File);
 //}
 //
-//llvm::MDNode* DebugInfo::emitModuleDI()
+// llvm::MDNode* DebugInfo::emitModuleDI()
 //{
 //   auto CU =  DI.createCompileUnit(
 //      llvm::dwarf::DW_LANG_C,
@@ -71,7 +71,7 @@
 //   return CU;
 //}
 //
-//void DebugInfo::setDebugLoc(
+// void DebugInfo::setDebugLoc(
 //   const SourceLocation &loc)
 //{
 //   if (ScopeStack.size() == 1) {
@@ -86,7 +86,7 @@
 //   ));
 //}
 //
-//llvm::DIFile* DebugInfo::getFileDI(const SourceLocation &loc)
+// llvm::DIFile* DebugInfo::getFileDI(const SourceLocation &loc)
 //{
 //   auto sourceID = loc.getSourceId();
 //   auto index = FileNodes.find(sourceID);
@@ -104,7 +104,7 @@
 //   );
 //}
 //
-//llvm::DIType* DebugInfo::getTypeDI(Type *ty)
+// llvm::DIType* DebugInfo::getTypeDI(Type *ty)
 //{
 //   auto index = TypeNodes.find((uintptr_t)ty);
 //   if (index != TypeNodes.end()) {
@@ -235,7 +235,7 @@
 //   return MD;
 //}
 //
-//llvm::dwarf::Tag DebugInfo::getTagForRecord(Record *rec)
+// llvm::dwarf::Tag DebugInfo::getTagForRecord(Record *rec)
 //{
 //   llvm::dwarf::Tag Tag;
 //   if (rec->isStruct()) {
@@ -251,7 +251,7 @@
 //   return Tag;
 //}
 //
-//llvm::DIType* DebugInfo::getRecordDI(Type *ty)
+// llvm::DIType* DebugInfo::getRecordDI(Type *ty)
 //{
 //   assert(ty->isObjectTy());
 //
@@ -278,7 +278,8 @@
 //
 //   StructTypes[ty->getClassName()] = forwardDecl;
 //
-//   if (rec->isClass() || rec->isStruct() || (rec->isEnum() && !rec->isRawEnum())) {
+//   if (rec->isClass() || rec->isStruct() || (rec->isEnum() &&
+//   !rec->isRawEnum())) {
 //      auto cl = rec->getAs<Class>();
 //
 //      size_t offset = 0;
@@ -376,7 +377,7 @@
 //   return MD;
 //}
 //
-//llvm::Instruction *DebugInfo::emitLocalVarDI(
+// llvm::Instruction *DebugInfo::emitLocalVarDI(
 //   LocalVarDecl *node,
 //   llvm::Value *alloca,
 //   llvm::Instruction *inst)
@@ -402,14 +403,14 @@
 //   );
 //}
 //
-//void DebugInfo::emitAssignmentDI(
+// void DebugInfo::emitAssignmentDI(
 //   BinaryOperator *node,
 //   llvm::Value *val)
 //{
 //
 //}
 //
-//llvm::MDNode* DebugInfo::emitGlobalVarDI(
+// llvm::MDNode* DebugInfo::emitGlobalVarDI(
 //   LocalVarDecl *node,
 //   llvm::GlobalVariable *var)
 //{
@@ -428,7 +429,7 @@
 //   return MD;
 //}
 //
-//void DebugInfo::emitParameterDI(
+// void DebugInfo::emitParameterDI(
 //   const std::vector<FuncArgDecl* > &args,
 //   llvm::Function *func,
 //   unsigned int argBegin,
@@ -466,16 +467,15 @@
 ////            val,
 ////            param,
 ////            DI.createExpression(),
-////            llvm::DebugLoc::get(loc.getLine(), loc.getCol(), func->getSubprogram()),
-////            bb
-////         );
+////            llvm::DebugLoc::get(loc.getLine(), loc.getCol(),
+///func->getSubprogram()), /            bb /         );
 ////
 ////         ++argIt;
 ////         ++argBegin;
 ////      }
 //}
 //
-//llvm::MDNode* DebugInfo::emitFunctionDI(
+// llvm::MDNode* DebugInfo::emitFunctionDI(
 //   FunctionDecl *node,
 //   llvm::Function *func)
 //{
@@ -517,7 +517,7 @@
 //   return MD;
 //}
 //
-//llvm::MDNode* DebugInfo::emitMethodDI(
+// llvm::MDNode* DebugInfo::emitMethodDI(
 //   Method *method, llvm::Function *func)
 //{
 //   auto ownFunc = Module->getFunction(func->getName());
@@ -567,7 +567,8 @@
 //         ++argBegin;
 //      }
 //
-//      emitParameterDI(method->getDeclaration()->getArgs(), func, argBegin, false);
+//      emitParameterDI(method->getDeclaration()->getArgs(), func, argBegin,
+//      false);
 //   }
 //
 //   if (method->getDeclaration() && !method->is_static) {
@@ -595,7 +596,7 @@
 //   return MD;
 //}
 //
-//llvm::MDNode* DebugInfo::emitLambdaDI(
+// llvm::MDNode* DebugInfo::emitLambdaDI(
 //   LambdaExpr *node,
 //   llvm::Function *func)
 //{
@@ -632,25 +633,25 @@
 //   return MD;
 //}
 //
-//llvm::DIScope* DebugInfo::getFunctionScope(llvm::StringRef funcName)
+// llvm::DIScope* DebugInfo::getFunctionScope(llvm::StringRef funcName)
 //{
 //   assert(Subprograms.find(funcName) != Subprograms.end());
 //   return Subprograms[funcName];
 //}
 //
-//void DebugInfo::beginScope(llvm::DIScope *scope)
+// void DebugInfo::beginScope(llvm::DIScope *scope)
 //{
 //   assert(scope);
 //   ScopeStack.push(scope);
 //}
 //
-//void DebugInfo::endScope()
+// void DebugInfo::endScope()
 //{
 //   assert(ScopeStack.size() > 1);
 //   ScopeStack.pop();
 //}
 //
-//void DebugInfo::beginLexicalScope(const SourceLocation &loc)
+// void DebugInfo::beginLexicalScope(const SourceLocation &loc)
 //{
 //   auto lineAndLoc = fs::FileManager::getLineAndCol(loc);
 //   auto scope = DI.createLexicalBlock(getCurrentScope(), File,
@@ -658,7 +659,7 @@
 //   beginScope(scope);
 //}
 //
-//void DebugInfo::beginGeneratedFunctionScope(
+// void DebugInfo::beginGeneratedFunctionScope(
 //   llvm::StringRef funcName,
 //   const std::vector<Type*> &args)
 //{

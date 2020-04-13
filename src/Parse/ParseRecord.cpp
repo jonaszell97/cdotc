@@ -1,12 +1,12 @@
-#include "Parser.h"
+#include "cdotc/Parse/Parser.h"
 
-#include "AST/Decl.h"
-#include "Basic/IdentifierInfo.h"
-#include "Lex/Lexer.h"
-#include "Module/Module.h"
-#include "Message/Diagnostics.h"
-#include "Sema/SemaPass.h"
-#include "Support/Casting.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/IdentifierInfo.h"
+#include "cdotc/Lex/Lexer.h"
+#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Casting.h"
 
 #include <llvm/ADT/SmallString.h>
 
@@ -24,38 +24,32 @@ ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind)
    RecordHead head;
    parseClassHead(head);
 
-   RecordDecl *decl;
+   RecordDecl* decl;
    switch (kind) {
    case tok::kw_struct:
       decl = StructDecl::Create(Context, CurDeclAttrs.Access, Loc,
-                                head.recordName,
-                                move(head.conformances),
+                                head.recordName, move(head.conformances),
                                 move(head.templateParams));
       break;
    case tok::kw_class:
       decl = ClassDecl::Create(Context, CurDeclAttrs.Access, Loc,
-                               head.recordName,
-                               move(head.conformances),
-                               move(head.templateParams),
-                               head.parentClass, CurDeclAttrs.Abstract);
+                               head.recordName, move(head.conformances),
+                               move(head.templateParams), head.parentClass,
+                               CurDeclAttrs.Abstract);
       break;
    case tok::kw_enum:
       decl = EnumDecl::Create(Context, CurDeclAttrs.Access, Loc,
-                              head.recordName,
-                              move(head.conformances),
-                              move(head.templateParams),
-                              head.enumRawType);
+                              head.recordName, move(head.conformances),
+                              move(head.templateParams), head.enumRawType);
       break;
    case tok::kw_union:
       decl = UnionDecl::Create(Context, CurDeclAttrs.Access, Loc,
-                               head.recordName,
-                               move(head.conformances),
+                               head.recordName, move(head.conformances),
                                move(head.templateParams));
       break;
    case tok::kw_protocol:
       decl = ProtocolDecl::Create(Context, CurDeclAttrs.Access, Loc,
-                                  head.recordName,
-                                  move(head.conformances),
+                                  head.recordName, move(head.conformances),
                                   move(head.templateParams));
       break;
    default:
@@ -114,8 +108,8 @@ ParseResult Parser::parseExtension()
       parseDeclConstraints(Constraints);
    }
 
-   ExtensionDecl *decl = ExtensionDecl::Create(Context, CurDeclAttrs.Access,Loc,
-                                               ExtendedType, Conformances);
+   ExtensionDecl* decl = ExtensionDecl::Create(Context, CurDeclAttrs.Access,
+                                               Loc, ExtendedType, Conformances);
 
    Context.setParsedConstraints(decl, move(Constraints));
    decl->setAccessLoc(CurDeclAttrs.AccessLoc);
@@ -139,7 +133,7 @@ void Parser::parseClassInner()
    advance();
 
    while (!currentTok().is(tok::close_brace)) {
-      (void) parseNextDecl();
+      (void)parseNextDecl();
 
       advance();
       while (currentTok().is(tok::semicolon)) {
@@ -169,178 +163,199 @@ ParseResult Parser::parseRecordLevelDecl()
    else if (currentTok().is(Ident_memberwise)) {
       NextDecl = parseConstrDecl();
    }
-   else switch (DeclKind) {
-   case tok::kw_public:
-   case tok::kw_private:
-   case tok::kw_fileprivate:
-   case tok::kw_protected:
-   case tok::kw_internal:
-      NextDecl = parseCompoundDecl(false);
-      break;
-   case tok::ident: {
-      if (currentTok().is(Ident_macro))
-         return parseMacro();
+   else
+      switch (DeclKind) {
+      case tok::kw_public:
+      case tok::kw_private:
+      case tok::kw_fileprivate:
+      case tok::kw_protected:
+      case tok::kw_internal:
+         NextDecl = parseCompoundDecl(false);
+         break;
+      case tok::ident: {
+         if (currentTok().is(Ident_macro))
+            return parseMacro();
 
-      goto case_bad_token;
-   }
-   case tok::open_brace:
-      return parseCompoundDecl(false, false);
-   case tok::kw_for: {
-      if (!lookahead().is(tok::triple_period)) {
-         SP.diagnose(err_generic_error,
-            "only 'for...' declarations can appear in records",
-            currentTok().getSourceLoc());
+         goto case_bad_token;
       }
-
-      return parseStaticForDecl(true);
-   }
-   case tok::kw_static:
-      AccessValid = false;
-      switch (lookahead().getKind()) {
-      case tok::kw_if:
-         NextDecl = parseStaticIfDecl(); break;
-      case tok::kw_for:
-         NextDecl = parseStaticForDecl(); break;
-      default:
-         llvm_unreachable("should have been caught before!");
-      }
-
-      break;
-   case tok::macro_name:
-      NextDecl = parseMacroExpansionDecl();
-      break;
-   case tok::macro_statement:
-   case tok::macro_expression: {
-      enum DiagKind {
-         Expression, Statement, Type, Decl,
-      };
-
-      SP.diagnose(err_bad_macro_variable_kind, currentTok().getSourceLoc(),
-                  currentTok().is(tok::macro_statement) ? Statement
-                                                        : Expression,
-                  Decl);
-
-      return ParseError();
-   }
-   case tok::macro_declaration:
-      NextDecl = currentTok().getDecl();
-      break;
-   case tok::kw_static_assert:
-      AccessValid = false;
-      NextDecl = parseStaticAssert();
-      break;
-   case tok::kw_static_print:
-      AccessValid = false;
-      NextDecl = parseStaticPrint();
-      break;
-   case tok::kw_typedef:
-      NextDecl = parseTypedef();
-      break;
-   case tok::kw_alias:
-      NextDecl = parseAlias();
-      DefaultValid = true;
-      break;
-   case tok::kw_let:
-   case tok::kw_var:
-      StaticValid = true;
-      DefaultValid = true;
-      NextDecl = parseFieldDecl();
-      break;
-   case tok::kw_prop:
-      StaticValid = true;
-      DefaultValid = true;
-      NextDecl = parsePropDecl();
-      break;
-   case tok::kw_def:
-      StaticValid = true;
-      DefaultValid = true;
-      NextDecl = parseMethodDecl();
-      break;
-   case tok::kw_init:
-      DefaultValid = true;
-      NextDecl = parseConstrDecl();
-      break;
-   case tok::kw_case: {
-      AccessValid = false;
-
-      ParseResult PR;
-      while (1) {
-         PR = parseEnumCase();
-
-         if (lookahead().is(tok::comma)) {
-            advance();
-
-            if (!lookahead().is(tok::ident))
-               break;
-
-            advance();
+      case tok::open_brace:
+         return parseCompoundDecl(false, false);
+      case tok::kw_for: {
+         if (!lookahead().is(tok::triple_period)) {
+            SP.diagnose(err_generic_error,
+                        "only 'for...' declarations can appear in records",
+                        currentTok().getSourceLoc());
          }
-         else
-            break;
+
+         return parseStaticForDecl(true);
       }
+      case tok::kw_static:
+         AccessValid = false;
+         switch (lookahead().getKind()) {
+         case tok::kw_if:
+            NextDecl = parseStaticIfDecl();
+            break;
+         case tok::kw_for:
+            NextDecl = parseStaticForDecl();
+            break;
+         default:
+            llvm_unreachable("should have been caught before!");
+         }
 
-      NextDecl = PR;
-      break;
-   }
-   case tok::kw_class:
-   case tok::kw_enum:
-   case tok::kw_struct:
-   case tok::kw_union:
-   case tok::kw_protocol:
-      NextDecl = parseAnyRecord(DeclKind);
-      break;
-   case tok::kw_associatedType:
-      AccessValid = false;
-      DefaultValid = true;
-      NextDecl = parseAssociatedType();
-      break;
-   case tok::kw___debug:
-      NextDecl = DebugDecl::Create(Context, currentTok().getSourceLoc());
-      break;
-   case tok::kw_module:
-      SP.diagnose(err_module_must_be_first, currentTok().getSourceLoc());
-      (void)parseModuleDecl();
+         break;
+      case tok::macro_name:
+         NextDecl = parseMacroExpansionDecl();
+         break;
+      case tok::macro_statement:
+      case tok::macro_expression: {
+         enum DiagKind {
+            Expression,
+            Statement,
+            Type,
+            Decl,
+         };
 
-      return ParseError();
-   default:
-   case_bad_token:
-      SP.diagnose(err_expecting_decl, currentTok().getSourceLoc(),
-                  currentTok().toString(), /*record level*/ false);
+         SP.diagnose(err_bad_macro_variable_kind, currentTok().getSourceLoc(),
+                     currentTok().is(tok::macro_statement) ? Statement
+                                                           : Expression,
+                     Decl);
 
-      return skipUntilProbableEndOfStmt();
-   }
+         return ParseError();
+      }
+      case tok::macro_declaration:
+         NextDecl = currentTok().getDecl();
+         break;
+      case tok::kw_static_assert:
+         AccessValid = false;
+         NextDecl = parseStaticAssert();
+         break;
+      case tok::kw_static_print:
+         AccessValid = false;
+         NextDecl = parseStaticPrint();
+         break;
+      case tok::kw_typedef:
+         NextDecl = parseTypedef();
+         break;
+      case tok::kw_alias:
+         NextDecl = parseAlias();
+         DefaultValid = true;
+         break;
+      case tok::kw_let:
+      case tok::kw_var:
+         StaticValid = true;
+         DefaultValid = true;
+         NextDecl = parseFieldDecl();
+         break;
+      case tok::kw_prop:
+         StaticValid = true;
+         DefaultValid = true;
+         NextDecl = parsePropDecl();
+         break;
+      case tok::kw_def:
+         StaticValid = true;
+         DefaultValid = true;
+         NextDecl = parseMethodDecl();
+         break;
+      case tok::kw_init:
+         DefaultValid = true;
+         NextDecl = parseConstrDecl();
+         break;
+      case tok::kw_case: {
+         AccessValid = false;
+
+         ParseResult PR;
+         while (1) {
+            PR = parseEnumCase();
+
+            if (lookahead().is(tok::comma)) {
+               advance();
+
+               if (!lookahead().is(tok::ident))
+                  break;
+
+               advance();
+            }
+            else
+               break;
+         }
+
+         NextDecl = PR;
+         break;
+      }
+      case tok::kw_class:
+      case tok::kw_enum:
+      case tok::kw_struct:
+      case tok::kw_union:
+      case tok::kw_protocol:
+         NextDecl = parseAnyRecord(DeclKind);
+         break;
+      case tok::kw_associatedType:
+         AccessValid = false;
+         DefaultValid = true;
+         NextDecl = parseAssociatedType();
+         break;
+      case tok::kw___debug:
+         NextDecl = DebugDecl::Create(Context, currentTok().getSourceLoc());
+         break;
+      case tok::kw_module:
+         SP.diagnose(err_module_must_be_first, currentTok().getSourceLoc());
+         (void)parseModuleDecl();
+
+         return ParseError();
+      default:
+      case_bad_token:
+         SP.diagnose(err_expecting_decl, currentTok().getSourceLoc(),
+                     currentTok().toString(), /*record level*/ false);
+
+         return skipUntilProbableEndOfStmt();
+      }
 
    int selector;
    if (currentTok().is(Ident_deinit)) {
       selector = 8;
    }
-   else switch (DeclKind) {
-   case tok::kw_associatedType: selector = 0; break;
-   case tok::kw_static: {
-      if (lookahead().getKind() == tok::kw_if)
-         selector = 1;
-      else
-         selector = 2;
+   else
+      switch (DeclKind) {
+      case tok::kw_associatedType:
+         selector = 0;
+         break;
+      case tok::kw_static: {
+         if (lookahead().getKind() == tok::kw_if)
+            selector = 1;
+         else
+            selector = 2;
 
-      break;
-   }
-   case tok::kw_static_assert: selector = 3; break;
-   case tok::kw_static_print: selector = 4; break;
-   case tok::kw_typedef: selector = 5; break;
-   case tok::kw_alias: selector = 6; break;
-   case tok::kw_init: selector = 7; break;
-   case tok::kw_case: selector = 9; break;
-   case tok::kw_class:
-   case tok::kw_enum:
-   case tok::kw_struct:
-   case tok::kw_union:
-   case tok::kw_protocol:
-      selector = 10;
-      break;
-   default:
-      selector = -1;
-      break;
-   }
+         break;
+      }
+      case tok::kw_static_assert:
+         selector = 3;
+         break;
+      case tok::kw_static_print:
+         selector = 4;
+         break;
+      case tok::kw_typedef:
+         selector = 5;
+         break;
+      case tok::kw_alias:
+         selector = 6;
+         break;
+      case tok::kw_init:
+         selector = 7;
+         break;
+      case tok::kw_case:
+         selector = 9;
+         break;
+      case tok::kw_class:
+      case tok::kw_enum:
+      case tok::kw_struct:
+      case tok::kw_union:
+      case tok::kw_protocol:
+         selector = 10;
+         break;
+      default:
+         selector = -1;
+         break;
+      }
 
    if (!NextDecl)
       return ParseError();
@@ -355,10 +370,11 @@ ParseResult Parser::parseRecordLevelDecl()
    }
 
    if (!AccessValid && CurDeclAttrs.AccessLoc) {
-      SP.diagnose(err_cannot_have_access_spec, CurDeclAttrs.AccessLoc,selector);
+      SP.diagnose(err_cannot_have_access_spec, CurDeclAttrs.AccessLoc,
+                  selector);
    }
 
-   auto *D = NextDecl.getDecl();
+   auto* D = NextDecl.getDecl();
    if (auto ND = dyn_cast<NamedDecl>(D)) {
       ND->setAccessLoc(CurDeclAttrs.AccessLoc);
       ND->setDefault(CurDeclAttrs.Default);
@@ -367,15 +383,16 @@ ParseResult Parser::parseRecordLevelDecl()
    return D;
 }
 
-void Parser::parseClassHead(RecordHead &Head)
+void Parser::parseClassHead(RecordHead& Head)
 {
    assert(currentTok().oneOf(tok::kw_struct, tok::kw_enum, tok::kw_class,
-                             tok::kw_protocol) && "not a record decl!");
+                             tok::kw_protocol)
+          && "not a record decl!");
 
    advance();
 
    if (currentTok().getKind() != tok::ident) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       skipUntilProbableEndOfStmt();
@@ -386,8 +403,7 @@ void Parser::parseClassHead(RecordHead &Head)
 
    auto params = tryParseTemplateParameters();
    Head.templateParams.insert(Context, Head.templateParams.end(),
-                              params.begin(),
-                              params.end());
+                              params.begin(), params.end());
 
    if (lexer->lookahead().is(tok::open_paren)) {
       advance();
@@ -456,13 +472,14 @@ ParseResult Parser::parseConstrDecl()
    if (IsMemberwise) {
       expect(tok::kw_init);
 
-      if (auto *R = dyn_cast<StructDecl>(&SP.getDeclContext())) {
+      if (auto* R = dyn_cast<StructDecl>(&SP.getDeclContext())) {
          R->setExplicitMemberwiseInit(true);
       }
       else {
-         SP.diagnose(err_generic_error, "'memberwise init' declaration cannot"
-                                        " appear here",
-                                        currentTok().getSourceLoc());
+         SP.diagnose(err_generic_error,
+                     "'memberwise init' declaration cannot"
+                     " appear here",
+                     currentTok().getSourceLoc());
       }
 
       return ParseError();
@@ -479,9 +496,9 @@ ParseResult Parser::parseConstrDecl()
    SourceLocation varargLoc;
    auto args = parseFuncArgs(varargLoc);
 
-   auto Init =  InitDecl::Create(Context, CurDeclAttrs.Access, Loc, args,
-                                 move(params), nullptr, DeclarationName(),
-                                 IsFallible);
+   auto Init
+       = InitDecl::Create(Context, CurDeclAttrs.Access, Loc, args, move(params),
+                          nullptr, DeclarationName(), IsFallible);
 
    std::vector<ParsedConstraint> Constraints;
    if (lookahead().is(Ident_where)) {
@@ -529,8 +546,7 @@ ParseResult Parser::parseDestrDecl()
 
    auto Deinit = DeinitDecl::Create(Context, Loc, nullptr, args);
    if (ParsingProtocol) {
-      SP.diagnose(Deinit, err_may_not_appear_in_protocol,
-                  Deinit,
+      SP.diagnose(Deinit, err_may_not_appear_in_protocol, Deinit,
                   currentTok().getSourceLoc());
    }
 
@@ -560,14 +576,14 @@ ParseResult Parser::parseFieldDecl()
    }
 
    if (currentTok().getKind() != tok::ident) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       return ParseError();
    }
 
    auto Loc = currentTok().getSourceLoc();
-   IdentifierInfo *fieldName = currentTok().getIdentifierInfo();
+   IdentifierInfo* fieldName = currentTok().getIdentifierInfo();
 
    SourceType typeref;
    Token next = lookahead();
@@ -593,16 +609,15 @@ ParseResult Parser::parseFieldDecl()
 
    if (lookahead().is(tok::open_brace)) {
       AccessorInfo Info;
-      SmallVector<FuncArgDecl*, 2> Args{ nullptr };
+      SmallVector<FuncArgDecl*, 2> Args{nullptr};
       parseAccessor(Loc, fieldName, typeref, CurDeclAttrs.StaticLoc.isValid(),
                     Args, Info, true);
 
       SourceRange SR(Loc, currentTok().getSourceLoc());
 
-      auto prop =
-         PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
-                          typeref, CurDeclAttrs.StaticLoc, false,
-                          Info.GetterMethod, Info.SetterMethod);
+      auto prop = PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
+                                   typeref, CurDeclAttrs.StaticLoc, false,
+                                   Info.GetterMethod, Info.SetterMethod);
 
       prop->setSynthesized(true);
       field->setAccessor(prop);
@@ -618,10 +633,11 @@ ParseResult Parser::parseFieldDecl()
    return ActOnDecl(field);
 }
 
-void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
+void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
                            SourceType Type, bool IsStatic,
-                           SmallVectorImpl<FuncArgDecl*> &Args,
-                           AccessorInfo &Info, bool IsProperty) {
+                           SmallVectorImpl<FuncArgDecl*>& Args,
+                           AccessorInfo& Info, bool IsProperty)
+{
    Token next = lookahead();
    if (next.is(tok::open_brace)) {
       advance();
@@ -632,8 +648,11 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
       next = lookahead();
       while (!next.is(tok::close_brace)) {
          switch (next.getKind()) {
-         case tok::kw_public: case tok::kw_private: case tok::kw_protected:
-         case tok::kw_fileprivate: case tok::kw_internal:
+         case tok::kw_public:
+         case tok::kw_private:
+         case tok::kw_protected:
+         case tok::kw_fileprivate:
+         case tok::kw_internal:
             if (AS != AccessSpecifier::Default) {
                SP.diagnose(err_duplicate_access_spec, next.getSourceLoc());
             }
@@ -656,9 +675,10 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
             next = lookahead();
 
             if (!next.oneOf(Ident_get, Ident_read, Ident_set, Ident_write)) {
-               SP.diagnose(err_generic_error,
-                           "expected 'get', 'set' or 'read' after 'nonmutating'",
-                           next.getSourceLoc());
+               SP.diagnose(
+                   err_generic_error,
+                   "expected 'get', 'set' or 'read' after 'nonmutating'",
+                   next.getSourceLoc());
             }
          }
 
@@ -680,7 +700,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
 
             SawGetOrSet = true;
 
-            IdentifierInfo *NewValName = nullptr;
+            IdentifierInfo* NewValName = nullptr;
             if (lexer->lookahead().is(tok::open_paren)) {
                advance();
                advance();
@@ -708,34 +728,32 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
             DeclarationName DN;
             if (IsProperty) {
                DN = Context.getDeclNameTable().getAccessorName(
-                  *Name, DeclarationName::Setter);
+                   *Name, DeclarationName::Setter);
             }
             else {
                DN = Context.getDeclNameTable().getSubscriptName(
-                  DeclarationName::SubscriptKind::Setter);
+                   DeclarationName::SubscriptKind::Setter);
             }
 
-            Expression *DefaultVal = nullptr;
+            Expression* DefaultVal = nullptr;
             if (!IsProperty) {
                // the argument needs a dummy default value for overload
                // resolution.
                DefaultVal = BuiltinExpr::Create(Context, Type);
             }
 
-            auto *NewValArg = FuncArgDecl::Create(Context, SetLoc, SetLoc,
-                                                  NewValName,
-                                                  nullptr,
-                                                  ArgumentConvention::Owned,
-                                                  Type, DefaultVal, false);
+            auto* NewValArg = FuncArgDecl::Create(
+                Context, SetLoc, SetLoc, NewValName, nullptr,
+                ArgumentConvention::Owned, Type, DefaultVal, false);
 
             NewValArg->setSynthesized(true);
 
             Args[0] = SP.MakeSelfArg(SetLoc);
             Args.push_back(NewValArg);
 
-            Info.SetterMethod = MethodDecl::Create(Context, AS, SetLoc, DN,
-                                                   SourceType(Context.getVoidType()),
-                                                   Args, {}, nullptr, IsStatic);
+            Info.SetterMethod = MethodDecl::Create(
+                Context, AS, SetLoc, DN, SourceType(Context.getVoidType()),
+                Args, {}, nullptr, IsStatic);
 
             Info.SetterMethod->setSynthesized(true);
             Info.SetterMethod->setMutating(!NonMutating);
@@ -750,7 +768,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                EnterFunctionScope EF(*this);
 
                Info.SetterMethod->setBody(
-                  parseCompoundStmt().tryGetStatement());
+                   parseCompoundStmt().tryGetStatement());
             }
          }
          else if (next.oneOf(Ident_get, Ident_read)) {
@@ -774,17 +792,16 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
             DeclarationName DN;
             if (IsProperty) {
                DN = Context.getDeclNameTable().getAccessorName(
-                  *Name, DeclarationName::Getter);
+                   *Name, DeclarationName::Getter);
             }
             else {
                DN = Context.getDeclNameTable().getSubscriptName(
-                  DeclarationName::SubscriptKind::Getter);
+                   DeclarationName::SubscriptKind::Getter);
             }
 
             Args[0] = SP.MakeSelfArg(GetLoc);
-            Info.GetterMethod = MethodDecl::Create(Context, AS, GetLoc, DN,
-                                                   Type, Args, {},
-                                                   nullptr, IsStatic);
+            Info.GetterMethod = MethodDecl::Create(
+                Context, AS, GetLoc, DN, Type, Args, {}, nullptr, IsStatic);
 
             Info.GetterMethod->setSynthesized(true);
 
@@ -798,39 +815,39 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo *Name,
                EnterFunctionScope EF(*this);
 
                Info.GetterMethod->setBody(
-                  parseCompoundStmt().tryGetStatement());
+                   parseCompoundStmt().tryGetStatement());
             }
          }
          else if (!SawGetOrSet) {
-            assert(!Info.GetterMethod && "found getter but didn't "
-                                         "update SawGetOrSet!");
-            assert(currentTok().is(tok::open_brace) && "shouldn't get here "
-                                                       "otherwise");
+            assert(!Info.GetterMethod
+                   && "found getter but didn't "
+                      "update SawGetOrSet!");
+            assert(currentTok().is(tok::open_brace)
+                   && "shouldn't get here "
+                      "otherwise");
 
             lexer->backtrack();
 
             DeclarationName DN;
             if (IsProperty) {
                DN = Context.getDeclNameTable().getAccessorName(
-                  *Name, DeclarationName::Getter);
+                   *Name, DeclarationName::Getter);
             }
             else {
                DN = Context.getDeclNameTable().getSubscriptName(
-                  DeclarationName::SubscriptKind::Getter);
+                   DeclarationName::SubscriptKind::Getter);
             }
 
             Args[0] = SP.MakeSelfArg(Loc);
-            Info.GetterMethod = MethodDecl::Create(Context, AS, Loc, DN,
-                                                   Type, Args, {},
-                                                   nullptr, IsStatic);
+            Info.GetterMethod = MethodDecl::Create(Context, AS, Loc, DN, Type,
+                                                   Args, {}, nullptr, IsStatic);
 
             Info.GetterMethod->setSynthesized(true);
 
             DeclContextRAII DCR(*this, Info.GetterMethod);
             EnterFunctionScope EF(*this);
 
-            Info.GetterMethod->setBody(
-               parseCompoundStmt().tryGetStatement());
+            Info.GetterMethod->setBody(parseCompoundStmt().tryGetStatement());
 
             break;
          }
@@ -856,13 +873,13 @@ ParseResult Parser::parsePropDecl()
    advance();
 
    if (currentTok().getKind() != tok::ident) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       return ParseError();
    }
 
-   IdentifierInfo *fieldName = currentTok().getIdentifierInfo();
+   IdentifierInfo* fieldName = currentTok().getIdentifierInfo();
    SourceType typeref;
    advance();
 
@@ -876,18 +893,19 @@ ParseResult Parser::parsePropDecl()
    }
 
    AccessorInfo Info;
-   SmallVector<FuncArgDecl*, 2> Args{ nullptr };
+   SmallVector<FuncArgDecl*, 2> Args{nullptr};
    parseAccessor(BeginLoc, fieldName, typeref, CurDeclAttrs.StaticLoc.isValid(),
                  Args, Info, true);
 
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
-   auto prop = PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
-                                typeref, CurDeclAttrs.StaticLoc,
-                                Info.IsReadWrite,
-                                Info.GetterMethod, Info.SetterMethod);
+   auto prop
+       = PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName, typeref,
+                          CurDeclAttrs.StaticLoc, Info.IsReadWrite,
+                          Info.GetterMethod, Info.SetterMethod);
 
    if (!Info.GetterMethod && !Info.SetterMethod) {
-      SP.diagnose(prop, err_prop_must_have_get_or_set, BeginLoc, 0/*property*/);
+      SP.diagnose(prop, err_prop_must_have_get_or_set, BeginLoc,
+                  0 /*property*/);
    }
 
    return ActOnDecl(prop);
@@ -926,9 +944,8 @@ ParseResult Parser::parseSubscriptDecl()
    }
 
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
-   auto SD = SubscriptDecl::Create(Context, CurDeclAttrs.Access, SR,
-                                   typeref, Info.GetterMethod,
-                                   Info.SetterMethod);
+   auto SD = SubscriptDecl::Create(Context, CurDeclAttrs.Access, SR, typeref,
+                                   Info.GetterMethod, Info.SetterMethod);
 
    return ActOnDecl(SD);
 }
@@ -937,8 +954,9 @@ ParseResult Parser::parseAssociatedType()
 {
    if (!ParsingProtocol) {
       SP.diagnose(err_generic_error,
-         "'associatedType' declarations may only appear in protocols, implement them with an alias instead",
-         currentTok().getSourceLoc());
+                  "'associatedType' declarations may only appear in protocols, "
+                  "implement them with an alias instead",
+                  currentTok().getSourceLoc());
    }
 
    auto Loc = currentTok().getSourceLoc();
@@ -973,7 +991,7 @@ ParseResult Parser::parseAssociatedType()
       parseDeclConstraints(Constraints);
    }
 
-   NamedDecl *decl;
+   NamedDecl* decl;
    if (!ParsingProtocol) {
       // Pretend the programmer used an alias.
       SourceType metaTy;
@@ -984,24 +1002,24 @@ ParseResult Parser::parseAssociatedType()
          metaTy = covariance;
       }
 
-      decl = AliasDecl::Create(
-         Context, Loc, AccessSpecifier::Public, name, metaTy, nullptr, {});
+      decl = AliasDecl::Create(Context, Loc, AccessSpecifier::Public, name,
+                               metaTy, nullptr, {});
 
       decl->setIsInvalid(true);
    }
    else {
-      decl = AssociatedTypeDecl::Create(
-         Context, Loc, name, actualType, covariance);
+      decl = AssociatedTypeDecl::Create(Context, Loc, name, actualType,
+                                        covariance);
    }
 
    Context.setParsedConstraints(decl, move(Constraints));
    return ActOnDecl(decl);
 }
 
-DeclarationName Parser::parseOperatorName(FixKind Fix,
-                                          bool &isCastOp) {
+DeclarationName Parser::parseOperatorName(FixKind Fix, bool& isCastOp)
+{
    auto MakeDeclName = [&](llvm::StringRef Ident) {
-      auto &II = Context.getIdentifiers().get(Ident);
+      auto& II = Context.getIdentifiers().get(Ident);
 
       if (Fix == FixKind::Infix) {
          Context.registerInfixOperator(&II);
@@ -1047,7 +1065,7 @@ DeclarationName Parser::parseOperatorName(FixKind Fix,
       return MakeDeclName(currentTok().toString());
    }
 
-   SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+   SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                currentTok().toString(), true, "operator");
 
    return DeclarationName();
@@ -1116,11 +1134,10 @@ ParseResult Parser::parseMethodDecl()
    advance();
 
    SmallVector<FuncArgDecl*, 4> args;
-   args.push_back(
-      FuncArgDecl::Create(Context, SourceLocation(), DefLoc,
-                          DeclarationName(Ident_self), nullptr,
-                          ArgumentConvention::Default, SourceType(),
-                          nullptr, false, false, /*isSelf=*/true));
+   args.push_back(FuncArgDecl::Create(Context, SourceLocation(), DefLoc,
+                                      DeclarationName(Ident_self), nullptr,
+                                      ArgumentConvention::Default, SourceType(),
+                                      nullptr, false, false, /*isSelf=*/true));
 
    SourceLocation varargLoc;
    parseFuncArgs(varargLoc, args, IsOperator);
@@ -1167,18 +1184,16 @@ ParseResult Parser::parseMethodDecl()
       parseDeclConstraints(Constraints);
    }
 
-   MethodDecl *methodDecl;
+   MethodDecl* methodDecl;
    if (isConversionOp) {
-      methodDecl = MethodDecl::CreateConversionOp(Context, CurDeclAttrs.Access,
-                                                  DefLoc, returnType, args,
-                                                  move(templateParams),
-                                                  nullptr);
+      methodDecl = MethodDecl::CreateConversionOp(
+          Context, CurDeclAttrs.Access, DefLoc, returnType, args,
+          move(templateParams), nullptr);
    }
    else {
-      methodDecl = MethodDecl::Create(Context, CurDeclAttrs.Access, DefLoc,
-                                      methodName, returnType, args,
-                                      move(templateParams),
-                                      nullptr, CurDeclAttrs.StaticLoc);
+      methodDecl = MethodDecl::Create(
+          Context, CurDeclAttrs.Access, DefLoc, methodName, returnType, args,
+          move(templateParams), nullptr, CurDeclAttrs.StaticLoc);
    }
 
    CompoundStmt* body = nullptr;
@@ -1202,8 +1217,7 @@ ParseResult Parser::parseMethodDecl()
    }
    else if (!ParsingProtocol && !IsAbstract) {
       SP.diagnose(methodDecl, err_generic_error,
-                  "method must have a definition",
-                  methodDecl->getSourceLoc());
+                  "method must have a definition", methodDecl->getSourceLoc());
    }
 
    methodDecl->setVararg(varargLoc.isValid());
@@ -1226,7 +1240,7 @@ ParseResult Parser::parseEnumCase()
    consumeToken(tok::kw_case);
 
    if (currentTok().getKind() != tok::ident) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       return ParseError();
@@ -1243,7 +1257,7 @@ ParseResult Parser::parseEnumCase()
    }
 
    EnumCaseDecl* caseDecl;
-   StaticExpr *Expr = nullptr;
+   StaticExpr* Expr = nullptr;
 
    if (lexer->lookahead().is(tok::equals)) {
       advance();
@@ -1252,13 +1266,11 @@ ParseResult Parser::parseEnumCase()
       Expr = StaticExpr::Create(Context, parseExprSequence().tryGetExpr());
    }
 
-   caseDecl = EnumCaseDecl::Create(Context, CurDeclAttrs.Access,
-                                   CaseLoc, CaseLoc,
-                                   caseName, Expr,
-                                   associatedTypes);
+   caseDecl = EnumCaseDecl::Create(Context, CurDeclAttrs.Access, CaseLoc,
+                                   CaseLoc, caseName, Expr, associatedTypes);
 
    return ActOnDecl(caseDecl);
 }
 
-} // namespace Parse
+} // namespace parse
 } // namespace cdot

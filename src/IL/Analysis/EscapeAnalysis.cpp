@@ -1,4 +1,4 @@
-#include "EscapeAnalysis.h"
+#include "cdotc/IL/Analysis/EscapeAnalysis.h"
 
 using namespace cdot::support;
 
@@ -11,7 +11,7 @@ void EscapeAnalysis::invalidate()
    GlobalCache.clear();
 }
 
-void EscapeAnalysis::invalidate(Function *F, InvalidationKind K)
+void EscapeAnalysis::invalidate(Function* F, InvalidationKind K)
 {
    if ((K & InvalidationKind::CallsAndInstructions) != 0) {
       auto It = PerFnCache.find(F);
@@ -20,7 +20,7 @@ void EscapeAnalysis::invalidate(Function *F, InvalidationKind K)
    }
 }
 
-bool EscapeAnalysis::doesEscape(Value *V)
+bool EscapeAnalysis::doesEscape(Value* V)
 {
    if (auto I = dyn_cast<Instruction>(V))
       return doesEscape(I);
@@ -41,7 +41,7 @@ bool EscapeAnalysis::doesEscape(Value *V)
    return Result;
 }
 
-bool EscapeAnalysis::doesEscape(il::Instruction *I)
+bool EscapeAnalysis::doesEscape(il::Instruction* I)
 {
    auto It = PerFnCache.find(I->getParent()->getParent());
    if (It != PerFnCache.end()) {
@@ -62,7 +62,7 @@ bool EscapeAnalysis::doesEscape(il::Instruction *I)
    return Result;
 }
 
-bool EscapeAnalysis::visit(il::Value &V, Value *ValToCheck)
+bool EscapeAnalysis::visit(il::Value& V, Value* ValToCheck)
 {
    switch (V.getTypeID()) {
    case Value::ArgumentID:
@@ -80,14 +80,14 @@ bool EscapeAnalysis::visit(il::Value &V, Value *ValToCheck)
    case Value::AssignInstID:
    case Value::InitInstID:
    case Value::StoreInstID: {
-      auto &I = cast<Instruction>(V);
+      auto& I = cast<Instruction>(V);
       if (I.getOperand(1) != ValToCheck)
          return false;
 
       return doesEscape(I.getOperand(0));
    }
    case Value::LoadInstID: {
-      auto &I = cast<LoadInst>(V);
+      auto& I = cast<LoadInst>(V);
       if (I.getTarget() != ValToCheck)
          return false;
 
@@ -100,10 +100,10 @@ bool EscapeAnalysis::visit(il::Value &V, Value *ValToCheck)
       auto arg_it = CS.getCalledFunction()->getEntryBlock()->arg_begin();
       auto arg_end = CS.getCalledFunction()->getEntryBlock()->arg_end();
 
-      for (auto &arg : CS.getArgs()) {
+      for (auto& arg : CS.getArgs()) {
          if (arg == ValToCheck
-               && (arg_it == arg_end
-                  || arg_it->getConvention() != ArgumentConvention::Borrowed)) {
+             && (arg_it == arg_end
+                 || arg_it->getConvention() != ArgumentConvention::Borrowed)) {
             return true;
          }
          if (arg == ValToCheck)
@@ -114,7 +114,7 @@ bool EscapeAnalysis::visit(il::Value &V, Value *ValToCheck)
    }
    case Value::EnumInitInstID:
    case Value::VirtualCallInstID: {
-      for (auto &arg : cast<Instruction>(V).getOperands()) {
+      for (auto& arg : cast<Instruction>(V).getOperands()) {
          if (arg == ValToCheck)
             return true;
       }

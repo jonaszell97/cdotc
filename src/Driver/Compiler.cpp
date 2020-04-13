@@ -1,22 +1,22 @@
-#include "Compiler.h"
+#include "cdotc/Driver/Compiler.h"
 
-#include "AST/ASTContext.h"
-#include "Basic/FileUtils.h"
-#include "Basic/FileManager.h"
-#include "ClangImporter/ClangImporter.h"
-#include "IL/Context.h"
-#include "IL/Module.h"
-#include "ILGen/ILGenPass.h"
-#include "IRGen/IRGen.h"
-#include "Job.h"
-#include "Message/Diagnostics.h"
-#include "Module/ModuleManager.h"
-#include "Module/Module.h"
-#include "Query/QueryContext.h"
-#include "Sema/SemaPass.h"
-#include "Serialization/IncrementalCompilation.h"
-#include "Support/StringSwitch.h"
-#include "Support/Timer.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/ClangImporter/ClangImporter.h"
+#include "cdotc/Driver/Job.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/IRGen/IRGen.h"
+#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/IncrementalCompilation.h"
+#include "cdotc/Support/StringSwitch.h"
+#include "cdotc/Support/Timer.h"
 
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
@@ -52,16 +52,15 @@ static cl::list<string> IncludePaths("I", cl::ZeroOrMore,
 static cl::list<string> LinkedLibraries("l", cl::ZeroOrMore, cl::Prefix,
                                         cl::desc("<linked libraries>"));
 
-
 /// Library search directories to pass to the linker
 static cl::list<string> LibrarySearchDirs("L", cl::ZeroOrMore, cl::Prefix,
                                           cl::desc("<library search path(s)>"));
 
 /// If given, debug info will be emitted.
-static cl::opt<bool> EmitDebugInfo("g",  cl::desc("emit debug info"));
+static cl::opt<bool> EmitDebugInfo("g", cl::desc("emit debug info"));
 
 /// If given, debug info will be emitted.
-static cl::opt<bool> RunUnitTests("test",  cl::desc("run unit tests"));
+static cl::opt<bool> RunUnitTests("test", cl::desc("run unit tests"));
 
 /// If given, IL will be emitted without debug info even if it is created.
 static cl::opt<bool> DebugIL("fdebug-il", cl::desc("emit IL with "
@@ -74,27 +73,29 @@ static cl::opt<bool> StaticModuleLib("static-module-lib",
 
 /// The optimization level to use for the compilation.
 cl::opt<OptimizationLevel> OptLevel(
-   cl::desc("choose optimization level:"),
-   cl::values(
-      clEnumValN(OptimizationLevel::Debug, "O0", "No optimizations"),
-      clEnumValN(OptimizationLevel::O1, "O1", "Enable trivial optimizations"),
-      clEnumValN(OptimizationLevel::O2, "O2", "Enable default optimizations"),
-      clEnumValN(OptimizationLevel::O3, "O3", "Enable expensive optimizations")));
+    cl::desc("choose optimization level:"),
+    cl::values(
+        clEnumValN(OptimizationLevel::Debug, "O0", "No optimizations"),
+        clEnumValN(OptimizationLevel::O1, "O1", "Enable trivial optimizations"),
+        clEnumValN(OptimizationLevel::O2, "O2", "Enable default optimizations"),
+        clEnumValN(OptimizationLevel::O3, "O3",
+                   "Enable expensive optimizations")));
 
 /// If given, the prelude module will not be imported.
 static cl::opt<bool> NoPrelude("no-prelude", cl::desc("do not implicitly "
                                                       "import std.prelude"));
 
 /// If given, this compilation is assumed to be the standard library.
-static cl::opt<bool> IsStdLib("is-std-lib",  cl::Hidden);
+static cl::opt<bool> IsStdLib("is-std-lib", cl::Hidden);
 
 static cl::OptionCategory OutputCat("Output Options",
                                     "These control which additional files are"
                                     " produced.");
 
 /// If given, module files will be emitted.
-static cl::opt<bool> EmitModules("emit-modules",cl::desc("emit module files for"
-                                                         " the compilation"),
+static cl::opt<bool> EmitModules("emit-modules",
+                                 cl::desc("emit module files for"
+                                          " the compilation"),
                                  cl::cat(OutputCat));
 
 /// If given, intermediate IL files will be emitted.
@@ -110,23 +111,25 @@ static cl::opt<string> EmitIR("emit-ir",
                               cl::init("-"));
 
 /// Maximum number of errors to emit before aborting.
-static cl::opt<unsigned> MaxErrors("error-limit",
-                                   cl::desc("maximum number of error diagnostics "
-                                            "to emit before aborting"),
-                                   cl::init(16));
+static cl::opt<unsigned>
+    MaxErrors("error-limit",
+              cl::desc("maximum number of error diagnostics "
+                       "to emit before aborting"),
+              cl::init(16));
 
 static cl::opt<unsigned> MaxInstDepth("max-instantiation-depth",
                                       cl::desc("maximum allowed recursive "
                                                "template instantiations"),
                                       cl::init(16));
 
-static cl::OptionCategory StageSelectionCat("Stage Selection Options",
-                                         "These control which stages are run.");
+static cl::OptionCategory
+    StageSelectionCat("Stage Selection Options",
+                      "These control which stages are run.");
 
 /// If given, compilation stops after semantic analysis.
 static cl::opt<bool> SyntaxOnly("fsyntax-only",
-                               cl::desc("only perform semantic analysis"),
-                               cl::cat(StageSelectionCat));
+                                cl::desc("only perform semantic analysis"),
+                                cl::cat(StageSelectionCat));
 
 /// If given, compilation stops before assembling.
 static cl::opt<bool> TextOutputOnly("S", cl::desc("stop before assembling"),
@@ -137,8 +140,9 @@ static cl::opt<bool> NoLinking("c", cl::desc("stop before linking"),
                                cl::cat(StageSelectionCat));
 
 /// If given, incremental compilation will not be used.
-static cl::opt<bool> NoIncremental("fno-incremental",
-                                cl::desc("do not use incremental compilation"));
+static cl::opt<bool>
+    NoIncremental("fno-incremental",
+                  cl::desc("do not use incremental compilation"));
 
 /// If given, clears the incremental compilation caches.
 static cl::opt<bool> ClearCaches("fclear-caches",
@@ -152,8 +156,8 @@ static cl::opt<bool> PrintStats("print-stats",
 
 /// If given, print various statistics during compilation.
 static cl::opt<bool> PrintPhases("print-phases",
-                                cl::desc("print duration of compilation "
-                                         "phases"));
+                                 cl::desc("print duration of compilation "
+                                          "phases"));
 
 /// Features
 
@@ -161,8 +165,7 @@ static cl::OptionCategory FeatureCat("Experimental Features",
                                      "These flags toggle experimental compiler "
                                      "features that are disabled by default.");
 
-static cl::opt<bool> RuntimeGenerics("Xruntime-generics",
-                                     cl::cat(FeatureCat),
+static cl::opt<bool> RuntimeGenerics("Xruntime-generics", cl::cat(FeatureCat),
                                      cl::init(false),
                                      cl::desc("enable experimental runtime "
                                               "generics support"));
@@ -175,33 +178,30 @@ static cl::OptionCategory ClangCat("Clang Importer Options",
 
 /// Options to pass through to clang.
 static cl::list<string> ClangInput("Xclang", cl::ZeroOrMore, cl::cat(ClangCat),
-                                    cl::desc("<clang option(s)>"));
+                                   cl::desc("<clang option(s)>"));
 
-CompilerInstance::CompilerInstance(CompilerOptions &&options)
-   : options(std::move(options)),
-     FileMgr(std::make_unique<fs::FileManager>()),
-     Context(std::make_unique<ASTContext>(*this)),
-     QC(std::make_unique<QueryContext>(*this)),
-     GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
-     ModuleManager(std::make_unique<module::ModuleManager>(*this)),
-     IRGen(nullptr),
-     LLVMCtx(std::make_unique<llvm::LLVMContext>()),
-     ILCtx(std::make_unique<il::Context>(*this)),
-     Sema(std::make_unique<SemaPass>(*this))
+CompilerInstance::CompilerInstance(CompilerOptions&& options)
+    : options(std::move(options)), FileMgr(std::make_unique<fs::FileManager>()),
+      Context(std::make_unique<ASTContext>(*this)),
+      QC(std::make_unique<QueryContext>(*this)),
+      GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
+      ModuleManager(std::make_unique<module::ModuleManager>(*this)),
+      IRGen(nullptr), LLVMCtx(std::make_unique<llvm::LLVMContext>()),
+      ILCtx(std::make_unique<il::Context>(*this)),
+      Sema(std::make_unique<SemaPass>(*this))
 {
    QC->Sema = Sema.get();
 }
 
-CompilerInstance::CompilerInstance(int argc, char **argv)
-   : FileMgr(std::make_unique<fs::FileManager>()),
-     Context(std::make_unique<ASTContext>(*this)),
-     QC(std::make_unique<QueryContext>(*this)),
-     GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
-     ModuleManager(std::make_unique<module::ModuleManager>(*this)),
-     IRGen(nullptr),
-     LLVMCtx(std::make_unique<llvm::LLVMContext>()),
-     ILCtx(std::make_unique<il::Context>(*this)),
-     Sema(std::make_unique<SemaPass>(*this))
+CompilerInstance::CompilerInstance(int argc, char** argv)
+    : FileMgr(std::make_unique<fs::FileManager>()),
+      Context(std::make_unique<ASTContext>(*this)),
+      QC(std::make_unique<QueryContext>(*this)),
+      GlobalDeclCtx(ast::GlobalDeclContext::Create(*Context, *this)),
+      ModuleManager(std::make_unique<module::ModuleManager>(*this)),
+      IRGen(nullptr), LLVMCtx(std::make_unique<llvm::LLVMContext>()),
+      ILCtx(std::make_unique<il::Context>(*this)),
+      Sema(std::make_unique<SemaPass>(*this))
 {
    QC->Sema = Sema.get();
    cl::ParseCommandLineOptions(argc, argv);
@@ -225,19 +225,18 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    bool FoundModule = false;
    bool FoundOther = false;
 
-   for (auto &FileName : InputFilenames) {
+   for (auto& FileName : InputFilenames) {
       fs::getAllMatchingFiles(FileName, files);
 
-      for (auto &f : files) {
+      for (auto& f : files) {
          ScratchBuf += f;
          fs::makeAbsolute(ScratchBuf);
 
          auto FileName = ScratchBuf.str();
          if (ScratchBuf.endswith("dotm")) {
             if (FoundModule) {
-               Sema->diagnose(err_generic_error,
-                              "cannot compile more than one "
-                              "module per compilation");
+               Sema->diagnose(err_generic_error, "cannot compile more than one "
+                                                 "module per compilation");
             }
             if (FoundOther) {
                Sema->diagnose(err_generic_error,
@@ -268,7 +267,7 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
       EmitModules = false;
    }
 
-   for (auto &LI : LinkedLibraries) {
+   for (auto& LI : LinkedLibraries) {
       ScratchBuf += "-l";
       ScratchBuf += LI;
 
@@ -276,7 +275,7 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    }
 
    ScratchBuf.clear();
-   for (auto &LI : LibrarySearchDirs) {
+   for (auto& LI : LibrarySearchDirs) {
       ScratchBuf += "-L";
       ScratchBuf += LI;
 
@@ -295,12 +294,12 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
    options.includePaths.emplace_back(fs::getIncludeDir());
    options.includePaths.emplace_back(fs::getLibraryDir());
 
-   for (auto &Inc : IncludePaths) {
+   for (auto& Inc : IncludePaths) {
       options.includePaths.emplace_back(move(Inc));
    }
 
    /// Clang Input
-   for (auto &Opt : ClangInput) {
+   for (auto& Opt : ClangInput) {
       options.clangOptions.emplace_back(move(Opt));
    }
 
@@ -378,15 +377,14 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
       Sema->diagnose(err_no_source_file);
    }
 
-   for (auto &inputs : options.inFiles) {
-      for (auto &file : inputs.second) {
+   for (auto& inputs : options.inFiles) {
+      for (auto& file : inputs.second) {
          if (file.front() != PathSeperator)
             file = "./" + file;
       }
    }
 
-   if (!options.textOutputOnly()
-       && !options.runUnitTests()
+   if (!options.textOutputOnly() && !options.runUnitTests()
        && !options.hasOutputKind(OutputKind::Executable)
        && !options.emitModules()) {
       options.OutFile = "./a.out";
@@ -398,25 +396,25 @@ CompilerInstance::CompilerInstance(int argc, char **argv)
 
 CompilerInstance::~CompilerInstance()
 {
-   for (auto *Job : Jobs)
+   for (auto* Job : Jobs)
       delete Job;
 
    Context->cleanup();
 }
 
-void CompilerOptions::addInput(std::string &&file)
+void CompilerOptions::addInput(std::string&& file)
 {
    auto kind = StringSwitch<InputKind>(getExtension(file))
-      .Case("dot", InputKind::SourceFile)
-      .Case("cdot", InputKind::SourceFile)
-      .Case("doth", InputKind::SourceFile)
-      .Case("dotm", InputKind::ModuleFile)
-      .Case("cdotm", InputKind::ModuleFile)
-      .Case("o", InputKind::LinkerInput)
-      .Case("a", InputKind::LinkerInput)
-      .Case("so", InputKind::LinkerInput)
-      .Case("dylib", InputKind::LinkerInput)
-      .Default(InputKind::SourceFile);
+                   .Case("dot", InputKind::SourceFile)
+                   .Case("cdot", InputKind::SourceFile)
+                   .Case("doth", InputKind::SourceFile)
+                   .Case("dotm", InputKind::ModuleFile)
+                   .Case("cdotm", InputKind::ModuleFile)
+                   .Case("o", InputKind::LinkerInput)
+                   .Case("a", InputKind::LinkerInput)
+                   .Case("so", InputKind::LinkerInput)
+                   .Case("dylib", InputKind::LinkerInput)
+                   .Default(InputKind::SourceFile);
 
    inFiles[kind].emplace_back(std::move(file));
 }
@@ -425,19 +423,19 @@ void CompilerOptions::setOutput(StringRef fileName)
 {
    auto ext = getExtension(fileName);
    auto kind = StringSwitch<OutputKind>(ext)
-      .Case("s", OutputKind::Asm)
-      .Case("as", OutputKind::Asm)
-      .Case("a", OutputKind::StaticLib)
-      .Case("so", OutputKind::SharedLib)
-      .Case("dylib", OutputKind::DyLib)
-      .Case("o", OutputKind::ObjectFile)
-      .Case("ll", OutputKind::LlvmIR)
-      .Case("ir", OutputKind::LlvmIR)
-      .Case("bc", OutputKind::LlvmBitCode)
-      .Case("cdotil", OutputKind::CDotIL)
-      .Case("ilbc", OutputKind::SerializedIL)
-      .Case("cdotast", OutputKind::SerializedAST)
-      .Default(OutputKind::Executable);
+                   .Case("s", OutputKind::Asm)
+                   .Case("as", OutputKind::Asm)
+                   .Case("a", OutputKind::StaticLib)
+                   .Case("so", OutputKind::SharedLib)
+                   .Case("dylib", OutputKind::DyLib)
+                   .Case("o", OutputKind::ObjectFile)
+                   .Case("ll", OutputKind::LlvmIR)
+                   .Case("ir", OutputKind::LlvmIR)
+                   .Case("bc", OutputKind::LlvmBitCode)
+                   .Case("cdotil", OutputKind::CDotIL)
+                   .Case("ilbc", OutputKind::SerializedIL)
+                   .Case("cdotast", OutputKind::SerializedAST)
+                   .Default(OutputKind::Executable);
 
    OutFile = fileName;
    Output = kind;
@@ -445,21 +443,18 @@ void CompilerOptions::setOutput(StringRef fileName)
 
 namespace {
 
-class QueryStackTraceEntry: public llvm::PrettyStackTraceEntry {
+class QueryStackTraceEntry : public llvm::PrettyStackTraceEntry {
    /// Reference to the compiler instance.
-   CompilerInstance &CI;
+   CompilerInstance& CI;
 
 public:
-   QueryStackTraceEntry(CompilerInstance &CI)
-      : CI(CI)
-   { }
+   QueryStackTraceEntry(CompilerInstance& CI) : CI(CI) {}
 
-   void print(llvm::raw_ostream &OS) const override
+   void print(llvm::raw_ostream& OS) const override
    {
       OS << "\n";
-      for (auto *Qs : CI.getQueryContext().QueryStack) {
-         OS << "  " << Qs->summary()
-            << "\n";
+      for (auto* Qs : CI.getQueryContext().QueryStack) {
+         OS << "  " << Qs->summary() << "\n";
       }
 
       CI.getSema().issueDiagnostics();
@@ -586,7 +581,7 @@ int CompilerInstance::setupJobs()
 
    // Create an InputJob and a ParseJob for every source file.
 
-   for (auto &File : options.getInputFiles(InputKind::SourceFile)) {
+   for (auto& File : options.getInputFiles(InputKind::SourceFile)) {
       if (MainFile.empty())
          MainFile = File;
 
@@ -624,7 +619,7 @@ int CompilerInstance::setupJobs()
    addJob<PrintUsedMemoryJob>(Jobs.back());
 
    SmallVector<Job*, 4> IRGenJobs;
-   auto *Mod = getCompilationModule();
+   auto* Mod = getCompilationModule();
 
    // Create the module emission pipeline
    if (options.emitModules()) {
@@ -646,7 +641,7 @@ int CompilerInstance::setupJobs()
 
       addEmitJobs(IRGenJobs);
 
-      auto *IRLinkJob = addJob<LinkIRJob>(IRGenJobs);
+      auto* IRLinkJob = addJob<LinkIRJob>(IRGenJobs);
 
       if (RunUnitTests) {
          addJob<UnittestJob>(Jobs.back());
@@ -684,7 +679,7 @@ int CompilerInstance::setupJobs()
 
 void CompilerInstance::addEmitJobs(ArrayRef<Job*> IRGenJobs)
 {
-   auto *Mod = getCompilationModule();
+   auto* Mod = getCompilationModule();
 
    // Emit IL if requested
    if (options.emitIL()) {
@@ -721,20 +716,20 @@ void CompilerInstance::addEmitJobs(ArrayRef<Job*> IRGenJobs)
       Dir += Mod->getName()->getIdentifier();
       Dir += ".ll";
 
-      auto *IRJob = IRGenJobs[i++];
+      auto* IRJob = IRGenJobs[i++];
       addJob<EmitIRJob>(IRJob, Dir);
    }
 }
 
 int CompilerInstance::runJobs()
 {
-   for (auto *Job : Jobs) {
+   for (auto* Job : Jobs) {
       Job->run();
       if (Job->hadError())
          return 1;
    }
 
-   for (auto *Job : Jobs)
+   for (auto* Job : Jobs)
       delete Job;
 
    Jobs.clear();
@@ -746,10 +741,11 @@ void CompilerInstance::createIRGen()
    if (IRGen)
       return;
 
-   IRGen = std::make_unique<il::IRGen>(*this, *LLVMCtx, options.emitDebugInfo());
+   IRGen
+       = std::make_unique<il::IRGen>(*this, *LLVMCtx, options.emitDebugInfo());
 }
 
-ClangImporter &CompilerInstance::getClangImporter()
+ClangImporter& CompilerInstance::getClangImporter()
 {
    if (ClangImporter)
       return *ClangImporter;
@@ -758,20 +754,14 @@ ClangImporter &CompilerInstance::getClangImporter()
    return *ClangImporter;
 }
 
-ast::ILGenPass& CompilerInstance::getILGen() const
-{
-   return Sema->getILGen();
-}
+ast::ILGenPass& CompilerInstance::getILGen() const { return Sema->getILGen(); }
 
-SourceLocation CompilerInstance::getSourceLoc() const
-{
-   return MainFileLoc;
-}
+SourceLocation CompilerInstance::getSourceLoc() const { return MainFileLoc; }
 
 void CompilerInstance::reportInternalCompilerError()
 {
    llvm::errs()
-      << "\033[21;31merror:\033[0m an internal compiler error occurred\n";
+       << "\033[21;31merror:\033[0m an internal compiler error occurred\n";
 }
 
 void CompilerInstance::reportBackendFailure(llvm::StringRef msg)
@@ -780,7 +770,7 @@ void CompilerInstance::reportBackendFailure(llvm::StringRef msg)
    Sema->issueDiagnostics();
 }
 
-void CompilerInstance::displayPhaseDurations(llvm::raw_ostream &OS) const
+void CompilerInstance::displayPhaseDurations(llvm::raw_ostream& OS) const
 {
    OS << TimerStr;
 }

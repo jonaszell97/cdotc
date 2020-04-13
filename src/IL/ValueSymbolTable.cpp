@@ -1,7 +1,9 @@
-#include <llvm/Support/raw_ostream.h>
+
+#include "cdotc/IL/ValueSymbolTable.h"
+#include "cdotc/IL/Value.h"
+
 #include <llvm/ADT/SmallString.h>
-#include "ValueSymbolTable.h"
-#include "Value.h"
+#include <llvm/Support/raw_ostream.h>
 
 namespace cdot {
 namespace il {
@@ -11,13 +13,13 @@ ValueSymbolTable::ValueSymbolTable()
    vmap.insert(std::make_pair("", (Value*)nullptr));
 }
 
-Value *ValueSymbolTable::lookup(llvm::StringRef name)
+Value* ValueSymbolTable::lookup(llvm::StringRef name)
 {
    auto it = vmap.find(name);
    return it == vmap.end() ? nullptr : it->second;
 }
 
-void ValueSymbolTable::insertValue(Value *V)
+void ValueSymbolTable::insertValue(Value* V)
 {
    if (V->hasName()) {
       auto InsertResult = vmap.insert(std::make_pair(V->getName(), V));
@@ -30,8 +32,8 @@ void ValueSymbolTable::insertValue(Value *V)
    V->setNameNoCheck(UN->getKey());
 }
 
-void ValueSymbolTable::reinsertWithName(llvm::StringRef newName,
-                                        Value *V) {
+void ValueSymbolTable::reinsertWithName(llvm::StringRef newName, Value* V)
+{
    if (V->hasName()) {
       vmap.erase(vmap.find(V->getName()));
    }
@@ -47,7 +49,7 @@ void ValueSymbolTable::reinsertWithName(llvm::StringRef newName,
    V->setNameNoCheck(UN->getKey());
 }
 
-void ValueSymbolTable::removeValue(Value *V)
+void ValueSymbolTable::removeValue(Value* V)
 {
    assert(V->hasName() && "can't erase unnamed value");
    auto it = vmap.find(V->getName());
@@ -56,14 +58,11 @@ void ValueSymbolTable::removeValue(Value *V)
    vmap.erase(it);
 }
 
-void ValueSymbolTable::removeValue(iterator it)
-{
-   vmap.erase(it);
-}
+void ValueSymbolTable::removeValue(iterator it) { vmap.erase(it); }
 
 llvm::StringMapEntry<Value*>*
-ValueSymbolTable::CreateUniqueName(Value *V,
-                                   llvm::SmallString<256> &UniqueName) {
+ValueSymbolTable::CreateUniqueName(Value* V, llvm::SmallString<256>& UniqueName)
+{
    auto base = UniqueName.size();
    size_t lastUnique = 0;
 

@@ -1,0 +1,535 @@
+template<> CompileModuleQuery* QueryContext::getQuery<CompileModuleQuery>();
+template<>
+ParseModuleFileQuery*
+QueryContext::getQuery<ParseModuleFileQuery>(StringRef FileName);
+template<>
+CreateDefaultModuleQuery* QueryContext::getQuery<CreateDefaultModuleQuery>();
+template<>
+ParseSourceFileQuery*
+QueryContext::getQuery<ParseSourceFileQuery>(Module* Mod, StringRef FileName);
+template<>
+ParseMainSourceFileQuery*
+QueryContext::getQuery<ParseMainSourceFileQuery>(Module* Mod,
+                                                 StringRef FileName);
+template<>
+ParseSourceFilesQuery*
+QueryContext::getQuery<ParseSourceFilesQuery>(Module* Mod);
+template<>
+CreateILModuleQuery* QueryContext::getQuery<CreateILModuleQuery>(Module* Mod);
+template<> SetupIRGenQuery* QueryContext::getQuery<SetupIRGenQuery>();
+template<>
+CreateLLVMModuleQuery*
+QueryContext::getQuery<CreateLLVMModuleQuery>(Module* Mod);
+template<>
+MeasureExecutionTimeQuery*
+QueryContext::getQuery<MeasureExecutionTimeQuery>(Query* Q);
+template<>
+IsPersistableQuery* QueryContext::getQuery<IsPersistableQuery>(CanType T);
+template<>
+IsEquatableQuery* QueryContext::getQuery<IsEquatableQuery>(CanType T);
+template<> IsCopyableQuery* QueryContext::getQuery<IsCopyableQuery>(CanType T);
+template<> IsMoveOnlyQuery* QueryContext::getQuery<IsMoveOnlyQuery>(CanType T);
+template<>
+IsUnpopulatedQuery* QueryContext::getQuery<IsUnpopulatedQuery>(CanType T);
+template<>
+IsImplicitlyCopyableQuery*
+QueryContext::getQuery<IsImplicitlyCopyableQuery>(CanType T);
+template<>
+IsTriviallyCopyableQuery*
+QueryContext::getQuery<IsTriviallyCopyableQuery>(CanType T);
+template<>
+NeedsRetainOrReleaseQuery*
+QueryContext::getQuery<NeedsRetainOrReleaseQuery>(CanType T);
+template<>
+NeedsDeinitilizationQuery*
+QueryContext::getQuery<NeedsDeinitilizationQuery>(CanType T);
+template<>
+NeedsStructReturnQuery*
+QueryContext::getQuery<NeedsStructReturnQuery>(CanType T);
+template<>
+PassByValueQuery* QueryContext::getQuery<PassByValueQuery>(CanType T);
+template<>
+ContainsAssociatedTypeConstraintQuery*
+QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T);
+template<>
+SubstAssociatedTypesQuery*
+QueryContext::getQuery<SubstAssociatedTypesQuery>(QualType T, QualType Self);
+template<>
+SubstTemplateParamTypesQuery*
+QueryContext::getQuery<SubstTemplateParamTypesQuery>(
+    QualType T, const sema::MultiLevelFinalTemplateArgList& TemplateArgs);
+template<>
+GetBuiltinModuleQuery* QueryContext::getQuery<GetBuiltinModuleQuery>(
+    GetBuiltinModuleQuery::ModuleKind Mod);
+template<>
+GetBuiltinFuncQuery* QueryContext::getQuery<GetBuiltinFuncQuery>(
+    GetBuiltinFuncQuery::FunctionKind Fn);
+template<>
+GetBuiltinAliasQuery*
+QueryContext::getQuery<GetBuiltinAliasQuery>(GetBuiltinAliasQuery::AliasKind K,
+                                             ast::DeclContext* DC);
+template<>
+GetBuiltinRecordQuery* QueryContext::getQuery<GetBuiltinRecordQuery>(
+    GetBuiltinRecordQuery::RecordKind R);
+template<>
+GetBuiltinProtocolQuery* QueryContext::getQuery<GetBuiltinProtocolQuery>(
+    GetBuiltinProtocolQuery::ProtocolKind P);
+template<>
+FindPrecedenceGroupQuery*
+QueryContext::getQuery<FindPrecedenceGroupQuery>(DeclarationName Name,
+                                                 bool DiagOnError);
+template<>
+FindOperatorQuery*
+QueryContext::getQuery<FindOperatorQuery>(DeclarationName Name,
+                                          bool DiagOnError);
+template<>
+ResolveImportQuery*
+QueryContext::getQuery<ResolveImportQuery>(ast::ImportDecl* I);
+template<>
+ResolveUsingQuery* QueryContext::getQuery<ResolveUsingQuery>(ast::UsingDecl* U);
+template<>
+ResolveStaticIfQuery*
+QueryContext::getQuery<ResolveStaticIfQuery>(ast::StaticIfDecl* Decl);
+template<>
+ResolveStaticForQuery*
+QueryContext::getQuery<ResolveStaticForQuery>(ast::StaticForDecl* Decl);
+template<>
+ResolveStaticAssertQuery*
+QueryContext::getQuery<ResolveStaticAssertQuery>(ast::StaticAssertDecl* Decl);
+template<>
+ResolveStaticPrintQuery*
+QueryContext::getQuery<ResolveStaticPrintQuery>(ast::StaticPrintDecl* Decl);
+template<>
+ResolveStaticExprQuery*
+QueryContext::getQuery<ResolveStaticExprQuery>(ast::StaticExpr* Expr);
+template<>
+ResolveStaticExprToBoolQuery*
+QueryContext::getQuery<ResolveStaticExprToBoolQuery>(ast::StaticExpr* Expr,
+                                                     bool DiagOnError);
+template<>
+ExpandMacroQuery* QueryContext::getQuery<ExpandMacroQuery>(
+    StmtOrDecl SOD, DeclarationName Name, ast::DeclContext* DC, unsigned Delim,
+    llvm::ArrayRef<lex::Token> Tokens, unsigned ExpectedKind);
+template<>
+ExpandMacroDeclQuery*
+QueryContext::getQuery<ExpandMacroDeclQuery>(ast::MacroExpansionDecl* Decl);
+template<>
+ExpandMacrosQuery*
+QueryContext::getQuery<ExpandMacrosQuery>(StringRef SourceFile);
+template<>
+ImportExternalSourceFileQuery*
+QueryContext::getQuery<ImportExternalSourceFileQuery>(
+    StringRef FileName, ImportExternalSourceFileQuery::HeaderKind Kind,
+    ast::DeclContext* DC, SourceLocation Loc, bool Optional);
+template<>
+FindExtensionsQuery* QueryContext::getQuery<FindExtensionsQuery>(QualType T);
+template<>
+GetExtensionTypeKindQuery*
+QueryContext::getQuery<GetExtensionTypeKindQuery>(ast::SourceType T);
+template<>
+MatchExtensionTypeQuery*
+QueryContext::getQuery<MatchExtensionTypeQuery>(QualType T,
+                                                ast::SourceType PatternTy);
+template<>
+ExtensionAppliesQuery*
+QueryContext::getQuery<ExtensionAppliesQuery>(ast::ExtensionDecl* Ext,
+                                              QualType T);
+template<>
+GetExtendedDeclQuery*
+QueryContext::getQuery<GetExtendedDeclQuery>(ast::SourceType ExtendedTy);
+template<>
+ResolveExtensionQuery*
+QueryContext::getQuery<ResolveExtensionQuery>(ast::ExtensionDecl* Ext);
+template<>
+ResolveConformanceToProtocolQuery*
+QueryContext::getQuery<ResolveConformanceToProtocolQuery>(
+    QualType T, const ast::SourceType& Conf);
+template<>
+ResolveExplicitConformancesQuery*
+QueryContext::getQuery<ResolveExplicitConformancesQuery>(QualType T);
+template<>
+ResolveConformancesToProtocolsQuery*
+QueryContext::getQuery<ResolveConformancesToProtocolsQuery>(
+    QualType T, llvm::ArrayRef<ast::SourceType> Conformances);
+template<>
+ResolveDeclaredConformancesQuery*
+QueryContext::getQuery<ResolveDeclaredConformancesQuery>(
+    QualType T, llvm::ArrayRef<ast::SourceType> Conformances,
+    ConformanceKind Kind, ast::ConstraintSet* CS);
+template<>
+AddSingleConformanceQuery* QueryContext::getQuery<AddSingleConformanceQuery>(
+    QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind,
+    ast::ConstraintSet* CS, bool AddRecursiveConformances);
+template<>
+ResolveAssociatedTypesQuery*
+QueryContext::getQuery<ResolveAssociatedTypesQuery>(QualType T);
+template<>
+CheckProtocolExtensionApplicabilityQuery*
+QueryContext::getQuery<CheckProtocolExtensionApplicabilityQuery>(
+    QualType T, ast::ExtensionDecl* Ext);
+template<>
+VerifyConstraintQuery*
+QueryContext::getQuery<VerifyConstraintQuery>(const ast::ParsedConstraint* C,
+                                              ast::NamedDecl* ConstrainedDecl);
+template<>
+VerifyConstraintsQuery*
+QueryContext::getQuery<VerifyConstraintsQuery>(ast::NamedDecl* ConstrainedDecl);
+template<>
+IsConstraintSatisfiedQuery* QueryContext::getQuery<IsConstraintSatisfiedQuery>(
+    const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl,
+    bool PrepareNameLookup);
+template<>
+GetConstrainedTypeQuery* QueryContext::getQuery<GetConstrainedTypeQuery>(
+    const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+template<>
+GetReferencedAssociatedTypesQuery*
+QueryContext::getQuery<GetReferencedAssociatedTypesQuery>(
+    ast::ConstraintSet* CS);
+template<>
+GetNeededAssociatedTypesQuery*
+QueryContext::getQuery<GetNeededAssociatedTypesQuery>(ast::RecordDecl* R);
+template<>
+CheckConformancesQuery*
+QueryContext::getQuery<CheckConformancesQuery>(QualType T);
+template<>
+CheckSingleConformanceQuery*
+QueryContext::getQuery<CheckSingleConformanceQuery>(QualType T,
+                                                    ast::ProtocolDecl* P);
+template<>
+CheckAssociatedTypeConstraintsQuery*
+QueryContext::getQuery<CheckAssociatedTypeConstraintsQuery>(ast::RecordDecl* R);
+template<>
+TypecheckConstraintsQuery*
+QueryContext::getQuery<TypecheckConstraintsQuery>(ast::NamedDecl* ND);
+template<>
+ConformsToQuery* QueryContext::getQuery<ConformsToQuery>(CanType T,
+                                                         ast::ProtocolDecl* P);
+template<>
+IsCovariantQuery* QueryContext::getQuery<IsCovariantQuery>(QualType T,
+                                                           QualType Covar);
+template<>
+IsContravariantQuery*
+QueryContext::getQuery<IsContravariantQuery>(QualType T, QualType Contravar);
+template<>
+GetTypeSizeQuery* QueryContext::getQuery<GetTypeSizeQuery>(CanType T);
+template<>
+GetTypeAlignmentQuery* QueryContext::getQuery<GetTypeAlignmentQuery>(CanType T);
+template<>
+GetTypeStrideQuery* QueryContext::getQuery<GetTypeStrideQuery>(CanType T);
+template<>
+CalculateRecordSizeQuery*
+QueryContext::getQuery<CalculateRecordSizeQuery>(ast::RecordDecl* R);
+template<>
+CheckBuiltinConformancesQuery*
+QueryContext::getQuery<CheckBuiltinConformancesQuery>(ast::RecordDecl* R);
+template<>
+IsAccessibleQuery*
+QueryContext::getQuery<IsAccessibleQuery>(ast::DeclContext* DC,
+                                          ast::NamedDecl* ND);
+template<>
+CheckAccessibilityQuery* QueryContext::getQuery<CheckAccessibilityQuery>(
+    ast::DeclContext* DC, ast::NamedDecl* ND, SourceLocation Loc);
+template<>
+ResolveNestedNameSpecToTypeQuery*
+QueryContext::getQuery<ResolveNestedNameSpecToTypeQuery>(
+    NestedNameSpecifierWithLoc* Name, ast::DeclContext* DC, bool IssueDiag);
+template<>
+ResolveNestedNameSpecToDeclQuery*
+QueryContext::getQuery<ResolveNestedNameSpecToDeclQuery>(
+    NestedNameSpecifierWithLoc* Name, ast::DeclContext* DC, bool IssueDiag);
+template<>
+TypeCheckDeclContextQuery*
+QueryContext::getQuery<TypeCheckDeclContextQuery>(ast::DeclContext* DC);
+template<>
+PreparePrecedenceGroupInterfaceQuery*
+QueryContext::getQuery<PreparePrecedenceGroupInterfaceQuery>(
+    ast::PrecedenceGroupDecl* D);
+template<>
+TypecheckPrecedenceGroupQuery*
+QueryContext::getQuery<TypecheckPrecedenceGroupQuery>(
+    ast::PrecedenceGroupDecl* D);
+template<>
+PrepareOperatorInterfaceQuery*
+QueryContext::getQuery<PrepareOperatorInterfaceQuery>(ast::OperatorDecl* D);
+template<>
+TypecheckOperatorQuery*
+QueryContext::getQuery<TypecheckOperatorQuery>(ast::OperatorDecl* D);
+template<>
+PrepareGlobalVarInterfaceQuery*
+QueryContext::getQuery<PrepareGlobalVarInterfaceQuery>(ast::GlobalVarDecl* D);
+template<>
+TypecheckGlobalVarQuery*
+QueryContext::getQuery<TypecheckGlobalVarQuery>(ast::GlobalVarDecl* D);
+template<>
+PrepareCallableInterfaceQuery*
+QueryContext::getQuery<PrepareCallableInterfaceQuery>(ast::CallableDecl* D);
+template<>
+TypecheckCallableQuery*
+QueryContext::getQuery<TypecheckCallableQuery>(ast::CallableDecl* D);
+template<>
+PrepareFunctionInterfaceQuery*
+QueryContext::getQuery<PrepareFunctionInterfaceQuery>(ast::FunctionDecl* D);
+template<>
+TypecheckFunctionQuery*
+QueryContext::getQuery<TypecheckFunctionQuery>(ast::FunctionDecl* D);
+template<>
+PrepareMethodInterfaceQuery*
+QueryContext::getQuery<PrepareMethodInterfaceQuery>(ast::MethodDecl* D);
+template<>
+TypecheckMethodQuery*
+QueryContext::getQuery<TypecheckMethodQuery>(ast::MethodDecl* D);
+template<>
+PrepareInitInterfaceQuery*
+QueryContext::getQuery<PrepareInitInterfaceQuery>(ast::InitDecl* D);
+template<>
+TypecheckInitQuery*
+QueryContext::getQuery<TypecheckInitQuery>(ast::InitDecl* D);
+template<>
+PrepareDeinitInterfaceQuery*
+QueryContext::getQuery<PrepareDeinitInterfaceQuery>(ast::DeinitDecl* D);
+template<>
+TypecheckDeinitQuery*
+QueryContext::getQuery<TypecheckDeinitQuery>(ast::DeinitDecl* D);
+template<>
+PrepareFuncArgInterfaceQuery*
+QueryContext::getQuery<PrepareFuncArgInterfaceQuery>(ast::FuncArgDecl* D);
+template<>
+TypecheckFuncArgQuery*
+QueryContext::getQuery<TypecheckFuncArgQuery>(ast::FuncArgDecl* D);
+template<>
+PrepareTemplateParamInterfaceQuery*
+QueryContext::getQuery<PrepareTemplateParamInterfaceQuery>(
+    ast::TemplateParamDecl* D);
+template<>
+TypecheckTemplateParamQuery*
+QueryContext::getQuery<TypecheckTemplateParamQuery>(ast::TemplateParamDecl* D);
+template<>
+PrepareAssociatedTypeInterfaceQuery*
+QueryContext::getQuery<PrepareAssociatedTypeInterfaceQuery>(
+    ast::AssociatedTypeDecl* D);
+template<>
+TypecheckAssociatedTypeQuery*
+QueryContext::getQuery<TypecheckAssociatedTypeQuery>(
+    ast::AssociatedTypeDecl* D);
+template<>
+PrepareAliasInterfaceQuery*
+QueryContext::getQuery<PrepareAliasInterfaceQuery>(ast::AliasDecl* D);
+template<>
+TypecheckAliasQuery*
+QueryContext::getQuery<TypecheckAliasQuery>(ast::AliasDecl* D);
+template<>
+PrepareRecordInterfaceQuery*
+QueryContext::getQuery<PrepareRecordInterfaceQuery>(ast::RecordDecl* D);
+template<>
+TypecheckRecordQuery*
+QueryContext::getQuery<TypecheckRecordQuery>(ast::RecordDecl* D);
+template<>
+PrepareStructInterfaceQuery*
+QueryContext::getQuery<PrepareStructInterfaceQuery>(ast::StructDecl* D);
+template<>
+TypecheckStructQuery*
+QueryContext::getQuery<TypecheckStructQuery>(ast::StructDecl* D);
+template<>
+PrepareClassInterfaceQuery*
+QueryContext::getQuery<PrepareClassInterfaceQuery>(ast::ClassDecl* D);
+template<>
+TypecheckClassQuery*
+QueryContext::getQuery<TypecheckClassQuery>(ast::ClassDecl* D);
+template<>
+PrepareEnumInterfaceQuery*
+QueryContext::getQuery<PrepareEnumInterfaceQuery>(ast::EnumDecl* D);
+template<>
+TypecheckEnumQuery*
+QueryContext::getQuery<TypecheckEnumQuery>(ast::EnumDecl* D);
+template<>
+PrepareProtocolInterfaceQuery*
+QueryContext::getQuery<PrepareProtocolInterfaceQuery>(ast::ProtocolDecl* D);
+template<>
+TypecheckProtocolQuery*
+QueryContext::getQuery<TypecheckProtocolQuery>(ast::ProtocolDecl* D);
+template<>
+PrepareExtensionInterfaceQuery*
+QueryContext::getQuery<PrepareExtensionInterfaceQuery>(ast::ExtensionDecl* D);
+template<>
+TypecheckExtensionQuery*
+QueryContext::getQuery<TypecheckExtensionQuery>(ast::ExtensionDecl* D);
+template<>
+PrepareFieldInterfaceQuery*
+QueryContext::getQuery<PrepareFieldInterfaceQuery>(ast::FieldDecl* D);
+template<>
+TypecheckFieldQuery*
+QueryContext::getQuery<TypecheckFieldQuery>(ast::FieldDecl* D);
+template<>
+PreparePropInterfaceQuery*
+QueryContext::getQuery<PreparePropInterfaceQuery>(ast::PropDecl* D);
+template<>
+TypecheckPropQuery*
+QueryContext::getQuery<TypecheckPropQuery>(ast::PropDecl* D);
+template<>
+PrepareSubscriptInterfaceQuery*
+QueryContext::getQuery<PrepareSubscriptInterfaceQuery>(ast::SubscriptDecl* D);
+template<>
+TypecheckSubscriptQuery*
+QueryContext::getQuery<TypecheckSubscriptQuery>(ast::SubscriptDecl* D);
+template<>
+PrepareEnumCaseInterfaceQuery*
+QueryContext::getQuery<PrepareEnumCaseInterfaceQuery>(ast::EnumCaseDecl* D);
+template<>
+TypecheckEnumCaseQuery*
+QueryContext::getQuery<TypecheckEnumCaseQuery>(ast::EnumCaseDecl* D);
+template<>
+PrepareNamespaceInterfaceQuery*
+QueryContext::getQuery<PrepareNamespaceInterfaceQuery>(ast::NamespaceDecl* D);
+template<>
+TypecheckNamespaceQuery*
+QueryContext::getQuery<TypecheckNamespaceQuery>(ast::NamespaceDecl* D);
+template<>
+PrepareCompoundInterfaceQuery*
+QueryContext::getQuery<PrepareCompoundInterfaceQuery>(ast::CompoundDecl* D);
+template<>
+TypecheckCompoundQuery*
+QueryContext::getQuery<TypecheckCompoundQuery>(ast::CompoundDecl* D);
+template<>
+PrepareModuleInterfaceQuery*
+QueryContext::getQuery<PrepareModuleInterfaceQuery>(ast::ModuleDecl* D);
+template<>
+TypecheckModuleQuery*
+QueryContext::getQuery<TypecheckModuleQuery>(ast::ModuleDecl* D);
+template<>
+PrepareTemplateParametersQuery*
+QueryContext::getQuery<PrepareTemplateParametersQuery>(ast::NamedDecl* Decl);
+template<>
+DeclareImplicitInitializersQuery*
+QueryContext::getQuery<DeclareImplicitInitializersQuery>(ast::RecordDecl* R);
+template<>
+DeclareImplicitDefaultInitQuery*
+QueryContext::getQuery<DeclareImplicitDefaultInitQuery>(ast::StructDecl* S);
+template<>
+DeclareMemberwiseInitQuery*
+QueryContext::getQuery<DeclareMemberwiseInitQuery>(ast::StructDecl* S);
+template<>
+DeclareImplicitDefaultDeinitQuery*
+QueryContext::getQuery<DeclareImplicitDefaultDeinitQuery>(ast::RecordDecl* S);
+template<>
+ResolveRawTypeQuery*
+QueryContext::getQuery<ResolveRawTypeQuery>(ast::EnumDecl* E);
+template<>
+AssignInitNameQuery*
+QueryContext::getQuery<AssignInitNameQuery>(ast::InitDecl* Init);
+template<>
+LookupFirstQuery* QueryContext::getQuery<LookupFirstQuery>(ast::DeclContext* DC,
+                                                           DeclarationName Name,
+                                                           LookupOpts Opts);
+template<>
+LookupSingleQuery* QueryContext::getQuery<LookupSingleQuery>(
+    ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
+template<>
+RestrictedLookupQuery* QueryContext::getQuery<RestrictedLookupQuery>(
+    ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
+template<>
+DirectLookupQuery* QueryContext::getQuery<DirectLookupQuery>(
+    ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions,
+    LookupOpts Opts, ast::ConstraintSet* Constraints);
+template<>
+ResolveMetaDeclarationsQuery*
+QueryContext::getQuery<ResolveMetaDeclarationsQuery>(ast::DeclContext* DC);
+template<>
+PrepareTypeNameLookupQuery*
+QueryContext::getQuery<PrepareTypeNameLookupQuery>(ast::DeclContext* DC);
+template<>
+PrepareNameLookupQuery*
+QueryContext::getQuery<PrepareNameLookupQuery>(ast::DeclContext* DC);
+template<>
+InstantiateFieldsQuery*
+QueryContext::getQuery<InstantiateFieldsQuery>(ast::StructDecl* S);
+template<>
+InstantiateCasesQuery*
+QueryContext::getQuery<InstantiateCasesQuery>(ast::EnumDecl* E);
+template<>
+CheckTypeEquivalenceQuery* QueryContext::getQuery<CheckTypeEquivalenceQuery>(
+    QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl,
+    ast::DeclContext* DeclCtx);
+template<>
+InstantiateProtocolDefaultImplQuery*
+QueryContext::getQuery<InstantiateProtocolDefaultImplQuery>(
+    ast::NamedDecl* Impl, QualType Self, bool ActOnDecl);
+template<>
+InstantiateRecordQuery* QueryContext::getQuery<InstantiateRecordQuery>(
+    ast::RecordDecl* Template, sema::FinalTemplateArgumentList* TemplateArgs,
+    ast::RecordDecl* OuterInst);
+template<>
+InstantiateAliasQuery* QueryContext::getQuery<InstantiateAliasQuery>(
+    ast::AliasDecl* Template, sema::FinalTemplateArgumentList* TemplateArgs);
+template<>
+InstantiateCallableQuery* QueryContext::getQuery<InstantiateCallableQuery>(
+    ast::CallableDecl* Template, sema::FinalTemplateArgumentList* TemplateArgs);
+template<>
+InstantiateFunctionQuery* QueryContext::getQuery<InstantiateFunctionQuery>(
+    ast::FunctionDecl* Template, sema::FinalTemplateArgumentList* TemplateArgs);
+template<>
+InstantiateMethodQuery* QueryContext::getQuery<InstantiateMethodQuery>(
+    ast::MethodDecl* Template, sema::FinalTemplateArgumentList* TemplateArgs);
+template<>
+InstantiateMethodBodyQuery*
+QueryContext::getQuery<InstantiateMethodBodyQuery>(ast::CallableDecl* Inst);
+template<>
+InstantiateDeclQuery* QueryContext::getQuery<InstantiateDeclQuery>(
+    ast::Decl* Template,
+    const sema::MultiLevelFinalTemplateArgList& TemplateArgs);
+template<>
+CheckTemplateExtensionApplicabilityQuery*
+QueryContext::getQuery<CheckTemplateExtensionApplicabilityQuery>(
+    ast::RecordDecl* Inst, ast::ExtensionDecl* Ext);
+template<>
+PrepareDeclForInstantiationQuery*
+QueryContext::getQuery<PrepareDeclForInstantiationQuery>(ast::NamedDecl* ND);
+template<>
+InstantiateTemplateMemberQuery*
+QueryContext::getQuery<InstantiateTemplateMemberQuery>(
+    ast::NamedDecl* TemplateMember, ast::RecordDecl* Inst,
+    sema::FinalTemplateArgumentList* TemplateArgs);
+template<>
+PrepareInstantiationForNameLookupQuery*
+QueryContext::getQuery<PrepareInstantiationForNameLookupQuery>(
+    ast::RecordDecl* Inst);
+template<>
+GetILModuleForDeclQuery*
+QueryContext::getQuery<GetILModuleForDeclQuery>(ast::Decl* D);
+template<>
+GenerateILForContextQuery*
+QueryContext::getQuery<GenerateILForContextQuery>(ast::DeclContext* DC);
+template<>
+GenerateRecordILQuery*
+QueryContext::getQuery<GenerateRecordILQuery>(ast::RecordDecl* R);
+template<>
+GetILGlobalQuery* QueryContext::getQuery<GetILGlobalQuery>(ast::VarDecl* GV);
+template<>
+GenerateLazyILGlobalDefinitionQuery*
+QueryContext::getQuery<GenerateLazyILGlobalDefinitionQuery>(ast::VarDecl* GV);
+template<>
+GetILFunctionQuery*
+QueryContext::getQuery<GetILFunctionQuery>(ast::CallableDecl* C);
+template<>
+GenerateILFunctionBodyQuery*
+QueryContext::getQuery<GenerateILFunctionBodyQuery>(ast::CallableDecl* C);
+template<>
+GetILTypeInfoQuery* QueryContext::getQuery<GetILTypeInfoQuery>(QualType T);
+template<>
+CreateILBasicTypeInfoQuery*
+QueryContext::getQuery<CreateILBasicTypeInfoQuery>(QualType T);
+template<>
+CreateILRecordTypeInfoQuery*
+QueryContext::getQuery<CreateILRecordTypeInfoQuery>(ast::RecordDecl* R);
+template<>
+OpenFileForReadQuery*
+QueryContext::getQuery<OpenFileForReadQuery>(StringRef FileName);
+template<>
+GetDefaultTemplateArgQuery*
+QueryContext::getQuery<GetDefaultTemplateArgQuery>(ast::TemplateParamDecl* P);
+template<>
+FindEquivalentDeclQuery* QueryContext::getQuery<FindEquivalentDeclQuery>(
+    ast::NamedDecl* Decl, ast::DeclContext* DC, QualType Self,
+    bool LookInExtensions);
+template<>
+EquivalentSignaturesQuery* QueryContext::getQuery<EquivalentSignaturesQuery>(
+    ast::CallableDecl* C1, ast::CallableDecl* C2, QualType Self);

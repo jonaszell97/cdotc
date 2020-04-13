@@ -1,13 +1,12 @@
-#include "SemaPass.h"
-
-#include "ILGen/ILGenPass.h"
-#include "Module/Module.h"
-#include "Query/QueryContext.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
 
 namespace cdot {
 namespace ast {
 
-bool SemaPass::prepareGlobalForCtfe(VarDecl *Decl)
+bool SemaPass::prepareGlobalForCtfe(VarDecl* Decl)
 {
    if (!QC.TypecheckDecl(Decl))
       return false;

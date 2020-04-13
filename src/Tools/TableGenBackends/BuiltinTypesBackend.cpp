@@ -3,9 +3,9 @@
 #include "tblgen/Type.h"
 #include "tblgen/Value.h"
 
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
-#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace tblgen;
@@ -15,10 +15,8 @@ namespace {
 
 class AttrDefEmitter {
 public:
-   AttrDefEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
-      : out(out), RK(RK)
+   AttrDefEmitter(llvm::raw_ostream& out, RecordKeeper& RK) : out(out), RK(RK)
    {
-
    }
 
    void emit()
@@ -27,11 +25,11 @@ public:
       llvm::SmallPtrSet<Record*, 16> Visited;
 
       out << "#ifdef " << TypeMacro << "\n"
-          << "#  define " << IntMacro
-            << "(Name, BW, Unsigned) " << TypeMacro << "(Name)\n"
-         << "#  define " << FPMacro
-            << "(Name, Precision) " << TypeMacro << "(Name)\n"
-         << "#endif\n\n";
+          << "#  define " << IntMacro << "(Name, BW, Unsigned) " << TypeMacro
+          << "(Name)\n"
+          << "#  define " << FPMacro << "(Name, Precision) " << TypeMacro
+          << "(Name)\n"
+          << "#endif\n\n";
 
       RK.getAllDefinitionsOf("IntTy", vec);
       out << "#ifdef " << IntMacro << "\n";
@@ -87,21 +85,20 @@ public:
    }
 
 private:
-   llvm::raw_ostream &out;
-   RecordKeeper &RK;
+   llvm::raw_ostream& out;
+   RecordKeeper& RK;
 
-   const char *TypeMacro = "CDOT_BUILTIN_TYPE";
-   const char *IntMacro  = "CDOT_BUILTIN_INT";
-   const char *FPMacro   = "CDOT_BUILTIN_FP";
+   const char* TypeMacro = "CDOT_BUILTIN_TYPE";
+   const char* IntMacro = "CDOT_BUILTIN_INT";
+   const char* FPMacro = "CDOT_BUILTIN_FP";
 };
 
 } // end anonymous namespace
 
 extern "C" {
 
-void EmitBuiltinTypes(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitBuiltinTypes(llvm::raw_ostream& out, RecordKeeper& RK)
 {
    AttrDefEmitter(out, RK).emit();
 }
-
 };

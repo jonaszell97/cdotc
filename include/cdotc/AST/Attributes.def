@@ -1,0 +1,66 @@
+#ifdef CDOT_ATTR
+#define CDOT_TYPE_ATTR(Name, Spelling) CDOT_ATTR(Name, Spelling)
+#define CDOT_DECL_ATTR(Name, Spelling) CDOT_ATTR(Name, Spelling)
+#define CDOT_EXPR_ATTR(Name, Spelling) CDOT_ATTR(Name, Spelling)
+#define CDOT_STMT_ATTR(Name, Spelling) CDOT_ATTR(Name, Spelling)
+#endif
+
+#ifndef CDOT_ABSTRACT_ATTR
+#define CDOT_ABSTRACT_ATTR(Name)
+#endif
+
+#ifndef CDOT_VISITATION_POINT
+#define CDOT_VISITATION_POINT(Name)
+#endif
+
+#ifdef CDOT_DECL_ATTR
+CDOT_ABSTRACT_ATTR(_firstDeclAttr)
+CDOT_DECL_ATTR(Extern, extern)
+CDOT_DECL_ATTR(Inline, inline)
+CDOT_DECL_ATTR(Implicit, implicit)
+CDOT_DECL_ATTR(Opaque, opaque)
+CDOT_DECL_ATTR(Align, align)
+CDOT_DECL_ATTR(DiscardableResult, discardableResult)
+CDOT_DECL_ATTR(AutoClosure, autoclosure)
+CDOT_DECL_ATTR(Escaping, escaping)
+CDOT_DECL_ATTR(Testable, testable)
+CDOT_DECL_ATTR(CompileTime, compiletime)
+CDOT_DECL_ATTR(NoDerive, noDerive)
+CDOT_DECL_ATTR(Strong, strong)
+CDOT_DECL_ATTR(VersionDecl, version)
+CDOT_DECL_ATTR(_Builtin, _builtin)
+CDOT_DECL_ATTR(_Semantics, _semantics)
+CDOT_ABSTRACT_ATTR(_lastDeclAttr)
+#endif
+#undef CDOT_DECL_ATTR
+
+#ifdef CDOT_STMT_ATTR
+CDOT_ABSTRACT_ATTR(_firstStmtAttr)
+CDOT_STMT_ATTR(VersionStmt, version)
+CDOT_ABSTRACT_ATTR(_lastStmtAttr)
+#endif
+#undef CDOT_STMT_ATTR
+
+#ifdef CDOT_EXPR_ATTR
+CDOT_ABSTRACT_ATTR(_firstExprAttr)
+CDOT_ABSTRACT_ATTR(_lastExprAttr)
+#endif
+#undef CDOT_EXPR_ATTR
+
+#ifdef CDOT_TYPE_ATTR
+CDOT_ABSTRACT_ATTR(_firstTypeAttr)
+CDOT_TYPE_ATTR(Thin, thin)
+CDOT_ABSTRACT_ATTR(_lastTypeAttr)
+#endif
+#undef CDOT_TYPE_ATTR
+
+CDOT_VISITATION_POINT(Immediate)
+CDOT_VISITATION_POINT(BeforeDeclaration)
+CDOT_VISITATION_POINT(AfterDeclaration)
+CDOT_VISITATION_POINT(BeforeSema)
+CDOT_VISITATION_POINT(AfterSema)
+CDOT_VISITATION_POINT(Never)
+
+#undef CDOT_ABSTRACT_ATTR
+#undef CDOT_VISITATION_POINT
+#undef CDOT_ATTR

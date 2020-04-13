@@ -1,22 +1,16 @@
-#include "Expression.h"
-#include "Statement.h"
+#include "cdotc/AST/Expression.h"
+#include "cdotc/AST/Statement.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
-AstNode::AstNode(NodeType typeID) : typeID(typeID), SubclassData(0) { }
+AstNode::AstNode(NodeType typeID) : typeID(typeID), SubclassData(0) {}
 
-AstNode::~AstNode()
-{
+AstNode::~AstNode() {}
 
-}
-
-void AstNode::setContextualType(QualType ty)
-{
-   contextualType = ty;
-}
+void AstNode::setContextualType(QualType ty) { contextualType = ty; }
 
 llvm::ArrayRef<Attr*> AstNode::getAttributes() const
 {

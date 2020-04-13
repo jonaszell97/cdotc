@@ -1,10 +1,10 @@
-#include "Query.h"
+#include "cdotc/Query/Query.h"
 
-#include "AST/Decl.h"
-#include "Driver/Compiler.h"
-#include "IRGen/IRGen.h"
-#include "Module/Module.h"
-#include "QueryContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IRGen/IRGen.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Query/QueryContext.h"
 
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
@@ -14,11 +14,10 @@ using namespace cdot::ast;
 using namespace cdot::diag;
 using namespace cdot::support;
 
-LookupOpts cdot::DefaultLookupOpts =
-   LookupOpts::PrepareNameLookup
-   | LookupOpts::LookInConformances;
+LookupOpts cdot::DefaultLookupOpts
+    = LookupOpts::PrepareNameLookup | LookupOpts::LookInConformances;
 
-llvm::raw_ostream &cdot::operator<<(llvm::raw_ostream &OS, LookupOpts Opts)
+llvm::raw_ostream& cdot::operator<<(llvm::raw_ostream& OS, LookupOpts Opts)
 {
    if (Opts == LookupOpts::None) {
       return OS << "none";
@@ -26,19 +25,23 @@ llvm::raw_ostream &cdot::operator<<(llvm::raw_ostream &OS, LookupOpts Opts)
 
    unsigned i = 0;
    if ((Opts & LookupOpts::LocalLookup) != LookupOpts::None) {
-      if (i++ != 0) OS << ", ";
+      if (i++ != 0)
+         OS << ", ";
       OS << "local lookup";
    }
    if ((Opts & LookupOpts::TypeLookup) != LookupOpts::None) {
-      if (i++ != 0) OS << ", ";
+      if (i++ != 0)
+         OS << ", ";
       OS << "type lookup";
    }
    if ((Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None) {
-      if (i++ != 0) OS << ", ";
+      if (i++ != 0)
+         OS << ", ";
       OS << "prepare name lookup";
    }
    if ((Opts & LookupOpts::IssueDiag) != LookupOpts::None) {
-      if (i++ != 0) OS << ", ";
+      if (i++ != 0)
+         OS << ", ";
       OS << "issue diag";
    }
 
@@ -46,36 +49,34 @@ llvm::raw_ostream &cdot::operator<<(llvm::raw_ostream &OS, LookupOpts Opts)
 }
 
 TypeCapability::TypeCapability(QualType T, QualType CT, Kind K)
-   : K(K), T(T), TypeVal(CT)
+    : K(K), T(T), TypeVal(CT)
 {
    assert(K == Equality || K == Inequality);
 }
 
-TypeCapability::TypeCapability(QualType T, ast::ProtocolDecl *P, Kind K)
-   : K(K), T(T), ProtoVal(P)
+TypeCapability::TypeCapability(QualType T, ast::ProtocolDecl* P, Kind K)
+    : K(K), T(T), ProtoVal(P)
 {
    assert(K == Conformance || K == NonConformance);
 }
 
-TypeCapability::TypeCapability(QualType T, ast::ClassDecl *C, Kind K)
-   : K(K), T(T), ClassVal(C)
+TypeCapability::TypeCapability(QualType T, ast::ClassDecl* C, Kind K)
+    : K(K), T(T), ClassVal(C)
 {
    assert(K == SubClass || K == NotSubClass);
 }
 
-TypeCapability::TypeCapability(QualType T, ast::AliasDecl *A)
-   : K(Concept), T(T), ConceptVal(A)
+TypeCapability::TypeCapability(QualType T, ast::AliasDecl* A)
+    : K(Concept), T(T), ConceptVal(A)
 {
-
 }
 
-TypeCapability::TypeCapability(QualType T, Kind K)
-   : K(K), T(T)
+TypeCapability::TypeCapability(QualType T, Kind K) : K(K), T(T)
 {
    assert(K == Class || K == Enum || K == Struct);
 }
 
-void QueryResult::update(ResultKind &Previous, ResultKind New)
+void QueryResult::update(ResultKind& Previous, ResultKind New)
 {
    switch (New) {
    case Success:
@@ -92,11 +93,7 @@ void QueryResult::update(ResultKind &Previous, ResultKind New)
    }
 }
 
-Query::Query(Kind K, QueryContext &QC)
-   : K(K), Stat(Idle), QC(QC)
-{
-
-}
+Query::Query(Kind K, QueryContext& QC) : K(K), Stat(Idle), QC(QC) {}
 
 QueryResult Query::finish(Status St)
 {
@@ -119,7 +116,7 @@ QueryResult Query::finish(Status St)
 QueryResult Query::finish(QueryResult Result)
 {
    assert((!Result.isDependent() || canBeDependent())
-      && "query cannot be dependent");
+          && "query cannot be dependent");
 
    switch (Result.K) {
    case QueryResult::Success:
@@ -136,12 +133,9 @@ QueryResult Query::finish(QueryResult Result)
    return Result;
 }
 
-ast::SemaPass& Query::sema() const
-{
-   return *QC.Sema;
-}
+ast::SemaPass& Query::sema() const { return *QC.Sema; }
 
-Query *Query::up(unsigned n) const
+Query* Query::up(unsigned n) const
 {
    if (n >= QC.QueryStack.size()) {
       return nullptr;
@@ -155,28 +149,31 @@ QueryResult Query::run()
    Stat = Running;
 
    switch (K) {
-#  define CDOT_QUERY(NAME)                                               \
-   case NAME##ID: return static_cast<NAME*>(this)->run();
-#  include "Inc/Queries.def"
+#define CDOT_QUERY(NAME)                                                       \
+   case NAME##ID:                                                              \
+      return static_cast<NAME*>(this)->run();
+#include "cdotc/Query/Inc/Queries.def"
    }
 }
 
 std::string Query::description() const
 {
    switch (K) {
-#  define CDOT_QUERY(NAME)                                               \
-   case NAME##ID: return static_cast<const NAME*>(this)->description();
-#  include "Inc/Queries.def"
+#define CDOT_QUERY(NAME)                                                       \
+   case NAME##ID:                                                              \
+      return static_cast<const NAME*>(this)->description();
+#include "cdotc/Query/Inc/Queries.def"
    }
 }
 
 std::string Query::summary() const
 {
    switch (K) {
-#  define CDOT_QUERY(NAME)                                               \
-   case NAME##ID: return static_cast<const NAME*>(this)->summary();
-#  include "Inc/Queries.def"
+#define CDOT_QUERY(NAME)                                                       \
+   case NAME##ID:                                                              \
+      return static_cast<const NAME*>(this)->summary();
+#include "cdotc/Query/Inc/Queries.def"
    }
 }
 
-#include "Inc/QueryImpls.inc"
+#include "cdotc/Query/Inc/QueryImpls.inc"

@@ -1,68 +1,50 @@
-#include "PrettyPrinter.h"
+#include "cdotc/AST/PrettyPrinter.h"
 
-#include "AST/ASTVisitor.h"
-#include "AST/Decl.h"
-#include "AST/Expression.h"
-#include "AST/Statement.h"
-#include "IL/Constants.h"
-#include "Support/Format.h"
-#include "Support/WriterBase.h"
+#include "cdotc/AST/ASTVisitor.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Expression.h"
+#include "cdotc/AST/Statement.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/Support/Format.h"
+#include "cdotc/Support/WriterBase.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace ast {
 
-class PrettyPrinterImpl: public WriterBase<PrettyPrinterImpl, 3>,
-                         public ASTVisitor<PrettyPrinterImpl> {
+class PrettyPrinterImpl : public WriterBase<PrettyPrinterImpl, 3>,
+                          public ASTVisitor<PrettyPrinterImpl> {
 public:
    using Options = PrettyPrinter::Options;
 
-   PrettyPrinterImpl(llvm::raw_ostream &out, Options opts)
-      : WriterBase(out), opts(opts)
+   PrettyPrinterImpl(llvm::raw_ostream& out, Options opts)
+       : WriterBase(out), opts(opts)
    {
       (void)this->opts;
    }
 
-   void visitExpr(Expression* expr)
-   {
-      ASTVisitor::visit(expr);
-   }
+   void visitExpr(Expression* expr) { ASTVisitor::visit(expr); }
 
-   void visitStmt(Statement* stmt)
-   {
-      ASTVisitor::visit(stmt);
-   }
+   void visitStmt(Statement* stmt) { ASTVisitor::visit(stmt); }
 
-   void visit(Expression* E)
-   {
-      ASTVisitor::visit(E);
-   }
+   void visit(Expression* E) { ASTVisitor::visit(E); }
 
-   void visit(Statement *S)
-   {
-      ASTVisitor::visit(S);
-   }
+   void visit(Statement* S) { ASTVisitor::visit(S); }
 
-   void visitDecl(Decl* D)
-   {
-      llvm_unreachable("not yet");
-   }
+   void visitDecl(Decl* D) { llvm_unreachable("not yet"); }
 
    void visit(SourceType Ty) {}
 
-#  define CDOT_STMT(Name)                                \
-   void visit##Name(Name* stmt);
+#define CDOT_STMT(Name) void visit##Name(Name* stmt);
 
-#  define CDOT_EXPR(Name)                                \
-   void visit##Name(Name* expr);
+#define CDOT_EXPR(Name) void visit##Name(Name* expr);
 
-#  include "AST/AstNode.def"
+#include "cdotc/AST/AstNode.def"
 
-#  define CDOT_DECL(Name)                                \
-   void visit##Name(Name *decl);
+#define CDOT_DECL(Name) void visit##Name(Name* decl);
 
-#  include "AST/Decl.def"
+#include "cdotc/AST/Decl.def"
 
    void visitRecordDecl(RecordDecl* stmt);
 
@@ -94,8 +76,8 @@ private:
       }
    }
 
-   void WriteStringExprPair(std::pair<string, Expression* >
-                           & pair) {
+   void WriteStringExprPair(std::pair<string, Expression*>& pair)
+   {
       if (!pair.first.empty())
          out << pair.first << ": ";
 
@@ -108,7 +90,7 @@ void PrettyPrinterImpl::visitCompoundStmt(CompoundStmt* stmt)
    out << "{\n";
    {
       TabGuard guard(this);
-      for (auto &node : stmt->getStatements()) {
+      for (auto& node : stmt->getStatements()) {
          ApplyTab();
 
          visitStmt(node);
@@ -118,30 +100,18 @@ void PrettyPrinterImpl::visitCompoundStmt(CompoundStmt* stmt)
    out << "}";
 }
 
-void PrettyPrinterImpl::visitSourceFileDecl(cdot::ast::SourceFileDecl *decl)
-{
+void PrettyPrinterImpl::visitSourceFileDecl(cdot::ast::SourceFileDecl* decl) {}
 
-}
+void PrettyPrinterImpl::visitAttributedStmt(cdot::ast::AttributedStmt* stmt) {}
 
-void PrettyPrinterImpl::visitAttributedStmt(cdot::ast::AttributedStmt *stmt)
-{
+void PrettyPrinterImpl::visitAttributedExpr(cdot::ast::AttributedExpr* E) {}
 
-}
-
-void PrettyPrinterImpl::visitAttributedExpr(cdot::ast::AttributedExpr *E)
-{
-
-}
-
-void PrettyPrinterImpl::visitTemplateParamDecl(TemplateParamDecl *stmt)
+void PrettyPrinterImpl::visitTemplateParamDecl(TemplateParamDecl* stmt)
 {
    out << stmt->getName();
 }
 
-void PrettyPrinterImpl::visitBreakStmt(BreakStmt* stmt)
-{
-   out << "break";
-}
+void PrettyPrinterImpl::visitBreakStmt(BreakStmt* stmt) { out << "break"; }
 
 void PrettyPrinterImpl::visitContinueStmt(ContinueStmt* stmt)
 {
@@ -200,7 +170,7 @@ void PrettyPrinterImpl::visitMatchStmt(MatchStmt* stmt)
 
    {
       TabGuard guard(this);
-      for (auto &C : stmt->getCases()) {
+      for (auto& C : stmt->getCases()) {
          ApplyTab();
          visitCaseStmt(C);
          out << "\n";
@@ -250,10 +220,7 @@ void PrettyPrinterImpl::visitGlobalVarDecl(GlobalVarDecl* stmt)
    visitVarDecl(stmt);
 }
 
-void PrettyPrinterImpl::visitDestructuringDecl(DestructuringDecl *decl)
-{
-
-}
+void PrettyPrinterImpl::visitDestructuringDecl(DestructuringDecl* decl) {}
 
 void PrettyPrinterImpl::visitAliasDecl(AliasDecl* stmt)
 {
@@ -265,130 +232,55 @@ void PrettyPrinterImpl::visitAliasDecl(AliasDecl* stmt)
    visitExpr(stmt->getAliasExpr());
 }
 
-void PrettyPrinterImpl::visitRecordDecl(RecordDecl* stmt)
-{
+void PrettyPrinterImpl::visitRecordDecl(RecordDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitClassDecl(ClassDecl* stmt) {}
 
-void PrettyPrinterImpl::visitClassDecl(ClassDecl* stmt)
-{
+void PrettyPrinterImpl::visitStructDecl(StructDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitEnumDecl(EnumDecl* stmt) {}
 
-void PrettyPrinterImpl::visitStructDecl(StructDecl* stmt)
-{
+void PrettyPrinterImpl::visitEnumCaseDecl(EnumCaseDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitUnionDecl(UnionDecl* stmt) {}
 
-void PrettyPrinterImpl::visitEnumDecl(EnumDecl* stmt)
-{
+void PrettyPrinterImpl::visitProtocolDecl(ProtocolDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitMethodDecl(MethodDecl* stmt) {}
 
-void PrettyPrinterImpl::visitEnumCaseDecl(EnumCaseDecl* stmt)
-{
+void PrettyPrinterImpl::visitFieldDecl(FieldDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitPropDecl(PropDecl* stmt) {}
 
-void PrettyPrinterImpl::visitUnionDecl(UnionDecl* stmt)
-{
+void PrettyPrinterImpl::visitSubscriptDecl(SubscriptDecl* decl) {}
 
-}
+void PrettyPrinterImpl::visitInitDecl(InitDecl* stmt) {}
 
-void PrettyPrinterImpl::visitProtocolDecl(ProtocolDecl* stmt)
-{
+void PrettyPrinterImpl::visitDeinitDecl(DeinitDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitAssociatedTypeDecl(AssociatedTypeDecl* stmt) {}
 
-void PrettyPrinterImpl::visitMethodDecl(MethodDecl* stmt)
-{
+void PrettyPrinterImpl::visitTypedefDecl(TypedefDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitExtensionDecl(ExtensionDecl* stmt) {}
 
-void PrettyPrinterImpl::visitFieldDecl(FieldDecl* stmt)
-{
+void PrettyPrinterImpl::visitFunctionDecl(FunctionDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitFuncArgDecl(FuncArgDecl* stmt) {}
 
-void PrettyPrinterImpl::visitPropDecl(PropDecl* stmt)
-{
+void PrettyPrinterImpl::visitNamespaceDecl(NamespaceDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitUnittestDecl(UnittestDecl* decl) {}
 
-void PrettyPrinterImpl::visitSubscriptDecl(SubscriptDecl *decl)
-{
+void PrettyPrinterImpl::visitUsingDecl(UsingDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitModuleDecl(ModuleDecl* stmt) {}
 
-void PrettyPrinterImpl::visitInitDecl(InitDecl* stmt)
-{
+void PrettyPrinterImpl::visitImportDecl(ImportDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitDebugStmt(DebugStmt* stmt) {}
 
-void PrettyPrinterImpl::visitDeinitDecl(DeinitDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitAssociatedTypeDecl(AssociatedTypeDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitTypedefDecl(TypedefDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitExtensionDecl(ExtensionDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitFunctionDecl(FunctionDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitFuncArgDecl(FuncArgDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitNamespaceDecl(NamespaceDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitUnittestDecl(UnittestDecl *decl)
-{
-
-}
-
-void PrettyPrinterImpl::visitUsingDecl(UsingDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitModuleDecl(ModuleDecl *stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitImportDecl(ImportDecl *stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitDebugStmt(DebugStmt* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitDebugDecl(DebugDecl *decl)
-{
-
-}
+void PrettyPrinterImpl::visitDebugDecl(DebugDecl* decl) {}
 
 void PrettyPrinterImpl::visitDoStmt(DoStmt* stmt)
 {
@@ -396,13 +288,13 @@ void PrettyPrinterImpl::visitDoStmt(DoStmt* stmt)
    visitStmt(stmt->getBody());
 }
 
-void PrettyPrinterImpl::visitTryExpr(TryExpr *expr)
+void PrettyPrinterImpl::visitTryExpr(TryExpr* expr)
 {
    out << "try ";
    visitExpr(expr->getExpr());
 }
 
-void PrettyPrinterImpl::visitAwaitExpr(AwaitExpr *expr)
+void PrettyPrinterImpl::visitAwaitExpr(AwaitExpr* expr)
 {
    out << "await ";
    visitExpr(expr->getExpr());
@@ -426,44 +318,30 @@ void PrettyPrinterImpl::visitReturnStmt(ReturnStmt* stmt)
    }
 }
 
-void PrettyPrinterImpl::visitDiscardAssignStmt(DiscardAssignStmt *stmt)
+void PrettyPrinterImpl::visitDiscardAssignStmt(DiscardAssignStmt* stmt)
 {
    out << "_ = ";
    visitExpr(stmt->getRHS());
 }
 
-void PrettyPrinterImpl::visitNullStmt(NullStmt* stmt)
-{
-   out << ";";
-}
+void PrettyPrinterImpl::visitNullStmt(NullStmt* stmt) { out << ";"; }
 
-void PrettyPrinterImpl::visitStaticIfStmt(StaticIfStmt* stmt)
-{
+void PrettyPrinterImpl::visitStaticIfStmt(StaticIfStmt* stmt) {}
 
-}
+void PrettyPrinterImpl::visitStaticForStmt(StaticForStmt* stmt) {}
 
-void PrettyPrinterImpl::visitStaticForStmt(StaticForStmt* stmt)
-{
+void PrettyPrinterImpl::visitStaticAssertDecl(StaticAssertDecl* stmt) {}
 
-}
+void PrettyPrinterImpl::visitStaticPrintDecl(StaticPrintDecl* stmt) {}
 
-void PrettyPrinterImpl::visitStaticAssertDecl(StaticAssertDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitStaticPrintDecl(StaticPrintDecl* stmt)
-{
-
-}
-
-void PrettyPrinterImpl::visitFunctionTypeExpr(FunctionTypeExpr *expr)
+void PrettyPrinterImpl::visitFunctionTypeExpr(FunctionTypeExpr* expr)
 {
    out << "(";
 
    size_t i = 0;
-   for (auto &Ty : expr->getArgTypes()) {
-      if (i++ != 0) out << ", ";
+   for (auto& Ty : expr->getArgTypes()) {
+      if (i++ != 0)
+         out << ", ";
       visit(Ty);
    }
 
@@ -471,61 +349,64 @@ void PrettyPrinterImpl::visitFunctionTypeExpr(FunctionTypeExpr *expr)
    visit(expr->getReturnType());
 }
 
-void PrettyPrinterImpl::visitTupleTypeExpr(TupleTypeExpr *expr)
+void PrettyPrinterImpl::visitTupleTypeExpr(TupleTypeExpr* expr)
 {
    out << "(";
 
    size_t i = 0;
-   for (auto &Ty : expr->getContainedTypes()) {
-      if (i++ != 0) out << ", ";
+   for (auto& Ty : expr->getContainedTypes()) {
+      if (i++ != 0)
+         out << ", ";
       visit(Ty);
    }
 
    out << ")";
 }
 
-void PrettyPrinterImpl::visitArrayTypeExpr(ArrayTypeExpr *expr)
+void PrettyPrinterImpl::visitArrayTypeExpr(ArrayTypeExpr* expr)
 {
    out << "[";
    visit(expr->getElementTy());
-//   out << "; " << expr->getSizeExpr()->getEvaluatedExpr().getAPSInt() << "]";
+   //   out << "; " << expr->getSizeExpr()->getEvaluatedExpr().getAPSInt() <<
+   //   "]";
 }
 
-void PrettyPrinterImpl::visitDeclTypeExpr(DeclTypeExpr *expr)
+void PrettyPrinterImpl::visitDeclTypeExpr(DeclTypeExpr* expr)
 {
    out << "decltype(";
    visitExpr(expr->getTyExpr());
    out << ")";
 }
 
-void PrettyPrinterImpl::visitReferenceTypeExpr(ReferenceTypeExpr *expr)
+void PrettyPrinterImpl::visitReferenceTypeExpr(ReferenceTypeExpr* expr)
 {
    out << "ref ";
    visit(expr->getSubType());
 }
 
-void PrettyPrinterImpl::visitPointerTypeExpr(PointerTypeExpr *expr)
+void PrettyPrinterImpl::visitPointerTypeExpr(PointerTypeExpr* expr)
 {
    visit(expr->getSubType());
    out << "*";
 }
 
-void PrettyPrinterImpl::visitOptionTypeExpr(OptionTypeExpr *expr)
+void PrettyPrinterImpl::visitOptionTypeExpr(OptionTypeExpr* expr)
 {
    visit(expr->getSubType());
    out << "?";
 }
 
-void PrettyPrinterImpl::visitExistentialTypeExpr(ExistentialTypeExpr *expr)
+void PrettyPrinterImpl::visitExistentialTypeExpr(ExistentialTypeExpr* expr)
 {
    unsigned i = 0;
-   for (auto &E : expr->getExistentials()) {
-      if (i++ != 0) out << " & ";
+   for (auto& E : expr->getExistentials()) {
+      if (i++ != 0)
+         out << " & ";
       visit(E);
    }
 }
 
-void PrettyPrinterImpl::visitParenExpr(ast::ParenExpr *expr)
+void PrettyPrinterImpl::visitParenExpr(ast::ParenExpr* expr)
 {
    out << "(";
    visitExpr(expr->getParenthesizedExpr());
@@ -561,10 +442,7 @@ void PrettyPrinterImpl::visitCharLiteral(CharLiteral* expr)
    out << c << "'";
 }
 
-void PrettyPrinterImpl::visitNoneLiteral(NoneLiteral* expr)
-{
-   out << "none";
-}
+void PrettyPrinterImpl::visitNoneLiteral(NoneLiteral* expr) { out << "none"; }
 
 void PrettyPrinterImpl::visitStringLiteral(StringLiteral* expr)
 {
@@ -575,7 +453,7 @@ void PrettyPrinterImpl::visitStringInterpolation(StringInterpolation* expr)
 {
    out << '"';
 
-   for (auto &str : expr->getSegments()) {
+   for (auto& str : expr->getSegments()) {
       if (auto S = dyn_cast<StringLiteral>(expr)) {
          out << S->getValue();
       }
@@ -616,10 +494,11 @@ void PrettyPrinterImpl::visitDictionaryLiteral(DictionaryLiteral* expr)
    }
 
    size_t i = 0;
-   for (auto &K : expr->getKeys()) {
-      if (i != 0) out << ", ";
+   for (auto& K : expr->getKeys()) {
+      if (i != 0)
+         out << ", ";
 
-      auto &V = expr->getValues()[i];
+      auto& V = expr->getValues()[i];
 
       visitExpr(K);
       out << ": ";
@@ -637,37 +516,27 @@ void PrettyPrinterImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
       out << DeclarationName(expr->getIdentInfo());
 }
 
-void PrettyPrinterImpl::visitDeclRefExpr(DeclRefExpr *expr)
+void PrettyPrinterImpl::visitDeclRefExpr(DeclRefExpr* expr)
 {
    out << expr->getDecl()->getDeclName();
 }
 
-void PrettyPrinterImpl::visitMemberRefExpr(MemberRefExpr *expr)
+void PrettyPrinterImpl::visitMemberRefExpr(MemberRefExpr* expr)
 {
    out << "." << expr->getMemberDecl()->getDeclName();
 }
 
-void PrettyPrinterImpl::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *expr)
+void PrettyPrinterImpl::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* expr)
 {
-
 }
 
-void PrettyPrinterImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *expr)
-{
+void PrettyPrinterImpl::visitBuiltinIdentExpr(BuiltinIdentExpr* expr) {}
 
-}
+void PrettyPrinterImpl::visitSelfExpr(SelfExpr* expr) { out << "self"; }
 
-void PrettyPrinterImpl::visitSelfExpr(SelfExpr *expr)
-{
-   out << "self";
-}
+void PrettyPrinterImpl::visitSuperExpr(SuperExpr* expr) { out << "super"; }
 
-void PrettyPrinterImpl::visitSuperExpr(SuperExpr *expr)
-{
-   out << "super";
-}
-
-void PrettyPrinterImpl::visitTupleMemberExpr(ast::TupleMemberExpr *expr)
+void PrettyPrinterImpl::visitTupleMemberExpr(ast::TupleMemberExpr* expr)
 {
    out << (expr->isPointerAccess() ? "->" : ".") << expr->getIndex();
 }
@@ -688,7 +557,7 @@ void PrettyPrinterImpl::visitCallExpr(CallExpr* expr)
    WriteList(expr->getArgs(), &PrettyPrinterImpl::visitExpr);
 }
 
-void PrettyPrinterImpl::visitAnonymousCallExpr(AnonymousCallExpr *expr)
+void PrettyPrinterImpl::visitAnonymousCallExpr(AnonymousCallExpr* expr)
 {
    WriteList(expr->getArgs(), &PrettyPrinterImpl::visitExpr);
 }
@@ -702,21 +571,15 @@ void PrettyPrinterImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
 
 void PrettyPrinterImpl::visitSubscriptExpr(SubscriptExpr* expr)
 {
-   WriteList(expr->getIndices(), &PrettyPrinterImpl::visitExpr, "[", ", ",
-             "]");
+   WriteList(expr->getIndices(), &PrettyPrinterImpl::visitExpr, "[", ", ", "]");
 }
 
-void PrettyPrinterImpl::visitTemplateArgListExpr(TemplateArgListExpr *expr)
+void PrettyPrinterImpl::visitTemplateArgListExpr(TemplateArgListExpr* expr)
 {
-   WriteList(expr->getExprs(), &PrettyPrinterImpl::visitExpr, "<", ", ",
-             ">");
+   WriteList(expr->getExprs(), &PrettyPrinterImpl::visitExpr, "<", ", ", ">");
 }
 
-void PrettyPrinterImpl::visitBuiltinExpr(
-   BuiltinExpr* expr)
-{
-
-}
+void PrettyPrinterImpl::visitBuiltinExpr(BuiltinExpr* expr) {}
 
 void PrettyPrinterImpl::visitExpressionPattern(ExpressionPattern* expr)
 {
@@ -747,14 +610,14 @@ void PrettyPrinterImpl::visitBinaryOperator(BinaryOperator* expr)
    visitExpr(expr->getRhs());
 }
 
-void PrettyPrinterImpl::visitAssignExpr(AssignExpr *expr)
+void PrettyPrinterImpl::visitAssignExpr(AssignExpr* expr)
 {
    visitExpr(expr->getLhs());
    out << " = ";
    visitExpr(expr->getRhs());
 }
 
-void PrettyPrinterImpl::visitTypePredicateExpr(TypePredicateExpr *expr)
+void PrettyPrinterImpl::visitTypePredicateExpr(TypePredicateExpr* expr)
 {
    visitExpr(expr->getLHS());
    out << " is ";
@@ -764,8 +627,9 @@ void PrettyPrinterImpl::visitTypePredicateExpr(TypePredicateExpr *expr)
 void PrettyPrinterImpl::visitExprSequence(ExprSequence* expr)
 {
    size_t i = 0;
-   for (auto &frag : expr->getFragments()) {
-      if (i++ != 0) out << " ";
+   for (auto& frag : expr->getFragments()) {
+      if (i++ != 0)
+         out << " ";
       if (frag.isExpression()) {
          visitExpr(frag.getExpr());
       }
@@ -778,22 +642,28 @@ void PrettyPrinterImpl::visitExprSequence(ExprSequence* expr)
    }
 }
 
-void PrettyPrinterImpl::visitCastExpr(CastExpr *expr)
+void PrettyPrinterImpl::visitCastExpr(CastExpr* expr)
 {
    visit(expr->getTarget());
 
    switch (expr->getStrength()) {
-      case CastStrength::Normal: out << "as"; break;
-      case CastStrength::Force: out << "as!"; break;
-      case CastStrength::Fallible: out << "as?"; break;
-      default:
-         llvm_unreachable("not an explicit cast!");
+   case CastStrength::Normal:
+      out << "as";
+      break;
+   case CastStrength::Force:
+      out << "as!";
+      break;
+   case CastStrength::Fallible:
+      out << "as?";
+      break;
+   default:
+      llvm_unreachable("not an explicit cast!");
    }
 
    visit(expr->getTargetType());
 }
 
-void PrettyPrinterImpl::visitAddrOfExpr(AddrOfExpr *expr)
+void PrettyPrinterImpl::visitAddrOfExpr(AddrOfExpr* expr)
 {
    out << "&";
    visitExpr(expr->getTarget());
@@ -804,7 +674,7 @@ void PrettyPrinterImpl::visitImplicitCastExpr(ImplicitCastExpr* expr)
    visitExpr(expr->getTarget());
 }
 
-void PrettyPrinterImpl::visitIfExpr(IfExpr *expr)
+void PrettyPrinterImpl::visitIfExpr(IfExpr* expr)
 {
    out << "if ";
    visit(expr->getCond().ExprData.Expr);
@@ -814,10 +684,7 @@ void PrettyPrinterImpl::visitIfExpr(IfExpr *expr)
    visit(expr->getFalseVal());
 }
 
-void PrettyPrinterImpl::visitDeclStmt(DeclStmt *stmt)
-{
-
-}
+void PrettyPrinterImpl::visitDeclStmt(DeclStmt* stmt) {}
 
 void PrettyPrinterImpl::visitStaticExpr(StaticExpr* expr)
 {
@@ -830,34 +697,34 @@ void PrettyPrinterImpl::visitStaticExpr(StaticExpr* expr)
 void PrettyPrinterImpl::visitConstraintExpr(ConstraintExpr* expr)
 {
    switch (expr->getKind()) {
-      case ConstraintExpr::Struct:
-         out << "struct";
-         break;
-      case ConstraintExpr::Class:
-         out << "class";
-         break;
-      case ConstraintExpr::Enum:
-         out << "enum";
-         break;
-      case ConstraintExpr::Union:
-         out << "union";
-         break;
-      case ConstraintExpr::Function:
-         out << "def";
-         break;
-      case ConstraintExpr::DefaultConstructible:
-         out << "default";
-         break;
-      case ConstraintExpr::Pointer:
-         out << "*";
-         break;
-      case ConstraintExpr::Reference:
-         out << "ref";
-         break;
-      case ConstraintExpr::Type: {
-         out << expr->getTypeConstraint().getResolvedType();
-         break;
-      }
+   case ConstraintExpr::Struct:
+      out << "struct";
+      break;
+   case ConstraintExpr::Class:
+      out << "class";
+      break;
+   case ConstraintExpr::Enum:
+      out << "enum";
+      break;
+   case ConstraintExpr::Union:
+      out << "union";
+      break;
+   case ConstraintExpr::Function:
+      out << "def";
+      break;
+   case ConstraintExpr::DefaultConstructible:
+      out << "default";
+      break;
+   case ConstraintExpr::Pointer:
+      out << "*";
+      break;
+   case ConstraintExpr::Reference:
+      out << "ref";
+      break;
+   case ConstraintExpr::Type: {
+      out << expr->getTypeConstraint().getResolvedType();
+      break;
+   }
    }
 }
 
@@ -865,122 +732,103 @@ void PrettyPrinterImpl::visitTraitsExpr(TraitsExpr* expr)
 {
    using Kind = TraitsExpr::Kind;
    switch (expr->getKind()) {
-      case Kind::Invalid:
-         out << "<invalid>";
-         break;
-      case Kind::Compiles:
-         out << "compiles";
-         break;
-      case Kind::CompileErrors:
-         out << "compile_errors";
-         break;
-      case Kind::HasMember:
-         out << "has_member";
-         break;
-      case Kind::HasProperty:
-         out << "has_property";
-         break;
-      case Kind::HasStaticMember:
-         out << "has_static_member";
-         break;
-      case Kind::HasStaticProperty:
-         out << "has_static_property";
-         break;
-      case Kind::HasMethod:
-         out << "has_method";
-         break;
-      case Kind::HasStaticMethod:
-         out << "has_static_method";
-         break;
-      case Kind::ValidIdentifier:
-         out << "valid_identifier";
-         break;
-      case Kind::ValidFunction:
-         out << "valid_function";
-         break;
-      case Kind::IsInteger:
-         out << "is_integer";
-         break;
-      case Kind::IsFloat:
-         out << "is_fp";
-         break;
-      case Kind::IntegerBitwidth:
-         out << "integer_bitwidth";
-         break;
-      case Kind::IsUnsigned:
-         out << "is_unsigned";
-         break;
-      case Kind::FPPrecision:
-         out << "fp_precision";
-         break;
-      case Kind::Arity:
-         out << "arity";
-         break;
+   case Kind::Invalid:
+      out << "<invalid>";
+      break;
+   case Kind::Compiles:
+      out << "compiles";
+      break;
+   case Kind::CompileErrors:
+      out << "compile_errors";
+      break;
+   case Kind::HasMember:
+      out << "has_member";
+      break;
+   case Kind::HasProperty:
+      out << "has_property";
+      break;
+   case Kind::HasStaticMember:
+      out << "has_static_member";
+      break;
+   case Kind::HasStaticProperty:
+      out << "has_static_property";
+      break;
+   case Kind::HasMethod:
+      out << "has_method";
+      break;
+   case Kind::HasStaticMethod:
+      out << "has_static_method";
+      break;
+   case Kind::ValidIdentifier:
+      out << "valid_identifier";
+      break;
+   case Kind::ValidFunction:
+      out << "valid_function";
+      break;
+   case Kind::IsInteger:
+      out << "is_integer";
+      break;
+   case Kind::IsFloat:
+      out << "is_fp";
+      break;
+   case Kind::IntegerBitwidth:
+      out << "integer_bitwidth";
+      break;
+   case Kind::IsUnsigned:
+      out << "is_unsigned";
+      break;
+   case Kind::FPPrecision:
+      out << "fp_precision";
+      break;
+   case Kind::Arity:
+      out << "arity";
+      break;
    }
 }
 
-void PrettyPrinterImpl::visitMacroDecl(MacroDecl *decl)
-{
-   
-}
+void PrettyPrinterImpl::visitMacroDecl(MacroDecl* decl) {}
 
-void PrettyPrinterImpl::visitMacroExpansionDecl(MacroExpansionDecl *decl)
-{
-   
-}
+void PrettyPrinterImpl::visitMacroExpansionDecl(MacroExpansionDecl* decl) {}
 
-void PrettyPrinterImpl::visitMacroExpansionStmt(MacroExpansionStmt *decl)
-{
+void PrettyPrinterImpl::visitMacroExpansionStmt(MacroExpansionStmt* decl) {}
 
-}
+void PrettyPrinterImpl::visitMacroExpansionExpr(MacroExpansionExpr* decl) {}
 
-void PrettyPrinterImpl::visitMacroExpansionExpr(MacroExpansionExpr *decl)
-{
+void PrettyPrinterImpl::visitMacroVariableExpr(MacroVariableExpr* decl) {}
 
-}
-
-void PrettyPrinterImpl::visitMacroVariableExpr(MacroVariableExpr *decl)
-{
-
-}
-
-void PrettyPrinterImpl::visitMixinExpr(ast::MixinExpr *expr)
+void PrettyPrinterImpl::visitMixinExpr(ast::MixinExpr* expr)
 {
    out << "mixin(";
    visitExpr(expr->getMixinExpr());
    out << ")";
 }
 
-void PrettyPrinterImpl::visitVariadicExpansionExpr(VariadicExpansionExpr *expr)
+void PrettyPrinterImpl::visitVariadicExpansionExpr(VariadicExpansionExpr* expr)
 {
    visitExpr(expr);
    out << "...";
 }
 
-void PrettyPrinterImpl::visitMixinStmt(ast::MixinStmt *expr)
+void PrettyPrinterImpl::visitMixinStmt(ast::MixinStmt* expr)
 {
    out << "mixin(";
    visitExpr(expr->getMixinExpr());
    out << ")";
 }
 
-void PrettyPrinterImpl::visitMixinDecl(ast::MixinDecl *expr)
+void PrettyPrinterImpl::visitMixinDecl(ast::MixinDecl* expr)
 {
    out << "mixin(";
    visitExpr(expr->getMixinExpr());
    out << ")";
 }
 
-PrettyPrinter::PrettyPrinter(llvm::raw_ostream &out, Options opts)
-   : pImpl(new PrettyPrinterImpl(out, opts))
+PrettyPrinter::PrettyPrinter(llvm::raw_ostream& out, Options opts)
+    : pImpl(new PrettyPrinterImpl(out, opts))
 {
-
 }
 
-PrettyPrinter::~PrettyPrinter()
-{
-   delete pImpl;
-}
+PrettyPrinter::~PrettyPrinter() { delete pImpl; }
 
 void PrettyPrinter::print(const Expression* expr)
 {

@@ -4,12 +4,12 @@
 //
 //#include "Attribute.h"
 //
-//using std::string;
-//using std::unordered_map;
+// using std::string;
+// using std::unordered_map;
 //
-//namespace cdot {
+// namespace cdot {
 //
-//unordered_map<string, Attr> AttributeMap = {
+// unordered_map<string, Attr> AttributeMap = {
 //   { "inline", Attr::Inline },
 //   { "carray", Attr::CArray },
 //   { "cstring", Attr::CString },
@@ -26,7 +26,7 @@
 //   { "_align", Attr::_align }
 //};
 //
-//string isValidAttribute(Attribute attr) {
+// string isValidAttribute(Attribute attr) {
 //   switch (attr.kind) {
 //      case Attr::None:
 //         return "Unknown attribute " + attr.name;
@@ -78,17 +78,17 @@
 //   return "";
 //}
 //
-//const std::vector<Attribute>& AttributeOwner::getAttributes() const
+// const std::vector<Attribute>& AttributeOwner::getAttributes() const
 //{
 //   return attributes;
 //}
 //
-//void AttributeOwner::setAttributes(std::vector<Attribute> &&attrs)
+// void AttributeOwner::setAttributes(std::vector<Attribute> &&attrs)
 //{
 //   attributes = attrs;
 //}
 //
-//bool AttributeOwner::hasAttribute(Attr kind)
+// bool AttributeOwner::hasAttribute(Attr kind)
 //{
 //   for (const auto &attr : attributes) {
 //      if (attr.kind == kind) {
@@ -99,7 +99,7 @@
 //   return false;
 //}
 //
-//Attribute& AttributeOwner::getAttribute(Attr kind)
+// Attribute& AttributeOwner::getAttribute(Attr kind)
 //{
 //   for (auto &attr : attributes) {
 //      if (attr.kind == kind) {

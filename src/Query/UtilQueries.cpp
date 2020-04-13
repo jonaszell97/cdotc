@@ -1,7 +1,7 @@
-#include "Query.h"
+#include "cdotc/Query/Query.h"
 
-#include "Basic/FileUtils.h"
-#include "QueryContext.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Query/QueryContext.h"
 
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>

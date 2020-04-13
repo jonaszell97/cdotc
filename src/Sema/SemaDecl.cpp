@@ -1,26 +1,26 @@
-#include "Driver/Compiler.h"
+#include "cdotc/Driver/Compiler.h"
 
-#include "AST/Decl.h"
-#include "AST/TypeBuilder.h"
-#include "AST/TypeVisitor.h"
-#include "Basic/FileManager.h"
-#include "IL/Constants.h"
-#include "ILGen/ILGenPass.h"
-#include "Lex/Lexer.h"
-#include "Message/Diagnostics.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "NameBinding.h"
-#include "Parse/Parser.h"
-#include "Query/QueryContext.h"
-#include "Sema/Builtin.h"
-#include "SemaPass.h"
-#include "Serialization/ModuleFile.h"
-#include "Support/Casting.h"
-#include "Support/SaveAndRestore.h"
-#include "Support/StringSwitch.h"
-#include "TemplateInstantiator.h"
-#include "Template.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/TypeBuilder.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Lex/Lexer.h"
+#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Parse/Parser.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/Builtin.h"
+#include "cdotc/Sema/NameBinding.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/Template.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
+#include "cdotc/Serialization/ModuleFile.h"
+#include "cdotc/Support/Casting.h"
+#include "cdotc/Support/SaveAndRestore.h"
+#include "cdotc/Support/StringSwitch.h"
 
 #include <cassert>
 #include <cstdlib>
@@ -42,44 +42,40 @@ namespace ast {
 
 namespace {
 
-class DeclPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
-   Decl *D;
+class DeclPrettyStackTraceEntry : public llvm::PrettyStackTraceEntry {
+   Decl* D;
 
 public:
-   DeclPrettyStackTraceEntry(Decl *D)
-      : D(D)
-   {}
+   DeclPrettyStackTraceEntry(Decl* D) : D(D) {}
 
-   void print(llvm::raw_ostream &OS) const override
+   void print(llvm::raw_ostream& OS) const override
    {
-      if (auto *ND = dyn_cast<NamedDecl>(D))
+      if (auto* ND = dyn_cast<NamedDecl>(D))
          OS << "while declaring " << ND->getDeclName() << "\n";
    }
 };
 
 } // anonymous namespace
 
-Type *SemaPass::getBuiltinType(DeclarationName typeName)
+Type* SemaPass::getBuiltinType(DeclarationName typeName)
 {
    if (!typeName.isSimpleIdentifier())
       return nullptr;
 
-   return StringSwitch<Type*>(typeName.getIdentifierInfo()
-                                            ->getIdentifier())
-#     define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
-      .Case(#Name, Context.get##Name##Ty())
-#     define CDOT_BUILTIN_FP(Name, Precision)               \
-      .Case(#Name, Context.get##Name##Ty())
-#     include "Basic/BuiltinTypes.def"
-      .Case("isize", Context.getIntTy())
-      .Case("usize", Context.getUIntTy())
-      .Default(nullptr);
+   return StringSwitch<Type*>(typeName.getIdentifierInfo()->getIdentifier())
+#define CDOT_BUILTIN_INT(Name, BW, Unsigned)                                   \
+   .Case(#Name, Context.get##Name##Ty())
+#define CDOT_BUILTIN_FP(Name, Precision) .Case(#Name, Context.get##Name##Ty())
+#include "cdotc/Basic/BuiltinTypes.def"
+       .Case("isize", Context.getIntTy())
+       .Case("usize", Context.getUIntTy())
+       .Default(nullptr);
 }
 
-void SemaPass::makeExtensionVisible(ExtensionDecl *Ext)
+void SemaPass::makeExtensionVisible(ExtensionDecl* Ext)
 {
    // The visibility of extensions depends on their access specifier.
-   DeclContext *VisibleCtx;
+   DeclContext* VisibleCtx;
    switch (Ext->getAccess()) {
    case AccessSpecifier::Public:
       VisibleCtx = getCompilationUnit().getCompilationModule()->getDecl();
@@ -88,8 +84,8 @@ void SemaPass::makeExtensionVisible(ExtensionDecl *Ext)
       VisibleCtx = Ext->getExtendedRecord();
       break;
    case AccessSpecifier::Internal: {
-      auto *ExtMod = Ext->getModule()->getModule()->getBaseModule();
-      auto *ThisMod = getCompilationUnit().getCompilationModule();
+      auto* ExtMod = Ext->getModule()->getModule()->getBaseModule();
+      auto* ThisMod = getCompilationUnit().getCompilationModule();
 
       if (ExtMod == ThisMod) {
          VisibleCtx = ThisMod->getDecl();
@@ -110,13 +106,12 @@ void SemaPass::makeExtensionVisible(ExtensionDecl *Ext)
    makeDeclAvailable(*VisibleCtx, Ext);
 }
 
-static bool checkProtocolDefaultDecl(SemaPass &SP,
-                                     ProtocolDecl *P,
-                                     ExtensionDecl *Ext,
-                                     NamedDecl *ND,
-                                     ArrayRef<ProtocolDecl*> newConformances,
-                                     SmallPtrSetImpl<ProtocolDecl*> &checkedConformances) {
-   NamedDecl *Req = nullptr;
+static bool
+checkProtocolDefaultDecl(SemaPass& SP, ProtocolDecl* P, ExtensionDecl* Ext,
+                         NamedDecl* ND, ArrayRef<ProtocolDecl*> newConformances,
+                         SmallPtrSetImpl<ProtocolDecl*>& checkedConformances)
+{
+   NamedDecl* Req = nullptr;
    QualType SelfTy = SP.Context.getRecordType(P);
 
    bool encounteredError = false;
@@ -127,13 +122,12 @@ static bool checkProtocolDefaultDecl(SemaPass &SP,
    if (!Result && Req != nullptr) {
       ND->setIsProtocolDefaultImpl(true);
       SP.Context.addProtocolDefaultImpl(
-         cast<ProtocolDecl>(Req->getDeclContext()),
-         Req, ND);
+          cast<ProtocolDecl>(Req->getDeclContext()), Req, ND);
    }
 
-   auto *constraints = SP.Context.getExtConstraints(Ext);
+   auto* constraints = SP.Context.getExtConstraints(Ext);
    auto Conformances = SP.Context.getConformanceTable().getAllConformances(P);
-   for (auto &Conf : Conformances) {
+   for (auto& Conf : Conformances) {
       if (Conf->getKind() == ConformanceKind::Conditional) {
          if (!SP.QC.IsSupersetOf(Conf->getConstraints(), constraints)) {
             continue;
@@ -144,20 +138,20 @@ static bool checkProtocolDefaultDecl(SemaPass &SP,
          continue;
       }
 
-      Result = SP.QC.FindEquivalentDecl(Req, ND, Conf->getProto(), SelfTy, false);
+      Result
+          = SP.QC.FindEquivalentDecl(Req, ND, Conf->getProto(), SelfTy, false);
       encounteredError |= Result.isErr();
 
       if (!Result && Req != nullptr) {
          ND->setIsProtocolDefaultImpl(true);
          SP.Context.addProtocolDefaultImpl(
-            cast<ProtocolDecl>(Req->getDeclContext()),
-            Req, ND);
+             cast<ProtocolDecl>(Req->getDeclContext()), Req, ND);
       }
    }
 
    // The declaration can also belong to a conditional conformance, as long as
    // it was introduced in the same extension.
-   for (auto *newConf : newConformances) {
+   for (auto* newConf : newConformances) {
       if (!checkedConformances.insert(newConf).second) {
          continue;
       }
@@ -168,14 +162,13 @@ static bool checkProtocolDefaultDecl(SemaPass &SP,
       if (!Result && Req != nullptr) {
          ND->setIsProtocolDefaultImpl(true);
          SP.Context.addProtocolDefaultImpl(
-            cast<ProtocolDecl>(Req->getDeclContext()),
-            Req, ND);
+             cast<ProtocolDecl>(Req->getDeclContext()), Req, ND);
       }
    }
 
    // Check if the 'Self' type has additional constraints imposed on it.
    QualType Self = SP.Context.getAssociatedType(
-      SP.QC.LookupSingleAs<AssociatedTypeDecl>(P, SP.getIdentifier("Self")));
+       SP.QC.LookupSingleAs<AssociatedTypeDecl>(P, SP.getIdentifier("Self")));
 
    QualType Constrained = Self;
    if (SP.QC.ApplyCapabilites(Constrained, Constrained, &SP.getDeclContext())) {
@@ -183,29 +176,27 @@ static bool checkProtocolDefaultDecl(SemaPass &SP,
    }
 
    if (Self != Constrained) {
-      if (auto *Ext = Constrained->asExistentialType()) {
+      if (auto* Ext = Constrained->asExistentialType()) {
          for (auto Proto : Ext->getExistentials()) {
-            auto *R = Proto->getRecord();
+            auto* R = Proto->getRecord();
             if (R == P) {
                continue;
             }
 
             if (!SP.QC.FindEquivalentDecl(Req, ND, R, SelfTy, false)
-                  && Req != nullptr) {
+                && Req != nullptr) {
                ND->setIsProtocolDefaultImpl(true);
                SP.Context.addProtocolDefaultImpl(
-                  cast<ProtocolDecl>(Req->getDeclContext()),
-                  Req, ND);
+                   cast<ProtocolDecl>(Req->getDeclContext()), Req, ND);
             }
          }
       }
-      else if (auto *R = Constrained->asRecordType()) {
+      else if (auto* R = Constrained->asRecordType()) {
          if (!SP.QC.FindEquivalentDecl(Req, ND, R->getRecord(), SelfTy, false)
-               && Req != nullptr) {
+             && Req != nullptr) {
             ND->setIsProtocolDefaultImpl(true);
             SP.Context.addProtocolDefaultImpl(
-               cast<ProtocolDecl>(Req->getDeclContext()),
-               Req, ND);
+                cast<ProtocolDecl>(Req->getDeclContext()), Req, ND);
          }
       }
    }
@@ -217,7 +208,7 @@ static bool checkProtocolDefaultDecl(SemaPass &SP,
    return !ND->isProtocolDefaultImpl();
 }
 
-void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
+void SemaPass::checkProtocolExtension(ExtensionDecl* Ext, ProtocolDecl* P)
 {
    if (P->isInvalid()) {
       return;
@@ -234,7 +225,7 @@ void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
       return;
    }
 
-   for (auto *Proto : newConformances) {
+   for (auto* Proto : newConformances) {
       checkAccessibility(Proto, Ext);
    }
 
@@ -242,8 +233,8 @@ void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
 
    // Check that every decl overrides a protocol requirement.
    SmallPtrSet<ProtocolDecl*, 2> checkedConformances;
-   for (auto *D : Ext->getDecls()) {
-      auto *ND = dyn_cast<NamedDecl>(D);
+   for (auto* D : Ext->getDecls()) {
+      auto* ND = dyn_cast<NamedDecl>(D);
       if (!ND) {
          diagnose(err_generic_error, "cannot appear in protocol extension",
                   D->getSourceLoc());
@@ -253,8 +244,7 @@ void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
 
       if (isa<FieldDecl>(D)) {
          diagnose(D, err_generic_error,
-                  "'var / let' is not allowed in protocols",
-                  D->getSourceLoc());
+                  "'var / let' is not allowed in protocols", D->getSourceLoc());
 
          continue;
       }
@@ -277,14 +267,15 @@ void SemaPass::checkProtocolExtension(ExtensionDecl *Ext, ProtocolDecl *P)
 }
 
 LLVM_ATTRIBUTE_UNUSED
-static void diagnoseCircularDependency(SemaPass &SP,
-                                       DependencyGraph<NamedDecl*> &Dep) {
+static void diagnoseCircularDependency(SemaPass& SP,
+                                       DependencyGraph<NamedDecl*>& Dep)
+{
    auto pair = Dep.getOffendingPair();
 
    // this pair should contain one RecordDecl and either a FieldDecl or an
    // EnumCaseDecl
-   RecordDecl *R = nullptr;
-   NamedDecl *FieldOrCase = nullptr;
+   RecordDecl* R = nullptr;
+   NamedDecl* FieldOrCase = nullptr;
 
    if (isa<RecordDecl>(pair.first)) {
       R = cast<RecordDecl>(pair.first);
@@ -315,8 +306,9 @@ static void diagnoseCircularDependency(SemaPass &SP,
 }
 
 LLVM_ATTRIBUTE_UNUSED
-static void diagnoseCircularConformance(SemaPass &SP,
-                                        DependencyGraph<ProtocolDecl*> &Dep) {
+static void diagnoseCircularConformance(SemaPass& SP,
+                                        DependencyGraph<ProtocolDecl*>& Dep)
+{
    auto Pair = Dep.getOffendingPair();
    SP.diagnose(Pair.first, err_circular_conformance, Pair.first->getSourceLoc(),
                Pair.first->getDeclName(), Pair.second->getDeclName());
@@ -345,7 +337,7 @@ RecordDecl* SemaPass::getCurrentRecordCtx()
 ExtensionDecl* SemaPass::getCurrentExtensionCtx()
 {
    for (auto ctx = DeclCtx; ctx; ctx = ctx->getParentCtx()) {
-      if (auto *Ext = dyn_cast<ExtensionDecl>(ctx)) {
+      if (auto* Ext = dyn_cast<ExtensionDecl>(ctx)) {
          return Ext;
       }
    }
@@ -401,8 +393,8 @@ void SemaPass::noteInstantiationContext()
              && !getInstantiationScope(D)->isInstantiation()) {
             auto Record = M->getRecord();
             diagnose(note_instantiation_of, Record->getInstantiatedFrom(),
-                     Record,
-                     Record->getSpecializedTemplate()->getDeclName(), true,
+                     Record, Record->getSpecializedTemplate()->getDeclName(),
+                     true,
                      Record->getTemplateArgs().toString('\0', '\0', true));
          }
       }
@@ -411,22 +403,21 @@ void SemaPass::noteInstantiationContext()
    }
 
    if (PrintElidedMessage) {
-      diagnose(note_generic_note,
-               "additional instantiation scopes elided");
+      diagnose(note_generic_note, "additional instantiation scopes elided");
 
       return;
    }
 }
 
-const SemaPass::CoroutineInfo &SemaPass::getCoroutineInfo(CallableDecl *C)
+const SemaPass::CoroutineInfo& SemaPass::getCoroutineInfo(CallableDecl* C)
 {
    assert(C->isAsync() && "not a coroutine!");
    return getCoroutineInfo(C->getReturnType());
 }
 
-static void ActOnCallableDecl(SemaPass &SP, CallableDecl *CD)
+static void ActOnCallableDecl(SemaPass& SP, CallableDecl* CD)
 {
-   for (auto *Arg : CD->getArgs()) {
+   for (auto* Arg : CD->getArgs()) {
       if (Arg->getLexicalContext()) {
          SP.makeDeclAvailable(*CD, Arg);
       }
@@ -438,12 +429,12 @@ static void ActOnCallableDecl(SemaPass &SP, CallableDecl *CD)
    SP.checkDefaultAccessibility(CD);
 }
 
-void SemaPass::ActOnDecl(DeclContext *DC, Decl *D)
+void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
 {
    assert(!D->isImportedFromModule() && "don't call this on imported decls!");
 
    D->setLexicalContext(DC);
-   if (auto *DeclCtx = dyn_cast<DeclContext>(D)) {
+   if (auto* DeclCtx = dyn_cast<DeclContext>(D)) {
       DeclCtx->setParentCtx(DC);
    }
 
@@ -530,7 +521,7 @@ void SemaPass::ActOnDecl(DeclContext *DC, Decl *D)
    }
 }
 
-void SemaPass::ActOnRecordDecl(DeclContext *DC, RecordDecl *R)
+void SemaPass::ActOnRecordDecl(DeclContext* DC, RecordDecl* R)
 {
    switch (R->getKind()) {
    case Decl::StructDeclID:
@@ -560,20 +551,17 @@ void SemaPass::ActOnRecordDecl(DeclContext *DC, RecordDecl *R)
 
    checkDefaultAccessibility(R);
 
-   for (auto &P : R->getTemplateParams()) {
+   for (auto& P : R->getTemplateParams()) {
       ActOnTemplateParamDecl(R, P);
    }
 }
 
-void SemaPass::ActOnStructDecl(DeclContext *DC, StructDecl *S)
-{
+void SemaPass::ActOnStructDecl(DeclContext* DC, StructDecl* S) {}
 
-}
-
-void SemaPass::ActOnProtoDecl(DeclContext *DC, ProtocolDecl *P)
+void SemaPass::ActOnProtoDecl(DeclContext* DC, ProtocolDecl* P)
 {
    if (P->getDeclName().isStr("Any")) {
-      Module *M;
+      Module* M;
       if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Policy)) {
          return;
       }
@@ -582,17 +570,11 @@ void SemaPass::ActOnProtoDecl(DeclContext *DC, ProtocolDecl *P)
    }
 }
 
-void SemaPass::ActOnEnumDecl(DeclContext *DC, EnumDecl *E)
-{
+void SemaPass::ActOnEnumDecl(DeclContext* DC, EnumDecl* E) {}
 
-}
+void SemaPass::ActOnUnionDecl(DeclContext* DC, UnionDecl* U) {}
 
-void SemaPass::ActOnUnionDecl(DeclContext *DC, UnionDecl *U)
-{
-
-}
-
-void SemaPass::ActOnExtensionDecl(DeclContext *DC, ExtensionDecl *E)
+void SemaPass::ActOnExtensionDecl(DeclContext* DC, ExtensionDecl* E)
 {
    addDeclToContext(*DC, (Decl*)E);
    checkDefaultAccessibility(E);
@@ -600,7 +582,7 @@ void SemaPass::ActOnExtensionDecl(DeclContext *DC, ExtensionDecl *E)
    Context.UnresolvedExtensions.insert(E);
 }
 
-void SemaPass::ActOnOperatorDecl(DeclContext *DC, OperatorDecl *Op)
+void SemaPass::ActOnOperatorDecl(DeclContext* DC, OperatorDecl* Op)
 {
    if (Op->isExternal()) {
       auto OpName = Op->getDeclName().getDeclaredOperatorName();
@@ -625,7 +607,8 @@ void SemaPass::ActOnOperatorDecl(DeclContext *DC, OperatorDecl *Op)
    }
 }
 
-void SemaPass::ActOnPrecedenceGroupDecl(DeclContext *DC, PrecedenceGroupDecl* PG)
+void SemaPass::ActOnPrecedenceGroupDecl(DeclContext* DC,
+                                        PrecedenceGroupDecl* PG)
 {
    // Precedence groups are always visible at the top level.
    if (!PG->isExternal()) {
@@ -636,15 +619,15 @@ void SemaPass::ActOnPrecedenceGroupDecl(DeclContext *DC, PrecedenceGroupDecl* PG
    }
 }
 
-void SemaPass::ActOnTypedefDecl(DeclContext *DC, TypedefDecl *TD)
+void SemaPass::ActOnTypedefDecl(DeclContext* DC, TypedefDecl* TD)
 {
    addDeclToContext(*DC, TD);
    checkDefaultAccessibility(TD);
 }
 
-void SemaPass::ActOnAliasDecl(DeclContext *DC, AliasDecl *alias)
+void SemaPass::ActOnAliasDecl(DeclContext* DC, AliasDecl* alias)
 {
-   for (auto &P : alias->getTemplateParams()) {
+   for (auto& P : alias->getTemplateParams()) {
       ActOnTemplateParamDecl(alias, P);
    }
 
@@ -652,20 +635,20 @@ void SemaPass::ActOnAliasDecl(DeclContext *DC, AliasDecl *alias)
    checkDefaultAccessibility(alias);
 }
 
-void SemaPass::ActOnPropDecl(DeclContext *DC, PropDecl *P)
+void SemaPass::ActOnPropDecl(DeclContext* DC, PropDecl* P)
 {
    addDeclToContext(*DC, P);
    checkDefaultAccessibility(P);
 
-   if (auto *getter = P->getGetterMethod()) {
+   if (auto* getter = P->getGetterMethod()) {
       ActOnDecl(DC, getter);
    }
-   if (auto *setter = P->getSetterMethod()) {
+   if (auto* setter = P->getSetterMethod()) {
       ActOnDecl(DC, setter);
    }
 }
 
-void SemaPass::ActOnFieldDecl(DeclContext *DC, FieldDecl *F)
+void SemaPass::ActOnFieldDecl(DeclContext* DC, FieldDecl* F)
 {
    addDeclToContext(*DC, F);
    checkDefaultAccessibility(F);
@@ -673,17 +656,16 @@ void SemaPass::ActOnFieldDecl(DeclContext *DC, FieldDecl *F)
    // field accessor is not visible via normal lookup
    if (auto Acc = F->getAccessor()) {
       addDeclToContext(*DC, (Decl*)Acc);
-//      ActOnPropDecl(DC, Acc);
+      //      ActOnPropDecl(DC, Acc);
    }
 
    if (isa<ProtocolDecl>(DC)) {
-      diagnose(F, err_generic_error,
-               "'var / let' is not allowed in protocols",
+      diagnose(F, err_generic_error, "'var / let' is not allowed in protocols",
                F->getSourceLoc());
    }
 }
 
-void SemaPass::ActOnFunctionDecl(DeclContext *DC, FunctionDecl *F)
+void SemaPass::ActOnFunctionDecl(DeclContext* DC, FunctionDecl* F)
 {
    ActOnCallableDecl(*this, F);
 
@@ -694,8 +676,8 @@ void SemaPass::ActOnFunctionDecl(DeclContext *DC, FunctionDecl *F)
    }
 
    if (F->getDeclName().isSimpleIdentifier()
-      && F->getDeclName().getIdentifierInfo()->getIdentifier()
-          .startswith("llvm.")) {
+       && F->getDeclName().getIdentifierInfo()->getIdentifier().startswith(
+              "llvm.")) {
       diagnose(F, err_llvm_function_name_reserved, F->getSourceLoc());
    }
 
@@ -706,23 +688,23 @@ void SemaPass::ActOnFunctionDecl(DeclContext *DC, FunctionDecl *F)
       addDeclToContext(*DC, F);
    }
 
-   for (auto &P : F->getTemplateParams()) {
+   for (auto& P : F->getTemplateParams()) {
       ActOnTemplateParamDecl(F, P);
    }
 }
 
-void SemaPass::ActOnMethodDecl(DeclContext *DC, MethodDecl *M)
+void SemaPass::ActOnMethodDecl(DeclContext* DC, MethodDecl* M)
 {
    ActOnCallableDecl(*this, M);
 
-   for (auto &P : M->getTemplateParams()) {
+   for (auto& P : M->getTemplateParams()) {
       ActOnTemplateParamDecl(M, P);
    }
 
    addDeclToContext(*DC, M);
 }
 
-void SemaPass::ActOnInitDecl(DeclContext *DC, InitDecl *I)
+void SemaPass::ActOnInitDecl(DeclContext* DC, InitDecl* I)
 {
    ActOnMethodDecl(DC, I);
 
@@ -733,25 +715,25 @@ void SemaPass::ActOnInitDecl(DeclContext *DC, InitDecl *I)
    }
 }
 
-void SemaPass::ActOnDeinitDecl(DeclContext *DC, DeinitDecl *D)
+void SemaPass::ActOnDeinitDecl(DeclContext* DC, DeinitDecl* D)
 {
    ActOnMethodDecl(DC, D);
 }
 
-void SemaPass::ActOnSubscriptDecl(DeclContext *DC, SubscriptDecl *D)
+void SemaPass::ActOnSubscriptDecl(DeclContext* DC, SubscriptDecl* D)
 {
    addDeclToContext(*DC, D);
    checkDefaultAccessibility(D);
 
-   if (auto *Getter = D->getGetterMethod()) {
+   if (auto* Getter = D->getGetterMethod()) {
       ActOnDecl(DC, Getter);
    }
-   if (auto *Setter = D->getSetterMethod()) {
+   if (auto* Setter = D->getSetterMethod()) {
       ActOnDecl(DC, Setter);
    }
 }
 
-void SemaPass::ActOnTemplateParamDecl(DeclContext *DC, TemplateParamDecl *P)
+void SemaPass::ActOnTemplateParamDecl(DeclContext* DC, TemplateParamDecl* P)
 {
    if (P->getLexicalContext()) {
       makeDeclAvailable(*DC, P);
@@ -761,39 +743,40 @@ void SemaPass::ActOnTemplateParamDecl(DeclContext *DC, TemplateParamDecl *P)
    }
 }
 
-void SemaPass::ActOnMacroExpansionDecl(DeclContext *DC, MacroExpansionDecl *Decl)
+void SemaPass::ActOnMacroExpansionDecl(DeclContext* DC,
+                                       MacroExpansionDecl* Decl)
 {
    addDeclToContext(*DC, Decl);
 }
 
-void SemaPass::ActOnStaticIfDecl(DeclContext *DC, StaticIfDecl *D)
+void SemaPass::ActOnStaticIfDecl(DeclContext* DC, StaticIfDecl* D)
 {
    addDeclToContext(*DC, D);
 }
 
-void SemaPass::ActOnStaticForDecl(DeclContext *DC, StaticForDecl *D)
+void SemaPass::ActOnStaticForDecl(DeclContext* DC, StaticForDecl* D)
 {
    addDeclToContext(*DC, D);
 }
 
-void SemaPass::ActOnMixinDecl(DeclContext *DC, MixinDecl *D)
+void SemaPass::ActOnMixinDecl(DeclContext* DC, MixinDecl* D)
 {
    addDeclToContext(*DC, D);
 }
 
-void SemaPass::ActOnImportDecl(DeclContext *DC, ImportDecl *D)
+void SemaPass::ActOnImportDecl(DeclContext* DC, ImportDecl* D)
 {
    addDeclToContext(*DC, D);
    checkDefaultAccessibility(D);
 }
 
-void SemaPass::ActOnUsingDecl(DeclContext *DC, UsingDecl *D)
+void SemaPass::ActOnUsingDecl(DeclContext* DC, UsingDecl* D)
 {
    addDeclToContext(*DC, (Decl*)D);
    checkDefaultAccessibility(D);
 }
 
-void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
+void SemaPass::checkDefaultAccessibility(NamedDecl* ND)
 {
    auto AS = ND->getAccess();
    if (AS == AccessSpecifier::Protected) {
@@ -808,7 +791,7 @@ void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
    if (AS != AccessSpecifier::Default)
       return;
 
-   auto *Mod = ND->getModule()->getModule();
+   auto* Mod = ND->getModule()->getModule();
    if (Mod->getDefaultAccessSpec() != AccessSpecifier::Default) {
       ND->setAccess(Mod->getDefaultAccessSpec());
       return;
@@ -819,14 +802,14 @@ void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
       return;
    }
 
-   auto *Ctx = ND->getNonTransparentDeclContext();
+   auto* Ctx = ND->getNonTransparentDeclContext();
    if (isa<RecordDecl>(Ctx) || isa<ExtensionDecl>(Ctx)) {
       if (isa<ProtocolDecl>(Ctx)) {
          ND->setAccess(AccessSpecifier::Public);
          return;
       }
 
-      auto *CtxDecl = dyn_cast<NamedDecl>(Ctx);
+      auto* CtxDecl = dyn_cast<NamedDecl>(Ctx);
 
       AccessSpecifier MinVisibility;
       if (CtxDecl->getAccess() != AccessSpecifier::Default) {
@@ -868,18 +851,12 @@ void SemaPass::checkDefaultAccessibility(NamedDecl *ND)
    }
 }
 
-void SemaPass::pushDeclContext(DeclContext *Ctx)
-{
-   DeclCtx = Ctx;
-}
+void SemaPass::pushDeclContext(DeclContext* Ctx) { DeclCtx = Ctx; }
 
-void SemaPass::popDeclContext()
-{
-   DeclCtx = DeclCtx->getParentCtx();
-}
+void SemaPass::popDeclContext() { DeclCtx = DeclCtx->getParentCtx(); }
 
 LLVM_ATTRIBUTE_UNUSED
-static void checkMainSignature(SemaPass &SP, CallableDecl *F)
+static void checkMainSignature(SemaPass& SP, CallableDecl* F)
 {
    QualType RetTy = F->getReturnType();
    if (!RetTy->isVoidType() && RetTy != SP.getContext().getIntTy()) {
@@ -901,12 +878,14 @@ static void checkMainSignature(SemaPass &SP, CallableDecl *F)
             Valid &= Arg->getType() == SP.getContext().getIntTy();
             break;
          case 1:
-            Valid &= Arg->getType() == SP.getContext().getUInt8PtrTy()
-                                         ->getPointerTo(SP.getContext());
+            Valid &= Arg->getType()
+                     == SP.getContext().getUInt8PtrTy()->getPointerTo(
+                            SP.getContext());
             break;
          case 2:
-            Valid &= Arg->getType() == SP.getContext().getUInt8PtrTy()
-                                         ->getPointerTo(SP.getContext());
+            Valid &= Arg->getType()
+                     == SP.getContext().getUInt8PtrTy()->getPointerTo(
+                            SP.getContext());
             break;
          default:
             llvm_unreachable("bad argument #");
@@ -924,18 +903,18 @@ static void checkMainSignature(SemaPass &SP, CallableDecl *F)
 }
 
 LLVM_ATTRIBUTE_UNUSED
-static bool checkCompileTimeEvaluable(SemaPass &SP, DeclContext *Ctx)
+static bool checkCompileTimeEvaluable(SemaPass& SP, DeclContext* Ctx)
 {
-   auto *Std = SP.getStdModule()->getDecl();
+   auto* Std = SP.getStdModule()->getDecl();
    while (Ctx) {
       if (Ctx->getPrimaryCtx() == Std)
          return true;
 
-      if (auto *D = dyn_cast<Decl>(Ctx)) {
+      if (auto* D = dyn_cast<Decl>(Ctx)) {
          if (D->hasAttribute<CompileTimeAttr>()) {
             return true;
          }
-         if (auto *Ext = dyn_cast<ExtensionDecl>(Ctx)) {
+         if (auto* Ext = dyn_cast<ExtensionDecl>(Ctx)) {
             if (checkCompileTimeEvaluable(SP, Ext->getExtendedRecord())) {
                return true;
             }
@@ -954,33 +933,32 @@ void SemaPass::collectCoroutineInfo(QualType Ty, StmtOrDecl D)
    if (It != CoroutineInfoMap.end())
       return;
 
-   CoroutineInfo &Info = CoroutineInfoMap.try_emplace(Ty)
-                                         .first->getSecond();
+   CoroutineInfo& Info = CoroutineInfoMap.try_emplace(Ty).first->getSecond();
 
-   auto *Awaitable = Ty->getRecord();
+   auto* Awaitable = Ty->getRecord();
    QC.PrepareDeclInterface(Awaitable);
-   
+
    Info.AwaitableType = Ty;
    Info.AwaitedType = Awaitable->getAssociatedType(getIdentifier("AwaitedType"))
-                               ->getDefaultType();
+                          ->getDefaultType();
    Info.AwaiterType = Awaitable->getAssociatedType(getIdentifier("AwaiterType"))
-                               ->getDefaultType();
+                          ->getDefaultType();
 
    // Instantiate the coroutine handle type.
    {
-      auto *HandleDecl = getCoroutineHandleDecl();
+      auto* HandleDecl = getCoroutineHandleDecl();
       if (!HandleDecl) {
          diagnose(D, err_no_builtin_decl, 12, D.getSourceLoc());
          return;
       }
 
-      auto *InitFn = HandleDecl->getMemberwiseInitializer();
+      auto* InitFn = HandleDecl->getMemberwiseInitializer();
       Info.CoroHandleInit = InitFn;
       maybeInstantiateMemberFunction(InitFn, D);
    }
 
    // Instantiate the needed methods for the Awaitable and the Awaiter.
-   auto *InitFn = cast<StructDecl>(Awaitable)->getParameterlessConstructor();
+   auto* InitFn = cast<StructDecl>(Awaitable)->getParameterlessConstructor();
    Info.AwaitableInit = InitFn;
    maybeInstantiateMemberFunction(InitFn, D);
 
@@ -988,14 +966,14 @@ void SemaPass::collectCoroutineInfo(QualType Ty, StmtOrDecl D)
    Info.AwaitableResolve = InstantiateMethod(Awaitable, "resolve", D);
 
    assert(Info.AwaiterType->isRecordType() && "non-record conforms to Awaiter");
-   auto *Awaiter = Info.AwaiterType->getRecord();
+   auto* Awaiter = Info.AwaiterType->getRecord();
 
    Info.AwaitSuspend = InstantiateMethod(Awaiter, "awaitSuspend", D);
    Info.AwaitResume = InstantiateMethod(Awaiter, "awaitResume", D);
    Info.AwaitReady = InstantiateProperty(Awaiter, "ready", true, D);
 }
 
-bool SemaPass::equivalent(TemplateParamDecl *p1, TemplateParamDecl *p2)
+bool SemaPass::equivalent(TemplateParamDecl* p1, TemplateParamDecl* p2)
 {
    if (p1->isTypeName() != p2->isTypeName())
       return false;
@@ -1021,15 +999,15 @@ bool SemaPass::equivalent(TemplateParamDecl *p1, TemplateParamDecl *p2)
 }
 
 LLVM_ATTRIBUTE_UNUSED
-static
-bool templateParamsEffectivelyEqual(SemaPass &SP,
-                                    ArrayRef<TemplateParamDecl*> P1,
-                                    ArrayRef<TemplateParamDecl*> P2) {
+static bool templateParamsEffectivelyEqual(SemaPass& SP,
+                                           ArrayRef<TemplateParamDecl*> P1,
+                                           ArrayRef<TemplateParamDecl*> P2)
+{
    if (P1.size() != P2.size())
       return false;
 
    size_t i = 0;
-   for (auto &p1 : P1) {
+   for (auto& p1 : P1) {
       auto p2 = P2[i];
       if (!SP.equivalent(p1, p2))
          return false;
@@ -1042,31 +1020,32 @@ bool templateParamsEffectivelyEqual(SemaPass &SP,
 
 namespace {
 
-class SignatureCheckTypeBuilder: public TypeBuilder<SignatureCheckTypeBuilder> {
-   CallableDecl *CD;
+class SignatureCheckTypeBuilder
+    : public TypeBuilder<SignatureCheckTypeBuilder> {
+   CallableDecl* CD;
 
 public:
-   SignatureCheckTypeBuilder(SemaPass &SP, CallableDecl *CD)
-      : TypeBuilder(SP, CD->getSourceLoc()), CD(CD)
+   SignatureCheckTypeBuilder(SemaPass& SP, CallableDecl* CD)
+       : TypeBuilder(SP, CD->getSourceLoc()), CD(CD)
    {
-
    }
 
-   void visitTemplateParamType(TemplateParamType *T, SmallVectorImpl<QualType> &Types)
+   void visitTemplateParamType(TemplateParamType* T,
+                               SmallVectorImpl<QualType>& Types)
    {
       Types.push_back(visitTemplateParamType(T));
    }
 
-   QualType visitTemplateParamType(TemplateParamType *T)
+   QualType visitTemplateParamType(TemplateParamType* T)
    {
       // Template argument types do not need to be equal, just equivalent.
-      auto *Param = T->getParam();
+      auto* Param = T->getParam();
       auto Idx = Param->getIndex();
 
       if (CD->getTemplateParams().size() <= Idx)
          return T;
 
-      auto *OtherParam = CD->getTemplateParams()[Idx];
+      auto* OtherParam = CD->getTemplateParams()[Idx];
       if (SP.equivalent(Param, OtherParam))
          return SP.getContext().getTemplateArgType(OtherParam);
 
@@ -1077,10 +1056,9 @@ public:
 } // anonymous namespace
 
 LLVM_ATTRIBUTE_UNUSED
-static bool typesCompatible(SemaPass &SP,
-                            CallableDecl *CD,
-                            const SourceType &LHS,
-                            const SourceType &RHS) {
+static bool typesCompatible(SemaPass& SP, CallableDecl* CD,
+                            const SourceType& LHS, const SourceType& RHS)
+{
    // Template argument types do not need to be equal, just equivalent.
    QualType RHSType;
    if (LHS->isDependentType()) {
@@ -1092,10 +1070,10 @@ static bool typesCompatible(SemaPass &SP,
    }
 
    return LHS.getResolvedType().getCanonicalType()
-      == RHSType.getCanonicalType();
+          == RHSType.getCanonicalType();
 }
 
-int SemaPass::signaturesCompatible(CallableDecl *C1, CallableDecl *C2)
+int SemaPass::signaturesCompatible(CallableDecl* C1, CallableDecl* C2)
 {
    auto Args1 = C1->getArgs();
    auto Args2 = C2->getArgs();
@@ -1109,13 +1087,13 @@ int SemaPass::signaturesCompatible(CallableDecl *C1, CallableDecl *C2)
 
    unsigned i = 0;
    if ((C1->isNonStaticMethod() && C2->isNonStaticMethod())
-         || (C1->isBaseInitializer() && C2->isBaseInitializer())) {
+       || (C1->isBaseInitializer() && C2->isBaseInitializer())) {
       ++i;
    }
 
    for (; i < NumArgs; ++i) {
-      auto &Arg = Args1[i];
-      auto &Other = Args2[i];
+      auto& Arg = Args1[i];
+      auto& Other = Args2[i];
       if (!typesCompatible(*this, C1, Arg->getType(), Other->getType()))
          return 0; // incompatible signature
 
@@ -1138,16 +1116,17 @@ int SemaPass::signaturesCompatible(CallableDecl *C1, CallableDecl *C2)
    return -1; // valid
 }
 
-void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
-                                                 llvm::StringRef fnKind) {
+void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl* C,
+                                                 llvm::StringRef fnKind)
+{
    // Protocol default implementations are allowed to override previous
    // declarations.
    if (isa<ExtensionDecl>(C->getDeclContext())
-         && isa<ProtocolDecl>(C->getDeclContext()->lookThroughExtension())) {
+       && isa<ProtocolDecl>(C->getDeclContext()->lookThroughExtension())) {
       return;
    }
 
-   const MultiLevelLookupResult *Result;
+   const MultiLevelLookupResult* Result;
    LookupOpts Opts = DefaultLookupOpts & ~LookupOpts::PrepareNameLookup;
 
    if (QC.DirectLookup(Result, C->getDeclContext(), C->getDeclName(), true,
@@ -1155,7 +1134,7 @@ void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
       return;
    }
 
-   for (auto *Decl : Result->allDecls()) {
+   for (auto* Decl : Result->allDecls()) {
       auto Fn = dyn_cast<CallableDecl>(Decl);
       if (Fn == C || !Fn)
          continue;
@@ -1180,8 +1159,8 @@ void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
       size_t i = 0;
       bool duplicate = true;
 
-      for (auto &arg : FstArgs) {
-         auto &other = SndArgs[i++];
+      for (auto& arg : FstArgs) {
+         auto& other = SndArgs[i++];
          if (arg->getType() != other->getType()) {
             duplicate = false;
             break;
@@ -1205,15 +1184,16 @@ void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl *C,
 
 FuncArgDecl* SemaPass::MakeSelfArg(SourceLocation Loc)
 {
-   auto *SelfII = &Context.getIdentifiers().get("self");
+   auto* SelfII = &Context.getIdentifiers().get("self");
    return FuncArgDecl::Create(Context, Loc, Loc, DeclarationName(SelfII),
-                              nullptr,
-                              ArgumentConvention::Default, SourceType(),
-                              nullptr, false, false, /*isSelf=*/true);
+                              nullptr, ArgumentConvention::Default,
+                              SourceType(), nullptr, false, false,
+                              /*isSelf=*/true);
 }
 
-TypeResult SemaPass::visitSourceType(Decl *D, const SourceType &Ty,
-                                     bool WantMeta) {
+TypeResult SemaPass::visitSourceType(Decl* D, const SourceType& Ty,
+                                     bool WantMeta)
+{
    auto Result = visitSourceType(Ty, WantMeta);
    if (Ty.getTypeExpr()) {
       D->copyStatusFlags(Ty.getTypeExpr());
@@ -1225,8 +1205,9 @@ TypeResult SemaPass::visitSourceType(Decl *D, const SourceType &Ty,
    return Result;
 }
 
-TypeResult SemaPass::visitSourceType(Statement *S, const SourceType &Ty,
-                                     bool WantMeta) {
+TypeResult SemaPass::visitSourceType(Statement* S, const SourceType& Ty,
+                                     bool WantMeta)
+{
    auto Result = visitSourceType(Ty, WantMeta);
    if (Ty.getTypeExpr()) {
       S->copyStatusFlags(Ty.getTypeExpr());
@@ -1238,7 +1219,7 @@ TypeResult SemaPass::visitSourceType(Statement *S, const SourceType &Ty,
    return Result;
 }
 
-TypeResult SemaPass::visitSourceType(const SourceType &Ty, bool WantMeta)
+TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
 {
    if (!Ty.getTypeExpr() || Ty.isResolved()) {
       assert(Ty.getResolvedType() && "source ty with no expr or resolved type");
@@ -1265,7 +1246,7 @@ TypeResult SemaPass::visitSourceType(const SourceType &Ty, bool WantMeta)
    return Ty.getResolvedType();
 }
 
-ExprResult SemaPass::visitTypeExpr(TypeExpr *Expr)
+ExprResult SemaPass::visitTypeExpr(TypeExpr* Expr)
 {
    QualType ResTy = Expr->getExprType();
    if (!Expr->isMeta() && ResTy->isMetaType()) {
@@ -1275,10 +1256,10 @@ ExprResult SemaPass::visitTypeExpr(TypeExpr *Expr)
    return Expr;
 }
 
-ExprResult SemaPass::visitTupleTypeExpr(TupleTypeExpr *Expr)
+ExprResult SemaPass::visitTupleTypeExpr(TupleTypeExpr* Expr)
 {
    SmallVector<QualType, 8> Tys;
-   for (auto &Ty : Expr->getContainedTypes()) {
+   for (auto& Ty : Expr->getContainedTypes()) {
       auto Res = visitSourceType(Expr, Ty);
       if (!Res)
          continue;
@@ -1290,10 +1271,10 @@ ExprResult SemaPass::visitTupleTypeExpr(TupleTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr *Expr)
+ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr* Expr)
 {
    llvm::SmallVector<QualType, 4> ArgTys;
-   for (auto &Ty : Expr->getArgTypes()) {
+   for (auto& Ty : Expr->getArgTypes()) {
       auto Res = visitSourceType(Expr, Ty);
       if (Res) {
          ArgTys.push_back(Res.get());
@@ -1304,7 +1285,7 @@ ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr *Expr)
    }
 
    SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
-   for (auto &I : Expr->getParamInfo()) {
+   for (auto& I : Expr->getParamInfo()) {
       if (I.getConvention() == ArgumentConvention::Default) {
          ParamInfo.push_back(ArgumentConvention::Borrowed);
       }
@@ -1325,12 +1306,12 @@ ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-TypeResult SemaPass::resolveArrayTypeExpr(Statement *DependentExpr,
-                                          const SourceType &ElementType,
-                                          StaticExpr *SizeExpr) {
+TypeResult SemaPass::resolveArrayTypeExpr(Statement* DependentExpr,
+                                          const SourceType& ElementType,
+                                          StaticExpr* SizeExpr)
+{
    auto ElementTyResult = visitSourceType(DependentExpr, ElementType);
-   QualType ElementTy = ElementTyResult ? ElementTyResult.get()
-                                        : ErrorTy;
+   QualType ElementTy = ElementTyResult ? ElementTyResult.get() : ErrorTy;
 
    QualType ResultTy;
 
@@ -1344,8 +1325,8 @@ TypeResult SemaPass::resolveArrayTypeExpr(Statement *DependentExpr,
          return TypeError();
 
       if (SizeRes.get()->isDependent()) {
-         ResultTy = Context.getValueDependentSizedArrayType(ElementTy,
-                                                            SizeExpr);
+         ResultTy
+             = Context.getValueDependentSizedArrayType(ElementTy, SizeExpr);
       }
    }
 
@@ -1370,8 +1351,7 @@ TypeResult SemaPass::resolveArrayTypeExpr(Statement *DependentExpr,
          }
          else if (NumElementsVal.ugt(MaxArraySize)) {
             diagnose(DependentExpr, err_array_size_too_large,
-                     llvm::APInt(64, MaxArraySize, false),
-                     NumElementsVal);
+                     llvm::APInt(64, MaxArraySize, false), NumElementsVal);
 
             NumElements = MaxArraySize;
          }
@@ -1396,10 +1376,10 @@ TypeResult SemaPass::resolveArrayTypeExpr(Statement *DependentExpr,
    return ResultTy;
 }
 
-ExprResult SemaPass::visitArrayTypeExpr(ArrayTypeExpr *Expr)
+ExprResult SemaPass::visitArrayTypeExpr(ArrayTypeExpr* Expr)
 {
-   auto TypeRes = resolveArrayTypeExpr(Expr, Expr->getElementTy(),
-                                       Expr->getSizeExpr());
+   auto TypeRes
+       = resolveArrayTypeExpr(Expr, Expr->getElementTy(), Expr->getSizeExpr());
 
    if (!TypeRes)
       return ExprError();
@@ -1408,7 +1388,7 @@ ExprResult SemaPass::visitArrayTypeExpr(ArrayTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-ExprResult SemaPass::visitDeclTypeExpr(DeclTypeExpr *Expr)
+ExprResult SemaPass::visitDeclTypeExpr(DeclTypeExpr* Expr)
 {
    auto ExprRes = visitExpr(Expr, Expr->getTyExpr());
    QualType ResultTy;
@@ -1422,9 +1402,9 @@ ExprResult SemaPass::visitDeclTypeExpr(DeclTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-static bool inExternCXXSignature(SemaPass &SP)
+static bool inExternCXXSignature(SemaPass& SP)
 {
-   for (auto *Ctx = &SP.getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
+   for (auto* Ctx = &SP.getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
       auto C = dyn_cast<CallableDecl>(Ctx);
       if (C && C->isExternCXX()) {
          return true;
@@ -1434,7 +1414,7 @@ static bool inExternCXXSignature(SemaPass &SP)
    return false;
 }
 
-ExprResult SemaPass::visitPointerTypeExpr(PointerTypeExpr *Expr)
+ExprResult SemaPass::visitPointerTypeExpr(PointerTypeExpr* Expr)
 {
    auto TypeRes = visitSourceType(Expr, Expr->getSubType());
 
@@ -1456,7 +1436,7 @@ ExprResult SemaPass::visitPointerTypeExpr(PointerTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-ExprResult SemaPass::visitReferenceTypeExpr(ReferenceTypeExpr *Expr)
+ExprResult SemaPass::visitReferenceTypeExpr(ReferenceTypeExpr* Expr)
 {
    auto TypeRes = visitSourceType(Expr, Expr->getSubType());
 
@@ -1480,7 +1460,7 @@ ExprResult SemaPass::visitReferenceTypeExpr(ReferenceTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr *Expr)
+ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr* Expr)
 {
    auto TypeRes = visitSourceType(Expr, Expr->getSubType());
 
@@ -1491,9 +1471,8 @@ ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr *Expr)
    else {
       auto Opt = getOptionDecl();
       if (Opt) {
-         TemplateArgument Arg(Opt->getTemplateParams().front(),
-                                 TypeRes.get(), Expr->getSubType().getTypeExpr()
-                                                    ->getSourceLoc());
+         TemplateArgument Arg(Opt->getTemplateParams().front(), TypeRes.get(),
+                              Expr->getSubType().getTypeExpr()->getSourceLoc());
 
          auto TemplateArgs = FinalTemplateArgumentList::Create(Context, Arg);
 
@@ -1502,8 +1481,8 @@ ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr *Expr)
             ResultTy = Context.getDependentRecordType(Opt, TemplateArgs);
          }
          else {
-            auto Inst = InstantiateRecord(Expr->getSourceLoc(), Opt,
-                                          TemplateArgs);
+            auto Inst
+                = InstantiateRecord(Expr->getSourceLoc(), Opt, TemplateArgs);
 
             if (Inst)
                ResultTy = Context.getRecordType(Inst);
@@ -1521,16 +1500,16 @@ ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr *Expr)
    return visitTypeExpr(Expr);
 }
 
-ExprResult SemaPass::visitExistentialTypeExpr(ExistentialTypeExpr *Expr)
+ExprResult SemaPass::visitExistentialTypeExpr(ExistentialTypeExpr* Expr)
 {
    SmallVector<QualType, 8> Tys;
-   for (auto &Ty : Expr->getExistentials()) {
+   for (auto& Ty : Expr->getExistentials()) {
       auto Res = visitSourceType(Expr, Ty);
       if (!Res)
          continue;
 
       QualType T = Res.get();
-      if (auto *Ext = T->asExistentialType()) {
+      if (auto* Ext = T->asExistentialType()) {
          Tys.append(Ext->getExistentials().begin(),
                     Ext->getExistentials().end());
       }
@@ -1539,7 +1518,7 @@ ExprResult SemaPass::visitExistentialTypeExpr(ExistentialTypeExpr *Expr)
       }
       else {
          SourceRange Loc;
-         if (auto *E = Ty.getTypeExpr()) {
+         if (auto* E = Ty.getTypeExpr()) {
             Loc = E->getSourceRange();
          }
          else {
@@ -1563,16 +1542,16 @@ QualType SemaPass::getOptionOf(QualType Ty, StmtOrDecl DependentStmt)
    }
 
    DeclScopeRAII DSR(*this, Opt);
-   TemplateArgument Arg(Opt->getTemplateParams().front(),
-                           Ty, DependentStmt.getSourceLoc());
+   TemplateArgument Arg(Opt->getTemplateParams().front(), Ty,
+                        DependentStmt.getSourceLoc());
 
-   auto TemplateArgs = FinalTemplateArgumentList::Create(Context, { Arg });
+   auto TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
    if (Ty->isDependentType()) {
       return Context.getDependentRecordType(Opt, TemplateArgs);
    }
    else {
-      auto Inst = InstantiateRecord(DependentStmt.getSourceLoc(), Opt,
-                                    TemplateArgs);
+      auto Inst
+          = InstantiateRecord(DependentStmt.getSourceLoc(), Opt, TemplateArgs);
 
       if (Inst)
          return Context.getRecordType(Inst);
@@ -1581,7 +1560,7 @@ QualType SemaPass::getOptionOf(QualType Ty, StmtOrDecl DependentStmt)
    }
 }
 
-StmtResult SemaPass::declareDebugStmt(DebugStmt *Stmt)
+StmtResult SemaPass::declareDebugStmt(DebugStmt* Stmt)
 {
    if (!Stmt->isUnreachable()) {
       int i = 3;
@@ -1593,14 +1572,14 @@ StmtResult SemaPass::declareDebugStmt(DebugStmt *Stmt)
 
 namespace {
 
-class MixinPrettyStackTrace: public llvm::PrettyStackTraceEntry {
+class MixinPrettyStackTrace : public llvm::PrettyStackTraceEntry {
 public:
    MixinPrettyStackTrace(llvm::StringRef Str, bool isParse)
-      : MixinStr(Str), IsParse(isParse)
+       : MixinStr(Str), IsParse(isParse)
    {
    }
 
-   void print(llvm::raw_ostream &OS) const override
+   void print(llvm::raw_ostream& OS) const override
    {
       OS << "while " << (IsParse ? "parsing" : "evaluating")
          << " mixin string '" << MixinStr << "'\n";
@@ -1613,7 +1592,7 @@ private:
 
 } // anonymous namespace
 
-//DeclResult SemaPass::declareMixinDecl(MixinDecl *Decl)
+// DeclResult SemaPass::declareMixinDecl(MixinDecl *Decl)
 //{
 //   auto Res = evalStaticExpr(Decl, Decl->getMixinExpr());
 //   if (!Res)
@@ -1648,16 +1627,17 @@ private:
 //   return Decl;
 //}
 
-QualType SemaPass::getTypeForDecl(NamedDecl *D)
+QualType SemaPass::getTypeForDecl(NamedDecl* D)
 {
    switch (D->getKind()) {
    case Decl::StructDeclID:
    case Decl::ClassDeclID:
    case Decl::EnumDeclID:
-      return QC.Context.getMetaType(
-         QC.Context.getRecordType(cast<RecordDecl>(D)))->getCanonicalType();
+      return QC.Context
+          .getMetaType(QC.Context.getRecordType(cast<RecordDecl>(D)))
+          ->getCanonicalType();
    case Decl::AliasDeclID: {
-      auto *A = cast<AliasDecl>(D);
+      auto* A = cast<AliasDecl>(D);
       if (QC.PrepareDeclInterface(A)) {
          return QC.Sema->ErrorTy;
       }
@@ -1668,7 +1648,7 @@ QualType SemaPass::getTypeForDecl(NamedDecl *D)
    case Decl::GlobalVarDeclID:
    case Decl::FieldDeclID:
    case Decl::FuncArgDeclID: {
-      auto *Var = cast<VarDecl>(D);
+      auto* Var = cast<VarDecl>(D);
       if (QC.PrepareDeclInterface(Var)) {
          return QC.Sema->ErrorTy;
       }
@@ -1676,7 +1656,7 @@ QualType SemaPass::getTypeForDecl(NamedDecl *D)
       return Var->getType()->getCanonicalType();
    }
    case Decl::PropDeclID: {
-      auto *P = cast<PropDecl>(D);
+      auto* P = cast<PropDecl>(D);
       if (QC.PrepareDeclInterface(P)) {
          return QC.Sema->ErrorTy;
       }
@@ -1684,7 +1664,7 @@ QualType SemaPass::getTypeForDecl(NamedDecl *D)
       return P->getType()->getCanonicalType();
    }
    case Decl::SubscriptDeclID: {
-      auto *S = cast<SubscriptDecl>(D);
+      auto* S = cast<SubscriptDecl>(D);
       if (QC.PrepareDeclInterface(S)) {
          return QC.Sema->ErrorTy;
       }
@@ -1695,7 +1675,7 @@ QualType SemaPass::getTypeForDecl(NamedDecl *D)
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID: {
-      auto *C = cast<CallableDecl>(D);
+      auto* C = cast<CallableDecl>(D);
       if (QC.PrepareDeclInterface(C)) {
          return QC.Sema->ErrorTy;
       }
@@ -1703,7 +1683,7 @@ QualType SemaPass::getTypeForDecl(NamedDecl *D)
       return C->getFunctionType();
    }
    case Decl::AssociatedTypeDeclID: {
-      auto *AT = cast<AssociatedTypeDecl>(D);
+      auto* AT = cast<AssociatedTypeDecl>(D);
       if (QC.PrepareDeclInterface(AT)) {
          return QC.Sema->ErrorTy;
       }
@@ -1717,7 +1697,7 @@ QualType SemaPass::getTypeForDecl(NamedDecl *D)
    }
 }
 
-ExprResult SemaPass::visitMixinExpr(MixinExpr *Expr)
+ExprResult SemaPass::visitMixinExpr(MixinExpr* Expr)
 {
    auto Res = evalStaticExpr(Expr, Expr->getMixinExpr());
    if (!Res) {
@@ -1765,7 +1745,7 @@ ExprResult SemaPass::visitMixinExpr(MixinExpr *Expr)
    return visitExpr(Expr, Result.getExpr());
 }
 
-StmtResult SemaPass::visitMixinStmt(MixinStmt *Stmt)
+StmtResult SemaPass::visitMixinStmt(MixinStmt* Stmt)
 {
    auto Res = evalStaticExpr(Stmt, Stmt->getMixinExpr());
    if (!Res)
@@ -1795,7 +1775,7 @@ StmtResult SemaPass::visitMixinStmt(MixinStmt *Stmt)
 
       parse::Parser parser(Context, &lex, *this);
       Result = parser.parseWithKind(Stmt->getSourceLoc(),
-         parse::Parser::ExpansionKind::Stmt);
+                                    parse::Parser::ExpansionKind::Stmt);
 
       if (!Result) {
          Stmt->setIsInvalid(true);
@@ -1807,14 +1787,14 @@ StmtResult SemaPass::visitMixinStmt(MixinStmt *Stmt)
    return visitStmt(Stmt, Result.getStatement());
 }
 
-Expression* SemaPass::resolveMacroExpansionExpr(MacroExpansionExpr *Expr)
+Expression* SemaPass::resolveMacroExpansionExpr(MacroExpansionExpr* Expr)
 {
    if (!checkNamespaceRef(Expr)) {
       return nullptr;
    }
 
-   DeclContext *Ctx = &getDeclContext();
-   if (auto *Ident = cast_or_null<IdentifierRefExpr>(Expr->getParentExpr())) {
+   DeclContext* Ctx = &getDeclContext();
+   if (auto* Ident = cast_or_null<IdentifierRefExpr>(Expr->getParentExpr())) {
       if (Ident->getKind() == IdentifierKind::Namespace) {
          Ctx = Ident->getNamespaceDecl();
       }
@@ -1826,10 +1806,9 @@ Expression* SemaPass::resolveMacroExpansionExpr(MacroExpansionExpr *Expr)
       }
    }
 
-   auto Result = checkMacroCommon(Expr, Expr->getMacroName(), *Ctx,
-                                  (MacroDecl::Delimiter)Expr->getDelim(),
-                                  Expr->getTokens(),
-                                  (unsigned)parse::Parser::ExpansionKind::Expr);
+   auto Result = checkMacroCommon(
+       Expr, Expr->getMacroName(), *Ctx, (MacroDecl::Delimiter)Expr->getDelim(),
+       Expr->getTokens(), (unsigned)parse::Parser::ExpansionKind::Expr);
 
    if (!Result) {
       return nullptr;
@@ -1843,9 +1822,9 @@ Expression* SemaPass::resolveMacroExpansionExpr(MacroExpansionExpr *Expr)
    return cast<Expression>(Result.getStatement());
 }
 
-ExprResult SemaPass::visitMacroExpansionExpr(MacroExpansionExpr *Expr)
+ExprResult SemaPass::visitMacroExpansionExpr(MacroExpansionExpr* Expr)
 {
-   auto *E = resolveMacroExpansionExpr(Expr);
+   auto* E = resolveMacroExpansionExpr(Expr);
    if (!E) {
       return ExprError();
    }
@@ -1853,13 +1832,13 @@ ExprResult SemaPass::visitMacroExpansionExpr(MacroExpansionExpr *Expr)
    return visitExpr(Expr, E, Expr->getContextualType());
 }
 
-StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
+StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt* Stmt)
 {
    if (!checkNamespaceRef(Stmt))
       return StmtError();
 
-   DeclContext *Ctx = &getDeclContext();
-   if (auto *Ident = cast_or_null<IdentifierRefExpr>(Stmt->getParentExpr())) {
+   DeclContext* Ctx = &getDeclContext();
+   if (auto* Ident = cast_or_null<IdentifierRefExpr>(Stmt->getParentExpr())) {
       if (Ident->getKind() == IdentifierKind::Namespace) {
          Ctx = Ident->getNamespaceDecl();
       }
@@ -1871,10 +1850,9 @@ StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
       }
    }
 
-   auto Result = checkMacroCommon(Stmt, Stmt->getMacroName(), *Ctx,
-                                  (MacroDecl::Delimiter )Stmt->getDelim(),
-                                  Stmt->getTokens(),
-                                  (unsigned)parse::Parser::ExpansionKind::Stmt);
+   auto Result = checkMacroCommon(
+       Stmt, Stmt->getMacroName(), *Ctx, (MacroDecl::Delimiter)Stmt->getDelim(),
+       Stmt->getTokens(), (unsigned)parse::Parser::ExpansionKind::Stmt);
 
    if (!Result)
       return StmtError();
@@ -1891,12 +1869,12 @@ StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt *Stmt)
    return StmtRes;
 }
 
-StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD,
-                                      DeclarationName MacroName,
-                                      DeclContext &Ctx,
+StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD, DeclarationName MacroName,
+                                      DeclContext& Ctx,
                                       MacroDecl::Delimiter Delim,
                                       llvm::ArrayRef<lex::Token> Tokens,
-                                      unsigned Kind) {
+                                      unsigned Kind)
+{
    auto Macro = QC.LookupSingleAs<MacroDecl>(&Ctx, MacroName);
    parse::ParseResult Result;
 
@@ -1907,18 +1885,24 @@ StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD,
    else if (Delim != Macro->getDelim()) {
       llvm::StringRef ExpectedDelim;
       switch (Macro->getDelim()) {
-      case MacroDecl::Paren: ExpectedDelim = "()"; break;
-      case MacroDecl::Brace: ExpectedDelim = "{}"; break;
-      case MacroDecl::Square: ExpectedDelim = "[]"; break;
+      case MacroDecl::Paren:
+         ExpectedDelim = "()";
+         break;
+      case MacroDecl::Brace:
+         ExpectedDelim = "{}";
+         break;
+      case MacroDecl::Square:
+         ExpectedDelim = "[]";
+         break;
       }
 
-      diagnose(SOD, err_macro_expects_delim, SOD.getSourceRange(),
-               MacroName, ExpectedDelim);
+      diagnose(SOD, err_macro_expects_delim, SOD.getSourceRange(), MacroName,
+               ExpectedDelim);
    }
 
    if (Macro) {
       Result = parse::Parser::expandMacro(*this, Macro, SOD, Tokens,
-                                          (parse::Parser::ExpansionKind) Kind);
+                                          (parse::Parser::ExpansionKind)Kind);
    }
 
    if (Result.holdsDecl()) {
@@ -1936,7 +1920,7 @@ StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD,
 
 Module* SemaPass::getStdModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Std)) {
       return nullptr;
    }
@@ -1946,7 +1930,7 @@ Module* SemaPass::getStdModule()
 
 Module* SemaPass::getPreludeModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Prelude)) {
       return nullptr;
    }
@@ -1956,7 +1940,7 @@ Module* SemaPass::getPreludeModule()
 
 Module* SemaPass::getRuntimeModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Runtime)) {
       return nullptr;
    }
@@ -1966,7 +1950,7 @@ Module* SemaPass::getRuntimeModule()
 
 Module* SemaPass::getBuiltinModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Builtin)) {
       return nullptr;
    }
@@ -1976,7 +1960,7 @@ Module* SemaPass::getBuiltinModule()
 
 Module* SemaPass::getReflectModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Reflect)) {
       return nullptr;
    }
@@ -1986,7 +1970,7 @@ Module* SemaPass::getReflectModule()
 
 Module* SemaPass::getSysModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Sys)) {
       return nullptr;
    }
@@ -1996,7 +1980,7 @@ Module* SemaPass::getSysModule()
 
 Module* SemaPass::getAsyncModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Async)) {
       return nullptr;
    }
@@ -2006,7 +1990,7 @@ Module* SemaPass::getAsyncModule()
 
 Module* SemaPass::getTestModule()
 {
-   Module *M;
+   Module* M;
    if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Test)) {
       return nullptr;
    }
@@ -2014,32 +1998,32 @@ Module* SemaPass::getTestModule()
    return M;
 }
 
-bool SemaPass::isInStdModule(Decl *D)
+bool SemaPass::isInStdModule(Decl* D)
 {
    return D->getModule()->getModule() == getStdModule();
 }
 
-bool SemaPass::isInBuiltinModule(Decl *D)
+bool SemaPass::isInBuiltinModule(Decl* D)
 {
-   if (!getCompilationUnit().getModuleMgr().IsModuleLoaded(getIdentifier("builtin"))) {
+   if (!getCompilationUnit().getModuleMgr().IsModuleLoaded(
+           getIdentifier("builtin"))) {
       return false;
    }
 
    return D->getModule()->getModule() == getBuiltinModule();
 }
 
-bool SemaPass::isInReflectModule(Decl *D)
+bool SemaPass::isInReflectModule(Decl* D)
 {
    return D->getModule()->getModule() == getReflectModule();
 }
 
-static LookupOpts BuiltinOpts =
-   LookupOpts::TypeLookup
-   | LookupOpts::PrepareNameLookup;
+static LookupOpts BuiltinOpts
+    = LookupOpts::TypeLookup | LookupOpts::PrepareNameLookup;
 
 StructDecl* SemaPass::getArrayDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::Array)) {
       return nullptr;
    }
@@ -2047,14 +2031,11 @@ StructDecl* SemaPass::getArrayDecl()
    return cast_or_null<StructDecl>(S);
 }
 
-StructDecl* SemaPass::getArrayViewDecl()
-{
-   llvm_unreachable("doesn't exist!");
-}
+StructDecl* SemaPass::getArrayViewDecl() { llvm_unreachable("doesn't exist!"); }
 
 ClassDecl* SemaPass::getDictionaryDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::Dictionary)) {
       return nullptr;
    }
@@ -2064,7 +2045,7 @@ ClassDecl* SemaPass::getDictionaryDecl()
 
 EnumDecl* SemaPass::getOptionDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::Option)) {
       return nullptr;
    }
@@ -2074,7 +2055,7 @@ EnumDecl* SemaPass::getOptionDecl()
 
 StructDecl* SemaPass::getStringDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::String)) {
       return nullptr;
    }
@@ -2089,7 +2070,7 @@ StructDecl* SemaPass::getStringViewDecl()
 
 StructDecl* SemaPass::getTypeInfoDecl()
 {
-   RecordDecl *TI;
+   RecordDecl* TI;
    if (QC.GetBuiltinRecord(TI, GetBuiltinRecordQuery::TypeInfo)) {
       return nullptr;
    }
@@ -2099,7 +2080,7 @@ StructDecl* SemaPass::getTypeInfoDecl()
 
 StructDecl* SemaPass::getValueWitnessTableDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::ValueWitnessTable)) {
       return nullptr;
    }
@@ -2109,7 +2090,7 @@ StructDecl* SemaPass::getValueWitnessTableDecl()
 
 StructDecl* SemaPass::getProtocolConformanceDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::ProtocolConformance)) {
       return nullptr;
    }
@@ -2119,7 +2100,7 @@ StructDecl* SemaPass::getProtocolConformanceDecl()
 
 StructDecl* SemaPass::getExistentialContainerDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::ExistentialContainer)) {
       return nullptr;
    }
@@ -2129,7 +2110,7 @@ StructDecl* SemaPass::getExistentialContainerDecl()
 
 StructDecl* SemaPass::getBoxDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::Box)) {
       return nullptr;
    }
@@ -2139,7 +2120,7 @@ StructDecl* SemaPass::getBoxDecl()
 
 ClassDecl* SemaPass::getPromiseDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::Promise)) {
       return nullptr;
    }
@@ -2149,7 +2130,7 @@ ClassDecl* SemaPass::getPromiseDecl()
 
 ClassDecl* SemaPass::getFutureDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::Future)) {
       return nullptr;
    }
@@ -2159,7 +2140,7 @@ ClassDecl* SemaPass::getFutureDecl()
 
 StructDecl* SemaPass::getCoroutineHandleDecl()
 {
-   RecordDecl *S;
+   RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::CoroHandle)) {
       return nullptr;
    }
@@ -2167,55 +2148,58 @@ StructDecl* SemaPass::getCoroutineHandleDecl()
    return cast_or_null<StructDecl>(S);
 }
 
-EnumDecl *SemaPass::getGenericArgumentValueDecl()
+EnumDecl* SemaPass::getGenericArgumentValueDecl()
 {
    if (!GenericArgumentValueDecl) {
-//      auto Rt = getRuntimeModule();
-//      if (!Rt)
-//         return nullptr;
-//
-      auto *II = &Context.getIdentifiers().get("GenericArgumentValue");
-//      GenericArgumentValueDecl = LookupSingle<EnumDecl>(*Rt->getDecl(), II);
+      //      auto Rt = getRuntimeModule();
+      //      if (!Rt)
+      //         return nullptr;
+      //
+      auto* II = &Context.getIdentifiers().get("GenericArgumentValue");
+      //      GenericArgumentValueDecl = LookupSingle<EnumDecl>(*Rt->getDecl(),
+      //      II);
 
-      //FIXME
-      GenericArgumentValueDecl = QC.LookupSingleAs<EnumDecl>(
-         compilationUnit->getMainFn(), II);
+      // FIXME
+      GenericArgumentValueDecl
+          = QC.LookupSingleAs<EnumDecl>(compilationUnit->getMainFn(), II);
    }
 
    return GenericArgumentValueDecl;
 }
 
-StructDecl *SemaPass::getGenericArgumentDecl()
+StructDecl* SemaPass::getGenericArgumentDecl()
 {
    if (!GenericArgumentDecl) {
-//      auto Rt = getRuntimeModule();
-//      if (!Rt)
-//         return nullptr;
+      //      auto Rt = getRuntimeModule();
+      //      if (!Rt)
+      //         return nullptr;
 
-      auto *II = &Context.getIdentifiers().get("GenericArgument");
-//      GenericArgumentDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
+      auto* II = &Context.getIdentifiers().get("GenericArgument");
+      //      GenericArgumentDecl = LookupSingle<StructDecl>(*Rt->getDecl(),
+      //      II);
 
-      //FIXME
-      GenericArgumentDecl = QC.LookupSingleAs<StructDecl>
-         (compilationUnit->getMainFn(), II);
+      // FIXME
+      GenericArgumentDecl
+          = QC.LookupSingleAs<StructDecl>(compilationUnit->getMainFn(), II);
    }
 
    return GenericArgumentDecl;
 }
 
-StructDecl *SemaPass::getGenericEnvironmentDecl()
+StructDecl* SemaPass::getGenericEnvironmentDecl()
 {
    if (!GenericEnvironmentDecl) {
-//      auto Rt = getRuntimeModule();
-//      if (!Rt)
-//         return nullptr;
+      //      auto Rt = getRuntimeModule();
+      //      if (!Rt)
+      //         return nullptr;
 
-      auto *II = &Context.getIdentifiers().get("GenericEnvironment");
-//      GenericEnvironmentDecl = LookupSingle<StructDecl>(*Rt->getDecl(), II);
+      auto* II = &Context.getIdentifiers().get("GenericEnvironment");
+      //      GenericEnvironmentDecl = LookupSingle<StructDecl>(*Rt->getDecl(),
+      //      II);
 
-      //FIXME
-      GenericEnvironmentDecl = QC.LookupSingleAs<StructDecl>
-         (compilationUnit->getMainFn(), II);
+      // FIXME
+      GenericEnvironmentDecl
+          = QC.LookupSingleAs<StructDecl>(compilationUnit->getMainFn(), II);
    }
 
    return GenericEnvironmentDecl;
@@ -2223,7 +2207,7 @@ StructDecl *SemaPass::getGenericEnvironmentDecl()
 
 FunctionDecl* SemaPass::getPureVirtualDecl()
 {
-   CallableDecl *F;
+   CallableDecl* F;
    if (QC.GetBuiltinFunc(F, GetBuiltinFuncQuery::CopyClass)) {
       return nullptr;
    }
@@ -2233,7 +2217,7 @@ FunctionDecl* SemaPass::getPureVirtualDecl()
 
 FunctionDecl* SemaPass::getCopyClassDecl()
 {
-   CallableDecl *F;
+   CallableDecl* F;
    if (QC.GetBuiltinFunc(F, GetBuiltinFuncQuery::CopyClass)) {
       return nullptr;
    }
@@ -2243,7 +2227,7 @@ FunctionDecl* SemaPass::getCopyClassDecl()
 
 FunctionDecl* SemaPass::getAtomicReleaseDecl()
 {
-   CallableDecl *F;
+   CallableDecl* F;
    if (QC.GetBuiltinFunc(F, GetBuiltinFuncQuery::AtomicRelease)) {
       return nullptr;
    }
@@ -2251,9 +2235,9 @@ FunctionDecl* SemaPass::getAtomicReleaseDecl()
    return cast_or_null<FunctionDecl>(F);
 }
 
-ProtocolDecl *SemaPass::getAnyDecl()
+ProtocolDecl* SemaPass::getAnyDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Any)) {
       return nullptr;
    }
@@ -2261,9 +2245,9 @@ ProtocolDecl *SemaPass::getAnyDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getEquatableDecl()
+ProtocolDecl* SemaPass::getEquatableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Equatable)) {
       return nullptr;
    }
@@ -2273,7 +2257,7 @@ ProtocolDecl *SemaPass::getEquatableDecl()
 
 ProtocolDecl* SemaPass::getHashableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Hashable)) {
       return nullptr;
    }
@@ -2281,9 +2265,9 @@ ProtocolDecl* SemaPass::getHashableDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getCopyableDecl()
+ProtocolDecl* SemaPass::getCopyableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Copyable)) {
       return nullptr;
    }
@@ -2291,9 +2275,9 @@ ProtocolDecl *SemaPass::getCopyableDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getMoveOnlyDecl()
+ProtocolDecl* SemaPass::getMoveOnlyDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::MoveOnly)) {
       return nullptr;
    }
@@ -2301,9 +2285,9 @@ ProtocolDecl *SemaPass::getMoveOnlyDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getImplicitlyCopyableDecl()
+ProtocolDecl* SemaPass::getImplicitlyCopyableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::ImplicitlyCopyable)) {
       return nullptr;
    }
@@ -2311,9 +2295,9 @@ ProtocolDecl *SemaPass::getImplicitlyCopyableDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getStringRepresentableDecl()
+ProtocolDecl* SemaPass::getStringRepresentableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::StringRepresentable)) {
       return nullptr;
    }
@@ -2323,7 +2307,7 @@ ProtocolDecl *SemaPass::getStringRepresentableDecl()
 
 ProtocolDecl* SemaPass::getTruthValueDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::TruthValue)) {
       return nullptr;
    }
@@ -2331,9 +2315,9 @@ ProtocolDecl* SemaPass::getTruthValueDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getRawRepresentableDecl()
+ProtocolDecl* SemaPass::getRawRepresentableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::RawRepresentable)) {
       return nullptr;
    }
@@ -2341,9 +2325,9 @@ ProtocolDecl *SemaPass::getRawRepresentableDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getPersistableDecl()
+ProtocolDecl* SemaPass::getPersistableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Persistable)) {
       return nullptr;
    }
@@ -2351,9 +2335,9 @@ ProtocolDecl *SemaPass::getPersistableDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getAwaitableDecl()
+ProtocolDecl* SemaPass::getAwaitableDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Awaitable)) {
       return nullptr;
    }
@@ -2361,9 +2345,9 @@ ProtocolDecl *SemaPass::getAwaitableDecl()
    return P;
 }
 
-ProtocolDecl *SemaPass::getAwaiterDecl()
+ProtocolDecl* SemaPass::getAwaiterDecl()
 {
-   ProtocolDecl *P;
+   ProtocolDecl* P;
    if (QC.GetBuiltinProtocol(P, GetBuiltinProtocolQuery::Awaiter)) {
       return nullptr;
    }
@@ -2373,7 +2357,7 @@ ProtocolDecl *SemaPass::getAwaiterDecl()
 
 PrecedenceGroupDecl* SemaPass::getDefaultPrecedenceGroup()
 {
-   PrecedenceGroupDecl *PG;
+   PrecedenceGroupDecl* PG;
    if (QC.FindPrecedenceGroup(PG, getIdentifier("DefaultPrecedence"), false)) {
       return nullptr;
    }
@@ -2381,13 +2365,13 @@ PrecedenceGroupDecl* SemaPass::getDefaultPrecedenceGroup()
    return PG;
 }
 
-ProtocolDecl *SemaPass::getInitializableByDecl(InitializableByKind Kind)
+ProtocolDecl* SemaPass::getInitializableByDecl(InitializableByKind Kind)
 {
    if (auto Decl = InitializableBy[(unsigned)Kind]) {
       return Decl;
    }
 
-   const IdentifierInfo *II;
+   const IdentifierInfo* II;
    switch (Kind) {
    case InitializableByKind::Integer:
       II = &Context.getIdentifiers().get("ExpressibleByIntegerLiteral");
@@ -2405,7 +2389,8 @@ ProtocolDecl *SemaPass::getInitializableByDecl(InitializableByKind Kind)
       II = &Context.getIdentifiers().get("ExpressibleByASCIILiteral");
       break;
    case InitializableByKind::CodePoint:
-      II = &Context.getIdentifiers().get("ExpressibleByUnicodeCodePointLiteral");
+      II = &Context.getIdentifiers().get(
+          "ExpressibleByUnicodeCodePointLiteral");
       break;
    case InitializableByKind::String:
       II = &Context.getIdentifiers().get("ExpressibleByStringLiteral");
@@ -2425,8 +2410,8 @@ ProtocolDecl *SemaPass::getInitializableByDecl(InitializableByKind Kind)
 #ifndef NDEBUG
       // Allow these to be manually provided in debug mode.
       auto Decl = QC.LookupSingleAs<ProtocolDecl>(
-         getCompilationUnit().getCompilationModule()->getDecl(), II,
-         BuiltinOpts);
+          getCompilationUnit().getCompilationModule()->getDecl(), II,
+          BuiltinOpts);
 
       InitializableBy[(unsigned)Kind] = Decl;
       return Decl;
@@ -2435,14 +2420,14 @@ ProtocolDecl *SemaPass::getInitializableByDecl(InitializableByKind Kind)
 #endif
    }
 
-   auto Decl = QC.LookupSingleAs<ProtocolDecl>(Prelude->getDecl(), II,
-                                               BuiltinOpts);
+   auto Decl
+       = QC.LookupSingleAs<ProtocolDecl>(Prelude->getDecl(), II, BuiltinOpts);
 
    InitializableBy[(unsigned)Kind] = Decl;
    return Decl;
 }
 
-InitDecl *SemaPass::getStringInit()
+InitDecl* SemaPass::getStringInit()
 {
    if (!StringInit) {
       auto S = getStringDecl();
@@ -2451,37 +2436,38 @@ InitDecl *SemaPass::getStringInit()
       }
 
       // Lookup the initializer to load the external lookup table if necessary
-      DeclarationName DN = Context.getDeclNameTable()
-                                  .getConstructorName(Context.getRecordType(S));
+      DeclarationName DN = Context.getDeclNameTable().getConstructorName(
+          Context.getRecordType(S));
 
-      const SingleLevelLookupResult *Result;
+      const SingleLevelLookupResult* Result;
       if (QC.LookupFirst(Result, S, DN) || Result->empty()) {
          return nullptr;
       }
 
-      StringInit = cast_or_null<InitDecl>(getBuiltinDecl("String.init(rawBytes:size:"));
+      StringInit = cast_or_null<InitDecl>(
+          getBuiltinDecl("String.init(rawBytes:size:"));
    }
 
    return StringInit;
 }
 
-MethodDecl *SemaPass::getStringPlusEqualsString()
+MethodDecl* SemaPass::getStringPlusEqualsString()
 {
    if (!StringPlusEqualsString) {
       auto S = getStringDecl();
       if (!S)
          return nullptr;
 
-      if (auto *MF = S->getModFile()) {
-         auto &II = Context.getIdentifiers().get("+=");
-         DeclarationName DN = Context.getDeclNameTable().getInfixOperatorName(
-            II);
+      if (auto* MF = S->getModFile()) {
+         auto& II = Context.getIdentifiers().get("+=");
+         DeclarationName DN
+             = Context.getDeclNameTable().getInfixOperatorName(II);
 
          MF->PerformExternalLookup(*S, DN);
       }
 
-      StringPlusEqualsString =
-         cast_or_null<MethodDecl>(getBuiltinDecl("String.infix +=(_:)"));
+      StringPlusEqualsString
+          = cast_or_null<MethodDecl>(getBuiltinDecl("String.infix +=(_:)"));
    }
 
    return StringPlusEqualsString;
@@ -2519,12 +2505,12 @@ StructDecl* SemaPass::getUIntDecl()
    return getUInt32Decl();
 }
 
-#define GET_BUILTIN_DECL(NAME)                                 \
-   StructDecl* SemaPass::get##NAME##Decl()                     \
-   {                                                           \
-      RecordDecl *D;                                           \
-      QC.GetBuiltinRecord(D, GetBuiltinRecordQuery::NAME);     \
-      return cast_or_null<StructDecl>(D);                      \
+#define GET_BUILTIN_DECL(NAME)                                                 \
+   StructDecl* SemaPass::get##NAME##Decl()                                     \
+   {                                                                           \
+      RecordDecl* D;                                                           \
+      QC.GetBuiltinRecord(D, GetBuiltinRecordQuery::NAME);                     \
+      return cast_or_null<StructDecl>(D);                                      \
    }
 
 GET_BUILTIN_DECL(Int8)

@@ -1,45 +1,27 @@
-#include "GlobalVariable.h"
+#include "cdotc/IL/GlobalVariable.h"
 
-#include "AST/ASTContext.h"
-#include "Context.h"
-#include "Module.h"
-#include "Writer/ModuleWriter.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IL/Writer/ModuleWriter.h"
 
 namespace cdot {
 namespace il {
 
-const char *LinkageTypeNames[] = {
-   "external",
-   "available_externally",
-   "linkonce",
-   "linkonce_odr",
-   "weak",
-   "weak_odr",
-   "appending",
-   "internal",
-   "private",
-   "extern_weak",
-   "common"
-};
+const char* LinkageTypeNames[] = {"external",  "available_externally",
+                                  "linkonce",  "linkonce_odr",
+                                  "weak",      "weak_odr",
+                                  "appending", "internal",
+                                  "private",   "extern_weak",
+                                  "common"};
 
-const char *VisibilityTypeNames[] = {
-   "default",
-   "hidden",
-   "protected"
-};
+const char* VisibilityTypeNames[] = {"default", "hidden", "protected"};
 
-const char *UnnamedAddrNames[] = {
-   "",
-   "local_unnamed_addr",
-   "unnamed_addr"
-};
+const char* UnnamedAddrNames[] = {"", "local_unnamed_addr", "unnamed_addr"};
 
-GlobalObject::GlobalObject(TypeID id,
-                           QualType ty,
-                           Module *module,
+GlobalObject::GlobalObject(TypeID id, QualType ty, Module* module,
                            llvm::StringRef name)
-   : Constant(id, ValueType(module->getContext(), ty)),
-     parent(module)
+    : Constant(id, ValueType(module->getContext(), ty)), parent(module)
 {
    this->name = name;
    Linkage = 0;
@@ -61,13 +43,10 @@ bool GlobalObject::isExternallyVisible() const
    }
 }
 
-GlobalVariable::GlobalVariable(QualType ty,
-                               bool isConstant,
-                               llvm::StringRef name,
-                               Module *module,
-                               Constant *initializer)
-   : GlobalObject(GlobalVariableID, ty, module, name),
-     initializer(initializer)
+GlobalVariable::GlobalVariable(QualType ty, bool isConstant,
+                               llvm::StringRef name, Module* module,
+                               Constant* initializer)
+    : GlobalObject(GlobalVariableID, ty, module, name), initializer(initializer)
 {
    if (initializer) {
       initializer->addUse(this);
@@ -86,9 +65,9 @@ GlobalVariable::GlobalVariable(QualType ty,
    }
 }
 
-GlobalVariable::GlobalVariable(const GlobalVariable &var, Module &M)
-   : GlobalObject(GlobalVariableID, var.getType(), &M, var.name),
-     initializer(nullptr)
+GlobalVariable::GlobalVariable(const GlobalVariable& var, Module& M)
+    : GlobalObject(GlobalVariableID, var.getType(), &M, var.name),
+      initializer(nullptr)
 {
    loc = var.loc;
    SourceLoc = var.SourceLoc;
@@ -105,7 +84,7 @@ GlobalVariable::GlobalVariable(const GlobalVariable &var, Module &M)
    setLinkage(ExternalLinkage);
 }
 
-void GlobalVariable::setInitializer(Constant *initializer)
+void GlobalVariable::setInitializer(Constant* initializer)
 {
    GlobalVariable::initializer = initializer;
    if (initializer) {
@@ -120,18 +99,15 @@ void GlobalVariable::makeMutable()
    type = getASTCtx().getMutableReferenceType(type->getReferencedType());
 }
 
-void GlobalVariable::dump() const
-{
-   print(llvm::outs());
-}
+void GlobalVariable::dump() const { print(llvm::outs()); }
 
-void GlobalVariable::print(llvm::raw_ostream &OS) const
+void GlobalVariable::print(llvm::raw_ostream& OS) const
 {
    ModuleWriter Writer(this);
    Writer.WriteTo(OS);
 }
 
-GlobalVariable* GlobalVariable::getDeclarationIn(Module *M)
+GlobalVariable* GlobalVariable::getDeclarationIn(Module* M)
 {
    if (M == parent)
       return this;

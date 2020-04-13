@@ -1,34 +1,32 @@
-#include "ConstraintGraph.h"
+#include "cdotc/Sema/ConstraintGraph.h"
 
-#include "AST/Decl.h"
-#include "AST/TypeVisitor.h"
-#include "ConstraintSystem.h"
-#include "Query/QueryContext.h"
-#include "SemaPass.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/ConstraintSystem.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::sema;
 
-ConstraintGraphEdge::ConstraintGraphEdge(ConstraintGraphNode *End,
-                                         Constraint *C)
-   : End(End), C(C)
+ConstraintGraphEdge::ConstraintGraphEdge(ConstraintGraphNode* End,
+                                         Constraint* C)
+    : End(End), C(C)
 {
-
 }
 
-ConstraintGraphNode::ConstraintGraphNode(TypeVariableType *TypeVar)
-   : TypeVar(TypeVar)
+ConstraintGraphNode::ConstraintGraphNode(TypeVariableType* TypeVar)
+    : TypeVar(TypeVar)
 {
-
 }
 
-void ConstraintGraphNode::addAdjacency(TypeVariableType *T)
+void ConstraintGraphNode::addAdjacency(TypeVariableType* T)
 {
    AdjacencyIndexMap[T] = Adjacencies.size();
    Adjacencies.push_back(T);
 }
 
-void ConstraintGraphNode::removeAdjacency(TypeVariableType *T)
+void ConstraintGraphNode::removeAdjacency(TypeVariableType* T)
 {
    auto Idx = AdjacencyIndexMap[T];
    if (Idx != Adjacencies.size() - 1) {
@@ -40,13 +38,13 @@ void ConstraintGraphNode::removeAdjacency(TypeVariableType *T)
    AdjacencyIndexMap.erase(T);
 }
 
-void ConstraintGraphNode::addConstraint(Constraint *C)
+void ConstraintGraphNode::addConstraint(Constraint* C)
 {
    IndexMap[C] = Constraints.size();
    Constraints.push_back(C);
 }
 
-void ConstraintGraphNode::removeConstraint(Constraint *C)
+void ConstraintGraphNode::removeConstraint(Constraint* C)
 {
    auto Idx = IndexMap[C];
    if (Idx != Constraints.size() - 1) {
@@ -58,23 +56,21 @@ void ConstraintGraphNode::removeConstraint(Constraint *C)
    IndexMap.erase(C);
 }
 
-ConstraintGraph::ConstraintGraph(ConstraintSystem &Sys) : Sys(Sys)
-{
-
-}
+ConstraintGraph::ConstraintGraph(ConstraintSystem& Sys) : Sys(Sys) {}
 
 namespace {
 
-class TypeVariableVisitor: public RecursiveTypeVisitor<TypeVariableVisitor> {
+class TypeVariableVisitor : public RecursiveTypeVisitor<TypeVariableVisitor> {
    /// The set of type variables.
-   SmallPtrSetImpl<TypeVariableType*> &TypeVars;
+   SmallPtrSetImpl<TypeVariableType*>& TypeVars;
 
 public:
-   TypeVariableVisitor(SmallPtrSetImpl<TypeVariableType*> &TypeVars)
-      : TypeVars(TypeVars)
-   { }
+   TypeVariableVisitor(SmallPtrSetImpl<TypeVariableType*>& TypeVars)
+       : TypeVars(TypeVars)
+   {
+   }
 
-   bool visitTypeVariableType(TypeVariableType *T)
+   bool visitTypeVariableType(TypeVariableType* T)
    {
       TypeVars.insert(T);
       return false;
@@ -83,22 +79,22 @@ public:
 
 } // anonymous namespace
 
-ArrayRef<TypeVariableType*> ConstraintGraph::getMentionedTypeVars(Constraint *C)
+ArrayRef<TypeVariableType*> ConstraintGraph::getMentionedTypeVars(Constraint* C)
 {
    auto It = MentionedTypeVarMap.find(C);
    if (It != MentionedTypeVarMap.end()) {
       return It->getSecond();
    }
 
-   auto &Vec = MentionedTypeVarMap[C];
+   auto& Vec = MentionedTypeVarMap[C];
    if (QualType RHSType = C->getRHSType()) {
-      SmallPtrSet<TypeVariableType *, 4> MentionedTypeVars;
+      SmallPtrSet<TypeVariableType*, 4> MentionedTypeVars;
       MentionedTypeVars.insert(C->getConstrainedType());
 
       TypeVariableVisitor(MentionedTypeVars).visit(RHSType);
       Vec.insert(Vec.end(), MentionedTypeVars.begin(), MentionedTypeVars.end());
    }
-   else if (auto *Cond = support::dyn_cast<ConditionalConstraint>(C)) {
+   else if (auto* Cond = support::dyn_cast<ConditionalConstraint>(C)) {
       Vec.push_back(C->getConstrainedType());
       Vec.push_back(Cond->getDisjunctionVar());
    }
@@ -109,14 +105,14 @@ ArrayRef<TypeVariableType*> ConstraintGraph::getMentionedTypeVars(Constraint *C)
    return Vec;
 }
 
-ConstraintGraphNode* ConstraintGraph::getOrAddNode(TypeVariableType *T)
+ConstraintGraphNode* ConstraintGraph::getOrAddNode(TypeVariableType* T)
 {
    auto It = NodeMap.find(T);
    if (It != NodeMap.end()) {
       return It->getSecond();
    }
 
-   auto *Node = new(Sys) ConstraintGraphNode(T);
+   auto* Node = new (Sys) ConstraintGraphNode(T);
    NodeMap[T] = Node;
 
    if (!UndoingChanges) {
@@ -126,14 +122,14 @@ ConstraintGraphNode* ConstraintGraph::getOrAddNode(TypeVariableType *T)
    return Node;
 }
 
-void ConstraintGraph::removeNode(TypeVariableType *T)
+void ConstraintGraph::removeNode(TypeVariableType* T)
 {
    auto It = NodeMap.find(T);
    if (It == NodeMap.end()) {
       return;
    }
 
-   auto *Node = It->getSecond();
+   auto* Node = It->getSecond();
 
    if (!UndoingChanges) {
       Changes.push_back(Change::removedNode(Node));
@@ -143,31 +139,32 @@ void ConstraintGraph::removeNode(TypeVariableType *T)
    NodeMap.erase(It);
 }
 
-void ConstraintGraph::addAdjacency(ConstraintGraphNode *Src,
-                                   TypeVariableType *T) {
+void ConstraintGraph::addAdjacency(ConstraintGraphNode* Src,
+                                   TypeVariableType* T)
+{
    Src->addAdjacency(T);
    if (!UndoingChanges) {
       Changes.push_back(Change::addedAdjacency(Src, T));
    }
 }
 
-void ConstraintGraph::removeAdjacency(ConstraintGraphNode *Src,
-                                      TypeVariableType *T) {
+void ConstraintGraph::removeAdjacency(ConstraintGraphNode* Src,
+                                      TypeVariableType* T)
+{
    Src->removeAdjacency(T);
    if (!UndoingChanges) {
       Changes.push_back(Change::removedAdjacency(Src, T));
    }
 }
 
-void
-ConstraintGraph::addConstraint(Constraint *C)
+void ConstraintGraph::addConstraint(Constraint* C)
 {
    ArrayRef<TypeVariableType*> MentionedTypeVars = getMentionedTypeVars(C);
-   for (auto *TypeVar : MentionedTypeVars) {
-      auto *Node = getOrAddNode(TypeVar);
+   for (auto* TypeVar : MentionedTypeVars) {
+      auto* Node = getOrAddNode(TypeVar);
       Node->addConstraint(C);
 
-      for (auto *Other : MentionedTypeVars) {
+      for (auto* Other : MentionedTypeVars) {
          if (Other == TypeVar) {
             continue;
          }
@@ -183,15 +180,14 @@ ConstraintGraph::addConstraint(Constraint *C)
    ActiveConstraints.push_back(C);
 }
 
-void
-ConstraintGraph::removeConstraint(Constraint *C)
+void ConstraintGraph::removeConstraint(Constraint* C)
 {
    ArrayRef<TypeVariableType*> MentionedTypeVars = getMentionedTypeVars(C);
-   for (auto *TypeVar : MentionedTypeVars) {
-      auto *Node = getOrAddNode(TypeVar);
+   for (auto* TypeVar : MentionedTypeVars) {
+      auto* Node = getOrAddNode(TypeVar);
       Node->removeConstraint(C);
 
-      for (auto *Other : MentionedTypeVars) {
+      for (auto* Other : MentionedTypeVars) {
          if (Other == TypeVar) {
             continue;
          }
@@ -204,27 +200,28 @@ ConstraintGraph::removeConstraint(Constraint *C)
       Changes.push_back(Change::removedConstraint(C));
    }
 
-   ActiveConstraints.erase(std::find(ActiveConstraints.begin(),
-                                     ActiveConstraints.end(),
-                                     C));
+   ActiveConstraints.erase(
+       std::find(ActiveConstraints.begin(), ActiveConstraints.end(), C));
 }
 
-void ConstraintGraph::bindTypeVariable(TypeVariableType *TypeVar,
+void ConstraintGraph::bindTypeVariable(TypeVariableType* TypeVar,
                                        QualType ConcreteTy,
-                                       unsigned OverloadChoice) {
-   auto *Node = getOrAddNode(TypeVar);
+                                       unsigned OverloadChoice)
+{
+   auto* Node = getOrAddNode(TypeVar);
    bindTypeVariableNoEquivalence(Node, ConcreteTy, OverloadChoice);
 
-   for (auto *EqNode : Node->EquivalenceClass) {
+   for (auto* EqNode : Node->EquivalenceClass) {
       bindTypeVariableNoEquivalence(EqNode, ConcreteTy, -1);
    }
 }
 
-void ConstraintGraph::bindVariadicTypeVariable(TypeVariableType *TypeVar,
+void ConstraintGraph::bindVariadicTypeVariable(TypeVariableType* TypeVar,
                                                QualType ConcreteTy,
-                                               unsigned Index) {
-   auto *Node = getOrAddNode(TypeVar);
-   auto *Tup = Node->Assignment->asTupleType();
+                                               unsigned Index)
+{
+   auto* Node = getOrAddNode(TypeVar);
+   auto* Tup = Node->Assignment->asTupleType();
    assert(Tup && "bad variadic argument type");
 
    auto ContainedTypes = Tup->getContainedTypes();
@@ -249,9 +246,10 @@ void ConstraintGraph::bindVariadicTypeVariable(TypeVariableType *TypeVar,
    }
 }
 
-void ConstraintGraph::bindTypeVariableNoEquivalence(ConstraintGraphNode *Node,
+void ConstraintGraph::bindTypeVariableNoEquivalence(ConstraintGraphNode* Node,
                                                     QualType ConcreteTy,
-                                                    unsigned OverloadChoice) {
+                                                    unsigned OverloadChoice)
+{
    Node->Assignment = ConcreteTy;
    Node->OverloadIndex = OverloadChoice;
 
@@ -260,10 +258,10 @@ void ConstraintGraph::bindTypeVariableNoEquivalence(ConstraintGraphNode *Node,
    }
 }
 
-void ConstraintGraph::makeEquivalent(TypeVariableType *T1,
-                                     TypeVariableType *T2) {
-   auto *Node1 = getOrAddNode(T1);
-   auto *Node2 = getOrAddNode(T2);
+void ConstraintGraph::makeEquivalent(TypeVariableType* T1, TypeVariableType* T2)
+{
+   auto* Node1 = getOrAddNode(T1);
+   auto* Node2 = getOrAddNode(T2);
 
    Node1->EquivalenceClass.insert(Node2);
    Node2->EquivalenceClass.insert(Node1);
@@ -271,7 +269,7 @@ void ConstraintGraph::makeEquivalent(TypeVariableType *T1,
    Changes.push_back(Change::addedEquivalence(Node1, Node2));
 }
 
-QualType ConstraintGraph::getBinding(TypeVariableType *TypeVar) const
+QualType ConstraintGraph::getBinding(TypeVariableType* TypeVar) const
 {
    auto It = NodeMap.find(TypeVar);
    if (It == NodeMap.end()) {
@@ -281,7 +279,7 @@ QualType ConstraintGraph::getBinding(TypeVariableType *TypeVar) const
    return It->getSecond()->Assignment;
 }
 
-unsigned ConstraintGraph::getOverloadChoice(TypeVariableType *TypeVar) const
+unsigned ConstraintGraph::getOverloadChoice(TypeVariableType* TypeVar) const
 {
    auto It = NodeMap.find(TypeVar);
    if (It == NodeMap.end()) {
@@ -296,7 +294,7 @@ void ConstraintGraph::undoChanges(unsigned Until)
    UndoingChanges = true;
 
    while (Changes.size() > Until) {
-      auto &C = Changes.back();
+      auto& C = Changes.back();
       C.undo(*this);
 
       Changes.pop_back();
@@ -306,7 +304,7 @@ void ConstraintGraph::undoChanges(unsigned Until)
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::addedNode(ConstraintGraphNode *Node)
+ConstraintGraph::Change::addedNode(ConstraintGraphNode* Node)
 {
    Change C;
    C.Kind = AddedNode;
@@ -316,7 +314,7 @@ ConstraintGraph::Change::addedNode(ConstraintGraphNode *Node)
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::removedNode(ConstraintGraphNode *Node)
+ConstraintGraph::Change::removedNode(ConstraintGraphNode* Node)
 {
    Change C;
    C.Kind = RemovedNode;
@@ -326,7 +324,7 @@ ConstraintGraph::Change::removedNode(ConstraintGraphNode *Node)
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::addedConstraint(Constraint *Cons)
+ConstraintGraph::Change::addedConstraint(Constraint* Cons)
 {
    Change C;
    C.Kind = AddedConstraint;
@@ -336,8 +334,9 @@ ConstraintGraph::Change::addedConstraint(Constraint *Cons)
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::addedAdjacency(ConstraintGraphNode *Node,
-                                        TypeVariableType *T) {
+ConstraintGraph::Change::addedAdjacency(ConstraintGraphNode* Node,
+                                        TypeVariableType* T)
+{
    Change C;
    C.Kind = AddedAdjacency;
    C.NodeData.Node = Node;
@@ -347,8 +346,9 @@ ConstraintGraph::Change::addedAdjacency(ConstraintGraphNode *Node,
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::removedAdjacency(ConstraintGraphNode *Node,
-                                          TypeVariableType *T) {
+ConstraintGraph::Change::removedAdjacency(ConstraintGraphNode* Node,
+                                          TypeVariableType* T)
+{
    Change C;
    C.Kind = RemovedAdjacency;
    C.NodeData.Node = Node;
@@ -358,7 +358,7 @@ ConstraintGraph::Change::removedAdjacency(ConstraintGraphNode *Node,
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::removedConstraint(Constraint *Cons)
+ConstraintGraph::Change::removedConstraint(Constraint* Cons)
 {
    Change C;
    C.Kind = RemovedConstraint;
@@ -368,8 +368,9 @@ ConstraintGraph::Change::removedConstraint(Constraint *Cons)
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::addedEquivalence(ConstraintGraphNode *N1,
-                                          ConstraintGraphNode *N2) {
+ConstraintGraph::Change::addedEquivalence(ConstraintGraphNode* N1,
+                                          ConstraintGraphNode* N2)
+{
    Change C;
    C.Kind = AddedEquivalence;
    C.EquivalenceData.N1 = N1;
@@ -379,8 +380,9 @@ ConstraintGraph::Change::addedEquivalence(ConstraintGraphNode *N1,
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::removedEquivalence(ConstraintGraphNode *N1,
-                                            ConstraintGraphNode *N2) {
+ConstraintGraph::Change::removedEquivalence(ConstraintGraphNode* N1,
+                                            ConstraintGraphNode* N2)
+{
    Change C;
    C.Kind = AddedEquivalence;
    C.EquivalenceData.N1 = N1;
@@ -390,8 +392,9 @@ ConstraintGraph::Change::removedEquivalence(ConstraintGraphNode *N1,
 }
 
 ConstraintGraph::Change
-ConstraintGraph::Change::boundTypeVariable(ConstraintGraphNode *Node,
-                                           unsigned VariadicIdx) {
+ConstraintGraph::Change::boundTypeVariable(ConstraintGraphNode* Node,
+                                           unsigned VariadicIdx)
+{
    Change C;
    C.Kind = BoundTypeVariable;
    C.NodeData.Node = Node;
@@ -400,7 +403,7 @@ ConstraintGraph::Change::boundTypeVariable(ConstraintGraphNode *Node,
    return C;
 }
 
-void ConstraintGraph::Change::undo(ConstraintGraph &CG)
+void ConstraintGraph::Change::undo(ConstraintGraph& CG)
 {
    switch (Kind) {
    case AddedNode: {
@@ -440,7 +443,7 @@ void ConstraintGraph::Change::undo(ConstraintGraph &CG)
    case BoundTypeVariable: {
       if (CG.Sys.representsVariadicTemplateParam(NodeData.Node->TypeVar)) {
          auto Index = NodeData.VariadicIdx;
-         auto *Tup = NodeData.Node->Assignment->asTupleType();
+         auto* Tup = NodeData.Node->Assignment->asTupleType();
          assert(Tup && "bad variadic argument type");
 
          auto ContainedTypes = Tup->getContainedTypes();
@@ -466,13 +469,14 @@ void ConstraintGraph::Change::undo(ConstraintGraph &CG)
    }
 }
 
-static void connectedComponentsImpl(ConstraintGraph &CG,
-                                    ConstraintGraphNode *Node,
+static void connectedComponentsImpl(ConstraintGraph& CG,
+                                    ConstraintGraphNode* Node,
                                     unsigned NumTypeVars,
                                     unsigned CurrentComponent,
-                                    unsigned &LastComponent,
-                                    SmallVectorImpl<unsigned> &Components) {
-   auto *T = Node->getTypeVariable();
+                                    unsigned& LastComponent,
+                                    SmallVectorImpl<unsigned>& Components)
+{
+   auto* T = Node->getTypeVariable();
    if (Components[T->getVariableID()] != NumTypeVars) {
       return;
    }
@@ -483,22 +487,22 @@ static void connectedComponentsImpl(ConstraintGraph &CG,
 
    Components[T->getVariableID()] = CurrentComponent;
 
-   for (auto *Other : Node->getAdjacencies()) {
+   for (auto* Other : Node->getAdjacencies()) {
       connectedComponentsImpl(CG, CG.getOrAddNode(Other), NumTypeVars,
                               CurrentComponent, LastComponent, Components);
    }
 }
 
 unsigned ConstraintGraph::computeConnectedComponents(
-                                        ArrayRef<TypeVariableType*> TypeVars,
-                                        SmallVectorImpl<unsigned> &Components) {
+    ArrayRef<TypeVariableType*> TypeVars, SmallVectorImpl<unsigned>& Components)
+{
    unsigned NumTypeVars = TypeVars.size();
    Components.assign(NumTypeVars, NumTypeVars);
 
    unsigned LastComponent = 0;
-   for (auto *TV : TypeVars) {
-      connectedComponentsImpl(*this, getOrAddNode(TV), NumTypeVars,
-                              NumTypeVars, LastComponent, Components);
+   for (auto* TV : TypeVars) {
+      connectedComponentsImpl(*this, getOrAddNode(TV), NumTypeVars, NumTypeVars,
+                              LastComponent, Components);
    }
 
    return LastComponent;
