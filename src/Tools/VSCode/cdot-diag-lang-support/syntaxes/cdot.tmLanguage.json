@@ -1,0 +1,57 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "cdotdef",
+	"patterns": [
+		{
+			"name": "comment.block.cdotdef",
+			"begin": "/\\*",
+			"end": "\\*/"
+		},
+		{
+			"name": "comment.block.documentation.cdotdef",
+			"begin": "/\\*\\*",
+			"end": "\\*/"
+		},
+		{
+			"name": "comment.line.cdotdef",
+			"begin": "//",
+			"end": "\\n"
+		},
+		{
+			"name": "string.quoted.double.cdotdef",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"match": "\\$[0-9]",
+					"name": "constant.variable.cdotdef"
+				},
+				{
+					"match": "\\$\\{[^\\}]*\\}",
+					"name": "constant.variable.cdotdef"
+				}
+			]
+		},
+		{
+			"begin": "<",
+			"end": ">",
+			"beginCaptures": {
+				"0": {}
+			},
+			"endCaptures": {
+				"0": {}
+			},
+			"patterns": [{
+				"name": "variable.other.member.cdot",
+				"match": "err"
+			}, {
+				"name": "entity.name.type.cdot",
+				"match": "warn"
+			}, {
+				"name": "support.type.cdot",
+				"match": "note"
+			}]
+		}
+	],
+	"scopeName": "source.cdotdef"
+}

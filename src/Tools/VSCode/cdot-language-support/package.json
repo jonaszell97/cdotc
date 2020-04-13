@@ -1,0 +1,62 @@
+{
+    "name": "cdot-language-support",
+    "displayName": "cdot-language-support",
+    "description": "",
+    "version": "0.0.1",
+    "publisher": "Jonas",
+    "engines": {
+        "vscode": "^1.13.0"
+    },
+    "categories": [
+        "Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "cdot",
+            "aliases": ["CDot", "cdot"],
+            "extensions": [".dot", ".doth", ".cdotm"],
+            "configuration": "./language-configuration.json"
+        }, {
+            "id": "cdot-il",
+            "aliases": ["CDot-IL"],
+            "extensions": [".cdotil"],
+            "configuration": "./il-language-configuration.json"
+        }, {
+            "id": "cdot-m",
+            "aliases": [
+                "CDot-Module"
+            ],
+            "extensions": [
+                ".cdotm"
+            ],
+            "configuration": "./module-language-configuration.json"
+         }, {
+            "id": "cdot-tg",
+            "aliases": [
+                "CDot-TableGen"
+            ],
+            "extensions": [
+                ".tg"
+            ],
+            "configuration": "./tg-language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "cdot",
+            "scopeName": "source.cdot",
+            "path": "./syntaxes/cdot.tmLanguage.json"
+        }, {
+            "language": "cdot-il",
+            "scopeName": "source.cdot-il",
+            "path": "./syntaxes/cdot-il.tmLanguage.json"
+        }, {
+            "language": "cdot-m",
+            "scopeName": "source.cdot-m",
+            "path": "./syntaxes/cdot-module.tmLanguage.json"
+        },
+        {
+            "language": "cdot-tg",
+            "scopeName": "source.cdot-tg",
+            "path": "./syntaxes/cdot-tg.tmLanguage.json"
+        }]
+    }
+}

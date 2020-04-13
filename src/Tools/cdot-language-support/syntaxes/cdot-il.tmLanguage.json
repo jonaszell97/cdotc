@@ -1,0 +1,57 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "cdot-il",
+	"patterns": [
+		{
+			"name": "comment.line.cdot-il",
+			"begin": ";",
+			"end": "\\n"
+		},
+		{
+			"name": "string.quoted.double.cdot-il",
+			"begin": "\"",
+			"end": "\""
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(declare|define|method|on|prop|get|set|stack_alloc|heap_alloc|init|union_init|enum_init|enum_value|enum_extract|lambda_call|lambda_init|field_ref|union|field|case|type|static|store|call|invoke|ret|throw|landingpad|unwind|catch(all)?|unreachable|if|else|switch|default|vtable|ptable|while|constant|class|struct|enum|protocol|br|label|load|ltor|gep|tuple_extract|bitcast|upcast|ext|trunc|sign_cast|dyn_cast|proto_wrap|proto_unwrap|union_cast|exception_cast|addr_of|inttoenum|intrinsic|align|typeinfo|fpext|fptrunc|to|ptrtoint|inttoptr|ibox|iunbox|fpbox|fpunbox|fptoint|inttofp|extract_capture|captures|ptr_to_lvalue)\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(add|sub|mul|div|mod|exp|and|or|xor|ashr|lshr|shl|comp|eq|ne|lt|gt|le|ge|min|neg)\\b"
+		},
+		{
+			"name": "constant.language.cdot-il",
+			"match": "\\b(true|false|null|zeroinitializer)\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b([ui][1-9][0-9]*|float|double|void)\\**\\b"
+		},
+		{
+			"name": "variable.language.cdot-il",
+			"match": "(%|@|\\$)\\*?(`[^`]+`|[a-zA-Z0-9_\\.]+)"
+		},
+		{
+			"name": "constant.numeric.hex.cdot-il",
+			"match": "\\b\\-?0[xX][0-9a-fA-F]+\\b"
+		},
+		{
+			"name": "constant.numeric.binary.cdot-il",
+			"match": "\\b\\-?0[bB][01]+\\b"
+		},
+		{
+			"name": "constant.numeric.octal.cdot-il",
+			"match": "\\b\\-?0[1-9][0-9]*\\b"
+		},
+		{
+			"name": "constant.numeric.decimal.cdot-il",
+			"match": "\\b-?(?:0|[1-9][0-9_]*)(?:\\.[0-9]+){0,1}(?:[eE][-]{0,1}[0-9]+){0,1}([uU][lL]?|[lL][uU]?|[fF]|[dD])?\\b"
+		},
+		{
+			"match": "\\*",
+			"name": "keyword.operator.cdot-il"
+		}
+	],
+	"scopeName": "source.cdot-il"
+}

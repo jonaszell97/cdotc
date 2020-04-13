@@ -1,0 +1,11 @@
+
+#include "BuiltinTypes.tg"
+
+class Class<let name: string> {}
+
+class Argument<let name: string, let type: Type> {}
+class MemberFunction<let name: string, let static: i1,
+                     let returnType: Type, let argTypes: list<Argument> > {}
+
+class Field<let name: string, let static: i1, let type: Type> {}
+

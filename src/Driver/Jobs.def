@@ -1,0 +1,31 @@
+
+#ifndef CDOT_JOB
+#  error "define CDOT_JOB before including this!"
+#endif
+
+CDOT_JOB(Input)
+CDOT_JOB(Parse)
+CDOT_JOB(Sema)
+CDOT_JOB(ILGen)
+CDOT_JOB(ILVerify)
+CDOT_JOB(ILCanonicalize)
+CDOT_JOB(ILOptimize)
+CDOT_JOB(IRGen)
+CDOT_JOB(LoadCache)
+CDOT_JOB(EmitAssembly)
+CDOT_JOB(EmitObject)
+CDOT_JOB(EmitStaticLibrary)
+CDOT_JOB(EmitDynamicLibrary)
+CDOT_JOB(EmitModule)
+CDOT_JOB(EmitExecutable)
+CDOT_JOB(EmitIL)
+CDOT_JOB(EmitIR)
+CDOT_JOB(Link)
+CDOT_JOB(LinkIR)
+CDOT_JOB(Unittest)
+CDOT_JOB(Cache)
+
+CDOT_JOB(PrintPhases)
+CDOT_JOB(PrintUsedMemory)
+
+#undef CDOT_JOB

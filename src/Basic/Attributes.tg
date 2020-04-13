@@ -1,0 +1,161 @@
+
+// #include "DeclNodes.tg"
+
+class DeclClass
+class DerivedDecl<let Base: DeclClass> : DeclClass
+class DeclContext
+
+def Decl : DeclClass
+
+def StaticAssertStmt : DerivedDecl<Decl>
+def StaticPrintStmt : DerivedDecl<Decl>
+def StaticIfDecl : DerivedDecl<Decl>
+def StaticForDecl : DerivedDecl<Decl>
+def MixinDecl : DerivedDecl<Decl>
+def NamedDecl : DerivedDecl<Decl>
+    def NamespaceDecl : DerivedDecl<NamedDecl>, DeclContext
+    def TranslationUnit : DerivedDecl<NamedDecl>, DeclContext
+    def VarDecl : DerivedDecl<NamedDecl>
+        def LocalVarDecl : DerivedDecl<VarDecl>
+        def GlobalVarDecl : DerivedDecl<VarDecl>
+        def FuncArgDecl : DerivedDecl<VarDecl>
+        def FieldDecl : DerivedDecl<VarDecl>
+    def CallableDecl : DerivedDecl<NamedDecl>, DeclContext
+        def FunctionDecl : DerivedDecl<CallableDecl>
+        def EnumCaseDecl : DerivedDecl<CallableDecl>
+        def MethodDecl : DerivedDecl<CallableDecl>
+            def DeinitDecl : DerivedDecl<MethodDecl>
+            def InitDecl : DerivedDecl<MethodDecl>
+    def RecordDecl : DerivedDecl<NamedDecl>
+        def StructDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ClassDecl : DerivedDecl<RecordDecl>, DeclContext
+        def EnumDecl : DerivedDecl<RecordDecl>, DeclContext
+        def UnionDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ProtocolDecl : DerivedDecl<RecordDecl>, DeclContext
+        def ExtensionDecl : DerivedDecl<RecordDecl>, DeclContext
+    def AssociatedTypeDecl : DerivedDecl<NamedDecl>
+    def PropDecl : DerivedDecl<NamedDecl>
+    def TypedefDecl : DerivedDecl<NamedDecl>
+    def TemplateParamDecl : DerivedDecl<NamedDecl>
+    def CompoundDecl : DeclClass, DeclContext
+    def AliasDecl : DerivedDecl<NamedDecl>, DeclContext
+
+
+class Arg<let name: string, let optional: i1>
+class IntArg<name: string, optional: i1 = false, let defaultVal: u64 = 0> : Arg<name, optional>
+class FloatArg<name: string,optional: i1 = false, let defaultVal: f64 = 0> : Arg<name, optional>
+class StringArg<name: string, optional: i1 = false, let defaultVal: string = ""> : Arg<name, optional>
+class TypeArg<name: string, optional: i1 = false> : Arg<name, optional>
+class ExprArg<name: string, optional: i1 = false> : Arg<name, optional>
+
+class EnumArgAlias<let alias: string, let aliasee: string>
+class EnumArg<name: string, let cases: list<string>, optional: i1 = false, let defaultVal: string = "", let aliases: list<EnumArgAlias> = []> : Arg<name, optional>
+
+class VisitationPoint
+    def Immediate         : VisitationPoint
+    def BeforeDeclaration : VisitationPoint
+    def AfterDeclaration  : VisitationPoint
+    def BeforeSema        : VisitationPoint
+    def AfterSema         : VisitationPoint
+    def Never             : VisitationPoint
+
+class Attr<let name: string> {
+    let Args: list<Arg> = []
+    let Visit: VisitationPoint = AfterDeclaration
+    let IgnoreFollowingParens: i1 = false
+    let Inherited: i1 = false
+}
+
+class DeclAttr<name: string, let Decls: list<DeclClass> > : Attr<name>
+class TypeAttr<name: string> : Attr<name>
+class ExprAttr<name: string> : Attr<name>
+class StmtAttr<name: string> : Attr<name>
+
+def Extern : DeclAttr<"extern", [CallableDecl, GlobalVarDecl]> {
+    Args = [EnumArg<"lang", ["C", "CXX"], false, "", [EnumArgAlias<"CPP", "CXX">,
+                                                      EnumArgAlias<"C++", "CXX">]>]
+    Visit = BeforeDeclaration
+}
+
+def Inline : DeclAttr<"inline", [CallableDecl]> {
+    Inherited = true
+    Args = [EnumArg<"level", ["always", "never", "hint"], true, "hint">]
+}
+
+def Implicit : DeclAttr<"implicit", [CallableDecl]>
+def Thin : TypeAttr<"thin"> {
+    Visit = Immediate
+    IgnoreFollowingParens = true
+}
+
+def Opaque : DeclAttr<"opaque", [RecordDecl]> {
+    Visit = Never
+}
+
+def Align : DeclAttr<"align", [RecordDecl, VarDecl]> {
+    Args = [ExprArg<"alignment">]
+    Visit = AfterSema
+}
+
+def DiscardableResult : DeclAttr<"discardableResult", [CallableDecl]> {
+    Visit = Never
+    Inherited = true
+}
+
+def AutoClosure : DeclAttr<"autoclosure", [FuncArgDecl]> {
+    Visit = Never
+}
+
+def Escaping : DeclAttr<"escaping", [FuncArgDecl]> {
+    Visit = Never
+}
+
+def Testable : DeclAttr<"testable", [Decl]> {
+    Visit = Never
+}
+
+def CompileTime : DeclAttr<"compiletime", [Decl]> {
+    Visit = Never
+    Inherited = true
+}
+
+def NoDerive : DeclAttr<"noDerive", [RecordDecl]> {
+    Visit = Never
+    Args = [
+        EnumArg<
+            "kind",
+            [
+                "Equatable", "Copyable", "Hashable",
+                "RawRepresentable", "StringRepresentable",
+                "_All"
+            ],
+            true, "_All",
+            [EnumArgAlias<"*", "_All">]
+        >
+    ]
+}
+
+def Strong : DeclAttr<"strong", [AliasDecl]> {
+    Visit = BeforeDeclaration
+}
+
+def VersionDecl : DeclAttr<"version", [Decl]> {
+    Visit = BeforeDeclaration
+    Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]
+}
+
+def VersionStmt : StmtAttr<"version"> {
+    Visit = BeforeDeclaration
+    Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]
+}
+
+// hidden attributes
+def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
+    Visit = Immediate
+    Args = [StringArg<"builtinName", true, "">]
+}
+
+def _Semantics : DeclAttr<"_semantics", [NamedDecl]> {
+    Visit = Immediate
+    Args = [StringArg<"semanticsKind">]
+}

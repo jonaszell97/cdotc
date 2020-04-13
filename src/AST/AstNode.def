@@ -1,0 +1,131 @@
+
+#ifdef CDOT_ASTNODE
+#  define CDOT_STMT(Name) CDOT_ASTNODE(Name)
+#endif
+
+#ifndef CDOT_ABSTRACT
+#  define CDOT_ABSTRACT(Name)
+#endif
+
+#ifdef CDOT_STMT
+#  ifndef CDOT_EXPR
+#     define CDOT_EXPR(Name) CDOT_STMT(Name)
+#  endif
+
+   CDOT_ABSTRACT(_firstStatement)
+      CDOT_STMT(CompoundStmt)
+      CDOT_STMT(DeclStmt)
+      CDOT_STMT(AttributedStmt)
+
+      CDOT_STMT(BreakStmt)
+      CDOT_STMT(ContinueStmt)
+      CDOT_STMT(ReturnStmt)
+      CDOT_STMT(CaseStmt)
+      CDOT_STMT(ForStmt)
+      CDOT_STMT(IfStmt)
+      CDOT_STMT(WhileStmt)
+      CDOT_STMT(ForInStmt)
+      CDOT_STMT(MatchStmt)
+
+      CDOT_STMT(DoStmt)
+      CDOT_STMT(ThrowStmt)
+      CDOT_STMT(DebugStmt)
+      CDOT_STMT(NullStmt)
+
+      CDOT_STMT(DiscardAssignStmt)
+
+      CDOT_STMT(MacroExpansionStmt)
+
+      CDOT_STMT(StaticIfStmt)
+      CDOT_STMT(StaticForStmt)
+      CDOT_STMT(MixinStmt)
+   CDOT_ABSTRACT(_lastStatement)
+#endif
+
+#ifdef CDOT_EXPR
+#  ifndef CDOT_TYPE_EXPR
+#     define CDOT_TYPE_EXPR(Name) CDOT_EXPR(Name)
+#  endif
+
+   CDOT_ABSTRACT(_firstExpr)
+      CDOT_EXPR(ParenExpr)
+      CDOT_EXPR(AttributedExpr)
+
+      CDOT_EXPR(IntegerLiteral)
+      CDOT_EXPR(FPLiteral)
+      CDOT_EXPR(BoolLiteral)
+      CDOT_EXPR(CharLiteral)
+      CDOT_EXPR(NoneLiteral)
+      CDOT_EXPR(StringLiteral)
+      CDOT_EXPR(StringInterpolation)
+      CDOT_EXPR(LambdaExpr)
+      CDOT_EXPR(DictionaryLiteral)
+      CDOT_EXPR(ArrayLiteral)
+      CDOT_EXPR(TupleLiteral)
+
+      CDOT_ABSTRACT(_firstIdentifiedExpr)
+         CDOT_EXPR(IdentifierRefExpr)
+         CDOT_EXPR(EnumCaseExpr)
+      CDOT_ABSTRACT(_lastIdentifiedExpr)
+
+      CDOT_EXPR(DeclRefExpr)
+      CDOT_EXPR(MemberRefExpr)
+      CDOT_EXPR(OverloadedDeclRefExpr)
+
+      CDOT_EXPR(CallExpr)
+      CDOT_EXPR(AnonymousCallExpr)
+      CDOT_EXPR(SubscriptExpr)
+      CDOT_EXPR(BuiltinExpr)
+      CDOT_EXPR(TupleMemberExpr)
+      CDOT_EXPR(TemplateArgListExpr)
+
+      CDOT_EXPR(SelfExpr)
+      CDOT_EXPR(SuperExpr)
+      CDOT_EXPR(BuiltinIdentExpr)
+
+      CDOT_EXPR(ExpressionPattern)
+      CDOT_EXPR(CasePattern)
+      CDOT_EXPR(IsPattern)
+
+      CDOT_EXPR(ExprSequence)
+      CDOT_EXPR(UnaryOperator)
+      CDOT_EXPR(BinaryOperator)
+      CDOT_EXPR(AssignExpr)
+      CDOT_EXPR(CastExpr)
+      CDOT_EXPR(TypePredicateExpr)
+      CDOT_EXPR(AddrOfExpr)
+
+      CDOT_EXPR(IfExpr)
+      CDOT_EXPR(TryExpr)
+      CDOT_EXPR(AwaitExpr)
+      CDOT_EXPR(ImplicitCastExpr)
+
+      CDOT_EXPR(StaticExpr)
+      CDOT_EXPR(ConstraintExpr)
+      CDOT_EXPR(TraitsExpr)
+      CDOT_EXPR(MixinExpr)
+      CDOT_EXPR(VariadicExpansionExpr)
+
+      CDOT_EXPR(MacroVariableExpr)
+      CDOT_EXPR(MacroExpansionExpr)
+
+      CDOT_ABSTRACT(_firstTypeExpr)
+         CDOT_TYPE_EXPR(TupleTypeExpr)
+         CDOT_TYPE_EXPR(ArrayTypeExpr)
+         CDOT_TYPE_EXPR(FunctionTypeExpr)
+         CDOT_TYPE_EXPR(DeclTypeExpr)
+         CDOT_TYPE_EXPR(PointerTypeExpr)
+         CDOT_TYPE_EXPR(ReferenceTypeExpr)
+         CDOT_TYPE_EXPR(OptionTypeExpr)
+         CDOT_TYPE_EXPR(ExistentialTypeExpr)
+      CDOT_ABSTRACT(_lastTypeExpr)
+   CDOT_ABSTRACT(_lastExpr)
+#endif
+
+CDOT_ABSTRACT(_lastASTNode)
+
+#undef CDOT_ASTNODE
+#undef CDOT_ABSTRACT
+#undef CDOT_STMT
+#undef CDOT_EXPR
+#undef CDOT_TYPE_EXPR

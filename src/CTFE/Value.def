@@ -1,0 +1,12 @@
+
+#ifdef CDOT_CTFEVAL
+   CDOT_CTFEVAL(IntVal)
+   CDOT_CTFEVAL(FPVal)
+   CDOT_CTFEVAL(PtrVal)
+   CDOT_CTFEVAL(StringVal)
+   CDOT_CTFEVAL(StructVal)
+   CDOT_CTFEVAL(MemBufferVal)
+   CDOT_CTFEVAL(FunctionVal)
+#endif
+
+#undef CDOT_CTFEVAL
