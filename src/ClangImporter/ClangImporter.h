@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.07.18.
-//
-
 #ifndef CDOT_CLANGIMPORTER_H
 #define CDOT_CLANGIMPORTER_H
 

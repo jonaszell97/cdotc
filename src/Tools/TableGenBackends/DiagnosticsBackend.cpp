@@ -1,18 +1,15 @@
-//
-// Created by Jonas Zell on 15.02.18.
-//
 
-#include "TableGen/Record.h"
-#include "TableGen/Value.h"
-#include "TableGen/Type.h"
+#include "tblgen/Record.h"
+#include "tblgen/Type.h"
+#include "tblgen/Value.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/Casting.h>
 
-using namespace cdot::tblgen;
-using llvm::cast;
+using namespace tblgen;
+using namespace tblgen::support;
 
 namespace {
 
@@ -35,7 +32,7 @@ public:
           << Allmacro << "(name, msg)" << "\n";
       out << "#endif\n\n";
 
-      llvm::SmallVector<Record*, 256> vec;
+      std::vector<Record*> vec;
 
       // Errors
       RK.getAllDefinitionsOf("Error", vec);
@@ -46,7 +43,7 @@ public:
       for (auto &Err : vec) {
          auto msg = cast<StringLiteral>(Err->getFieldValue("msg"))->getVal();
          bool fatal = cast<IntegerLiteral>(Err->getFieldValue("fatal"))
-            ->getVal().getBoolValue();
+            ->getVal() != 0;
 
          out << "   " << ErrMacro << "(" << Err->getName()
              << ", \"" << msg << "\", " << (fatal ? "true" : "false")

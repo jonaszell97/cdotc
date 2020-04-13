@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 31.05.18.
-//
-
 #include "ILReader.h"
 
 #include "ASTReader.h"

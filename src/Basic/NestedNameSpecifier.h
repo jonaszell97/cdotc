@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 06.08.18.
-//
-
 #ifndef CDOT_NESTEDNAMESPECIFIER_H
 #define CDOT_NESTEDNAMESPECIFIER_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.03.18.
-//
-
 #ifndef CDOT_USEBEFOREINIT_H
 #define CDOT_USEBEFOREINIT_H
 

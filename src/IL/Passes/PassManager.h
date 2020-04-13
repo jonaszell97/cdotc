@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 22.11.17.
-//
-
 #ifndef CDOT_ILPASSMANAGER_H
 #define CDOT_ILPASSMANAGER_H
 

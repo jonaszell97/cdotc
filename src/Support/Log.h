@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-10-28.
-//
-
 #ifndef CDOT_LOG_H
 #define CDOT_LOG_H
 

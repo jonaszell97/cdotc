@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 02.08.18.
-//
-
 #ifndef CDOT_SAVEANDRESTORE_H
 #define CDOT_SAVEANDRESTORE_H
 

@@ -1,4 +1,4 @@
-tblgen="/Users/Jonas/CDot/cmake-build-debug/cdot-tblgen"
+tblgen=tblgen
 
 $tblgen ../../Query/Queries.tg -query-defs /Users/Jonas/CDot/cmake-build-debug/libcdotc-tblgens.dylib > /Users/Jonas/CDot/src/Query/Inc/Queries.def
 

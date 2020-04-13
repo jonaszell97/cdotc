@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 26.11.17.
-//
-
 #include "CastKind.h"
 
 namespace cdot {

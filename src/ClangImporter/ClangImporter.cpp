@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.07.18.
-//
-
 #include "ClangImporter.h"
 
 #include "AST/ASTContext.h"

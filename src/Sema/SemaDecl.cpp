@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 08.09.17.
-//
-
 #include "Driver/Compiler.h"
 
 #include "AST/Decl.h"
@@ -676,7 +672,8 @@ void SemaPass::ActOnFieldDecl(DeclContext *DC, FieldDecl *F)
 
    // field accessor is not visible via normal lookup
    if (auto Acc = F->getAccessor()) {
-      ActOnPropDecl(DC, Acc);
+      addDeclToContext(*DC, (Decl*)Acc);
+//      ActOnPropDecl(DC, Acc);
    }
 
    if (isa<ProtocolDecl>(DC)) {

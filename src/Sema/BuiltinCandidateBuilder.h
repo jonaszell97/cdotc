@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.02.18.
-//
-
 #ifndef CDOT_BUILTINCANDIDATEBUILDER_H
 #define CDOT_BUILTINCANDIDATEBUILDER_H
 

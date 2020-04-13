@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 22.11.17.
-//
-
 #include "VerifierPass.h"
 
 #include "Basic/CastKind.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
-
 #include "GlobalVariable.h"
 
 #include "AST/ASTContext.h"

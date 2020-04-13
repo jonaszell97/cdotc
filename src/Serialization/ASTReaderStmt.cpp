@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
-
 #include "BitCodes.h"
 #include "ASTReader.h"
 #include "ASTReaderInternals.h"

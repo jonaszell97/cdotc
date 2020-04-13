@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.08.18.
-//
-
 #ifndef CDOT_IRDEBUGANNOTATEPASS_H
 #define CDOT_IRDEBUGANNOTATEPASS_H
 

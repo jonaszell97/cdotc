@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.12.17.
-//
-
 #include "TemplateInstantiator.h"
 
 #include "AST/ASTContext.h"

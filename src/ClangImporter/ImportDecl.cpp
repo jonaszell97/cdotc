@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.07.18.
-//
-
 #include "ImporterImpl.h"
 
 #include "AST/ASTContext.h"

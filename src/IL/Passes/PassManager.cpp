@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 22.11.17.
-//
-
 #include "PassManager.h"
 
 #include "IL/Analysis/AnalysisKinds.h"

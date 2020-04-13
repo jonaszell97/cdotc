@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.06.18.
-//
-
 #ifndef CDOT_MODULEREADER_H
 #define CDOT_MODULEREADER_H
 
@@ -229,9 +225,6 @@ public:
 
    ModuleReader(const ModuleReader&) = delete;
    ModuleReader &operator=(const ModuleReader&) = delete;
-
-   ModuleReader(ModuleReader&&) = default;
-   ModuleReader &operator=(ModuleReader&&) = default;
 
    Module *ReadModule();
 

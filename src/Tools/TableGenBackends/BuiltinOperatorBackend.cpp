@@ -1,18 +1,14 @@
-//
-// Created by Jonas Zell on 14.02.18.
-//
 
-#include "TableGen/Record.h"
-#include "TableGen/Value.h"
-#include "TableGen/Type.h"
+#include "tblgen/Record.h"
+#include "tblgen/Type.h"
+#include "tblgen/Value.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/Casting.h>
 
-using namespace cdot::tblgen;
-using llvm::cast;
+using namespace tblgen;
+using namespace tblgen::support;
 
 namespace {
 
@@ -30,11 +26,10 @@ public:
 
    void emit()
    {
-      llvm::SmallVector<Record*, 16> vec;
+      std::vector<Record*> vec;
 
       // Precedence Groups
-      RK.getAllDefinitionsOf(RK.lookupClass("PrecedenceGroup"),
-                             vec);
+      RK.getAllDefinitionsOf(RK.lookupClass("PrecedenceGroup"), vec);
 
       out << "#ifdef " << PGMacro << "\n";
       for (auto &PG : vec) {
@@ -68,7 +63,7 @@ public:
       out << "#ifdef " << BinOpMacro << "\n";
 
       for (auto &BinOp : Binary.getAllRecords()) {
-         emitOp(*BinOp.getValue(), Infix);
+         emitOp(*BinOp, Infix);
       }
 
       out << "#endif\n#undef " << BinOpMacro << "\n\n";
@@ -79,14 +74,14 @@ public:
       out << "#ifdef " << PrefixOpMacro << "\n";
 
       for (auto &UnOp : PrefixUnary.getAllRecords()) {
-         emitOp(*UnOp.getValue(), Prefix);
+         emitOp(*UnOp, Prefix);
       }
 
       out << "#endif\n#undef " << PrefixOpMacro << "\n\n";
       out << "#ifdef " << PostfixOpMacro << "\n";
 
       for (auto &UnOp : PostfixUnary.getAllRecords()) {
-         emitOp(*UnOp.getValue(), Postfix);
+         emitOp(*UnOp, Postfix);
       }
 
       out << "#endif\n#undef " << PostfixOpMacro;
@@ -173,7 +168,7 @@ void AttrDefEmitter::emitOp(Record &Op, Fix fix)
       ->getRecord();
 
    bool lvalueOperand = cast<IntegerLiteral>(Op.getFieldValue("lvalueOperand"))
-      ->getVal().getBoolValue();
+      ->getVal() != 0;
 
    for (auto &TyVal : ApplicableTys->getValues()) {
       // (name, symbol, operandTy, resultTy, lvalueOperand)

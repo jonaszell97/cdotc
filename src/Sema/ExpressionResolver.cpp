@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.11.17.
-//
-
 #include "ExpressionResolver.h"
 #include "CandidateSet.h"
 #include "Query/QueryContext.h"

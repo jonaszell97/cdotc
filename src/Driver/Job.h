@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.06.18.
-//
-
 #ifndef CDOT_JOB_H
 #define CDOT_JOB_H
 

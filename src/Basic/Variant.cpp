@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 14.06.17.
-//
-
 #include "Variant.h"
 
 #include "Lex/Token.h"

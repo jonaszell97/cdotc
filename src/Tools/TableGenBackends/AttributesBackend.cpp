@@ -1,20 +1,16 @@
-//
-// Created by Jonas Zell on 16.03.18.
-//
 
-#include "TableGen/Record.h"
-#include "TableGen/Value.h"
-#include "TableGen/Type.h"
-#include "Support/Casting.h"
-#include "Support/StringSwitch.h"
+#include "tblgen/Record.h"
+#include "tblgen/Value.h"
+#include "tblgen/Type.h"
+#include "tblgen/Support/Casting.h"
+#include "tblgen/Support/StringSwitch.h"
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/ArrayRef.h>
 
-#include <unordered_map>
-
-using namespace cdot::tblgen;
-using namespace cdot::support;
+using namespace tblgen;
+using namespace tblgen::support;
 
 using std::string;
 
@@ -86,7 +82,7 @@ void AttrDefEmitter::emit()
        << "#   define " << VisitMacro << "(Name)\n"
        << "#endif\n\n";
 
-   llvm::SmallVector<Record*, 16> Attrs;
+   std::vector<Record*> Attrs;
 
    // Decl Attributes
    Attrs.clear();
@@ -152,7 +148,7 @@ void AttrDefEmitter::emit()
    out << "   " << AbstractMacro << "(_lastTypeAttr)\n";
    out << "#endif\n#undef " << TypeAttrMacro << "\n\n";
 
-   llvm::SmallVector<Record*, 16> VisitPoints;
+   std::vector<Record*> VisitPoints;
    RK.getAllDefinitionsOf("VisitationPoint", VisitPoints);
 
    for (auto &VP : VisitPoints) {
@@ -180,7 +176,7 @@ public:
    void emitPrintPrettyImpl(Record *Attr, Class *Base);
    void emitCloneImpl(Record *Attr, Class *Base);
 
-   void emitAttrSema(llvm::SmallVectorImpl<Record*> &Attrs);
+   void emitAttrSema(std::vector<Record*> &Attrs);
 
 private:
    llvm::raw_ostream &out;
@@ -259,7 +255,7 @@ std::string buildDefaultValue(RecordVal *Arg, Value *Default)
    auto C = Arg->getRecord()->getBases().front().getBase();
    if (C->getName() == "IntArg") {
       str += "llvm::APSInt(llvm::APInt(64, ";
-      str += cast<IntegerLiteral>(Default)->getVal().toString(10);
+      str += std::to_string(cast<IntegerLiteral>(Default)->getVal());
       str += "), false)";
 
       return str;
@@ -267,11 +263,7 @@ std::string buildDefaultValue(RecordVal *Arg, Value *Default)
 
    if (C->getName() == "FloatArg") {
       str += "llvm::APFloat(";
-
-      llvm::SmallString<64> Str;
-      cast<FPLiteral>(Default)->getVal().toString(Str);
-
-      str += Str.str();
+      str += std::to_string(cast<FPLiteral>(Default)->getVal());
       str += ")";
 
       return str;
@@ -302,7 +294,7 @@ std::string buildDefaultValue(RecordVal *Arg, Value *Default)
 
 void AttrClassEmitter::emit()
 {
-   llvm::SmallVector<Record*, 16> Attrs;
+   std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
    // class declarations
@@ -435,7 +427,7 @@ void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
 
       bool IsOptional = cast<IntegerLiteral>(ArgVal->getRecord()
                                                    ->getFieldValue("optional"))
-         ->getVal().getBoolValue();
+         ->getVal() != 0;
 
       if (IsOptional) {
          if (ArgVal->getRecord()->hasField("defaultVal")) {
@@ -506,7 +498,7 @@ void AttrClassEmitter::emitGetVisitationPoint()
 {
    std::unordered_map<Record*, std::vector<Record*>> AttrMap;
 
-   llvm::SmallVector<Record*, 16> Attrs;
+   std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
    for (auto &Attr : Attrs) {
@@ -541,12 +533,12 @@ void AttrClassEmitter::emitIsInherited()
 {
    std::unordered_map<Record*, bool> AttrMap;
 
-   llvm::SmallVector<Record*, 16> Attrs;
+   std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
    for (auto &Attr : Attrs) {
       bool IsInherited = cast<IntegerLiteral>(Attr->getFieldValue("Inherited"))
-         ->getVal().getBoolValue();
+         ->getVal() != 0;
 
       AttrMap[Attr] = IsInherited;
    }
@@ -685,7 +677,7 @@ void AttrClassEmitter::emitCloneImpl(Record *Attr, Class *)
    out << Newline() << "}\n\n";
 }
 
-void AttrClassEmitter::emitAttrSema(llvm::SmallVectorImpl<Record*> &Attrs)
+void AttrClassEmitter::emitAttrSema(std::vector<Record*> &Attrs)
 {
    for (auto &Attr : Attrs) {
       auto VisitNever =
@@ -696,7 +688,7 @@ void AttrClassEmitter::emitAttrSema(llvm::SmallVectorImpl<Record*> &Attrs)
          continue;
 
       auto BaseName = Attr->getBases().front().getBase()->getName();
-      llvm::StringRef Kind = cdot::StringSwitch<llvm::StringRef>(BaseName)
+      llvm::StringRef Kind = StringSwitch<llvm::StringRef>(BaseName)
          .Case("DeclAttr", "Decl")
          .Case("ExprAttr", "Expression")
          .Case("TypeAttr", "Expression")
@@ -765,7 +757,7 @@ private:
 
 void AttrParseEmitter::emit()
 {
-   llvm::SmallVector<Record*, 16> Attrs;
+   std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
    out << "#ifdef CDOT_PARSE_ATTR_MAIN" << Newline();
@@ -855,13 +847,13 @@ void AttrParseEmitter::emit()
 
       Switch.flush();
 
-      llvm::SmallVector<Value*, 4> DefaultVals;
+      std::vector<Value*> DefaultVals;
       unsigned FirstDefault = unsigned(-1);
       unsigned i = 0;
 
       for (auto &Arg : Args) {
          auto Optional = cast<IntegerLiteral>(cast<RecordVal>(Arg)->getRecord()
-            ->getFieldValue("optional"))->getVal().getBoolValue();
+            ->getFieldValue("optional"))->getVal() != 0;
 
          if (Optional) {
             if (FirstDefault == -1)
@@ -917,7 +909,7 @@ void AttrParseEmitter::emit()
       }
 
       bool SkipArgs = cast<IntegerLiteral>(
-         Attr->getFieldValue("IgnoreFollowingParens"))->getVal().getBoolValue();
+         Attr->getFieldValue("IgnoreFollowingParens"))->getVal() != 0;
 
       if (!SkipArgs) {
          // build a simple state machine for argument parsing
@@ -1189,15 +1181,20 @@ void AttrParseEmitter::readIntDefault(llvm::raw_ostream &out,
                                       Value *DefaultVal) {
    auto *Val = cast<IntegerLiteral>(DefaultVal);
    out << TypeAndName.second << " = ";
-   if (Val->getVal().getBitWidth() <= 64) {
-      out << "llvm::APSInt(llvm::APInt(" << Val->getVal().getBitWidth() << ", "
-          << Val->getVal().getZExtValue() << ", "
-          << Val->getVal().isSigned() << ")";
+
+   auto *type = cast<IntType>(Val->getType());
+   auto bitwidth = type->getBitWidth();
+   auto isUnsigned = type->isUnsigned();
+
+   if (bitwidth <= 64) {
+      out << "llvm::APSInt(llvm::APInt(" << bitwidth << ", "
+          << Val->getVal() << ", "
+          << !isUnsigned << ")";
    }
    else {
-      out << "llvm::APSInt(llvm::APInt(" << Val->getVal().getBitWidth() << ", "
-          << "R\"__(" << Val->getVal().getZExtValue() << ")__\", "
-          << Val->getVal().isSigned() << ")";
+      out << "llvm::APSInt(llvm::APInt(" << bitwidth << ", "
+          << "R\"__(" << Val->getVal() << ")__\", "
+          << !isUnsigned << ")";
    }
 
    out << ";\n";
@@ -1207,7 +1204,7 @@ void AttrParseEmitter::readFloatDefault(llvm::raw_ostream &out,
                                         std::pair<string, string> &TypeAndName,
                                         Value *DefaultVal) {
    out << TypeAndName.second << " = llvm::APFloat(";
-   cast<FPLiteral>(DefaultVal)->getVal().print(out);
+   out << cast<FPLiteral>(DefaultVal)->getVal();
    out << ");\n";
 }
 
@@ -1262,7 +1259,7 @@ private:
 
 void AttrSerializeEmitter::emit()
 {
-   llvm::SmallVector<Record*, 16> Attrs;
+   std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
    out << "#ifdef CDOT_ATTR_SERIALIZE" << Newline();
@@ -1379,7 +1376,7 @@ void AttrSerializeEmitter::emitSerialize(llvm::ArrayRef<Record *> Attrs)
 
 void AttrSerializeEmitter::emitDeserialize(llvm::ArrayRef<Record *> Attrs)
 {
-   llvm::SmallVector<llvm::StringRef, 4> FieldNames;
+   std::vector<llvm::StringRef> FieldNames;
    for (auto &Attr : Attrs) {
       out << Attr->getName() << "Attr *ASTAttrReader::read" << Attr->getName()
           << "Attr(SourceRange SR) {\n";

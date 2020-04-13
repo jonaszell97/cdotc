@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.06.17.
-//
-
 #ifndef CDOT_PARSER_H
 #define CDOT_PARSER_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.01.18.
-//
-
 #ifndef CDOT_PRETTYPRINT_H
 #define CDOT_PRETTYPRINT_H
 

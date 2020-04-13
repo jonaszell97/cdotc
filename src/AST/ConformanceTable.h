@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.04.18.
-//
-
 #ifndef CDOT_CONFORMANCETABLE_H
 #define CDOT_CONFORMANCETABLE_H
 

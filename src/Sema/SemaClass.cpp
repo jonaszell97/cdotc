@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.10.17.
-//
-
 #include "SemaPass.h"
 
 #include "AST/TypeVisitor.h"
@@ -361,7 +357,9 @@ QueryResult ResolveRawTypeQuery::run()
          bool Conforms = QC.Sema->ConformsTo(res.get(), Eq);
          if (!Conforms) {
             QC.Sema->diagnose(err_generic_error,
-                              "enum raw type must conform to 'Equatable'");
+                              "enum raw type must conform to 'Equatable', "
+                                  + res.get()->toString() + " given",
+                              E->getSourceLoc());
          }
          else {
             CaseValTy = res.get();
@@ -369,7 +367,9 @@ QueryResult ResolveRawTypeQuery::run()
       }
       else {
          QC.Sema->diagnose(err_generic_error,
-                           "enum raw type must conform to 'Equatable'");
+                           "enum raw type must conform to 'Equatable'"
+                              + res.get()->toString() + " given",
+                           E->getSourceLoc());
       }
    }
 
@@ -408,6 +408,10 @@ static bool mustProvideValue(QueryContext &QC, QualType RawType)
 
 static void synthesizeValue(SemaPass &Sema, EnumCaseDecl *Case,
                             QualType RawType, int64_t RawVal) {
+   if (auto *R = RawType->asRecordType()) {
+      RawType = cast<StructDecl>(R->getRecord())->getFields().front()->getType();
+   }
+
    Case->setILValue(Sema.getILGen().Builder.GetConstantInt(RawType, RawVal));
 }
 

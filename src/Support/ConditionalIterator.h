@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 22.01.18.
-//
-
 #ifndef CDOT_CONDITIONALITERATOR_H
 #define CDOT_CONDITIONALITERATOR_H
 

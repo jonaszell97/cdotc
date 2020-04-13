@@ -1,19 +1,15 @@
-//
-// Created by Jonas Zell on 14.02.18.
-//
 
-#include "TableGen/Record.h"
-#include "TableGen/Value.h"
-#include "TableGen/Type.h"
+#include "tblgen/Record.h"
+#include "tblgen/Type.h"
+#include "tblgen/Value.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/Casting.h>
 
-using namespace cdot::tblgen;
-using llvm::cast;
+using namespace tblgen;
+using namespace tblgen::support;
 
 namespace {
 
@@ -27,7 +23,7 @@ public:
 
    void emit()
    {
-      llvm::SmallVector<Record*, 16> vec;
+      std::vector<Record*> vec;
       llvm::SmallPtrSet<Record*, 16> Visited;
 
       out << "#ifdef " << TypeMacro << "\n"
@@ -45,7 +41,11 @@ public:
 
          auto name = def->getName();
          bool isUnsigned = name.front() == 'u';
-         int bitwidth = ::atoi(name.drop_front(1).data());
+
+         std::string_view bitwidthStr = name;
+         bitwidthStr.remove_prefix(1);
+
+         int bitwidth = ::atoi(std::string(bitwidthStr).c_str());
 
          out << "  " << IntMacro << "(" << name << ", " << bitwidth << ", "
              << isUnsigned << ")\n";
@@ -61,8 +61,10 @@ public:
          Visited.insert(def);
 
          auto name = def->getName();
-         int precision = ::atoi(name.drop_front(1).data());
+         std::string_view bitwidthStr = name;
+         bitwidthStr.remove_prefix(1);
 
+         int precision = ::atoi(std::string(bitwidthStr).c_str());
          out << "  " << FPMacro << "(" << name << ", " << precision << ")\n";
       }
 

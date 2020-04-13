@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.07.18.
-//
-
 #ifndef CDOT_IMPORTERIMPL_H
 #define CDOT_IMPORTERIMPL_H
 

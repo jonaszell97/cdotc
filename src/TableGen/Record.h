@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.02.18.
-//
-
 #ifndef TABLEGEN_RECORD_H
 #define TABLEGEN_RECORD_H
 

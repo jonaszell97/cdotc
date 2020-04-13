@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.02.18.
-//
-
 #include "BuiltinCandidateBuilder.h"
 
 #include "AST/Expression.h"

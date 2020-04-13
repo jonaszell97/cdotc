@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.10.17.
-//
-
 #include "SemaPass.h"
 
 #include "Sema/ExpressionResolver.h"

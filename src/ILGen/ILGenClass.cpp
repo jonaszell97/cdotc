@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 19.11.17.
-//
-
 #include "ILGenPass.h"
 
 #include "AST/Decl.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 03.09.17.
-//
-
 #ifndef CDOT_COMPILER_H
 #define CDOT_COMPILER_H
 

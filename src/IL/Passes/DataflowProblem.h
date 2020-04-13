@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.04.18.
-//
-
 #ifndef CDOT_DATAFLOWPROBLEM_H
 #define CDOT_DATAFLOWPROBLEM_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.02.18.
-//
-
 #include "Type.h"
 #include "Record.h"
 #include "Support/Casting.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.01.18.
-//
-
 #include "Scope.h"
 #include "AST/Decl.h"
 #include "AST/Expression.h"

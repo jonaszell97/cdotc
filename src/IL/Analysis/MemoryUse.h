@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
-
 #ifndef CDOT_BORROW_H
 #define CDOT_BORROW_H
 

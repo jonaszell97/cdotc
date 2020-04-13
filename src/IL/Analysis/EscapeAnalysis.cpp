@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.05.18.
-//
-
 #include "EscapeAnalysis.h"
 
 using namespace cdot::support;

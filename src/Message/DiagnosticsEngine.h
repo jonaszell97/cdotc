@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 15.03.18.
-//
-
 #ifndef CDOT_DIAGNOSTICSENGINE_H
 #define CDOT_DIAGNOSTICSENGINE_H
 

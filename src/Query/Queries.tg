@@ -1855,6 +1855,8 @@ def ResolveMetaDeclarations : VoidQuery {
         /// The context to prepare for lookup.
         DeclContextParam<"DC">
     ]
+
+    ignoreCircularDependency = true
 }
 
 /// Prepare a declaration context for type lookup, i.e. types that are contained within it.

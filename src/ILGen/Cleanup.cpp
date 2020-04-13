@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.04.18.
-//
-
 #include "Cleanup.h"
 
 #include "AST/Decl.h"

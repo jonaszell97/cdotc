@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 07.02.18.
-//
-
 #ifndef CDOT_STATICEVALUATOR_H
 #define CDOT_STATICEVALUATOR_H
 

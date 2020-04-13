@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2019-07-19.
-//
-
 #include "Sema/SemaPass.h"
 
 using namespace cdot;

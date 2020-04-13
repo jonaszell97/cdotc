@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 02.01.18.
-//
-
 #include "Value.h"
 
 using std::string;

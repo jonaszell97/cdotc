@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.02.18.
-//
-
 #ifndef TBLGEN_TABLEGEN_H
 #define TBLGEN_TABLEGEN_H
 

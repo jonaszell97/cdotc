@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 14.08.18.
-//
-
 #include "ILGenPass.h"
 
 #include "AST/TypeBuilder.h"

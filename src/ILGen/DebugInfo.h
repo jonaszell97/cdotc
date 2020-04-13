@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 12.10.17.
-//
-
 #ifndef CDOT_DEBUGINFO_H
 #define CDOT_DEBUGINFO_H
 

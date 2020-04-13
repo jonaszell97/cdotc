@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 31.05.18.
-//
-
 #ifndef CDOT_ILWRITER_H
 #define CDOT_ILWRITER_H
 

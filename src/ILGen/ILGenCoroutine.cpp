@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 02.07.18.
-//
-
 #include "ILGenPass.h"
 
 #include "IL/Constants.h"

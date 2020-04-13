@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-12-07.
-//
-
 #include "AST/ASTVisitor.h"
 #include "ConstraintBuilder.h"
 #include "Query/QueryContext.h"

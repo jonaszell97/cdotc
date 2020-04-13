@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-12-12.
-//
-
 #include "OverloadResolver.h"
 
 #include "AST/Decl.h"

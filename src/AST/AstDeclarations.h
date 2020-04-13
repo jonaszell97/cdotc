@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 10.10.17.
-//
-
 namespace cdot {
 namespace ast {
 

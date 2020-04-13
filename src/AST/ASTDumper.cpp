@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 11.02.18.
-//
-
 #include "ASTDumper.h"
 
 #include "AST/ASTVisitor.h"

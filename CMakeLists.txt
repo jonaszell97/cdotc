@@ -5,6 +5,10 @@ project(CDot)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# include tblgen
+set(TBLGEN_DIR /Users/Jonas/CLionProjects/TableGen)
+include_directories("${TBLGEN_DIR}/include")
+
 # find LLVM
 set(LLVM_DIR /usr/local/Cellar/llvm/6.0.0/lib/cmake/llvm)
 find_package(LLVM REQUIRED CONFIG)

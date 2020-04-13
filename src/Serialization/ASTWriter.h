@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.05.18.
-//
-
 #ifndef CDOT_ASTWRITER_H
 #define CDOT_ASTWRITER_H
 

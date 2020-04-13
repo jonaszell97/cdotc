@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 15.03.18.
-//
-
 #include "DiagnosticsEngine.h"
 
 using namespace cdot;

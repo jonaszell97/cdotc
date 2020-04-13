@@ -5,10 +5,10 @@
     "version": "0.0.1",
     "publisher": "Jonas",
     "engines": {
-        "vscode": "^1.13.0"
+        "vscode": "^1.36.0"
     },
     "categories": [
-        "Languages"
+        "Programming Languages"
     ],
     "contributes": {
         "languages": [{

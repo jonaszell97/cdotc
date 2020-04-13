@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.04.18.
-//
-
 #ifndef CDOT_CLEANUPACTION_H
 #define CDOT_CLEANUPACTION_H
 

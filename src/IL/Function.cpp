@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
-
 #include "Function.h"
 #include "Argument.h"
 #include "BasicBlock.h"

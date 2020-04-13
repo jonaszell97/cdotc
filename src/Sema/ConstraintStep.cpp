@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-12-03.
-//
-
 #include "ConstraintStep.h"
 
 #include "AST/ASTContext.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.04.18.
-//
-
 #include "SemaPass.h"
 
 #include "Basic/TargetInfo.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.03.18.
-//
-
 #ifndef CDOT_TARGETINFO_H
 #define CDOT_TARGETINFO_H
 

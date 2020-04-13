@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.05.18.
-//
-
 #include "StackPromotion.h"
 
 #include "AST/Decl.h"

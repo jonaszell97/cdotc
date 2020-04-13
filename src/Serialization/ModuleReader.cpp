@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.06.18.
-//
-
 #include "ModuleReader.h"
 
 #include "ASTReaderInternals.h"

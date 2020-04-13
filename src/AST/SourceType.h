@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.03.18.
-//
-
 #ifndef CDOT_SOURCETYPE_H
 #define CDOT_SOURCETYPE_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 09.04.18.
-//
-
 #ifndef CDOT_TYPEBUILDER_H
 #define CDOT_TYPEBUILDER_H
 

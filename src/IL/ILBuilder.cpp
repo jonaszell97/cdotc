@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
-
 #include "ILBuilder.h"
 
 #include "AST/ASTContext.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.08.18.
-//
-
 #ifndef CDOT_QUERY_H
 #define CDOT_QUERY_H
 

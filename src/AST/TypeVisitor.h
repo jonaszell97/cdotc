@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.03.18.
-//
-
 #ifndef CDOT_TYPEVISITOR_H
 #define CDOT_TYPEVISITOR_H
 

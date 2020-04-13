@@ -1,0 +1,85 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "cdot-il",
+	"patterns": [
+		{
+			"name": "comment.line.cdot-il",
+			"begin": ";",
+			"end": "\\n"
+		},
+		{
+			"name": "variable.language.cdot-il",
+			"match": "(%|@|\\$)(`[^`]+`|[a-zA-Z0-9_\\.]+)"
+		},
+		{
+			"name": "variable.language.cdot-il",
+			"match": "\\bMeta\\b"
+		},
+		{
+			"name": "string.quoted.double.cdot-il",
+			"begin": "\"",
+			"end": "\""
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(declare|define|coro|method|on|mut|let|move(d)?|begin_borrow|begin_mut_borrow|end_borrow|end_mut_borrow|get|set|alloc_stack|alloc_heap|alloc_box|dealloc_stack|dealloc_heap|dealloc_box|init_(struct|enum|union|class|lambda|existential|generic)|enum_value|enum_extract|lambda_call|indirect|field_ref|union|field|case|type|static|store|assign|init|call( virtual)?|invoke( virtual)?|(llvm )?intrinsic|ret|yield|(re)?throw|landingpad|unwind|catch(all)?|unreachable|if|else|switch|default|vtable|ptable|virtual|existential_cast|constant|class|struct|enum|protocol|br|label|load|gep|tuple_extract|bitcast|upcast|ext|trunc|sign_cast|dyn_cast|exception_cast|addr_of|inttoenum|align|typeinfo|fpext|fptrunc|to|ptrtoint|inttoptr|ibox|iunbox|fpbox|fpunbox|fptoint|inttofp|extract_capture|captures|mut_ref_to_ref|mut_ptr_to_ptr|nothrow_to_throw|lambda|deinit_temporary|deinit_local|debug_loc|debug_local|line|col|file|name|value|(strong|weak)_(retain|release))\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(external|available_externally|linkonce|linkonce_odr|weak|weak_odr|appending|internal|private|extern_weak|common)\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(default|hidden|protected)\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(local_unnamed_addr|unnamed_addr)\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b(add|sub|mul|div|mod|exp|and|or|xor|ashr|lshr|shl|comp|eq|ne|lt|gt|le|ge|min|neg)\\b"
+		},
+		{
+			"match": "\\[(thin|thick|owned|borrow)\\]",
+			"captures": {
+				"1": {
+					"name": "keyword.control.cdot-il"
+				}
+			}
+		},
+		{
+			"name": "constant.language.cdot-il",
+			"match": "\\b(true|false|null|zeroinitializer)\\b"
+		},
+		{
+			"name": "keyword.control.cdot-il",
+			"match": "\\b([ui][1-9][0-9]*|f32|f64|void)\\**\\b"
+		},
+		{
+			"name": "keyword.operator.cdot-il",
+			"match": "&|\\*|->"
+		},
+		{
+			"name": "constant.numeric.hex.cdot-il",
+			"match": "\\b\\-?0[xX][0-9a-fA-F]+\\b"
+		},
+		{
+			"name": "constant.numeric.binary.cdot-il",
+			"match": "\\b\\-?0[bB][01]+\\b"
+		},
+		{
+			"name": "constant.numeric.octal.cdot-il",
+			"match": "\\b\\-?0[1-9][0-9]*\\b"
+		},
+		{
+			"name": "constant.numeric.decimal.cdot-il",
+			"match": "\\b-?(?:0|[1-9][0-9_]*)(?:\\.[0-9]+){0,1}(?:[eE][-]{0,1}[0-9]+){0,1}([uU][lL]?|[lL][uU]?|[fF]|[dD])?\\b"
+		},
+		{
+			"match": "\\*",
+			"name": "keyword.operator.cdot-il"
+		}
+	],
+	"scopeName": "source.cdot-il"
+}

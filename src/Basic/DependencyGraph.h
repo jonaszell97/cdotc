@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 22.12.17.
-//
-
 #ifndef CDOT_DEPENDENCYGRAPH_H
 #define CDOT_DEPENDENCYGRAPH_H
 

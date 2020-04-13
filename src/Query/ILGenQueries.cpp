@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 26.08.18.
-//
-
 #include "AST/Decl.h"
 #include "IL/Constants.h"
 #include "IL/ILBuilder.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 09.04.18.
-//
-
 #ifndef CDOT_STMTORDECL_H
 #define CDOT_STMTORDECL_H
 

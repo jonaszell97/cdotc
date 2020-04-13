@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
-
 #include "MemoryLocation.h"
 
 #include "IL/Constants.h"

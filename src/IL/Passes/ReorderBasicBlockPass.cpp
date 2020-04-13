@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 20.06.18.
-//
-
 #include "ReorderBasicBlockPass.h"
 
 #include "IL/Analysis/Dominance.h"

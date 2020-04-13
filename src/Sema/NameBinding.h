@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.08.18.
-//
-
 #ifndef CDOT_NAMEBINDING_H
 #define CDOT_NAMEBINDING_H
 

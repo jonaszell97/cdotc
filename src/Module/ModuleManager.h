@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.11.17.
-//
-
 #ifndef CDOT_MODULEMANAGER_H
 #define CDOT_MODULEMANAGER_H
 

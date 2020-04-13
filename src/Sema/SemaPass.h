@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 04.07.17.
-//
-
 #ifndef CDOT_SEMA_H
 #define CDOT_SEMA_H
 

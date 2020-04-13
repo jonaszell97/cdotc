@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.02.18.
-//
-
 #include "Record.h"
 #include "TableGen.h"
 #include "Value.h"

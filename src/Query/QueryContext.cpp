@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.08.18.
-//
-
 #include "QueryContext.h"
 
 #include "Driver/Compiler.h"

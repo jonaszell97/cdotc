@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.01.18.
-//
-
 #include "IdentifierInfo.h"
 
 using namespace cdot::lex;

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 15.02.18.
-//
-
 #include "CandidateSet.h"
 
 #include "AST/Expression.h"

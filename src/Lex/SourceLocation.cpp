@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2019-07-23.
-//
-
 #include "SourceLocation.h"
 
 #include <llvm/Support/raw_ostream.h>

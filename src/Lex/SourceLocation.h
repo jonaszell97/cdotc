@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
-
 #ifndef CDOT_SOURCELOCATION_H
 #define CDOT_SOURCELOCATION_H
 

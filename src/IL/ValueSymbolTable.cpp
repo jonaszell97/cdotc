@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.11.17.
-//
-
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallString.h>
 #include "ValueSymbolTable.h"

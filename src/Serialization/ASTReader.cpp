@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
-
 #include "ASTReader.h"
 
 #include "ASTReaderInternals.h"
@@ -1283,6 +1279,23 @@ ASTReader::ASTReader(ModuleReader &Reader, ASTReader &DeclReader)
 {
 
 }
+
+//ASTReader::ASTReader(ASTReader &&other) noexcept
+//   : Reader(other.Reader), Sema(other.Sema), Context(other.Context),
+//     FileMgr(other.FileMgr), DeclReader(other.DeclReader),
+//     CurrentImportLoc(other.CurrentImportLoc),
+//     Lookups(move(other.Lookups)), DeclsLoaded(move(other.DeclsLoaded)),
+//     DeclIDMap(move(other.DeclIDMap)), DeclsCursor(move(other.DeclsCursor)),
+//     TypesLoaded(move(other.TypesLoaded)), ConformanceData(move(other.ConformanceData)),
+//     ConformanceTable(move(other.ConformanceTable)),
+//     InstantiationTable(move(other.InstantiationTable)),
+//     DeclContextMap(move(other.DeclContextMap)),
+//     DeclsLoaded(move(other.DeclsLoaded)),
+//     DeclsLoaded(move(other.DeclsLoaded)),
+//
+//{
+//
+//}
 
 ASTReader::~ASTReader()
 {

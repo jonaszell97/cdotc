@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.02.18.
-//
-
 #include "LiteralParser.h"
 
 #include "Support/Format.h"

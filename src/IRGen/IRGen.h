@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 10.12.17.
-//
-
 #ifndef CDOT_IRGEN_H
 #define CDOT_IRGEN_H
 

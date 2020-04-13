@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.08.18.
-//
-
 #include "AST/Decl.h"
 #include "Module/Module.h"
 #include "Sema/SemaPass.h"

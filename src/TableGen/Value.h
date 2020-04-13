@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.02.18.
-//
-
 #ifndef CDOT_VALUE_H
 #define CDOT_VALUE_H
 

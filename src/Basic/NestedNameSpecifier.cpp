@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 06.08.18.
-//
-
 #include "NestedNameSpecifier.h"
 
 #include "AST/ASTContext.h"

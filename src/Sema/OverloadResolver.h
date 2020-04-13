@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 08.11.17.
-//
-
 #ifndef CDOT_OVERLOADRESOLVER_H
 #define CDOT_OVERLOADRESOLVER_H
 

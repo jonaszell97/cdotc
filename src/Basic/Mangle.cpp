@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.01.18.
-//
-
 #include "Mangle.h"
 
 #include "AST/Decl.h"

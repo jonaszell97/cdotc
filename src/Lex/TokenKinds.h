@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.01.18.
-//
-
 #ifndef CDOT_TOKENKINDS_H
 #define CDOT_TOKENKINDS_H
 

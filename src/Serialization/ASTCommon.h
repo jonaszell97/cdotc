@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
-
 #ifndef CDOT_ASTCOMMON_H
 #define CDOT_ASTCOMMON_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.06.18.
-//
-
 #ifndef CDOT_DECLBASE_H
 #define CDOT_DECLBASE_H
 

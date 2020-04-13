@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.05.18.
-//
-
 #ifndef CDOT_ESCAPEANALYSIS_H
 #define CDOT_ESCAPEANALYSIS_H
 

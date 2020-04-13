@@ -7609,7 +7609,7 @@ QueryResult QueryContext::ResolveMetaDeclarations(ast::DeclContext* DC)
    case Query::Idle:
       {
          ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Running;
+         _Q->Stat = Query::Idle;
          if (auto _R = _Q->run()) {
             return _R;
          }

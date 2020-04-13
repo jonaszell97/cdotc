@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.05.18.
-//
-
 #include "ASTWriter.h"
 #include "ASTReaderInternals.h"
 #include "AST/ASTVisitor.h"

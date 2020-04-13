@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 22.11.17.
-//
-
 #ifndef CDOT_PASSBASE_H
 #define CDOT_PASSBASE_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.05.18.
-//
-
 #include "UnsafeAnalysis.h"
 
 #include "IL/Analysis/Dominance.h"

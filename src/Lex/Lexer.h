@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.06.17.
-//
-
 #ifndef LEXER_H
 #define LEXER_H
 

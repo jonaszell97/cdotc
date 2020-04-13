@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.05.18.
-//
-
 #ifndef CDOT_BOTTOMUPIPANALYSIS_H
 #define CDOT_BOTTOMUPIPANALYSIS_H
 

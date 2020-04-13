@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
-
 #ifndef CDOT_ASTREADERINTERNALS_H
 #define CDOT_ASTREADERINTERNALS_H
 

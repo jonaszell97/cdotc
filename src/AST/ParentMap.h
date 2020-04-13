@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 06.02.18.
-//
-
 #ifndef CDOT_PARENTMAP_H
 #define CDOT_PARENTMAP_H
 

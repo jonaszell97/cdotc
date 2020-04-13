@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 04.01.18.
-//
-
 #include <Basic/NestedNameSpecifier.h>
 #include "Template.h"
 

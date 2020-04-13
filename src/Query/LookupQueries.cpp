@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.08.18.
-//
-
 #include "AST/Decl.h"
 #include "Basic/NestedNameSpecifier.h"
 #include "IL/Constants.h"

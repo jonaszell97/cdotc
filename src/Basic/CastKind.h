@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 26.11.17.
-//
-
 #ifndef CDOT_CASTKIND_H
 #define CDOT_CASTKIND_H
 

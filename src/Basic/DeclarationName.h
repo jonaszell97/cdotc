@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 25.03.18.
-//
-
 #ifndef CDOT_DECLARATIONNAME_H
 #define CDOT_DECLARATIONNAME_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.03.18.
-//
-
 #include "TargetInfo.h"
 
 #include "AST/ASTContext.h"

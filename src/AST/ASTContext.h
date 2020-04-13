@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.01.18.
-//
-
 #ifndef CDOT_ASTCONTEXT_H
 #define CDOT_ASTCONTEXT_H
 

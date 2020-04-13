@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.04.18.
-//
-
 #ifndef CDOT_DOMINATORTREE_H
 #define CDOT_DOMINATORTREE_H
 

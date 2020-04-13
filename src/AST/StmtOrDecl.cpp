@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 09.04.18.
-//
-
 #include "StmtOrDecl.h"
 
 #include "Decl.h"

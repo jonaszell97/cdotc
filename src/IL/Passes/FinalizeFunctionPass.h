@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
-
 #ifndef CDOT_ELIMINATEASSIGNPASS_H
 #define CDOT_ELIMINATEASSIGNPASS_H
 

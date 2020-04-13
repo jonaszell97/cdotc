@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 02.05.18.
-//
-
 #include "AccessPathIterator.h"
 #include "IL/Instructions.h"
 

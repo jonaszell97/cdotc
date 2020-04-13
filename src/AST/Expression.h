@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 19.06.17.
-//
-
 #ifndef EXPRESSION_H
 #define EXPRESSION_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.04.18.
-//
-
 #include "ConformanceTable.h"
 
 #include "AST/ASTContext.h"

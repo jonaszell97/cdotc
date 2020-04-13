@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 04.10.17.
-//
-
 #include "Diagnostics.h"
 
 #include "DiagnosticsEngine.h"

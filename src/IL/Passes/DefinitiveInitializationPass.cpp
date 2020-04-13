@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.03.18.
-//
-
 #include "DefinitiveInitializationPass.h"
 
 #include "AST/Decl.h"

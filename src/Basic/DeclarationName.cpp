@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 25.03.18.
-//
-
 #include "DeclarationName.h"
 
 #include "AST/ASTContext.h"

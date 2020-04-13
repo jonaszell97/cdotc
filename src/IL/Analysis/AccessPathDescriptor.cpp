@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
-
 #include "AccessPathDescriptor.h"
 
 #include "AST/Decl.h"

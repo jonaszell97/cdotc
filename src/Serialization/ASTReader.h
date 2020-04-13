@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
-
 #ifndef CDOT_ASTREADER_H
 #define CDOT_ASTREADER_H
 
@@ -180,7 +176,7 @@ private:
 
 public:
    struct DeclUpdate {
-      DeclUpdate(ast::Decl *D, unsigned ID, unsigned *DeclIDs)
+      DeclUpdate(ast::Decl *D, unsigned ID, unsigned *DeclIDs) noexcept
          : D(D), ID(ID), DeclIDs(DeclIDs)
       {}
 
@@ -345,6 +341,9 @@ private:
 public:
    explicit ASTReader(ModuleReader &Reader);
    ASTReader(ModuleReader &Reader, ASTReader &DeclReader);
+
+   ASTReader(const ASTReader&) = delete;
+   ASTReader &operator=(const ASTReader&) = delete;
 
    ~ASTReader();
 

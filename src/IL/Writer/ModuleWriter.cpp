@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 17.11.17.
-//
-
 #include "ModuleWriter.h"
 
 #include "AST/Decl.h"

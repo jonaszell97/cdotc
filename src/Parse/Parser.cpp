@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.06.17.
-//
-
 #include "Parser.h"
 
 #include "AST/ASTContext.h"

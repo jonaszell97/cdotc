@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.06.17.
-//
-
 #include "Token.h"
 
 #include "Basic/Variant.h"

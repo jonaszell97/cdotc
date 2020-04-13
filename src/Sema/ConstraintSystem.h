@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-12-01.
-//
-
 #ifndef CDOT_CONSTRAINTSYSTEM_H
 #define CDOT_CONSTRAINTSYSTEM_H
 

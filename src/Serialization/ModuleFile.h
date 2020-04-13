@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.06.18.
-//
-
 #ifndef CDOT_MODULEFILE_H
 #define CDOT_MODULEFILE_H
 

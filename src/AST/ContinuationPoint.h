@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 17.04.18.
-//
-
 #ifndef CDOT_CONTINUATIONPOINT_H
 #define CDOT_CONTINUATIONPOINT_H
 

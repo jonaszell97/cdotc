@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-10-28.
-//
-
 #ifndef NDEBUG
 
 #include "Log.h"

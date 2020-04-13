@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.10.17.
-//
-
 #ifndef CDOT_FILEUTILS_H
 #define CDOT_FILEUTILS_H
 

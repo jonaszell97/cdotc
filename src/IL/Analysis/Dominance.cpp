@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.04.18.
-//
-
 #include "Dominance.h"
 
 #include <llvm/Support/GenericDomTreeConstruction.h>

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 20.06.18.
-//
-
 #ifndef CDOT_REORDERBASICBLOCKPASS_H
 #define CDOT_REORDERBASICBLOCKPASS_H
 

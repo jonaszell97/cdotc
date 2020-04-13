@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
-
 #ifndef CDOT_ACCESSPATHDESCRIPTOR_H
 #define CDOT_ACCESSPATHDESCRIPTOR_H
 

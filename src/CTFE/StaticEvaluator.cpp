@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 07.02.18.
-//
-
 #include "StaticEvaluator.h"
 
 #include "AST/ASTVisitor.h"

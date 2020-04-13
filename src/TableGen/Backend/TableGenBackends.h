@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 04.02.18.
-//
-
 #ifndef CDOT_TABLEGENBACKENDS_H
 #define CDOT_TABLEGENBACKENDS_H
 

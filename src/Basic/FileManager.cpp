@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 14.10.17.
-//
-
 #include "FileManager.h"
 
 #include "AST/Decl.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 04.02.18.
-//
-
 #include "TableGenBackends.h"
 
 #include "TableGen/Record.h"

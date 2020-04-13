@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 15.02.18.
-//
-
 #ifndef CDOT_CANDIDATESET_H
 #define CDOT_CANDIDATESET_H
 

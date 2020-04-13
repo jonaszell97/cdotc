@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.01.18.
-//
-
 #ifndef CDOT_SCOPE_H
 #define CDOT_SCOPE_H
 

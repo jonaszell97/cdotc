@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.11.17.
-//
-
 #ifndef CDOT_VALUESYMBOLTABLE_H
 #define CDOT_VALUESYMBOLTABLE_H
 

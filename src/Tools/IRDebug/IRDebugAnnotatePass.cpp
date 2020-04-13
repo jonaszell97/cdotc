@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 16.08.18.
-//
-
 #include "Basic/FileUtils.h"
 #include "Support/Casting.h"
 

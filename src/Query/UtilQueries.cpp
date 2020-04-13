@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 25.08.18.
-//
-
 #include "Query.h"
 
 #include "Basic/FileUtils.h"

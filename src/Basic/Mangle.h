@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 05.01.18.
-//
-
 #ifndef CDOT_MANGLE_H
 #define CDOT_MANGLE_H
 

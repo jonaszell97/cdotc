@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-11-15.
-//
-
 #include "Parser.h"
 
 #include "Driver/Compiler.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.08.17.
-//
-
 #ifndef CDOT_BUILTIN_TYPE_H
 #define CDOT_BUILTIN_TYPE_H
 

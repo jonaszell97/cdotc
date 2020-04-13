@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 26.01.18.
-//
-
 #include "Decl.h"
 
 #include "AST/ASTContext.h"

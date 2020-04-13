@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 17.03.18.
-//
-
 #include "SemaPass.h"
 #include "IL/Constants.h"
 #include "Query/QueryContext.h"

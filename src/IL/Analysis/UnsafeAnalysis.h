@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.05.18.
-//
-
 #ifndef CDOT_UNSAFEANALYSIS_H
 #define CDOT_UNSAFEANALYSIS_H
 

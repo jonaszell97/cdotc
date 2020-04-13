@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 13.08.17.
-//
-
 #include "Type.h"
 
 #include "AST/ASTContext.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.12.17.
-//
-
 #include "AST/ASTContext.h"
 #include "AST/Decl.h"
 #include "AST/TypeBuilder.h"
@@ -1579,8 +1575,15 @@ struct ConditionalConformance {
 
    void print(llvm::raw_ostream &OS, int indent = 0) const
    {
+      llvm::SmallPtrSet<ProtocolDecl*, 4> visited;
+      print(visited, OS, indent);
+   }
+
+   void print(llvm::SmallPtrSetImpl<ProtocolDecl*> &visited,
+              llvm::raw_ostream &OS, int indent = 0) const
+   {
       int indentIncrease = 0;
-      if (proto) {
+      if (proto && visited.insert(proto).second) {
          indentIncrease = 3;
          applyIndent(OS, indent);
 
@@ -1605,7 +1608,7 @@ struct ConditionalConformance {
 
       if (innerConformances) {
          for (auto &inner : *innerConformances) {
-            inner.print(OS, indent + indentIncrease);
+            inner.print(visited, OS, indent + indentIncrease);
          }
       }
    }
@@ -1990,6 +1993,10 @@ static bool verifyConformance(QueryContext &QC,
    }
 #endif
 
+   if (conf.proto&&conf.proto->getDeclName().isStr("Equatable")) {
+       NO_OP;
+   }
+
    using ReadyKind = ReferencedAssociatedTypesReadyQuery::ResultKind;
 
    if (conf.done) {
@@ -2103,6 +2110,10 @@ static bool verifyConformance(QueryContext &QC,
                                 Self->getRecord(), conf.proto);
       }
    }
+   else if (conf.proto) {
+      ConfTbl.addConformance(QC.Context, ConformanceKind::Explicit,
+                             Self->getRecord(), conf.proto);
+   }
 
    // Verify inner conformances.
    bool allDone = true;
@@ -2160,6 +2171,10 @@ QueryResult cdot::ResolveAssociatedTypesQuery::run()
    // algorithm.
    ConditionalConformance baseConf(QC.Context);
    baseConf.initializerInnerConformances();
+
+   if (Rec->getDeclName().isStr("Int64")) {
+      int o=3;
+   }
 
    if (registerConformances(QC, ConfTbl, T, Rec, testSet,
                             directConformances, baseConf)) {

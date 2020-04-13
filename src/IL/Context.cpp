@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 17.11.17.
-//
-
 #include "Context.h"
 
 #include "Driver/Compiler.h"

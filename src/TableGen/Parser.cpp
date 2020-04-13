@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 01.02.18.
-//
-
 #include "Parser.h"
 
 #include "Record.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.11.17.
-//
-
 #ifndef CDOT_EXPRESSIONRESOLVER_H
 #define CDOT_EXPRESSIONRESOLVER_H
 

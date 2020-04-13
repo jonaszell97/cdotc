@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 27.05.18.
-//
-
 #ifndef CDOT_EMPTYASTVISITOR_H
 #define CDOT_EMPTYASTVISITOR_H
 

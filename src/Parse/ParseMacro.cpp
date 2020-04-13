@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 19.04.18.
-//
-
 #include "Parser.h"
 
 #include "Basic/FileUtils.h"

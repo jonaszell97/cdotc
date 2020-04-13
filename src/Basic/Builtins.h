@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 29.04.18.
-//
-
 #ifndef CDOT_BUILTINS_H
 #define CDOT_BUILTINS_H
 

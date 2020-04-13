@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 30.01.18.
-//
-
 #include "Preprocessor.h"
 #include "Token.h"
 #include "Lexer.h"

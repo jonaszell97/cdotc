@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 11.02.18.
-//
-
 #ifndef CDOT_ASTDUMPER_H
 #define CDOT_ASTDUMPER_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 14.08.18.
-//
-
 #ifndef CDOT_INSTRUCTIONCLONER_H
 #define CDOT_INSTRUCTIONCLONER_H
 

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 17.01.18.
-//
-
 #ifndef CDOT_LLVM_H
 #define CDOT_LLVM_H
 

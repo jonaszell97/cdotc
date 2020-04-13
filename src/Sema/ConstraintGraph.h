@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-12-03.
-//
-
 #ifndef CDOT_CONSTRAINTGRAPH_H
 #define CDOT_CONSTRAINTGRAPH_H
 

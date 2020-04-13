@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 18.11.17.
-//
-
 #include "Format.h"
 #include <llvm/Support/raw_ostream.h>
 

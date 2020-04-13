@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 14.10.17.
-//
-
 #ifndef CDOT_FILEMANAGER_H
 #define CDOT_FILEMANAGER_H
 

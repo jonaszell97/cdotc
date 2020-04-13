@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 02.01.18.
-//
-
 #ifndef CDOT_CTFEENGINE_H
 #define CDOT_CTFEENGINE_H
 

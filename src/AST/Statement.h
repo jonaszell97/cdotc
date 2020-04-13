@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 19.06.17.
-//
-
 #ifndef STATEMENT_H
 #define STATEMENT_H
 

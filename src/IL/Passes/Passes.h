@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 23.05.18.
-//
-
 #ifndef CDOT_PASSES_H
 #define CDOT_PASSES_H
 

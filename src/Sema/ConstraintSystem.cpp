@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 2018-12-01.
-//
-
 #include "ConstraintSystem.h"
 
 #include "ConstraintStep.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 07.04.18.
-//
-
 #ifndef CDOT_DECLDENSEMAPINFO_H
 #define CDOT_DECLDENSEMAPINFO_H
 

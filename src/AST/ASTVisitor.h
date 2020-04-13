@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 07.02.18.
-//
-
 #ifndef CDOT_NULLASTVISITOR_H
 #define CDOT_NULLASTVISITOR_H
 

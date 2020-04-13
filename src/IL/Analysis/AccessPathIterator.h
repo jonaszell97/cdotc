@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 02.05.18.
-//
-
 #ifndef CDOT_ACCESSPATHITERATOR_H
 #define CDOT_ACCESSPATHITERATOR_H
 

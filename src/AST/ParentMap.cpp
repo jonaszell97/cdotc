@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 06.02.18.
-//
-
 #include "ParentMap.h"
 
 #include "Statement.h"

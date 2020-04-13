@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 14.03.18.
-//
-
 #include "SemaPass.h"
 
 #include "ILGen/ILGenPass.h"

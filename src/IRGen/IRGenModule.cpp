@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 10.12.17.
-//
-
 #include "IRGen.h"
 
 #include "AST/Decl.h"

@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 19.02.18.
-//
-
 #include "SemaPass.h"
 
 #include "AST/TypeVisitor.h"

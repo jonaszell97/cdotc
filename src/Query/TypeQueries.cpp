@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 24.08.18.
-//
-
 #include "Query.h"
 
 #include "AST/Decl.h"

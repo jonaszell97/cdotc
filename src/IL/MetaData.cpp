@@ -1,7 +1,3 @@
-//
-// Created by Jonas Zell on 19.11.17.
-//
-
 #include "MetaData.h"
 #include "Basic/FileManager.h"
 #include "Basic/FileUtils.h"
