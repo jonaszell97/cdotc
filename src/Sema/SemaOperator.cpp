@@ -1,13 +1,12 @@
-#include "SemaPass.h"
+#include "cdotc/AST/Type.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/ExpressionResolver.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/StringSwitch.h"
 
-#include "Sema/ExpressionResolver.h"
-#include "AST/Type.h"
-#include "Query/QueryContext.h"
-#include "Support/StringSwitch.h"
-
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::diag;
 using namespace cdot::sema;
@@ -16,7 +15,7 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
-ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
+ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr* Pred)
 {
    Pred->setExprType(Context.getBoolTy());
    auto PredExpr = Pred->getRHS();
@@ -79,11 +78,11 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
          break;
       }
 
-      auto *RHSRec = rhs->getRecord();
-      if (auto *proto = RHSRec->dyn_cast<ProtocolDecl>()) {
+      auto* RHSRec = rhs->getRecord();
+      if (auto* proto = RHSRec->dyn_cast<ProtocolDecl>()) {
          result = ConformsTo(lhs, proto);
       }
-      else if (auto *baseClass = RHSRec->dyn_cast<ClassDecl>()) {
+      else if (auto* baseClass = RHSRec->dyn_cast<ClassDecl>()) {
          if (!lhs->isRecordType()) {
             break;
          }
@@ -92,7 +91,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
             break;
          }
 
-         auto *C = lhs->getRecord()->cast<ClassDecl>();
+         auto* C = lhs->getRecord()->cast<ClassDecl>();
          if (C) {
             result = IsSubClassOf(C, baseClass, true);
          }
@@ -132,7 +131,7 @@ ExprResult SemaPass::visitTypePredicateExpr(TypePredicateExpr *Pred)
    return Pred;
 }
 
-ExprResult SemaPass::visitExprSequence(ExprSequence *ExprSeq)
+ExprResult SemaPass::visitExprSequence(ExprSequence* ExprSeq)
 {
    ExpressionResolver Resolver(*this);
    auto Expr = Resolver.resolve(ExprSeq);
@@ -152,14 +151,14 @@ ExprResult SemaPass::visitExprSequence(ExprSequence *ExprSeq)
    return result.get();
 }
 
-ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
+ExprResult SemaPass::visitBinaryOperator(BinaryOperator* BinOp)
 {
    auto lhs = BinOp->getLhs();
    auto rhs = BinOp->getRhs();
 
    auto LhsResult = visitExpr(BinOp, lhs);
-   auto RhsResult = visitExpr(BinOp, rhs,
-                              BinOp->getFunctionType()->getParamTypes()[1]);
+   auto RhsResult
+       = visitExpr(BinOp, rhs, BinOp->getFunctionType()->getParamTypes()[1]);
 
    if (!LhsResult || !RhsResult)
       return ExprError();
@@ -170,18 +169,42 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    op::OperatorKind preAssignOp = op::UnknownOp;
 
    switch (BinOp->getKind()) {
-   case op::AddAssign: preAssignOp = op::Add; break;
-   case op::SubAssign: preAssignOp = op::Sub; break;
-   case op::MulAssign: preAssignOp = op::Mul; break;
-   case op::DivAssign: preAssignOp = op::Div; break;
-   case op::ModAssign: preAssignOp = op::Mod; break;
-   case op::ExpAssign: preAssignOp = op::Exp; break;
-   case op::AndAssign: preAssignOp = op::And; break;
-   case op::OrAssign: preAssignOp = op::Or; break;
-   case op::XorAssign: preAssignOp = op::Xor; break;
-   case op::ShlAssign: preAssignOp = op::Shl; break;
-   case op::AShrAssign: preAssignOp = op::AShr; break;
-   case op::LShrAssign: preAssignOp = op::LShr; break;
+   case op::AddAssign:
+      preAssignOp = op::Add;
+      break;
+   case op::SubAssign:
+      preAssignOp = op::Sub;
+      break;
+   case op::MulAssign:
+      preAssignOp = op::Mul;
+      break;
+   case op::DivAssign:
+      preAssignOp = op::Div;
+      break;
+   case op::ModAssign:
+      preAssignOp = op::Mod;
+      break;
+   case op::ExpAssign:
+      preAssignOp = op::Exp;
+      break;
+   case op::AndAssign:
+      preAssignOp = op::And;
+      break;
+   case op::OrAssign:
+      preAssignOp = op::Or;
+      break;
+   case op::XorAssign:
+      preAssignOp = op::Xor;
+      break;
+   case op::ShlAssign:
+      preAssignOp = op::Shl;
+      break;
+   case op::AShrAssign:
+      preAssignOp = op::AShr;
+      break;
+   case op::LShrAssign:
+      preAssignOp = op::LShr;
+      break;
    default:
       break;
    // workaround to avoid highlighting error for 'always false condition'.
@@ -200,13 +223,13 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
       auto lhsTy = lhs->getExprType()->getReferencedType();
       auto rhsTy = rhs->getExprType();
 
-      auto FnTy = Context.getFunctionType(lhsTy, { lhsTy, rhsTy });
+      auto FnTy = Context.getFunctionType(lhsTy, {lhsTy, rhsTy});
       BinOp->setFunctionType(FnTy);
       BinOp->setKind(preAssignOp);
       BinOp->setLhs(castToRValue(lhs));
 
-      auto Assign = AssignExpr::Create(Context, BinOp->getOperatorLoc(),
-                                       lhs, BinOp);
+      auto Assign
+          = AssignExpr::Create(Context, BinOp->getOperatorLoc(), lhs, BinOp);
 
       return visitExpr(BinOp, Assign);
    }
@@ -215,7 +238,7 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator *BinOp)
    return BinOp;
 }
 
-static ExprResult checkAccessorAssignment(SemaPass &Sema, AssignExpr *Expr)
+static ExprResult checkAccessorAssignment(SemaPass& Sema, AssignExpr* Expr)
 {
    auto Ident = dyn_cast<IdentifierRefExpr>(Expr->getLhs());
    if (!Ident) {
@@ -234,14 +257,14 @@ static ExprResult checkAccessorAssignment(SemaPass &Sema, AssignExpr *Expr)
    }
 
    // Build a call to the appropriate accessor method.
-   auto *Call = Sema.CreateCall(Ident->getAccessor()->getSetterMethod(),
+   auto* Call = Sema.CreateCall(Ident->getAccessor()->getSetterMethod(),
                                 {Expr->getLhs(), Expr->getRhs()},
                                 Expr->getEqualsLoc());
 
    return Sema.visitExpr(Call);
 }
 
-static ExprResult checkSubscriptAssignment(SemaPass &Sema, AssignExpr *Expr)
+static ExprResult checkSubscriptAssignment(SemaPass& Sema, AssignExpr* Expr)
 {
    // the subscript will have been transformed into a call
    auto Call = dyn_cast<CallExpr>(Expr->getLhs());
@@ -261,7 +284,7 @@ static ExprResult checkSubscriptAssignment(SemaPass &Sema, AssignExpr *Expr)
    return Sema.visitExpr(Call);
 }
 
-ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
+ExprResult SemaPass::visitAssignExpr(AssignExpr* Expr)
 {
    // Check property setter.
    auto lhs = Expr->getLhs();
@@ -307,9 +330,9 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
    assert(lhs->getExprType()->isMutableReferenceType()
           && "assigning to non-reference");
 
-   rhs = implicitCastIfNecessary(rhs, lhs->getExprType()->asReferenceType()
-                                         ->getReferencedType(),
-                                 false, diag::err_assign_type_mismatch);
+   rhs = implicitCastIfNecessary(
+       rhs, lhs->getExprType()->asReferenceType()->getReferencedType(), false,
+       diag::err_assign_type_mismatch);
 
    Expr->setRhs(rhs);
    Expr->setExprType(Context.getVoidType());
@@ -317,7 +340,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr *Expr)
    return Expr;
 }
 
-ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
+ExprResult SemaPass::visitUnaryOperator(UnaryOperator* UnOp)
 {
    auto TargetResult = visitExpr(UnOp, UnOp->getTarget(),
                                  UnOp->getFunctionType()->getParamTypes()[0]);
@@ -330,10 +353,9 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
 
    auto target = UnOp->getTarget();
    if (!target->isTypeDependent()
-         && !UnOp->getFunctionType()->isDependentType()) {
-      UnOp->setTarget(forceCast(target,
-                                UnOp->getFunctionType()->getParamTypes()
-                                    .front()));
+       && !UnOp->getFunctionType()->isDependentType()) {
+      UnOp->setTarget(
+          forceCast(target, UnOp->getFunctionType()->getParamTypes().front()));
    }
 
    if (UnOp->getKind() == op::TypeOf) {
@@ -352,12 +374,12 @@ ExprResult SemaPass::visitUnaryOperator(UnaryOperator *UnOp)
    return UnOp;
 }
 
-ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
+ExprResult SemaPass::visitIfExpr(IfExpr* Expr)
 {
    visitIfConditions(Expr, Expr->getCond());
 
-   auto TrueValRes = visitExpr(Expr, Expr->getTrueVal(),
-                               Expr->getContextualType());
+   auto TrueValRes
+       = visitExpr(Expr, Expr->getTrueVal(), Expr->getContextualType());
    if (!TrueValRes)
       return ExprError();
 
@@ -374,7 +396,7 @@ ExprResult SemaPass::visitIfExpr(IfExpr *Expr)
    return Expr;
 }
 
-ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
+ExprResult SemaPass::visitCastExpr(CastExpr* Cast)
 {
    QualType to = Cast->getTargetType()->removeMetaType();
 
@@ -393,21 +415,22 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
    }
 
    auto from = Cast->getTarget()->getExprType();
-   auto IsCastStrengthCompatible = [&](CastStrength Given, CastStrength Needed){
-      if (Needed == CastStrength::Implicit)
-         return Given != CastStrength::Fallible;
+   auto IsCastStrengthCompatible
+       = [&](CastStrength Given, CastStrength Needed) {
+            if (Needed == CastStrength::Implicit)
+               return Given != CastStrength::Fallible;
 
-      switch (Given) {
-      case CastStrength::Implicit:
-         llvm_unreachable("implicit cast in cast expression?");
-      case CastStrength::Normal:
-         return Needed == CastStrength::Normal;
-      case CastStrength::Fallible:
-         return Needed == CastStrength::Fallible;
-      case CastStrength::Force:
-         return true;
-      }
-   };
+            switch (Given) {
+            case CastStrength::Implicit:
+               llvm_unreachable("implicit cast in cast expression?");
+            case CastStrength::Normal:
+               return Needed == CastStrength::Normal;
+            case CastStrength::Fallible:
+               return Needed == CastStrength::Fallible;
+            case CastStrength::Force:
+               return true;
+            }
+         };
 
    auto ConvSeq = getConversionSequence(from, to);
    if (!ConvSeq.isValid()) {
@@ -416,8 +439,8 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
       if (auto E = Cast->getTargetType().getTypeExpr())
          RHSRange = E->getSourceRange();
 
-      diagnose(Cast, err_no_explicit_cast, from, to,
-               Cast->getAsLoc(), LHSRange, RHSRange);
+      diagnose(Cast, err_no_explicit_cast, from, to, Cast->getAsLoc(), LHSRange,
+               RHSRange);
    }
    else if (!IsCastStrengthCompatible(Cast->getStrength(),
                                       ConvSeq.getStrength())) {
@@ -431,9 +454,8 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
                   Cast->getAsLoc(), LHSRange, RHSRange);
       }
       else {
-         diagnose(Cast, err_cast_requires_op,
-                  Cast->getAsLoc(), LHSRange, RHSRange,
-                  from->removeReference(), to->removeReference(),
+         diagnose(Cast, err_cast_requires_op, Cast->getAsLoc(), LHSRange,
+                  RHSRange, from->removeReference(), to->removeReference(),
                   (int)ConvSeq.getStrength() - 1);
       }
    }
@@ -444,15 +466,13 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
    if (Cast->getStrength() == CastStrength::Fallible) {
       auto Opt = getOptionDecl();
       if (!Opt) {
-         diagnose(Cast, err_no_builtin_decl, 8,
-                  Cast->getAsLoc());
+         diagnose(Cast, err_no_builtin_decl, 8, Cast->getAsLoc());
       }
       else {
          TemplateArgument Arg(Opt->getTemplateParams().front(),
-                                 Cast->getExprType(), Cast->getSourceLoc());
+                              Cast->getExprType(), Cast->getSourceLoc());
 
-         auto TemplateArgs = FinalTemplateArgumentList::Create(Context,
-                                                               { Arg });
+         auto TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
 
          auto Inst = InstantiateRecord(Cast->getSourceLoc(), Opt, TemplateArgs);
 
@@ -460,7 +480,7 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
          Cast->setExprType(Context.getRecordType(Inst));
       }
 
-      for (auto &Step : ConvSeq.getSteps()) {
+      for (auto& Step : ConvSeq.getSteps()) {
          switch (Step.getKind()) {
          case CastKind::DynCast:
          case CastKind::ExistentialCastFallible:
@@ -480,7 +500,7 @@ ExprResult SemaPass::visitCastExpr(CastExpr *Cast)
    return Cast;
 }
 
-ExprResult SemaPass::visitAddrOfExpr(AddrOfExpr *Expr)
+ExprResult SemaPass::visitAddrOfExpr(AddrOfExpr* Expr)
 {
    auto Res = visitExpr(Expr, Expr->getTarget());
    if (!Res) {

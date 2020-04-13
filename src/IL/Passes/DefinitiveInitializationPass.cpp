@@ -1,21 +1,21 @@
-#include "DefinitiveInitializationPass.h"
+#include "cdotc/IL/Passes/DefinitiveInitializationPass.h"
 
-#include "AST/Decl.h"
-#include "BorrowCheckPass.h"
-#include "DataflowProblem.h"
-#include "FinalizeFunctionPass.h"
-#include "IL/Analysis/AccessPathDescriptor.h"
-#include "IL/Analysis/AccessPathIterator.h"
-#include "IL/Analysis/Dominance.h"
-#include "IL/Analysis/UnsafeAnalysis.h"
-#include "IL/Transforms/StackPromotion.h"
-#include "IL/Utils/BlockIterator.h"
-#include "ILGen/ILGenPass.h"
-#include "Message/Diagnostics.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/Analysis/AccessPathDescriptor.h"
+#include "cdotc/IL/Analysis/AccessPathIterator.h"
+#include "cdotc/IL/Analysis/Dominance.h"
+#include "cdotc/IL/Analysis/UnsafeAnalysis.h"
+#include "cdotc/IL/Passes/BorrowCheckPass.h"
+#include "cdotc/IL/Passes/DataflowProblem.h"
+#include "cdotc/IL/Passes/FinalizeFunctionPass.h"
+#include "cdotc/IL/Transforms/StackPromotion.h"
+#include "cdotc/IL/Utils/BlockIterator.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Sema/SemaPass.h"
 
 #ifndef NDEBUG
-#  include "IL/Instructions.h"
+#include "cdotc/IL/Instructions.h"
 #endif
 
 using namespace cdot::support;
@@ -29,14 +29,13 @@ namespace cdot {
 namespace il {
 namespace detail {
 
-struct LocalVariable final: llvm::TrailingObjects<LocalVariable,
-                                                  LocalVariable*> {
+struct LocalVariable final
+    : llvm::TrailingObjects<LocalVariable, LocalVariable*> {
 private:
-   LocalVariable(Value *Val,
-                 MemoryLocation Loc, unsigned BitVectorIdx,
+   LocalVariable(Value* Val, MemoryLocation Loc, unsigned BitVectorIdx,
                  llvm::ArrayRef<LocalVariable*> ContainedVars)
-      : NumContainedVars((unsigned)ContainedVars.size()),
-      Val(Val), Loc(Loc), BitVectorIdx(BitVectorIdx)
+       : NumContainedVars((unsigned)ContainedVars.size()), Val(Val), Loc(Loc),
+         BitVectorIdx(BitVectorIdx)
    {
       std::copy(ContainedVars.begin(), ContainedVars.end(),
                 getTrailingObjects<LocalVariable*>());
@@ -45,18 +44,19 @@ private:
    unsigned NumContainedVars;
 
 public:
-   Value *Val;
+   Value* Val;
    MemoryLocation Loc;
    unsigned BitVectorIdx;
 
-   static LocalVariable *Create(ast::ASTContext &C, Value *Val,
+   static LocalVariable* Create(ast::ASTContext& C, Value* Val,
                                 MemoryLocation Loc, unsigned BitVectorIdx,
-                                llvm::ArrayRef<LocalVariable*> ContainedVars) {
-      void *Mem = C.TmpAllocator.Allocate(
-         totalSizeToAlloc<LocalVariable*>(ContainedVars.size()),
-         alignof(LocalVariable));
+                                llvm::ArrayRef<LocalVariable*> ContainedVars)
+   {
+      void* Mem = C.TmpAllocator.Allocate(
+          totalSizeToAlloc<LocalVariable*>(ContainedVars.size()),
+          alignof(LocalVariable));
 
-      return new(Mem) LocalVariable(Val, Loc, BitVectorIdx, ContainedVars);
+      return new (Mem) LocalVariable(Val, Loc, BitVectorIdx, ContainedVars);
    }
 
    enum InitializationState {
@@ -66,14 +66,14 @@ public:
       PartiallyInitialized,
    };
 
-   InitializationState getInitializationState(BitVector &Must, BitVector &May)
-   const
+   InitializationState getInitializationState(BitVector& Must,
+                                              BitVector& May) const
    {
       if (!NumContainedVars)
          return Must.test(BitVectorIdx)
-            ? FullyInitialized
-            : May.test(BitVectorIdx) ? MaybeUninitialized
-                                     : NotInitialized;
+                    ? FullyInitialized
+                    : May.test(BitVectorIdx) ? MaybeUninitialized
+                                             : NotInitialized;
 
       bool FoundInitialized = false;
       bool FoundUninitialized = false;
@@ -98,54 +98,53 @@ public:
       return FoundInitialized ? FullyInitialized : NotInitialized;
    }
 
-   void initializeAll(BitVector &BV)
+   void initializeAll(BitVector& BV)
    {
       BV.set(BitVectorIdx);
-      for (auto &Var : getContainedVars()) {
+      for (auto& Var : getContainedVars()) {
          Var->initializeAll(BV);
       }
    }
 
-   void uninitializeAll(BitVector &BV)
+   void uninitializeAll(BitVector& BV)
    {
       BV.reset(BitVectorIdx);
-      for (auto &Var : getContainedVars()) {
+      for (auto& Var : getContainedVars()) {
          Var->uninitializeAll(BV);
       }
    }
 
    llvm::ArrayRef<LocalVariable*> getContainedVars() const
    {
-      return { getTrailingObjects<LocalVariable*>(), NumContainedVars };
+      return {getTrailingObjects<LocalVariable*>(), NumContainedVars};
    }
 };
 
 } // namespace detail
 
-DefinitiveInitializationPass::DefinitiveInitializationPass(ast::ILGenPass &ILGen)
-   : FunctionPass(PassKind::DefinitiveInitializationPassID),
-     ILGen(ILGen)
+DefinitiveInitializationPass::DefinitiveInitializationPass(
+    ast::ILGenPass& ILGen)
+    : FunctionPass(PassKind::DefinitiveInitializationPassID), ILGen(ILGen)
 {
-
 }
 
-void DefinitiveInitializationPass::solveDataFlowProblem(il::Function &F)
+void DefinitiveInitializationPass::solveDataFlowProblem(il::Function& F)
 {
    unsigned NumFacts = MemoryLocs.size();
 
    // Calculate Gen and Kill sets for each BB
    // Kill always empty since a variable can't be "deinitialized"
-   for (auto &B : F) {
+   for (auto& B : F) {
       if (B.hasNoPredecessors())
          continue;
 
-      auto &Gen = GenMap[&B];
+      auto& Gen = GenMap[&B];
       Gen.resize(NumFacts);
 
-      auto &Kill = KillMap[&B];
+      auto& Kill = KillMap[&B];
       Kill.resize(NumFacts);
 
-      for (auto &I : B) {
+      for (auto& I : B) {
          visit(I, Gen, Kill);
       }
    }
@@ -153,12 +152,12 @@ void DefinitiveInitializationPass::solveDataFlowProblem(il::Function &F)
    // Calculate In / Out until no more changes happen
    llvm::SmallPtrSet<BasicBlock*, 16> WorkList;
 
-   for (auto &B : F) {
-      auto &MustIn = MustInMap[&B];
-      auto &MustOut = MustOutMap[&B];
+   for (auto& B : F) {
+      auto& MustIn = MustInMap[&B];
+      auto& MustOut = MustOutMap[&B];
 
-      auto &MayIn = MayInMap[&B];
-      auto &MayOut = MayOutMap[&B];
+      auto& MayIn = MayInMap[&B];
+      auto& MayOut = MayOutMap[&B];
 
       MustIn.resize(NumFacts);
       MustOut.resize(NumFacts);
@@ -188,11 +187,11 @@ void DefinitiveInitializationPass::solveDataFlowProblem(il::Function &F)
       if (BB == F.getEntryBlock() || BB->hasNoPredecessors())
          continue;
 
-      auto &MustIn = MustInMap[BB];
-      auto &MustOut = MustOutMap[BB];
+      auto& MustIn = MustInMap[BB];
+      auto& MustOut = MustOutMap[BB];
 
-      auto &MayIn = MayInMap[BB];
-      auto &MayOut = MayOutMap[BB];
+      auto& MayIn = MayInMap[BB];
+      auto& MayOut = MayOutMap[BB];
 
       bool first = true;
 
@@ -211,7 +210,7 @@ void DefinitiveInitializationPass::solveDataFlowProblem(il::Function &F)
       }
 
       // Out(B) = (Gen(B) | In(B)) & ~Kill(B)
-      auto &Kill = KillMap[BB];
+      auto& Kill = KillMap[BB];
 
       auto NewMayOut = GenMap[BB];
       NewMayOut |= MayIn;
@@ -231,7 +230,7 @@ void DefinitiveInitializationPass::solveDataFlowProblem(il::Function &F)
    }
 }
 
-LocalVariable *DefinitiveInitializationPass::getLocal(il::Value *Val)
+LocalVariable* DefinitiveInitializationPass::getLocal(il::Value* Val)
 {
    if (!isa<Argument>(Val) && !isa<AllocaInst>(Val) && !isa<MoveInst>(Val))
       return nullptr;
@@ -261,14 +260,15 @@ LocalVariable *DefinitiveInitializationPass::getLocal(il::Value *Val)
    return Var;
 }
 
-LocalVariable* DefinitiveInitializationPass::getLocal(Value *Val,
-                                                     MemoryLocation Loc,
-                                                     QualType Ty,
-                                                     bool NoClasses) {
+LocalVariable* DefinitiveInitializationPass::getLocal(Value* Val,
+                                                      MemoryLocation Loc,
+                                                      QualType Ty,
+                                                      bool NoClasses)
+{
    llvm::SmallVector<LocalVariable*, 4> Vec;
 
    unsigned Offset = 0;
-   if (auto *Tup = Ty->asTupleType()) {
+   if (auto* Tup = Ty->asTupleType()) {
       for (auto ContTy : Tup->getContainedTypes()) {
          auto NewLoc = MemoryLocation::getTupleField(Loc, Offset++);
          auto NewVal = getLocal(nullptr, NewLoc, ContTy);
@@ -276,13 +276,13 @@ LocalVariable* DefinitiveInitializationPass::getLocal(Value *Val,
             Vec.push_back(NewVal);
       }
    }
-   else if (auto *R = Ty->asRecordType()) {
+   else if (auto* R = Ty->asRecordType()) {
       if (R->getRecord()->getDeclKind() == ast::Decl::StructDeclID
-            || (!NoClasses && isa<ast::ClassDecl>(R->getRecord()))) {
+          || (!NoClasses && isa<ast::ClassDecl>(R->getRecord()))) {
          auto Fields = cast<ast::StructDecl>(R->getRecord())->getFields();
          for (auto Field : Fields) {
-            auto NewLoc = MemoryLocation::getStructField(
-               Loc, Field->getDeclName());
+            auto NewLoc
+                = MemoryLocation::getStructField(Loc, Field->getDeclName());
 
             auto NewVal = getLocal(nullptr, NewLoc, Field->getType());
             if (NewVal)
@@ -295,7 +295,7 @@ LocalVariable* DefinitiveInitializationPass::getLocal(Value *Val,
                                     MemoryLocCounter++, Vec);
 
    auto Result = MemoryLocs.try_emplace(Var->Loc, Var);
-   (void) Result;
+   (void)Result;
 
 #ifndef NDEBUG
    if (!Result.second) {
@@ -313,9 +313,10 @@ LocalVariable* DefinitiveInitializationPass::getLocal(Value *Val,
    return Var;
 }
 
-void DefinitiveInitializationPass::visitAssignInst(il::AssignInst &I,
-                                                   BitVector &Gen,
-                                                   BitVector &Kill) {
+void DefinitiveInitializationPass::visitAssignInst(il::AssignInst& I,
+                                                   BitVector& Gen,
+                                                   BitVector& Kill)
+{
    auto Loc = MemoryLocation::get(I.getDst(), false);
    if (!Loc)
       return;
@@ -323,7 +324,7 @@ void DefinitiveInitializationPass::visitAssignInst(il::AssignInst &I,
    if (SelfFields.find(Loc) != SelfFields.end())
       I.setTagged(true);
 
-   auto *Var = lookupLocal(Loc);
+   auto* Var = lookupLocal(Loc);
    if (!Var)
       return;
 
@@ -347,9 +348,10 @@ void DefinitiveInitializationPass::visitAssignInst(il::AssignInst &I,
    Var->uninitializeAll(Kill);
 }
 
-void DefinitiveInitializationPass::visitInitInst(il::InitInst &I,
-                                                 BitVector &Gen,
-                                                 BitVector &Kill) {
+void DefinitiveInitializationPass::visitInitInst(il::InitInst& I,
+                                                 BitVector& Gen,
+                                                 BitVector& Kill)
+{
    if (I.isSynthesized())
       return;
 
@@ -360,7 +362,7 @@ void DefinitiveInitializationPass::visitInitInst(il::InitInst &I,
    if (SelfFields.find(Loc) != SelfFields.end())
       I.setTagged(true);
 
-   auto *Var = lookupLocal(Loc);
+   auto* Var = lookupLocal(Loc);
    if (!Var)
       return;
 
@@ -379,7 +381,7 @@ void DefinitiveInitializationPass::visitInitInst(il::InitInst &I,
    Var->uninitializeAll(Kill);
 }
 
-static void verifyMove(Function &F, il::MoveInst &I, ast::ILGenPass &ILGen)
+static void verifyMove(Function& F, il::MoveInst& I, ast::ILGenPass& ILGen)
 {
    if (isa<GlobalVariable>(I.getOperand(0))) {
       F.setInvalid(true);
@@ -387,7 +389,7 @@ static void verifyMove(Function &F, il::MoveInst &I, ast::ILGenPass &ILGen)
       return;
    }
 
-   auto *FieldRef = dyn_cast<FieldRefInst>(I.getOperand(0));
+   auto* FieldRef = dyn_cast<FieldRefInst>(I.getOperand(0));
    if (!FieldRef)
       return;
 
@@ -407,9 +409,10 @@ static void verifyMove(Function &F, il::MoveInst &I, ast::ILGenPass &ILGen)
                             I.getSourceLoc());
 }
 
-void DefinitiveInitializationPass::visitMoveInst(il::MoveInst &I,
-                                                 BitVector &Gen,
-                                                 BitVector &Kill) {
+void DefinitiveInitializationPass::visitMoveInst(il::MoveInst& I,
+                                                 BitVector& Gen,
+                                                 BitVector& Kill)
+{
    if (SecondPass && !UA->isUnsafe(I))
       verifyMove(*this->F, I, ILGen);
 
@@ -421,7 +424,7 @@ void DefinitiveInitializationPass::visitMoveInst(il::MoveInst &I,
    if (SelfFields.find(Loc) != SelfFields.end())
       I.setTagged(true);
 
-   auto *Var = lookupLocal(Loc);
+   auto* Var = lookupLocal(Loc);
    if (Var) {
       Var->uninitializeAll(Gen);
       Var->initializeAll(Kill);
@@ -440,9 +443,10 @@ void DefinitiveInitializationPass::visitMoveInst(il::MoveInst &I,
    Var->uninitializeAll(Kill);
 }
 
-void DefinitiveInitializationPass::visitCallInst(il::CallInst &I,
-                                                 BitVector &Gen,
-                                                 BitVector &Kill) {
+void DefinitiveInitializationPass::visitCallInst(il::CallInst& I,
+                                                 BitVector& Gen,
+                                                 BitVector& Kill)
+{
    // a 'self.init' call effectively initializes all fields
    if (auto Init = dyn_cast_or_null<Initializer>(I.getCalledFunction())) {
       if (Init->getCtorKind() == ConstructorKind::Base) {
@@ -457,19 +461,20 @@ void DefinitiveInitializationPass::visitCallInst(il::CallInst &I,
             Whitelist.insert(Inst);
          }
 
-         auto *SelfTy = Init->getRecordType();
-         auto *Fn =cast_or_null<ast::CallableDecl>(ILGen.getDeclForValue(Init));
+         auto* SelfTy = Init->getRecordType();
+         auto* Fn
+             = cast_or_null<ast::CallableDecl>(ILGen.getDeclForValue(Init));
 
          if (Fn && Fn->isFallibleInit())
             SelfTy = SelfTy->getTemplateArgs().front().getType()->getRecord();
 
          // this might be a super.init, so only initialize the fields of the
          // class this method belongs to
-         for (auto *F : cast<ast::StructDecl>(SelfTy)->getStoredFields()) {
+         for (auto* F : cast<ast::StructDecl>(SelfTy)->getStoredFields()) {
             auto Loc = MemoryLocation::getStructField(SelfVal->Loc,
                                                       F->getDeclName());
 
-            auto *Var = lookupLocal(Loc);
+            auto* Var = lookupLocal(Loc);
             assert(Var && "untracked stored field!");
 
             Var->initializeAll(Gen);
@@ -479,16 +484,18 @@ void DefinitiveInitializationPass::visitCallInst(il::CallInst &I,
    }
 }
 
-void DefinitiveInitializationPass::visitLoadInst(il::LoadInst &I,
-                                                 BitVector &Gen,
-                                                 BitVector &Kill) {
+void DefinitiveInitializationPass::visitLoadInst(il::LoadInst& I,
+                                                 BitVector& Gen,
+                                                 BitVector& Kill)
+{
    auto Loc = MemoryLocation::get(I.getTarget());
    if (SelfFields.find(Loc) != SelfFields.end())
       I.setTagged(true);
 }
 
-void DefinitiveInitializationPass::prepareInitializer(ast::CallableDecl *FnDecl,
-                                                      il::Initializer &I) {
+void DefinitiveInitializationPass::prepareInitializer(ast::CallableDecl* FnDecl,
+                                                      il::Initializer& I)
+{
    auto S = dyn_cast<ast::StructDecl>(FnDecl->getRecord());
    if (!S)
       return;
@@ -535,7 +542,7 @@ void DefinitiveInitializationPass::run()
    }
 
    // add memory locations for owned or mutably borrowed arguments
-   for (auto &Arg : F->getEntryBlock()->getArgs()) {
+   for (auto& Arg : F->getEntryBlock()->getArgs()) {
       if (Arg.getConvention() == ArgumentConvention::Borrowed)
          continue;
 
@@ -546,8 +553,8 @@ void DefinitiveInitializationPass::run()
    }
 
    // collect local variables
-   for (auto &B : *F) {
-      for (auto &I : B) {
+   for (auto& B : *F) {
+      for (auto& I : B) {
          getLocal(&I);
       }
    }
@@ -557,13 +564,13 @@ void DefinitiveInitializationPass::run()
       return;
    }
 
-   auto &MustEntryVec = MustInMap[F->getEntryBlock()];
+   auto& MustEntryVec = MustInMap[F->getEntryBlock()];
    MustEntryVec.resize(MemoryLocCounter);
 
-   auto &KillEntryVec = KillMap[F->getEntryBlock()];
+   auto& KillEntryVec = KillMap[F->getEntryBlock()];
    KillEntryVec.resize(MemoryLocCounter);
 
-   for (auto &Arg: InitializedArgs) {
+   for (auto& Arg : InitializedArgs) {
       Arg->initializeAll(MustEntryVec);
       Arg->uninitializeAll(KillEntryVec);
    }
@@ -573,7 +580,7 @@ void DefinitiveInitializationPass::run()
    solveDataFlowProblem(*F);
    SecondPass = true;
 
-   for (auto &B : *F) {
+   for (auto& B : *F) {
       BitVector MustGen(MemoryLocCounter);
       MustGen |= MustInMap[&B];
 
@@ -582,7 +589,7 @@ void DefinitiveInitializationPass::run()
 
       BitVector Kill(MemoryLocCounter);
 
-      for (auto &I : B) {
+      for (auto& I : B) {
          if (Whitelist.find(&I) == Whitelist.end()) {
             verifyMemoryUse(I, MustGen, MayGen);
          }
@@ -603,12 +610,12 @@ void DefinitiveInitializationPass::run()
       if (!B.isExitBlock())
          continue;
 
-      for (auto &Var : MemoryLocs) {
+      for (auto& Var : MemoryLocs) {
          if (!Var.getSecond()->Val)
             continue;
 
          if (Var.getSecond()->Val->isSelf()
-               || !Var.getSecond()->Val->getType()->isRecordType())
+             || !Var.getSecond()->Val->getType()->isRecordType())
             continue;
 
          auto State = Var.getSecond()->getInitializationState(MustGen, MayGen);
@@ -637,13 +644,13 @@ void DefinitiveInitializationPass::run()
             continue;
 
          auto S = cast<ast::StructDecl>(
-            SelfVal->Val->getType()->removeReference()->getRecord());
+             SelfVal->Val->getType()->removeReference()->getRecord());
 
          if (S->getStoredFields().empty())
             continue;
 
          auto FieldIt = S->stored_field_begin();
-         for (auto &Val : SelfVal->getContainedVars()) {
+         for (auto& Val : SelfVal->getContainedVars()) {
             auto FieldState = Val->getInitializationState(MustGen, MayGen);
             if (FieldState != LocalVariable::FullyInitialized)
                break;
@@ -697,9 +704,10 @@ void DefinitiveInitializationPass::run()
    SecondPass = false;
 }
 
-void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction &I,
-                                                   BitVector &MustGen,
-                                                   BitVector &MayGen) {
+void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
+                                                   BitVector& MustGen,
+                                                   BitVector& MayGen)
+{
    if (I.isSynthesized())
       return;
 
@@ -750,22 +758,21 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction &I,
 
    // verify that the memory has been initialized before this use
    if (!IsValidUse) {
-      auto &Sema = ILGen.getSema();
+      auto& Sema = ILGen.getSema();
       auto Decl = ILGen.getDeclForValue(I.getOperand(0)->ignoreBitCast());
       if (!Decl)
          return;
 
       F->setInvalid(true);
 
-      Sema.diagnose(Decl, err_uninitialized_local,
-                    Decl->getDeclName(), I.getSourceLoc());
+      Sema.diagnose(Decl, err_uninitialized_local, Decl->getDeclName(),
+                    I.getSourceLoc());
 
-      Sema.diagnose(note_uninitialized_declared_here,
-                    Decl->getSourceLoc());
+      Sema.diagnose(note_uninitialized_declared_here, Decl->getSourceLoc());
    }
 }
 
-static il::Value *LookThroughLoad(il::Value *V)
+static il::Value* LookThroughLoad(il::Value* V)
 {
    if (auto Ld = dyn_cast<LoadInst>(V))
       return Ld->getTarget();
@@ -773,9 +780,10 @@ static il::Value *LookThroughLoad(il::Value *V)
    return V;
 }
 
-void DefinitiveInitializationPass::checkDeinitilization(il::CallInst &I,
-                                                       BitVector &MustGen,
-                                                       BitVector &MayGen) {
+void DefinitiveInitializationPass::checkDeinitilization(il::CallInst& I,
+                                                        BitVector& MustGen,
+                                                        BitVector& MayGen)
+{
    if (isa<VirtualCallInst>(I))
       return;
 
@@ -793,7 +801,7 @@ void DefinitiveInitializationPass::checkDeinitilization(il::CallInst &I,
    if (!Loc)
       return;
 
-   auto *Var = lookupLocal(Loc);
+   auto* Var = lookupLocal(Loc);
    if (!Var)
       return;
 
@@ -804,7 +812,7 @@ void DefinitiveInitializationPass::checkDeinitilization(il::CallInst &I,
 
       // remove any loads or indexing instructions that are used for this
       // deinitializer call
-      Instruction *Curr = dyn_cast<Instruction>(I.getOperand(0));
+      Instruction* Curr = dyn_cast<Instruction>(I.getOperand(0));
       while (Curr && (isa<LoadInst>(Curr) || Curr->isIndexingInstruction())) {
          InstsToRemove.push_back(Curr);
          Curr = dyn_cast<Instruction>(Curr->getOperand(0));

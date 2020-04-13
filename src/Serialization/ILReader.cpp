@@ -1,19 +1,19 @@
-#include "ILReader.h"
+#include "cdotc/Serialization/ILReader.h"
 
-#include "ASTReader.h"
-#include "ASTReaderInternals.h"
-#include "AST/ASTContext.h"
-#include "BitCodes.h"
-#include "IL/Constants.h"
-#include "IL/Context.h"
-#include "IL/Function.h"
-#include "IL/GlobalVariable.h"
-#include "IL/Instructions.h"
-#include "IL/Module.h"
-#include "ILGen/ILGenPass.h"
-#include "ModuleFile.h"
-#include "ModuleReader.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/GlobalVariable.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ASTReader.h"
+#include "cdotc/Serialization/ASTReaderInternals.h"
+#include "cdotc/Serialization/BitCodes.h"
+#include "cdotc/Serialization/ModuleFile.h"
+#include "cdotc/Serialization/ModuleReader.h"
 
 #include <llvm/ADT/StringExtras.h>
 
@@ -22,52 +22,52 @@ using namespace cdot::il;
 using namespace cdot::serial;
 using namespace cdot::support;
 
-ILReader::ILReader(ast::SemaPass &Sema, ast::ASTContext &Context,
-                   ASTReader &Reader,
-                   const llvm::BitstreamCursor &Stream, il::Context &ILCtx)
-   : Reader(Reader), Stream(Stream), ILCtx(ILCtx),
-     ILGen(Reader.getSema().getILGen()),
-     Builder(Context, ILCtx, Reader.Reader.CI.getFileMgr())
-{ }
-
-ILReader::~ILReader()
+ILReader::ILReader(ast::SemaPass& Sema, ast::ASTContext& Context,
+                   ASTReader& Reader, const llvm::BitstreamCursor& Stream,
+                   il::Context& ILCtx)
+    : Reader(Reader), Stream(Stream), ILCtx(ILCtx),
+      ILGen(Reader.getSema().getILGen()),
+      Builder(Context, ILCtx, Reader.Reader.CI.getFileMgr())
 {
-   delete SymTab;
 }
 
-void ILReader::setModule(il::Module *M)
+ILReader::~ILReader() { delete SymTab; }
+
+void ILReader::setModule(il::Module* M)
 {
    ILMod = M;
    Builder.SetModule(M);
 }
 
-ast::Decl* ILReader::ReadDecl(const RecordData &R,
-                              unsigned &I) {
+ast::Decl* ILReader::ReadDecl(const RecordData& R, unsigned& I)
+{
    return Reader.ReadDecl(R, I);
 }
 
-SourceLocation ILReader::ReadSourceLocation(const RecordDataImpl &Record,
-                                            unsigned &Idx) {
+SourceLocation ILReader::ReadSourceLocation(const RecordDataImpl& Record,
+                                            unsigned& Idx)
+{
    return Reader.ReadSourceLocation(Record, Idx);
 }
 
-llvm::APInt ILReader::ReadAPInt(const RecordData &Record, unsigned &Idx)
+llvm::APInt ILReader::ReadAPInt(const RecordData& Record, unsigned& Idx)
 {
    return Reader.ReadAPInt(Record, Idx);
 }
 
-llvm::APSInt ILReader::ReadAPSInt(const RecordData &Record, unsigned &Idx)
+llvm::APSInt ILReader::ReadAPSInt(const RecordData& Record, unsigned& Idx)
 {
    return Reader.ReadAPSInt(Record, Idx);
 }
 
-llvm::APFloat ILReader::ReadAPFloat(const RecordData &Record,
-                                    const llvm::fltSemantics &Sem,
-                                    unsigned &Idx) {
+llvm::APFloat ILReader::ReadAPFloat(const RecordData& Record,
+                                    const llvm::fltSemantics& Sem,
+                                    unsigned& Idx)
+{
    return Reader.ReadAPFloat(Record, Sem, Idx);
 }
 
-std::string ILReader::ReadString(const RecordData &Record, unsigned &Idx)
+std::string ILReader::ReadString(const RecordData& Record, unsigned& Idx)
 {
    return Reader.ReadString(Record, Idx);
 }
@@ -83,18 +83,19 @@ DeclarationName ILRecordReader::readDeclarationName()
    }
 }
 
-QualType ILReader::readType(const RecordData &Record,
-                            unsigned &Idx) {
+QualType ILReader::readType(const RecordData& Record, unsigned& Idx)
+{
    return Reader.readType(Record, Idx);
 }
 
-il::Value* ILReader::readValue(const RecordData &R,
-                               unsigned &Idx) {
+il::Value* ILReader::readValue(const RecordData& R, unsigned& Idx)
+{
    return GetValue(R[Idx++]);
 }
 
-IdentifierInfo* ILReader::GetIdentifierInfo(const RecordData &Record,
-                                            unsigned &Idx) {
+IdentifierInfo* ILReader::GetIdentifierInfo(const RecordData& Record,
+                                            unsigned& Idx)
+{
    return Reader.GetIdentifierInfo(Record, Idx);
 }
 
@@ -124,11 +125,11 @@ il::GlobalObject* ILReader::GetGlobalObject(llvm::StringRef Name)
       return nullptr;
 
    ILSymbolTableLookupTrait Trait(*this);
-   return cast<GlobalObject>(Trait.ReadData(Name, It.getDataPtr(),
-                                            It.getDataLen()));
+   return cast<GlobalObject>(
+       Trait.ReadData(Name, It.getDataPtr(), It.getDataLen()));
 }
 
-ReadResult ILReader::ReadILModule(llvm::BitstreamCursor &Stream)
+ReadResult ILReader::ReadILModule(llvm::BitstreamCursor& Stream)
 {
    if (ModuleReader::ReadBlockAbbrevs(Stream, IL_MODULE_BLOCK_ID)) {
       Reader.Error("malformed IL block");
@@ -177,8 +178,8 @@ ReadResult ILReader::ReadILModule(llvm::BitstreamCursor &Stream)
       Record.clear();
 
       StringRef Blob;
-      auto RecordType =
-         (ILRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType
+          = (ILRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
 
       switch (RecordType) {
       default:
@@ -199,7 +200,7 @@ ReadResult ILReader::ReadILModuleEager()
 
    unsigned i = 0;
    while (i < ReadGlobals->size()) {
-      auto *Val = (*ReadGlobals)[i++];
+      auto* Val = (*ReadGlobals)[i++];
       if (auto F = dyn_cast<Function>(Val)) {
          if (auto Inf = F->getLazyFnInfo())
             Inf->loadFunctionBody();
@@ -210,47 +211,47 @@ ReadResult ILReader::ReadILModuleEager()
       }
    }
 
-//   auto data_it = SymTab->data_begin();
-//   auto end = SymTab->data_end();
-//
-//   while (data_it != end) {
-//      Value *Val = *data_it++;
-//      if (auto F = dyn_cast<Function>(Val)) {
-//         if (auto Inf = F->getLazyFnInfo())
-//            Inf->loadFunctionBody();
-//      }
-//      else if (auto G = dyn_cast<GlobalVariable>(Val)) {
-//         if (auto Inf = G->getLazyGlobalInfo())
-//            Inf->loadGlobalInitializer();
-//      }
-//   }
+   //   auto data_it = SymTab->data_begin();
+   //   auto end = SymTab->data_end();
+   //
+   //   while (data_it != end) {
+   //      Value *Val = *data_it++;
+   //      if (auto F = dyn_cast<Function>(Val)) {
+   //         if (auto Inf = F->getLazyFnInfo())
+   //            Inf->loadFunctionBody();
+   //      }
+   //      else if (auto G = dyn_cast<GlobalVariable>(Val)) {
+   //         if (auto Inf = G->getLazyGlobalInfo())
+   //            Inf->loadGlobalInitializer();
+   //      }
+   //   }
 
    return Success;
 }
 
 ILSymbolTableLookupTrait::hash_value_type
-ILSymbolTableLookupTrait::ComputeHash(const internal_key_type &a)
+ILSymbolTableLookupTrait::ComputeHash(const internal_key_type& a)
 {
    return llvm::HashString(a);
 }
 
-ReadResult
-ILReader::readValueSymTab(uint32_t TblOffset, llvm::StringRef Blob)
+ReadResult ILReader::readValueSymTab(uint32_t TblOffset, llvm::StringRef Blob)
 {
-   auto *Data = (const unsigned char*)Blob.data();
+   auto* Data = (const unsigned char*)Blob.data();
    auto Buckets = Data + TblOffset;
 
    ILSymbolTableLookupTrait Trait(*this);
    SymTab = HashTable::Create(Buckets, Data + 1, Data, Trait);
 
-   ILMod->setExternalLookup(
-      new(Reader.getContext()) ILModuleFile(Reader.Reader, SymTab));
+   ILMod->setExternalLookup(new (Reader.getContext())
+                                ILModuleFile(Reader.Reader, SymTab));
 
    return Success;
 }
 
-unsigned ILRecordReader::readRecord(llvm::BitstreamCursor &Cursor,
-                                    unsigned AbbrevID) {
+unsigned ILRecordReader::readRecord(llvm::BitstreamCursor& Cursor,
+                                    unsigned AbbrevID)
+{
    Idx = 0;
    Record.clear();
 
@@ -262,13 +263,13 @@ void ILReader::ReadValueRecord(unsigned ID)
    ++Reader.Reader.NumILValuesRead;
    auto Offset = ValueOffsets[ID - BaseValueIndex];
 
-   auto &Cursor = Reader.DeclsCursor;
+   auto& Cursor = Reader.DeclsCursor;
    SavedStreamPosition Pos(Cursor);
 
    Cursor.JumpToBit(Offset);
 
    ILRecordReader Record(*this);
-   Value *V;
+   Value* V;
 
    unsigned Code = Cursor.ReadCode();
    auto Kind = Record.readRecord(Cursor, Code);
@@ -288,11 +289,11 @@ void ILReader::ReadValueRecord(unsigned ID)
    case Value::GlobalVariableID:
       V = readGlobalVariable(Record);
       break;
-#  define CDOT_INSTRUCTION(NAME)            \
-   case Value::NAME##ID:                    \
-      V = readInstruction(Record, Kind);    \
+#define CDOT_INSTRUCTION(NAME)                                                 \
+   case Value::NAME##ID:                                                       \
+      V = readInstruction(Record, Kind);                                       \
       break;
-#  include "IL/Instructions.def"
+#include "cdotc/IL/Instructions.def"
 
    default:
       V = readConstant(Record, Kind);
@@ -305,7 +306,7 @@ void ILReader::ReadValueRecord(unsigned ID)
    assert(Record.getIdx() == Record.size());
 }
 
-il::GlobalVariable* ILReader::readGlobalVariable(ILRecordReader &Record)
+il::GlobalVariable* ILReader::readGlobalVariable(ILRecordReader& Record)
 {
    ++NumGlobalVariables;
 
@@ -336,9 +337,8 @@ il::GlobalVariable* ILReader::readGlobalVariable(ILRecordReader &Record)
       if (ReadGlobals)
          ReadGlobals->push_back(GV);
 
-      GV->setLazyGlobalInfo(
-         new(Reader.getContext()) LazyILGlobalInfo(Reader.Reader, *GV,
-                                                   InitID, Linkage));
+      GV->setLazyGlobalInfo(new (Reader.getContext()) LazyILGlobalInfo(
+          Reader.Reader, *GV, InitID, Linkage));
 
       GV->setDeclared(false);
    }
@@ -346,21 +346,21 @@ il::GlobalVariable* ILReader::readGlobalVariable(ILRecordReader &Record)
    return GV;
 }
 
-il::Constant* ILReader::readConstant(ILRecordReader &Record, unsigned Code)
+il::Constant* ILReader::readConstant(ILRecordReader& Record, unsigned Code)
 {
    ++NumConstants;
 
    auto Type = Record.readType();
    auto Bits = Record.readInt();
 
-   Constant *C = nullptr;
+   Constant* C = nullptr;
    switch (Code) {
    case Value::ConstantIntID:
       C = Builder.GetConstantInt(Type, Record.readAPSInt());
       break;
    case Value::ConstantFloatID:
-      C = Builder.GetConstantFP(Type, Record.readAPFloat(
-         llvm::APFloat::IEEEdouble()));
+      C = Builder.GetConstantFP(
+          Type, Record.readAPFloat(llvm::APFloat::IEEEdouble()));
       break;
    case Value::ConstantStringID:
       C = Builder.GetConstantString(Record.readString());
@@ -408,8 +408,8 @@ il::Constant* ILReader::readConstant(ILRecordReader &Record, unsigned Code)
       auto TI = Record.readValueAs<GlobalVariable>();
       auto Base = Record.readValueAs<ConstantClass>();
 
-      C = Builder.GetConstantClass(cast<ast::ClassDecl>(Type->getRecord()),
-                                   TI, Values, Base);
+      C = Builder.GetConstantClass(cast<ast::ClassDecl>(Type->getRecord()), TI,
+                                   Values, Base);
 
       break;
    }
@@ -465,7 +465,7 @@ il::Constant* ILReader::readConstant(ILRecordReader &Record, unsigned Code)
       break;
    }
    case Value::ConstantOperatorInstID: {
-      auto OPC = Record.readEnum<ConstantOperatorInst::OpCode >();
+      auto OPC = Record.readEnum<ConstantOperatorInst::OpCode>();
       auto LHS = Record.readValueAs<Constant>();
       auto RHS = Record.readValueAs<Constant>();
 
@@ -482,8 +482,8 @@ il::Constant* ILReader::readConstant(ILRecordReader &Record, unsigned Code)
    return C;
 }
 
-il::Function* ILReader::readFunction(ILRecordReader &Record,
-                                     unsigned Code) {
+il::Function* ILReader::readFunction(ILRecordReader& Record, unsigned Code)
+{
    ++NumFunctions;
 
    auto Name = Record.getIdentifierInfo()->getIdentifier();
@@ -509,7 +509,7 @@ il::Function* ILReader::readFunction(ILRecordReader &Record,
       Func->setDeclared(true);
 
    auto IP = Builder.saveIP();
-   auto *M = Builder.getModule();
+   auto* M = Builder.getModule();
 
    FunctionRAII FR(*this, Func);
 
@@ -541,11 +541,8 @@ il::Function* ILReader::readFunction(ILRecordReader &Record,
       if (ReadGlobals)
          ReadGlobals->push_back(Func);
 
-      Func->setLazyFnInfo(
-         new(Reader.getContext()) LazyILFunctionInfo(Reader.Reader, *Func,
-                                                     move(BlockIDs),
-                                                     move(EntryInstIDs),
-                                                     Linkage));
+      Func->setLazyFnInfo(new (Reader.getContext()) LazyILFunctionInfo(
+          Reader.Reader, *Func, move(BlockIDs), move(EntryInstIDs), Linkage));
 
       Func->setDeclared(true);
    }
@@ -556,12 +553,12 @@ il::Function* ILReader::readFunction(ILRecordReader &Record,
    return Func;
 }
 
-il::BasicBlock* ILReader::readBasicBlock(ILRecordReader &Record, unsigned ID)
+il::BasicBlock* ILReader::readBasicBlock(ILRecordReader& Record, unsigned ID)
 {
    assert(CurrentFn && "shouldn't read this outside of a function");
 
    auto RawBits = Record.readInt();
-   auto *M = Builder.getModule();
+   auto* M = Builder.getModule();
    auto IP = Builder.saveIP();
 
    auto BB = Builder.CreateBasicBlock(CurrentFn, true);
@@ -597,11 +594,11 @@ il::BasicBlock* ILReader::readBasicBlock(ILRecordReader &Record, unsigned ID)
 void ILReader::finalizeBasicBlocks()
 {
    while (!UnfinishedBBs.empty()) {
-      auto &&Next = UnfinishedBBs.pop_back_val();
+      auto&& Next = UnfinishedBBs.pop_back_val();
       Builder.SetInsertPoint(&Next.B);
 
       for (auto Inst : Next.InstIDs) {
-         auto *NextInst = cast<Instruction>(GetValue(Inst));
+         auto* NextInst = cast<Instruction>(GetValue(Inst));
          if (NextInst->getParent() != &Next.B) {
             NextInst->detachFromParent();
             Next.B.getInstructions().push_back(NextInst);
@@ -610,11 +607,13 @@ void ILReader::finalizeBasicBlocks()
    }
 }
 
-il::BasicBlock *ILReader::readFunctionEntryBlock(unsigned ID,
-                                           SmallVectorImpl<unsigned> &InstIDs) {
+il::BasicBlock*
+ILReader::readFunctionEntryBlock(unsigned ID,
+                                 SmallVectorImpl<unsigned>& InstIDs)
+{
    auto Offset = ValueOffsets[ID - BaseValueIndex];
 
-   auto &Cursor = Reader.DeclsCursor;
+   auto& Cursor = Reader.DeclsCursor;
    SavedStreamPosition Pos(Cursor);
 
    Cursor.JumpToBit(Offset);
@@ -652,22 +651,23 @@ il::BasicBlock *ILReader::readFunctionEntryBlock(unsigned ID,
    return BB;
 }
 
-void ILReader::readFunctionBody(il::Function &F,
+void ILReader::readFunctionBody(il::Function& F,
                                 llvm::ArrayRef<unsigned> BlockIDs,
                                 llvm::ArrayRef<unsigned> EntryInstIDs,
-                                unsigned Linkage) {
+                                unsigned Linkage)
+{
    FunctionRAII FR(*this, &F);
 
    bool Entry = true;
    for (auto BlockID : BlockIDs) {
       if (Entry) {
-         auto *BB = F.getEntryBlock();
+         auto* BB = F.getEntryBlock();
          assert(BB == ValuesLoaded[BlockID - BaseValueIndex]);
 
          Builder.SetInsertPoint(BB);
 
          for (auto InstID : EntryInstIDs) {
-            (void) GetValue(InstID);
+            (void)GetValue(InstID);
          }
 
          Entry = false;
@@ -683,16 +683,16 @@ void ILReader::readFunctionBody(il::Function &F,
    finalizeBasicBlocks();
 }
 
-void ILReader::readGlobalInitializer(GlobalVariable &G,
-                                     unsigned InitID,
-                                     unsigned Linkage) {
+void ILReader::readGlobalInitializer(GlobalVariable& G, unsigned InitID,
+                                     unsigned Linkage)
+{
    G.setInitializer(cast_or_null<Constant>(GetValue(InitID)));
    G.setLinkage(static_cast<Function::LinkageTypes>(Linkage));
 }
 
-void ILReader::readLazyGlobal(il::GlobalObject &GO)
+void ILReader::readLazyGlobal(il::GlobalObject& GO)
 {
-   if (auto *Fn = dyn_cast<Function>(&GO)) {
+   if (auto* Fn = dyn_cast<Function>(&GO)) {
       Fn->getLazyFnInfo()->loadFunctionBody();
    }
    else {
@@ -700,7 +700,7 @@ void ILReader::readLazyGlobal(il::GlobalObject &GO)
    }
 }
 
-il::Argument* ILReader::readArgument(ILRecordReader &Record)
+il::Argument* ILReader::readArgument(ILRecordReader& Record)
 {
    auto Type = Record.readType();
    auto RawBits = Record.readInt();
@@ -713,8 +713,9 @@ il::Argument* ILReader::readArgument(ILRecordReader &Record)
    return Arg;
 }
 
-il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
-                                           unsigned Code) {
+il::Instruction* ILReader::readInstruction(ILRecordReader& Record,
+                                           unsigned Code)
+{
    if (!Builder.GetInsertBlock())
       return nullptr;
 
@@ -739,7 +740,7 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    auto Bits = Record.readInt();
    auto Loc = Record.readSourceLocation();
 
-   Instruction *I;
+   Instruction* I;
    switch (Code) {
    case Value::AllocaInstID: {
       auto Size = Record.readValue();
@@ -750,7 +751,7 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    }
    case Value::AllocBoxInstID:
       I = Builder.CreateAllocBox(Type->removeReference()->getBoxedType(),
-         Record.readValueAs<Function>());
+                                 Record.readValueAs<Function>());
       break;
    case Value::RetInstID: {
       auto Val = Record.readValue();
@@ -816,16 +817,15 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       auto TI = cast_or_null<GlobalVariable>(Record.readValue());
       auto Offset = (unsigned)Record.readInt();
 
-      I = Builder.CreateVirtualCall(cast<Function>(Operands.back()),
-                                    FnTy, TI, Offset,
+      I = Builder.CreateVirtualCall(cast<Function>(Operands.back()), FnTy, TI,
+                                    Offset,
                                     ArrayRef<Value*>(Operands).drop_back(1));
 
       break;
    }
    case Value::LambdaCallInstID: {
       I = Builder.CreateLambdaCall(
-         Operands.back(),
-         llvm::ArrayRef<Value*>(Operands).drop_back(1));
+          Operands.back(), llvm::ArrayRef<Value*>(Operands).drop_back(1));
       break;
    }
    case Value::InvokeInstID: {
@@ -844,10 +844,9 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       auto NormalDst = Record.readValueAs<BasicBlock>();
       auto LPad = Record.readValueAs<BasicBlock>();
 
-      I = Builder.CreateVirtualInvoke(cast<Function>(Operands.back()),
-                                      FnTy, TI, Offset,
-                                      ArrayRef<Value*>(Operands).drop_back(1),
-                                      NormalDst, LPad);
+      I = Builder.CreateVirtualInvoke(
+          cast<Function>(Operands.back()), FnTy, TI, Offset,
+          ArrayRef<Value*>(Operands).drop_back(1), NormalDst, LPad);
 
       break;
    }
@@ -901,8 +900,8 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    }
    case Value::GEPInstID: {
       if (Operands[0]->getType()->isRecordType()) {
-         I = Builder.CreateStructGEP(Operands[0],
-            cast<ConstantInt>(Operands[1])->getZExtValue());
+         I = Builder.CreateStructGEP(
+             Operands[0], cast<ConstantInt>(Operands[1])->getZExtValue());
       }
       else {
          I = Builder.CreateGEP(Operands[0], Operands[1]);
@@ -912,12 +911,12 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    }
    case Value::TupleExtractInstID: {
       I = Builder.CreateTupleExtract(
-         Operands[0], cast<ConstantInt>(Operands[1])->getZExtValue());
+          Operands[0], cast<ConstantInt>(Operands[1])->getZExtValue());
       break;
    }
    case Value::CaptureExtractInstID: {
       I = Builder.CreateCaptureExtract(
-         cast<ConstantInt>(Operands[0])->getZExtValue());
+          cast<ConstantInt>(Operands[0])->getZExtValue());
       break;
    }
    case Value::EnumExtractInstID: {
@@ -946,13 +945,12 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       break;
    }
    case Value::DynamicCastInstID: {
-      auto *TI = Record.readValue();
+      auto* TI = Record.readValue();
       I = Builder.CreateDynamicCast(Operands[0], TI, Type);
       break;
    }
    case Value::ExistentialInitInstID: {
-      I = Builder.CreateExistentialInit(Operands[0], Type,
-                                        Operands[1],
+      I = Builder.CreateExistentialInit(Operands[0], Type, Operands[1],
                                         cast<GlobalVariable>(Operands[2]));
       break;
    }
@@ -963,9 +961,8 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
    case Value::StructInitInstID: {
       auto SD = Record.readDeclAs<ast::StructDecl>();
       I = Builder.CreateStructInit(
-         SD, cast<Method>(Operands.back()),
-         llvm::ArrayRef<Value*>(Operands).drop_back(1),
-         false, Type);
+          SD, cast<Method>(Operands.back()),
+          llvm::ArrayRef<Value*>(Operands).drop_back(1), false, Type);
 
       break;
    }
@@ -986,8 +983,8 @@ il::Instruction* ILReader::readInstruction(ILRecordReader &Record,
       break;
    case Value::EnumInitInstID: {
       auto Case = Record.readDeclAs<ast::EnumCaseDecl>();
-      I = Builder.CreateEnumInit(
-         cast<ast::EnumDecl>(Case->getRecord()), Case, Operands);
+      I = Builder.CreateEnumInit(cast<ast::EnumDecl>(Case->getRecord()), Case,
+                                 Operands);
       break;
    }
    case Value::LambdaInitInstID: {

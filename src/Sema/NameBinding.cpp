@@ -4,21 +4,20 @@
 //
 //#include "NameBinding.h"
 //
-//#include "Basic/NestedNameSpecifier.h"
-//#include "SemaPass.h"
-//#include "Support/StringSwitch.h"
+//#include "cdotc/Basic/NestedNameSpecifier.h"
+//#include "cdotc/Sema/SemaPass.h"//#include "cdotc/Support/StringSwitch.h"
 //
-//using namespace cdot;
-//using namespace cdot::ast;
-//using namespace cdot::diag;
-//using namespace cdot::support;
+// using namespace cdot;
+// using namespace cdot::ast;
+// using namespace cdot::diag;
+// using namespace cdot::support;
 //
-//NameBinder::NameBinder(SemaPass &Sema,
+// NameBinder::NameBinder(SemaPass &Sema,
 //                       SmallPtrSetImpl<NamedDecl *> *ReferencedDecls)
 //   : Sema(Sema), ReferencedDecls(ReferencedDecls)
 //{}
 //
-//bool NameBinder::bindNames(Expression *E)
+// bool NameBinder::bindNames(Expression *E)
 //{
 //   // Reset error.
 //   HadError = false;
@@ -27,14 +26,14 @@
 //   return HadError;
 //}
 //
-//bool NameBinder::visitTemplateArgListExpr(TemplateArgListExpr *E)
+// bool NameBinder::visitTemplateArgListExpr(TemplateArgListExpr *E)
 //{
 //   // We don't actually instantiate anything during this stage, just visit
 //   // the parent expression.
 //   return visit(E->getParentExpr());
 //}
 //
-//static bool CheckBuiltinType(SemaPass &SP, IdentifierRefExpr *Ident)
+// static bool CheckBuiltinType(SemaPass &SP, IdentifierRefExpr *Ident)
 //{
 //   if (!Ident->getDeclName().isSimpleIdentifier())
 //      return false;
@@ -52,7 +51,7 @@
 //        .Default(false);
 //}
 //
-//static ExprResult makeNestedNameSpec(SemaPass &SP,
+// static ExprResult makeNestedNameSpec(SemaPass &SP,
 //                                     ASTContext &Context,
 //                                     NestedNameSpecifier *NameSpec,
 //                                     IdentifierRefExpr *Ident) {
@@ -74,7 +73,8 @@
 //
 //   std::reverse(Locs.begin(), Locs.end());
 //
-//   auto WithLoc = NestedNameSpecifierWithLoc::Create(Context.getDeclNameTable(),
+//   auto WithLoc =
+//   NestedNameSpecifierWithLoc::Create(Context.getDeclNameTable(),
 //                                                     NameSpec, Locs);
 //
 //   auto Ty = Context.getDependentNameType(WithLoc);
@@ -86,7 +86,7 @@
 //   return Ident;
 //}
 //
-//bool NameBinder::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
+// bool NameBinder::visitIdentifierRefExpr(IdentifierRefExpr *Ident)
 //{
 //   // Check if this expressions parent expr refers to a namespace.
 //   auto *NameSpec = Sema.checkNamespaceRef(Ident);
@@ -251,7 +251,7 @@
 //   return true;
 //}
 //
-//bool NameBinder::visitCallExpr(CallExpr *E)
+// bool NameBinder::visitCallExpr(CallExpr *E)
 //{
 //   return true;
 //}

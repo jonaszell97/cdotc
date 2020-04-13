@@ -1,24 +1,22 @@
-#include "Function.h"
-#include "Argument.h"
-#include "BasicBlock.h"
+#include "cdotc/IL/Function.h"
 
-#include "AST/Decl.h"
-#include "Module.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/Argument.h"
+#include "cdotc/IL/BasicBlock.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IL/Writer/ModuleWriter.h"
 
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/raw_ostream.h>
-#include <IL/Writer/ModuleWriter.h>
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-Function::Function(llvm::StringRef name,
-                   FunctionType *funcTy,
-                   Module *parent)
-   : GlobalObject(FunctionID, funcTy->getCanonicalType(), parent, name),
-     BasicBlocks(this)
+Function::Function(llvm::StringRef name, FunctionType* funcTy, Module* parent)
+    : GlobalObject(FunctionID, funcTy->getCanonicalType(), parent, name),
+      BasicBlocks(this)
 {
    auto Canon = cast<FunctionType>(funcTy->getCanonicalType());
 
@@ -27,11 +25,9 @@ Function::Function(llvm::StringRef name,
    FnBits.Vararg = Canon->isCStyleVararg();
 }
 
-Function::Function(TypeID id, FunctionType *Ty,
-                   llvm::StringRef name,
-                   Module *parent)
-   : GlobalObject(id, Ty, parent, name),
-     BasicBlocks(this)
+Function::Function(TypeID id, FunctionType* Ty, llvm::StringRef name,
+                   Module* parent)
+    : GlobalObject(id, Ty, parent, name), BasicBlocks(this)
 {
    auto Canon = cast<FunctionType>(Ty->getCanonicalType());
 
@@ -40,9 +36,9 @@ Function::Function(TypeID id, FunctionType *Ty,
    FnBits.Vararg = Canon->isCStyleVararg();
 }
 
-Function::Function(const Function &other, Module &M)
-   : GlobalObject(FunctionID, other.getType(), &M, other.name),
-     BasicBlocks(this)
+Function::Function(const Function& other, Module& M)
+    : GlobalObject(FunctionID, other.getType(), &M, other.name),
+      BasicBlocks(this)
 {
    metaData = other.metaData;
    knownFnKind = other.knownFnKind;
@@ -57,37 +53,25 @@ Function::Function(const Function &other, Module &M)
    new BasicBlock(*other.getEntryBlock(), *this);
 }
 
-Function::~Function()
-{
+Function::~Function() {}
 
-}
+llvm::StringRef Function::getUnmangledName() const { return getName(); }
 
-llvm::StringRef Function::getUnmangledName() const
-{
-   return getName();
-}
-
-bool Function::isLambda() const
-{
-   return isa<Lambda>(this);
-}
+bool Function::isLambda() const { return isa<Lambda>(this); }
 
 BasicBlock const* Function::getEntryBlock() const
 {
    return &BasicBlocks.front();
 }
 
-BasicBlock* Function::getEntryBlock()
-{
-   return &BasicBlocks.front();
-}
+BasicBlock* Function::getEntryBlock() { return &BasicBlocks.front(); }
 
 bool Function::isGlobalInitFn() const
 {
    return this == parent->getGlobalInitFn();
 }
 
-Function* Function::getDeclarationIn(Module *Mod)
+Function* Function::getDeclarationIn(Module* Mod)
 {
    if (parent == Mod)
       return this;
@@ -95,7 +79,7 @@ Function* Function::getDeclarationIn(Module *Mod)
    if (auto Fn = Mod->getOwnFunction(getName()))
       return Fn;
 
-   Function *f;
+   Function* f;
    if (auto Init = dyn_cast<Initializer>(this)) {
       f = new Initializer(*Init, *Mod);
    }
@@ -113,46 +97,33 @@ Function* Function::getDeclarationIn(Module *Mod)
    return f;
 }
 
-void Function::dump() const
-{
-   print(llvm::outs());
-}
+void Function::dump() const { print(llvm::outs()); }
 
-void Function::print(llvm::raw_ostream &OS) const
+void Function::print(llvm::raw_ostream& OS) const
 {
    ModuleWriter Writer(this);
    Writer.WriteTo(OS);
 }
 
-Lambda::Lambda(FunctionType *funcTy,
-               Module *parent)
-   : Function(LambdaID, funcTy, "__anonymous_lambda", parent)
+Lambda::Lambda(FunctionType* funcTy, Module* parent)
+    : Function(LambdaID, funcTy, "__anonymous_lambda", parent)
 {
    setLinkage(InternalLinkage);
 }
 
-Lambda::Lambda(const il::Lambda &other, il::Module &M)
-   : Function(other, M)
-{
+Lambda::Lambda(const il::Lambda& other, il::Module& M) : Function(other, M) {}
 
-}
-
-Method::Method(llvm::StringRef name,
-               FunctionType *FuncTy,
-               bool isStatic,
-               bool isVirtual,
-               bool isDeinit,
-               Module *parent)
-   : Function(MethodID, FuncTy, name, parent),
-     Self(nullptr)
+Method::Method(llvm::StringRef name, FunctionType* FuncTy, bool isStatic,
+               bool isVirtual, bool isDeinit, Module* parent)
+    : Function(MethodID, FuncTy, name, parent), Self(nullptr)
 {
    FnBits.Static = isStatic;
    FnBits.Virtual = isVirtual;
    FnBits.Deinit = isDeinit;
 }
 
-Method::Method(const Method &other, Module &M)
-   : Function(other, M), Self(nullptr)
+Method::Method(const Method& other, Module& M)
+    : Function(other, M), Self(nullptr)
 {
    id = MethodID;
    vtableOffset = other.vtableOffset;
@@ -161,22 +132,23 @@ Method::Method(const Method &other, Module &M)
 
 ast::RecordDecl* Method::getRecordType() const
 {
-   return BasicBlocks.front().getArgs()
-                     .front().getType()->removeReference()->getRecord();
+   return BasicBlocks.front()
+       .getArgs()
+       .front()
+       .getType()
+       ->removeReference()
+       ->getRecord();
 }
 
-Initializer::Initializer(llvm::StringRef methodName,
-                         FunctionType *FuncTy,
-                         ConstructorKind Kind,
-                         Module *parent)
-   : Method(methodName, FuncTy, false, false, false, parent)
+Initializer::Initializer(llvm::StringRef methodName, FunctionType* FuncTy,
+                         ConstructorKind Kind, Module* parent)
+    : Method(methodName, FuncTy, false, false, false, parent)
 {
    id = InitializerID;
    FnBits.CtorKind = (unsigned)Kind;
 }
 
-Initializer::Initializer(const Initializer &other, Module &M)
-   : Method(other, M)
+Initializer::Initializer(const Initializer& other, Module& M) : Method(other, M)
 {
    id = InitializerID;
 }

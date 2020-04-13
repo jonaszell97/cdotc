@@ -1,23 +1,23 @@
-#include "ASTWriter.h"
+#include "cdotc/Serialization/ASTWriter.h"
 
-#include "ASTCommon.h"
-#include "AST/TypeVisitor.h"
-#include "Basic/NestedNameSpecifier.h"
-#include "Driver/Compiler.h"
-#include "ILWriter.h"
-#include "IL/Constant.h"
-#include "IncrementalCompilation.h"
-#include "Lex/Token.h"
-#include "ModuleWriter.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
-#include "Support/Various.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Basic/NestedNameSpecifier.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Constant.h"
+#include "cdotc/Lex/Token.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ASTCommon.h"
+#include "cdotc/Serialization/ILWriter.h"
+#include "cdotc/Serialization/IncrementalCompilation.h"
+#include "cdotc/Serialization/ModuleWriter.h"
+#include "cdotc/Support/Format.h"
+#include "cdotc/Support/Various.h"
 
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/Support/OnDiskHashTable.h>
-#include <Support/Format.h>
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -37,9 +37,8 @@ unsigned ComputeHash(DeclarationName Name)
    case DeclarationName::PrefixOperatorName:
    case DeclarationName::PostfixOperatorName:
    case DeclarationName::MacroName:
-      support::hash_combine(hash,
-                            llvm::HashString(Name.getIdentifierInfo()
-                                                 ->getIdentifier()));
+      support::hash_combine(
+          hash, llvm::HashString(Name.getIdentifierInfo()->getIdentifier()));
 
       break;
    case DeclarationName::InstantiationName:
@@ -86,44 +85,40 @@ unsigned ComputeHash(DeclarationName Name)
 } // namespace serial
 } // namespace cdot
 
-ASTWriter::ASTWriter(cdot::serial::ModuleWriter &Writer)
-   : Stream(Writer.Stream), Writer(Writer)
+ASTWriter::ASTWriter(cdot::serial::ModuleWriter& Writer)
+    : Stream(Writer.Stream), Writer(Writer)
 {
-
 }
 
-ASTWriter::ASTWriter(cdot::serial::ModuleWriter &Writer, ASTWriter &DWriter)
-   : Stream(Writer.Stream), Writer(Writer), DeclWriter(&DWriter)
+ASTWriter::ASTWriter(cdot::serial::ModuleWriter& Writer, ASTWriter& DWriter)
+    : Stream(Writer.Stream), Writer(Writer), DeclWriter(&DWriter)
 {
-
 }
 
 namespace {
 
 class InstantiationTableLookupTrait {
 public:
-   using key_type     = StringRef;
+   using key_type = StringRef;
    using key_type_ref = key_type;
 
-   using data_type     = unsigned;
+   using data_type = unsigned;
    using data_type_ref = data_type;
 
    using hash_value_type = unsigned;
-   using offset_type     = unsigned;
+   using offset_type = unsigned;
 
-   static bool EqualKey(key_type_ref a, key_type_ref b)
-   {
-      return a == b;
-   }
+   static bool EqualKey(key_type_ref a, key_type_ref b) { return a == b; }
 
    hash_value_type ComputeHash(key_type_ref Name)
    {
       return llvm::HashString(Name);
    }
 
-   std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream &Out,
+   std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream& Out,
                                                    key_type_ref Name,
-                                                   data_type_ref Lookup) {
+                                                   data_type_ref Lookup)
+   {
       unsigned KeyLen = Name.size() + 1;
       unsigned DataLen = 4;
 
@@ -138,13 +133,13 @@ public:
       return std::make_pair(KeyLen, DataLen);
    }
 
-   void EmitKey(llvm::raw_ostream &Out, key_type_ref Name, unsigned KeyLen)
+   void EmitKey(llvm::raw_ostream& Out, key_type_ref Name, unsigned KeyLen)
    {
       Out.write(Name.begin(), KeyLen);
    }
 
-   void EmitData(llvm::raw_ostream& Out, key_type_ref,
-                 unsigned ID, unsigned) {
+   void EmitData(llvm::raw_ostream& Out, key_type_ref, unsigned ID, unsigned)
+   {
       using namespace llvm::support;
 
       endian::Writer<little> LE(Out);
@@ -158,27 +153,27 @@ void ASTWriter::WriteInstantiationTable()
 {
    using namespace llvm;
 
-   auto &Ctx = Writer.CI.getContext();
-   auto &Sema = Writer.CI.getSema();
-   auto &Mangle = Sema.getMangler();
-   auto &Idents = Ctx.getIdentifiers();
+   auto& Ctx = Writer.CI.getContext();
+   auto& Sema = Writer.CI.getSema();
+   auto& Mangle = Sema.getMangler();
+   auto& Idents = Ctx.getIdentifiers();
 
    llvm::OnDiskChainedHashTableGenerator<InstantiationTableLookupTrait> Gen;
-   for (auto &Inst : Ctx.RecordTemplateInstatiations) {
+   for (auto& Inst : Ctx.RecordTemplateInstatiations) {
       auto Pref = Mangle.getPrefix(&Inst);
-      auto *II = &Idents.get(Pref);
+      auto* II = &Idents.get(Pref);
       Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
    }
 
-   for (auto &Inst : Ctx.FunctionTemplateInstatiations) {
+   for (auto& Inst : Ctx.FunctionTemplateInstatiations) {
       auto Pref = Mangle.getPrefix(&Inst);
-      auto *II = &Idents.get(Pref);
+      auto* II = &Idents.get(Pref);
       Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
    }
 
-   for (auto &Inst : Ctx.AliasTemplateInstatiations) {
+   for (auto& Inst : Ctx.AliasTemplateInstatiations) {
       auto Pref = Mangle.getPrefix(&Inst);
-      auto *II = &Idents.get(Pref);
+      auto* II = &Idents.get(Pref);
       Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
    }
 
@@ -190,7 +185,7 @@ void ASTWriter::WriteInstantiationTable()
       llvm::raw_svector_ostream OS(TblData);
       Offset = Gen.Emit(OS);
    }
-   
+
    uint64_t Data[] = {INSTANTIATION_TABLE, Offset};
    Stream.EmitRecordWithBlob(InstantiationTableAbbrev, Data, bytes(TblData));
 }
@@ -202,7 +197,8 @@ void ASTWriter::WriteOffsetAbbrevs()
    // Write the declaration offsets array
    auto Abbrev = std::make_shared<BitCodeAbbrev>();
    Abbrev->Add(BitCodeAbbrevOp(DECL_OFFSET));
-   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // # of declarations
+   Abbrev->Add(
+       BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // # of declarations
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // base decl ID
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // declarations block
    DeclOffsetAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
@@ -212,7 +208,7 @@ void ASTWriter::WriteOffsetAbbrevs()
    Abbrev->Add(BitCodeAbbrevOp(TYPE_OFFSET));
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // # of types
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // base decl ID
-   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // types block
+   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));      // types block
    TypeOffsetAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
 
    // Write the type offsets array
@@ -220,7 +216,7 @@ void ASTWriter::WriteOffsetAbbrevs()
    Abbrev->Add(BitCodeAbbrevOp(IL_VALUE_OFFSETS));
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // # of values
    Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // base value ID
-   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // values block
+   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));      // values block
    ValueOffsetAbbrev = Stream.EmitAbbrev(std::move(Abbrev));
 }
 
@@ -229,29 +225,27 @@ void ASTWriter::WriteDeclOffsets(unsigned Offset)
    ArrayRef<uint32_t> Offsets = DeclOffsets;
    Offsets = Offsets.drop_front(Offset);
 
-   RecordData::value_type Record[] = {
-      DECL_OFFSET, Offsets.size(), 1
-   };
+   RecordData::value_type Record[] = {DECL_OFFSET, Offsets.size(), 1};
 
    Stream.EmitRecordWithBlob(DeclOffsetAbbrev, Record, bytes(Offsets));
 }
 
-void ASTWriter::AddDeclRef(const Decl *D, RecordDataImpl &Record)
+void ASTWriter::AddDeclRef(const Decl* D, RecordDataImpl& Record)
 {
    Record.push_back(GetDeclRef(D));
 }
 
-unsigned ASTWriter::GetDeclRef(const Decl *D)
+unsigned ASTWriter::GetDeclRef(const Decl* D)
 {
    if (!D || D->isIgnored())
       return 0;
 
-   unsigned &ID = DeclIDMap[D];
+   unsigned& ID = DeclIDMap[D];
    if (ID == 0) {
       assert(!Writer.DoneWriting && "adding decl after done writing");
 
       ID = NextDeclID++;
-      auto &Back = Writer.ValuesToEmit.emplace(const_cast<Decl*>(D));
+      auto& Back = Writer.ValuesToEmit.emplace(const_cast<Decl*>(D));
 
 #ifndef NDEBUG
       Decl::verifyID(((Decl*)Back)->getKind());
@@ -262,7 +256,7 @@ unsigned ASTWriter::GetDeclRef(const Decl *D)
    return ID;
 }
 
-unsigned serial::ASTWriter::getDeclID(const Decl *D)
+unsigned serial::ASTWriter::getDeclID(const Decl* D)
 {
    auto It = DeclIDMap.find(D);
    assert(It != DeclIDMap.end() && "decl not emitted");
@@ -270,7 +264,7 @@ unsigned serial::ASTWriter::getDeclID(const Decl *D)
    return It->getSecond();
 }
 
-unsigned ASTWriter::GetModuleID(Module *M)
+unsigned ASTWriter::GetModuleID(Module* M)
 {
    auto It = Writer.ModuleIDs.find(M);
    assert(It != Writer.ModuleIDs.end() && "module not emitted");
@@ -287,7 +281,7 @@ void ASTWriter::WriteTypeOffsets(unsigned Offset)
    Stream.EmitRecordWithBlob(TypeOffsetAbbrev, Record, bytes(Offsets));
 }
 
-void ASTWriter::AddTypeRef(QualType T, RecordDataImpl &Record)
+void ASTWriter::AddTypeRef(QualType T, RecordDataImpl& Record)
 {
    Record.push_back(GetOrCreateTypeID(T));
 }
@@ -297,12 +291,12 @@ unsigned ASTWriter::GetOrCreateTypeID(QualType T)
    if (T.isNull())
       return 0;
 
-   unsigned &ID = TypeIDMap[T];
+   unsigned& ID = TypeIDMap[T];
    if (ID == 0) {
       assert(!Writer.DoneWriting && "adding type after done writing");
 
       ID = NextTypeID++;
-      auto &Back = Writer.ValuesToEmit.emplace(T);
+      auto& Back = Writer.ValuesToEmit.emplace(T);
 
 #ifndef NDEBUG
       Type::verifyID(((QualType)Back)->getTypeID());
@@ -323,15 +317,16 @@ unsigned ASTWriter::getTypeID(QualType T) const
 
 namespace {
 
-class ASTTypeWriter: public TypeVisitor<ASTTypeWriter> {
+class ASTTypeWriter : public TypeVisitor<ASTTypeWriter> {
    ASTRecordWriter Record;
    Type::TypeID Code;
    unsigned AbbrevToUse = 0;
 
 public:
-   ASTTypeWriter(ASTWriter &Writer, ASTWriter::RecordData &Data)
-      : Record(Writer, Data), Code(static_cast<Type::TypeID>(0))
-   {}
+   ASTTypeWriter(ASTWriter& Writer, ASTWriter::RecordData& Data)
+       : Record(Writer, Data), Code(static_cast<Type::TypeID>(0))
+   {
+   }
 
    void visit(QualType Ty)
    {
@@ -339,35 +334,32 @@ public:
       Code = Ty->getTypeID();
    }
 
-#  define CDOT_TYPE(TYPE, PARENT) void visit##TYPE(const TYPE *Ty);
-#  include "AST/Types.def"
+#define CDOT_TYPE(TYPE, PARENT) void visit##TYPE(const TYPE* Ty);
+#include "cdotc/AST/Types.def"
 
-   uint64_t Emit()
-   {
-      return Record.Emit(Code, AbbrevToUse);
-   }
+   uint64_t Emit() { return Record.Emit(Code, AbbrevToUse); }
 };
 
 } // anonymous namespace
 
-void ASTTypeWriter::visitArrayType(const ArrayType *Ty)
+void ASTTypeWriter::visitArrayType(const ArrayType* Ty)
 {
    Record.push_back(Ty->getNumElements());
    Record.AddTypeRef(Ty->getElementType());
 }
 
-void ASTTypeWriter::visitAssociatedType(const AssociatedType *Ty)
+void ASTTypeWriter::visitAssociatedType(const AssociatedType* Ty)
 {
    Record.AddDeclRef(Ty->getDecl());
    Record.AddTypeRef(Ty->getOuterAT());
 }
 
-void ASTTypeWriter::visitBoxType(const BoxType *Ty)
+void ASTTypeWriter::visitBoxType(const BoxType* Ty)
 {
    Record.AddTypeRef(Ty->getBoxedType());
 }
 
-void ASTTypeWriter::visitExistentialType(const ExistentialType *Ty)
+void ASTTypeWriter::visitExistentialType(const ExistentialType* Ty)
 {
    auto Existentials = Ty->getExistentials();
    Record.push_back(Existentials.size());
@@ -376,47 +368,45 @@ void ASTTypeWriter::visitExistentialType(const ExistentialType *Ty)
       Record.AddTypeRef(E);
 }
 
-void ASTTypeWriter::visitTokenType(const TokenType *Ty)
-{
+void ASTTypeWriter::visitTokenType(const TokenType* Ty) {}
 
-}
-
-void ASTTypeWriter::visitBuiltinType(const BuiltinType *Ty)
+void ASTTypeWriter::visitBuiltinType(const BuiltinType* Ty)
 {
    Record.push_back(Ty->getKind());
 }
 
-void ASTTypeWriter::visitDependentRecordType(const DependentRecordType *Ty)
+void ASTTypeWriter::visitDependentRecordType(const DependentRecordType* Ty)
 {
    Record.AddDeclRef(Ty->getRecord());
    Record.AddTemplateArgumentList(Ty->getTemplateArgs());
    Record.AddTypeRef(Ty->getParent());
 }
 
-void ASTTypeWriter::visitDependentSizeArrayType(const DependentSizeArrayType *Ty)
+void ASTTypeWriter::visitDependentSizeArrayType(
+    const DependentSizeArrayType* Ty)
 {
    Record.AddStmt(Ty->getSizeExpr());
    Record.AddTypeRef(Ty->getElementType());
 }
 
-void ASTTypeWriter::visitDependentTypedefType(const DependentTypedefType *Ty)
+void ASTTypeWriter::visitDependentTypedefType(const DependentTypedefType* Ty)
 {
    Record.AddDeclRef(Ty->getTypedef());
    Record.AddTemplateArgumentList(Ty->getTemplateArgs());
    Record.AddTypeRef(Ty->getParent());
 }
 
-void ASTTypeWriter::visitDependentNameType(const DependentNameType *Ty)
+void ASTTypeWriter::visitDependentNameType(const DependentNameType* Ty)
 {
    Record.AddNestedNameSpecWithLoc(Ty->getNameSpecWithLoc());
 }
 
-void ASTTypeWriter::visitTypeVariableType(const TypeVariableType *Ty)
+void ASTTypeWriter::visitTypeVariableType(const TypeVariableType* Ty)
 {
    Record.push_back(Ty->getVariableID());
 }
 
-void ASTTypeWriter::visitFunctionType(const FunctionType *Ty)
+void ASTTypeWriter::visitFunctionType(const FunctionType* Ty)
 {
    Record.AddTypeRef(Ty->getReturnType());
 
@@ -434,52 +424,52 @@ void ASTTypeWriter::visitFunctionType(const FunctionType *Ty)
    Record.push_back(Ty->getRawFlags());
 }
 
-void ASTTypeWriter::visitTemplateParamType(const TemplateParamType *Ty)
+void ASTTypeWriter::visitTemplateParamType(const TemplateParamType* Ty)
 {
    Record.AddDeclRef(Ty->getParam());
 }
 
-void ASTTypeWriter::visitInferredSizeArrayType(const InferredSizeArrayType *Ty)
+void ASTTypeWriter::visitInferredSizeArrayType(const InferredSizeArrayType* Ty)
 {
    Record.AddTypeRef(Ty->getElementType());
 }
 
-void ASTTypeWriter::visitLambdaType(const LambdaType *Ty)
+void ASTTypeWriter::visitLambdaType(const LambdaType* Ty)
 {
    visitFunctionType(Ty);
 }
 
-void ASTTypeWriter::visitMetaType(const MetaType *Ty)
+void ASTTypeWriter::visitMetaType(const MetaType* Ty)
 {
    Record.AddTypeRef(Ty->getUnderlyingType());
 }
 
-void ASTTypeWriter::visitMutablePointerType(const MutablePointerType *Ty)
+void ASTTypeWriter::visitMutablePointerType(const MutablePointerType* Ty)
 {
    Record.AddTypeRef(Ty->getPointeeType());
 }
 
-void ASTTypeWriter::visitMutableReferenceType(const MutableReferenceType *Ty)
+void ASTTypeWriter::visitMutableReferenceType(const MutableReferenceType* Ty)
 {
    Record.AddTypeRef(Ty->getReferencedType());
 }
 
-void ASTTypeWriter::visitPointerType(const PointerType *Ty)
+void ASTTypeWriter::visitPointerType(const PointerType* Ty)
 {
    Record.AddTypeRef(Ty->getPointeeType());
 }
 
-void ASTTypeWriter::visitRecordType(const RecordType *Ty)
+void ASTTypeWriter::visitRecordType(const RecordType* Ty)
 {
    Record.AddDeclRef(Ty->getRecord());
 }
 
-void ASTTypeWriter::visitReferenceType(const ReferenceType *Ty)
+void ASTTypeWriter::visitReferenceType(const ReferenceType* Ty)
 {
    Record.AddTypeRef(Ty->getReferencedType());
 }
 
-void ASTTypeWriter::visitTupleType(const TupleType *Ty)
+void ASTTypeWriter::visitTupleType(const TupleType* Ty)
 {
    auto ContainedTypes = Ty->getContainedTypes();
    Record.push_back(ContainedTypes.size());
@@ -488,19 +478,16 @@ void ASTTypeWriter::visitTupleType(const TupleType *Ty)
       Record.AddTypeRef(Cont);
 }
 
-void ASTTypeWriter::visitTypedefType(const TypedefType *Ty)
+void ASTTypeWriter::visitTypedefType(const TypedefType* Ty)
 {
    Record.AddDeclRef(Ty->getTypedef());
 }
 
-void ASTWriter::WriteTypeAbbrevs()
-{
-
-}
+void ASTWriter::WriteTypeAbbrevs() {}
 
 void ASTWriter::WriteType(QualType Ty)
 {
-   unsigned &IdxRef = TypeIDMap[Ty];
+   unsigned& IdxRef = TypeIDMap[Ty];
    if (IdxRef == 0) // we haven't seen this type before.
       IdxRef = NextTypeID++;
 
@@ -516,7 +503,7 @@ void ASTWriter::WriteType(QualType Ty)
    TypeOffsets.push_back(Offset);
 }
 
-void ASTWriter::AddSourceLocation(SourceLocation Loc, RecordDataImpl &Record)
+void ASTWriter::AddSourceLocation(SourceLocation Loc, RecordDataImpl& Record)
 {
    auto ID = Writer.CI.getFileMgr().getSourceId(Loc);
    uint64_t Val = static_cast<uint64_t>(Loc.getOffset()) << 32u;
@@ -525,41 +512,42 @@ void ASTWriter::AddSourceLocation(SourceLocation Loc, RecordDataImpl &Record)
    Record.push_back(Val);
 }
 
-void ASTWriter::AddSourceRange(SourceRange Range, RecordDataImpl &Record)
+void ASTWriter::AddSourceRange(SourceRange Range, RecordDataImpl& Record)
 {
    AddSourceLocation(Range.getStart(), Record);
    AddSourceLocation(Range.getEnd(), Record);
 }
 
-void ASTRecordWriter::AddAPInt(const llvm::APInt &Value)
+void ASTRecordWriter::AddAPInt(const llvm::APInt& Value)
 {
    Record->push_back(Value.getBitWidth());
-   const uint64_t *Words = Value.getRawData();
+   const uint64_t* Words = Value.getRawData();
    Record->append(Words, Words + Value.getNumWords());
 }
 
-void ASTRecordWriter::AddAPSInt(const llvm::APSInt &Value)
+void ASTRecordWriter::AddAPSInt(const llvm::APSInt& Value)
 {
    Record->push_back(Value.isUnsigned());
    AddAPInt(Value);
 }
 
-void ASTRecordWriter::AddAPFloat(const llvm::APFloat &Value)
+void ASTRecordWriter::AddAPFloat(const llvm::APFloat& Value)
 {
    AddAPInt(Value.bitcastToAPInt());
 }
 
-void ASTWriter::AddIdentifierRef(const IdentifierInfo *II,
-                                 RecordDataImpl &Record) {
+void ASTWriter::AddIdentifierRef(const IdentifierInfo* II,
+                                 RecordDataImpl& Record)
+{
    Record.push_back(getIdentifierRef(II));
 }
 
-unsigned ASTWriter::getIdentifierRef(const IdentifierInfo *II)
+unsigned ASTWriter::getIdentifierRef(const IdentifierInfo* II)
 {
    return Writer.getIdentifierRef(II);
 }
 
-void ASTWriter::AddString(llvm::StringRef Str, RecordDataImpl &Record)
+void ASTWriter::AddString(llvm::StringRef Str, RecordDataImpl& Record)
 {
    Record.push_back(Str.size());
    Record.insert(Record.end(), Str.begin(), Str.end());
@@ -571,7 +559,8 @@ void ASTRecordWriter::AddTypeRef(SourceType T)
    AddTypeRef(T.getResolvedType());
 }
 
-void ASTWriter::AddDeclarationName(DeclarationName Name, ASTRecordWriter &Record)
+void ASTWriter::AddDeclarationName(DeclarationName Name,
+                                   ASTRecordWriter& Record)
 {
    Record.push_back(Name.getKind());
 
@@ -638,9 +627,9 @@ void ASTWriter::AddDeclarationName(DeclarationName Name, ASTRecordWriter &Record
    }
 }
 
-void ASTRecordWriter::AddNestedNameSpec(NestedNameSpecifier *Name)
+void ASTRecordWriter::AddNestedNameSpec(NestedNameSpecifier* Name)
 {
-   if (auto *Prev = Name->getPrevious()) {
+   if (auto* Prev = Name->getPrevious()) {
       push_back(true);
       AddNestedNameSpec(Prev);
    }
@@ -678,7 +667,7 @@ void ASTRecordWriter::AddNestedNameSpec(NestedNameSpecifier *Name)
    }
 }
 
-void ASTRecordWriter::AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc *Name)
+void ASTRecordWriter::AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc* Name)
 {
    AddNestedNameSpec(Name->getNameSpec());
 
@@ -690,7 +679,7 @@ void ASTRecordWriter::AddNestedNameSpecWithLoc(NestedNameSpecifierWithLoc *Name)
    }
 }
 
-void ASTRecordWriter::AddTemplateArgument(const TemplateArgument &Arg)
+void ASTRecordWriter::AddTemplateArgument(const TemplateArgument& Arg)
 {
    push_back(Arg.isNull());
    push_back(Arg.isType());
@@ -703,10 +692,10 @@ void ASTRecordWriter::AddTemplateArgument(const TemplateArgument &Arg)
       return;
 
    if (Arg.isVariadic()) {
-      auto &VAs = Arg.getVariadicArgs();
+      auto& VAs = Arg.getVariadicArgs();
       push_back(VAs.size());
 
-      for (auto &VA : VAs)
+      for (auto& VA : VAs)
          AddTemplateArgument(VA);
    }
    else if (Arg.isType()) {
@@ -718,14 +707,16 @@ void ASTRecordWriter::AddTemplateArgument(const TemplateArgument &Arg)
 }
 
 void ASTRecordWriter::AddTemplateArgumentList(
-                              const FinalTemplateArgumentList &TemplateArgs) {
+    const FinalTemplateArgumentList& TemplateArgs)
+{
    push_back(TemplateArgs.size());
-   for (auto &TA : TemplateArgs)
+   for (auto& TA : TemplateArgs)
       AddTemplateArgument(TA);
 }
 
 void ASTRecordWriter::AddTemplateParameterList(
-                           llvm::ArrayRef<TemplateParamDecl *> TemplateParams) {
+    llvm::ArrayRef<TemplateParamDecl*> TemplateParams)
+{
    push_back(TemplateParams.size());
    for (auto P : TemplateParams)
       AddDeclRef(P);
@@ -733,18 +724,20 @@ void ASTRecordWriter::AddTemplateParameterList(
 
 namespace {
 
-class ASTAttrWriter: public AttrVisitor<ASTAttrWriter> {
+class ASTAttrWriter : public AttrVisitor<ASTAttrWriter> {
    ASTRecordWriter Record;
-   IdentifierTable &Idents;
+   IdentifierTable& Idents;
 
 public:
-   ASTAttrWriter(ASTWriter &Writer, ASTWriter::RecordDataImpl &Data)
-      : Record(Writer, Data),
-        Idents(Writer.getWriter().getCompilerInstance()
-                     .getContext().getIdentifiers())
-   {}
+   ASTAttrWriter(ASTWriter& Writer, ASTWriter::RecordDataImpl& Data)
+       : Record(Writer, Data), Idents(Writer.getWriter()
+                                          .getCompilerInstance()
+                                          .getContext()
+                                          .getIdentifiers())
+   {
+   }
 
-   void visit(Attr *A)
+   void visit(Attr* A)
    {
       Record.push_back(static_cast<uint64_t>(A->getKind()));
       Record.AddSourceRange(A->getSourceRange());
@@ -752,17 +745,16 @@ public:
       AttrVisitor::visit(A);
    }
 
-#  define CDOT_ATTR(NAME, SPELLING) void visit##NAME##Attr(NAME##Attr *A);
-#  include "AST/Attributes.def"
+#define CDOT_ATTR(NAME, SPELLING) void visit##NAME##Attr(NAME##Attr* A);
+#include "cdotc/AST/Attributes.def"
 };
 
 } // anonymous namespace
 
-
 #define CDOT_ATTR_SERIALIZE
-#include "SerializeAttr.inc"
+#include "cdotc/Serialization/SerializeAttr.inc"
 
-void ASTRecordWriter::AddAttributes(llvm::ArrayRef<const Attr *> Attrs)
+void ASTRecordWriter::AddAttributes(llvm::ArrayRef<const Attr*> Attrs)
 {
    push_back(Attrs.size());
 
@@ -773,15 +765,15 @@ void ASTRecordWriter::AddAttributes(llvm::ArrayRef<const Attr *> Attrs)
    }
 }
 
-void ASTRecordWriter::AddILConstant(il::Constant *C)
+void ASTRecordWriter::AddILConstant(il::Constant* C)
 {
    push_back(Writer->Writer.ILWriter.GetOrCreateValueID(C));
 }
 
-void ASTRecordWriter::AddModuleRef(Module *M)
+void ASTRecordWriter::AddModuleRef(Module* M)
 {
-   if (M->getBaseModule() == Writer->getWriter().getCompilerInstance()
-                                                .getCompilationModule()) {
+   if (M->getBaseModule()
+       == Writer->getWriter().getCompilerInstance().getCompilationModule()) {
       return push_back(Writer->GetModuleID(M));
    }
 
@@ -801,7 +793,7 @@ void ASTRecordWriter::AddModuleRef(Module *M)
    }
 }
 
-void ASTRecordWriter::AddToken(const lex::Token &Tok)
+void ASTRecordWriter::AddToken(const lex::Token& Tok)
 {
    using namespace cdot::lex;
 
@@ -838,30 +830,30 @@ void ASTRecordWriter::AddToken(const lex::Token &Tok)
    }
 }
 
-uint64_t ASTWriter::WriteDeclContextLexicalBlock(ASTContext&,
-                                                 DeclContext *DC) {
+uint64_t ASTWriter::WriteDeclContextLexicalBlock(ASTContext&, DeclContext* DC)
+{
    if (DC->decl_empty())
       return 0;
 
    uint64_t Offset = Stream.GetCurrentBitNo();
    llvm::SmallVector<uint32_t, 128> DeclIDs;
-   for (const auto *D : DC->getDecls()) {
+   for (const auto* D : DC->getDecls()) {
       auto ID = GetDeclRef(D);
       if (ID)
          DeclIDs.push_back(ID);
    }
 
    RecordData::value_type Record[] = {DECL_CONTEXT_LEXICAL, DeclIDs.size()};
-   Stream.EmitRecordWithBlob(DeclContextLexicalAbbrev, Record,
-                             bytes(DeclIDs));
+   Stream.EmitRecordWithBlob(DeclContextLexicalAbbrev, Record, bytes(DeclIDs));
 
    return Offset;
 }
 
-uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
-                                                 DeclContext *DC) {
+uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext& Context,
+                                                 DeclContext* DC)
+{
    uint64_t Offset = Stream.GetCurrentBitNo();
-   auto &Map = DC->getOwnNamedDecls();
+   auto& Map = DC->getOwnNamedDecls();
    if (Map.empty())
       return 0;
 
@@ -872,7 +864,7 @@ uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
    uint32_t TblOffset = GenerateNameLookupTable(DC, LookupTable);
 
    // Write the lookup table
-   RecordData::value_type Record[] = { DECL_CONTEXT_VISIBLE, TblOffset };
+   RecordData::value_type Record[] = {DECL_CONTEXT_VISIBLE, TblOffset};
    Stream.EmitRecordWithBlob(DeclContextVisibleLookupAbbrev, Record,
                              LookupTable);
 
@@ -883,11 +875,11 @@ void ASTWriter::WriteCacheLookupTable()
 {
    // Create the on-disk hash table in a buffer.
    SmallString<4096> LookupTable;
-   uint32_t TblOffset = GenerateNameLookupTable(Writer.Mod->getDecl(),
-                                                LookupTable);
+   uint32_t TblOffset
+       = GenerateNameLookupTable(Writer.Mod->getDecl(), LookupTable);
 
    // Write the lookup table
-   RecordData::value_type Record[] = { CACHE_LOOKUP_TABLE, TblOffset };
+   RecordData::value_type Record[] = {CACHE_LOOKUP_TABLE, TblOffset};
    Stream.EmitRecordWithBlob(CacheLookupAbbrev, Record, LookupTable);
 }
 
@@ -895,38 +887,35 @@ namespace {
 
 // Trait used for the on-disk hash table
 class ASTDeclContextNameLookupTrait {
-   ASTWriter &Writer;
+   ASTWriter& Writer;
    llvm::SmallVector<unsigned, 64> DeclIDs;
 
 public:
-   using key_type     = DeclarationName;
+   using key_type = DeclarationName;
    using key_type_ref = key_type;
 
    /// A start and end index into DeclIDs, representing a sequence of decls.
    using data_type = std::pair<unsigned, unsigned>;
-   using data_type_ref = const data_type &;
+   using data_type_ref = const data_type&;
 
    using hash_value_type = unsigned;
    using offset_type = unsigned;
 
-   explicit ASTDeclContextNameLookupTrait(ASTWriter &Writer) : Writer(Writer) {}
+   explicit ASTDeclContextNameLookupTrait(ASTWriter& Writer) : Writer(Writer) {}
 
-   data_type getData(const DeclContextLookupResult &Decls)
+   data_type getData(const DeclContextLookupResult& Decls)
    {
       unsigned Start = DeclIDs.size();
-      for (NamedDecl *D : Decls) {
+      for (NamedDecl* D : Decls) {
          auto ID = Writer.GetDeclRef(D);
          if (ID)
             DeclIDs.push_back(ID);
       }
-      
+
       return std::make_pair(Start, DeclIDs.size());
    }
 
-   static bool EqualKey(key_type_ref a, key_type_ref b)
-   {
-      return a == b;
-   }
+   static bool EqualKey(key_type_ref a, key_type_ref b) { return a == b; }
 
    hash_value_type ComputeHash(DeclarationName Name)
    {
@@ -980,27 +969,28 @@ public:
       return KeyLen;
    }
 
-   std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream &Out,
+   std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream& Out,
                                                    DeclarationName Name,
-                                                   data_type_ref Lookup) {
+                                                   data_type_ref Lookup)
+   {
       using namespace llvm::support;
 
       endian::Writer<little> LE(Out);
       unsigned KeyLen = GetKeyLength(Name);
-      
+
       LE.write<uint16_t>(KeyLen);
 
       // 4 bytes for each DeclID.
       unsigned DataLen = 4 * (Lookup.second - Lookup.first);
-      assert(uint16_t(DataLen) == DataLen &&
-                "too many decls for serialized lookup result");
-      
+      assert(uint16_t(DataLen) == DataLen
+             && "too many decls for serialized lookup result");
+
       LE.write<uint16_t>(DataLen);
 
       return std::make_pair(KeyLen, DataLen);
    }
 
-   void EmitKey(llvm::raw_ostream &Out, DeclarationName Name, unsigned KeyLen)
+   void EmitKey(llvm::raw_ostream& Out, DeclarationName Name, unsigned KeyLen)
    {
       using namespace llvm::support;
 
@@ -1020,32 +1010,31 @@ public:
       case DeclarationName::OperatorDeclName:
          LE.write<uint8_t>(Name.getDeclaredOperatorName().getKind());
          LE.write<uint32_t>(Writer.getIdentifierRef(
-            Name.getDeclaredOperatorName().getIdentifierInfo()));
+             Name.getDeclaredOperatorName().getIdentifierInfo()));
          break;
       case DeclarationName::LocalVarName:
          LE.write<uint32_t>(Writer.getIdentifierRef(
-            Name.getLocalVarName().getIdentifierInfo()));
+             Name.getLocalVarName().getIdentifierInfo()));
          LE.write<uint32_t>(Name.getLocalVarScope());
          break;
       case DeclarationName::ConversionOperatorName:
          LE.write<uint32_t>(
-            Writer.GetOrCreateTypeID(Name.getConversionOperatorType()));
+             Writer.GetOrCreateTypeID(Name.getConversionOperatorType()));
          break;
       case DeclarationName::ExtensionName:
-         LE.write<uint32_t>(
-            Writer.GetOrCreateTypeID(Name.getExtendedType()));
+         LE.write<uint32_t>(Writer.GetOrCreateTypeID(Name.getExtendedType()));
          break;
       case DeclarationName::ConstructorName:
       case DeclarationName::BaseConstructorName:
          LE.write<uint32_t>(
-            Writer.GetOrCreateTypeID(Name.getConstructorType()));
+             Writer.GetOrCreateTypeID(Name.getConstructorType()));
          break;
       case DeclarationName::DestructorName:
          LE.write<uint32_t>(Writer.GetOrCreateTypeID(Name.getDestructorType()));
          break;
       case DeclarationName::PackExpansionName:
          LE.write<uint32_t>(Writer.getIdentifierRef(
-            Name.getPackExpansionName().getIdentifierInfo()));
+             Name.getPackExpansionName().getIdentifierInfo()));
          LE.write<uint32_t>(Name.getPackExpansionIndex());
 
          break;
@@ -1065,12 +1054,14 @@ public:
       }
    }
 
-   void EmitData(llvm::raw_ostream &Out, key_type_ref, data_type Lookup,
-                 unsigned DataLen) {
+   void EmitData(llvm::raw_ostream& Out, key_type_ref, data_type Lookup,
+                 unsigned DataLen)
+   {
       using namespace llvm::support;
 
       endian::Writer<little> LE(Out);
-      uint64_t Start = Out.tell(); (void)Start;
+      uint64_t Start = Out.tell();
+      (void)Start;
       for (unsigned I = Lookup.first, N = Lookup.second; I != N; ++I)
          LE.write<uint32_t>(DeclIDs[I]);
       assert(Out.tell() - Start == DataLen && "Data length is wrong");
@@ -1079,14 +1070,16 @@ public:
 
 } // anonymous namespace
 
-uint32_t ASTWriter::GenerateNameLookupTable(DeclContext *DC,
-                                      llvm::SmallVectorImpl<char> &LookupTable){
+uint32_t
+ASTWriter::GenerateNameLookupTable(DeclContext* DC,
+                                   llvm::SmallVectorImpl<char>& LookupTable)
+{
    ASTDeclContextNameLookupTrait Trait(*this);
    llvm::OnDiskChainedHashTableGenerator<ASTDeclContextNameLookupTrait>
-      Generator;
+       Generator;
 
    llvm::SmallVector<DeclarationName, 16> Names;
-   for (auto &DeclPair : DC->getAllNamedDecls()) {
+   for (auto& DeclPair : DC->getAllNamedDecls()) {
       Names.push_back(DeclPair.getFirst());
    }
 
@@ -1105,10 +1098,11 @@ uint32_t ASTWriter::GenerateNameLookupTable(DeclContext *DC,
    return Generator.Emit(OS, Trait);
 }
 
-void ASTWriter::addOperatorsPrecedenceGroups(ModuleDecl *M,
-                                             SmallVectorImpl<uint32_t> &Vec) {
-   for (auto &DeclNamePair : M->getAllNamedDecls()) {
-      for (auto *D : DeclNamePair.getSecond().getAsLookupResult()) {
+void ASTWriter::addOperatorsPrecedenceGroups(ModuleDecl* M,
+                                             SmallVectorImpl<uint32_t>& Vec)
+{
+   for (auto& DeclNamePair : M->getAllNamedDecls()) {
+      for (auto* D : DeclNamePair.getSecond().getAsLookupResult()) {
          switch (D->getKind()) {
          case Decl::ModuleDeclID:
             addOperatorsPrecedenceGroups(cast<ModuleDecl>(D), Vec);
@@ -1132,10 +1126,9 @@ void ASTWriter::WriteOperatorPrecedenceGroupRecords()
 {
    SmallVector<uint32_t, 8> OpPGDeclIDs;
    addOperatorsPrecedenceGroups(Writer.Mod->getDecl(), OpPGDeclIDs);
-   
-   RecordData::value_type Data[] = {
-      OPERATOR_PRECEDENCE_DECLS, OpPGDeclIDs.size()
-   };
+
+   RecordData::value_type Data[]
+       = {OPERATOR_PRECEDENCE_DECLS, OpPGDeclIDs.size()};
 
    Writer.NumOpPGDecls = static_cast<unsigned>(OpPGDeclIDs.size());
    Stream.EmitRecordWithBlob(OperatorPredecedenceAbbrev, Data,
@@ -1147,23 +1140,20 @@ namespace {
 class ConformanceTableLookupTrait {
 public:
    /// An ID representing a declaration.
-   using key_type     = uint32_t;
+   using key_type = uint32_t;
    using key_type_ref = key_type;
 
    /// An offset into the conformance data.
-   using data_type     = uint32_t;
-   using data_type_ref = const data_type &;
+   using data_type = uint32_t;
+   using data_type_ref = const data_type&;
 
    using hash_value_type = uint32_t;
-   using offset_type     = uint32_t;
+   using offset_type = uint32_t;
 
-   hash_value_type ComputeHash(key_type_ref Key)
-   {
-      return Key;
-   }
+   hash_value_type ComputeHash(key_type_ref Key) { return Key; }
 
-   std::pair<unsigned, unsigned>
-   EmitKeyDataLength(llvm::raw_ostream& Out, uint32_t, uint32_t)
+   std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream& Out,
+                                                   uint32_t, uint32_t)
    {
       using namespace llvm::support;
       return std::make_pair(4, 4);
@@ -1195,18 +1185,18 @@ void ASTWriter::WriteConformanceAbbrevs()
    auto Abv = std::make_shared<BitCodeAbbrev>();
    Abv->Add(BitCodeAbbrevOp(CONFORMANCE_TABLE));
    Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // table offset
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // raw data
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));      // raw data
    ConformanceTableAbbrev = Stream.EmitAbbrev(move(Abv));
 
    Abv = std::make_shared<BitCodeAbbrev>();
    Abv->Add(BitCodeAbbrevOp(CONFORMANCE_DATA));
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));      // raw data
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // raw data
    ConformanceDataAbbrev = Stream.EmitAbbrev(move(Abv));
 }
 
 void ASTWriter::WriteConformanceData()
 {
-   auto &ConfTable = Writer.CI.getContext().getConformanceTable();
+   auto& ConfTable = Writer.CI.getContext().getConformanceTable();
    SmallString<256> Blob;
    {
       using namespace llvm::support;
@@ -1235,7 +1225,7 @@ void ASTWriter::WriteConformanceTable()
    llvm::OnDiskChainedHashTableGenerator<ConformanceTableLookupTrait> Gen;
    ConformanceTableLookupTrait Trait;
 
-   for (auto &RecordIDPair : ConformanceOffsetMap) {
+   for (auto& RecordIDPair : ConformanceOffsetMap) {
       Gen.insert(GetDeclRef(RecordIDPair.getFirst()), RecordIDPair.getSecond(),
                  Trait);
    }
@@ -1254,13 +1244,13 @@ void ASTWriter::WriteConformanceTable()
    Stream.EmitRecordWithBlob(ConformanceTableAbbrev, Data, bytes(LookupTable));
 }
 
-void ASTWriter::WriteAST(ModuleDecl *M)
+void ASTWriter::WriteAST(ModuleDecl* M)
 {
    using namespace llvm;
 
    // Write the remaining AST contents.
    Stream.EnterSubblock(AST_BLOCK_ID, 5);
-   
+
    // Write abbreviations.
    auto Abv = std::make_shared<BitCodeAbbrev>();
    Abv->Add(BitCodeAbbrevOp(INSTANTIATION_TABLE));
@@ -1284,11 +1274,11 @@ void ASTWriter::WriteAST(ModuleDecl *M)
    unsigned MainModuleID = GetDeclRef(M);
 
    // Write the declaration table of the module.
-   uint64_t Data[] = { MainModuleID };
+   uint64_t Data[] = {MainModuleID};
    Stream.EmitRecord(GLOBAL_DECL_CONTEXT, Data);
 
    // Add all declarations to be written.
-   for (auto &File : Writer.CI.getFileMgr().getSourceFiles()) {
+   for (auto& File : Writer.CI.getFileMgr().getSourceFiles()) {
       GetDeclRef(Writer.CI.getModuleForSource(File.getValue().SourceId));
    }
 
@@ -1307,7 +1297,4 @@ void ASTWriter::WriteAST(ModuleDecl *M)
    Stream.ExitBlock(); // AST_BLOCK
 }
 
-void ASTWriter::WriteASTCache(ModuleDecl *M)
-{
-   WriteAST(M);
-}
+void ASTWriter::WriteASTCache(ModuleDecl* M) { WriteAST(M); }

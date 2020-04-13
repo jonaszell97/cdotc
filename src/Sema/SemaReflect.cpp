@@ -1,13 +1,12 @@
-#include "SemaPass.h"
-
-#include "Basic/TargetInfo.h"
-#include "Builtin.h"
-#include "IL/Constants.h"
-#include "IL/Function.h"
-#include "IL/GlobalVariable.h"
-#include "ILGen/ILGenPass.h"
-#include "Module/Module.h"
-#include "Query/QueryContext.h"
+#include "cdotc/Basic/TargetInfo.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/GlobalVariable.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/Builtin.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot::diag;
 using namespace cdot::sema;
@@ -17,22 +16,47 @@ namespace cdot {
 namespace ast {
 
 enum ReflectionIdent {
-   sizeOf = 0, alignOf, strideOf, line, column, fileName, sourceLocation,
-   function, mangledFunction, targetInfo, RI_inCTFE,
+   sizeOf = 0,
+   alignOf,
+   strideOf,
+   line,
+   column,
+   fileName,
+   sourceLocation,
+   function,
+   mangledFunction,
+   targetInfo,
+   RI_inCTFE,
 
    mirror,
 
-   SourceLocation, TargetInfo,
-   RI_AccessSpecifier, RI_Type, RI_NamedDecl, RI_RecordDecl, RI_FunctionDecl,
-   RI_StructDecl, RI_ClassDecl, RI_EnumDecl, RI_UnionDecl, RI_EnumCaseDecl,
-   RI_FieldDecl, RI_MethodDecl, RI_FuncArgDecl, RI_VarDecl,
+   SourceLocation,
+   TargetInfo,
+   RI_AccessSpecifier,
+   RI_Type,
+   RI_NamedDecl,
+   RI_RecordDecl,
+   RI_FunctionDecl,
+   RI_StructDecl,
+   RI_ClassDecl,
+   RI_EnumDecl,
+   RI_UnionDecl,
+   RI_EnumCaseDecl,
+   RI_FieldDecl,
+   RI_MethodDecl,
+   RI_FuncArgDecl,
+   RI_VarDecl,
 
    RI_debug,
-   Endianness, little, big,
+   Endianness,
+   little,
+   big,
    OperatingSystem,
 
    IsTriviallyCopyable,
-   underlyingType, IsDefaultInitializable, defaultValue,
+   underlyingType,
+   IsDefaultInitializable,
+   defaultValue,
 
    _last
 };
@@ -42,7 +66,7 @@ void SemaPass::initReflectionIdents()
    static_assert(sizeof(ReflectionIdents) / sizeof(IdentifierInfo*) > _last,
                  "not enough space for reflection identifiers!");
 
-   auto &Idents = Context.getIdentifiers();
+   auto& Idents = Context.getIdentifiers();
 
    ReflectionIdents[sizeOf] = &Idents.get("sizeOf");
    ReflectionIdents[alignOf] = &Idents.get("alignOf");
@@ -84,66 +108,68 @@ void SemaPass::initReflectionIdents()
    ReflectionIdents[OperatingSystem] = &Idents.get("OperatingSystem");
    ReflectionIdents[underlyingType] = &Idents.get("underlyingType");
    ReflectionIdents[IsTriviallyCopyable] = &Idents.get("IsTriviallyCopyable");
-   ReflectionIdents[IsDefaultInitializable] = &Idents.get("IsDefaultInitializable");
+   ReflectionIdents[IsDefaultInitializable]
+       = &Idents.get("IsDefaultInitializable");
    ReflectionIdents[defaultValue] = &Idents.get("defaultValue");
 
    ReflectionIdentsInitialized = true;
 }
 
 class ReflectionBuilder {
-   SemaPass &SP;
-   ast::ASTContext &Context;
-   il::ILBuilder &Builder;
-   Expression *Expr;
+   SemaPass& SP;
+   ast::ASTContext& Context;
+   il::ILBuilder& Builder;
+   Expression* Expr;
    llvm::DenseMap<uintptr_t, il::Constant*> ReflMap;
-   il::ConstantEnum *AccessSpecConstants[5] = { nullptr };
+   il::ConstantEnum* AccessSpecConstants[5] = {nullptr};
 
 public:
-   ReflectionBuilder(SemaPass &SP, Expression *Expr)
-      : SP(SP), Context(SP.getContext()),
-        Builder(SP.getILGen().Builder), Expr(Expr)
-   {}
+   ReflectionBuilder(SemaPass& SP, Expression* Expr)
+       : SP(SP), Context(SP.getContext()), Builder(SP.getILGen().Builder),
+         Expr(Expr)
+   {
+   }
 
-   void setExpr(Expression *E) { Expr = E; }
+   void setExpr(Expression* E) { Expr = E; }
 
    std::pair<il::Constant*, QualType> getMirror(QualType Ty)
    {
       auto C = ReflectType(Ty);
-      return { C, C->getType() };
+      return {C, C->getType()};
    }
 
-   std::pair<il::Constant*, QualType> getMirror(NamedDecl *ND)
+   std::pair<il::Constant*, QualType> getMirror(NamedDecl* ND)
    {
       auto C = BuildNamedDeclMirror(ND);
       if (auto GV = dyn_cast<il::GlobalVariable>(C)) {
-         return { GV, GV->getInitializer()->getType() };
+         return {GV, GV->getInitializer()->getType()};
       }
 
-      return { C, C->getType() };
+      return {C, C->getType()};
    }
 
 private:
-   void cacheValue(NamedDecl *ND, il::Constant *C)
+   void cacheValue(NamedDecl* ND, il::Constant* C)
    {
       ReflMap[(uintptr_t)ND] = C;
    }
 
-   void cacheValue(QualType Ty, il::Constant *C)
+   void cacheValue(QualType Ty, il::Constant* C)
    {
       ReflMap[(uintptr_t)Ty.getAsOpaquePtr()] = C;
    }
 
-   il::Constant *getCachedValue(NamedDecl *ND)
+   il::Constant* getCachedValue(NamedDecl* ND)
    {
       return ReflMap[(uintptr_t)ND];
    }
 
-   il::Constant *getCachedValue(QualType Ty)
+   il::Constant* getCachedValue(QualType Ty)
    {
       return ReflMap[(uintptr_t)Ty.getAsOpaquePtr()];
    }
 
-   il::Constant *ReflectType(QualType Ty)
+   il::Constant* ReflectType(QualType Ty)
    {
       if (Ty->isRecordType()) {
          return BuildRecordMirror(Ty->getRecord());
@@ -152,7 +178,7 @@ private:
       return BuildType(Ty);
    }
 
-   il::GlobalVariable *MakeGlobal(il::Constant *C, struct SourceLocation Loc)
+   il::GlobalVariable* MakeGlobal(il::Constant* C, struct SourceLocation Loc)
    {
       auto GV = Builder.CreateGlobalVariable(C, true, StringRef(), Loc);
       GV->setLinkage(il::GlobalVariable::InternalLinkage);
@@ -161,7 +187,7 @@ private:
       return GV;
    }
 
-   il::ConstantClass *BuildNamedDeclMirror(NamedDecl *ND)
+   il::ConstantClass* BuildNamedDeclMirror(NamedDecl* ND)
    {
       switch (ND->getKind()) {
       case Decl::EnumDeclID:
@@ -177,7 +203,7 @@ private:
       }
    }
 
-   il::ConstantClass *BuildRecordMirror(RecordDecl *R)
+   il::ConstantClass* BuildRecordMirror(RecordDecl* R)
    {
       switch (R->getKind()) {
       case Decl::EnumDeclID:
@@ -193,8 +219,8 @@ private:
       }
    }
 
-   il::Constant *BuildStringView(llvm::StringRef Str);
-   il::Constant *BuildStringView(DeclarationName Name)
+   il::Constant* BuildStringView(llvm::StringRef Str);
+   il::Constant* BuildStringView(DeclarationName Name)
    {
       std::string str;
       llvm::raw_string_ostream OS(str);
@@ -203,44 +229,45 @@ private:
       return BuildStringView(OS.str());
    }
 
-   il::Constant *BuildArrayView(QualType ElementTy,
+   il::Constant* BuildArrayView(QualType ElementTy,
                                 llvm::ArrayRef<il::Constant*> Values);
 
-   il::Constant *BuildOption(QualType Ty, il::Constant *Val = nullptr);
+   il::Constant* BuildOption(QualType Ty, il::Constant* Val = nullptr);
 
-   il::ConstantEnum *BuildAccessSpec(AccessSpecifier AS);
-   il::ConstantEnum *BuildType(QualType Ty);
+   il::ConstantEnum* BuildAccessSpec(AccessSpecifier AS);
+   il::ConstantEnum* BuildType(QualType Ty);
 
-   il::ConstantInt *BuildWord(uint64_t Val)
+   il::ConstantInt* BuildWord(uint64_t Val)
    {
       return Builder.GetConstantInt(Context.getUIntTy(), Val);
    }
 
-   il::ConstantClass *BuildNamedDeclBase(NamedDecl *ND);
-   il::ConstantClass *BuildVarDeclBase(VarDecl *Var);
+   il::ConstantClass* BuildNamedDeclBase(NamedDecl* ND);
+   il::ConstantClass* BuildVarDeclBase(VarDecl* Var);
 
-   il::ConstantClass *BuildFieldMirror(FieldDecl *F);
-   il::ConstantClass *BuildArgumentMirror(FuncArgDecl *Arg);
-   il::ConstantClass *BuildMethodMirror(MethodDecl *M);
+   il::ConstantClass* BuildFieldMirror(FieldDecl* F);
+   il::ConstantClass* BuildArgumentMirror(FuncArgDecl* Arg);
+   il::ConstantClass* BuildMethodMirror(MethodDecl* M);
 
-   il::ConstantClass *BuildRecordBase(RecordDecl *R);
-   il::ConstantClass *BuildFunctionBase(CallableDecl *F, bool cache = true);
+   il::ConstantClass* BuildRecordBase(RecordDecl* R);
+   il::ConstantClass* BuildFunctionBase(CallableDecl* F, bool cache = true);
 
-   il::ConstantClass *BuildStructMirror(StructDecl *S, bool cache = true);
+   il::ConstantClass* BuildStructMirror(StructDecl* S, bool cache = true);
 
-   il::ConstantClass *BuildClassMirror(ClassDecl *C);
-   il::ConstantClass *BuildUnionMirror(UnionDecl *U);
+   il::ConstantClass* BuildClassMirror(ClassDecl* C);
+   il::ConstantClass* BuildUnionMirror(UnionDecl* U);
 
-   il::ConstantClass *BuildEnumMirror(EnumDecl *E);
-   il::ConstantClass *BuildEnumCaseMirror(EnumCaseDecl *Case);
+   il::ConstantClass* BuildEnumMirror(EnumDecl* E);
+   il::ConstantClass* BuildEnumCaseMirror(EnumCaseDecl* Case);
 
-   il::GlobalVariable *GetTypeInfo(RecordDecl *R)
+   il::GlobalVariable* GetTypeInfo(RecordDecl* R)
    {
-      return SP.getILGen().GetOrCreateTypeInfo(SP.getContext().getRecordType(R));
+      return SP.getILGen().GetOrCreateTypeInfo(
+          SP.getContext().getRecordType(R));
    }
 };
 
-static RecordDecl *requireStringViewDecl(SemaPass &SP, Expression *Expr)
+static RecordDecl* requireStringViewDecl(SemaPass& SP, Expression* Expr)
 {
    auto SV = SP.getStringViewDecl();
    if (!SV) {
@@ -253,7 +280,7 @@ static RecordDecl *requireStringViewDecl(SemaPass &SP, Expression *Expr)
    return SV;
 }
 
-static RecordDecl *requireStringDecl(SemaPass &SP, Expression *Expr)
+static RecordDecl* requireStringDecl(SemaPass& SP, Expression* Expr)
 {
    auto SV = SP.getStringDecl();
    if (!SV) {
@@ -266,7 +293,7 @@ static RecordDecl *requireStringDecl(SemaPass &SP, Expression *Expr)
    return SV;
 }
 
-il::Constant *ReflectionBuilder::BuildStringView(llvm::StringRef Str)
+il::Constant* ReflectionBuilder::BuildStringView(llvm::StringRef Str)
 {
    auto SV = requireStringViewDecl(SP, Expr);
    if (!SV) {
@@ -278,7 +305,8 @@ il::Constant *ReflectionBuilder::BuildStringView(llvm::StringRef Str)
 
 il::Constant*
 ReflectionBuilder::BuildArrayView(QualType ElementTy,
-                                  llvm::ArrayRef<il::Constant*> Values) {
+                                  llvm::ArrayRef<il::Constant*> Values)
+{
    auto AV = SP.getArrayViewDecl();
    if (!AV) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -288,24 +316,24 @@ ReflectionBuilder::BuildArrayView(QualType ElementTy,
    }
 
    TemplateArgument Arg(AV->getTemplateParams().front(), ElementTy);
-   auto *TemplateArgs = FinalTemplateArgumentList::Create(Context, { Arg });
+   auto* TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
 
    auto Inst = SP.InstantiateRecord(Expr->getSourceLoc(), AV, TemplateArgs);
    if (!Inst)
       return nullptr;
 
-   auto *ArrTy = Context.getArrayType(ElementTy, Values.size());
-   auto *Arr = Builder.GetConstantArray(ArrTy, Values);
-   auto *GV = Builder.CreateGlobalVariable(Arr, true, "", AV->getSourceLoc());
+   auto* ArrTy = Context.getArrayType(ElementTy, Values.size());
+   auto* Arr = Builder.GetConstantArray(ArrTy, Values);
+   auto* GV = Builder.CreateGlobalVariable(Arr, true, "", AV->getSourceLoc());
 
-   auto *Size = Builder.GetConstantInt(Context.getUIntTy(), Values.size());
-   auto *FirstElPtr = il::ConstantExpr::getBitCast(
-      GV, ElementTy->getPointerTo(Context));
+   auto* Size = Builder.GetConstantInt(Context.getUIntTy(), Values.size());
+   auto* FirstElPtr
+       = il::ConstantExpr::getBitCast(GV, ElementTy->getPointerTo(Context));
 
    return Builder.GetConstantStruct(cast<StructDecl>(Inst), {FirstElPtr, Size});
 }
 
-il::Constant* ReflectionBuilder::BuildOption(QualType Ty, il::Constant *Val)
+il::Constant* ReflectionBuilder::BuildOption(QualType Ty, il::Constant* Val)
 {
    auto Opt = SP.getOptionDecl();
    if (!Opt) {
@@ -316,7 +344,7 @@ il::Constant* ReflectionBuilder::BuildOption(QualType Ty, il::Constant *Val)
    }
 
    TemplateArgument Arg(Opt->getTemplateParams().front(), Ty);
-   auto *TemplateArgs = FinalTemplateArgumentList::Create(Context, { Arg });
+   auto* TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
 
    auto Inst = SP.InstantiateRecord(Expr->getSourceLoc(), Opt, TemplateArgs);
    if (!Inst)
@@ -327,19 +355,19 @@ il::Constant* ReflectionBuilder::BuildOption(QualType Ty, il::Constant *Val)
 
    if (Val) {
       ++case_it;
-      return Builder.GetConstantEnum(*case_it, { Val });
+      return Builder.GetConstantEnum(*case_it, {Val});
    }
 
    return Builder.GetConstantEnum(*case_it, {});
 }
 
-il::ConstantEnum *ReflectionBuilder::BuildAccessSpec(AccessSpecifier AS)
+il::ConstantEnum* ReflectionBuilder::BuildAccessSpec(AccessSpecifier AS)
 {
    if (auto Val = AccessSpecConstants[(unsigned)AS])
       return Val;
 
    auto ASDecl = dyn_cast_or_null<EnumDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_AccessSpecifier]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_AccessSpecifier]]);
 
    if (!ASDecl) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -365,7 +393,7 @@ il::ConstantEnum* ReflectionBuilder::BuildType(QualType Ty)
       return cast<il::ConstantEnum>(Val);
 
    auto TypeDecl = dyn_cast_or_null<EnumDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_Type]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_Type]]);
 
    if (!TypeDecl) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -394,8 +422,8 @@ il::ConstantEnum* ReflectionBuilder::BuildType(QualType Ty)
    case Type::BuiltinTypeID: {
       if (Ty->isIntegerType()) {
          Kind = IntegerTy;
-         CaseVals.push_back(Builder.GetConstantInt(Context.getUIntTy(),
-                                                   Ty->getBitwidth()));
+         CaseVals.push_back(
+             Builder.GetConstantInt(Context.getUIntTy(), Ty->getBitwidth()));
          CaseVals.push_back(Ty->isUnsigned() ? Builder.GetTrue()
                                              : Builder.GetFalse());
       }
@@ -435,11 +463,11 @@ il::ConstantEnum* ReflectionBuilder::BuildType(QualType Ty)
       Kind = TupleTy;
 
       auto Tup = Ty->asTupleType();
-      for (auto &Cont : Tup->getContainedTypes()) {
+      for (auto& Cont : Tup->getContainedTypes()) {
          CaseVals.push_back(BuildType(Cont));
       }
 
-      auto *Arr = BuildArrayView(Context.getRecordType(TypeDecl), CaseVals);
+      auto* Arr = BuildArrayView(Context.getRecordType(TypeDecl), CaseVals);
       CaseVals.clear();
       CaseVals.push_back(Arr);
 
@@ -450,13 +478,13 @@ il::ConstantEnum* ReflectionBuilder::BuildType(QualType Ty)
       Kind = FunctionTy;
 
       auto Func = Ty->asFunctionType();
-      for (auto &Cont : Func->getParamTypes()) {
+      for (auto& Cont : Func->getParamTypes()) {
          CaseVals.push_back(BuildType(Cont));
       }
 
-      auto *Ret = BuildType(Func->getReturnType());
-      auto *Args = BuildArrayView(Context.getRecordType(TypeDecl), CaseVals);
-      auto *Thin = Ty->isLambdaType() ? Builder.GetFalse() : Builder.GetTrue();
+      auto* Ret = BuildType(Func->getReturnType());
+      auto* Args = BuildArrayView(Context.getRecordType(TypeDecl), CaseVals);
+      auto* Thin = Ty->isLambdaType() ? Builder.GetFalse() : Builder.GetTrue();
 
       CaseVals.clear();
       CaseVals.push_back(Ret);
@@ -484,10 +512,10 @@ il::ConstantEnum* ReflectionBuilder::BuildType(QualType Ty)
    return Val;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildNamedDeclBase(NamedDecl *ND)
+il::ConstantClass* ReflectionBuilder::BuildNamedDeclBase(NamedDecl* ND)
 {
    auto NDDecl = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_NamedDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_NamedDecl]]);
 
    if (!NDDecl) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -502,13 +530,13 @@ il::ConstantClass* ReflectionBuilder::BuildNamedDeclBase(NamedDecl *ND)
    if (!AS || !Name)
       return nullptr;
 
-   return Builder.GetConstantClass(NDDecl, GetTypeInfo(NDDecl), { AS, Name });
+   return Builder.GetConstantClass(NDDecl, GetTypeInfo(NDDecl), {AS, Name});
 }
 
-il::ConstantClass* ReflectionBuilder::BuildRecordBase(RecordDecl *R)
+il::ConstantClass* ReflectionBuilder::BuildRecordBase(RecordDecl* R)
 {
    auto RD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_RecordDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_RecordDecl]]);
    if (!RD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Record");
@@ -517,7 +545,7 @@ il::ConstantClass* ReflectionBuilder::BuildRecordBase(RecordDecl *R)
    }
 
    auto MD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_MethodDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_MethodDecl]]);
    if (!MD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Method");
@@ -537,19 +565,19 @@ il::ConstantClass* ReflectionBuilder::BuildRecordBase(RecordDecl *R)
    }
 
    auto MethodConst = BuildArrayView(Context.getRecordType(MD), Methods);
-   return Builder.GetConstantClass(RD, GetTypeInfo(RD),
-                                   { MethodConst }, NDBase);
+   return Builder.GetConstantClass(RD, GetTypeInfo(RD), {MethodConst}, NDBase);
 }
 
-il::ConstantClass* ReflectionBuilder::BuildFunctionBase(CallableDecl *F,
-                                                        bool cache) {
+il::ConstantClass* ReflectionBuilder::BuildFunctionBase(CallableDecl* F,
+                                                        bool cache)
+{
    if (cache) {
       if (auto Val = getCachedValue(F))
          return cast<il::ConstantClass>(Val);
    }
 
    auto FD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_FunctionDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_FunctionDecl]]);
    if (!FD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Function");
@@ -561,7 +589,7 @@ il::ConstantClass* ReflectionBuilder::BuildFunctionBase(CallableDecl *F,
    if (!Ty)
       return nullptr;
 
-   il::Constant *Fn = SP.getILGen().DeclareFunction(F);
+   il::Constant* Fn = SP.getILGen().DeclareFunction(F);
    if (!Fn)
       return nullptr;
 
@@ -571,7 +599,7 @@ il::ConstantClass* ReflectionBuilder::BuildFunctionBase(CallableDecl *F,
    if (!NDBase)
       return nullptr;
 
-   auto Val = Builder.GetConstantClass(FD, GetTypeInfo(FD), { Ty, Fn }, NDBase);
+   auto Val = Builder.GetConstantClass(FD, GetTypeInfo(FD), {Ty, Fn}, NDBase);
    if (cache) {
       cacheValue(F, Val);
    }
@@ -579,7 +607,7 @@ il::ConstantClass* ReflectionBuilder::BuildFunctionBase(CallableDecl *F,
    return Val;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildMethodMirror(MethodDecl *M)
+il::ConstantClass* ReflectionBuilder::BuildMethodMirror(MethodDecl* M)
 {
    if (M->isUnboundedTemplate())
       return nullptr;
@@ -588,7 +616,7 @@ il::ConstantClass* ReflectionBuilder::BuildMethodMirror(MethodDecl *M)
       return cast<il::ConstantClass>(Val);
 
    auto MD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_MethodDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_MethodDecl]]);
    if (!MD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Method");
@@ -608,10 +636,10 @@ il::ConstantClass* ReflectionBuilder::BuildMethodMirror(MethodDecl *M)
    return Val;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildVarDeclBase(VarDecl *Var)
+il::ConstantClass* ReflectionBuilder::BuildVarDeclBase(VarDecl* Var)
 {
    auto VD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_VarDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_VarDecl]]);
    if (!VD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "VarDecl");
@@ -629,16 +657,16 @@ il::ConstantClass* ReflectionBuilder::BuildVarDeclBase(VarDecl *Var)
    if (!NDBase)
       return nullptr;
 
-   return Builder.GetConstantClass(VD, GetTypeInfo(VD), { Ty, IsLet }, NDBase);
+   return Builder.GetConstantClass(VD, GetTypeInfo(VD), {Ty, IsLet}, NDBase);
 }
 
-il::ConstantClass* ReflectionBuilder::BuildFieldMirror(FieldDecl *F)
+il::ConstantClass* ReflectionBuilder::BuildFieldMirror(FieldDecl* F)
 {
    if (auto Val = getCachedValue(F))
       return cast<il::ConstantClass>(Val);
 
    auto FD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_FieldDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_FieldDecl]]);
    if (!FD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Field");
@@ -656,13 +684,13 @@ il::ConstantClass* ReflectionBuilder::BuildFieldMirror(FieldDecl *F)
    return Val;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildArgumentMirror(FuncArgDecl *Arg)
+il::ConstantClass* ReflectionBuilder::BuildArgumentMirror(FuncArgDecl* Arg)
 {
    if (auto Val = getCachedValue(Arg))
       return cast<il::ConstantClass>(Val);
 
    auto ArgDecl = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_FuncArgDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_FuncArgDecl]]);
    if (!ArgDecl) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Argument");
@@ -674,20 +702,20 @@ il::ConstantClass* ReflectionBuilder::BuildArgumentMirror(FuncArgDecl *Arg)
    if (!VDBase)
       return nullptr;
 
-   auto Val = Builder.GetConstantClass(ArgDecl, GetTypeInfo(ArgDecl), {},
-                                       VDBase);
+   auto Val
+       = Builder.GetConstantClass(ArgDecl, GetTypeInfo(ArgDecl), {}, VDBase);
 
    cacheValue(Arg, Val);
    return Val;
 }
 
-il::ConstantClass *ReflectionBuilder::BuildEnumCaseMirror(EnumCaseDecl *Case)
+il::ConstantClass* ReflectionBuilder::BuildEnumCaseMirror(EnumCaseDecl* Case)
 {
    if (auto Val = getCachedValue(Case))
       return cast<il::ConstantClass>(Val);
 
    auto CaseDecl = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_EnumCaseDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_EnumCaseDecl]]);
 
    if (!CaseDecl) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -697,7 +725,7 @@ il::ConstantClass *ReflectionBuilder::BuildEnumCaseMirror(EnumCaseDecl *Case)
    }
 
    auto ArgDecl = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_FuncArgDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_FuncArgDecl]]);
 
    if (!ArgDecl) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -708,29 +736,30 @@ il::ConstantClass *ReflectionBuilder::BuildEnumCaseMirror(EnumCaseDecl *Case)
 
    QualType ElementTy = Context.getRecordType(ArgDecl);
    llvm::SmallVector<il::Constant*, 4> CaseVals;
-   for (auto &Val : Case->getArgs()) {
+   for (auto& Val : Case->getArgs()) {
       CaseVals.push_back(BuildArgumentMirror(Val));
    }
 
-   auto *CaseValPtr = BuildArrayView(ElementTy, {});
+   auto* CaseValPtr = BuildArrayView(ElementTy, {});
    auto NDBase = BuildNamedDeclBase(Case);
 
    if (!CaseValPtr || !NDBase)
       return nullptr;
 
    return Builder.GetConstantClass(CaseDecl, GetTypeInfo(CaseDecl),
-                                   { CaseValPtr }, NDBase);
+                                   {CaseValPtr}, NDBase);
 }
 
-il::ConstantClass* ReflectionBuilder::BuildStructMirror(StructDecl *S,
-                                                        bool cache) {
+il::ConstantClass* ReflectionBuilder::BuildStructMirror(StructDecl* S,
+                                                        bool cache)
+{
    if (cache) {
       if (auto Val = getCachedValue(S))
          return cast<il::ConstantClass>(Val);
    }
 
    auto SD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_StructDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_StructDecl]]);
 
    if (!SD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -752,7 +781,7 @@ il::ConstantClass* ReflectionBuilder::BuildStructMirror(StructDecl *S,
    }
 
    auto FieldDecl = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_FieldDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_FieldDecl]]);
    if (!FieldDecl)
       return nullptr;
 
@@ -762,19 +791,19 @@ il::ConstantClass* ReflectionBuilder::BuildStructMirror(StructDecl *S,
    if (!RDBase)
       return nullptr;
 
-   auto RealVal = Builder.ReplaceForwardDecl(FwdDecl, { FieldVal }, RDBase);
+   auto RealVal = Builder.ReplaceForwardDecl(FwdDecl, {FieldVal}, RDBase);
    cacheValue(S, RealVal);
 
    return RealVal;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildClassMirror(ClassDecl *C)
+il::ConstantClass* ReflectionBuilder::BuildClassMirror(ClassDecl* C)
 {
    if (auto Val = getCachedValue(C))
       return cast<il::ConstantClass>(Val);
 
    auto CD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_ClassDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_ClassDecl]]);
    if (!CD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Class");
@@ -787,7 +816,7 @@ il::ConstantClass* ReflectionBuilder::BuildClassMirror(ClassDecl *C)
 
    auto ClassTy = Context.getRecordType(CD);
 
-   il::Constant *BaseVal;
+   il::Constant* BaseVal;
    if (auto Base = C->getParentClass()) {
       BaseVal = BuildOption(ClassTy, BuildClassMirror(Base));
    }
@@ -799,19 +828,19 @@ il::ConstantClass* ReflectionBuilder::BuildClassMirror(ClassDecl *C)
    if (!SDBase)
       return nullptr;
 
-   auto RealVal = Builder.ReplaceForwardDecl(FwdDecl, { BaseVal }, SDBase);
+   auto RealVal = Builder.ReplaceForwardDecl(FwdDecl, {BaseVal}, SDBase);
    cacheValue(C, RealVal);
 
    return RealVal;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildUnionMirror(UnionDecl *U)
+il::ConstantClass* ReflectionBuilder::BuildUnionMirror(UnionDecl* U)
 {
    if (auto Val = getCachedValue(U))
       return cast<il::ConstantClass>(Val);
 
    auto UD = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_UnionDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_UnionDecl]]);
    if (!UD) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
                   "Union");
@@ -832,13 +861,13 @@ il::ConstantClass* ReflectionBuilder::BuildUnionMirror(UnionDecl *U)
    return RealVal;
 }
 
-il::ConstantClass* ReflectionBuilder::BuildEnumMirror(EnumDecl *E)
+il::ConstantClass* ReflectionBuilder::BuildEnumMirror(EnumDecl* E)
 {
    if (auto Val = getCachedValue(E))
       return cast<il::ConstantClass>(Val);
 
    auto ED = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_EnumDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_EnumDecl]]);
 
    if (!ED) {
       SP.diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -864,7 +893,7 @@ il::ConstantClass* ReflectionBuilder::BuildEnumMirror(EnumDecl *E)
    }
 
    auto CaseDecl = dyn_cast_or_null<ClassDecl>(
-      SP.BuiltinDecls[SP.ReflectionIdents[RI_EnumCaseDecl]]);
+       SP.BuiltinDecls[SP.ReflectionIdents[RI_EnumCaseDecl]]);
    if (!CaseDecl)
       return nullptr;
 
@@ -876,21 +905,21 @@ il::ConstantClass* ReflectionBuilder::BuildEnumMirror(EnumDecl *E)
    if (!RDBase)
       return nullptr;
 
-   auto RealVal = Builder.ReplaceForwardDecl(FwdDecl, { RawTy, CaseVals },
-      RDBase);
+   auto RealVal
+       = Builder.ReplaceForwardDecl(FwdDecl, {RawTy, CaseVals}, RDBase);
 
    cacheValue(E, RealVal);
    return RealVal;
 }
 
-ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
+ExprResult SemaPass::HandleReflectionAlias(AliasDecl* Alias, Expression* Expr)
 {
    if (auto AE = Alias->getAliasExpr()) {
       Expr->setExprType(AE->getExprType());
       return Expr;
    }
 
-   auto *ReflectMod = getReflectModule();
+   auto* ReflectMod = getReflectModule();
    if (!ReflectMod) {
       diagnose(Expr, err_compiler_ns_unknown_entity, Alias->getDeclName(),
                Alias->getSourceRange());
@@ -918,16 +947,16 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       initReflectionIdents();
 
    if (!ReflBuilder)
-      ReflBuilder = new(Context) ReflectionBuilder(*this, Expr);
+      ReflBuilder = new (Context) ReflectionBuilder(*this, Expr);
    else
       ReflBuilder->setExpr(Expr);
 
    bool DoCache = false;
-   Expression *ResultExpr = nullptr;
+   Expression* ResultExpr = nullptr;
 
    auto getReflectionDecl = [&](ReflectionIdent Ident) {
-      auto *II = ReflectionIdents[Ident];
-      const MultiLevelLookupResult *LookupRes;
+      auto* II = ReflectionIdents[Ident];
+      const MultiLevelLookupResult* LookupRes;
       if (QC.DirectLookup(LookupRes, ReflectMod->getDecl(), II)) {
          return (NamedDecl*)nullptr;
       }
@@ -935,17 +964,17 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       return BuiltinDecls[II];
    };
 
-   auto *II = Name.getIdentifierInfo();
+   auto* II = Name.getIdentifierInfo();
 
    // look the declaration up to make sure it's deserialized.
-   const MultiLevelLookupResult *LookupRes;
+   const MultiLevelLookupResult* LookupRes;
    if (QC.DirectLookup(LookupRes, ReflectMod->getDecl(), II)) {
       return ExprError();
    }
 
    if (II == ReflectionIdents[sizeOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
-                              || !Alias->getTemplateArgs().front().isType()) {
+          || !Alias->getTemplateArgs().front().isType()) {
          diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
                   Alias->getSourceRange());
 
@@ -966,10 +995,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Size = 1;
       }
 
-      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getIntTy(),
-                                          llvm::APSInt(llvm::APInt(64, Size),
-                                                       false));
+      ResultExpr = IntegerLiteral::Create(
+          Context, Expr->getSourceRange(), Context.getIntTy(),
+          llvm::APSInt(llvm::APInt(64, Size), false));
    }
    else if (II == ReflectionIdents[strideOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -994,14 +1022,13 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Stride = 1;
       }
 
-      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getIntTy(),
-                                          llvm::APSInt(llvm::APInt(64,Stride),
-                                                       false));
+      ResultExpr = IntegerLiteral::Create(
+          Context, Expr->getSourceRange(), Context.getIntTy(),
+          llvm::APSInt(llvm::APInt(64, Stride), false));
    }
    else if (II == ReflectionIdents[alignOf]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
-                              || !Alias->getTemplateArgs().front().isType()) {
+          || !Alias->getTemplateArgs().front().isType()) {
          diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
                   Alias->getSourceRange());
 
@@ -1022,10 +1049,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          Align = 1;
       }
 
-      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getIntTy(),
-                                          llvm::APSInt(llvm::APInt(64, Align),
-                                                       false));
+      ResultExpr = IntegerLiteral::Create(
+          Context, Expr->getSourceRange(), Context.getIntTy(),
+          llvm::APSInt(llvm::APInt(64, Align), false));
    }
    else if (II == ReflectionIdents[line]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1033,10 +1059,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
-      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getIntTy(),
-                                          llvm::APSInt(llvm::APInt(
-                                             64, LineAndCol.line), false));
+      ResultExpr = IntegerLiteral::Create(
+          Context, Expr->getSourceRange(), Context.getIntTy(),
+          llvm::APSInt(llvm::APInt(64, LineAndCol.line), false));
    }
    else if (II == ReflectionIdents[column]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1044,10 +1069,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
-      ResultExpr = IntegerLiteral::Create(Context, Expr->getSourceRange(),
-                                          Context.getIntTy(),
-                                          llvm::APSInt(llvm::APInt(
-                                             64, LineAndCol.col), false));
+      ResultExpr = IntegerLiteral::Create(
+          Context, Expr->getSourceRange(), Context.getIntTy(),
+          llvm::APSInt(llvm::APInt(64, LineAndCol.col), false));
    }
    else if (II == ReflectionIdents[fileName]) {
       if (Bits.InDefaultArgumentValue) {
@@ -1060,7 +1084,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
-      il::Constant *CS = ILGen->MakeStdString(FileName);
+      il::Constant* CS = ILGen->MakeStdString(FileName);
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
                                       Expr->getSourceRange(), CS);
@@ -1085,17 +1109,18 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
-      StructDecl *Int = getIntDecl();
-      auto &Builder = ILGen->Builder;
+      StructDecl* Int = getIntDecl();
+      auto& Builder = ILGen->Builder;
 
-      il::Constant *ConstFileName = ILGen->MakeStdString(FileName);
-      il::Constant *ConstLoc = Builder.GetConstantStruct(SLDecl, {
-         Builder.GetConstantStruct(
-            Int, Builder.GetConstantInt(Context.getIntTy(), LineAndCol.line)),
-         Builder.GetConstantStruct(
-            Int, Builder.GetConstantInt(Context.getIntTy(), LineAndCol.col)),
-         ConstFileName
-      });
+      il::Constant* ConstFileName = ILGen->MakeStdString(FileName);
+      il::Constant* ConstLoc = Builder.GetConstantStruct(
+          SLDecl,
+          {Builder.GetConstantStruct(
+               Int,
+               Builder.GetConstantInt(Context.getIntTy(), LineAndCol.line)),
+           Builder.GetConstantStruct(
+               Int, Builder.GetConstantInt(Context.getIntTy(), LineAndCol.col)),
+           ConstFileName});
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SLDecl),
                                       Expr->getSourceRange(), ConstLoc);
@@ -1117,7 +1142,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       }
 
       auto FuncName = Fn->getFullName();
-      il::Constant *CS = ILGen->MakeStdString(FuncName);
+      il::Constant* CS = ILGen->MakeStdString(FuncName);
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
                                       Expr->getSourceRange(), CS);
@@ -1144,7 +1169,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
       mangle.mangle(Fn, OS);
       OS.flush();
 
-      il::Constant *CS = ILGen->MakeStdString(MangledName);
+      il::Constant* CS = ILGen->MakeStdString(MangledName);
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SV),
                                       Expr->getSourceRange(), CS);
    }
@@ -1158,7 +1183,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
 
       // 'Endianness' enum
       auto EndiannessDecl = dyn_cast_or_null<EnumDecl>(
-         BuiltinDecls[ReflectionIdents[Endianness]]);
+          BuiltinDecls[ReflectionIdents[Endianness]]);
 
       if (!EndiannessDecl) {
          diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
@@ -1174,58 +1199,88 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
-      StructDecl *Int = getIntDecl();
+      StructDecl* Int = getIntDecl();
 
-      const cdot::TargetInfo &TI = ILGen->getTargetInfo();
-      auto &Builder = ILGen->Builder;
-      auto PointerSize =
-         Builder.GetConstantStruct(
-            Int, Builder.GetConstantInt(Context.getIntTy(),
-                                         TI.getPointerSizeInBytes()));
+      const cdot::TargetInfo& TI = ILGen->getTargetInfo();
+      auto& Builder = ILGen->Builder;
+      auto PointerSize = Builder.GetConstantStruct(
+          Int, Builder.GetConstantInt(Context.getIntTy(),
+                                      TI.getPointerSizeInBytes()));
 
-      auto PointerAlign =
-         Builder.GetConstantStruct(
-            Int, Builder.GetConstantInt(Context.getIntTy(),
-                                         TI.getPointerAlignInBytes()));
+      auto PointerAlign = Builder.GetConstantStruct(
+          Int, Builder.GetConstantInt(Context.getIntTy(),
+                                      TI.getPointerAlignInBytes()));
 
-      il::Constant *Endianness;
+      il::Constant* Endianness;
       if (TI.getTriple().isLittleEndian()) {
          Endianness = Builder.GetConstantEnum(
-            EndiannessDecl->hasCase(ReflectionIdents[little]), {});
+             EndiannessDecl->hasCase(ReflectionIdents[little]), {});
       }
       else {
          Endianness = Builder.GetConstantEnum(
-            EndiannessDecl->hasCase(ReflectionIdents[big]), {});
+             EndiannessDecl->hasCase(ReflectionIdents[big]), {});
       }
 
       llvm::StringRef OSIdent;
       switch (TI.getTriple().getOS()) {
-      case llvm::Triple::OSType::Darwin: OSIdent = "darwin"; break;
-      case llvm::Triple::OSType::DragonFly: OSIdent = "dragonFly"; break;
-      case llvm::Triple::OSType::FreeBSD: OSIdent = "freeBSD"; break;
-      case llvm::Triple::OSType::Fuchsia: OSIdent = "fuchsia"; break;
-      case llvm::Triple::OSType::IOS: OSIdent = "iOS"; break;
-      case llvm::Triple::OSType::KFreeBSD: OSIdent = "kFreeBSD"; break;
-      case llvm::Triple::OSType::Linux: OSIdent = "linux"; break;
-      case llvm::Triple::OSType::Lv2: OSIdent = "ps3"; break;
-      case llvm::Triple::OSType::MacOSX: OSIdent = "macOS"; break;
-      case llvm::Triple::OSType::NetBSD: OSIdent = "netBSD"; break;
-      case llvm::Triple::OSType::OpenBSD: OSIdent = "openBSD"; break;
-      case llvm::Triple::OSType::Solaris: OSIdent = "solaris"; break;
-      case llvm::Triple::OSType::Win32: OSIdent = "windows"; break;
-      case llvm::Triple::OSType::PS4: OSIdent = "PS4"; break;
-      case llvm::Triple::OSType::TvOS: OSIdent = "tvOS"; break;
-      case llvm::Triple::OSType::WatchOS: OSIdent = "watchOS"; break;
-      default: OSIdent = "unknownOS"; break;
+      case llvm::Triple::OSType::Darwin:
+         OSIdent = "darwin";
+         break;
+      case llvm::Triple::OSType::DragonFly:
+         OSIdent = "dragonFly";
+         break;
+      case llvm::Triple::OSType::FreeBSD:
+         OSIdent = "freeBSD";
+         break;
+      case llvm::Triple::OSType::Fuchsia:
+         OSIdent = "fuchsia";
+         break;
+      case llvm::Triple::OSType::IOS:
+         OSIdent = "iOS";
+         break;
+      case llvm::Triple::OSType::KFreeBSD:
+         OSIdent = "kFreeBSD";
+         break;
+      case llvm::Triple::OSType::Linux:
+         OSIdent = "linux";
+         break;
+      case llvm::Triple::OSType::Lv2:
+         OSIdent = "ps3";
+         break;
+      case llvm::Triple::OSType::MacOSX:
+         OSIdent = "macOS";
+         break;
+      case llvm::Triple::OSType::NetBSD:
+         OSIdent = "netBSD";
+         break;
+      case llvm::Triple::OSType::OpenBSD:
+         OSIdent = "openBSD";
+         break;
+      case llvm::Triple::OSType::Solaris:
+         OSIdent = "solaris";
+         break;
+      case llvm::Triple::OSType::Win32:
+         OSIdent = "windows";
+         break;
+      case llvm::Triple::OSType::PS4:
+         OSIdent = "PS4";
+         break;
+      case llvm::Triple::OSType::TvOS:
+         OSIdent = "tvOS";
+         break;
+      case llvm::Triple::OSType::WatchOS:
+         OSIdent = "watchOS";
+         break;
+      default:
+         OSIdent = "unknownOS";
+         break;
       }
 
-      il::Constant *OS = Builder.GetConstantEnum(
-         OSDecl->hasCase(Context.getIdentifiers().get(OSIdent)), {}
-      );
+      il::Constant* OS = Builder.GetConstantEnum(
+          OSDecl->hasCase(Context.getIdentifiers().get(OSIdent)), {});
 
-      il::Constant *InfoConstant = Builder.GetConstantStruct(TIDecl, {
-         PointerSize, PointerAlign, Endianness, OS
-      });
+      il::Constant* InfoConstant = Builder.GetConstantStruct(
+          TIDecl, {PointerSize, PointerAlign, Endianness, OS});
 
       DoCache = true;
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(TIDecl),
@@ -1258,18 +1313,18 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
    else if (II == ReflectionIdents[RI_inCTFE]) {
       DoCache = true;
 
-      RecordDecl *BoolDecl;
+      RecordDecl* BoolDecl;
       QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool);
 
-      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(BoolDecl),
-                                      Expr->getSourceRange(),
-                                      ILGen->Builder.GetMagicConstant(
-                                         il::MagicConstant::__ctfe));
+      ResultExpr = StaticExpr::Create(
+          Context, Context.getRecordType(BoolDecl), Expr->getSourceRange(),
+          ILGen->Builder.GetMagicConstant(il::MagicConstant::__ctfe));
    }
    else if (II == ReflectionIdents[RI_debug]) {
       DoCache = true;
-      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
-         Context.getBoolTy(), compilationUnit->getOptions().emitDebugInfo());
+      ResultExpr = BoolLiteral::Create(
+          Context, Expr->getSourceLoc(), Context.getBoolTy(),
+          compilationUnit->getOptions().emitDebugInfo());
    }
    else if (II == ReflectionIdents[underlyingType]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -1296,12 +1351,11 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return ExprError();
       }
 
-      QualType UnderlyingTy = Context.getMetaType(
-         cast<EnumDecl>(Ty->getRecord())->getRawType());
+      QualType UnderlyingTy
+          = Context.getMetaType(cast<EnumDecl>(Ty->getRecord())->getRawType());
 
-      ResultExpr = new(Context) IdentifierRefExpr(Expr->getSourceRange(),
-                                                  IdentifierKind::MetaType,
-                                                  UnderlyingTy);
+      ResultExpr = new (Context) IdentifierRefExpr(
+          Expr->getSourceRange(), IdentifierKind::MetaType, UnderlyingTy);
    }
    else if (II == ReflectionIdents[IsTriviallyCopyable]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -1320,10 +1374,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return Expr;
       }
 
-      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
-                                       Context.getBoolTy(),
-                                       Context.getTargetInfo()
-                                              .isTriviallyCopyable(Ty));
+      ResultExpr = BoolLiteral::Create(
+          Context, Expr->getSourceLoc(), Context.getBoolTy(),
+          Context.getTargetInfo().isTriviallyCopyable(Ty));
    }
    else if (II == ReflectionIdents[IsDefaultInitializable]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -1342,9 +1395,9 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl *Alias, Expression *Expr)
          return Expr;
       }
 
-      ResultExpr = BoolLiteral::Create(Context, Expr->getSourceLoc(),
-                                       Context.getBoolTy(),
-                                       hasDefaultValue(Ty));
+      ResultExpr
+          = BoolLiteral::Create(Context, Expr->getSourceLoc(),
+                                Context.getBoolTy(), hasDefaultValue(Ty));
    }
    else if (II == ReflectionIdents[defaultValue]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1

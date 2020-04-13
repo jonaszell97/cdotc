@@ -14,12 +14,9 @@ namespace {
 
 class AttrDefEmitter {
 public:
-   enum Fix {
-      Infix, Prefix, Postfix
-   };
+   enum Fix { Infix, Prefix, Postfix };
 
-   AttrDefEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
-      : out(out), RK(RK)
+   AttrDefEmitter(llvm::raw_ostream& out, RecordKeeper& RK) : out(out), RK(RK)
    {
       OperandTy = RK.lookupRecord("OperandTy");
    }
@@ -32,7 +29,7 @@ public:
       RK.getAllDefinitionsOf(RK.lookupClass("PrecedenceGroup"), vec);
 
       out << "#ifdef " << PGMacro << "\n";
-      for (auto &PG : vec) {
+      for (auto& PG : vec) {
          out << "   ";
          emitPrecedenceGroup(*PG);
          out << "\n";
@@ -47,7 +44,7 @@ public:
       RK.getAllDefinitionsOf("BuiltinOperator", vec);
 
       out << "#ifdef " << OpMacro << "\n";
-      for (auto &Op : vec) {
+      for (auto& Op : vec) {
          out << "   ";
          emitOpGeneral(*Op);
          out << "\n";
@@ -57,30 +54,30 @@ public:
       out << "#undef " << OpMacro << "\n\n";
 
       // Operator definitions
-      auto &Binary = *RK.lookupNamespace("Binary");
-      auto &Unary  = *RK.lookupNamespace("Unary");
+      auto& Binary = *RK.lookupNamespace("Binary");
+      auto& Unary = *RK.lookupNamespace("Unary");
 
       out << "#ifdef " << BinOpMacro << "\n";
 
-      for (auto &BinOp : Binary.getAllRecords()) {
+      for (auto& BinOp : Binary.getAllRecords()) {
          emitOp(*BinOp, Infix);
       }
 
       out << "#endif\n#undef " << BinOpMacro << "\n\n";
 
-      auto &PrefixUnary  = *Unary.lookupNamespace("Prefix");
-      auto &PostfixUnary = *Unary.lookupNamespace("Postfix");
+      auto& PrefixUnary = *Unary.lookupNamespace("Prefix");
+      auto& PostfixUnary = *Unary.lookupNamespace("Postfix");
 
       out << "#ifdef " << PrefixOpMacro << "\n";
 
-      for (auto &UnOp : PrefixUnary.getAllRecords()) {
+      for (auto& UnOp : PrefixUnary.getAllRecords()) {
          emitOp(*UnOp, Prefix);
       }
 
       out << "#endif\n#undef " << PrefixOpMacro << "\n\n";
       out << "#ifdef " << PostfixOpMacro << "\n";
 
-      for (auto &UnOp : PostfixUnary.getAllRecords()) {
+      for (auto& UnOp : PostfixUnary.getAllRecords()) {
          emitOp(*UnOp, Postfix);
       }
 
@@ -88,93 +85,88 @@ public:
    }
 
 private:
-   llvm::raw_ostream &out;
-   RecordKeeper &RK;
+   llvm::raw_ostream& out;
+   RecordKeeper& RK;
 
-   Record *OperandTy;
+   Record* OperandTy;
 
-   const char *TyMacro = "CDOT_TYPE";
-   const char *OpMacro = "CDOT_OPERATOR";
-   const char *PGMacro = "CDOT_PRECEDENCE_GROUP";
-   const char *BinOpMacro = "CDOT_BINARY_OP";
-   const char *PrefixOpMacro = "CDOT_PREFIX_OP";
-   const char *PostfixOpMacro = "CDOT_POSTFIX_OP";
+   const char* TyMacro = "CDOT_TYPE";
+   const char* OpMacro = "CDOT_OPERATOR";
+   const char* PGMacro = "CDOT_PRECEDENCE_GROUP";
+   const char* BinOpMacro = "CDOT_BINARY_OP";
+   const char* PrefixOpMacro = "CDOT_PREFIX_OP";
+   const char* PostfixOpMacro = "CDOT_POSTFIX_OP";
 
-   void emitType(Record &Ty);
-   void emitPrecedenceGroup(Record &PG);
+   void emitType(Record& Ty);
+   void emitPrecedenceGroup(Record& PG);
 
-   void emitOpGeneral(Record &Op);
-   void emitOp(Record &Op, Fix fix);
+   void emitOpGeneral(Record& Op);
+   void emitOp(Record& Op, Fix fix);
 };
 
 } // end anonymous namespace
 
-void AttrDefEmitter::emitType(Record &Ty)
+void AttrDefEmitter::emitType(Record& Ty)
 {
    out << TyMacro << "(" << Ty.getName() << ")";
 }
 
-void AttrDefEmitter::emitPrecedenceGroup(Record &PG)
+void AttrDefEmitter::emitPrecedenceGroup(Record& PG)
 {
    // (name, precedence, associativity)
 
-   auto prec  = cast<IntegerLiteral>(PG.getFieldValue("prec"));
+   auto prec = cast<IntegerLiteral>(PG.getFieldValue("prec"));
    auto assoc = cast<RecordVal>(PG.getFieldValue("assoc"));
 
-   out << PGMacro << "(" << PG.getName()
-       << ", " << prec->getVal()
-       << ", " << assoc->getRecord()->getName()
-       << ")";
+   out << PGMacro << "(" << PG.getName() << ", " << prec->getVal() << ", "
+       << assoc->getRecord()->getName() << ")";
 }
 
-void AttrDefEmitter::emitOpGeneral(Record &Op)
+void AttrDefEmitter::emitOpGeneral(Record& Op)
 {
    // (name, symbol, precedenceGroup, fix)
 
    auto name = Op.getName();
    auto symb = cast<StringLiteral>(Op.getFieldValue("opString"))->getVal();
-   auto PG   = cast<RecordVal>(Op.getFieldValue("precedenceGroup"));
-   auto fix  = cast<RecordVal>(Op.getFieldValue("fix"));
+   auto PG = cast<RecordVal>(Op.getFieldValue("precedenceGroup"));
+   auto fix = cast<RecordVal>(Op.getFieldValue("fix"));
 
-   out << OpMacro << "(" << name << ", \"" << symb << '"'
-       << ", " << PG->getRecord()->getName()
-       << ", " << fix->getRecord()->getName() << ")";
+   out << OpMacro << "(" << name << ", \"" << symb << '"' << ", "
+       << PG->getRecord()->getName() << ", " << fix->getRecord()->getName()
+       << ")";
 }
 
-void AttrDefEmitter::emitOp(Record &Op, Fix fix)
+void AttrDefEmitter::emitOp(Record& Op, Fix fix)
 {
-   const char *macroPrefix;
+   const char* macroPrefix;
    switch (fix) {
-      case Infix:
-         macroPrefix = BinOpMacro;
-         break;
-      case Prefix:
-         macroPrefix = PrefixOpMacro;
-         break;
-      case Postfix:
-         macroPrefix = PostfixOpMacro;
-         break;
+   case Infix:
+      macroPrefix = BinOpMacro;
+      break;
+   case Prefix:
+      macroPrefix = PrefixOpMacro;
+      break;
+   case Postfix:
+      macroPrefix = PostfixOpMacro;
+      break;
    }
 
    llvm::SmallString<64> macro(macroPrefix);
 
-   auto name = cast<RecordVal>(Op.getFieldValue("builtinOp"))->getRecord()
-                                                             ->getName();
+   auto name
+       = cast<RecordVal>(Op.getFieldValue("builtinOp"))->getRecord()->getName();
 
-   auto ApplicableTys =
-      cast<ListLiteral>(Op.getFieldValue("applicableTypes"));
+   auto ApplicableTys = cast<ListLiteral>(Op.getFieldValue("applicableTypes"));
 
-   auto ResultTy = cast<RecordVal>(Op.getFieldValue("resultType"))
-      ->getRecord();
+   auto ResultTy = cast<RecordVal>(Op.getFieldValue("resultType"))->getRecord();
 
-   bool lvalueOperand = cast<IntegerLiteral>(Op.getFieldValue("lvalueOperand"))
-      ->getVal() != 0;
+   bool lvalueOperand
+       = cast<IntegerLiteral>(Op.getFieldValue("lvalueOperand"))->getVal() != 0;
 
-   for (auto &TyVal : ApplicableTys->getValues()) {
+   for (auto& TyVal : ApplicableTys->getValues()) {
       // (name, symbol, operandTy, resultTy, lvalueOperand)
       auto Ty = cast<RecordVal>(TyVal);
-      out << "   " << macro
-          << "(" << name << ", " << Op.getName()
+      out << "   " << macro << "(" << name << ", " << Op.getName()
           << ", /*operandType=*/ " << Ty->getRecord()->getName()
           << ", /*resultType=*/ ";
 
@@ -192,9 +184,8 @@ void AttrDefEmitter::emitOp(Record &Op, Fix fix)
 
 extern "C" {
 
-void EmitBuiltinOperators(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitBuiltinOperators(llvm::raw_ostream& out, RecordKeeper& RK)
 {
    AttrDefEmitter(out, RK).emit();
 }
-
 };

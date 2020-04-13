@@ -1,17 +1,17 @@
-#include "StaticEvaluator.h"
+#include "cdotc/CTFE/StaticEvaluator.h"
 
-#include "AST/ASTVisitor.h"
-#include "CTFE/CTFEEngine.h"
-#include "CTFE/Value.h"
-#include "ILGen/ILGenPass.h"
-#include "Sema/SemaPass.h"
-#include "Sema/Builtin.h"
-#include "Support/Format.h"
-#include "Support/StringSwitch.h"
+#include "cdotc/AST/ASTVisitor.h"
+#include "cdotc/Basic/Builtins.h"
+#include "cdotc/CTFE/CTFEEngine.h"
+#include "cdotc/CTFE/Value.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Sema/Builtin.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Format.h"
+#include "cdotc/Support/StringSwitch.h"
+#include "cdotc/Support/Various.h"
 
 #include <llvm/ADT/SmallString.h>
-#include <Support/Various.h>
-#include <Basic/Builtins.h>
 
 using namespace cdot::ast;
 using namespace cdot::diag;
@@ -20,16 +20,14 @@ using namespace cdot::support;
 namespace cdot {
 namespace {
 
-class EvaluationMethodDecider:
-   public RecursiveASTVisitor<EvaluationMethodDecider> {
+class EvaluationMethodDecider
+    : public RecursiveASTVisitor<EvaluationMethodDecider> {
 public:
-#  define CDOT_EXPR(Name)                                \
-   bool visit##Name(Name* Stmt) {                        \
-      return decide(Stmt);                               \
-   }
-#  include "AST/AstNode.def"
+#define CDOT_EXPR(Name)                                                        \
+   bool visit##Name(Name* Stmt) { return decide(Stmt); }
+#include "cdotc/AST/AstNode.def"
 
-   bool decide(Statement *Stmt)
+   bool decide(Statement* Stmt)
    {
       switch (Stmt->getTypeID()) {
       case Statement::UnaryOperatorID:
@@ -67,7 +65,7 @@ public:
       }
       case Statement::CallExprID: {
          auto Call = cast<CallExpr>(Stmt);
-         
+
          switch (Call->getKind()) {
          case CallKind::NamedFunctionCall: {
             switch (Call->getFunc()->getKnownFnKind()) {
@@ -114,15 +112,13 @@ public:
    bool UseCTFE = false;
 };
 
-class EvaluatorImpl: public ASTVisitor<EvaluatorImpl, Variant> {
+class EvaluatorImpl : public ASTVisitor<EvaluatorImpl, Variant> {
 public:
-   explicit EvaluatorImpl(SemaPass &SP)
-      : SP(SP), Engine(SP)
-   {}
+   explicit EvaluatorImpl(SemaPass& SP) : SP(SP), Engine(SP) {}
 
    using StaticExprResult = StaticEvaluator::StaticExprResult;
 
-   StaticExprResult evaluate(Expression *Expr)
+   StaticExprResult evaluate(Expression* Expr)
    {
       auto semaRes = SP.visitExpr(Expr);
       if (!semaRes)
@@ -134,8 +130,8 @@ public:
          return StaticExprResult(Expr->isTypeDependent(),
                                  Expr->isValueDependent());
 
-//      EvaluationMethodDecider Decider;
-//      Decider.visit(Expr);
+      //      EvaluationMethodDecider Decider;
+      //      Decider.visit(Expr);
 
       if (true /* Decider.UseCTFE */) {
          auto res = SP.getILGen().evaluateStaticExpr(Expr);
@@ -147,46 +143,46 @@ public:
 
       Variant V = visit(Expr);
 
-      return StaticExprResult(SP.getILGen()
-                                .getConstantVal(Expr->getExprType(), V));
+      return StaticExprResult(
+          SP.getILGen().getConstantVal(Expr->getExprType(), V));
    }
 
    friend class ASTVisitor<EvaluatorImpl, Variant>;
 
 private:
-   SemaPass &SP;
+   SemaPass& SP;
    ctfe::CTFEEngine Engine;
 
-   Variant makeStruct(std::vector<Variant> &&vals)
+   Variant makeStruct(std::vector<Variant>&& vals)
    {
       return Variant(VariantType::Struct, move(vals));
    }
 
-   Variant makeArray(std::vector<Variant> &&vals)
+   Variant makeArray(std::vector<Variant>&& vals)
    {
       return Variant(VariantType::Array, move(vals));
    }
 
-   Variant visitParenExpr(ParenExpr *Expr);
-   
+   Variant visitParenExpr(ParenExpr* Expr);
+
    Variant visitIntegerLiteral(IntegerLiteral* expr);
    Variant visitFPLiteral(FPLiteral* expr);
    Variant visitBoolLiteral(BoolLiteral* expr);
    Variant visitCharLiteral(CharLiteral* expr);
 
    Variant visitStringLiteral(StringLiteral* expr);
-   Variant visitStringInterpolation(StringInterpolation *expr);
+   Variant visitStringInterpolation(StringInterpolation* expr);
 
    Variant visitIdentifierRefExpr(IdentifierRefExpr* expr);
-   Variant visitBuiltinIdentExpr(BuiltinIdentExpr *Expr);
+   Variant visitBuiltinIdentExpr(BuiltinIdentExpr* Expr);
 
-   Variant visitCallExpr(CallExpr *expr);
+   Variant visitCallExpr(CallExpr* expr);
 
-   Variant visitUnaryOperator(UnaryOperator *UnOp);
-   Variant visitBinaryOperator(BinaryOperator *BinOp);
+   Variant visitUnaryOperator(UnaryOperator* UnOp);
+   Variant visitBinaryOperator(BinaryOperator* BinOp);
 
-   Variant visitTypePredicateExpr(TypePredicateExpr *Expr);
-   Variant visitIfExpr(IfExpr *Expr);
+   Variant visitTypePredicateExpr(TypePredicateExpr* Expr);
+   Variant visitIfExpr(IfExpr* Expr);
 
    Variant visitStaticExpr(StaticExpr* expr);
    Variant visitTraitsExpr(TraitsExpr* expr);
@@ -194,7 +190,7 @@ private:
 
 } // anonymous namespace
 
-Variant EvaluatorImpl::visitParenExpr(ParenExpr *Expr)
+Variant EvaluatorImpl::visitParenExpr(ParenExpr* Expr)
 {
    return visit(Expr->getParenthesizedExpr());
 }
@@ -216,24 +212,24 @@ Variant EvaluatorImpl::visitBoolLiteral(BoolLiteral* expr)
 
 Variant EvaluatorImpl::visitCharLiteral(CharLiteral* expr)
 {
-   return Variant(llvm::APSInt(llvm::APInt(8, uint64_t(expr->getNarrow())),
-                               true));
+   return Variant(
+       llvm::APSInt(llvm::APInt(8, uint64_t(expr->getNarrow())), true));
 }
 
 Variant EvaluatorImpl::visitStringLiteral(StringLiteral* expr)
 {
    return Variant(expr->getValue());
-//   if (expr->isCString())
-//      return Variant(move(Str));
-//
-//   Variant Size = Variant(uint64_t(expr->getValue().size()));
-//   return makeStruct({ move(Str), move(Size) });
+   //   if (expr->isCString())
+   //      return Variant(move(Str));
+   //
+   //   Variant Size = Variant(uint64_t(expr->getValue().size()));
+   //   return makeStruct({ move(Str), move(Size) });
 }
 
 Variant EvaluatorImpl::visitStringInterpolation(StringInterpolation* expr)
 {
    llvm::SmallString<128> str;
-   for (auto &s : expr->getSegments()) {
+   for (auto& s : expr->getSegments()) {
       auto V = visit(s);
       if (!V.isStruct()) {
          str += V.toString();
@@ -243,45 +239,45 @@ Variant EvaluatorImpl::visitStringInterpolation(StringInterpolation* expr)
       }
    }
 
-   return makeStruct({ Variant(str.str()), Variant(uint64_t(str.size())) });
+   return makeStruct({Variant(str.str()), Variant(uint64_t(str.size()))});
 }
 
 Variant EvaluatorImpl::visitIdentifierRefExpr(IdentifierRefExpr* expr)
 {
    using IK = IdentifierKind;
    switch (expr->getKind()) {
-      default:
-         llvm_unreachable("bad identifier kind");
-      case IK::MetaType:
-         return Variant(expr->getExprType()->asMetaType()->getUnderlyingType());
-      case IK::Namespace:
-         return Variant();
+   default:
+      llvm_unreachable("bad identifier kind");
+   case IK::MetaType:
+      return Variant(expr->getExprType()->asMetaType()->getUnderlyingType());
+   case IK::Namespace:
+      return Variant();
    }
 }
 
-Variant EvaluatorImpl::visitBuiltinIdentExpr(BuiltinIdentExpr *Expr)
+Variant EvaluatorImpl::visitBuiltinIdentExpr(BuiltinIdentExpr* Expr)
 {
    switch (Expr->getIdentifierKind()) {
-      case BuiltinIdentifier::NULLPTR:
-         return Variant(uint64_t(0));
-      case BuiltinIdentifier::DOUBLE_SNAN:
-         return Variant(std::numeric_limits<double>::signaling_NaN());
-      case BuiltinIdentifier::DOUBLE_QNAN:
-         return Variant(std::numeric_limits<double>::quiet_NaN());
-      case BuiltinIdentifier::FLOAT_SNAN:
-         return Variant(std::numeric_limits<float>::signaling_NaN());
-      case BuiltinIdentifier::FLOAT_QNAN:
-         return Variant(std::numeric_limits<float>::quiet_NaN());
-      case BuiltinIdentifier::__ctfe:
-         return Variant(uint64_t(true));
-      default:
-         llvm_unreachable("Unsupported builtin identifier");
+   case BuiltinIdentifier::NULLPTR:
+      return Variant(uint64_t(0));
+   case BuiltinIdentifier::DOUBLE_SNAN:
+      return Variant(std::numeric_limits<double>::signaling_NaN());
+   case BuiltinIdentifier::DOUBLE_QNAN:
+      return Variant(std::numeric_limits<double>::quiet_NaN());
+   case BuiltinIdentifier::FLOAT_SNAN:
+      return Variant(std::numeric_limits<float>::signaling_NaN());
+   case BuiltinIdentifier::FLOAT_QNAN:
+      return Variant(std::numeric_limits<float>::quiet_NaN());
+   case BuiltinIdentifier::__ctfe:
+      return Variant(uint64_t(true));
+   default:
+      llvm_unreachable("Unsupported builtin identifier");
    }
 }
 
-Variant EvaluatorImpl::visitCallExpr(CallExpr *expr)
+Variant EvaluatorImpl::visitCallExpr(CallExpr* expr)
 {
-   auto &args = expr->getArgs();
+   auto& args = expr->getArgs();
 
    switch (expr->getKind()) {
    default:
@@ -304,11 +300,11 @@ Variant EvaluatorImpl::visitCallExpr(CallExpr *expr)
          return Variant(support::pow(visit(args[0]).getDouble(),
                                      visit(args[1]).getSExtValue()));
       case KnownFunction::llvm_pow_f32:
-         return Variant(std::pow(visit(args[0]).getFloat(),
-                                 visit(args[1]).getFloat()));
+         return Variant(
+             std::pow(visit(args[0]).getFloat(), visit(args[1]).getFloat()));
       case KnownFunction::llvm_pow_f64:
-         return Variant(std::pow(visit(args[0]).getDouble(),
-                                 visit(args[1]).getDouble()));
+         return Variant(
+             std::pow(visit(args[0]).getDouble(), visit(args[1]).getDouble()));
       case KnownFunction::llvm_log10_f64:
          return Variant(std::log10(visit(args.front()).getDouble()));
       case KnownFunction::llvm_log2_f64:
@@ -336,41 +332,41 @@ Variant EvaluatorImpl::visitUnaryOperator(UnaryOperator* UnOp)
 
    if (UnOp->getTarget()->getExprType()->isIntegerType()) {
       switch (opKind) {
-         case op::UnaryPlus:
-            return V;
-         case op::UnaryMin:
-            return Variant(-V.getAPSInt());
-         case op::UnaryLNot:
-            return Variant(!V.getAPSInt());
-         case op::UnaryNot:
-            return Variant(~V.getAPSInt());
-         default:
-            llvm_unreachable("bad unary op");
+      case op::UnaryPlus:
+         return V;
+      case op::UnaryMin:
+         return Variant(-V.getAPSInt());
+      case op::UnaryLNot:
+         return Variant(!V.getAPSInt());
+      case op::UnaryNot:
+         return Variant(~V.getAPSInt());
+      default:
+         llvm_unreachable("bad unary op");
       }
    }
    else {
       assert(V.isFloat());
       switch (opKind) {
-         case op::UnaryPlus:
-            return V;
-         case op::UnaryMin: {
-            llvm::APFloat F(V.getAPFloat());
-            F.changeSign();
+      case op::UnaryPlus:
+         return V;
+      case op::UnaryMin: {
+         llvm::APFloat F(V.getAPFloat());
+         F.changeSign();
 
-            return Variant(std::move(F));
-         }
-         default:
-            llvm_unreachable("bad unary op");
+         return Variant(std::move(F));
+      }
+      default:
+         llvm_unreachable("bad unary op");
       }
    }
 }
 
-#define BINARY_INT_OP(Name, Op)                             \
-   case op::Name:                                           \
+#define BINARY_INT_OP(Name, Op)                                                \
+   case op::Name:                                                              \
       return Variant(lhs.getAPSInt() Op rhs.getAPSInt())
 
-#define BINARY_FP_OP(Name, Op)                              \
-   case op::Name:                                           \
+#define BINARY_FP_OP(Name, Op)                                                 \
+   case op::Name:                                                              \
       return Variant(lhs.getAPFloat() Op rhs.getAPFloat())
 
 Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
@@ -379,24 +375,24 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
    auto kind = BinOp->getKind();
 
    switch (kind) {
-      case op::LAnd: {
-         if (!lhs.getZExtValue()) {
-            return Variant(false);
-         }
-
-         auto rhs = visit(BinOp->getRhs());
-         return Variant(rhs.getZExtValue() != 0);
+   case op::LAnd: {
+      if (!lhs.getZExtValue()) {
+         return Variant(false);
       }
-      case op::LOr: {
-         if (lhs.getZExtValue()) {
-            return Variant(true);
-         }
 
-         auto rhs = visit(BinOp->getRhs());
-         return Variant(rhs.getZExtValue() != 0);
+      auto rhs = visit(BinOp->getRhs());
+      return Variant(rhs.getZExtValue() != 0);
+   }
+   case op::LOr: {
+      if (lhs.getZExtValue()) {
+         return Variant(true);
       }
-      default:
-         break;
+
+      auto rhs = visit(BinOp->getRhs());
+      return Variant(rhs.getZExtValue() != 0);
+   }
+   default:
+      break;
    }
 
    auto rhs = visit(BinOp->getRhs());
@@ -413,58 +409,58 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
          BINARY_INT_OP(Or, |);
          BINARY_INT_OP(Xor, ^);
 
-         case op::CompRefEQ:
+      case op::CompRefEQ:
          BINARY_INT_OP(CompEQ, ==);
 
-         case op::CompRefNE:
+      case op::CompRefNE:
          BINARY_INT_OP(CompNE, !=);
          BINARY_INT_OP(CompLE, <=);
          BINARY_INT_OP(CompLT, <);
          BINARY_INT_OP(CompGE, >=);
          BINARY_INT_OP(CompGT, >);
 
-         case op::Exp: {
-            auto lhsVal = lhs.getAPSInt().getZExtValue();
-            auto rhsVal = rhs.getAPSInt().getZExtValue();
+      case op::Exp: {
+         auto lhsVal = lhs.getAPSInt().getZExtValue();
+         auto rhsVal = rhs.getAPSInt().getZExtValue();
 
-            uint64_t Result(support::intPower(lhsVal, rhsVal));
-            llvm::APSInt APS = lhs.getAPSInt();
-            APS = Result;
+         uint64_t Result(support::intPower(lhsVal, rhsVal));
+         llvm::APSInt APS = lhs.getAPSInt();
+         APS = Result;
 
-            return move(APS);
-         }
-         case op::Shl: {
-            auto lhsVal = lhs.getAPSInt().getZExtValue();
-            auto rhsVal = rhs.getAPSInt().getZExtValue();
+         return move(APS);
+      }
+      case op::Shl: {
+         auto lhsVal = lhs.getAPSInt().getZExtValue();
+         auto rhsVal = rhs.getAPSInt().getZExtValue();
 
-            uint64_t Result(lhsVal << rhsVal);
-            llvm::APSInt APS = lhs.getAPSInt();
-            APS = Result;
+         uint64_t Result(lhsVal << rhsVal);
+         llvm::APSInt APS = lhs.getAPSInt();
+         APS = Result;
 
-            return move(APS);
-         }
-         case op::AShr: {
-            auto lhsVal = lhs.getAPSInt().getZExtValue();
-            auto rhsVal = rhs.getAPSInt().getZExtValue();
+         return move(APS);
+      }
+      case op::AShr: {
+         auto lhsVal = lhs.getAPSInt().getZExtValue();
+         auto rhsVal = rhs.getAPSInt().getZExtValue();
 
-            uint64_t Result(lhsVal >> rhsVal);
-            llvm::APSInt APS = lhs.getAPSInt();
-            APS = Result;
+         uint64_t Result(lhsVal >> rhsVal);
+         llvm::APSInt APS = lhs.getAPSInt();
+         APS = Result;
 
-            return move(APS);
-         }
-         case op::LShr: {
-            auto lhsVal = lhs.getAPSInt().getSExtValue();
-            auto rhsVal = rhs.getAPSInt().getSExtValue();
+         return move(APS);
+      }
+      case op::LShr: {
+         auto lhsVal = lhs.getAPSInt().getSExtValue();
+         auto rhsVal = rhs.getAPSInt().getSExtValue();
 
-            int64_t Result(lhsVal >> rhsVal);
-            llvm::APSInt APS = lhs.getAPSInt();
-            APS = Result;
+         int64_t Result(lhsVal >> rhsVal);
+         llvm::APSInt APS = lhs.getAPSInt();
+         APS = Result;
 
-            return move(APS);
-         }
-         default:
-            llvm_unreachable("bad binary op");
+         return move(APS);
+      }
+      default:
+         llvm_unreachable("bad binary op");
       }
    }
    else {
@@ -475,29 +471,29 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
          BINARY_FP_OP(Mul, *);
          BINARY_FP_OP(Div, /);
 
-         case op::CompEQ:
-         case op::CompNE:
-         case op::CompLT:
-         case op::CompGT:
-         case op::CompLE:
-         case op::CompGE: {
-            auto compRes = lhs.getAPFloat().compare(rhs.getAPFloat());
-            switch (compRes) {
-               case llvm::APFloat::cmpEqual:
-                  return Variant(kind == op::CompEQ || kind == op::CompGE
-                                 || kind == op::CompLE);
-               case llvm::APFloat::cmpLessThan:
-                  return Variant(kind == op::CompLT || kind == op::CompLE
-                                 || kind == op::CompNE);
-               case llvm::APFloat::cmpGreaterThan:
-                  return Variant(kind == op::CompGT || kind == op::CompGE
-                                 || kind == op::CompNE);
-               case llvm::APFloat::cmpUnordered:
-                  return Variant(false);
-            }
+      case op::CompEQ:
+      case op::CompNE:
+      case op::CompLT:
+      case op::CompGT:
+      case op::CompLE:
+      case op::CompGE: {
+         auto compRes = lhs.getAPFloat().compare(rhs.getAPFloat());
+         switch (compRes) {
+         case llvm::APFloat::cmpEqual:
+            return Variant(kind == op::CompEQ || kind == op::CompGE
+                           || kind == op::CompLE);
+         case llvm::APFloat::cmpLessThan:
+            return Variant(kind == op::CompLT || kind == op::CompLE
+                           || kind == op::CompNE);
+         case llvm::APFloat::cmpGreaterThan:
+            return Variant(kind == op::CompGT || kind == op::CompGE
+                           || kind == op::CompNE);
+         case llvm::APFloat::cmpUnordered:
+            return Variant(false);
          }
-         default:
-            llvm_unreachable("bad binary op");
+      }
+      default:
+         llvm_unreachable("bad binary op");
       }
    }
 
@@ -507,12 +503,12 @@ Variant EvaluatorImpl::visitBinaryOperator(BinaryOperator* BinOp)
 #undef BINARY_INT_OP
 #undef BINARY_FP_OP
 
-Variant EvaluatorImpl::visitTypePredicateExpr(TypePredicateExpr *Expr)
+Variant EvaluatorImpl::visitTypePredicateExpr(TypePredicateExpr* Expr)
 {
    return Variant(Expr->getResult());
 }
 
-Variant EvaluatorImpl::visitIfExpr(IfExpr *Expr)
+Variant EvaluatorImpl::visitIfExpr(IfExpr* Expr)
 {
    auto Cond = visit(Expr->getCond().ExprData.Expr);
    if (Cond.getAPSInt().getBoolValue()) {
@@ -533,18 +529,14 @@ Variant EvaluatorImpl::visitTraitsExpr(TraitsExpr*)
    llvm_unreachable("should not appear here!");
 }
 
-StaticEvaluator::StaticEvaluator(SemaPass &SP)
-   : pImpl(new EvaluatorImpl(SP))
-{
-
-}
+StaticEvaluator::StaticEvaluator(SemaPass& SP) : pImpl(new EvaluatorImpl(SP)) {}
 
 StaticEvaluator::~StaticEvaluator()
 {
    delete reinterpret_cast<EvaluatorImpl*>(pImpl);
 }
 
-StaticEvaluator::StaticExprResult StaticEvaluator::evaluate(Expression *Expr)
+StaticEvaluator::StaticExprResult StaticEvaluator::evaluate(Expression* Expr)
 {
    return reinterpret_cast<EvaluatorImpl*>(pImpl)->evaluate(Expr);
 }

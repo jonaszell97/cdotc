@@ -1,13 +1,13 @@
 
 #include "tblgen/Record.h"
-#include "tblgen/Value.h"
-#include "tblgen/Type.h"
 #include "tblgen/Support/Casting.h"
 #include "tblgen/Support/StringSwitch.h"
+#include "tblgen/Type.h"
+#include "tblgen/Value.h"
 
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace tblgen;
 using namespace tblgen::support;
@@ -21,7 +21,7 @@ struct Tab {
    unsigned TabSize;
 };
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &out, Tab T)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& out, Tab T)
 {
    for (unsigned i = 0; i < T.TabSize; ++i)
       out << ' ';
@@ -29,9 +29,10 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &out, Tab T)
    return out;
 }
 
-struct Newline { };
+struct Newline {
+};
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &out, Newline)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& out, Newline)
 {
    out << '\n';
    return out;
@@ -39,39 +40,38 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &out, Newline)
 
 class AttrDefEmitter {
 public:
-   AttrDefEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
-      : out(out), RK(RK)
-   {}
+   AttrDefEmitter(llvm::raw_ostream& out, RecordKeeper& RK) : out(out), RK(RK)
+   {
+   }
 
    void emit();
 
 private:
-   llvm::raw_ostream &out;
-   RecordKeeper &RK;
+   llvm::raw_ostream& out;
+   RecordKeeper& RK;
 };
 
 } // anonymous namespace
 
 void AttrDefEmitter::emit()
 {
-   static constexpr auto AttrMacro     = "CDOT_ATTR";
+   static constexpr auto AttrMacro = "CDOT_ATTR";
    static constexpr auto TypeAttrMacro = "CDOT_TYPE_ATTR";
    static constexpr auto DeclAttrMacro = "CDOT_DECL_ATTR";
    static constexpr auto ExprAttrMacro = "CDOT_EXPR_ATTR";
    static constexpr auto StmtAttrMacro = "CDOT_STMT_ATTR";
    static constexpr auto AbstractMacro = "CDOT_ABSTRACT_ATTR";
-   static constexpr auto VisitMacro    = "CDOT_VISITATION_POINT";
-
+   static constexpr auto VisitMacro = "CDOT_VISITATION_POINT";
 
    out << "#ifdef " << AttrMacro << "\n";
-   out << "#   define " << TypeAttrMacro << "(Name, Spelling) "
-                        << AttrMacro     << "(Name, Spelling)\n";
-   out << "#   define " << DeclAttrMacro << "(Name, Spelling) "
-                        << AttrMacro     << "(Name, Spelling)\n";
-   out << "#   define " << ExprAttrMacro << "(Name, Spelling) "
-                        << AttrMacro     << "(Name, Spelling)\n";
-   out << "#   define " << StmtAttrMacro << "(Name, Spelling) "
-                        << AttrMacro     << "(Name, Spelling)\n";
+   out << "#   define " << TypeAttrMacro << "(Name, Spelling) " << AttrMacro
+       << "(Name, Spelling)\n";
+   out << "#   define " << DeclAttrMacro << "(Name, Spelling) " << AttrMacro
+       << "(Name, Spelling)\n";
+   out << "#   define " << ExprAttrMacro << "(Name, Spelling) " << AttrMacro
+       << "(Name, Spelling)\n";
+   out << "#   define " << StmtAttrMacro << "(Name, Spelling) " << AttrMacro
+       << "(Name, Spelling)\n";
    out << "#endif\n\n";
 
    out << "#ifndef " << AbstractMacro << "\n"
@@ -91,8 +91,9 @@ void AttrDefEmitter::emit()
    out << "#ifdef " << DeclAttrMacro << "\n";
    out << "   " << AbstractMacro << "(_firstDeclAttr)\n";
 
-   for (auto &Attr : Attrs) {
-      auto Spelling = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
+   for (auto& Attr : Attrs) {
+      auto Spelling
+          = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
       out << "   " << DeclAttrMacro << "(" << Attr->getName() << ", "
           << Spelling << ")\n";
    }
@@ -107,8 +108,9 @@ void AttrDefEmitter::emit()
    out << "#ifdef " << StmtAttrMacro << "\n";
    out << "   " << AbstractMacro << "(_firstStmtAttr)\n";
 
-   for (auto &Attr : Attrs) {
-      auto Spelling = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
+   for (auto& Attr : Attrs) {
+      auto Spelling
+          = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
       out << "   " << StmtAttrMacro << "(" << Attr->getName() << ", "
           << Spelling << ")\n";
    }
@@ -123,8 +125,9 @@ void AttrDefEmitter::emit()
    out << "#ifdef " << ExprAttrMacro << "\n";
    out << "   " << AbstractMacro << "(_firstExprAttr)\n";
 
-   for (auto &Attr : Attrs) {
-      auto Spelling = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
+   for (auto& Attr : Attrs) {
+      auto Spelling
+          = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
       out << "   " << ExprAttrMacro << "(" << Attr->getName() << ", "
           << Spelling << ")\n";
    }
@@ -139,8 +142,9 @@ void AttrDefEmitter::emit()
    out << "#ifdef " << TypeAttrMacro << "\n";
    out << "   " << AbstractMacro << "(_firstTypeAttr)\n";
 
-   for (auto &Attr : Attrs) {
-      auto Spelling = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
+   for (auto& Attr : Attrs) {
+      auto Spelling
+          = cast<StringLiteral>(Attr->getFieldValue("name"))->getVal();
       out << "   " << TypeAttrMacro << "(" << Attr->getName() << ", "
           << Spelling << ")\n";
    }
@@ -151,7 +155,7 @@ void AttrDefEmitter::emit()
    std::vector<Record*> VisitPoints;
    RK.getAllDefinitionsOf("VisitationPoint", VisitPoints);
 
-   for (auto &VP : VisitPoints) {
+   for (auto& VP : VisitPoints) {
       out << VisitMacro << "(" << VP->getName() << ")\n";
    }
 
@@ -164,26 +168,26 @@ namespace {
 
 class AttrClassEmitter {
 public:
-   AttrClassEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
-      : out(out), RK(RK)
-   {}
+   AttrClassEmitter(llvm::raw_ostream& out, RecordKeeper& RK) : out(out), RK(RK)
+   {
+   }
 
    void emit();
-   void emitAttrDecl(Record *Attr, Class *Base);
+   void emitAttrDecl(Record* Attr, Class* Base);
    void emitGetVisitationPoint();
    void emitIsInherited();
 
-   void emitPrintPrettyImpl(Record *Attr, Class *Base);
-   void emitCloneImpl(Record *Attr, Class *Base);
+   void emitPrintPrettyImpl(Record* Attr, Class* Base);
+   void emitCloneImpl(Record* Attr, Class* Base);
 
-   void emitAttrSema(std::vector<Record*> &Attrs);
+   void emitAttrSema(std::vector<Record*>& Attrs);
 
 private:
-   llvm::raw_ostream &out;
-   RecordKeeper &RK;
+   llvm::raw_ostream& out;
+   RecordKeeper& RK;
 };
 
-llvm::StringRef getCXXType(RecordVal *Arg)
+llvm::StringRef getCXXType(RecordVal* Arg)
 {
    auto C = Arg->getRecord()->getBases().front().getBase();
    if (C->getName() == "IntArg")
@@ -205,7 +209,7 @@ llvm::StringRef getCXXType(RecordVal *Arg)
    return "";
 }
 
-llvm::StringRef getCXXGetterType(RecordVal *Arg)
+llvm::StringRef getCXXGetterType(RecordVal* Arg)
 {
    auto C = Arg->getRecord()->getBases().front().getBase();
    if (C->getName() == "IntArg")
@@ -227,7 +231,7 @@ llvm::StringRef getCXXGetterType(RecordVal *Arg)
    return "";
 }
 
-llvm::StringRef getCXXArgType(RecordVal *Arg)
+llvm::StringRef getCXXArgType(RecordVal* Arg)
 {
    auto C = Arg->getRecord()->getBases().front().getBase();
    if (C->getName() == "IntArg")
@@ -249,7 +253,7 @@ llvm::StringRef getCXXArgType(RecordVal *Arg)
    return "";
 }
 
-std::string buildDefaultValue(RecordVal *Arg, Value *Default)
+std::string buildDefaultValue(RecordVal* Arg, Value* Default)
 {
    std::string str;
    auto C = Arg->getRecord()->getBases().front().getBase();
@@ -301,8 +305,9 @@ void AttrClassEmitter::emit()
    out << "#ifdef CDOT_ATTR_DECL\n";
 
    size_t i = 0;
-   for (auto &Attr : Attrs) {
-      if (i++ != 0) out << "\n\n";
+   for (auto& Attr : Attrs) {
+      if (i++ != 0)
+         out << "\n\n";
 
       auto Base = Attr->getBases().front().getBase();
       emitAttrDecl(Attr, Base);
@@ -317,8 +322,9 @@ void AttrClassEmitter::emit()
    emitIsInherited();
 
    i = 0;
-   for (auto &Attr : Attrs) {
-      if (i++ != 0) out << "\n\n";
+   for (auto& Attr : Attrs) {
+      if (i++ != 0)
+         out << "\n\n";
 
       auto Base = Attr->getBases().front().getBase();
       emitPrintPrettyImpl(Attr, Base);
@@ -334,29 +340,27 @@ void AttrClassEmitter::emit()
    out << "\n#endif\n#undef CDOT_ATTR_SEMA\n\n";
 }
 
-void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
+void AttrClassEmitter::emitAttrDecl(Record* Attr, Class* Base)
 {
    std::string ClassName = Attr->getName();
    ClassName += "Attr";
 
-   out << "class " << ClassName
-       << ": public " << Base->getName()
-       << " {\n";
+   out << "class " << ClassName << ": public " << Base->getName() << " {\n";
 
-   out << "public:" << Newline()
-       << Tab();
+   out << "public:" << Newline() << Tab();
 
    out << "static bool classof(const Attr* A) "
           "{ return classofKind(A->getKind()); }"
-          << Newline() << Tab();
+       << Newline() << Tab();
 
    out << "static bool classofKind(AttrKind kind)"
-          "{ return kind == AttrKind::" << Attr->getName() << "; }"
-       << Newline() << Newline();
+          "{ return kind == AttrKind::"
+       << Attr->getName() << "; }" << Newline() << Newline();
 
    out << R"__(
    void printPretty(llvm::raw_ostream &out) const;
-   )__" << ClassName << R"__( *clone(ast::ASTContext &Ctx) const;
+   )__" << ClassName
+       << R"__( *clone(ast::ASTContext &Ctx) const;
 )__";
 
    std::string Enums;
@@ -373,24 +377,29 @@ void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
    std::vector<std::pair<std::string, std::string>> ConstructorArgs;
 
    size_t NumEnumArgs = 0;
-   size_t ArgNo       = 0;
+   size_t ArgNo = 0;
 
    auto Args = cast<ListLiteral>(Attr->getFieldValue("Args"));
 
-   for (auto &Arg : Args->getValues()) {
-      if (ArgNo++ != 0) { out << "\n"; GetterStr << "\n"; };
+   for (auto& Arg : Args->getValues()) {
+      if (ArgNo++ != 0) {
+         out << "\n";
+         GetterStr << "\n";
+      };
 
       auto ArgVal = cast<RecordVal>(Arg);
-      auto Name = cast<StringLiteral>(ArgVal->getRecord()
-                                            ->getFieldValue("name"))->getVal();
+      auto Name
+          = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
+                ->getVal();
 
-      auto TypeName       = getCXXType(ArgVal);
+      auto TypeName = getCXXType(ArgVal);
       auto GetterTypeName = getCXXGetterType(ArgVal);
-      auto ArgTypeName    = getCXXArgType(ArgVal);
+      auto ArgTypeName = getCXXArgType(ArgVal);
 
       // enum argument, introduce new enum
       if (TypeName.empty()) {
-         if (NumEnumArgs++ != 0) EnumStr << "\n\n";
+         if (NumEnumArgs++ != 0)
+            EnumStr << "\n\n";
 
          std::string EnumName(1, ::toupper(Name.front()));
          EnumName += Name.substr(1);
@@ -399,12 +408,13 @@ void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
          EnumStr << Tab() << "enum " << EnumName << " {" << Newline();
 
          size_t i = 0;
-         auto &CaseVals = cast<ListLiteral>(ArgVal->getRecord()
-                                                  ->getFieldValue("cases"))
-            ->getValues();
+         auto& CaseVals
+             = cast<ListLiteral>(ArgVal->getRecord()->getFieldValue("cases"))
+                   ->getValues();
 
-         for (auto &Case : CaseVals) {
-            if (i++ != 0) EnumStr << "," << Newline();
+         for (auto& Case : CaseVals) {
+            if (i++ != 0)
+               EnumStr << "," << Newline();
             EnumStr << Tab() << Tab() << cast<StringLiteral>(Case)->getVal();
          }
 
@@ -417,23 +427,24 @@ void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
 
       FieldStr << Tab() << TypeName << " " << Name << ";";
       GetterStr << Tab() << GetterTypeName << " get"
-                << (char)::toupper(Name.front())
-                << Name.substr(1) << "() const { return " << Name << "; }";
+                << (char)::toupper(Name.front()) << Name.substr(1)
+                << "() const { return " << Name << "; }";
 
       // build constructor arguments and initialization
       std::string constructorArg = ArgTypeName;
       constructorArg += " ";
       constructorArg += Name;
 
-      bool IsOptional = cast<IntegerLiteral>(ArgVal->getRecord()
-                                                   ->getFieldValue("optional"))
-         ->getVal() != 0;
+      bool IsOptional
+          = cast<IntegerLiteral>(ArgVal->getRecord()->getFieldValue("optional"))
+                ->getVal()
+            != 0;
 
       if (IsOptional) {
          if (ArgVal->getRecord()->hasField("defaultVal")) {
             constructorArg += " = ";
             constructorArg += buildDefaultValue(
-               ArgVal, ArgVal->getRecord()->getFieldValue("defaultVal"));
+                ArgVal, ArgVal->getRecord()->getFieldValue("defaultVal"));
          }
       }
 
@@ -474,18 +485,20 @@ void AttrClassEmitter::emitAttrDecl(Record *Attr, Class *Base)
    out << "explicit " << ClassName << "(";
 
    size_t NumCtorArgs = 0;
-   for (auto &Arg : ConstructorArgs) {
-      if (NumCtorArgs++ != 0) out << ", ";
+   for (auto& Arg : ConstructorArgs) {
+      if (NumCtorArgs++ != 0)
+         out << ", ";
       out << Arg.first;
    }
 
-   if (NumCtorArgs != 0) out << ", ";
+   if (NumCtorArgs != 0)
+      out << ", ";
    out << "SourceRange SR = SourceRange())";
 
    out << "\n" << Tab() << Tab() << ": ";
    out << Base->getName() << "(AttrKind::" << Attr->getName() << ", SR)";
 
-   for (auto &Arg : ConstructorArgs) {
+   for (auto& Arg : ConstructorArgs) {
       out << ", ";
       out << Arg.second;
    }
@@ -501,7 +514,7 @@ void AttrClassEmitter::emitGetVisitationPoint()
    std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
-   for (auto &Attr : Attrs) {
+   for (auto& Attr : Attrs) {
       auto VP = cast<RecordVal>(Attr->getFieldValue("Visit"))->getRecord();
       AttrMap[VP].push_back(Attr);
    }
@@ -509,8 +522,8 @@ void AttrClassEmitter::emitGetVisitationPoint()
    std::string CaseStr;
    llvm::raw_string_ostream CS(CaseStr);
 
-   for (auto &Vec : AttrMap) {
-      for (auto &Attr : Vec.second) {
+   for (auto& Vec : AttrMap) {
+      for (auto& Attr : Vec.second) {
          CS << Tab() << "case AttrKind::" << Attr->getName() << ":\n";
       }
 
@@ -523,7 +536,8 @@ void AttrClassEmitter::emitGetVisitationPoint()
    Attr::VisitationPoint Attr::getVisitationPoint() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-      )__" << CaseStr << R"__(
+      )__"
+       << CaseStr << R"__(
       }
    }
 )__";
@@ -536,9 +550,10 @@ void AttrClassEmitter::emitIsInherited()
    std::vector<Record*> Attrs;
    RK.getAllDefinitionsOf("Attr", Attrs);
 
-   for (auto &Attr : Attrs) {
-      bool IsInherited = cast<IntegerLiteral>(Attr->getFieldValue("Inherited"))
-         ->getVal() != 0;
+   for (auto& Attr : Attrs) {
+      bool IsInherited
+          = cast<IntegerLiteral>(Attr->getFieldValue("Inherited"))->getVal()
+            != 0;
 
       AttrMap[Attr] = IsInherited;
    }
@@ -546,7 +561,7 @@ void AttrClassEmitter::emitIsInherited()
    std::string CaseStr;
    llvm::raw_string_ostream CS(CaseStr);
 
-   for (auto &Pair : AttrMap) {
+   for (auto& Pair : AttrMap) {
       CS << Tab() << "case AttrKind::" << Pair.first->getName() << ":\n";
       CS << Tab() << Tab() << "return " << (Pair.second ? "true" : "false")
          << ";\n";
@@ -558,13 +573,14 @@ void AttrClassEmitter::emitIsInherited()
    bool Attr::isInherited() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-      )__" << CaseStr << R"__(
+      )__"
+       << CaseStr << R"__(
       }
    }
 )__";
 }
 
-void AttrClassEmitter::emitPrintPrettyImpl(Record *Attr, Class *)
+void AttrClassEmitter::emitPrintPrettyImpl(Record* Attr, Class*)
 {
    std::string ClassName = Attr->getName();
    ClassName += "Attr";
@@ -577,17 +593,19 @@ void AttrClassEmitter::emitPrintPrettyImpl(Record *Attr, Class *)
    llvm::raw_string_ostream ArgStr(PrettyPrintArgs);
 
    size_t ArgNo = 0;
-   auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+   auto& Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
 
    std::string caseStrings;
    llvm::raw_string_ostream caseStr(caseStrings);
 
    if (!Args.empty()) {
-      for (auto &Arg : Args) {
-         if (ArgNo++ != 0) ArgStr << " << \", \" << ";
+      for (auto& Arg : Args) {
+         if (ArgNo++ != 0)
+            ArgStr << " << \", \" << ";
          auto ArgVal = cast<RecordVal>(Arg);
-         auto Name = cast<StringLiteral>(ArgVal->getRecord()
-                                               ->getFieldValue("name"))->getVal();
+         auto Name
+             = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
+                   ->getVal();
 
          auto TypeName = getCXXType(ArgVal);
          if (TypeName.empty()) {
@@ -598,14 +616,15 @@ void AttrClassEmitter::emitPrintPrettyImpl(Record *Attr, Class *)
             caseStr << "llvm::StringRef " << varName << ";\n";
 
             // switch over the cases to get the case name
-            auto &CaseVals = cast<ListLiteral>(ArgVal->getRecord()
-                                                     ->getFieldValue("cases"))
-               ->getValues();
+            auto& CaseVals
+                = cast<ListLiteral>(ArgVal->getRecord()->getFieldValue("cases"))
+                      ->getValues();
 
             caseStr << "switch (" << Name << ") {" << Newline();
 
-            for (auto &Case : CaseVals) {
-               auto CaseName =  cast<StringLiteral>(Case)->getVal();;
+            for (auto& Case : CaseVals) {
+               auto CaseName = cast<StringLiteral>(Case)->getVal();
+               ;
                caseStr << Tab() << "case " << CaseName << ": " << varName
                        << " = " << '"' << CaseName << '"' << "; break;"
                        << Newline();
@@ -633,14 +652,13 @@ void AttrClassEmitter::emitPrintPrettyImpl(Record *Attr, Class *)
 
    ArgStr.flush();
    if (!PrettyPrintArgs.empty()) {
-      out << "out << '(' << " << PrettyPrintArgs
-          << " << ')';" << Newline();
+      out << "out << '(' << " << PrettyPrintArgs << " << ')';" << Newline();
    }
 
    out << Newline() << "}\n\n";
 }
 
-void AttrClassEmitter::emitCloneImpl(Record *Attr, Class *)
+void AttrClassEmitter::emitCloneImpl(Record* Attr, Class*)
 {
    std::string ClassName = Attr->getName();
    ClassName += "Attr";
@@ -652,12 +670,14 @@ void AttrClassEmitter::emitCloneImpl(Record *Attr, Class *)
    out << Tab() << "return new(Ctx) " << ClassName << "(";
 
    size_t ArgNo = 0;
-   auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
-   for (auto &Arg : Args) {
-      if (ArgNo++ != 0) out << ", ";
+   auto& Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+   for (auto& Arg : Args) {
+      if (ArgNo++ != 0)
+         out << ", ";
       auto ArgVal = cast<RecordVal>(Arg);
-      auto Name = cast<StringLiteral>(ArgVal->getRecord()
-                                            ->getFieldValue("name"))->getVal();
+      auto Name
+          = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
+                ->getVal();
 
       auto ArgType = getCXXArgType(ArgVal);
 
@@ -671,34 +691,36 @@ void AttrClassEmitter::emitCloneImpl(Record *Attr, Class *)
       }
    }
 
-   if (ArgNo != 0) out << ", ";
+   if (ArgNo != 0)
+      out << ", ";
    out << "SourceLoc);";
 
    out << Newline() << "}\n\n";
 }
 
-void AttrClassEmitter::emitAttrSema(std::vector<Record*> &Attrs)
+void AttrClassEmitter::emitAttrSema(std::vector<Record*>& Attrs)
 {
-   for (auto &Attr : Attrs) {
-      auto VisitNever =
-         cast<RecordVal>(Attr->getFieldValue("Visit"))
-            ->getRecord()->getName() == "Never";
+   for (auto& Attr : Attrs) {
+      auto VisitNever = cast<RecordVal>(Attr->getFieldValue("Visit"))
+                            ->getRecord()
+                            ->getName()
+                        == "Never";
 
       if (!VisitNever)
          continue;
 
       auto BaseName = Attr->getBases().front().getBase()->getName();
       llvm::StringRef Kind = StringSwitch<llvm::StringRef>(BaseName)
-         .Case("DeclAttr", "Decl")
-         .Case("ExprAttr", "Expression")
-         .Case("TypeAttr", "Expression")
-         .Case("StmtAttr", "Statement")
-         .Default("");
+                                 .Case("DeclAttr", "Decl")
+                                 .Case("ExprAttr", "Expression")
+                                 .Case("TypeAttr", "Expression")
+                                 .Case("StmtAttr", "Statement")
+                                 .Default("");
 
       assert(!Kind.empty() && "bad attribute kind!");
 
-      out << "void SemaPass::check" << Attr->getName()
-          << "Attr(" << Kind << "*, " << Attr->getName() << "Attr*) {}\n";
+      out << "void SemaPass::check" << Attr->getName() << "Attr(" << Kind
+          << "*, " << Attr->getName() << "Attr*) {}\n";
    }
 }
 
@@ -706,51 +728,43 @@ namespace {
 
 class AttrParseEmitter {
 public:
-   AttrParseEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
-      : out(out), RK(RK)
-   {}
+   AttrParseEmitter(llvm::raw_ostream& out, RecordKeeper& RK) : out(out), RK(RK)
+   {
+   }
 
    void emit();
 
    struct CurrentArgInfo {
       llvm::StringRef AttrName;
       unsigned ArgNo;
-      std::pair<std::string, std::string> &TypeAndName;
-      Record *Arg;
+      std::pair<std::string, std::string>& TypeAndName;
+      Record* Arg;
    };
 
-   void parseStringArg(llvm::raw_ostream &out,
-                       CurrentArgInfo &ArgInfo);
-   void parseIntArg(llvm::raw_ostream &out,
-                    CurrentArgInfo &ArgInfo);
-   void parseFloatArg(llvm::raw_ostream &out,
-                      CurrentArgInfo &ArgInfo);
-   void parseTypeArg(llvm::raw_ostream &out,
-                     CurrentArgInfo &ArgInfo);
-   void parseExprArg(llvm::raw_ostream &out,
-                     CurrentArgInfo &ArgInfo);
-   void parseEnumArg(llvm::raw_ostream &out,
-                     CurrentArgInfo &ArgInfo,
-                     llvm::StringRef EnumOwner,
-                     llvm::ArrayRef<Value*> Cases);
+   void parseStringArg(llvm::raw_ostream& out, CurrentArgInfo& ArgInfo);
+   void parseIntArg(llvm::raw_ostream& out, CurrentArgInfo& ArgInfo);
+   void parseFloatArg(llvm::raw_ostream& out, CurrentArgInfo& ArgInfo);
+   void parseTypeArg(llvm::raw_ostream& out, CurrentArgInfo& ArgInfo);
+   void parseExprArg(llvm::raw_ostream& out, CurrentArgInfo& ArgInfo);
+   void parseEnumArg(llvm::raw_ostream& out, CurrentArgInfo& ArgInfo,
+                     llvm::StringRef EnumOwner, llvm::ArrayRef<Value*> Cases);
 
-   void readStringDefault(llvm::raw_ostream &out,
-                          std::pair<std::string, std::string> &TypeAndName,
-                          Value *DefaultVal);
-   void readIntDefault(llvm::raw_ostream &out,
-                       std::pair<std::string, std::string> &TypeAndName,
-                       Value *DefaultVal);
-   void readFloatDefault(llvm::raw_ostream &out,
-                         std::pair<std::string, std::string> &TypeAndName,
-                         Value *DefaultVal);
-   void readEnumDefault(llvm::raw_ostream &out,
-                        std::pair<std::string, std::string> &TypeAndName,
-                        llvm::StringRef EnumOwner,
-                        Value *DefaultVal);
+   void readStringDefault(llvm::raw_ostream& out,
+                          std::pair<std::string, std::string>& TypeAndName,
+                          Value* DefaultVal);
+   void readIntDefault(llvm::raw_ostream& out,
+                       std::pair<std::string, std::string>& TypeAndName,
+                       Value* DefaultVal);
+   void readFloatDefault(llvm::raw_ostream& out,
+                         std::pair<std::string, std::string>& TypeAndName,
+                         Value* DefaultVal);
+   void readEnumDefault(llvm::raw_ostream& out,
+                        std::pair<std::string, std::string>& TypeAndName,
+                        llvm::StringRef EnumOwner, Value* DefaultVal);
 
 private:
-   llvm::raw_ostream &out;
-   RecordKeeper &RK;
+   llvm::raw_ostream& out;
+   RecordKeeper& RK;
 };
 
 } // anonymous namespace
@@ -765,17 +779,18 @@ void AttrParseEmitter::emit()
    // this is included inside a switch statement after the type of attribute
    // is known
 
-   for (auto &Attr : Attrs) {
-      auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+   for (auto& Attr : Attrs) {
+      auto& Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
 
       out << "case AttrKind::" << Attr->getName() << ": {" << Newline();
       std::vector<std::pair<std::string, std::string>> NeededArgVals;
 
       // reserve space for every needed argument
-      for (auto &Arg : Args) {
+      for (auto& Arg : Args) {
          auto ArgVal = cast<RecordVal>(Arg);
-         auto Name = cast<StringLiteral>(
-            ArgVal->getRecord()->getFieldValue("name"))->getVal();
+         auto Name
+             = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
+                   ->getVal();
 
          std::string TypeName = getCXXType(ArgVal);
          if (TypeName.empty()) {
@@ -796,17 +811,14 @@ void AttrParseEmitter::emit()
       llvm::raw_string_ostream Switch(SwitchStr);
 
       unsigned ArgNo = 0;
-      for (auto &Arg : Args) {
+      for (auto& Arg : Args) {
          Switch << "case " << ArgNo++ << ": {";
-         auto C = cast<RecordVal>(Arg)->getRecord()
-                     ->getBases().front().getBase();
+         auto C
+             = cast<RecordVal>(Arg)->getRecord()->getBases().front().getBase();
 
          CurrentArgInfo ArgInfo{
-            cast<StringLiteral>(Attr->getFieldValue("name"))->getVal(),
-            ArgNo,
-            NeededArgVals[ArgNo - 1],
-            cast<RecordVal>(Arg)->getRecord()
-         };
+             cast<StringLiteral>(Attr->getFieldValue("name"))->getVal(), ArgNo,
+             NeededArgVals[ArgNo - 1], cast<RecordVal>(Arg)->getRecord()};
 
          if (C->getName() == "IntArg")
             parseIntArg(Switch, ArgInfo);
@@ -819,9 +831,10 @@ void AttrParseEmitter::emit()
          else if (C->getName() == "ExprArg")
             parseExprArg(Switch, ArgInfo);
          else {
-            auto &Cases = cast<ListLiteral>(
-               cast<RecordVal>(Arg)->getRecord()->getFieldValue("cases"))
-               ->getValues();
+            auto& Cases
+                = cast<ListLiteral>(
+                      cast<RecordVal>(Arg)->getRecord()->getFieldValue("cases"))
+                      ->getValues();
 
             std::string Namespace = Attr->getName();
             Namespace += "Attr";
@@ -851,16 +864,19 @@ void AttrParseEmitter::emit()
       unsigned FirstDefault = unsigned(-1);
       unsigned i = 0;
 
-      for (auto &Arg : Args) {
-         auto Optional = cast<IntegerLiteral>(cast<RecordVal>(Arg)->getRecord()
-            ->getFieldValue("optional"))->getVal() != 0;
+      for (auto& Arg : Args) {
+         auto Optional
+             = cast<IntegerLiteral>(
+                   cast<RecordVal>(Arg)->getRecord()->getFieldValue("optional"))
+                   ->getVal()
+               != 0;
 
          if (Optional) {
             if (FirstDefault == -1)
                FirstDefault = i;
 
-            DefaultVals.push_back(cast<RecordVal>(Arg)
-               ->getRecord()->getFieldValue("defaultVal"));
+            DefaultVals.push_back(
+                cast<RecordVal>(Arg)->getRecord()->getFieldValue("defaultVal"));
          }
 
          ++i;
@@ -870,21 +886,25 @@ void AttrParseEmitter::emit()
       if (FirstDefault != -1) {
          llvm::raw_string_ostream OS(DefaultStr);
          OS << R"__(
-         while (ArgNo < )__" << (FirstDefault + 1) << R"__() {
+         while (ArgNo < )__"
+            << (FirstDefault + 1) << R"__() {
             switch (ArgNo) {
             default: llvm_unreachable("no default argument");
 )__";
 
          unsigned j = FirstDefault;
          while (j < Args.size()) {
-            auto &Arg = Args[j];
-            auto &ArgInfo = NeededArgVals[j];
-            auto *DefaultVal = DefaultVals[j - FirstDefault];
+            auto& Arg = Args[j];
+            auto& ArgInfo = NeededArgVals[j];
+            auto* DefaultVal = DefaultVals[j - FirstDefault];
 
             OS << "case " << j++ << ": {\n";
 
-            auto C = cast<RecordVal>(Arg)->getRecord()
-                                         ->getBases().front().getBase();
+            auto C = cast<RecordVal>(Arg)
+                         ->getRecord()
+                         ->getBases()
+                         .front()
+                         .getBase();
 
             if (C->getName() == "IntArg")
                readIntDefault(OS, ArgInfo, DefaultVal);
@@ -908,8 +928,10 @@ void AttrParseEmitter::emit()
 )__";
       }
 
-      bool SkipArgs = cast<IntegerLiteral>(
-         Attr->getFieldValue("IgnoreFollowingParens"))->getVal() != 0;
+      bool SkipArgs
+          = cast<IntegerLiteral>(Attr->getFieldValue("IgnoreFollowingParens"))
+                ->getVal()
+            != 0;
 
       if (!SkipArgs) {
          // build a simple state machine for argument parsing
@@ -923,7 +945,8 @@ void AttrParseEmitter::emit()
 
             while (!currentTok().is(tok::close_paren)) {
                switch (ArgNo++) {
-               )__" << SwitchStr << R"__(
+               )__"
+             << SwitchStr << R"__(
                }
 
                advance();
@@ -953,12 +976,14 @@ void AttrParseEmitter::emit()
           << "Attrs.push_back(new (Context) " << Attr->getName() << "Attr(";
 
       i = 0;
-      for (auto &Arg : NeededArgVals) {
-         if (i++ != 0) out << ", ";
+      for (auto& Arg : NeededArgVals) {
+         if (i++ != 0)
+            out << ", ";
          out << "std::move(" << Arg.second << ")";
       }
 
-      if (i != 0) out << ", ";
+      if (i != 0)
+         out << ", ";
       out << "SourceRange(AttrLoc, EndLoc)));\n break;";
 
       out << "}" << Newline();
@@ -972,7 +997,7 @@ void AttrParseEmitter::emit()
 
    Switch << "switch(A->getKind()) {\n";
 
-   for (auto &Attr : Attrs) {
+   for (auto& Attr : Attrs) {
       auto Base = Attr->getBases().front().getBase();
       if (Base->getName() != "DeclAttr")
          continue;
@@ -981,15 +1006,15 @@ void AttrParseEmitter::emit()
 
       Switch << "case AttrKind::" << Attr->getName() << ": {";
 
-      for (auto &D : Decls) {
+      for (auto& D : Decls) {
          Switch << "if (isa<" << cast<RecordVal>(D)->getRecord()->getName()
-                              << ">(D)) break;\n";
+                << ">(D)) break;\n";
       }
 
       Switch << "SP.diagnose(err_attribute_not_valid_here,"
                 "            A->getSourceRange(), \""
-          << cast<StringLiteral>(Attr->getFieldValue("name"))->getVal()
-          << "\");\n";
+             << cast<StringLiteral>(Attr->getFieldValue("name"))->getVal()
+             << "\");\n";
 
       Switch << "}\n";
    }
@@ -1003,13 +1028,16 @@ void AttrParseEmitter::emit()
    out << "#endif\n#undef CDOT_PARSE_ATTR_CHECK\n\n";
 }
 
-void AttrParseEmitter::parseIntArg(llvm::raw_ostream &out,
-                                   CurrentArgInfo &ArgInfo) {
+void AttrParseEmitter::parseIntArg(llvm::raw_ostream& out,
+                                   CurrentArgInfo& ArgInfo)
+{
    out << R"__(
    if (!currentTok().is(tok::integerliteral)) {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  ")__" << ArgInfo.AttrName << R"__(", 0 /*integer literal */,
-                  )__" << ArgInfo.ArgNo << R"__();
+                  ")__"
+       << ArgInfo.AttrName << R"__(", 0 /*integer literal */,
+                  )__" << ArgInfo.ArgNo
+       << R"__();
 
       break;
    }
@@ -1042,13 +1070,16 @@ void AttrParseEmitter::parseIntArg(llvm::raw_ostream &out,
    out << ArgInfo.TypeAndName.second << " = std::move(API);\n";
 }
 
-void AttrParseEmitter::parseFloatArg(llvm::raw_ostream &out,
-                                     AttrParseEmitter::CurrentArgInfo &ArgInfo){
+void AttrParseEmitter::parseFloatArg(llvm::raw_ostream& out,
+                                     AttrParseEmitter::CurrentArgInfo& ArgInfo)
+{
    out << R"__(
    if (!currentTok().is(tok::fpliteral)) {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  ")__" << ArgInfo.AttrName << R"__(", 1 /*float literal */,
-                  )__" << ArgInfo.ArgNo << R"__();
+                  ")__"
+       << ArgInfo.AttrName << R"__(", 1 /*float literal */,
+                  )__" << ArgInfo.ArgNo
+       << R"__();
 
       break;
    }
@@ -1070,13 +1101,16 @@ void AttrParseEmitter::parseFloatArg(llvm::raw_ostream &out,
    out << ArgInfo.TypeAndName.second << " = std::move(APF);\n";
 }
 
-void AttrParseEmitter::parseStringArg(llvm::raw_ostream &out,
-                                      AttrParseEmitter::CurrentArgInfo &ArgInfo){
+void AttrParseEmitter::parseStringArg(llvm::raw_ostream& out,
+                                      AttrParseEmitter::CurrentArgInfo& ArgInfo)
+{
    out << R"__(
    if (!currentTok().is(tok::stringliteral)) {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  ")__" << ArgInfo.AttrName << R"__(", 2 /*string literal */,
-                  )__" << ArgInfo.ArgNo << R"__();
+                  ")__"
+       << ArgInfo.AttrName << R"__(", 2 /*string literal */,
+                  )__" << ArgInfo.ArgNo
+       << R"__();
 
       break;
    }
@@ -1086,8 +1120,9 @@ void AttrParseEmitter::parseStringArg(llvm::raw_ostream &out,
        << " = prepareStringLiteral(currentTok());\n";
 }
 
-void AttrParseEmitter::parseExprArg(llvm::raw_ostream &out,
-                                    AttrParseEmitter::CurrentArgInfo &ArgInfo) {
+void AttrParseEmitter::parseExprArg(llvm::raw_ostream& out,
+                                    AttrParseEmitter::CurrentArgInfo& ArgInfo)
+{
    out << R"__(
    auto exprResult = parseExprSequence();
    if (exprResult.holdsExpr())
@@ -1097,8 +1132,9 @@ void AttrParseEmitter::parseExprArg(llvm::raw_ostream &out,
        << " = StaticExpr::Create(Context, exprResult.getExpr());\n";
 }
 
-void AttrParseEmitter::parseTypeArg(llvm::raw_ostream &out,
-                                    AttrParseEmitter::CurrentArgInfo &ArgInfo) {
+void AttrParseEmitter::parseTypeArg(llvm::raw_ostream& out,
+                                    AttrParseEmitter::CurrentArgInfo& ArgInfo)
+{
    out << R"__(
    auto typeResult = parseType();
    if (typeResult)
@@ -1107,14 +1143,16 @@ void AttrParseEmitter::parseTypeArg(llvm::raw_ostream &out,
    out << ArgInfo.TypeAndName.second << " = typeResult.get();\n";
 }
 
-void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
-                                    AttrParseEmitter::CurrentArgInfo &ArgInfo,
+void AttrParseEmitter::parseEnumArg(llvm::raw_ostream& out,
+                                    AttrParseEmitter::CurrentArgInfo& ArgInfo,
                                     llvm::StringRef EnumOwner,
-                                    llvm::ArrayRef<Value *> Cases) {
+                                    llvm::ArrayRef<Value*> Cases)
+{
    std::string DiagStr;
    size_t i = 0;
-   for (auto &Case : Cases) {
-      if (i++ != 0) DiagStr += ", ";
+   for (auto& Case : Cases) {
+      if (i++ != 0)
+         DiagStr += ", ";
       DiagStr += cast<StringLiteral>(Case)->getVal();
    }
 
@@ -1126,8 +1164,10 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
       Ident = currentTok().getIdentifier();
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  ")__" << ArgInfo.AttrName << R"__( ", 5 /*one of */,
-                  )__" << ArgInfo.ArgNo << ", \"" << DiagStr << R"__(");
+                  ")__"
+       << ArgInfo.AttrName << R"__( ", 5 /*one of */,
+                  )__" << ArgInfo.ArgNo << ", \""
+       << DiagStr << R"__(");
 
       break;
    }
@@ -1136,31 +1176,35 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
    out << ArgInfo.TypeAndName.first << " _enumKind;\n";
 
    i = 0;
-   for (auto &Case : Cases) {
-      if (i++ != 0) out << "else ";
+   for (auto& Case : Cases) {
+      if (i++ != 0)
+         out << "else ";
       out << "if (Ident==\"" << cast<StringLiteral>(Case)->getVal() << "\") {";
-      out << " _enumKind = " << EnumOwner << "::"
-          << cast<StringLiteral>(Case)->getVal() << "; }\n";
+      out << " _enumKind = " << EnumOwner
+          << "::" << cast<StringLiteral>(Case)->getVal() << "; }\n";
    }
 
    // aliases
    auto ArgAliases = cast<ListLiteral>(ArgInfo.Arg->getFieldValue("aliases"));
-   for (auto &aliasVal : ArgAliases->getValues()) {
+   for (auto& aliasVal : ArgAliases->getValues()) {
       auto Val = cast<RecordVal>(aliasVal)->getRecord();
       auto AliasName = cast<StringLiteral>(Val->getFieldValue("alias"));
       auto AliaseeName = cast<StringLiteral>(Val->getFieldValue("aliasee"));
 
-      if (i++ != 0) out << "else ";
+      if (i++ != 0)
+         out << "else ";
       out << "if (Ident==\"" << AliasName->getVal() << "\") {";
-      out << " _enumKind = " << EnumOwner << "::"
-          << AliaseeName->getVal() << "; }\n";
+      out << " _enumKind = " << EnumOwner << "::" << AliaseeName->getVal()
+          << "; }\n";
    }
 
    out << R"__(
    else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  ")__" << ArgInfo.AttrName << R"__(", 5 /*one of */,
-                  )__" << ArgInfo.ArgNo << ", \"" << DiagStr << R"__(");
+                  ")__"
+       << ArgInfo.AttrName << R"__(", 5 /*one of */,
+                  )__" << ArgInfo.ArgNo << ", \""
+       << DiagStr << R"__(");
 
       break;
    }
@@ -1169,90 +1213,86 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream &out,
    out << ArgInfo.TypeAndName.second << " = _enumKind;\n";
 }
 
-void AttrParseEmitter::readStringDefault(llvm::raw_ostream &out,
-                                         std::pair<string, string> &TypeAndName,
-                                         Value *DefaultVal) {
-   auto *Val = cast<StringLiteral>(DefaultVal);
+void AttrParseEmitter::readStringDefault(llvm::raw_ostream& out,
+                                         std::pair<string, string>& TypeAndName,
+                                         Value* DefaultVal)
+{
+   auto* Val = cast<StringLiteral>(DefaultVal);
    out << TypeAndName.second << " = R\"__(" << Val->getVal() << ")__\";";
 }
 
-void AttrParseEmitter::readIntDefault(llvm::raw_ostream &out,
-                                      std::pair<string, string> &TypeAndName,
-                                      Value *DefaultVal) {
-   auto *Val = cast<IntegerLiteral>(DefaultVal);
+void AttrParseEmitter::readIntDefault(llvm::raw_ostream& out,
+                                      std::pair<string, string>& TypeAndName,
+                                      Value* DefaultVal)
+{
+   auto* Val = cast<IntegerLiteral>(DefaultVal);
    out << TypeAndName.second << " = ";
 
-   auto *type = cast<IntType>(Val->getType());
+   auto* type = cast<IntType>(Val->getType());
    auto bitwidth = type->getBitWidth();
    auto isUnsigned = type->isUnsigned();
 
    if (bitwidth <= 64) {
-      out << "llvm::APSInt(llvm::APInt(" << bitwidth << ", "
-          << Val->getVal() << ", "
-          << !isUnsigned << ")";
+      out << "llvm::APSInt(llvm::APInt(" << bitwidth << ", " << Val->getVal()
+          << ", " << !isUnsigned << ")";
    }
    else {
       out << "llvm::APSInt(llvm::APInt(" << bitwidth << ", "
-          << "R\"__(" << Val->getVal() << ")__\", "
-          << !isUnsigned << ")";
+          << "R\"__(" << Val->getVal() << ")__\", " << !isUnsigned << ")";
    }
 
    out << ";\n";
 }
 
-void AttrParseEmitter::readFloatDefault(llvm::raw_ostream &out,
-                                        std::pair<string, string> &TypeAndName,
-                                        Value *DefaultVal) {
+void AttrParseEmitter::readFloatDefault(llvm::raw_ostream& out,
+                                        std::pair<string, string>& TypeAndName,
+                                        Value* DefaultVal)
+{
    out << TypeAndName.second << " = llvm::APFloat(";
    out << cast<FPLiteral>(DefaultVal)->getVal();
    out << ");\n";
 }
 
-void AttrParseEmitter::readEnumDefault(llvm::raw_ostream &out,
-                                       std::pair<string, string> &TypeAndName,
+void AttrParseEmitter::readEnumDefault(llvm::raw_ostream& out,
+                                       std::pair<string, string>& TypeAndName,
                                        llvm::StringRef EnumOwner,
-                                       Value *DefaultVal) {
-   out << TypeAndName.second << " = " << EnumOwner << "::"
-       << TypeAndName.first << "::" << cast<StringLiteral>(DefaultVal)->getVal()
-       << ";\n";
+                                       Value* DefaultVal)
+{
+   out << TypeAndName.second << " = " << EnumOwner << "::" << TypeAndName.first
+       << "::" << cast<StringLiteral>(DefaultVal)->getVal() << ";\n";
 }
 
 namespace {
 
 class AttrSerializeEmitter {
 public:
-   AttrSerializeEmitter(llvm::raw_ostream &out, RecordKeeper &RK)
-      : out(out), RK(RK)
-   {}
+   AttrSerializeEmitter(llvm::raw_ostream& out, RecordKeeper& RK)
+       : out(out), RK(RK)
+   {
+   }
 
    void emit();
 
 private:
-   llvm::raw_ostream &out;
-   RecordKeeper &RK;
+   llvm::raw_ostream& out;
+   RecordKeeper& RK;
 
    void emitSerialize(llvm::ArrayRef<Record*> Attrs);
    void emitDeserialize(llvm::ArrayRef<Record*> Attrs);
 
-   void writeStringArg(llvm::raw_ostream &out,
-                       llvm::StringRef GetterName);
-   void writeIntArg(llvm::raw_ostream &out,
-                    llvm::StringRef GetterName);
-   void writeFloatArg(llvm::raw_ostream &out,
-                      llvm::StringRef GetterName);
-   void writeTypeArg(llvm::raw_ostream &out,
-                     llvm::StringRef GetterName);
-   void writeExprArg(llvm::raw_ostream &out,
-                     llvm::StringRef GetterName);
-   void writeEnumArg(llvm::raw_ostream &out,
-                     llvm::StringRef GetterName);
+   void writeStringArg(llvm::raw_ostream& out, llvm::StringRef GetterName);
+   void writeIntArg(llvm::raw_ostream& out, llvm::StringRef GetterName);
+   void writeFloatArg(llvm::raw_ostream& out, llvm::StringRef GetterName);
+   void writeTypeArg(llvm::raw_ostream& out, llvm::StringRef GetterName);
+   void writeExprArg(llvm::raw_ostream& out, llvm::StringRef GetterName);
+   void writeEnumArg(llvm::raw_ostream& out, llvm::StringRef GetterName);
 
-   void readStringArg(llvm::raw_ostream &out);
-   void readIntArg(llvm::raw_ostream &out);
-   void readFloatArg(llvm::raw_ostream &out);
-   void readTypeArg(llvm::raw_ostream &out);
-   void readExprArg(llvm::raw_ostream &out);
-   void readEnumArg(llvm::raw_ostream &out, llvm::StringRef EnumName);
+   void readStringArg(llvm::raw_ostream& out);
+   void readIntArg(llvm::raw_ostream& out);
+   void readFloatArg(llvm::raw_ostream& out);
+   void readTypeArg(llvm::raw_ostream& out);
+   void readExprArg(llvm::raw_ostream& out);
+   void readEnumArg(llvm::raw_ostream& out, llvm::StringRef EnumName);
 };
 
 } // anonymous namespace
@@ -1274,80 +1314,88 @@ void AttrSerializeEmitter::emit()
    out << "#undef CDOT_ATTR_DESERIALIZE\n";
 }
 
-void AttrSerializeEmitter::writeStringArg(llvm::raw_ostream &out,
-                                          llvm::StringRef GetterName) {
+void AttrSerializeEmitter::writeStringArg(llvm::raw_ostream& out,
+                                          llvm::StringRef GetterName)
+{
    out << "Record.AddIdentifierRef(&Idents.get(A->" << GetterName << "()));\n";
 }
 
-void AttrSerializeEmitter::writeIntArg(llvm::raw_ostream &out,
-                                       llvm::StringRef GetterName) {
+void AttrSerializeEmitter::writeIntArg(llvm::raw_ostream& out,
+                                       llvm::StringRef GetterName)
+{
    out << "Record.AddAPSInt(A->" << GetterName << "());\n";
 }
 
-void AttrSerializeEmitter::writeFloatArg(llvm::raw_ostream &out,
-                                         llvm::StringRef GetterName) {
+void AttrSerializeEmitter::writeFloatArg(llvm::raw_ostream& out,
+                                         llvm::StringRef GetterName)
+{
    out << "Record.AddAPFloat(A->" << GetterName << "());\n";
 }
 
-void AttrSerializeEmitter::writeTypeArg(llvm::raw_ostream &out,
-                                        llvm::StringRef GetterName) {
+void AttrSerializeEmitter::writeTypeArg(llvm::raw_ostream& out,
+                                        llvm::StringRef GetterName)
+{
    out << "Record.AddType(A->" << GetterName << "());\n";
 }
 
-void AttrSerializeEmitter::writeExprArg(llvm::raw_ostream &out,
-                                        llvm::StringRef GetterName) {
+void AttrSerializeEmitter::writeExprArg(llvm::raw_ostream& out,
+                                        llvm::StringRef GetterName)
+{
    out << "Record.AddStmt(A->" << GetterName << "());\n";
 }
 
-void AttrSerializeEmitter::writeEnumArg(llvm::raw_ostream &out,
-                                        llvm::StringRef GetterName) {
+void AttrSerializeEmitter::writeEnumArg(llvm::raw_ostream& out,
+                                        llvm::StringRef GetterName)
+{
    out << "Record.push_back((uint64_t)A->" << GetterName << "());\n";
 }
 
-void AttrSerializeEmitter::readStringArg(llvm::raw_ostream &out)
+void AttrSerializeEmitter::readStringArg(llvm::raw_ostream& out)
 {
    out << "Record.getIdentifierInfo()->getIdentifier()";
 }
 
-void AttrSerializeEmitter::readIntArg(llvm::raw_ostream &out)
+void AttrSerializeEmitter::readIntArg(llvm::raw_ostream& out)
 {
    out << "Record.readAPSInt()";
 }
 
-void AttrSerializeEmitter::readFloatArg(llvm::raw_ostream &out)
+void AttrSerializeEmitter::readFloatArg(llvm::raw_ostream& out)
 {
    out << "Record.readAPFloat()";
 }
 
-void AttrSerializeEmitter::readTypeArg(llvm::raw_ostream &out)
+void AttrSerializeEmitter::readTypeArg(llvm::raw_ostream& out)
 {
    out << "Record.readSourceType()";
 }
 
-void AttrSerializeEmitter::readExprArg(llvm::raw_ostream &out)
+void AttrSerializeEmitter::readExprArg(llvm::raw_ostream& out)
 {
    out << "cast<StaticExpr>(Record.readExpr())";
 }
 
-void AttrSerializeEmitter::readEnumArg(llvm::raw_ostream &out,
-                                       llvm::StringRef EnumName) {
+void AttrSerializeEmitter::readEnumArg(llvm::raw_ostream& out,
+                                       llvm::StringRef EnumName)
+{
    out << "Record.readEnum<" << EnumName << ">()";
 }
 
-void AttrSerializeEmitter::emitSerialize(llvm::ArrayRef<Record *> Attrs)
+void AttrSerializeEmitter::emitSerialize(llvm::ArrayRef<Record*> Attrs)
 {
    llvm::SmallString<64> GetterName;
-   for (auto &Attr : Attrs) {
-      out << "void ASTAttrWriter::visit" << Attr->getName()
-          << "Attr(" << Attr->getName() << "Attr *A) {\n";
+   for (auto& Attr : Attrs) {
+      out << "void ASTAttrWriter::visit" << Attr->getName() << "Attr("
+          << Attr->getName() << "Attr *A) {\n";
 
-      auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
-      for (auto &Arg : Args) {
-         auto *ArgVal = cast<RecordVal>(Arg);
+      auto& Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+      for (auto& Arg : Args) {
+         auto* ArgVal = cast<RecordVal>(Arg);
          auto C = ArgVal->getRecord()->getBases().front().getBase();
 
-         auto Name = cast<StringLiteral>(
-            ArgVal->getRecord()->getFieldValue("name"))->getVal();
+         auto Name
+             = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
+                   ->getVal();
 
          GetterName += "get";
          GetterName += (char)::toupper(Name.front());
@@ -1374,21 +1422,22 @@ void AttrSerializeEmitter::emitSerialize(llvm::ArrayRef<Record *> Attrs)
    }
 }
 
-void AttrSerializeEmitter::emitDeserialize(llvm::ArrayRef<Record *> Attrs)
+void AttrSerializeEmitter::emitDeserialize(llvm::ArrayRef<Record*> Attrs)
 {
    std::vector<llvm::StringRef> FieldNames;
-   for (auto &Attr : Attrs) {
+   for (auto& Attr : Attrs) {
       out << Attr->getName() << "Attr *ASTAttrReader::read" << Attr->getName()
           << "Attr(SourceRange SR) {\n";
 
-      auto &Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
-      for (auto &Arg : Args) {
-         auto *ArgVal = cast<RecordVal>(Arg);
+      auto& Args = cast<ListLiteral>(Attr->getFieldValue("Args"))->getValues();
+      for (auto& Arg : Args) {
+         auto* ArgVal = cast<RecordVal>(Arg);
          auto C = ArgVal->getRecord()->getBases().front().getBase();
 
-         auto Name = cast<StringLiteral>(
-            ArgVal->getRecord()->getFieldValue("name"))->getVal();
-         
+         auto Name
+             = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
+                   ->getVal();
+
          FieldNames.push_back(Name);
 
          out << "   auto " << Name << " = ";
@@ -1438,24 +1487,23 @@ void AttrSerializeEmitter::emitDeserialize(llvm::ArrayRef<Record *> Attrs)
 
 extern "C" {
 
-void EmitAttributeDefs(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitAttributeDefs(llvm::raw_ostream& out, RecordKeeper& RK)
 {
    AttrDefEmitter(out, RK).emit();
 }
 
-void EmitAttributeClasses(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitAttributeClasses(llvm::raw_ostream& out, RecordKeeper& RK)
 {
    AttrClassEmitter(out, RK).emit();
 }
 
-void EmitAttributeParse(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitAttributeParse(llvm::raw_ostream& out, RecordKeeper& RK)
 {
    AttrParseEmitter(out, RK).emit();
 }
 
-void EmitAttributeSerialize(llvm::raw_ostream &out, RecordKeeper &RK)
+void EmitAttributeSerialize(llvm::raw_ostream& out, RecordKeeper& RK)
 {
    AttrSerializeEmitter(out, RK).emit();
 }
-
 };

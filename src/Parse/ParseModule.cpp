@@ -1,16 +1,16 @@
-#include "Parser.h"
+#include "cdotc/Parse/Parser.h"
 
-#include "Driver/Compiler.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::diag;
 using namespace cdot::lex;
 using namespace cdot::parse;
 
-Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
+Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
 {
    skipWhitespace();
 
@@ -26,7 +26,7 @@ Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
       return nullptr;
    }
 
-   auto *Name = currentTok().getIdentifierInfo();
+   auto* Name = currentTok().getIdentifierInfo();
 
    advance();
    if (!expectToken(tok::open_brace)) {
@@ -35,8 +35,8 @@ Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
 
    advance();
 
-   auto &Mgr = SP.getCompilationUnit().getModuleMgr();
-   Module *Mod;
+   auto& Mgr = SP.getCompilationUnit().getModuleMgr();
+   Module* Mod;
 
    if (ParentMod) {
       Mod = Mgr.CreateSubModule(Loc, Name, ParentMod);
@@ -54,7 +54,7 @@ Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
       case tok::close_brace:
          return Mod;
       case tok::ident: {
-         auto *II = currentTok().getIdentifierInfo();
+         auto* II = currentTok().getIdentifierInfo();
          if (II->isStr("sourceFiles")) {
             advance();
             if (!expectToken(tok::equals)) {
@@ -91,7 +91,7 @@ Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
             }
          }
          else if (II->isStr("include_system") || II->isStr("include_c")
-              || II->isStr("include_cxx")) {
+                  || II->isStr("include_cxx")) {
             advance();
             if (!expectToken(tok::equals)) {
                return nullptr;
@@ -251,8 +251,8 @@ Module *Parser::parseModuleFile(Module *ParentMod, bool IsMainModule)
                   }
                }
 
-               auto *IM = SP.getCompilationUnit().getModuleMgr()
-                             .GetModule(moduleName);
+               auto* IM = SP.getCompilationUnit().getModuleMgr().GetModule(
+                   moduleName);
 
                if (IM) {
                   Mod->addImplicitlyImportedModule(IM);

@@ -1,16 +1,16 @@
-#include "IRGen.h"
+#include "cdotc/IRGen/IRGen.h"
 
-#include "AST/Decl.h"
-#include "Basic/FileUtils.h"
-#include "Driver/Compiler.h"
-#include "IL/Context.h"
-#include "IL/Module.h"
-#include "Message/Diagnostics.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
-#include "Serialization/ModuleFile.h"
-#include "Support/StringSwitch.h"
-#include "Tools/IRDebug/IRDebugAnnotatePass.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ModuleFile.h"
+#include "cdotc/Support/StringSwitch.h"
+#include "cdotc/Tools/IRDebug/IRDebugAnnotatePass.h"
 
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 #include <llvm/IR/IRBuilder.h>
@@ -21,9 +21,9 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Program.h>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Transforms/Coroutines.h>
@@ -44,24 +44,23 @@ static cl::opt<std::string> EmitIRDebugInfo("debug-ir",
                                             cl::desc("emit LLVM-IR debug info"),
                                             cl::init("-"));
 
-static cl::opt<std::string> ClangSanitizers("fsanitize",
-                                            cl::desc("Clang sanitizers"),
-                                            cl::init(""));
+static cl::opt<std::string>
+    ClangSanitizers("fsanitize", cl::desc("Clang sanitizers"), cl::init(""));
 
-void IRGen::finalize(const CompilerInstance &CU)
+void IRGen::finalize(const CompilerInstance& CU)
 {
    if (DI)
       emitModuleDI();
 
-   auto &llvmOut = llvm::outs();
+   auto& llvmOut = llvm::outs();
    auto isInvalid = llvm::verifyModule(*M, &llvmOut);
 
-   if (isInvalid||true) {
+   if (isInvalid || true) {
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(
-            "/Users/Jonas/CDotProjects/ex/stdlib/_error.ll",
-            EC, llvm::sys::fs::F_RW);
+             "/Users/Jonas/CDotProjects/ex/stdlib/_error.ll", EC,
+             llvm::sys::fs::F_RW);
 
          llvm::AssemblyAnnotationWriter AAW;
          M->print(fd, &AAW);
@@ -69,8 +68,8 @@ void IRGen::finalize(const CompilerInstance &CU)
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(
-            "/Users/Jonas/CDotProjects/ex/stdlib/_error.cdotil",
-            EC, llvm::sys::fs::F_RW);
+             "/Users/Jonas/CDotProjects/ex/stdlib/_error.cdotil", EC,
+             llvm::sys::fs::F_RW);
 
          CU.getCompilationModule()->getILModule()->writeTo(fd);
       }
@@ -80,18 +79,17 @@ void IRGen::finalize(const CompilerInstance &CU)
    }
 }
 
-llvm::Module *IRGen::linkModules(CompilerInstance &CI)
+llvm::Module* IRGen::linkModules(CompilerInstance& CI)
 {
    if (LinkedModule)
       return LinkedModule;
 
-   llvm::Module *JoinedModule = new llvm::Module("main", Ctx);
+   llvm::Module* JoinedModule = new llvm::Module("main", Ctx);
    llvm::Linker ModuleLinker(*JoinedModule);
 
-   auto *Mod = CI.getCompilationModule();
+   auto* Mod = CI.getCompilationModule();
    auto LLVMMod = Mod->getILModule()->getLLVMModule();
-   if (ModuleLinker.linkInModule(
-      std::unique_ptr<llvm::Module>(LLVMMod))) {
+   if (ModuleLinker.linkInModule(std::unique_ptr<llvm::Module>(LLVMMod))) {
       llvm::report_fatal_error("linking IR modules failed", false);
    }
 
@@ -99,7 +97,7 @@ llvm::Module *IRGen::linkModules(CompilerInstance &CI)
    return LinkedModule;
 }
 
-void IRGen::runMandatoryPasses(llvm::Module *M)
+void IRGen::runMandatoryPasses(llvm::Module* M)
 {
    // Prepare pass manager
    llvm::PassManagerBuilder Builder;
@@ -116,7 +114,7 @@ void IRGen::runMandatoryPasses(llvm::Module *M)
 
    // Run per-function passes.
    FPM.doInitialization();
-   for (auto &Fn : *M) {
+   for (auto& Fn : *M) {
       if (!Fn.isDeclaration()) {
          FPM.run(Fn);
       }
@@ -127,16 +125,16 @@ void IRGen::runMandatoryPasses(llvm::Module *M)
    PM.run(*M);
 }
 
-void IRGen::prepareModuleForEmission(llvm::Module *Module)
+void IRGen::prepareModuleForEmission(llvm::Module* Module)
 {
    if (!FinalizedModules.insert(Module).second)
       return;
 
-   auto &TargetTriple = CI.getContext().getTargetInfo().getTriple();
+   auto& TargetTriple = CI.getContext().getTargetInfo().getTriple();
    if (!TargetMachine) {
       std::string Error;
-      auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple.str(),
-                                                       Error);
+      auto Target
+          = llvm::TargetRegistry::lookupTarget(TargetTriple.str(), Error);
 
       if (!Target) {
          llvm::report_fatal_error("invalid target", false);
@@ -147,8 +145,8 @@ void IRGen::prepareModuleForEmission(llvm::Module *Module)
 
       llvm::TargetOptions opt;
       auto RM = llvm::Optional<llvm::Reloc::Model>();
-      TargetMachine = Target->createTargetMachine(TargetTriple.str(),
-                                                  CPU, Features, opt, RM);
+      TargetMachine = Target->createTargetMachine(TargetTriple.str(), CPU,
+                                                  Features, opt, RM);
    }
 
    Module->setDataLayout(TargetMachine->createDataLayout());
@@ -167,10 +165,9 @@ void IRGen::prepareModuleForEmission(llvm::Module *Module)
    }
 }
 
-void IRGen::emitObjectFile(llvm::StringRef OutFile,
-                           llvm::Module *Module,
-                           bool KeepOpen, int *OutFD,
-                           size_t *FileSize) {
+void IRGen::emitObjectFile(llvm::StringRef OutFile, llvm::Module* Module,
+                           bool KeepOpen, int* OutFD, size_t* FileSize)
+{
    using namespace llvm::sys::fs;
 
    int FD;
@@ -198,7 +195,7 @@ void IRGen::emitObjectFile(llvm::StringRef OutFile,
       *FileSize = OS.tell();
 }
 
-void IRGen::emitObjectFile(llvm::raw_ostream &OS, llvm::Module *Module)
+void IRGen::emitObjectFile(llvm::raw_ostream& OS, llvm::Module* Module)
 {
    SmallString<512> str;
    llvm::raw_svector_ostream SS(str);
@@ -215,7 +212,7 @@ void IRGen::emitObjectFile(llvm::raw_ostream &OS, llvm::Module *Module)
    OS << SS.str();
 }
 
-void IRGen::emitAsmFile(llvm::raw_ostream &OS, llvm::Module *Module)
+void IRGen::emitAsmFile(llvm::raw_ostream& OS, llvm::Module* Module)
 {
    SmallString<512> str;
    llvm::raw_svector_ostream SS(str);
@@ -232,15 +229,16 @@ void IRGen::emitAsmFile(llvm::raw_ostream &OS, llvm::Module *Module)
    OS << SS.str();
 }
 
-static void addModuleLib(IRGen &IRG,
-                         cdot::Module *Mod,
-                         SmallVectorImpl<string> &args,
-                         llvm::SmallPtrSetImpl<cdot::Module*> &Visited) {
-   auto *BaseMod = Mod->getBaseModule();
+static void addModuleLib(IRGen& IRG, cdot::Module* Mod,
+                         SmallVectorImpl<string>& args,
+                         llvm::SmallPtrSetImpl<cdot::Module*>& Visited)
+{
+   auto* BaseMod = Mod->getBaseModule();
    if (!Visited.insert(BaseMod).second)
       return;
 
-   if (!Mod->getILModule()->hasExternallyVisibleSymbols() || Mod->declarationsOnly())
+   if (!Mod->getILModule()->hasExternallyVisibleSymbols()
+       || Mod->declarationsOnly())
       return;
 
    auto StaticLibBlob = BaseMod->getDecl()->getModFile()->getLibraryBlob();
@@ -254,23 +252,23 @@ static void addModuleLib(IRGen &IRG,
       args.emplace_back(IRG.createLinkedModuleTmpFile(StaticLibBlob));
    }
 
-   for (auto *Imp : Mod->getImports())
+   for (auto* Imp : Mod->getImports())
       addModuleLib(IRG, Imp, args, Visited);
 }
 
-static void addModuleLib(IRGen &IRG,
-                         cdot::Module *CompilationMod,
-                         SmallVectorImpl<string> &args) {
+static void addModuleLib(IRGen& IRG, cdot::Module* CompilationMod,
+                         SmallVectorImpl<string>& args)
+{
    llvm::SmallPtrSet<cdot::Module*, 4> VisitedModules;
    VisitedModules.insert(CompilationMod);
 
-   for (auto *Imp : CompilationMod->getImports())
+   for (auto* Imp : CompilationMod->getImports())
       addModuleLib(IRG, Imp, args, VisitedModules);
 }
 
-static void addICULib(SmallVectorImpl<string> &LinkerArgs)
+static void addICULib(SmallVectorImpl<string>& LinkerArgs)
 {
-   const char *ICUArgs = getenv("CDOT_ICU_LIBS");
+   const char* ICUArgs = getenv("CDOT_ICU_LIBS");
    std::string Output;
 
    if (!ICUArgs) {
@@ -278,7 +276,7 @@ static void addICULib(SmallVectorImpl<string> &LinkerArgs)
       if (!execOrError)
          return;
 
-      auto &&Cmd = execOrError.get();
+      auto&& Cmd = execOrError.get();
       Cmd += " --ldflags";
 
       Output = fs::exec(Cmd);
@@ -307,11 +305,12 @@ static void addICULib(SmallVectorImpl<string> &LinkerArgs)
    }
 }
 
-void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
-                           ArrayRef<StringRef> AdditionalFilesToLink) {
+void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
+                           ArrayRef<StringRef> AdditionalFilesToLink)
+{
    prepareModuleForEmission(Module);
 
-   auto &options = CI.getOptions();
+   auto& options = CI.getOptions();
    std::error_code EC;
 
    string TmpFile;
@@ -342,21 +341,18 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
    }
 
    SmallString<128> ScratchBuf;
-   SmallVector<string, 8> args{
-      clangPathOrError.get(),
-      TmpFile
-   };
+   SmallVector<string, 8> args{clangPathOrError.get(), TmpFile};
 
-   for (auto &file : options.getInputFiles(InputKind::LinkerInput)) {
+   for (auto& file : options.getInputFiles(InputKind::LinkerInput)) {
       args.push_back(file);
    }
-   for (auto &file : options.getLinkerInput()) {
+   for (auto& file : options.getLinkerInput()) {
       args.push_back(file);
    }
-   for (auto &file : AdditionalFilesToLink) {
+   for (auto& file : AdditionalFilesToLink) {
       args.push_back(file);
    }
-   for (auto &ClangOpt : options.getClangOptions()) {
+   for (auto& ClangOpt : options.getClangOptions()) {
       args.push_back(ClangOpt);
    }
 
@@ -369,7 +365,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
 
    addICULib(args);
 
-   auto *Mod = CI.getCompilationModule();
+   auto* Mod = CI.getCompilationModule();
    addModuleLib(*this, Mod, args);
 
    auto initialSize = args.size();
@@ -389,8 +385,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
       auto DsymPath = llvm::sys::findProgramByName("dsymutil");
       if (!DsymPath.getError()) {
          string dsymArgs[] = {
-            DsymPath.get(),
-            OutFile,
+             DsymPath.get(), OutFile,
          };
 
          fs::executeCommand(DsymPath.get(), dsymArgs);
@@ -398,7 +393,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module *Module,
    }
 }
 
-void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module *Module)
+void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module* Module)
 {
    prepareModuleForEmission(Module);
 
@@ -436,10 +431,10 @@ void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module *Module)
    args.emplace_back("-c");
    args.emplace_back("-s");
 
-   for (auto &file : CI.getOptions().getInputFiles(InputKind::LinkerInput))
+   for (auto& file : CI.getOptions().getInputFiles(InputKind::LinkerInput))
       args.push_back(file);
 
-   for (auto &file : CI.getOptions().getLinkerInput())
+   for (auto& file : CI.getOptions().getLinkerInput())
       args.push_back(file);
 
    args.push_back(OutFile);
@@ -454,7 +449,7 @@ void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module *Module)
    }
 }
 
-void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module *Module)
+void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
 {
    prepareModuleForEmission(Module);
 
@@ -487,13 +482,12 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module *Module)
    }
 
    std::vector<std::string> args{
-      clangPathOrError.get(),
-      "-shared", "-undefined", "dynamic_lookup",
-      "-o", OutFile.str(),
-      TmpFilePath.str(),
+       clangPathOrError.get(), "-shared", "-undefined",
+       "dynamic_lookup",       "-o",      OutFile.str(),
+       TmpFilePath.str(),
    };
 
-   for (auto &file : CI.getOptions().getLinkerInput())
+   for (auto& file : CI.getOptions().getLinkerInput())
       args.push_back(file);
 
    int result = fs::executeCommand(args[0], args);

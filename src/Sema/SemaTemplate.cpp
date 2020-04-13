@@ -1,7 +1,6 @@
-#include "SemaPass.h"
-
-#include "ILGen/ILGenPass.h"
-#include "TemplateInstantiator.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 
 using namespace cdot;
 using namespace cdot::ast;

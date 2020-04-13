@@ -1,13 +1,13 @@
 
-#include "Lookup.h"
+#include "cdotc/Sema/Lookup.h"
 
 using namespace cdot;
 using namespace cdot::ast;
 
 bool SingleLevelLookupResult::unique() const
 {
-   NamedDecl *UniqueDecl = nullptr;
-   for (auto *ND : *this) {
+   NamedDecl* UniqueDecl = nullptr;
+   for (auto* ND : *this) {
       if (!UniqueDecl) {
          UniqueDecl = ND;
       }
@@ -27,8 +27,8 @@ ast::NamedDecl* SingleLevelLookupResult::uniqueDecl() const
 
 bool MultiLevelLookupResult::unique() const
 {
-   NamedDecl *UniqueDecl = nullptr;
-   for (auto *ND : allDecls()) {
+   NamedDecl* UniqueDecl = nullptr;
+   for (auto* ND : allDecls()) {
       if (!UniqueDecl) {
          UniqueDecl = ND;
       }

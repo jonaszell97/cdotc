@@ -5,18 +5,18 @@
 //#include "OverloadResolver.h"
 //
 //#include "ConstraintBuilder.h"
-//#include "Query/QueryContext.h"
-//#include "Sema/SemaPass.h"
+//#include "cdotc/Query/QueryContext.h"
+//#include "cdotc/Sema/SemaPass.h"
 //
-//using namespace cdot::support;
-//using namespace cdot::sema;
+// using namespace cdot::support;
+// using namespace cdot::sema;
 //
-//namespace cdot {
-//namespace ast {
+// namespace cdot {
+// namespace ast {
 //
-//using ConvSeqVec = SmallVectorImpl<ConversionSequenceBuilder>;
+// using ConvSeqVec = SmallVectorImpl<ConversionSequenceBuilder>;
 //
-//OverloadResolver::OverloadResolver(SemaPass &SP,
+// OverloadResolver::OverloadResolver(SemaPass &SP,
 //                                   DeclarationName FuncName,
 //                                   Expression *SelfArg,
 //                                   ArrayRef<Expression*> givenArgs,
@@ -30,7 +30,7 @@
 //
 //}
 //
-//static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
+// static unsigned castPenalty(const ConversionSequenceBuilder &neededCast)
 //{
 //   unsigned penalty = 0;
 //
@@ -77,7 +77,7 @@
 //   return penalty;
 //}
 //
-//static bool isMovable(Expression *Expr)
+// static bool isMovable(Expression *Expr)
 //{
 //   auto *Ident = dyn_cast<IdentifierRefExpr>(Expr);
 //   if (!Ident)
@@ -100,7 +100,7 @@
 //   }
 //}
 //
-//static bool createsNewValue(ConversionSequenceBuilder &Seq)
+// static bool createsNewValue(ConversionSequenceBuilder &Seq)
 //{
 //   for (auto &S : Seq.getSteps()) {
 //      switch (S.getKind()) {
@@ -119,7 +119,7 @@
 //   return false;
 //}
 //
-//static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
+// static bool getConversionPenalty(SemaPass &SP, Expression *Expr,
 //                                 CanType NeededTy, CanType GivenTy,
 //                                 FunctionType::ParamInfo NeededParamInfo,
 //                                 CandidateSet::Candidate &Cand,
@@ -322,7 +322,7 @@
 //   return false;
 //}
 //
-//static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
+// static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
 //                               IdentifierInfo *GivenLabel,
 //                               Expression *E) {
 //   if (GivenLabel && GivenLabel->isStr("_")) {
@@ -335,9 +335,11 @@
 //      return true;
 //   }
 //
-//   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
+//   if (auto *Ident =
+//   dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
 //      if ((!Ident->getParentExpr()
-//      || isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
+//      ||
+//      isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
 //      && Ident->getIdentInfo() == NeededLabel) {
 //         return true;
 //      }
@@ -346,12 +348,13 @@
 //   return false;
 //}
 //
-//static bool isVariadic(QualType Ty)
+// static bool isVariadic(QualType Ty)
 //{
-//   return Ty->isTemplateParamType() && Ty->asTemplateParamType()->isVariadic();
+//   return Ty->isTemplateParamType() &&
+//   Ty->asTemplateParamType()->isVariadic();
 //}
 //
-//static bool resolveContextualArgument(SemaPass &SP,
+// static bool resolveContextualArgument(SemaPass &SP,
 //                                      unsigned i,
 //                                      FuncArgDecl *ArgDecl,
 //                                      Expression *ArgVal,
@@ -483,8 +486,8 @@
 //   return false;
 //}
 //
-//LLVM_ATTRIBUTE_UNUSED
-//static bool resolveSingleArgument(SemaPass &SP,
+// LLVM_ATTRIBUTE_UNUSED
+// static bool resolveSingleArgument(SemaPass &SP,
 //                                  unsigned i,
 //                                  FuncArgDecl *ArgDecl,
 //                                  Expression *ArgVal,
@@ -531,7 +534,8 @@
 //   }
 //
 //   if (NeededTy->isDependentType()) {
-//      if (ArgValType->isDependentType() || NeededTy->containsAssociatedType()) {
+//      if (ArgValType->isDependentType() || NeededTy->containsAssociatedType())
+//      {
 //         Cand.setIsDependent();
 //         return true;
 //      }
@@ -551,7 +555,7 @@
 //   return false;
 //}
 //
-//static bool resolveContextDependentArgs(SemaPass &SP,
+// static bool resolveContextDependentArgs(SemaPass &SP,
 //                                        Statement *Caller,
 //                                        CallableDecl *CD,
 //                                        Expression *SelfVal,
@@ -679,7 +683,7 @@
 ////         if (DefaultVal->isMagicArgumentValue()) {
 ////            auto Alias = cast<IdentifierRefExpr>(DefaultVal)->getAlias();
 ////            auto Result = SP.HandleReflectionAlias(Alias,
-////                                                   cast<Expression>(Caller));
+//// cast<Expression>(Caller));
 ////
 ////            if (Result) {
 ////               ArgExprs.emplace_back(Result.getValue());
@@ -706,17 +710,12 @@
 ////      for (Expression *ArgVal : DeclArgMap[ArgDecl]) {
 ////         QualType NeededTy = ArgDecl->getType();
 ////
-////         auto GenRes = Builder.generateConstraints(ArgVal, SourceType(NeededTy));
-////         switch (GenRes) {
-////         case ConstraintBuilder::Dependent:
-////            Cand.setIsDependent();
-////            return true;
-////         case ConstraintBuilder::Failure:
-////            Cand.setIsInvalid();
-////            return true;
-////         case ConstraintBuilder::Success:
-////            break;
-////         }
+////         auto GenRes = Builder.generateConstraints(ArgVal,
+///SourceType(NeededTy)); /         switch (GenRes) { /         case
+///ConstraintBuilder::Dependent: /            Cand.setIsDependent(); /
+///return true; /         case ConstraintBuilder::Failure: /
+///Cand.setIsInvalid(); /            return true; /         case
+///ConstraintBuilder::Success: /            break; /         }
 ////
 ////         ArgExprs.push_back(ArgVal);
 ////      }
@@ -797,7 +796,7 @@
 //   return true;
 //}
 //
-//static bool resolveContextDependentArgs(SemaPass &SP,
+// static bool resolveContextDependentArgs(SemaPass &SP,
 //                                        Statement *Caller,
 //                                        Expression *SelfVal,
 //                                        ArrayRef<Expression*> UnorderedArgs,
@@ -808,9 +807,10 @@
 //                                        ConvSeqVec &Conversions,
 //                                        MultiLevelTemplateArgList*TemplateArgs){
 //   if (!Cand.isAnonymousCandidate()) {
-//      return resolveContextDependentArgs(SP, Caller, Cand.getFunc(), SelfVal, labels,
-//                                         UnorderedArgs, ArgExprs, Cand, CandSet,
-//                                         Conversions, TemplateArgs);
+//      return resolveContextDependentArgs(SP, Caller, Cand.getFunc(), SelfVal,
+//      labels,
+//                                         UnorderedArgs, ArgExprs, Cand,
+//                                         CandSet, Conversions, TemplateArgs);
 //   }
 //
 //   auto *FuncTy = Cand.getFunctionType();
@@ -924,13 +924,13 @@
 //   return true;
 //}
 //
-//namespace {
+// namespace {
 //
-//class CaptureMarker: public RecursiveASTVisitor<CaptureMarker> {
+// class CaptureMarker: public RecursiveASTVisitor<CaptureMarker> {
 //   ASTContext &C;
 //   LambdaExpr *LE;
 //
-//public:
+// public:
 //   CaptureMarker(ASTContext &C, LambdaExpr *LE) : C(C), LE(LE)
 //   {}
 //
@@ -970,7 +970,7 @@
 //
 //} // anonymous namespace
 //
-//static bool applyConversions(SemaPass &SP,
+// static bool applyConversions(SemaPass &SP,
 //                             CandidateSet &CandSet,
 //                             SmallVectorImpl<StmtOrDecl> &ArgExprs,
 //                             SmallVectorImpl<ConversionSequenceBuilder>
@@ -1034,9 +1034,11 @@
 //      E = Result.get();
 //
 //      if (E->getExprType()->isVoidType()) {
-//         SP.diagnose(E, diag::err_vararg_cannot_pass_void, E->getSourceRange());
+//         SP.diagnose(E, diag::err_vararg_cannot_pass_void,
+//         E->getSourceRange());
 //      }
-//      else if (ArgDecl &&ArgDecl->getConvention() == ArgumentConvention::Owned){
+//      else if (ArgDecl &&ArgDecl->getConvention() ==
+//      ArgumentConvention::Owned){
 //         // mark this declaration as moved from
 //         if (auto Ident = dyn_cast<IdentifierRefExpr>(E)) {
 //            auto ND = Ident->getNamedDecl();
@@ -1072,7 +1074,7 @@
 //   return false;
 //}
 //
-//void OverloadResolver::resolve(CandidateSet &CandSet)
+// void OverloadResolver::resolve(CandidateSet &CandSet)
 //{
 //   SmallVector<ConversionSequenceBuilder, 4> BestMatchConversions;
 //   SmallVector<StmtOrDecl, 4> BestMatchArgExprs;
@@ -1177,15 +1179,16 @@
 //
 //      SP.maybeInstantiate(CandSet, Caller);
 //
-//      if (applyConversions(SP, CandSet, BestMatchArgExprs, BestMatchConversions,
+//      if (applyConversions(SP, CandSet, BestMatchArgExprs,
+//      BestMatchConversions,
 //                           Caller)) {
 //         return;
 //      }
 //   }
 //}
 //
-//LLVM_ATTRIBUTE_UNUSED
-//static bool hasDependentSignature(CallableDecl *C)
+// LLVM_ATTRIBUTE_UNUSED
+// static bool hasDependentSignature(CallableDecl *C)
 //{
 //   for (auto &Arg : C->getArgs())
 //      if (Arg->isDependent())
@@ -1197,7 +1200,7 @@
 //   return false;
 //}
 //
-//void OverloadResolver::resolve(CandidateSet &CandSet,
+// void OverloadResolver::resolve(CandidateSet &CandSet,
 //                               CandidateSet::Candidate &Cand,
 //                               llvm::ArrayRef<Expression*> givenArgs,
 //                               ConvSeqVec &Conversions,

@@ -1,10 +1,10 @@
-#include "Parser.h"
+#include "cdotc/Parse/Parser.h"
 
-#include "Basic/FileUtils.h"
-#include "ClangImporter/ClangImporter.h"
-#include "Lex/Lexer.h"
-#include "Sema/SemaPass.h"
-#include "Support/StringSwitch.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/ClangImporter/ClangImporter.h"
+#include "cdotc/Lex/Lexer.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/StringSwitch.h"
 
 #include <llvm/ADT/SmallString.h>
 
@@ -16,30 +16,26 @@ namespace cdot {
 namespace parse {
 
 class MacroParser {
-   SemaPass &SP;
-   Parser &P;
+   SemaPass& SP;
+   Parser& P;
 
    // macro parsing
    struct PatternExpansionRAII {
-      PatternExpansionRAII(MacroParser &P)
-         : P(P)
+      PatternExpansionRAII(MacroParser& P) : P(P)
       {
          P.PatternExpansionStack.emplace_back();
          ++P.LastExpansionScopeID;
       }
 
-      ~PatternExpansionRAII()
-      {
-         P.PatternExpansionStack.pop_back();
-      }
+      ~PatternExpansionRAII() { P.PatternExpansionStack.pop_back(); }
 
    private:
-      MacroParser &P;
+      MacroParser& P;
    };
 
    struct VariableExpansionRAII {
-      VariableExpansionRAII(MacroParser &P, bool Enabled)
-         : P(P), Enabled(Enabled)
+      VariableExpansionRAII(MacroParser& P, bool Enabled)
+          : P(P), Enabled(Enabled)
       {
          if (Enabled) {
             P.VariableExpansionStack.emplace_back();
@@ -54,7 +50,7 @@ class MacroParser {
       }
 
    private:
-      MacroParser &P;
+      MacroParser& P;
       bool Enabled;
    };
 
@@ -70,46 +66,35 @@ class MacroParser {
    };
 
    llvm::DenseMap<const IdentifierInfo*, PatternVariableDeclaration>
-      MacroVarDecls;
+       MacroVarDecls;
 
-   const lex::Token &currentTok() const
-   {
-      return P.currentTok();
-   }
+   const lex::Token& currentTok() const { return P.currentTok(); }
 
-   Token lookahead() const
-   {
-      return P.lookahead();
-   }
+   Token lookahead() const { return P.lookahead(); }
 
    void advance(bool ignoreNewline = true, bool whitespace = false) const
    {
       return P.advance(ignoreNewline, whitespace);
    }
 
-   void backtrack() const
-   {
-      return P.lexer->backtrack();
-   }
+   void backtrack() const { return P.lexer->backtrack(); }
 
 public:
-   MacroParser(SemaPass &SP, Parser &P)
-      : SP(SP), P(P)
-   { }
+   MacroParser(SemaPass& SP, Parser& P) : SP(SP), P(P) {}
 
    bool Invalid = false;
 
-   PatternFragment *parsePattern();
-   PatternFragment *parseInnerPattern(PatternFragment *Previous,
+   PatternFragment* parsePattern();
+   PatternFragment* parseInnerPattern(PatternFragment* Previous,
                                       bool SetErrorState = true);
 
-   void parseExpansionFragment(llvm::SmallVectorImpl<ExpansionFragment*> &Vec);
-   void parseExpansionFragments(llvm::SmallVectorImpl<ExpansionFragment*> &Vec);
+   void parseExpansionFragment(llvm::SmallVectorImpl<ExpansionFragment*>& Vec);
+   void parseExpansionFragments(llvm::SmallVectorImpl<ExpansionFragment*>& Vec);
 
-   MacroPattern *parseMacroPattern();
+   MacroPattern* parseMacroPattern();
 };
 
-PatternFragment *MacroParser::parsePattern()
+PatternFragment* MacroParser::parsePattern()
 {
    auto Begin = PatternFragment::Create(SP.getContext());
    auto Penultimate = parseInnerPattern(Begin);
@@ -120,9 +105,9 @@ PatternFragment *MacroParser::parsePattern()
    return Begin;
 }
 
-static bool diagnoseInvalidSeparator(SemaPass &SP,
-                                     PatternFragment *Previous,
-                                     const lex::Token &Tok) {
+static bool diagnoseInvalidSeparator(SemaPass& SP, PatternFragment* Previous,
+                                     const lex::Token& Tok)
+{
    if (!Previous)
       return false;
 
@@ -130,7 +115,7 @@ static bool diagnoseInvalidSeparator(SemaPass &SP,
    if (Previous->isVariable()) {
       // If the previous segment has unconditional transitions,
       // backpatch them.
-      for (auto &Trans : Previous->getTransitions()) {
+      for (auto& Trans : Previous->getTransitions()) {
          if (Trans.Next && !Trans.Tok && Trans.NeedsBackpatching) {
             Trans.Tok = Tok;
             Trans.NeedsBackpatching = false;
@@ -153,29 +138,61 @@ static bool diagnoseInvalidSeparator(SemaPass &SP,
 
    bool Valid = false;
    switch (Tok.getKind()) {
-   case tok::comma: case tok::semicolon: case tok::close_paren:
-   case tok::newline: case tok::eof: case tok::sentinel:
-   case tok::close_brace: case tok::close_square:
-   case tok::arrow_double: case tok::arrow_single:
-   case tok::kw_def: case tok::kw_let:
-   case tok::kw_var: case tok::kw_return: case tok::kw_else:
-   case tok::kw_while: case tok::kw_loop: case tok::kw_match:
-   case tok::kw_for: case tok::kw_case: case tok::kw_throw:
-   case tok::kw_try: case tok::kw_catch: case tok::kw_finally:
-   case tok::kw_alias: case tok::kw_typedef: case tok::kw_namespace:
-   case tok::kw_struct: case tok::kw_class: case tok::kw_union:
-   case tok::kw_enum: case tok::kw_protocol: case tok::kw_extend:
-   case tok::kw_public: case tok::kw_private:
-   case tok::kw_protected: case tok::kw_static: case tok::kw_abstract:
+   case tok::comma:
+   case tok::semicolon:
+   case tok::close_paren:
+   case tok::newline:
+   case tok::eof:
+   case tok::sentinel:
+   case tok::close_brace:
+   case tok::close_square:
+   case tok::arrow_double:
+   case tok::arrow_single:
+   case tok::kw_def:
+   case tok::kw_let:
+   case tok::kw_var:
+   case tok::kw_return:
+   case tok::kw_else:
+   case tok::kw_while:
+   case tok::kw_loop:
+   case tok::kw_match:
+   case tok::kw_for:
+   case tok::kw_case:
+   case tok::kw_throw:
+   case tok::kw_try:
+   case tok::kw_catch:
+   case tok::kw_finally:
+   case tok::kw_alias:
+   case tok::kw_typedef:
+   case tok::kw_namespace:
+   case tok::kw_struct:
+   case tok::kw_class:
+   case tok::kw_union:
+   case tok::kw_enum:
+   case tok::kw_protocol:
+   case tok::kw_extend:
+   case tok::kw_public:
+   case tok::kw_private:
+   case tok::kw_protected:
+   case tok::kw_static:
+   case tok::kw_abstract:
    case tok::kw_prop:
-   case tok::kw_continue: case tok::kw_init:
-   case tok::kw_associatedType: case tok::kw_break:
-   case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
+   case tok::kw_continue:
+   case tok::kw_init:
+   case tok::kw_associatedType:
+   case tok::kw_break:
+   case tok::kw_mutating:
+   case tok::kw_declare:
+   case tok::kw_module:
    case tok::kw_import:
-   case tok::kw_static_if: case tok::kw_static_for:
-   case tok::kw_static_assert: case tok::kw_static_print:
-   case tok::kw___debug: case tok::kw___unreachable:
-   case tok::interpolation_begin: case tok::interpolation_end:
+   case tok::kw_static_if:
+   case tok::kw_static_for:
+   case tok::kw_static_assert:
+   case tok::kw_static_print:
+   case tok::kw___debug:
+   case tok::kw___unreachable:
+   case tok::interpolation_begin:
+   case tok::interpolation_end:
       Valid = true;
       break;
    case tok::ident: {
@@ -199,11 +216,12 @@ static bool diagnoseInvalidSeparator(SemaPass &SP,
    return !Valid;
 }
 
-PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
-                                                bool SetErrorState) {
+PatternFragment* MacroParser::parseInnerPattern(PatternFragment* Previous,
+                                                bool SetErrorState)
+{
    bool done = false;
    unsigned OpenParens = 1;
-   PatternFragment *FragmentForSeperatorCheck = nullptr;
+   PatternFragment* FragmentForSeperatorCheck = nullptr;
 
    while (true) {
       SourceLocation Loc = currentTok().getSourceLoc();
@@ -253,7 +271,8 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             case tok::open_square:
                ++InnerOpenSquare;
                break;
-            case tok::dollar_ident: case tok::dollar:
+            case tok::dollar_ident:
+            case tok::dollar:
                innerDone = true;
                backtrack();
                break;
@@ -353,16 +372,16 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
          }
 
          if (PatternExpansionStack.empty()) {
-            MacroVarDecls[VarName] = PatternVariableDeclaration{ 0 };
+            MacroVarDecls[VarName] = PatternVariableDeclaration{0};
          }
          else {
-            MacroVarDecls[VarName] =
-               PatternVariableDeclaration{ LastExpansionScopeID };
+            MacroVarDecls[VarName]
+                = PatternVariableDeclaration{LastExpansionScopeID};
             PatternExpansionStack.back().insert(VarName);
          }
 
-         auto Next = PatternFragment::Create(SP.getContext(), Loc, VarKind,
-                                             VarName);
+         auto Next
+             = PatternFragment::Create(SP.getContext(), Loc, VarKind, VarName);
 
          Previous->addTransition(Token(), Next);
          Previous = Next;
@@ -386,7 +405,7 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
 
          advance();
 
-         auto *PatternStart = PatternFragment::Create(SP.Context);
+         auto* PatternStart = PatternFragment::Create(SP.Context);
          Previous->addTransition(Token(), PatternStart);
 
          auto LastInRepetition = parseInnerPattern(PatternStart, false);
@@ -409,8 +428,8 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
                break;
             default:
                if (Delim.getKind() != tok::sentinel
-                     || currentTok().oneOf(tok::close_paren, tok::close_brace,
-                                           tok::close_square)) {
+                   || currentTok().oneOf(tok::close_paren, tok::close_brace,
+                                         tok::close_square)) {
                   SP.diagnose(err_expected_after_repetition,
                               currentTok().getSourceLoc());
 
@@ -431,7 +450,7 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             break;
          }
 
-         auto &Ctx = SP.getContext();
+         auto& Ctx = SP.getContext();
 
          auto Merge = PatternFragment::Create(Ctx);
          switch (Kind) {
@@ -448,11 +467,11 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             // Check if a distinct token gets you back in the repetition,
             // otherwise only eof gets you to the end.
             else {
-               lex::Token FirstTokInRepetition =
-                  Previous->getTransitions().front().Tok;
+               lex::Token FirstTokInRepetition
+                   = Previous->getTransitions().front().Tok;
 
-               lex::Token MergeTok = FirstTokInRepetition ? Token()
-                                                          : Token(tok::eof);
+               lex::Token MergeTok
+                   = FirstTokInRepetition ? Token() : Token(tok::eof);
 
                LastInRepetition->addTransition(MergeTok, Merge);
                LastInRepetition->addTransition(FirstTokInRepetition,
@@ -476,9 +495,10 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             if (Delim.getKind() != tok::sentinel) {
                LastInRepetition->addTransition(Delim, ZeroOrMoreState,
                                                /*IsConsuming=*/false);
-               LastInRepetition->addUnconditionalTransition(Merge,
-                                                   /*IsConsuming=*/true,
-                                                   /*NeedsBackpatching=*/true);
+               LastInRepetition->addUnconditionalTransition(
+                   Merge,
+                   /*IsConsuming=*/true,
+                   /*NeedsBackpatching=*/true);
 
                ZeroOrMoreState->addTransition(Delim, PatternStart);
                ZeroOrMoreState->addTransition(Token(), Merge);
@@ -486,11 +506,11 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
             // Check if a distinct token gets you back in the repetition,
             // otherwise only eof gets you to the end.
             else {
-               lex::Token FirstTokInRepetition =
-                  Previous->getTransitions().front().Tok;
+               lex::Token FirstTokInRepetition
+                   = Previous->getTransitions().front().Tok;
 
-               lex::Token MergeTok = FirstTokInRepetition ? Token()
-                                                          : Token(tok::eof);
+               lex::Token MergeTok
+                   = FirstTokInRepetition ? Token() : Token(tok::eof);
 
                LastInRepetition->addTransition(FirstTokInRepetition,
                                                ZeroOrMoreState,
@@ -537,7 +557,8 @@ PatternFragment *MacroParser::parseInnerPattern(PatternFragment *Previous,
 }
 
 void MacroParser::parseExpansionFragment(
-                              llvm::SmallVectorImpl<ExpansionFragment*> &Vec) {
+    llvm::SmallVectorImpl<ExpansionFragment*>& Vec)
+{
    SourceLocation Loc = currentTok().getSourceLoc();
 
    switch (currentTok().getKind()) {
@@ -560,7 +581,7 @@ void MacroParser::parseExpansionFragment(
       }
       else if (It->getSecond().ExpansionScopeID != 0
                && !VariableExpansionStack.empty()) {
-         auto &back = VariableExpansionStack.back();
+         auto& back = VariableExpansionStack.back();
          back.insert(VarName);
       }
 
@@ -606,9 +627,9 @@ void MacroParser::parseExpansionFragment(
          Invalid = true;
       }
 
-      const IdentifierInfo *Fst = nullptr;
+      const IdentifierInfo* Fst = nullptr;
 
-      auto &Var = VariableExpansionStack.back();
+      auto& Var = VariableExpansionStack.back();
       if (Var.empty()) {
          SP.diagnose(err_expansion_without_variable,
                      currentTok().getSourceLoc());
@@ -669,10 +690,11 @@ void MacroParser::parseExpansionFragment(
          case tok::open_square:
             ++OpenSquare;
             break;
-         case tok::dollar_ident: case tok::dollar:
+         case tok::dollar_ident:
+         case tok::dollar:
             if (!Tokens.empty())
-               Vec.push_back(ExpansionFragment::Create(SP.getContext(), Loc,
-                                                       Tokens));
+               Vec.push_back(
+                   ExpansionFragment::Create(SP.getContext(), Loc, Tokens));
 
             Tokens.clear();
             parseExpansionFragment(Vec);
@@ -699,8 +721,7 @@ void MacroParser::parseExpansionFragment(
       }
 
       if (!Tokens.empty())
-         Vec.push_back(ExpansionFragment::Create(SP.getContext(), Loc,
-                                                 Tokens));
+         Vec.push_back(ExpansionFragment::Create(SP.getContext(), Loc, Tokens));
 
       break;
    }
@@ -708,7 +729,8 @@ void MacroParser::parseExpansionFragment(
 }
 
 void MacroParser::parseExpansionFragments(
-                              llvm::SmallVectorImpl<ExpansionFragment*> &Vec) {
+    llvm::SmallVectorImpl<ExpansionFragment*>& Vec)
+{
    unsigned OpenBraces = 0;
    unsigned OpenParens = 0;
    unsigned OpenSquare = 0;
@@ -811,10 +833,8 @@ MacroPattern* MacroParser::parseMacroPattern()
    MacroVarDecls.clear();
 
    unsigned End = P.currentTok().getOffset() + P.currentTok().getLength();
-   return MacroPattern::Create(SP.getContext(),
-                               Loc, Pattern,
-                               ExpansionLoc, ExpansionFragments,
-                               End - Begin);
+   return MacroPattern::Create(SP.getContext(), Loc, Pattern, ExpansionLoc,
+                               ExpansionFragments, End - Begin);
 }
 
 ParseResult Parser::parseMacro()
@@ -828,9 +848,8 @@ ParseResult Parser::parseMacro()
          return ParseError();
    }
 
-   DeclarationName MacroName =
-      Context.getDeclNameTable()
-             .getMacroName(*currentTok().getIdentifierInfo());
+   DeclarationName MacroName = Context.getDeclNameTable().getMacroName(
+       *currentTok().getIdentifierInfo());
 
    advance();
 
@@ -883,8 +902,8 @@ ParseResult Parser::parseMacro()
 
    SourceRange SR(MacroLoc, currentTok().getEndLoc());
 
-   auto Decl = MacroDecl::Create(Context, SR, CurDeclAttrs.Access,
-                                 MacroName, Delim, Patterns);
+   auto Decl = MacroDecl::Create(Context, SR, CurDeclAttrs.Access, MacroName,
+                                 Delim, Patterns);
 
    if (MP.Invalid) {
       Decl->setIsInvalid(true);
@@ -894,12 +913,11 @@ ParseResult Parser::parseMacro()
    return ActOnDecl(Decl);
 }
 
-ParseResult Parser::parseMacroExpansionExpr(Expression *ParentExpr)
+ParseResult Parser::parseMacroExpansionExpr(Expression* ParentExpr)
 {
    auto BeginLoc = currentTok().getSourceLoc();
-   DeclarationName MacroName =
-      Context.getDeclNameTable()
-             .getMacroName(*currentTok().getIdentifierInfo());
+   DeclarationName MacroName = Context.getDeclNameTable().getMacroName(
+       *currentTok().getIdentifierInfo());
 
    advance();
 
@@ -967,12 +985,11 @@ ParseResult Parser::parseMacroExpansionExpr(Expression *ParentExpr)
                                      ParentExpr);
 }
 
-ParseResult Parser::parseMacroExpansionStmt(Expression *ParentExpr)
+ParseResult Parser::parseMacroExpansionStmt(Expression* ParentExpr)
 {
    auto BeginLoc = currentTok().getSourceLoc();
-   DeclarationName MacroName =
-      Context.getDeclNameTable()
-             .getMacroName(*currentTok().getIdentifierInfo());
+   DeclarationName MacroName = Context.getDeclNameTable().getMacroName(
+       *currentTok().getIdentifierInfo());
 
    advance();
 
@@ -1036,16 +1053,15 @@ ParseResult Parser::parseMacroExpansionStmt(Expression *ParentExpr)
    Toks.emplace_back(tok::eof);
 
    SourceRange SR(BeginLoc, currentTok().getEndLoc());
-   return MacroExpansionStmt::Create(Context, SR, MacroName, ParentExpr,
-                                     Delim, Toks);
+   return MacroExpansionStmt::Create(Context, SR, MacroName, ParentExpr, Delim,
+                                     Toks);
 }
 
-ParseResult Parser::parseMacroExpansionDecl(Expression *ParentExpr)
+ParseResult Parser::parseMacroExpansionDecl(Expression* ParentExpr)
 {
    auto BeginLoc = currentTok().getSourceLoc();
-   DeclarationName MacroName =
-      Context.getDeclNameTable()
-             .getMacroName(*currentTok().getIdentifierInfo());
+   DeclarationName MacroName = Context.getDeclNameTable().getMacroName(
+       *currentTok().getIdentifierInfo());
 
    advance();
 
@@ -1119,63 +1135,61 @@ namespace {
 
 struct MacroVariable {
    enum Kind {
-      AstNode, TokenTree, Identifier,
+      AstNode,
+      TokenTree,
+      Identifier,
    };
 
-   explicit MacroVariable(Kind kind)
-      : kind(kind)
+   explicit MacroVariable(Kind kind) : kind(kind)
    {
       if (kind == AstNode) {
-         new(&Values) std::vector<StmtOrDecl>;
+         new (&Values) std::vector<StmtOrDecl>;
       }
       else if (kind == TokenTree) {
-         new(&Tokens) std::vector<std::vector<Token>>;
+         new (&Tokens) std::vector<std::vector<Token>>;
       }
       else if (kind == Identifier) {
-         new(&Idents) std::vector<Token>;
+         new (&Idents) std::vector<Token>;
       }
    }
 
-   MacroVariable(MacroVariable &&other) noexcept : kind(other.kind)
+   MacroVariable(MacroVariable&& other) noexcept : kind(other.kind)
    {
       if (kind == AstNode) {
-         new(&Values) std::vector<StmtOrDecl>(move(other.Values));
+         new (&Values) std::vector<StmtOrDecl>(move(other.Values));
       }
       else if (kind == TokenTree) {
-         new(&Tokens) std::vector<std::vector<Token>>(move(other.Tokens));
+         new (&Tokens) std::vector<std::vector<Token>>(move(other.Tokens));
       }
       else if (kind == Identifier) {
-         new(&Idents) std::vector<Token>(move(other.Idents));
+         new (&Idents) std::vector<Token>(move(other.Idents));
       }
    }
 
-   MacroVariable &operator=(MacroVariable &&other)
+   MacroVariable& operator=(MacroVariable&& other)
    {
       destroyValue();
-      new(this) MacroVariable(move(other));
+      new (this) MacroVariable(move(other));
 
       return *this;
    }
 
-   ~MacroVariable()
-   {
-      destroyValue();
-   }
+   ~MacroVariable() { destroyValue(); }
 
    Kind getKind() const { return kind; }
-   std::vector<StmtOrDecl> &getValues()
+   std::vector<StmtOrDecl>& getValues()
    {
       assert(kind == AstNode);
       return Values;
    }
 
-   std::vector<std::vector<Token>> &getTokens()
+   std::vector<std::vector<Token>>& getTokens()
    {
       assert(kind == TokenTree);
       return Tokens;
    }
 
-   std::vector<Token> &getIdents()
+   std::vector<Token>& getIdents()
    {
       assert(kind == Identifier);
       return Idents;
@@ -1223,19 +1237,18 @@ private:
 using VariableMap = llvm::DenseMap<const IdentifierInfo*, MacroVariable>;
 
 class PatternMatcher {
-   Parser &parser;
-   VariableMap &VarMap;
-   PatternFragment *State;
+   Parser& parser;
+   VariableMap& VarMap;
+   PatternFragment* State;
 
    struct MatchFailureReason {
-      MatchFailureReason(MessageKind msg,
-                         SourceLocation PatternLoc,
-                         const Token &ExpectedTok1, const Token &ExpectedTok2,
-                         const Token &GivenTok)
-         : msg(msg), PatternLoc(PatternLoc),
-           ExpectedTok1(ExpectedTok1), ExpectedTok2(ExpectedTok2),
-           GivenTok(GivenTok)
-      { }
+      MatchFailureReason(MessageKind msg, SourceLocation PatternLoc,
+                         const Token& ExpectedTok1, const Token& ExpectedTok2,
+                         const Token& GivenTok)
+          : msg(msg), PatternLoc(PatternLoc), ExpectedTok1(ExpectedTok1),
+            ExpectedTok2(ExpectedTok2), GivenTok(GivenTok)
+      {
+      }
 
       MatchFailureReason() : msg(diag::_first_err) {}
 
@@ -1250,21 +1263,20 @@ class PatternMatcher {
    /// Reasons for failed pattern matches.
    std::vector<MatchFailureReason> FailureReasons;
 
-   bool compatibleTokens(const Token &Given, const Token &Needed);
+   bool compatibleTokens(const Token& Given, const Token& Needed);
    bool moveNext();
 
 public:
-   PatternMatcher(Parser &parser, VariableMap &VarMap)
-      : parser(parser), VarMap(VarMap),
-        State(nullptr)
+   PatternMatcher(Parser& parser, VariableMap& VarMap)
+       : parser(parser), VarMap(VarMap), State(nullptr)
    {
    }
 
-   bool match(MacroPattern *Pat);
-   void diagnose(MacroDecl *D);
+   bool match(MacroPattern* Pat);
+   void diagnose(MacroDecl* D);
 };
 
-bool PatternMatcher::match(MacroPattern *Pat)
+bool PatternMatcher::match(MacroPattern* Pat)
 {
    State = Pat->getPattern();
 
@@ -1281,7 +1293,7 @@ bool PatternMatcher::match(MacroPattern *Pat)
    return !State->isErrorState();
 }
 
-static void printTok(const Token &Tok, llvm::raw_ostream &OS)
+static void printTok(const Token& Tok, llvm::raw_ostream& OS)
 {
    if (!Tok)
       return;
@@ -1304,7 +1316,7 @@ static void printTok(const Token &Tok, llvm::raw_ostream &OS)
    }
 }
 
-void PatternMatcher::diagnose(MacroDecl *D)
+void PatternMatcher::diagnose(MacroDecl* D)
 {
    assert(FailureReasons.size() == D->getNumPatterns());
 
@@ -1316,7 +1328,7 @@ void PatternMatcher::diagnose(MacroDecl *D)
    llvm::raw_string_ostream Tok1OS(Tok1);
    llvm::raw_string_ostream Tok2OS(Tok2);
 
-   for (auto &Reason : FailureReasons) {
+   for (auto& Reason : FailureReasons) {
       if (!Reason.PatternLoc)
          continue;
 
@@ -1342,15 +1354,18 @@ void PatternMatcher::diagnose(MacroDecl *D)
    }
 }
 
-bool PatternMatcher::compatibleTokens(const Token &Given, const Token &Needed)
+bool PatternMatcher::compatibleTokens(const Token& Given, const Token& Needed)
 {
    if (Given.getKind() != Needed.getKind())
       return false;
 
    switch (Needed.getKind()) {
-   case tok::ident: case tok::op_ident:
+   case tok::ident:
+   case tok::op_ident:
       return Given.getIdentifierInfo() == Needed.getIdentifierInfo();
-   case tok::stringliteral: case tok::integerliteral: case tok::fpliteral:
+   case tok::stringliteral:
+   case tok::integerliteral:
+   case tok::fpliteral:
    case tok::charliteral:
       return Given.getText() == Needed.getText();
    default:
@@ -1360,11 +1375,11 @@ bool PatternMatcher::compatibleTokens(const Token &Given, const Token &Needed)
 
 bool PatternMatcher::moveNext()
 {
-   PatternFragment *NextState               = nullptr;
-   PatternFragment *UnconditionalTransition = nullptr;
-   PatternFragment *VariableTransition      = nullptr;
+   PatternFragment* NextState = nullptr;
+   PatternFragment* UnconditionalTransition = nullptr;
+   PatternFragment* VariableTransition = nullptr;
 
-   for (auto &Trans : State->getTransitions()) {
+   for (auto& Trans : State->getTransitions()) {
       if (!Trans)
          continue;
 
@@ -1400,9 +1415,9 @@ bool PatternMatcher::moveNext()
       }
       else {
          FailureReasons.emplace_back(
-            diag::note_pattern_not_viable_expected_tok,
-            State->getLoc(), State->getTransitions()[0].Tok,
-            State->getTransitions()[1].Tok, parser.currentTok());
+             diag::note_pattern_not_viable_expected_tok, State->getLoc(),
+             State->getTransitions()[0].Tok, State->getTransitions()[1].Tok,
+             parser.currentTok());
 
          return false;
       }
@@ -1424,17 +1439,18 @@ bool PatternMatcher::moveNext()
       case PatternFragment::Ident: {
          if (!parser.currentTok().oneOf(tok::ident, tok::op_ident)) {
             FailureReasons.emplace_back(
-               diag::note_pattern_not_viable_expected_tok,
-               NextState->getLoc(), Token(tok::ident),
-               Token(), parser.currentTok());
+                diag::note_pattern_not_viable_expected_tok, NextState->getLoc(),
+                Token(tok::ident), Token(), parser.currentTok());
 
             return false;
          }
 
          auto It = VarMap.find(NextState->getVariableName());
          if (It == VarMap.end()) {
-            It = VarMap.try_emplace(NextState->getVariableName(),
-                                    MacroVariable::Identifier).first;
+            It = VarMap
+                     .try_emplace(NextState->getVariableName(),
+                                  MacroVariable::Identifier)
+                     .first;
          }
 
          It->getSecond().getIdents().push_back(parser.currentTok());
@@ -1453,11 +1469,13 @@ bool PatternMatcher::moveNext()
       case PatternFragment::Tok: {
          auto It = VarMap.find(NextState->getVariableName());
          if (It == VarMap.end()) {
-            It = VarMap.try_emplace(NextState->getVariableName(),
-                                    MacroVariable::TokenTree).first;
+            It = VarMap
+                     .try_emplace(NextState->getVariableName(),
+                                  MacroVariable::TokenTree)
+                     .first;
          }
 
-         auto &Toks = It->getSecond().getTokens().emplace_back();
+         auto& Toks = It->getSecond().getTokens().emplace_back();
 
          Toks.push_back(parser.currentTok());
          parser.advance();
@@ -1472,7 +1490,7 @@ bool PatternMatcher::moveNext()
          lex::Token NextTok1;
          lex::Token NextTok2;
 
-         for (auto &Trans : NextState->getTransitions()) {
+         for (auto& Trans : NextState->getTransitions()) {
             if (!Trans.isUnconditional()) {
                if (NextTok1.getKind() == tok::sentinel) {
                   NextTok1 = Trans.Tok;
@@ -1489,11 +1507,13 @@ bool PatternMatcher::moveNext()
 
          auto It = VarMap.find(NextState->getVariableName());
          if (It == VarMap.end()) {
-            It = VarMap.try_emplace(NextState->getVariableName(),
-                                    MacroVariable::TokenTree).first;
+            It = VarMap
+                     .try_emplace(NextState->getVariableName(),
+                                  MacroVariable::TokenTree)
+                     .first;
          }
 
-         auto &Toks = It->getSecond().getTokens().emplace_back();
+         auto& Toks = It->getSecond().getTokens().emplace_back();
          while (!compatibleTokens(parser.currentTok(), NextTok1)
                 && !compatibleTokens(parser.currentTok(), NextTok2)
                 && !parser.currentTok().is(tok::eof)) {
@@ -1528,18 +1548,20 @@ bool PatternMatcher::moveNext()
 
       auto It = VarMap.find(NextState->getVariableName());
       if (It == VarMap.end()) {
-         It = VarMap.try_emplace(NextState->getVariableName(),
-                                 MacroVariable::AstNode).first;
+         It = VarMap
+                  .try_emplace(NextState->getVariableName(),
+                               MacroVariable::AstNode)
+                  .first;
       }
 
       It->getSecond().getValues().push_back(SOD);
    }
    else if (NextState->getKind() == PatternFragment::Tokens) {
-      for (auto &Tok : NextState->getTokens().drop_front(1)) {
+      for (auto& Tok : NextState->getTokens().drop_front(1)) {
          if (!compatibleTokens(parser.currentTok(), Tok)) {
             FailureReasons.emplace_back(
-               diag::note_pattern_not_viable_expected_tok,
-               NextState->getLoc(), Tok, Token(), parser.currentTok());
+                diag::note_pattern_not_viable_expected_tok, NextState->getLoc(),
+                Tok, Token(), parser.currentTok());
 
             return false;
          }
@@ -1561,8 +1583,7 @@ ParseResult Parser::parseWithKind(SourceLocation Loc, ExpansionKind Kind, bool)
 
       advance();
       if (!currentTok().is(tok::eof))
-         SP.diagnose(err_leftover_tokens_after_parsing,
-                     Loc, (int)Kind);
+         SP.diagnose(err_leftover_tokens_after_parsing, Loc, (int)Kind);
 
       break;
    case Parser::ExpansionKind::Stmt: {
@@ -1591,11 +1612,11 @@ ParseResult Parser::parseWithKind(SourceLocation Loc, ExpansionKind Kind, bool)
 }
 
 class MacroExpander {
-   SemaPass &SP;
-   MacroPattern *Pat;
-   VariableMap &VarMap;
+   SemaPass& SP;
+   MacroPattern* Pat;
+   VariableMap& VarMap;
    Parser::ExpansionKind Kind;
-   MacroDecl *M;
+   MacroDecl* M;
 
    /// The source location where this macro was expanded.
    SourceLocation ExpandedFrom;
@@ -1622,29 +1643,30 @@ class MacroExpander {
       none,
 
       // Utility
-      stringify, counter, unique_name,
+      stringify,
+      counter,
+      unique_name,
 
       // Text inclusion
-      include_str, include,
+      include_str,
+      include,
 
       // Clang inclusion
-      include_c, include_cxx, include_system_header,
+      include_c,
+      include_cxx,
+      include_system_header,
    };
 
-   bool expandInto(ExpansionFragment *Frag,
-                   llvm::SmallVectorImpl<Token> &Vec,
-                   unsigned idx = 0,
-                   unsigned NumRepetitions = 0,
-                   const IdentifierInfo *ExpandedVarName = nullptr,
+   bool expandInto(ExpansionFragment* Frag, llvm::SmallVectorImpl<Token>& Vec,
+                   unsigned idx = 0, unsigned NumRepetitions = 0,
+                   const IdentifierInfo* ExpandedVarName = nullptr,
                    SourceLocation ExpandedVarLoc = SourceLocation());
 
-   BuiltinMacro getBuiltinMacroKind(const Token &Tok);
-   void checkBuiltinMacros(SmallVectorImpl<Token> &Vec);
+   BuiltinMacro getBuiltinMacroKind(const Token& Tok);
+   void checkBuiltinMacros(SmallVectorImpl<Token>& Vec);
    bool checkBuiltinMacro(StringRef MacroName,
-                          ArrayRef<lex::Token> ExpansionToks,
-                          unsigned &i,
-                          SmallVectorImpl<Token> &Vec,
-                          SourceLocation Loc);
+                          ArrayRef<lex::Token> ExpansionToks, unsigned& i,
+                          SmallVectorImpl<Token>& Vec, SourceLocation Loc);
 
    SourceLocation makeSourceLoc(SourceLocation Loc)
    {
@@ -1652,20 +1674,20 @@ class MacroExpander {
    }
 
 public:
-   MacroExpander(SemaPass &SP, MacroPattern *Pat, VariableMap &VarMap,
-                 Parser::ExpansionKind Kind,
-                 SourceLocation ExpandedFrom,
-                 MacroDecl *M)
-      : SP(SP), Pat(Pat), VarMap(VarMap), Kind(Kind),
-        M(M), ExpandedFrom(ExpandedFrom)
+   MacroExpander(SemaPass& SP, MacroPattern* Pat, VariableMap& VarMap,
+                 Parser::ExpansionKind Kind, SourceLocation ExpandedFrom,
+                 MacroDecl* M)
+       : SP(SP), Pat(Pat), VarMap(VarMap), Kind(Kind), M(M),
+         ExpandedFrom(ExpandedFrom)
    {
-      auto &FileMgr = SP.getCompilationUnit().getFileMgr();
+      auto& FileMgr = SP.getCompilationUnit().getFileMgr();
       BaseOffset = Pat->getSourceLoc().getOffset();
-      ExpansionOffset = FileMgr
-                     .createMacroExpansion(
-                        ExpandedFrom, Pat->getSourceLoc(),
-                        Pat->getSourceLength() + 1,
-                        this->M->getDeclName().getMacroName()).BaseOffset;
+      ExpansionOffset
+          = FileMgr
+                .createMacroExpansion(ExpandedFrom, Pat->getSourceLoc(),
+                                      Pat->getSourceLength() + 1,
+                                      this->M->getDeclName().getMacroName())
+                .BaseOffset;
    }
 
    ParseResult expand();
@@ -1673,15 +1695,15 @@ public:
 
 uint64_t MacroExpander::LastUniqueNameID = 0;
 
-bool MacroExpander::expandInto(ExpansionFragment *Frag,
-                               SmallVectorImpl<Token> &Vec,
-                               unsigned idx,
+bool MacroExpander::expandInto(ExpansionFragment* Frag,
+                               SmallVectorImpl<Token>& Vec, unsigned idx,
                                unsigned NumRepetitions,
-                               const IdentifierInfo *ExpandedVarName,
-                               SourceLocation ExpandedVarLoc) {
+                               const IdentifierInfo* ExpandedVarName,
+                               SourceLocation ExpandedVarLoc)
+{
    switch (Frag->getKind()) {
    case ExpansionFragment::Tokens: {
-      for (auto &Tok : Frag->getTokens()) {
+      for (auto& Tok : Frag->getTokens()) {
          FoundBuiltinMacro |= getBuiltinMacroKind(Tok) != BuiltinMacro::none;
          Vec.emplace_back(Tok, makeSourceLoc(Tok.getSourceLoc()));
       }
@@ -1692,16 +1714,13 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
       auto It = VarMap.find(Frag->getVariableName());
       assert(It != VarMap.end() && "variable not captured!");
 
-      auto &Var = It->getSecond();
-      if (NumRepetitions
-            && Var.size() != 1
-            && NumRepetitions != 1
-            && Var.size() != NumRepetitions) {
+      auto& Var = It->getSecond();
+      if (NumRepetitions && Var.size() != 1 && NumRepetitions != 1
+          && Var.size() != NumRepetitions) {
          SP.diagnose(err_multiple_expanded_macro_variables,
                      Frag->getVariableName()->getIdentifier(),
-                     ExpandedVarName->getIdentifier(),
-                     NumRepetitions, Var.size(),
-                     Frag->getLoc(), ExpandedVarLoc);
+                     ExpandedVarName->getIdentifier(), NumRepetitions,
+                     Var.size(), Frag->getLoc(), ExpandedVarLoc);
 
          return false;
       }
@@ -1713,7 +1732,7 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
       assert(Var.size() > idx && "index out of bounds");
       switch (Var.getKind()) {
       case MacroVariable::AstNode: {
-         auto &SOD = Var.getValues()[idx];
+         auto& SOD = Var.getValues()[idx];
          if (auto Stmt = SOD.asStatement()) {
             if (auto Expr = dyn_cast<Expression>(Stmt)) {
                Vec.emplace_back(Expr, makeSourceLoc(Frag->getLoc()));
@@ -1723,17 +1742,16 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
             }
          }
          else {
-            Vec.emplace_back(SOD.getDecl(),
-                             makeSourceLoc(Frag->getLoc()));
+            Vec.emplace_back(SOD.getDecl(), makeSourceLoc(Frag->getLoc()));
          }
 
          break;
       }
       case MacroVariable::TokenTree: {
-         auto &Toks = Var.getTokens()[idx];
+         auto& Toks = Var.getTokens()[idx];
          auto VarLoc = makeSourceLoc(Frag->getLoc());
 
-         for (auto &Tok : Toks)
+         for (auto& Tok : Toks)
             Vec.emplace_back(Tok, VarLoc);
 
          break;
@@ -1748,13 +1766,13 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
             auto concat = LastTok.getIdentifier().str();
             concat += Var.getIdents()[idx].getIdentifier().str();
 
-            auto *II = &SP.getContext().getIdentifiers().get(concat);
+            auto* II = &SP.getContext().getIdentifiers().get(concat);
             Vec.pop_back();
 
             Vec.emplace_back(II, VarLoc, LastTok.getKind());
          }
          else {
-            auto &Tok = Var.getIdents()[idx];
+            auto& Tok = Var.getIdents()[idx];
             Vec.emplace_back(Tok, VarLoc);
          }
 
@@ -1769,11 +1787,11 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
       auto It = VarMap.find(ExpandedVarName);
       assert(It != VarMap.end() && "variable not captured!");
 
-      auto &Var = It->getSecond();
+      auto& Var = It->getSecond();
       unsigned NumValues = (unsigned)Var.size();
 
       for (unsigned i = 0; i < NumValues; ++i) {
-         for (auto &ExpFrag : Frag->getRepetitionFragments()) {
+         for (auto& ExpFrag : Frag->getRepetitionFragments()) {
             if (!expandInto(ExpFrag, Vec, i, NumValues,
                             Frag->getExpandedVariable(), Frag->getLoc())) {
                return false;
@@ -1785,7 +1803,7 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
    }
    case ExpansionFragment::ConcatExpr: {
       llvm::SmallVector<Token, 8> Toks;
-      for (auto &ExpFrag : Frag->getRepetitionFragments()) {
+      for (auto& ExpFrag : Frag->getRepetitionFragments()) {
          if (!expandInto(ExpFrag, Toks, idx, NumRepetitions, ExpandedVarName,
                          ExpandedVarLoc)) {
             return false;
@@ -1796,7 +1814,7 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
       std::string str;
       llvm::raw_string_ostream OS(str);
 
-      for (auto &Tok : Toks) {
+      for (auto& Tok : Toks) {
          if (Tok.oneOf(tok::space, tok::newline))
             continue;
 
@@ -1820,13 +1838,13 @@ bool MacroExpander::expandInto(ExpansionFragment *Frag,
    return true;
 }
 
-void MacroExpander::checkBuiltinMacros(SmallVectorImpl<Token> &Toks)
+void MacroExpander::checkBuiltinMacros(SmallVectorImpl<Token>& Toks)
 {
    SmallVector<Token, 16> NewVec;
 
    unsigned NumTokens = Toks.size();
    for (unsigned i = 0; i < NumTokens; ++i) {
-      auto &Tok = Toks[i];
+      auto& Tok = Toks[i];
 
       // Expand builtin macros.
       if (Tok.is(tok::macro_name)) {
@@ -1843,28 +1861,28 @@ void MacroExpander::checkBuiltinMacros(SmallVectorImpl<Token> &Toks)
    Toks.append(NewVec.begin(), NewVec.end());
 }
 
-MacroExpander::BuiltinMacro MacroExpander::getBuiltinMacroKind(const Token &Tok)
+MacroExpander::BuiltinMacro MacroExpander::getBuiltinMacroKind(const Token& Tok)
 {
    if (!Tok.is(tok::macro_name)) {
       return BuiltinMacro::none;
    }
 
    return StringSwitch<BuiltinMacro>(Tok.getIdentifier())
-      .Case("stringify", BuiltinMacro::stringify)
-      .Case("counter", BuiltinMacro::counter)
-      .Case("include_str", BuiltinMacro::include_str)
-      .Case("include", BuiltinMacro::include)
-      .Case("include_c", BuiltinMacro::include_c)
-      .Case("include_cxx", BuiltinMacro::include_cxx)
-      .Case("include_system_header", BuiltinMacro::include_system_header)
-      .Default(BuiltinMacro::none);
+       .Case("stringify", BuiltinMacro::stringify)
+       .Case("counter", BuiltinMacro::counter)
+       .Case("include_str", BuiltinMacro::include_str)
+       .Case("include", BuiltinMacro::include)
+       .Case("include_c", BuiltinMacro::include_c)
+       .Case("include_cxx", BuiltinMacro::include_cxx)
+       .Case("include_system_header", BuiltinMacro::include_system_header)
+       .Default(BuiltinMacro::none);
 }
 
 bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
                                       ArrayRef<Token> ExpansionToks,
-                                      unsigned &i,
-                                      SmallVectorImpl<Token> &Vec,
-                                      SourceLocation Loc) {
+                                      unsigned& i, SmallVectorImpl<Token>& Vec,
+                                      SourceLocation Loc)
+{
    // Only allow parentheses as delimiters for builtin macros.
    if (!ExpansionToks[i + 1].is(tok::open_paren)) {
       return false;
@@ -1902,9 +1920,8 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
    }
 
    unsigned TokensEnd = i;
-   ArrayRef<Token> Tokens = ExpansionToks
-      .drop_front(TokensStart + 2)
-      .drop_back(ExpansionToks.size() - TokensEnd);
+   ArrayRef<Token> Tokens = ExpansionToks.drop_front(TokensStart + 2)
+                                .drop_back(ExpansionToks.size() - TokensEnd);
 
    switch (MacroKind) {
    case BuiltinMacro::none:
@@ -1913,7 +1930,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       std::string str;
       {
          llvm::raw_string_ostream OS(str);
-         for (auto &Tok : Tokens) {
+         for (auto& Tok : Tokens) {
             if (Tok.is(tok::stringliteral)) {
                OS << Tok.getText();
             }
@@ -1929,12 +1946,12 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       SourceLocation EndLoc = Tokens.empty() ? Loc : Tokens.back().getEndLoc();
       SourceRange SR(Loc, EndLoc);
 
-      auto *S = StringLiteral::Create(SP.Context, SR,
-                                      string(Alloc, str.size()));
+      auto* S
+          = StringLiteral::Create(SP.Context, SR, string(Alloc, str.size()));
 
       Vec.emplace_back(S, Loc);
-//      Vec.emplace_back(Alloc, str.size(), tok::stringliteral,
-//                       Tokens.front().getSourceLoc());
+      //      Vec.emplace_back(Alloc, str.size(), tok::stringliteral,
+      //                       Tokens.front().getSourceLoc());
 
       return true;
    }
@@ -1949,9 +1966,10 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
          counterIndex = 0;
       }
       else {
-         SP.diagnose(err_generic_error,
-                     "'counter!' expects an integer literal as its only argument",
-                     Tokens.front().getSourceLoc());
+         SP.diagnose(
+             err_generic_error,
+             "'counter!' expects an integer literal as its only argument",
+             Tokens.front().getSourceLoc());
 
          counterIndex = 0;
       }
@@ -1959,7 +1977,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       llvm::APSInt Val(llvm::APInt(64, CounterValues[counterIndex]++, true),
                        false);
 
-      auto *I = IntegerLiteral::Create(SP.Context, Loc, SP.Context.getIntTy(),
+      auto* I = IntegerLiteral::Create(SP.Context, Loc, SP.Context.getIntTy(),
                                        move(Val));
 
       Vec.emplace_back(I, Loc);
@@ -1993,21 +2011,20 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
          return true;
       }
 
-      auto &FileMgr = *SP.getDiags().getFileMgr();
+      auto& FileMgr = *SP.getDiags().getFileMgr();
 
       auto FileName = Tokens.front().getText();
       std::string realFile;
 
       if (!FileName.startswith(StringRef(&fs::PathSeperator, 1))) {
-         auto includeDirs = SP.getCompilationUnit().getOptions().getIncludeDirs()
-                              .vec();
+         auto includeDirs
+             = SP.getCompilationUnit().getOptions().getIncludeDirs().vec();
 
-         includeDirs.push_back(
-            fs::getPath(FileMgr.getFileName(Loc).str()));
+         includeDirs.push_back(fs::getPath(FileMgr.getFileName(Loc).str()));
 
          auto Path = fs::getPath(FileName);
          if (!Path.empty()) {
-            for (auto &Dir : includeDirs) {
+            for (auto& Dir : includeDirs) {
                fs::appendToPath(Dir, Path);
             }
 
@@ -2029,17 +2046,17 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
 
       auto File = FileMgr.openFile(realFile);
       if (MacroKind == BuiltinMacro::include_str) {
-         auto S = StringLiteral::Create(SP.getContext(), Loc,
-                                        llvm::StringRef(
-                                           File.Buf->getBufferStart(),
-                                           File.Buf->getBufferSize()));
+         auto S = StringLiteral::Create(
+             SP.getContext(), Loc,
+             llvm::StringRef(File.Buf->getBufferStart(),
+                             File.Buf->getBufferSize()));
 
          Vec.emplace_back(S, Loc);
          return true;
       }
 
-      Lexer lexer(SP.getContext().getIdentifiers(), SP.getDiags(),
-                  File.Buf, File.SourceId, File.BaseOffset);
+      Lexer lexer(SP.getContext().getIdentifiers(), SP.getDiags(), File.Buf,
+                  File.SourceId, File.BaseOffset);
 
       while (!lexer.eof()) {
          Vec.emplace_back(lexer.currentTok());
@@ -2051,7 +2068,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
    case BuiltinMacro::include_c:
    case BuiltinMacro::include_cxx:
    case BuiltinMacro::include_system_header: {
-      ClangImporter &Importer = SP.getCompilationUnit().getClangImporter();
+      ClangImporter& Importer = SP.getCompilationUnit().getClangImporter();
 
       if (Tokens.size() != 1 || !Tokens.front().is(tok::stringliteral)) {
          SP.diagnose(err_generic_error, "expected string literal");
@@ -2077,7 +2094,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
 ParseResult MacroExpander::expand()
 {
    SmallVector<Token, 0> Tokens;
-   for (auto &Frag : Pat->getExpansion()) {
+   for (auto& Frag : Pat->getExpansion()) {
       if (!expandInto(Frag, Tokens)) {
          return ParseError();
       }
@@ -2087,8 +2104,8 @@ ParseResult MacroExpander::expand()
       checkBuiltinMacros(Tokens);
    }
 
-   unsigned SourceID = SP.getCompilationUnit().getFileMgr()
-                         .getSourceId(ExpandedFrom);
+   unsigned SourceID
+       = SP.getCompilationUnit().getFileMgr().getSourceId(ExpandedFrom);
 
    lex::Lexer Lexer(SP.getContext().getIdentifiers(), SP.getDiags(), Tokens,
                     SourceID);
@@ -2097,25 +2114,23 @@ ParseResult MacroExpander::expand()
    return parser.parseWithKind(ExpandedFrom, Kind);
 }
 
-ParseResult Parser::expandMacro(SemaPass &SP,
-                                MacroDecl *Macro,
-                                StmtOrDecl SOD,
-                                ArrayRef<Token> Tokens,
-                                ExpansionKind Kind) {
+ParseResult Parser::expandMacro(SemaPass& SP, MacroDecl* Macro, StmtOrDecl SOD,
+                                ArrayRef<Token> Tokens, ExpansionKind Kind)
+{
    if (Macro->isInvalid()) {
       return ParseError();
    }
 
-   auto &Context = SP.getContext();
+   auto& Context = SP.getContext();
 
    VariableMap VarMap;
-   MacroPattern *Match = nullptr;
+   MacroPattern* Match = nullptr;
 
    lex::Lexer Lexer(Context.getIdentifiers(), SP.getDiags(), Tokens, 0);
    parse::Parser Parser(Context, &Lexer, SP);
 
    PatternMatcher Matcher(Parser, VarMap);
-   for (auto &Pat : Macro->getPatterns()) {
+   for (auto& Pat : Macro->getPatterns()) {
       Parser.skipWhitespace();
 
       if (Matcher.match(Pat)) {
@@ -2135,8 +2150,8 @@ ParseResult Parser::expandMacro(SemaPass &SP,
       return ParseError();
    }
 
-   return MacroExpander(SP, Match, VarMap, Kind,
-                        SOD.getSourceLoc(), Macro).expand();
+   return MacroExpander(SP, Match, VarMap, Kind, SOD.getSourceLoc(), Macro)
+       .expand();
 }
 
 } // namespace parse

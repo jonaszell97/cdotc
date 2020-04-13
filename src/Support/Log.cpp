@@ -1,6 +1,6 @@
 #ifndef NDEBUG
 
-#include "Log.h"
+#include "cdotc/Support/Log.h"
 #include <llvm/Support/CommandLine.h>
 
 namespace cl = llvm::cl;
@@ -12,11 +12,9 @@ namespace detail {
 
 /// The main output file for the compilation.
 static cl::opt<std::string> DebugLog(
-   "debug-logs",
-   cl::desc("see Log.h for possible values(for debugging purposes only)"),
-   cl::value_desc("logs"),
-   cl::init("0"),
-   cl::Hidden);
+    "debug-logs",
+    cl::desc("see Log.h for possible values(for debugging purposes only)"),
+    cl::value_desc("logs"), cl::init("0"), cl::Hidden);
 
 static llvm::Optional<uint64_t> resolvedLogs;
 

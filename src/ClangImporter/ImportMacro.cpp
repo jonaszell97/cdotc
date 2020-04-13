@@ -1,11 +1,11 @@
 #include "ImporterImpl.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "AST/Expression.h"
-#include "Driver/Compiler.h"
-#include "Sema/SemaPass.h"
-#include "Support/LiteralParser.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Expression.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/LiteralParser.h"
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Lex/Preprocessor.h>
@@ -16,40 +16,47 @@ using namespace cdot::support;
 
 using ImporterImpl = ClangImporter::ImporterImpl;
 
-lex::Token ImporterImpl::getToken(const clang::Token &Tok)
+lex::Token ImporterImpl::getToken(const clang::Token& Tok)
 {
    using namespace lex;
    namespace cl = clang::tok;
 
-   auto &Ctx = CI.getContext();
-   auto &Idents = Ctx.getIdentifiers();
+   auto& Ctx = CI.getContext();
+   auto& Idents = Ctx.getIdentifiers();
    SourceLocation Loc = getSourceLoc(Tok.getLocation());
 
-#  define SAME_TOK(KIND) case cl::KIND: return Token(tok::KIND, Loc)
-#  define REPLACE(CLANG, CDOT) case cl::CLANG: return Token(tok::CDOT, Loc)
-#  define KEYWORD(KW) case cl::kw_##KW: return Token(tok::kw_##KW, Loc)
-#  define KEYWORD_ID(KW) case cl::kw_##KW:                              \
-      return Token(&Idents.get(Tok.getIdentifierInfo()->getName()),     \
-                   Loc, tok::ident)
+#define SAME_TOK(KIND)                                                         \
+   case cl::KIND:                                                              \
+      return Token(tok::KIND, Loc)
+#define REPLACE(CLANG, CDOT)                                                   \
+   case cl::CLANG:                                                             \
+      return Token(tok::CDOT, Loc)
+#define KEYWORD(KW)                                                            \
+   case cl::kw_##KW:                                                           \
+      return Token(tok::kw_##KW, Loc)
+#define KEYWORD_ID(KW)                                                         \
+   case cl::kw_##KW:                                                           \
+      return Token(&Idents.get(Tok.getIdentifierInfo()->getName()), Loc,       \
+                   tok::ident)
 
    switch (Tok.getKind()) {
-   SAME_TOK(eof);
-   
+      SAME_TOK(eof);
+
    case cl::identifier:
    case cl::raw_identifier:
-      return Token(&Idents.get(Tok.getIdentifierInfo()->getName()), Loc, 
+      return Token(&Idents.get(Tok.getIdentifierInfo()->getName()), Loc,
                    tok::ident);
    case cl::numeric_constant: {
       // FIXME detect this better.
       StringRef Txt(Tok.getLiteralData(), Tok.getLength());
 
-      char *Data = Ctx.Allocate<char>(Tok.getLength());
+      char* Data = Ctx.Allocate<char>(Tok.getLength());
       std::copy(Txt.begin(), Txt.end(), Data);
 
       if (Txt.find('.') != string::npos) {
          return Token(Data, Txt.size(), tok::fpliteral, Loc);
       }
-      
+
       return Token(Data, Txt.size(), tok::integerliteral, Loc);
    }
    case cl::char_constant:
@@ -58,7 +65,7 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
    case cl::utf32_char_constant: {
       StringRef Txt(Tok.getLiteralData(), Tok.getLength());
 
-      char *Data = Ctx.Allocate<char>(Tok.getLength());
+      char* Data = Ctx.Allocate<char>(Tok.getLength());
       std::copy(Txt.begin(), Txt.end(), Data);
 
       return Token(Data, Tok.getLength(), tok::charliteral, Loc);
@@ -70,62 +77,62 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
    case cl::utf32_string_literal: {
       StringRef Txt(Tok.getLiteralData(), Tok.getLength());
 
-      char *Data = Ctx.Allocate<char>(Tok.getLength());
+      char* Data = Ctx.Allocate<char>(Tok.getLength());
       std::copy(Txt.begin(), Txt.end(), Data);
 
       return Token(Data, Tok.getLength(), tok::stringliteral, Loc);
    }
 
-   REPLACE(l_square, open_square);
-   REPLACE(r_square, close_square);
+      REPLACE(l_square, open_square);
+      REPLACE(r_square, close_square);
 
-   REPLACE(l_paren, open_paren);
-   REPLACE(r_paren, close_paren);
+      REPLACE(l_paren, open_paren);
+      REPLACE(r_paren, close_paren);
 
-   REPLACE(l_brace, open_brace);
-   REPLACE(r_brace, close_brace);
+      REPLACE(l_brace, open_brace);
+      REPLACE(r_brace, close_brace);
 
-   SAME_TOK(period);
-   REPLACE(ellipsis, triple_period);
-   REPLACE(amp, op_and);
-   REPLACE(ampamp, logical_and);
-   REPLACE(ampequal, and_equals);
-   REPLACE(star, times);
-   REPLACE(starequal, times_equals);
-   SAME_TOK(plus);
-   REPLACE(plusplus, plus_plus);
-   REPLACE(plusequal, plus_equals);
-   SAME_TOK(minus);
-   REPLACE(minusminus, minus_minus);
-   REPLACE(minusequal, minus_equals);
-   SAME_TOK(tilde);
-   SAME_TOK(exclaim);
-   REPLACE(exclaimequal, exclaim_equals);
-   REPLACE(slash, div);
-   REPLACE(slashequal, div_equals);
-   SAME_TOK(percent);
-   REPLACE(percentequal, mod_equals);
-   REPLACE(less, smaller);
-   REPLACE(lessless, shl);
-   REPLACE(lessequal, smaller_equals);
-   REPLACE(lesslessequal, shl_equals);
-   REPLACE(greater, greater);
-   REPLACE(greatergreater, ashr);
-   REPLACE(greaterequal, greater_equals);
-   REPLACE(greatergreaterequal, ashr_equals);
-   SAME_TOK(caret);
-   REPLACE(caretequal, xor_equals);
-   REPLACE(pipe, op_or);
-   REPLACE(pipepipe, logical_or);
-   REPLACE(pipeequal, or_equals);
-   SAME_TOK(question);
-   SAME_TOK(colon);
-   REPLACE(semi, semicolon);
-   REPLACE(equal, equals);
-   REPLACE(equalequal, double_equals);
-   SAME_TOK(comma);
-   REPLACE(hash, pound);
-   REPLACE(arrow, arrow_single);
+      SAME_TOK(period);
+      REPLACE(ellipsis, triple_period);
+      REPLACE(amp, op_and);
+      REPLACE(ampamp, logical_and);
+      REPLACE(ampequal, and_equals);
+      REPLACE(star, times);
+      REPLACE(starequal, times_equals);
+      SAME_TOK(plus);
+      REPLACE(plusplus, plus_plus);
+      REPLACE(plusequal, plus_equals);
+      SAME_TOK(minus);
+      REPLACE(minusminus, minus_minus);
+      REPLACE(minusequal, minus_equals);
+      SAME_TOK(tilde);
+      SAME_TOK(exclaim);
+      REPLACE(exclaimequal, exclaim_equals);
+      REPLACE(slash, div);
+      REPLACE(slashequal, div_equals);
+      SAME_TOK(percent);
+      REPLACE(percentequal, mod_equals);
+      REPLACE(less, smaller);
+      REPLACE(lessless, shl);
+      REPLACE(lessequal, smaller_equals);
+      REPLACE(lesslessequal, shl_equals);
+      REPLACE(greater, greater);
+      REPLACE(greatergreater, ashr);
+      REPLACE(greaterequal, greater_equals);
+      REPLACE(greatergreaterequal, ashr_equals);
+      SAME_TOK(caret);
+      REPLACE(caretequal, xor_equals);
+      REPLACE(pipe, op_or);
+      REPLACE(pipepipe, logical_or);
+      REPLACE(pipeequal, or_equals);
+      SAME_TOK(question);
+      SAME_TOK(colon);
+      REPLACE(semi, semicolon);
+      REPLACE(equal, equals);
+      REPLACE(equalequal, double_equals);
+      SAME_TOK(comma);
+      REPLACE(hash, pound);
+      REPLACE(arrow, arrow_single);
 
    case cl::spaceship:
    case cl::periodstar:
@@ -137,24 +144,26 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
       return Token(&Idents.get(Tok.getIdentifierInfo()->getName()), Loc,
                    tok::op_ident);
 
-   case cl::hashhash: return Token(&Idents.get("##"), Loc, tok::op_ident);
-   case cl::hashat: return Token(&Idents.get("#@"), Loc, tok::op_ident);
-   
-   SAME_TOK(at);
+   case cl::hashhash:
+      return Token(&Idents.get("##"), Loc, tok::op_ident);
+   case cl::hashat:
+      return Token(&Idents.get("#@"), Loc, tok::op_ident);
 
-   KEYWORD_ID(auto);
-   KEYWORD(break);
-   KEYWORD(case);
-   KEYWORD_ID(char);
-   KEYWORD_ID(const);
-   KEYWORD(continue);
-   KEYWORD_ID(default);
-   KEYWORD_ID(do);
-   KEYWORD_ID(double);
-   KEYWORD(else);
-   KEYWORD(enum);
-   KEYWORD_ID(extern);
-   KEYWORD_ID(float);
+      SAME_TOK(at);
+
+      KEYWORD_ID(auto);
+      KEYWORD(break);
+      KEYWORD(case);
+      KEYWORD_ID(char);
+      KEYWORD_ID(const);
+      KEYWORD(continue);
+      KEYWORD_ID(default);
+      KEYWORD_ID(do);
+      KEYWORD_ID(double);
+      KEYWORD(else);
+      KEYWORD(enum);
+      KEYWORD_ID(extern);
+      KEYWORD_ID(float);
    KEYWORD(for);
    KEYWORD_ID(goto);
    KEYWORD(if);
@@ -163,7 +172,7 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
    KEYWORD_ID(long);
    KEYWORD_ID(register);
    KEYWORD_ID(restrict);
-   KEYWORD(return);
+   KEYWORD(return );
    KEYWORD_ID(short);
    KEYWORD_ID(signed);
    KEYWORD_ID(sizeof);
@@ -234,7 +243,7 @@ lex::Token ImporterImpl::getToken(const clang::Token &Tok)
 #undef KEYWORD_ID
 }
 
-static bool isSimpleConstant(clang::MacroInfo *MI)
+static bool isSimpleConstant(clang::MacroInfo* MI)
 {
    if (MI->getNumTokens() != 1)
       return false;
@@ -242,11 +251,11 @@ static bool isSimpleConstant(clang::MacroInfo *MI)
    return MI->getReplacementToken(0).isLiteral();
 }
 
-static bool isSimpleExpression(clang::MacroInfo *MI)
+static bool isSimpleExpression(clang::MacroInfo* MI)
 {
    namespace cl = clang::tok;
 
-   for (auto &Tok : MI->tokens()) {
+   for (auto& Tok : MI->tokens()) {
       switch (Tok.getKind()) {
       case cl::numeric_constant:
       case cl::char_constant:
@@ -306,16 +315,14 @@ static bool isSimpleExpression(clang::MacroInfo *MI)
          return false;
       }
    }
-   
+
    return true;
 }
 
-static void importMacro(ImporterImpl &Importer,
-                        ASTContext &Ctx,
-                        SemaPass &Sema,
-                        DeclContext *DC,
-                        clang::IdentifierInfo *Name,
-                        clang::MacroInfo *MI) {
+static void importMacro(ImporterImpl& Importer, ASTContext& Ctx, SemaPass& Sema,
+                        DeclContext* DC, clang::IdentifierInfo* Name,
+                        clang::MacroInfo* MI)
+{
    bool IsSimpleConstant = isSimpleConstant(MI);
    bool HasNoTokens = MI->getNumTokens() == 0;
    bool IsSimpleExpression = false;
@@ -326,9 +333,10 @@ static void importMacro(ImporterImpl &Importer,
 
    if (IsSimpleConstant || HasNoTokens || IsSimpleExpression) {
       SourceLocation Loc = Importer.getSourceLoc(MI->getDefinitionLoc());
-      Expression *Expr;
+      Expression* Expr;
 
-      // Handle the simple case of a constant first, these get imported as aliases.
+      // Handle the simple case of a constant first, these get imported as
+      // aliases.
       if (IsSimpleConstant) {
          Expr = Importer.expressionFromLiteralToken(MI->getReplacementToken(0));
       }
@@ -344,11 +352,10 @@ static void importMacro(ImporterImpl &Importer,
       if (!Expr)
          return;
 
-      auto *SE = StaticExpr::Create(Ctx, Expr);
-      auto *Alias = AliasDecl::Create(Ctx, Loc,
-                                  AccessSpecifier::Public,
-                                  Ctx.getIdentifiers().get(Name->getName()),
-                                  SourceType(Ctx.getAutoType()), SE, {});
+      auto* SE = StaticExpr::Create(Ctx, Expr);
+      auto* Alias = AliasDecl::Create(Ctx, Loc, AccessSpecifier::Public,
+                                      Ctx.getIdentifiers().get(Name->getName()),
+                                      SourceType(Ctx.getAutoType()), SE, {});
 
       Alias->setImportedFromClang(true);
       Sema.ActOnDecl(DC, Alias);
@@ -366,14 +373,13 @@ static void importMacro(ImporterImpl &Importer,
    SourceLocation Loc = Importer.getSourceLoc(MI->getDefinitionLoc());
 
    unsigned i = 0;
-   for (auto *ParamName : MI->params()) {
-      auto *Pat = PatternFragment::Create(Ctx, Loc,
-                                          PatternFragment::Any,
-                                          &Ctx.getIdentifiers().get(
-                                             ParamName->getName()));
+   for (auto* ParamName : MI->params()) {
+      auto* Pat = PatternFragment::Create(
+          Ctx, Loc, PatternFragment::Any,
+          &Ctx.getIdentifiers().get(ParamName->getName()));
 
       PatternFragments.back()->addTransition(
-         lex::Token(i++ != 0 ? lex::tok::comma : lex::tok::sentinel), Pat);
+          lex::Token(i++ != 0 ? lex::tok::comma : lex::tok::sentinel), Pat);
 
       ParamNames.insert(ParamName);
       PatternFragments.push_back(Pat);
@@ -382,19 +388,20 @@ static void importMacro(ImporterImpl &Importer,
    // Handle variadic macro
    if (MI->isVariadic()) {
       // The final fragment that will merge all paths.
-      auto *Merge = PatternFragment::Create(Ctx);
+      auto* Merge = PatternFragment::Create(Ctx);
 
       // Add an unconditional transition to the first expansion.
-      auto *Previous = PatternFragments.back();
+      auto* Previous = PatternFragments.back();
 
       /// Add a state to skip a leading comma.
-      auto *SkippedComma = PatternFragment::Create(Ctx);
+      auto* SkippedComma = PatternFragment::Create(Ctx);
       Previous->addTransition(lex::Token(lex::tok::comma), SkippedComma);
       Previous->addTransition(lex::Token(), SkippedComma);
 
       // Create a repetition fragment.
-      auto *Repetition = PatternFragment::Create(Ctx, Loc,
-         PatternFragment::Any, &Ctx.getIdentifiers().get("__VA_ARGS__"));
+      auto* Repetition
+          = PatternFragment::Create(Ctx, Loc, PatternFragment::Any,
+                                    &Ctx.getIdentifiers().get("__VA_ARGS__"));
 
       // Has to happen at least once, transition to error if not
       SkippedComma->addTransition(lex::Token(), Repetition);
@@ -426,9 +433,8 @@ static void importMacro(ImporterImpl &Importer,
       if (CurrToks.empty())
          return;
 
-      auto *Exp = ExpansionFragment::Create(Ctx,
-                                            CurrToks.front().getSourceLoc(),
-                                            CurrToks);
+      auto* Exp = ExpansionFragment::Create(
+          Ctx, CurrToks.front().getSourceLoc(), CurrToks);
 
       CurrToks.clear();
       ExpansionFragments.push_back(Exp);
@@ -439,27 +445,26 @@ static void importMacro(ImporterImpl &Importer,
       auto First = MI->getReplacementToken(0);
       auto Last = MI->getReplacementToken(MI->getNumTokens() - 1);
 
-      auto &SourceMgr = Importer.Instance->getPreprocessor().getSourceManager();
+      auto& SourceMgr = Importer.Instance->getPreprocessor().getSourceManager();
       Len = SourceMgr.getFileOffset(Last.getLocation())
-         - SourceMgr.getFileOffset(First.getLocation())
-         + Last.getLength();
+            - SourceMgr.getFileOffset(First.getLocation()) + Last.getLength();
    }
 
-   for (auto &Tok : MI->tokens()) {
+   for (auto& Tok : MI->tokens()) {
       auto CopyTok = Importer.getToken(Tok);
       Len += CopyTok.getLength();
 
       if (CopyTok.is(lex::tok::ident)) {
          if (Tok.getIdentifierInfo()->isStr("__VA_ARGS__")) {
             // Expand variadic arguments.
-            auto *Var = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(),
+            auto* Var = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(),
                                                   CopyTok.getIdentifierInfo());
 
-            auto *Comma = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(),
-                                                    lex::Token(lex::tok::comma));
+            auto* Comma = ExpansionFragment::Create(
+                Ctx, CopyTok.getSourceLoc(), lex::Token(lex::tok::comma));
 
-            auto *Exp = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(),
-                                                  {Var,Comma},
+            auto* Exp = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(),
+                                                  {Var, Comma},
                                                   CopyTok.getIdentifierInfo());
 
             ExpansionFragments.push_back(Exp);
@@ -468,9 +473,9 @@ static void importMacro(ImporterImpl &Importer,
          if (ParamNames.find(Tok.getIdentifierInfo()) != ParamNames.end()) {
             FlushToks();
 
-            auto *Ident = CopyTok.getIdentifierInfo();
-            auto *Exp = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(),
-                                                  Ident);
+            auto* Ident = CopyTok.getIdentifierInfo();
+            auto* Exp
+                = ExpansionFragment::Create(Ctx, CopyTok.getSourceLoc(), Ident);
 
             ExpansionFragments.push_back(Exp);
             continue;
@@ -490,28 +495,27 @@ static void importMacro(ImporterImpl &Importer,
       ExpansionLoc = Loc;
    }
 
-   auto *Pat = MacroPattern::Create(Ctx, Loc, BeginPat,
-                                    ExpansionLoc, ExpansionFragments,
-                                    Len);
+   auto* Pat = MacroPattern::Create(Ctx, Loc, BeginPat, ExpansionLoc,
+                                    ExpansionFragments, Len);
 
    auto MacroName = Ctx.getDeclNameTable().getMacroName(
-      Ctx.getIdentifiers().get(Name->getName()));
+       Ctx.getIdentifiers().get(Name->getName()));
 
-   auto *MD = MacroDecl::Create(Ctx, Loc, AccessSpecifier::Public,
-                                MacroName, MacroDecl::Paren, Pat);
+   auto* MD = MacroDecl::Create(Ctx, Loc, AccessSpecifier::Public, MacroName,
+                                MacroDecl::Paren, Pat);
 
    MD->setImportedFromClang(true);
    Sema.ActOnDecl(DC, MD);
 }
 
-void ImporterImpl::importMacros(DeclContext *DC)
+void ImporterImpl::importMacros(DeclContext* DC)
 {
-   auto &Ctx = CI.getContext();
-   auto &Sema = CI.getSema();
+   auto& Ctx = CI.getContext();
+   auto& Sema = CI.getSema();
 
-   for (auto *Name : MacroNames) {
+   for (auto* Name : MacroNames) {
       auto MD = Instance->getPreprocessor().getMacroDefinition(Name);
-      auto *MI = MD.getMacroInfo();
+      auto* MI = MD.getMacroInfo();
 
       if (!MI)
          continue;

@@ -1,9 +1,9 @@
-#include "ASTReaderInternals.h"
-#include "ASTWriter.h"
-#include "AST/ASTVisitor.h"
-#include "ModuleWriter.h"
-#include "Sema/ConversionSequence.h"
-#include "Sema/Scope/Scope.h"
+#include "cdotc/AST/ASTVisitor.h"
+#include "cdotc/Sema/ConversionSequence.h"
+#include "cdotc/Sema/Scope/Scope.h"
+#include "cdotc/Serialization/ASTReaderInternals.h"
+#include "cdotc/Serialization/ASTWriter.h"
+#include "cdotc/Serialization/ModuleWriter.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -12,17 +12,17 @@ using namespace cdot::support;
 
 namespace {
 
-class ASTStmtWriter: public ASTVisitor<ASTStmtWriter> {
-   ASTWriter &Writer;
+class ASTStmtWriter : public ASTVisitor<ASTStmtWriter> {
+   ASTWriter& Writer;
    ASTRecordWriter Record;
 
    Statement::NodeType Code;
    unsigned AbbrevToUse;
 
 public:
-   ASTStmtWriter(ASTWriter &Writer, ASTWriter::RecordData &Record)
-      : Writer(Writer), Record(Writer, Record),
-        Code((Statement::NodeType)(0)), AbbrevToUse(0)
+   ASTStmtWriter(ASTWriter& Writer, ASTWriter::RecordData& Record)
+       : Writer(Writer), Record(Writer, Record), Code((Statement::NodeType)(0)),
+         AbbrevToUse(0)
    {
       (void)this->Writer;
    }
@@ -33,27 +33,27 @@ public:
    {
       return Record.EmitStmt(static_cast<unsigned>(Code), AbbrevToUse);
    }
-   
-   void visit(Statement *S);
 
-   void visitStmt(Statement *S);
-   void visitExpr(Expression *E);
+   void visit(Statement* S);
 
-   void visitPatternExpr(PatternExpr *E);
-   void visitTypeExpr(TypeExpr *E);
+   void visitStmt(Statement* S);
+   void visitExpr(Expression* E);
 
-#  define CDOT_STMT(NAME) void visit##NAME(NAME *S);
-#  include "AST/AstNode.def"
+   void visitPatternExpr(PatternExpr* E);
+   void visitTypeExpr(TypeExpr* E);
+
+#define CDOT_STMT(NAME) void visit##NAME(NAME* S);
+#include "cdotc/AST/AstNode.def"
 };
 
 } // anonymous namespace
 
-static void WriteConvSeq(ASTRecordWriter &Record,
-                         const ConversionSequence &Seq) {
+static void WriteConvSeq(ASTRecordWriter& Record, const ConversionSequence& Seq)
+{
    Record.push_back(Seq.getStrength());
    Record.push_back(Seq.getSteps().size());
 
-   for (auto &Step : Seq.getSteps()) {
+   for (auto& Step : Seq.getSteps()) {
       Record.push_back(Step.isHalt());
       if (Step.isHalt())
          continue;
@@ -69,7 +69,7 @@ static void WriteConvSeq(ASTRecordWriter &Record,
    }
 }
 
-static void WriteIfCondition(const IfCondition &C, ASTRecordWriter &Record)
+static void WriteIfCondition(const IfCondition& C, ASTRecordWriter& Record)
 {
    Record.push_back(C.K);
    switch (C.K) {
@@ -103,18 +103,18 @@ static void WriteIfCondition(const IfCondition &C, ASTRecordWriter &Record)
    }
 }
 
-void ASTStmtWriter::visit(Statement *S)
+void ASTStmtWriter::visit(Statement* S)
 {
    ASTVisitor::visit(S);
    Code = S->getTypeID();
 }
 
-void ASTStmtWriter::visitStmt(Statement *S)
+void ASTStmtWriter::visitStmt(Statement* S)
 {
    Record.push_back(S->getSubclassData());
 }
 
-void ASTStmtWriter::visitExpr(Expression *E)
+void ASTStmtWriter::visitExpr(Expression* E)
 {
    visitStmt(E);
 
@@ -129,7 +129,7 @@ void ASTStmtWriter::visitExpr(Expression *E)
    Record.push_back(Flags);
 }
 
-void ASTStmtWriter::visitCompoundStmt(CompoundStmt *S)
+void ASTStmtWriter::visitCompoundStmt(CompoundStmt* S)
 {
    visitStmt(S);
 
@@ -146,14 +146,14 @@ void ASTStmtWriter::visitCompoundStmt(CompoundStmt *S)
    Record.push_back(S->getScopeID());
 }
 
-void ASTStmtWriter::visitDeclStmt(DeclStmt *S)
+void ASTStmtWriter::visitDeclStmt(DeclStmt* S)
 {
    visitStmt(S);
 
    Record.AddDeclRef(S->getDecl());
 }
 
-void ASTStmtWriter::visitAttributedStmt(AttributedStmt *S)
+void ASTStmtWriter::visitAttributedStmt(AttributedStmt* S)
 {
    visitStmt(S);
 
@@ -161,7 +161,7 @@ void ASTStmtWriter::visitAttributedStmt(AttributedStmt *S)
    Record.AddStmt(S->getStatement());
 }
 
-void ASTStmtWriter::visitBreakStmt(BreakStmt *S)
+void ASTStmtWriter::visitBreakStmt(BreakStmt* S)
 {
    visitStmt(S);
 
@@ -169,7 +169,7 @@ void ASTStmtWriter::visitBreakStmt(BreakStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitContinueStmt(ContinueStmt *S)
+void ASTStmtWriter::visitContinueStmt(ContinueStmt* S)
 {
    visitStmt(S);
 
@@ -177,7 +177,7 @@ void ASTStmtWriter::visitContinueStmt(ContinueStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitReturnStmt(ReturnStmt *S)
+void ASTStmtWriter::visitReturnStmt(ReturnStmt* S)
 {
    visitStmt(S);
 
@@ -185,7 +185,7 @@ void ASTStmtWriter::visitReturnStmt(ReturnStmt *S)
    Record.AddSourceLocation(S->getSourceLoc());
 }
 
-void ASTStmtWriter::visitDiscardAssignStmt(DiscardAssignStmt *S)
+void ASTStmtWriter::visitDiscardAssignStmt(DiscardAssignStmt* S)
 {
    visitStmt(S);
 
@@ -194,7 +194,7 @@ void ASTStmtWriter::visitDiscardAssignStmt(DiscardAssignStmt *S)
    Record.AddStmt(S->getRHS());
 }
 
-void ASTStmtWriter::visitCaseStmt(CaseStmt *S)
+void ASTStmtWriter::visitCaseStmt(CaseStmt* S)
 {
    visitStmt(S);
 
@@ -203,7 +203,7 @@ void ASTStmtWriter::visitCaseStmt(CaseStmt *S)
    Record.AddStmt(S->getBody());
 }
 
-void ASTStmtWriter::visitForStmt(ForStmt *S)
+void ASTStmtWriter::visitForStmt(ForStmt* S)
 {
    visitStmt(S);
 
@@ -215,12 +215,12 @@ void ASTStmtWriter::visitForStmt(ForStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitIfStmt(IfStmt *S)
+void ASTStmtWriter::visitIfStmt(IfStmt* S)
 {
    visitStmt(S);
 
    Record.push_back(S->getConditions().size());
-   for (auto &C : S->getConditions())
+   for (auto& C : S->getConditions())
       WriteIfCondition(C, Record);
 
    Record.AddSourceLocation(S->getSourceLoc());
@@ -229,12 +229,12 @@ void ASTStmtWriter::visitIfStmt(IfStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitWhileStmt(WhileStmt *S)
+void ASTStmtWriter::visitWhileStmt(WhileStmt* S)
 {
    visitStmt(S);
 
    Record.push_back(S->getConditions().size());
-   for (auto &C : S->getConditions())
+   for (auto& C : S->getConditions())
       WriteIfCondition(C, Record);
 
    Record.AddSourceLocation(S->getSourceLoc());
@@ -243,7 +243,7 @@ void ASTStmtWriter::visitWhileStmt(WhileStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitForInStmt(ForInStmt *S)
+void ASTStmtWriter::visitForInStmt(ForInStmt* S)
 {
    visitStmt(S);
 
@@ -257,7 +257,7 @@ void ASTStmtWriter::visitForInStmt(ForInStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitMatchStmt(MatchStmt *S)
+void ASTStmtWriter::visitMatchStmt(MatchStmt* S)
 {
    visitStmt(S);
 
@@ -273,19 +273,19 @@ void ASTStmtWriter::visitMatchStmt(MatchStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-static void WriteCatchBlock(ASTRecordWriter &Record, CatchBlock &CB)
+static void WriteCatchBlock(ASTRecordWriter& Record, CatchBlock& CB)
 {
    Record.AddDeclRef(CB.varDecl);
    Record.AddStmt(CB.Body);
    Record.AddStmt(CB.Condition);
 }
 
-void ASTStmtWriter::visitDoStmt(DoStmt *S)
+void ASTStmtWriter::visitDoStmt(DoStmt* S)
 {
    visitStmt(S);
 
    Record.push_back(S->getCatchBlocks().size());
-   for (auto &CB : S->getCatchBlocks())
+   for (auto& CB : S->getCatchBlocks())
       WriteCatchBlock(Record, CB);
 
    Record.AddSourceRange(S->getSourceRange());
@@ -293,7 +293,7 @@ void ASTStmtWriter::visitDoStmt(DoStmt *S)
    Record.AddIdentifierRef(S->getLabel());
 }
 
-void ASTStmtWriter::visitThrowStmt(ThrowStmt *S)
+void ASTStmtWriter::visitThrowStmt(ThrowStmt* S)
 {
    visitStmt(S);
 
@@ -301,26 +301,26 @@ void ASTStmtWriter::visitThrowStmt(ThrowStmt *S)
    Record.AddStmt(S->getThrownVal());
 }
 
-void ASTStmtWriter::visitDebugStmt(DebugStmt *S)
+void ASTStmtWriter::visitDebugStmt(DebugStmt* S)
 {
    visitStmt(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
 }
 
-void ASTStmtWriter::visitNullStmt(NullStmt *S)
+void ASTStmtWriter::visitNullStmt(NullStmt* S)
 {
    visitStmt(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
 }
 
-void ASTStmtWriter::visitMacroExpansionStmt(MacroExpansionStmt *S)
+void ASTStmtWriter::visitMacroExpansionStmt(MacroExpansionStmt* S)
 {
    visitStmt(S);
 
    Record.push_back(S->getTokens().size());
-   for (auto &Tok : S->getTokens())
+   for (auto& Tok : S->getTokens())
       Record.AddToken(Tok);
 
    Record.AddSourceRange(S->getSourceRange());
@@ -329,7 +329,7 @@ void ASTStmtWriter::visitMacroExpansionStmt(MacroExpansionStmt *S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitStaticIfStmt(StaticIfStmt *S)
+void ASTStmtWriter::visitStaticIfStmt(StaticIfStmt* S)
 {
    visitStmt(S);
 
@@ -340,7 +340,7 @@ void ASTStmtWriter::visitStaticIfStmt(StaticIfStmt *S)
    Record.AddStmt(S->getElseBranch());
 }
 
-void ASTStmtWriter::visitStaticForStmt(StaticForStmt *S)
+void ASTStmtWriter::visitStaticForStmt(StaticForStmt* S)
 {
    visitStmt(S);
 
@@ -356,7 +356,7 @@ void ASTStmtWriter::visitStaticForStmt(StaticForStmt *S)
    }
 }
 
-void ASTStmtWriter::visitMixinStmt(MixinStmt *S)
+void ASTStmtWriter::visitMixinStmt(MixinStmt* S)
 {
    visitStmt(S);
 
@@ -364,7 +364,7 @@ void ASTStmtWriter::visitMixinStmt(MixinStmt *S)
    Record.AddStmt(S->getMixinExpr());
 }
 
-void ASTStmtWriter::visitParenExpr(ParenExpr *S)
+void ASTStmtWriter::visitParenExpr(ParenExpr* S)
 {
    visitExpr(S);
 
@@ -372,7 +372,7 @@ void ASTStmtWriter::visitParenExpr(ParenExpr *S)
    Record.AddStmt(S->getParenthesizedExpr());
 }
 
-void ASTStmtWriter::visitAttributedExpr(AttributedExpr *S)
+void ASTStmtWriter::visitAttributedExpr(AttributedExpr* S)
 {
    visitExpr(S);
 
@@ -380,7 +380,7 @@ void ASTStmtWriter::visitAttributedExpr(AttributedExpr *S)
    Record.AddStmt(S->getExpr());
 }
 
-void ASTStmtWriter::visitIntegerLiteral(IntegerLiteral *S)
+void ASTStmtWriter::visitIntegerLiteral(IntegerLiteral* S)
 {
    visitExpr(S);
 
@@ -391,7 +391,7 @@ void ASTStmtWriter::visitIntegerLiteral(IntegerLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitFPLiteral(FPLiteral *S)
+void ASTStmtWriter::visitFPLiteral(FPLiteral* S)
 {
    visitExpr(S);
 
@@ -402,7 +402,7 @@ void ASTStmtWriter::visitFPLiteral(FPLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitBoolLiteral(BoolLiteral *S)
+void ASTStmtWriter::visitBoolLiteral(BoolLiteral* S)
 {
    visitExpr(S);
 
@@ -412,7 +412,7 @@ void ASTStmtWriter::visitBoolLiteral(BoolLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitCharLiteral(CharLiteral *S)
+void ASTStmtWriter::visitCharLiteral(CharLiteral* S)
 {
    visitExpr(S);
 
@@ -422,14 +422,14 @@ void ASTStmtWriter::visitCharLiteral(CharLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitNoneLiteral(NoneLiteral *S)
+void ASTStmtWriter::visitNoneLiteral(NoneLiteral* S)
 {
    visitExpr(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
 }
 
-void ASTStmtWriter::visitStringLiteral(StringLiteral *S)
+void ASTStmtWriter::visitStringLiteral(StringLiteral* S)
 {
    visitExpr(S);
 
@@ -438,20 +438,20 @@ void ASTStmtWriter::visitStringLiteral(StringLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitStringInterpolation(StringInterpolation *S)
+void ASTStmtWriter::visitStringInterpolation(StringInterpolation* S)
 {
    visitExpr(S);
 
    auto Segs = S->getSegments();
    Record.push_back(Segs.size());
 
-   for (auto &Seg : Segs)
+   for (auto& Seg : Segs)
       Record.AddStmt(Seg);
 
    Record.AddSourceRange(S->getSourceRange());
 }
 
-void ASTStmtWriter::visitLambdaExpr(LambdaExpr *S)
+void ASTStmtWriter::visitLambdaExpr(LambdaExpr* S)
 {
    visitExpr(S);
 
@@ -475,7 +475,7 @@ void ASTStmtWriter::visitLambdaExpr(LambdaExpr *S)
    Record.AddStmt(S->getBody());
 }
 
-void ASTStmtWriter::visitDictionaryLiteral(DictionaryLiteral *S)
+void ASTStmtWriter::visitDictionaryLiteral(DictionaryLiteral* S)
 {
    visitExpr(S);
 
@@ -496,7 +496,7 @@ void ASTStmtWriter::visitDictionaryLiteral(DictionaryLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitArrayLiteral(ArrayLiteral *S)
+void ASTStmtWriter::visitArrayLiteral(ArrayLiteral* S)
 {
    visitExpr(S);
 
@@ -510,7 +510,7 @@ void ASTStmtWriter::visitArrayLiteral(ArrayLiteral *S)
    Record.AddDeclRef(S->getExpressibleByInit());
 }
 
-void ASTStmtWriter::visitTupleLiteral(TupleLiteral *S)
+void ASTStmtWriter::visitTupleLiteral(TupleLiteral* S)
 {
    visitExpr(S);
 
@@ -523,7 +523,7 @@ void ASTStmtWriter::visitTupleLiteral(TupleLiteral *S)
    Record.AddSourceRange(S->getSourceRange());
 }
 
-void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
+void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr* S)
 {
    visitExpr(S);
 
@@ -556,7 +556,7 @@ void ASTStmtWriter::visitIdentifierRefExpr(IdentifierRefExpr *S)
    Record.AddDeclRef(support::cast_or_null<Decl>(S->getDeclCtx()));
 }
 
-void ASTStmtWriter::visitDeclRefExpr(DeclRefExpr *S)
+void ASTStmtWriter::visitDeclRefExpr(DeclRefExpr* S)
 {
    visitExpr(S);
 
@@ -569,7 +569,7 @@ void ASTStmtWriter::visitDeclRefExpr(DeclRefExpr *S)
    Record.push_back(Flags);
 }
 
-void ASTStmtWriter::visitMemberRefExpr(MemberRefExpr *S)
+void ASTStmtWriter::visitMemberRefExpr(MemberRefExpr* S)
 {
    visitExpr(S);
 
@@ -579,12 +579,12 @@ void ASTStmtWriter::visitMemberRefExpr(MemberRefExpr *S)
    Record.push_back(S->isCalled());
 }
 
-void ASTStmtWriter::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *S)
+void ASTStmtWriter::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* S)
 {
    visitExpr(S);
 
    Record.push_back(S->getNumOverloads());
-   for (auto *D : S->getOverloads()) {
+   for (auto* D : S->getOverloads()) {
       Record.AddDeclRef(D);
    }
 
@@ -592,14 +592,14 @@ void ASTStmtWriter::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitEnumCaseExpr(EnumCaseExpr *S)
+void ASTStmtWriter::visitEnumCaseExpr(EnumCaseExpr* S)
 {
    visitExpr(S);
 
    Record.AddSourceLocation(S->getSourceLoc());
    Record.AddDeclarationName(S->getDeclName());
 
-   auto &Args = S->getArgs();
+   auto& Args = S->getArgs();
    Record.push_back(Args.size());
 
    for (auto Arg : Args)
@@ -608,14 +608,14 @@ void ASTStmtWriter::visitEnumCaseExpr(EnumCaseExpr *S)
    Record.AddDeclRef(S->getCase());
 }
 
-void ASTStmtWriter::visitCallExpr(CallExpr *S)
+void ASTStmtWriter::visitCallExpr(CallExpr* S)
 {
    visitExpr(S);
 
    auto Labels = S->getLabels();
    Record.push_back(Labels.size());
 
-   for (auto &Label : Labels)
+   for (auto& Label : Labels)
       Record.AddIdentifierRef(Label);
 
    Record.AddSourceLocation(S->getIdentLoc());
@@ -624,10 +624,10 @@ void ASTStmtWriter::visitCallExpr(CallExpr *S)
    Record.AddDeclarationName(S->getDeclName());
    Record.push_back(static_cast<uintptr_t>(S->getKind()));
 
-   auto &Args = S->getArgs();
+   auto& Args = S->getArgs();
    Record.push_back(Args.size());
 
-   for (auto &Arg : Args)
+   for (auto& Arg : Args)
       Record.AddStmt(Arg);
 
    uint64_t Flags = 0;
@@ -645,7 +645,7 @@ void ASTStmtWriter::visitCallExpr(CallExpr *S)
    Record.AddDeclRef(S->getFunc());
    Record.AddStmt(S->getParentExpr());
 
-   if (auto *templateArgs = S->getTemplateArgs()) {
+   if (auto* templateArgs = S->getTemplateArgs()) {
       Record.push_back(true);
       Record.AddTemplateArgumentList(*templateArgs);
    }
@@ -654,7 +654,7 @@ void ASTStmtWriter::visitCallExpr(CallExpr *S)
    }
 }
 
-void ASTStmtWriter::visitAnonymousCallExpr(AnonymousCallExpr *S)
+void ASTStmtWriter::visitAnonymousCallExpr(AnonymousCallExpr* S)
 {
    visitExpr(S);
 
@@ -667,7 +667,7 @@ void ASTStmtWriter::visitAnonymousCallExpr(AnonymousCallExpr *S)
    auto Labels = S->getLabels();
    Record.push_back(Labels.size());
 
-   for (auto &Label : Labels)
+   for (auto& Label : Labels)
       Record.AddIdentifierRef(Label);
 
    Record.AddSourceRange(S->getParenRange());
@@ -677,7 +677,7 @@ void ASTStmtWriter::visitAnonymousCallExpr(AnonymousCallExpr *S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitSubscriptExpr(SubscriptExpr *S)
+void ASTStmtWriter::visitSubscriptExpr(SubscriptExpr* S)
 {
    visitExpr(S);
 
@@ -691,7 +691,7 @@ void ASTStmtWriter::visitSubscriptExpr(SubscriptExpr *S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitTemplateArgListExpr(TemplateArgListExpr *S)
+void ASTStmtWriter::visitTemplateArgListExpr(TemplateArgListExpr* S)
 {
    visitExpr(S);
 
@@ -705,12 +705,9 @@ void ASTStmtWriter::visitTemplateArgListExpr(TemplateArgListExpr *S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitBuiltinExpr(BuiltinExpr *S)
-{
-   visitExpr(S);
-}
+void ASTStmtWriter::visitBuiltinExpr(BuiltinExpr* S) { visitExpr(S); }
 
-void ASTStmtWriter::visitTupleMemberExpr(TupleMemberExpr *S)
+void ASTStmtWriter::visitTupleMemberExpr(TupleMemberExpr* S)
 {
    visitExpr(S);
 
@@ -721,7 +718,7 @@ void ASTStmtWriter::visitTupleMemberExpr(TupleMemberExpr *S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitSelfExpr(SelfExpr *S)
+void ASTStmtWriter::visitSelfExpr(SelfExpr* S)
 {
    visitExpr(S);
 
@@ -731,7 +728,7 @@ void ASTStmtWriter::visitSelfExpr(SelfExpr *S)
    Record.push_back(S->isUppercase());
 }
 
-void ASTStmtWriter::visitSuperExpr(SuperExpr *S)
+void ASTStmtWriter::visitSuperExpr(SuperExpr* S)
 {
    visitExpr(S);
 
@@ -740,7 +737,7 @@ void ASTStmtWriter::visitSuperExpr(SuperExpr *S)
    Record.push_back(S->getCaptureIndex());
 }
 
-void ASTStmtWriter::visitBuiltinIdentExpr(BuiltinIdentExpr *S)
+void ASTStmtWriter::visitBuiltinIdentExpr(BuiltinIdentExpr* S)
 {
    visitExpr(S);
 
@@ -748,27 +745,27 @@ void ASTStmtWriter::visitBuiltinIdentExpr(BuiltinIdentExpr *S)
    Record.push_back(static_cast<uint64_t>(S->getIdentifierKind()));
 }
 
-void ASTStmtWriter::visitPatternExpr(PatternExpr *S)
+void ASTStmtWriter::visitPatternExpr(PatternExpr* S)
 {
    visitExpr(S);
    Record.AddSourceLocation(S->getColonLoc());
 }
 
-void ASTStmtWriter::visitExpressionPattern(ExpressionPattern *S)
+void ASTStmtWriter::visitExpressionPattern(ExpressionPattern* S)
 {
    visitPatternExpr(S);
    Record.AddStmt(S->getExpr());
    Record.AddDeclRef(S->getComparisonOp());
 }
 
-void ASTStmtWriter::visitCasePattern(CasePattern *S)
+void ASTStmtWriter::visitCasePattern(CasePattern* S)
 {
    visitExpr(S);
 
    auto Args = S->getArgs();
    Record.push_back(Args.size());
 
-   for (auto &Arg : Args)
+   for (auto& Arg : Args)
       WriteIfCondition(Arg, Record);
 
    Record.AddSourceLocation(S->getColonLoc());
@@ -786,7 +783,7 @@ void ASTStmtWriter::visitCasePattern(CasePattern *S)
    Record.AddDeclRef(S->getCaseDecl());
 }
 
-void ASTStmtWriter::visitIsPattern(IsPattern *S)
+void ASTStmtWriter::visitIsPattern(IsPattern* S)
 {
    visitPatternExpr(S);
 
@@ -794,8 +791,9 @@ void ASTStmtWriter::visitIsPattern(IsPattern *S)
    Record.AddTypeRef(S->getIsType());
 }
 
-static void WriteSequenceElement(ASTRecordWriter &Record,
-                                 const SequenceElement &El) {
+static void WriteSequenceElement(ASTRecordWriter& Record,
+                                 const SequenceElement& El)
+{
    Record.AddSourceLocation(El.getLoc());
    Record.push_back(El.getKind());
 
@@ -814,18 +812,18 @@ static void WriteSequenceElement(ASTRecordWriter &Record,
    }
 }
 
-void ASTStmtWriter::visitExprSequence(ExprSequence *S)
+void ASTStmtWriter::visitExprSequence(ExprSequence* S)
 {
    visitExpr(S);
 
    auto Elements = S->getFragments();
    Record.push_back(Elements.size());
 
-   for (auto &El : Elements)
+   for (auto& El : Elements)
       WriteSequenceElement(Record, El);
 }
 
-void ASTStmtWriter::visitUnaryOperator(UnaryOperator *S)
+void ASTStmtWriter::visitUnaryOperator(UnaryOperator* S)
 {
    visitExpr(S);
 
@@ -836,7 +834,7 @@ void ASTStmtWriter::visitUnaryOperator(UnaryOperator *S)
    Record.push_back(S->isPrefix());
 }
 
-void ASTStmtWriter::visitBinaryOperator(BinaryOperator *S)
+void ASTStmtWriter::visitBinaryOperator(BinaryOperator* S)
 {
    visitExpr(S);
 
@@ -847,7 +845,7 @@ void ASTStmtWriter::visitBinaryOperator(BinaryOperator *S)
    Record.AddStmt(S->getRhs());
 }
 
-void ASTStmtWriter::visitAssignExpr(AssignExpr *S)
+void ASTStmtWriter::visitAssignExpr(AssignExpr* S)
 {
    visitExpr(S);
 
@@ -857,7 +855,7 @@ void ASTStmtWriter::visitAssignExpr(AssignExpr *S)
    Record.push_back(S->isInitialization());
 }
 
-void ASTStmtWriter::visitCastExpr(CastExpr *S)
+void ASTStmtWriter::visitCastExpr(CastExpr* S)
 {
    visitExpr(S);
 
@@ -868,7 +866,7 @@ void ASTStmtWriter::visitCastExpr(CastExpr *S)
    WriteConvSeq(Record, S->getConvSeq());
 }
 
-void ASTStmtWriter::visitAddrOfExpr(AddrOfExpr *S)
+void ASTStmtWriter::visitAddrOfExpr(AddrOfExpr* S)
 {
    visitExpr(S);
 
@@ -876,7 +874,7 @@ void ASTStmtWriter::visitAddrOfExpr(AddrOfExpr *S)
    Record.AddStmt(S->getTarget());
 }
 
-void ASTStmtWriter::visitTypePredicateExpr(TypePredicateExpr *S)
+void ASTStmtWriter::visitTypePredicateExpr(TypePredicateExpr* S)
 {
    visitExpr(S);
 
@@ -893,7 +891,7 @@ void ASTStmtWriter::visitTypePredicateExpr(TypePredicateExpr *S)
    Record.push_back(Flags);
 }
 
-void ASTStmtWriter::visitIfExpr(IfExpr *S)
+void ASTStmtWriter::visitIfExpr(IfExpr* S)
 {
    visitExpr(S);
 
@@ -903,7 +901,7 @@ void ASTStmtWriter::visitIfExpr(IfExpr *S)
    Record.AddStmt(S->getFalseVal());
 }
 
-void ASTStmtWriter::visitTryExpr(TryExpr *S)
+void ASTStmtWriter::visitTryExpr(TryExpr* S)
 {
    visitExpr(S);
 
@@ -912,7 +910,7 @@ void ASTStmtWriter::visitTryExpr(TryExpr *S)
    Record.AddStmt(S->getExpr());
 }
 
-void ASTStmtWriter::visitAwaitExpr(AwaitExpr *S)
+void ASTStmtWriter::visitAwaitExpr(AwaitExpr* S)
 {
    visitExpr(S);
 
@@ -921,7 +919,7 @@ void ASTStmtWriter::visitAwaitExpr(AwaitExpr *S)
    Record.push_back(S->isImmediateReturn());
 }
 
-void ASTStmtWriter::visitImplicitCastExpr(ImplicitCastExpr *S)
+void ASTStmtWriter::visitImplicitCastExpr(ImplicitCastExpr* S)
 {
    visitExpr(S);
 
@@ -929,7 +927,7 @@ void ASTStmtWriter::visitImplicitCastExpr(ImplicitCastExpr *S)
    WriteConvSeq(Record, S->getConvSeq());
 }
 
-void ASTStmtWriter::visitStaticExpr(StaticExpr *S)
+void ASTStmtWriter::visitStaticExpr(StaticExpr* S)
 {
    visitExpr(S);
 
@@ -938,7 +936,7 @@ void ASTStmtWriter::visitStaticExpr(StaticExpr *S)
    Record.AddILConstant(S->getEvaluatedExpr());
 }
 
-void ASTStmtWriter::visitConstraintExpr(ConstraintExpr *S)
+void ASTStmtWriter::visitConstraintExpr(ConstraintExpr* S)
 {
    visitExpr(S);
 
@@ -950,8 +948,9 @@ void ASTStmtWriter::visitConstraintExpr(ConstraintExpr *S)
    }
 }
 
-static void WriteTraitsArgument(ASTRecordWriter &Record,
-                                const TraitsArgument &Arg) {
+static void WriteTraitsArgument(ASTRecordWriter& Record,
+                                const TraitsArgument& Arg)
+{
    Record.push_back(Arg.getKind());
    switch (Arg.getKind()) {
    case TraitsArgument::Type:
@@ -969,14 +968,14 @@ static void WriteTraitsArgument(ASTRecordWriter &Record,
    }
 }
 
-void ASTStmtWriter::visitTraitsExpr(TraitsExpr *S)
+void ASTStmtWriter::visitTraitsExpr(TraitsExpr* S)
 {
    visitExpr(S);
 
    auto Args = S->getArgs();
    Record.push_back(Args.size());
 
-   for (auto &Arg : Args)
+   for (auto& Arg : Args)
       WriteTraitsArgument(Record, Arg);
 
    Record.AddSourceLocation(S->getTraitsLoc());
@@ -984,7 +983,7 @@ void ASTStmtWriter::visitTraitsExpr(TraitsExpr *S)
    Record.push_back(S->getKind());
 }
 
-void ASTStmtWriter::visitMixinExpr(MixinExpr *S)
+void ASTStmtWriter::visitMixinExpr(MixinExpr* S)
 {
    visitExpr(S);
 
@@ -992,7 +991,7 @@ void ASTStmtWriter::visitMixinExpr(MixinExpr *S)
    Record.AddStmt(S->getMixinExpr());
 }
 
-void ASTStmtWriter::visitVariadicExpansionExpr(VariadicExpansionExpr *S)
+void ASTStmtWriter::visitVariadicExpansionExpr(VariadicExpansionExpr* S)
 {
    visitExpr(S);
 
@@ -1002,18 +1001,18 @@ void ASTStmtWriter::visitVariadicExpansionExpr(VariadicExpansionExpr *S)
    Record.AddDeclRef(S->getElementDecl());
 }
 
-void ASTStmtWriter::visitMacroVariableExpr(MacroVariableExpr *S)
+void ASTStmtWriter::visitMacroVariableExpr(MacroVariableExpr* S)
 {
    visitExpr(S);
    Record.AddStmt(S->getExpr());
 }
 
-void ASTStmtWriter::visitMacroExpansionExpr(MacroExpansionExpr *S)
+void ASTStmtWriter::visitMacroExpansionExpr(MacroExpansionExpr* S)
 {
    visitExpr(S);
 
    Record.push_back(S->getTokens().size());
-   for (auto &Tok : S->getTokens())
+   for (auto& Tok : S->getTokens())
       Record.AddToken(Tok);
 
    Record.AddSourceRange(S->getSourceRange());
@@ -1021,7 +1020,7 @@ void ASTStmtWriter::visitMacroExpansionExpr(MacroExpansionExpr *S)
    Record.push_back(S->getDelim());
 }
 
-void ASTStmtWriter::visitTypeExpr(TypeExpr *E)
+void ASTStmtWriter::visitTypeExpr(TypeExpr* E)
 {
    visitExpr(E);
 
@@ -1029,18 +1028,18 @@ void ASTStmtWriter::visitTypeExpr(TypeExpr *E)
    Record.push_back(E->isMeta());
 }
 
-void ASTStmtWriter::visitTupleTypeExpr(TupleTypeExpr *S)
+void ASTStmtWriter::visitTupleTypeExpr(TupleTypeExpr* S)
 {
    visitTypeExpr(S);
 
    auto Tys = S->getContainedTypes();
    Record.push_back(Tys.size());
 
-   for (auto &Ty : Tys)
+   for (auto& Ty : Tys)
       Record.AddTypeRef(Ty);
 }
 
-void ASTStmtWriter::visitArrayTypeExpr(ArrayTypeExpr *S)
+void ASTStmtWriter::visitArrayTypeExpr(ArrayTypeExpr* S)
 {
    visitTypeExpr(S);
 
@@ -1048,7 +1047,7 @@ void ASTStmtWriter::visitArrayTypeExpr(ArrayTypeExpr *S)
    Record.AddStmt(S->getSizeExpr());
 }
 
-void ASTStmtWriter::visitFunctionTypeExpr(FunctionTypeExpr *S)
+void ASTStmtWriter::visitFunctionTypeExpr(FunctionTypeExpr* S)
 {
    visitTypeExpr(S);
 
@@ -1057,7 +1056,7 @@ void ASTStmtWriter::visitFunctionTypeExpr(FunctionTypeExpr *S)
    Record.push_back(Tys.size());
 
    unsigned i = 0;
-   for (auto &Ty : Tys) {
+   for (auto& Ty : Tys) {
       Record.AddTypeRef(Ty);
       Record.push_back((uint64_t)Info[i++].getConvention());
    }
@@ -1070,43 +1069,43 @@ void ASTStmtWriter::visitFunctionTypeExpr(FunctionTypeExpr *S)
    Record.push_back(S->isAsync());
 }
 
-void ASTStmtWriter::visitExistentialTypeExpr(ExistentialTypeExpr *S)
+void ASTStmtWriter::visitExistentialTypeExpr(ExistentialTypeExpr* S)
 {
    visitTypeExpr(S);
 
    auto Tys = S->getExistentials();
    Record.push_back(Tys.size());
 
-   for (auto &Ty : Tys) {
+   for (auto& Ty : Tys) {
       Record.AddTypeRef(Ty);
    }
 }
 
-void ASTStmtWriter::visitDeclTypeExpr(DeclTypeExpr *S)
+void ASTStmtWriter::visitDeclTypeExpr(DeclTypeExpr* S)
 {
    visitTypeExpr(S);
    Record.AddStmt(S->getTyExpr());
 }
 
-void ASTStmtWriter::visitPointerTypeExpr(PointerTypeExpr *S)
+void ASTStmtWriter::visitPointerTypeExpr(PointerTypeExpr* S)
 {
    visitTypeExpr(S);
    Record.AddTypeRef(S->getSubType());
 }
 
-void ASTStmtWriter::visitReferenceTypeExpr(ReferenceTypeExpr *S)
+void ASTStmtWriter::visitReferenceTypeExpr(ReferenceTypeExpr* S)
 {
    visitTypeExpr(S);
    Record.AddTypeRef(S->getSubType());
 }
 
-void ASTStmtWriter::visitOptionTypeExpr(OptionTypeExpr *S)
+void ASTStmtWriter::visitOptionTypeExpr(OptionTypeExpr* S)
 {
    visitTypeExpr(S);
    Record.AddTypeRef(S->getSubType());
 }
 
-void ASTWriter::WriteSubStmt(Statement *S)
+void ASTWriter::WriteSubStmt(Statement* S)
 {
    RecordData Record;
    ASTStmtWriter Writer(*this, Record);

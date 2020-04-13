@@ -1,16 +1,16 @@
 
-#include "ModuleManager.h"
+#include "cdotc/Module/ModuleManager.h"
 
-#include "AST/Decl.h"
-#include "Basic/FileUtils.h"
-#include "Driver/Compiler.h"
-#include "IL/Module.h"
-#include "IRGen/IRGen.h"
-#include "Query/QueryContext.h"
-#include "Sema/SemaPass.h"
-#include "Serialization/ModuleFile.h"
-#include "Serialization/ModuleReader.h"
-#include "Serialization/ModuleWriter.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IRGen/IRGen.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ModuleFile.h"
+#include "cdotc/Serialization/ModuleReader.h"
+#include "cdotc/Serialization/ModuleWriter.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/FileSystem.h>
@@ -24,18 +24,15 @@ using namespace cdot::support;
 
 using std::string;
 
-ModuleManager::ModuleManager(CompilerInstance &CI)
-   : CI(CI)
-{ }
-
+ModuleManager::ModuleManager(CompilerInstance& CI) : CI(CI) {}
 
 ModuleManager::~ModuleManager()
 {
-   for (auto &Reader : ReaderMap) {
+   for (auto& Reader : ReaderMap) {
       Reader.second->~ModuleReader();
    }
 
-   for (auto &Pair : LoadedModules) {
+   for (auto& Pair : LoadedModules) {
       if (Pair.getSecond() == MainModule) {
          continue;
       }
@@ -48,17 +45,17 @@ ModuleManager::~ModuleManager()
    }
 }
 
-Module* ModuleManager::CreateModule(SourceRange Loc,
-                                    IdentifierInfo *Name,
-                                    bool CreateDecl) {
+Module* ModuleManager::CreateModule(SourceRange Loc, IdentifierInfo* Name,
+                                    bool CreateDecl)
+{
    auto Mod = Module::Create(CI.getContext(), Name, Loc, nullptr);
 
    auto File = CI.getFileMgr().getOpenedFile(Loc.getStart());
    Mod->setILModule(
-      new il::Module(CI.getILCtx(), File.SourceId, File.FileName));
+       new il::Module(CI.getILCtx(), File.SourceId, File.FileName));
 
    if (CreateDecl) {
-      auto *D = ModuleDecl::Create(CI.getContext(), Loc, Name);
+      auto* D = ModuleDecl::Create(CI.getContext(), Loc, Name);
       CI.getSema().addDeclToContext(CI.getGlobalDeclCtx(), D);
 
       D->setModule(Mod);
@@ -69,14 +66,13 @@ Module* ModuleManager::CreateModule(SourceRange Loc,
    return Mod;
 }
 
-Module* ModuleManager::CreateSubModule(SourceRange Loc,
-                                       IdentifierInfo *Name,
-                                       Module *ParentModule,
-                                       bool CreateDecl) {
-   auto *Mod = Module::Create(CI.getContext(), Name, Loc, ParentModule);
+Module* ModuleManager::CreateSubModule(SourceRange Loc, IdentifierInfo* Name,
+                                       Module* ParentModule, bool CreateDecl)
+{
+   auto* Mod = Module::Create(CI.getContext(), Name, Loc, ParentModule);
 
    if (CreateDecl) {
-      auto *D = ModuleDecl::Create(CI.getContext(), Loc, Name);
+      auto* D = ModuleDecl::Create(CI.getContext(), Loc, Name);
       CI.getSema().addDeclToContext(*ParentModule->getDecl(), D);
 
       D->setModule(Mod);
@@ -86,9 +82,9 @@ Module* ModuleManager::CreateSubModule(SourceRange Loc,
    return Mod;
 }
 
-Module* ModuleManager::LookupModule(SourceRange Loc,
-                                    SourceLocation DiagLoc,
-                                    IdentifierInfo *Name) {
+Module* ModuleManager::LookupModule(SourceRange Loc, SourceLocation DiagLoc,
+                                    IdentifierInfo* Name)
+{
    auto It = LoadedModules.find(Name);
    if (It != LoadedModules.end())
       return It->getSecond();
@@ -110,8 +106,8 @@ Module* ModuleManager::LookupModule(SourceRange Loc,
    auto File = CI.getFileMgr().openFile(FileName, false);
    llvm::BitstreamCursor Cursor(*File.Buf);
 
-   auto Reader = new(CI.getContext()) serial::ModuleReader(CI, Loc, DiagLoc,
-                                                           Cursor);
+   auto Reader
+       = new (CI.getContext()) serial::ModuleReader(CI, Loc, DiagLoc, Cursor);
 
    auto Mod = Reader->ReadModule();
    if (!Mod)
@@ -124,20 +120,21 @@ Module* ModuleManager::LookupModule(SourceRange Loc,
    return Mod;
 }
 
-bool ModuleManager::IsModuleLoaded(IdentifierInfo *Name)
+bool ModuleManager::IsModuleLoaded(IdentifierInfo* Name)
 {
    return LoadedModules.find(Name) != LoadedModules.end();
 }
 
-ModuleDecl *ModuleManager::GetOrCreateModule(SourceRange Loc,
-                                             ArrayRef<IdentifierInfo*> Name) {
+ModuleDecl* ModuleManager::GetOrCreateModule(SourceRange Loc,
+                                             ArrayRef<IdentifierInfo*> Name)
+{
    assert(!Name.empty() && "invalid module name!");
 
-   DeclContext *Ctx = &CI.getGlobalDeclCtx();
-   auto &Sema = CI.getSema();
+   DeclContext* Ctx = &CI.getGlobalDeclCtx();
+   auto& Sema = CI.getSema();
 
    // Create the base module first.
-   auto *Decl = ModuleDecl::Create(CI.getContext(), Loc, Name.front());
+   auto* Decl = ModuleDecl::Create(CI.getContext(), Loc, Name.front());
    Sema.addDeclToContext(*Ctx, Decl);
 
    if (!MainModule) {
@@ -152,12 +149,12 @@ ModuleDecl *ModuleManager::GetOrCreateModule(SourceRange Loc,
 
    // Now look for or create the necessary submodules.
    auto RestName = Name.drop_front(1);
-   auto *CurrentMod = MainModule;
-   for (auto *SubName : RestName) {
-      auto *SubDecl = ModuleDecl::Create(CI.getContext(), Loc, SubName);
+   auto* CurrentMod = MainModule;
+   for (auto* SubName : RestName) {
+      auto* SubDecl = ModuleDecl::Create(CI.getContext(), Loc, SubName);
       Sema.addDeclToContext(*Ctx, SubDecl);
 
-      auto *SubMod = CurrentMod->getSubModule(SubName);
+      auto* SubMod = CurrentMod->getSubModule(SubName);
       if (!SubMod) {
          SubMod = CreateSubModule(Loc, SubName, CurrentMod);
       }
@@ -173,18 +170,18 @@ ModuleDecl *ModuleManager::GetOrCreateModule(SourceRange Loc,
    return cast<ModuleDecl>(Ctx);
 }
 
-Module *ModuleManager::GetModule(ArrayRef<IdentifierInfo *> Name)
+Module* ModuleManager::GetModule(ArrayRef<IdentifierInfo*> Name)
 {
    assert(!Name.empty() && "empty module name!");
 
    auto Loc = CI.getMainFileLoc();
 
-   auto *Mod = LookupModule(Loc, Loc, Name.front());
+   auto* Mod = LookupModule(Loc, Loc, Name.front());
    if (!Mod)
       return nullptr;
 
-   for (auto *SubName : Name.drop_front(1)) {
-      auto *SubMod = Mod->getSubModule(SubName);
+   for (auto* SubName : Name.drop_front(1)) {
+      auto* SubMod = Mod->getSubModule(SubName);
       if (!SubMod)
          return nullptr;
 
@@ -201,7 +198,7 @@ void ModuleManager::EmitModules()
    }
 }
 
-void ModuleManager::EmitModule(Module *Mod)
+void ModuleManager::EmitModule(Module* Mod)
 {
    std::error_code EC;
    SmallString<128> OutFile;
@@ -221,12 +218,12 @@ void ModuleManager::EmitModule(Module *Mod)
    // if the module doesn't export anything, there's no need to emit a
    // static library.
    bool EmitLib = Mod->getILModule()->hasExternallyVisibleSymbols()
-      && !Mod->declarationsOnly();
+                  && !Mod->declarationsOnly();
 
    bool EmitStaticLib = EmitLib && CI.getOptions().emitStaticModuleLib();
    SmallString<128> TmpFile;
 
-   il::IRGen *IRGen;
+   il::IRGen* IRGen;
    if (CI.getQueryContext().SetupIRGen(IRGen)) {
       llvm_unreachable("setting up IRGen failed?");
    }
@@ -246,9 +243,8 @@ void ModuleManager::EmitModule(Module *Mod)
    }
    else if (EmitLib) {
       SmallString<56> LibDir = fs::getLibraryDir();
-      fs::appendToPath(LibDir,
-                       "libcdot" + Mod->getName()->getIdentifier()
-                          + "." + fs::getDynamicLibraryExtension());
+      fs::appendToPath(LibDir, "libcdot" + Mod->getName()->getIdentifier() + "."
+                                   + fs::getDynamicLibraryExtension());
 
       IRGen->emitDynamicLibrary(LibDir, Mod->getILModule()->getLLVMModule());
    }
@@ -275,15 +271,15 @@ void ModuleManager::EmitModule(Module *Mod)
    OS << *Buffer;
 }
 
-void ModuleManager::ImportPrelude(Module *IntoMod)
+void ModuleManager::ImportPrelude(Module* IntoMod)
 {
-   auto &Sema = CI.getSema();
-   class Module *Prelude = Sema.getPreludeModule();
+   auto& Sema = CI.getSema();
+   class Module* Prelude = Sema.getPreludeModule();
 
    if (!Prelude) {
-      auto *StdII = &CI.getContext().getIdentifiers().get("std");
+      auto* StdII = &CI.getContext().getIdentifiers().get("std");
 
-      class Module *Std;
+      class Module* Std;
       if (IntoMod->getName() == StdII) {
          Std = IntoMod;
       }
@@ -298,13 +294,12 @@ void ModuleManager::ImportPrelude(Module *IntoMod)
       if (!Std)
          return;
 
-      auto *PreludeII = &CI.getContext().getIdentifiers().get("prelude");
+      auto* PreludeII = &CI.getContext().getIdentifiers().get("prelude");
       Prelude = Std->getSubModule(PreludeII);
 
       if (!Prelude) {
-         auto *PreludeDecl = ModuleDecl::Create(CI.getContext(),
-                                                Std->getSourceRange(),
-                                                PreludeII);
+         auto* PreludeDecl = ModuleDecl::Create(
+             CI.getContext(), Std->getSourceRange(), PreludeII);
 
          Sema.addDeclToContext(*Std->getDecl(), PreludeDecl);
          Prelude = Module::Create(CI.getContext(), PreludeII,
@@ -315,27 +310,24 @@ void ModuleManager::ImportPrelude(Module *IntoMod)
       }
    }
 
-   if (IntoMod == Prelude
-         || IntoMod->importsModule(Prelude)
-         || IntoMod->getBaseModule() == Prelude->getBaseModule())
+   if (IntoMod == Prelude || IntoMod->importsModule(Prelude)
+       || IntoMod->getBaseModule() == Prelude->getBaseModule())
       return;
 
    IntoMod->getDecl()->addImportedModule(Prelude);
    IntoMod->addImport(Prelude);
 }
 
-void ModuleManager::ImportModule(ImportDecl *I)
+void ModuleManager::ImportModule(ImportDecl* I)
 {
-   auto &Sema = CI.getSema();
-   auto *Mod = LookupModule(I->getSourceRange(),
-                            CI.getFileMgr()
-                              .createModuleImportLoc(I->getSourceLoc()),
-                            I->getQualifiedImportName().front()
-                             .getIdentifierInfo());
+   auto& Sema = CI.getSema();
+   auto* Mod
+       = LookupModule(I->getSourceRange(),
+                      CI.getFileMgr().createModuleImportLoc(I->getSourceLoc()),
+                      I->getQualifiedImportName().front().getIdentifierInfo());
 
    if (!Mod) {
-      Sema.diagnose(diag::err_module_not_found,
-                    I->getSourceRange(),
+      Sema.diagnose(diag::err_module_not_found, I->getSourceRange(),
                     I->getQualifiedImportName().front());
 
       return;
@@ -344,8 +336,7 @@ void ModuleManager::ImportModule(ImportDecl *I)
    for (auto Ident : I->getQualifiedImportName().drop_front(1)) {
       auto SubMod = Mod->getSubModule(Ident.getIdentifierInfo());
       if (!SubMod) {
-         Sema.diagnose(diag::err_submodule_not_found,
-                       I->getSourceRange(),
+         Sema.diagnose(diag::err_submodule_not_found, I->getSourceRange(),
                        Mod->getName(), Ident);
 
          return;
@@ -355,13 +346,13 @@ void ModuleManager::ImportModule(ImportDecl *I)
    }
 
    // diagnose circular dependencies
-   auto *CurrentMod = CI.getSema().getDeclContext().getDeclModule()
-                        ->getModule();
+   auto* CurrentMod
+       = CI.getSema().getDeclContext().getDeclModule()->getModule();
 
    if (Mod->importsModule(CurrentMod)) {
       Sema.diagnose(I, diag::err_circular_module_dependency,
-                    I->getSourceRange(),
-                    Mod->getFullName(), CurrentMod->getFullName());
+                    I->getSourceRange(), Mod->getFullName(),
+                    CurrentMod->getFullName());
 
       return;
    }
@@ -370,7 +361,7 @@ void ModuleManager::ImportModule(ImportDecl *I)
    I->setImportedModule(Mod);
 }
 
-serial::ModuleReader *ModuleManager::getReaderForModule(Module *Mod)
+serial::ModuleReader* ModuleManager::getReaderForModule(Module* Mod)
 {
    auto It = ReaderMap.find(Mod);
    if (It == ReaderMap.end())
@@ -379,15 +370,15 @@ serial::ModuleReader *ModuleManager::getReaderForModule(Module *Mod)
    return It->getSecond();
 }
 
-void ModuleManager::addSourceFileToModule(const fs::OpenFile &File,
-                                          Module *Mod) {
+void ModuleManager::addSourceFileToModule(const fs::OpenFile& File, Module* Mod)
+{
    Mod = Mod->getBaseModule();
 
-   auto *SourceFile = Mod->lookupSourceFile(File.FileName);
+   auto* SourceFile = Mod->lookupSourceFile(File.FileName);
    auto LastModified = fs::getLastModifiedTime(File.FileName);
 
    if (!SourceFile) {
       Mod->addSourceFile(File.FileName,
-                         { LastModified, File.SourceId, File.BaseOffset });
+                         {LastModified, File.SourceId, File.BaseOffset});
    }
 }

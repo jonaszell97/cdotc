@@ -1,0 +1,258 @@
+
+#ifdef CDOT_TOKEN
+#define CDOT_OTHER_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_KEYWORD_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_OPERATOR_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_LITERAL_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#define CDOT_MODULE_KW_TOKEN(Name, Spelling) CDOT_TOKEN(Name, Spelling)
+#endif
+
+#ifdef CDOT_OTHER_TOKEN
+CDOT_OTHER_TOKEN(sentinel, "")
+CDOT_OTHER_TOKEN(eof, "")
+
+CDOT_OTHER_TOKEN(expr_begin, "")
+CDOT_OTHER_TOKEN(stringify_begin, "")
+CDOT_OTHER_TOKEN(preprocessor_value, "")
+
+CDOT_OTHER_TOKEN(interpolation_begin, "")
+CDOT_OTHER_TOKEN(interpolation_end, "")
+
+CDOT_OTHER_TOKEN(macro_expression, "")
+CDOT_OTHER_TOKEN(macro_statement, "")
+CDOT_OTHER_TOKEN(macro_declaration, "")
+
+CDOT_OTHER_TOKEN(ident, "")
+CDOT_OTHER_TOKEN(op_ident, "")
+CDOT_OTHER_TOKEN(dollar_ident, "")
+CDOT_OTHER_TOKEN(closure_arg, "")
+CDOT_OTHER_TOKEN(macro_name, "")
+CDOT_OTHER_TOKEN(percent_ident, "")
+CDOT_OTHER_TOKEN(dollar_dollar_ident, "")
+CDOT_OTHER_TOKEN(percent_percent_ident, "")
+#endif
+
+#ifdef CDOT_LITERAL_TOKEN
+CDOT_LITERAL_TOKEN(charliteral, "")
+CDOT_LITERAL_TOKEN(stringliteral, "")
+CDOT_LITERAL_TOKEN(integerliteral, "")
+CDOT_LITERAL_TOKEN(fpliteral, "")
+#endif
+
+#ifdef CDOT_KEYWORD_TOKEN
+#define CDOT_KEYWORD(Name) CDOT_KEYWORD_TOKEN(kw_##Name, #Name)
+
+// semantically these are keywords as they can't appear in arbitrary
+// expression context, even though they are lexed as operators
+CDOT_KEYWORD_TOKEN(arrow_single, "->")
+CDOT_KEYWORD_TOKEN(arrow_double, "=>")
+#endif
+
+#ifdef CDOT_KEYWORD
+CDOT_KEYWORD(self)
+CDOT_KEYWORD(super)
+CDOT_KEYWORD(true)
+CDOT_KEYWORD(false)
+CDOT_KEYWORD(none)
+
+CDOT_KEYWORD(def)
+CDOT_KEYWORD(let)
+CDOT_KEYWORD(var)
+CDOT_KEYWORD(return )
+CDOT_KEYWORD(if)
+CDOT_KEYWORD(else)
+CDOT_KEYWORD(while)
+CDOT_KEYWORD(loop)
+CDOT_KEYWORD(match)
+   CDOT_KEYWORD(for)
+   CDOT_KEYWORD(case)
+
+   CDOT_KEYWORD(throw)
+   CDOT_KEYWORD(try)
+   CDOT_KEYWORD(await)
+   CDOT_KEYWORD(catch)
+   CDOT_KEYWORD(finally)
+
+   CDOT_KEYWORD(alias)
+
+   CDOT_KEYWORD(typedef)
+   CDOT_KEYWORD(namespace)
+   CDOT_KEYWORD(struct)
+   CDOT_KEYWORD(class)
+   CDOT_KEYWORD(union)
+   CDOT_KEYWORD(enum)
+   CDOT_KEYWORD(protocol)
+   CDOT_KEYWORD(extend)
+   CDOT_KEYWORD(mixin)
+
+   CDOT_KEYWORD(public)
+   CDOT_KEYWORD(private)
+   CDOT_KEYWORD(protected)
+   CDOT_KEYWORD(fileprivate)
+   CDOT_KEYWORD(internal)
+   CDOT_KEYWORD(static)
+   CDOT_KEYWORD(abstract)
+   CDOT_KEYWORD(prop)
+   CDOT_KEYWORD(continue)
+   CDOT_KEYWORD(init)
+   CDOT_KEYWORD(associatedType)
+
+   CDOT_KEYWORD(break)
+   CDOT_KEYWORD(mutating)
+   CDOT_KEYWORD(declare)
+
+   CDOT_KEYWORD(module)
+   CDOT_KEYWORD(import)
+
+   CDOT_KEYWORD(static_if)
+   CDOT_KEYWORD(static_for)
+   CDOT_KEYWORD(static_assert)
+   CDOT_KEYWORD(static_print)
+
+   CDOT_KEYWORD(__debug)
+   CDOT_KEYWORD(__unreachable)
+#endif
+
+#ifdef CDOT_SOFT_KEYWORD
+   CDOT_SOFT_KEYWORD(using)
+   CDOT_SOFT_KEYWORD(read)
+   CDOT_SOFT_KEYWORD(write)
+   CDOT_SOFT_KEYWORD(nonmutating)
+#endif
+
+#ifdef CDOT_MODULE_KW_TOKEN
+   CDOT_MODULE_KW_TOKEN(kw_source_files, "source_files")
+   CDOT_MODULE_KW_TOKEN(kw_timestamp, "timestamp")
+   CDOT_MODULE_KW_TOKEN(kw_build_options, "build_options")
+#endif
+
+#ifdef CDOT_TABLEGEN_KW_TOKEN
+   CDOT_TABLEGEN_KW_TOKEN(tblgen_if, "if")
+   CDOT_TABLEGEN_KW_TOKEN(tblgen_foreach, "foreach")
+   CDOT_TABLEGEN_KW_TOKEN(tblgen_print, "print")
+#endif
+
+#ifdef CDOT_CONTEXTUAL_KW_TOKEN
+   CDOT_CONTEXTUAL_KW_TOKEN(kw_typename, "typename")
+   CDOT_CONTEXTUAL_KW_TOKEN(kw_value, "value")
+   CDOT_CONTEXTUAL_KW_TOKEN(kw_in, "in")
+#endif
+
+#ifdef CDOT_POUND_KEYWORD_TOKEN
+#define CDOT_POUND_KEYWORD(Name)                                               \
+   CDOT_POUND_KEYWORD_TOKEN(pound_##Name, "#" #Name)
+#endif
+
+#ifdef CDOT_POUND_KEYWORD
+   CDOT_POUND_KEYWORD(if)
+   CDOT_POUND_KEYWORD(else)
+   CDOT_POUND_KEYWORD(elseif)
+   CDOT_POUND_KEYWORD(endif)
+   CDOT_POUND_KEYWORD(ifdef)
+   CDOT_POUND_KEYWORD(ifndef)
+   CDOT_POUND_KEYWORD(for)
+   CDOT_POUND_KEYWORD(endfor)
+   CDOT_POUND_KEYWORD(pragma)
+   CDOT_POUND_KEYWORD(define)
+   CDOT_POUND_KEYWORD(macro)
+   CDOT_POUND_KEYWORD(undef)
+   CDOT_POUND_KEYWORD(let)
+   CDOT_POUND_KEYWORD(print)
+   CDOT_POUND_KEYWORD(include)
+   CDOT_POUND_KEYWORD(using)
+   CDOT_POUND_KEYWORD(namespace)
+   CDOT_POUND_KEYWORD(endnamespace)
+#endif
+
+#ifdef CDOT_PUNCTUATOR_TOKEN
+   CDOT_PUNCTUATOR_TOKEN(space, ' ')
+   CDOT_PUNCTUATOR_TOKEN(open_paren, '(')
+   CDOT_PUNCTUATOR_TOKEN(close_paren, ')')
+   CDOT_PUNCTUATOR_TOKEN(comma, ',')
+   CDOT_PUNCTUATOR_TOKEN(open_brace, '{')
+   CDOT_PUNCTUATOR_TOKEN(close_brace, '}')
+   CDOT_PUNCTUATOR_TOKEN(open_square, '[')
+   CDOT_PUNCTUATOR_TOKEN(close_square, ']')
+   CDOT_PUNCTUATOR_TOKEN(semicolon, ';')
+   CDOT_PUNCTUATOR_TOKEN(newline, '\n')
+   CDOT_PUNCTUATOR_TOKEN(backslash, '\\')
+   CDOT_PUNCTUATOR_TOKEN(period, '.')
+   CDOT_PUNCTUATOR_TOKEN(at, '@')
+   CDOT_PUNCTUATOR_TOKEN(pound, '#')
+   CDOT_PUNCTUATOR_TOKEN(single_quote, '\'')
+   CDOT_PUNCTUATOR_TOKEN(double_quote, '"')
+   CDOT_PUNCTUATOR_TOKEN(backtick, '`')
+   CDOT_PUNCTUATOR_TOKEN(dollar, '$')
+   CDOT_PUNCTUATOR_TOKEN(underscore, '_')
+#endif
+
+#ifdef CDOT_OPERATOR_TOKEN
+   CDOT_OPERATOR_TOKEN(exclaim, "!")
+   CDOT_OPERATOR_TOKEN(question, "?")
+   CDOT_OPERATOR_TOKEN(colon, ":")
+
+   CDOT_OPERATOR_TOKEN(equals, "=")
+   CDOT_OPERATOR_TOKEN(plus_equals, "+=")
+   CDOT_OPERATOR_TOKEN(minus_equals, "-=")
+   CDOT_OPERATOR_TOKEN(times_equals, "*=")
+   CDOT_OPERATOR_TOKEN(div_equals, "/=")
+   CDOT_OPERATOR_TOKEN(mod_equals, "%=")
+   CDOT_OPERATOR_TOKEN(and_equals, "&=")
+   CDOT_OPERATOR_TOKEN(or_equals, "|=")
+   CDOT_OPERATOR_TOKEN(xor_equals, "^=")
+   CDOT_OPERATOR_TOKEN(exp_equals, "**=")
+   CDOT_OPERATOR_TOKEN(shl_equals, "<<=")
+   CDOT_OPERATOR_TOKEN(ashr_equals, ">>=")
+   CDOT_OPERATOR_TOKEN(lshr_equals, ">>>=")
+
+   CDOT_OPERATOR_TOKEN(logical_or, "||")
+   CDOT_OPERATOR_TOKEN(logical_and, "&&")
+   CDOT_OPERATOR_TOKEN(op_and, "&")
+   CDOT_OPERATOR_TOKEN(op_or, "|")
+   CDOT_OPERATOR_TOKEN(caret, "^")
+   CDOT_OPERATOR_TOKEN(tilde, "~")
+   CDOT_OPERATOR_TOKEN(exclaim_equals, "!=")
+   CDOT_OPERATOR_TOKEN(double_equals, "==")
+
+   CDOT_OPERATOR_TOKEN(triple_equals, "===")
+   CDOT_OPERATOR_TOKEN(exclaim_double_equals, "!==")
+
+   CDOT_OPERATOR_TOKEN(smaller_equals, "<=")
+   CDOT_OPERATOR_TOKEN(greater_equals, ">=")
+   CDOT_OPERATOR_TOKEN(smaller, "<")
+   CDOT_OPERATOR_TOKEN(greater, ">")
+   CDOT_OPERATOR_TOKEN(shl, "<<")
+   CDOT_OPERATOR_TOKEN(lshr, ">>>")
+   CDOT_OPERATOR_TOKEN(ashr, ">>")
+   CDOT_OPERATOR_TOKEN(plus, "+")
+   CDOT_OPERATOR_TOKEN(minus, "-")
+   CDOT_OPERATOR_TOKEN(times, "*")
+
+   CDOT_OPERATOR_TOKEN(plus_plus, "++")
+   CDOT_OPERATOR_TOKEN(minus_minus, "--")
+
+   CDOT_OPERATOR_TOKEN(div, "/")
+   CDOT_OPERATOR_TOKEN(percent, "%")
+   CDOT_OPERATOR_TOKEN(times_times, "**")
+   CDOT_OPERATOR_TOKEN(triple_period, "...")
+
+   CDOT_OPERATOR_TOKEN(exclaim_is, "!is")
+#endif
+
+#undef CDOT_TOKEN
+#undef CDOT_OTHER_TOKEN
+#undef CDOT_OPERATOR_TOKEN
+#undef CDOT_PUNCTUATOR_TOKEN
+#undef CDOT_KEYWORD_TOKEN
+#undef CDOT_SOFT_KEYWORD
+#undef CDOT_POUND_KEYWORD_TOKEN
+#undef CDOT_LITERAL_TOKEN
+#undef CDOT_CONTEXTUAL_KW_TOKEN
+#undef CDOT_MODULE_KW_TOKEN
+#undef CDOT_TABLEGEN_KW_TOKEN
+
+#undef CDOT_KEYWORD
+#undef CDOT_POUND_KEYWORD

@@ -1,28 +1,28 @@
-#include "IRGen.h"
+#include "cdotc/IRGen/IRGen.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "AST/Type.h"
-#include "Basic/CastKind.h"
-#include "Driver/Compiler.h"
-#include "Basic/FileUtils.h"
-#include "Basic/FileManager.h"
-#include "IL/Constants.h"
-#include "IL/Context.h"
-#include "IL/Instructions.h"
-#include "IL/Analysis/Dominance.h"
-#include "IL/Utils/BlockIterator.h"
-#include "ILGen/ILGenPass.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Type.h"
+#include "cdotc/Basic/CastKind.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Analysis/Dominance.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Utils/BlockIterator.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/SemaPass.h"
 
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
 
 using namespace cdot::support;
@@ -34,11 +34,11 @@ namespace il {
 
 namespace {
 
-class IRGenPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
+class IRGenPrettyStackTraceEntry : public llvm::PrettyStackTraceEntry {
 public:
-   explicit IRGenPrettyStackTraceEntry(const il::Function &F) : F(F) {}
+   explicit IRGenPrettyStackTraceEntry(const il::Function& F) : F(F) {}
 
-   void print(raw_ostream &OS) const override
+   void print(raw_ostream& OS) const override
    {
       OS << "while generating IL for function '" << F.getName() << "'";
 
@@ -51,7 +51,7 @@ public:
    }
 
 private:
-   const il::Function &F;
+   const il::Function& F;
 };
 
 } // anonymous namespace
@@ -59,19 +59,14 @@ private:
 #ifndef NDEBUG
 
 LLVM_ATTRIBUTE_UNUSED
-void dump(llvm::Function *F)
-{
-   F->print(llvm::outs());
-}
+void dump(llvm::Function* F) { F->print(llvm::outs()); }
 
 #endif
 
-IRGen::IRGen(CompilerInstance &CI,
-             llvm::LLVMContext &Ctx,
-             bool emitDebugInfo)
-   : CI(CI), Sema(CI.getSema()), TI(CI.getContext().getTargetInfo()),
-     emitDebugInfo(emitDebugInfo), DI(nullptr), Ctx(Ctx), M(nullptr),
-     Builder(Ctx)
+IRGen::IRGen(CompilerInstance& CI, llvm::LLVMContext& Ctx, bool emitDebugInfo)
+    : CI(CI), Sema(CI.getSema()), TI(CI.getContext().getTargetInfo()),
+      emitDebugInfo(emitDebugInfo), DI(nullptr), Ctx(Ctx), M(nullptr),
+      Builder(Ctx)
 {
    llvm::InitializeAllTargetInfos();
    llvm::InitializeAllTargets();
@@ -85,48 +80,45 @@ IRGen::IRGen(CompilerInstance &CI,
    Int1Ty = llvm::IntegerType::get(Ctx, 1);
    VoidTy = llvm::Type::getVoidTy(Ctx);
 
-   DeinitializerTy = llvm::FunctionType::get(VoidTy, { Int8PtrTy }, false);
+   DeinitializerTy = llvm::FunctionType::get(VoidTy, {Int8PtrTy}, false);
 
    EmptyTupleTy = llvm::StructType::get(Ctx, {});
    EmptyTuple = llvm::UndefValue::get(EmptyTupleTy->getPointerTo());
 
-   llvm::Type *errorContainedTypes[] = {
-      Int8PtrTy,                 // typeinfo ptr
-      Int8PtrTy,                 // deinit fn
-      Int8PtrTy                  // object ptr
+   llvm::Type* errorContainedTypes[] = {
+       Int8PtrTy, // typeinfo ptr
+       Int8PtrTy, // deinit fn
+       Int8PtrTy  // object ptr
    };
 
    ErrorTy = llvm::StructType::create(Ctx, errorContainedTypes, "cdot.Error");
 
-   llvm::Type *boxContainedTypes[] = {
-      WordTy,                   // strong refcount
-      WordTy,                   // weak refcount
-      Int8PtrTy,                // deinitializer
-      Builder.getInt8Ty()       // data
+   llvm::Type* boxContainedTypes[] = {
+       WordTy,             // strong refcount
+       WordTy,             // weak refcount
+       Int8PtrTy,          // deinitializer
+       Builder.getInt8Ty() // data
    };
 
    BoxTy = llvm::StructType::create(Ctx, boxContainedTypes, "cdot.Box");
 
-   llvm::Type *lambdaContainedTypes[] = {
-      Int8PtrTy,                // function ptr
-      WordTy,                   // strong refcount
-      BoxTy->getPointerTo()     // first environment value
-                                // (trailing objects follow)
+   llvm::Type* lambdaContainedTypes[] = {
+       Int8PtrTy,            // function ptr
+       WordTy,               // strong refcount
+       BoxTy->getPointerTo() // first environment value
+                             // (trailing objects follow)
    };
 
-   LambdaTy = llvm::StructType::create(Ctx, lambdaContainedTypes,
-                                       "cdot.Lambda");
+   LambdaTy
+       = llvm::StructType::create(Ctx, lambdaContainedTypes, "cdot.Lambda");
 
    WordZero = Builder.getInt64(0);
    WordOne = Builder.getInt64(1);
 }
 
-IRGen::~IRGen()
-{
-   delete TargetMachine;
-}
+IRGen::~IRGen() { delete TargetMachine; }
 
-void IRGen::visitCompilationUnit(CompilerInstance &CU)
+void IRGen::visitCompilationUnit(CompilerInstance& CU)
 {
    visitModule(*CU.getCompilationModule()->getILModule());
 }
@@ -143,14 +135,8 @@ void IRGen::visitModule(Module& ILMod)
       DI = new llvm::DIBuilder(*this->M);
       File = DI->createFile(ILMod.getFileName(), ILMod.getPath());
 
-      this->CU = DI->createCompileUnit(
-         llvm::dwarf::DW_LANG_C,
-         File,
-         "cdotc v0.1",
-         false,
-         "",
-         0
-      );
+      this->CU = DI->createCompileUnit(llvm::dwarf::DW_LANG_C, File,
+                                       "cdotc v0.1", false, "", 0);
 
       beginScope(this->CU);
    }
@@ -190,15 +176,15 @@ void IRGen::visitModule(Module& ILMod)
    DynamicDownCastFn = nullptr;
    RuntimeFunctions.clear();
 
-   auto *TypeInfoDecl = Sema.getTypeInfoDecl();
-   auto *ECDecl = Sema.getExistentialContainerDecl();
-   auto *ConfDecl = Sema.getProtocolConformanceDecl();
-//   auto *GenericEnvDecl = Sema.getGenericEnvironmentDecl();
+   auto* TypeInfoDecl = Sema.getTypeInfoDecl();
+   auto* ECDecl = Sema.getExistentialContainerDecl();
+   auto* ConfDecl = Sema.getProtocolConformanceDecl();
+   //   auto *GenericEnvDecl = Sema.getGenericEnvironmentDecl();
 
    ILMod.addRecord(TypeInfoDecl);
    ILMod.addRecord(ECDecl);
    ILMod.addRecord(ConfDecl);
-//   ILMod.addRecord(GenericEnvDecl);
+   //   ILMod.addRecord(GenericEnvDecl);
 
    for (auto Ty : ILMod.getRecords()) {
       if (StructTypeMap.find(Ty) != StructTypeMap.end())
@@ -212,71 +198,65 @@ void IRGen::visitModule(Module& ILMod)
    TypeInfoTy = getStructTy(TypeInfoDecl);
    ExistentialContainerTy = getStructTy(ECDecl);
    ProtocolConformanceTy = getStructTy(ConfDecl);
-//   GenericEnvironmentTy = getStructTy(GenericEnvDecl);
+   //   GenericEnvironmentTy = getStructTy(GenericEnvDecl);
 
    for (auto Ty : ILMod.getRecords()) {
       DeclareType(Ty);
    }
 
-   for (const auto &F : ILMod.getFuncList()) {
+   for (const auto& F : ILMod.getFuncList()) {
       DeclareFunction(&F);
    }
 
-   for (const auto &G : ILMod.getGlobalList())
+   for (const auto& G : ILMod.getGlobalList())
       ForwardDeclareGlobal(&G);
 
-   for (const auto &G : ILMod.getGlobalList())
+   for (const auto& G : ILMod.getGlobalList())
       DeclareGlobal(&G);
 
-   for (auto &F : ILMod.getFuncList())
+   for (auto& F : ILMod.getFuncList())
       visitFunction(F);
 
    auto VoidFnTy = llvm::FunctionType::get(Builder.getVoidTy(), false);
 
    if (!GlobalInitFns.empty()) {
-      auto ctorStructTy =
-         llvm::StructType::get(Builder.getInt32Ty(), VoidFnTy->getPointerTo(),
-                               Int8PtrTy);
+      auto ctorStructTy = llvm::StructType::get(
+          Builder.getInt32Ty(), VoidFnTy->getPointerTo(), Int8PtrTy);
 
       llvm::SmallVector<llvm::Constant*, 4> Vals;
-      for (auto &Fn : GlobalInitFns) {
-         Vals.push_back(
-            llvm::ConstantStruct::get(
-               ctorStructTy, Builder.getInt32(Fn.second), Fn.first,
-               llvm::ConstantPointerNull::get(Int8PtrTy)));
+      for (auto& Fn : GlobalInitFns) {
+         Vals.push_back(llvm::ConstantStruct::get(
+             ctorStructTy, Builder.getInt32(Fn.second), Fn.first,
+             llvm::ConstantPointerNull::get(Int8PtrTy)));
       }
 
-      auto ctorArrayTy = llvm::ArrayType::get(ctorStructTy,
-                                              GlobalInitFns.size());
+      auto ctorArrayTy
+          = llvm::ArrayType::get(ctorStructTy, GlobalInitFns.size());
 
-      auto ctors =
-         new llvm::GlobalVariable(*M, ctorArrayTy, true,
-                                  llvm::GlobalVariable::AppendingLinkage,
-                                  nullptr, "llvm.global_ctors");
+      auto ctors = new llvm::GlobalVariable(
+          *M, ctorArrayTy, true, llvm::GlobalVariable::AppendingLinkage,
+          nullptr, "llvm.global_ctors");
 
       ctors->setInitializer(llvm::ConstantArray::get(ctorArrayTy, Vals));
    }
 
    if (!GlobalDeinitFns.empty()) {
-      auto dtorStructTy =
-         llvm::StructType::get(Builder.getInt32Ty(), VoidFnTy->getPointerTo(),
-                               Int8PtrTy);
+      auto dtorStructTy = llvm::StructType::get(
+          Builder.getInt32Ty(), VoidFnTy->getPointerTo(), Int8PtrTy);
 
       llvm::SmallVector<llvm::Constant*, 4> Vals;
-      for (auto &Fn : GlobalDeinitFns) {
-         Vals.push_back(
-            llvm::ConstantStruct::get(
-               dtorStructTy, Builder.getInt32(Fn.second), Fn.first,
-               llvm::ConstantPointerNull::get(Int8PtrTy)));
+      for (auto& Fn : GlobalDeinitFns) {
+         Vals.push_back(llvm::ConstantStruct::get(
+             dtorStructTy, Builder.getInt32(Fn.second), Fn.first,
+             llvm::ConstantPointerNull::get(Int8PtrTy)));
       }
 
-      auto dtorArrayTy = llvm::ArrayType::get(dtorStructTy,
-                                              GlobalDeinitFns.size());
+      auto dtorArrayTy
+          = llvm::ArrayType::get(dtorStructTy, GlobalDeinitFns.size());
 
-      auto dtors =
-         new llvm::GlobalVariable(*M, dtorArrayTy, true,
-                                  llvm::GlobalVariable::AppendingLinkage,
-                                  nullptr, "llvm.global_dtors");
+      auto dtors = new llvm::GlobalVariable(
+          *M, dtorArrayTy, true, llvm::GlobalVariable::AppendingLinkage,
+          nullptr, "llvm.global_dtors");
 
       dtors->setInitializer(llvm::ConstantArray::get(dtorArrayTy, Vals));
    }
@@ -310,14 +290,13 @@ void IRGen::visitModule(Module& ILMod)
 
 /// If given, IL will be emitted without debug info even if it is created.
 static llvm::cl::opt<bool>
-AssumeSingleThread("fassume-single-threaded",
-                   llvm::cl::desc("use non-atomic reference counting"));
+    AssumeSingleThread("fassume-single-threaded",
+                       llvm::cl::desc("use non-atomic reference counting"));
 
 llvm::Constant* IRGen::getMallocFn()
 {
    if (!MallocFn) {
-      MallocFn = M->getOrInsertFunction("_cdot_Malloc",
-                                        Int8PtrTy, WordTy);
+      MallocFn = M->getOrInsertFunction("_cdot_Malloc", Int8PtrTy, WordTy);
    }
 
    return MallocFn;
@@ -326,8 +305,7 @@ llvm::Constant* IRGen::getMallocFn()
 llvm::Constant* IRGen::getFreeFn()
 {
    if (!FreeFn)
-      FreeFn = M->getOrInsertFunction("_cdot_Free",
-                                      VoidTy, Int8PtrTy);
+      FreeFn = M->getOrInsertFunction("_cdot_Free", VoidTy, Int8PtrTy);
 
    return FreeFn;
 }
@@ -335,8 +313,7 @@ llvm::Constant* IRGen::getFreeFn()
 llvm::Constant* IRGen::getThrowFn()
 {
    if (!ThrowFn)
-      ThrowFn = M->getOrInsertFunction("__cdot_throw",
-                                       VoidTy, Int8PtrTy);
+      ThrowFn = M->getOrInsertFunction("__cdot_throw", VoidTy, Int8PtrTy);
 
    return ThrowFn;
 }
@@ -344,9 +321,9 @@ llvm::Constant* IRGen::getThrowFn()
 llvm::Constant* IRGen::getAllocExcnFn()
 {
    if (!AllocExcFn)
-      AllocExcFn = M->getOrInsertFunction("__cdot_allocate_exception",
-                                          Int8PtrTy, WordTy, Int8PtrTy,
-                                          Int8PtrTy, Int8PtrTy);
+      AllocExcFn
+          = M->getOrInsertFunction("__cdot_allocate_exception", Int8PtrTy,
+                                   WordTy, Int8PtrTy, Int8PtrTy, Int8PtrTy);
 
    return AllocExcFn;
 }
@@ -358,8 +335,8 @@ llvm::Constant* IRGen::getRetainFn()
          RetainFn = M->getOrInsertFunction("_cdot_Retain", VoidTy, Int8PtrTy);
       }
       else {
-         RetainFn = M->getOrInsertFunction("_cdot_AtomicRetain", VoidTy,
-                                           Int8PtrTy);
+         RetainFn
+             = M->getOrInsertFunction("_cdot_AtomicRetain", VoidTy, Int8PtrTy);
       }
    }
 
@@ -373,8 +350,8 @@ llvm::Constant* IRGen::getReleaseFn()
          ReleaseFn = M->getOrInsertFunction("_cdot_Release", VoidTy, Int8PtrTy);
       }
       else {
-         ReleaseFn = M->getOrInsertFunction("_cdot_AtomicRelease", VoidTy,
-                                            Int8PtrTy);
+         ReleaseFn
+             = M->getOrInsertFunction("_cdot_AtomicRelease", VoidTy, Int8PtrTy);
       }
    }
 
@@ -385,8 +362,8 @@ llvm::Constant* IRGen::getRetainLambdaFn()
 {
    if (!RetainLambdaFn) {
       if (AssumeSingleThread) {
-         RetainLambdaFn = M->getOrInsertFunction("_cdot_RetainLambda",
-                                                 VoidTy, Int8PtrTy);
+         RetainLambdaFn
+             = M->getOrInsertFunction("_cdot_RetainLambda", VoidTy, Int8PtrTy);
       }
       else {
          RetainLambdaFn = M->getOrInsertFunction("_cdot_AtomicRetainLambda",
@@ -401,8 +378,8 @@ llvm::Constant* IRGen::getReleaseLambdaFn()
 {
    if (!ReleaseLambdaFn) {
       if (AssumeSingleThread) {
-         ReleaseLambdaFn = M->getOrInsertFunction("_cdot_ReleaseLambda",
-                                                  VoidTy, Int8PtrTy);
+         ReleaseLambdaFn
+             = M->getOrInsertFunction("_cdot_ReleaseLambda", VoidTy, Int8PtrTy);
       }
       else {
          ReleaseLambdaFn = M->getOrInsertFunction("_cdot_AtomicReleaseLambda",
@@ -417,12 +394,12 @@ llvm::Constant* IRGen::getRetainBoxFn()
 {
    if (!RetainBoxFn) {
       if (AssumeSingleThread) {
-         RetainBoxFn = M->getOrInsertFunction("_cdot_RetainBox",
-                                              VoidTy, Int8PtrTy);
+         RetainBoxFn
+             = M->getOrInsertFunction("_cdot_RetainBox", VoidTy, Int8PtrTy);
       }
       else {
-         RetainBoxFn = M->getOrInsertFunction("_cdot_AtomicRetainBox",
-                                              VoidTy, Int8PtrTy);
+         RetainBoxFn = M->getOrInsertFunction("_cdot_AtomicRetainBox", VoidTy,
+                                              Int8PtrTy);
       }
    }
 
@@ -433,12 +410,12 @@ llvm::Constant* IRGen::getReleaseBoxFn()
 {
    if (!ReleaseBoxFn) {
       if (AssumeSingleThread) {
-         ReleaseBoxFn = M->getOrInsertFunction("_cdot_ReleaseBox",
-                                               VoidTy, Int8PtrTy);
+         ReleaseBoxFn
+             = M->getOrInsertFunction("_cdot_ReleaseBox", VoidTy, Int8PtrTy);
       }
       else {
-         ReleaseBoxFn = M->getOrInsertFunction("_cdot_AtomicReleaseBox",
-                                               VoidTy, Int8PtrTy);
+         ReleaseBoxFn = M->getOrInsertFunction("_cdot_AtomicReleaseBox", VoidTy,
+                                               Int8PtrTy);
       }
    }
 
@@ -448,9 +425,8 @@ llvm::Constant* IRGen::getReleaseBoxFn()
 llvm::Constant* IRGen::getTypeInfoCmpFn()
 {
    if (!TypeInfoCmpFn)
-      TypeInfoCmpFn = M->getOrInsertFunction("_cdot_TypeInfoCmp",
-                                             Builder.getInt1Ty(), Int8PtrTy,
-                                             Int8PtrTy);
+      TypeInfoCmpFn = M->getOrInsertFunction(
+          "_cdot_TypeInfoCmp", Builder.getInt1Ty(), Int8PtrTy, Int8PtrTy);
 
    return TypeInfoCmpFn;
 }
@@ -458,8 +434,7 @@ llvm::Constant* IRGen::getTypeInfoCmpFn()
 llvm::Constant* IRGen::getExitFn()
 {
    if (!ExitFn)
-      ExitFn = M->getOrInsertFunction("exit",
-                                      VoidTy, Builder.getInt32Ty());
+      ExitFn = M->getOrInsertFunction("exit", VoidTy, Builder.getInt32Ty());
 
    return ExitFn;
 }
@@ -467,8 +442,8 @@ llvm::Constant* IRGen::getExitFn()
 llvm::Constant* IRGen::getPrintExceptionFn()
 {
    if (!PrintExceptionFn)
-      PrintExceptionFn = M->getOrInsertFunction("_cdot_PrintException",
-                                                VoidTy, Int8PtrTy);
+      PrintExceptionFn
+          = M->getOrInsertFunction("_cdot_PrintException", VoidTy, Int8PtrTy);
 
    return PrintExceptionFn;
 }
@@ -476,8 +451,8 @@ llvm::Constant* IRGen::getPrintExceptionFn()
 llvm::Constant* IRGen::getCleanupExceptionFn()
 {
    if (!CleanupExceptionFn)
-      CleanupExceptionFn = M->getOrInsertFunction("_cdot_CleanupException",
-                                                  VoidTy, Int8PtrTy);
+      CleanupExceptionFn
+          = M->getOrInsertFunction("_cdot_CleanupException", VoidTy, Int8PtrTy);
 
    return CleanupExceptionFn;
 }
@@ -485,8 +460,9 @@ llvm::Constant* IRGen::getCleanupExceptionFn()
 llvm::Constant* IRGen::getPrintfFn()
 {
    if (!PrintfFn)
-      PrintfFn = M->getOrInsertFunction("printf",
-            llvm::FunctionType::get(Builder.getInt32Ty(), { Int8PtrTy }, true));
+      PrintfFn = M->getOrInsertFunction(
+          "printf",
+          llvm::FunctionType::get(Builder.getInt32Ty(), {Int8PtrTy}, true));
 
    return PrintfFn;
 }
@@ -494,103 +470,79 @@ llvm::Constant* IRGen::getPrintfFn()
 llvm::Constant* IRGen::getMemCmpFn()
 {
    if (!MemCmpFn)
-      MemCmpFn = M->getOrInsertFunction("memcmp",
-                                        llvm::FunctionType::get(
-                                           Builder.getInt32Ty(), { Int8PtrTy,
-                                              Int8PtrTy, WordTy }, false));
+      MemCmpFn = M->getOrInsertFunction(
+          "memcmp",
+          llvm::FunctionType::get(Builder.getInt32Ty(),
+                                  {Int8PtrTy, Int8PtrTy, WordTy}, false));
 
    return MemCmpFn;
 }
 
-llvm::Constant *IRGen::getInitializeExistentialFn()
+llvm::Constant* IRGen::getInitializeExistentialFn()
 {
    if (!InitializeExistentialFn) {
-      InitializeExistentialFn =
-         M->getOrInsertFunction("_cdot_InitializeExistential",
-            llvm::FunctionType::get(VoidTy,
-                                    {
-                                       Int8PtrTy,
-                                       Int8PtrTy,
-                                       Int8PtrTy,
-                                       Int8PtrTy
-                                    }, false));
+      InitializeExistentialFn = M->getOrInsertFunction(
+          "_cdot_InitializeExistential",
+          llvm::FunctionType::get(
+              VoidTy, {Int8PtrTy, Int8PtrTy, Int8PtrTy, Int8PtrTy}, false));
    }
 
    return InitializeExistentialFn;
 }
 
-llvm::Constant *IRGen::getDeinitializeExistentialFn()
+llvm::Constant* IRGen::getDeinitializeExistentialFn()
 {
    if (!DeinitializeExistentialFn) {
-      DeinitializeExistentialFn =
-         M->getOrInsertFunction("_cdot_DeinitializeExistential",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy
-                                                        }, false));
+      DeinitializeExistentialFn = M->getOrInsertFunction(
+          "_cdot_DeinitializeExistential",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy}, false));
    }
 
    return DeinitializeExistentialFn;
 }
 
-llvm::Constant *IRGen::getCopyExistentialFn()
+llvm::Constant* IRGen::getCopyExistentialFn()
 {
    if (!CopyExistentialFn) {
-      CopyExistentialFn =
-         M->getOrInsertFunction("_cdot_CopyExistential",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      CopyExistentialFn = M->getOrInsertFunction(
+          "_cdot_CopyExistential",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy, Int8PtrTy}, false));
    }
 
    return CopyExistentialFn;
 }
 
-llvm::Constant *IRGen::getCastExistentialFn()
+llvm::Constant* IRGen::getCastExistentialFn()
 {
    if (!CastExistentialFn) {
-      CastExistentialFn =
-         M->getOrInsertFunction("_cdot_ExistentialCast",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      CastExistentialFn = M->getOrInsertFunction(
+          "_cdot_ExistentialCast",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy, Int8PtrTy, Int8PtrTy},
+                                  false));
    }
 
    return CastExistentialFn;
 }
 
-llvm::Constant *IRGen::getCastExistentialFallibleFn()
+llvm::Constant* IRGen::getCastExistentialFallibleFn()
 {
    if (!CastExistentialFallibleFn) {
-      CastExistentialFallibleFn =
-         M->getOrInsertFunction("_cdot_ExistentialCastFallible",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      CastExistentialFallibleFn = M->getOrInsertFunction(
+          "_cdot_ExistentialCastFallible",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy, Int8PtrTy, Int8PtrTy},
+                                  false));
    }
 
    return CastExistentialFallibleFn;
 }
 
-llvm::Constant *IRGen::getUnwrapExistentialFn()
+llvm::Constant* IRGen::getUnwrapExistentialFn()
 {
    if (!UnwrapExistentialFn) {
-      UnwrapExistentialFn =
-         M->getOrInsertFunction("_cdot_ExistentialUnwrap",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      UnwrapExistentialFn = M->getOrInsertFunction(
+          "_cdot_ExistentialUnwrap",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy, Int8PtrTy, Int8PtrTy},
+                                  false));
    }
 
    return UnwrapExistentialFn;
@@ -599,13 +551,9 @@ llvm::Constant *IRGen::getUnwrapExistentialFn()
 llvm::Constant* IRGen::getCopyClassFn()
 {
    if (!CopyClassFn) {
-      CopyClassFn =
-         M->getOrInsertFunction("_cdot_CopyClass",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      CopyClassFn = M->getOrInsertFunction(
+          "_cdot_CopyClass",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy, Int8PtrTy}, false));
    }
 
    return CopyClassFn;
@@ -614,13 +562,9 @@ llvm::Constant* IRGen::getCopyClassFn()
 llvm::Constant* IRGen::getGetConformanceFn()
 {
    if (!GetConformanceFn) {
-      GetConformanceFn =
-         M->getOrInsertFunction("_cdot_GetConformance",
-                                llvm::FunctionType::get(Int8PtrTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      GetConformanceFn = M->getOrInsertFunction(
+          "_cdot_GetConformance",
+          llvm::FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, false));
    }
 
    return GetConformanceFn;
@@ -629,13 +573,9 @@ llvm::Constant* IRGen::getGetConformanceFn()
 llvm::Constant* IRGen::getGetProtocolVTableFn()
 {
    if (!GetProtocolVTableFn) {
-      GetProtocolVTableFn =
-         M->getOrInsertFunction("_cdot_GetProtocolVTable",
-                                llvm::FunctionType::get(Int8PtrTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      GetProtocolVTableFn = M->getOrInsertFunction(
+          "_cdot_GetProtocolVTable",
+          llvm::FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, false));
    }
 
    return GetProtocolVTableFn;
@@ -644,14 +584,10 @@ llvm::Constant* IRGen::getGetProtocolVTableFn()
 llvm::Constant* IRGen::getGetGenericArgumentFn()
 {
    if (!GetGenericArgumentFn) {
-      GetGenericArgumentFn =
-         M->getOrInsertFunction("_cdot_GetGenericArgument",
-                                llvm::FunctionType::get(Int8PtrTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           WordTy,
-                                                           WordTy
-                                                        }, false));
+      GetGenericArgumentFn = M->getOrInsertFunction(
+          "_cdot_GetGenericArgument",
+          llvm::FunctionType::get(Int8PtrTy, {Int8PtrTy, WordTy, WordTy},
+                                  false));
    }
 
    return GetGenericArgumentFn;
@@ -660,12 +596,9 @@ llvm::Constant* IRGen::getGetGenericArgumentFn()
 llvm::Constant* IRGen::getGetTemplateParamTypeValueFn()
 {
    if (!GetTemplateParamTypeValueFn) {
-      GetTemplateParamTypeValueFn =
-         M->getOrInsertFunction("_cdot_GetTemplateParamTypeValue",
-                                llvm::FunctionType::get(Int8PtrTy,
-                                                        {
-                                                           Int8PtrTy
-                                                        }, false));
+      GetTemplateParamTypeValueFn = M->getOrInsertFunction(
+          "_cdot_GetTemplateParamTypeValue",
+          llvm::FunctionType::get(Int8PtrTy, {Int8PtrTy}, false));
    }
 
    return GetTemplateParamTypeValueFn;
@@ -674,14 +607,10 @@ llvm::Constant* IRGen::getGetTemplateParamTypeValueFn()
 llvm::Constant* IRGen::getDynamicDownCastFn()
 {
    if (!DynamicDownCastFn) {
-      DynamicDownCastFn =
-         M->getOrInsertFunction("_cdot_DynamicDownCast",
-                                llvm::FunctionType::get(VoidTy,
-                                                        {
-                                                           Int8PtrTy,
-                                                           Int8PtrTy,
-                                                           Int8PtrTy
-                                                        }, false));
+      DynamicDownCastFn = M->getOrInsertFunction(
+          "_cdot_DynamicDownCast",
+          llvm::FunctionType::get(VoidTy, {Int8PtrTy, Int8PtrTy, Int8PtrTy},
+                                  false));
    }
 
    return DynamicDownCastFn;
@@ -693,40 +622,40 @@ llvm::Constant* IRGen::getIntPowFn(QualType IntTy)
    llvm::StringRef funcName;
 
    switch (cast<BuiltinType>(IntTy)->getKind()) {
-#  define CDOT_BUILTIN_INT(Name, BW, Unsigned)         \
-   case BuiltinType::Name:                             \
-      funcName = "_cdot_intpow_" #Name;               \
+#define CDOT_BUILTIN_INT(Name, BW, Unsigned)                                   \
+   case BuiltinType::Name:                                                     \
+      funcName = "_cdot_intpow_" #Name;                                        \
       break;
-#  include "Basic/BuiltinTypes.def"
+#include "cdotc/Basic/BuiltinTypes.def"
    default:
       llvm_unreachable("not an integer type!");
    }
 
-   return M->getOrInsertFunction(funcName,
-                                 llvm::FunctionType::get(
-                                    llvmTy, { llvmTy, llvmTy }, false));
+   return M->getOrInsertFunction(
+       funcName, llvm::FunctionType::get(llvmTy, {llvmTy, llvmTy}, false));
 }
 
-llvm::CallInst *IRGen::CallRuntimeFunction(StringRef FuncName,
-                                           ArrayRef<llvm::Value *> Args,
-                                           llvm::Type *RetTy) {
+llvm::CallInst* IRGen::CallRuntimeFunction(StringRef FuncName,
+                                           ArrayRef<llvm::Value*> Args,
+                                           llvm::Type* RetTy)
+{
    auto It = RuntimeFunctions.find(FuncName);
    if (It != RuntimeFunctions.end())
       return Builder.CreateCall(It->getSecond(), Args);
 
    SmallVector<llvm::Type*, 2> ParamTys;
-   for (auto *V : Args)
+   for (auto* V : Args)
       ParamTys.push_back(V->getType());
 
-   auto *Fn = M->getOrInsertFunction(
-      FuncName,
-      llvm::FunctionType::get(RetTy ? RetTy : VoidTy, ParamTys, false));
+   auto* Fn = M->getOrInsertFunction(
+       FuncName,
+       llvm::FunctionType::get(RetTy ? RetTy : VoidTy, ParamTys, false));
 
    RuntimeFunctions[FuncName] = Fn;
    return Builder.CreateCall(Fn, Args);
 }
 
-void IRGen::addMappedValue(const il::Value *ILVal, llvm::Value *LLVMVal)
+void IRGen::addMappedValue(const il::Value* ILVal, llvm::Value* LLVMVal)
 {
    ValueMap[ILVal] = LLVMVal;
 }
@@ -738,7 +667,7 @@ bool IRGen::IsSmallStruct(cdot::CanType Ty)
    case Type::TupleTypeID:
       return !NeedsStructReturn(Ty);
    case Type::RecordTypeID: {
-      auto *R = Ty->getRecord();
+      auto* R = Ty->getRecord();
       switch (R->getKind()) {
       case Decl::StructDeclID:
          return !NeedsStructReturn(Ty);
@@ -756,7 +685,7 @@ bool IRGen::NeedsStructReturn(CanType Ty)
    return Sema.NeedsStructReturn(Ty->getDesugaredType());
 }
 
-llvm::StructType* IRGen::getEnumCaseTy(ast::EnumCaseDecl *Decl)
+llvm::StructType* IRGen::getEnumCaseTy(ast::EnumCaseDecl* Decl)
 {
    auto it = EnumCaseTys.find(Decl);
    if (it != EnumCaseTys.end())
@@ -765,19 +694,19 @@ llvm::StructType* IRGen::getEnumCaseTy(ast::EnumCaseDecl *Decl)
    unsigned Size = 0;
    llvm::SmallVector<llvm::Type*, 4> ContainedTys;
 
-   for (auto &Val : Decl->getArgs()) {
+   for (auto& Val : Decl->getArgs()) {
       Size += TI.getSizeOfType(Val->getType());
       ContainedTys.push_back(getStorageType(Val->getType()));
    }
 
    // add padding to get to the same size as the Enum type
-   auto NeededCaseValSize =
-      TI.getSizeOfType(cast<EnumDecl>(Decl->getRecord())->getType())
-      - TI.getSizeOfType(cast<EnumDecl>(Decl->getRecord())->getRawType());
+   auto NeededCaseValSize
+       = TI.getSizeOfType(cast<EnumDecl>(Decl->getRecord())->getType())
+         - TI.getSizeOfType(cast<EnumDecl>(Decl->getRecord())->getRawType());
 
    if (Size < NeededCaseValSize) {
-      ContainedTys.push_back(llvm::ArrayType::get(Builder.getInt8Ty(),
-                                                  NeededCaseValSize - Size));
+      ContainedTys.push_back(
+          llvm::ArrayType::get(Builder.getInt8Ty(), NeededCaseValSize - Size));
    }
 
    auto llvmTy = llvm::StructType::get(Ctx, ContainedTys);
@@ -791,7 +720,7 @@ llvm::StructType* IRGen::getStructTy(QualType Ty)
    return getStructTy(Ty->getRecord());
 }
 
-llvm::StructType* IRGen::getStructTy(RecordDecl *R)
+llvm::StructType* IRGen::getStructTy(RecordDecl* R)
 {
    if (isa<ProtocolDecl>(R))
       return ExistentialContainerTy;
@@ -811,10 +740,12 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
    switch (Ty->getTypeID()) {
    case Type::BuiltinTypeID:
       switch (Ty->asBuiltinType()->getKind()) {
-         case BuiltinType::Void: return VoidTy;
-#           define CDOT_BUILTIN_INT(Name, BW, isUnsigned)                     \
-         case BuiltinType::Name: return Builder.getIntNTy(BW);
-#           include "Basic/BuiltinTypes.def"
+      case BuiltinType::Void:
+         return VoidTy;
+#define CDOT_BUILTIN_INT(Name, BW, isUnsigned)                                 \
+   case BuiltinType::Name:                                                     \
+      return Builder.getIntNTy(BW);
+#include "cdotc/Basic/BuiltinTypes.def"
 
       case BuiltinType::f16:
          return Builder.getHalfTy();
@@ -847,19 +778,19 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
    case Type::TokenTypeID:
       return llvm::Type::getTokenTy(Ctx);
    case Type::ArrayTypeID: {
-      ArrayType *ArrTy = Ty->asArrayType();
+      ArrayType* ArrTy = Ty->asArrayType();
       return llvm::ArrayType::get(getStorageType(ArrTy->getElementType()),
                                   ArrTy->getNumElements());
    }
    case Type::LambdaTypeID:
       return LambdaTy->getPointerTo();
    case Type::FunctionTypeID: {
-      FunctionType *FuncTy = Ty->asFunctionType();
+      FunctionType* FuncTy = Ty->asFunctionType();
 
       QualType RetType = FuncTy->getReturnType();
       bool sret = NeedsStructReturn(RetType);
 
-      llvm::Type *LLVMRetTy;
+      llvm::Type* LLVMRetTy;
       if (RetType->isEmptyTupleType() || sret) {
          LLVMRetTy = VoidTy;
       }
@@ -875,21 +806,21 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
          argTypes.push_back(getParameterType(RetType));
       }
 
-      for (const auto &arg : FuncTy->getParamTypes())
+      for (const auto& arg : FuncTy->getParamTypes())
          argTypes.push_back(getParameterType(arg));
 
-      auto *FnTy = llvm::FunctionType::get(LLVMRetTy, argTypes,
+      auto* FnTy = llvm::FunctionType::get(LLVMRetTy, argTypes,
                                            FuncTy->isCStyleVararg());
 
       return FnTy->getPointerTo();
    }
    case Type::TupleTypeID: {
-      TupleType *TupleTy = Ty->asTupleType();
+      TupleType* TupleTy = Ty->asTupleType();
       if (!TupleTy->getArity())
          return EmptyTupleTy;
 
       SmallVector<llvm::Type*, 4> argTypes;
-      for (const auto &cont : TupleTy->getContainedTypes())
+      for (const auto& cont : TupleTy->getContainedTypes())
          argTypes.push_back(getStorageType(cont));
 
       return llvm::StructType::get(Ctx, argTypes);
@@ -899,7 +830,8 @@ llvm::Type* IRGen::getLlvmTypeImpl(CanType Ty)
          return getStructTy(Ty)->getPointerTo();
       }
       if (Ty->isRawEnum()) {
-         return getLlvmTypeImpl(cast<ast::EnumDecl>(Ty->getRecord())->getRawType());
+         return getLlvmTypeImpl(
+             cast<ast::EnumDecl>(Ty->getRecord())->getRawType());
       }
 
       return getStructTy(Ty);
@@ -938,10 +870,7 @@ llvm::Type* IRGen::getParameterType(CanType Ty)
    return llvmTy;
 }
 
-llvm::Type* IRGen::getGlobalType(CanType Ty)
-{
-   return getStorageType(Ty);
-}
+llvm::Type* IRGen::getGlobalType(CanType Ty) { return getStorageType(Ty); }
 
 void IRGen::DeclareFunction(il::Function const* F)
 {
@@ -949,7 +878,7 @@ void IRGen::DeclareFunction(il::Function const* F)
    auto funcTy = F->getType()->asFunctionType();
 
    SmallVector<llvm::Type*, 8> argTypes;
-   llvm::Type *retType;
+   llvm::Type* retType;
 
    bool sret = false;
    unsigned sretIdx = 0;
@@ -963,12 +892,12 @@ void IRGen::DeclareFunction(il::Function const* F)
       auto L = cast<Lambda>(F);
 
       llvm::SmallVector<llvm::Type*, 4> CapturedTypes;
-      for (auto &Capt : L->getCaptures()) {
+      for (auto& Capt : L->getCaptures()) {
          (void)Capt;
          CapturedTypes.push_back(BoxTy->getPointerTo());
       }
 
-      llvm::StructType *Ty = llvm::StructType::get(Ctx, CapturedTypes);
+      llvm::StructType* Ty = llvm::StructType::get(Ctx, CapturedTypes);
       argTypes.push_back(Ty->getPointerTo());
 
       ++sretIdx;
@@ -993,7 +922,7 @@ void IRGen::DeclareFunction(il::Function const* F)
    }
 
    SmallVector<unsigned, 4> ParamIndices;
-   for (auto &Arg : F->getEntryBlock()->getArgs()) {
+   for (auto& Arg : F->getEntryBlock()->getArgs()) {
       QualType ParamTy = Arg.getType();
       ParamIndices.push_back(argTypes.size());
 
@@ -1005,13 +934,12 @@ void IRGen::DeclareFunction(il::Function const* F)
       }
    }
 
-   auto linkage =
-      F->isGlobalInitFn()
-         ? llvm::Function::InternalLinkage
-         : (llvm::Function::LinkageTypes)F->getLinkage();
+   auto linkage = F->isGlobalInitFn()
+                      ? llvm::Function::InternalLinkage
+                      : (llvm::Function::LinkageTypes)F->getLinkage();
 
-   auto llvmTy = llvm::FunctionType::get(retType, argTypes,
-                                         funcTy->isCStyleVararg());
+   auto llvmTy
+       = llvm::FunctionType::get(retType, argTypes, funcTy->isCStyleVararg());
 
    auto fn = llvm::Function::Create(llvmTy, linkage, F->getName(), M);
    fn->setUnnamedAddr((llvm::Function::UnnamedAddr)F->getUnnamedAddr());
@@ -1030,34 +958,34 @@ void IRGen::DeclareFunction(il::Function const* F)
    if (DI && !F->isDeclared())
       emitFunctionDI(*F, fn);
 
-   auto &ILGen = CI.getILGen();
+   auto& ILGen = CI.getILGen();
    if (auto Decl = dyn_cast_or_null<CallableDecl>(ILGen.getDeclForValue(F))) {
       if (auto Attr = Decl->getAttribute<InlineAttr>()) {
          switch (Attr->getLevel()) {
          case InlineAttr::never:
-            AttrList = AttrList.addAttribute(Ctx,
-                                             llvm::AttributeList::FunctionIndex,
-                                             llvm::Attribute::NoInline);
+            AttrList
+                = AttrList.addAttribute(Ctx, llvm::AttributeList::FunctionIndex,
+                                        llvm::Attribute::NoInline);
 
             break;
          case InlineAttr::hint:
-            AttrList = AttrList.addAttribute(Ctx,
-                                             llvm::AttributeList::FunctionIndex,
-                                             llvm::Attribute::InlineHint);
+            AttrList
+                = AttrList.addAttribute(Ctx, llvm::AttributeList::FunctionIndex,
+                                        llvm::Attribute::InlineHint);
 
             break;
          case InlineAttr::always:
-            AttrList = AttrList.addAttribute(Ctx,
-                                             llvm::AttributeList::FunctionIndex,
-                                             llvm::Attribute::AlwaysInline);
+            AttrList
+                = AttrList.addAttribute(Ctx, llvm::AttributeList::FunctionIndex,
+                                        llvm::Attribute::AlwaysInline);
             break;
          }
       }
    }
 
    if (F->mightThrow()) {
-      AttrList = AttrList.addParamAttribute(Ctx, 0,
-                                            llvm::Attribute::SwiftError);
+      AttrList
+          = AttrList.addParamAttribute(Ctx, 0, llvm::Attribute::SwiftError);
    }
 
    if (sret) {
@@ -1073,7 +1001,8 @@ void IRGen::DeclareFunction(il::Function const* F)
    unsigned i = 0;
    for (auto Idx : ParamIndices) {
       while (i < Idx) {
-         ++i; ++llvm_arg_it;
+         ++i;
+         ++llvm_arg_it;
       }
 
       assert(il_arg_it != F->getEntryBlock()->arg_end());
@@ -1112,27 +1041,27 @@ llvm::Value* IRGen::getCurrentErrorValue()
    return &*it;
 }
 
-void IRGen::ForwardDeclareType(ast::RecordDecl *R)
+void IRGen::ForwardDeclareType(ast::RecordDecl* R)
 {
    if (isa<ProtocolDecl>(R))
       return;
 
    llvm::SmallString<128> typeName;
    switch (R->getKind()) {
-      case Decl::ClassDeclID:
-         typeName += "class";
-         break;
-      case Decl::StructDeclID:
-         typeName += "struct";
-         break;
-      case Decl::EnumDeclID:
-         typeName += "enum";
-         break;
-      case Decl::UnionDeclID:
-         typeName += "union";
-         break;
-      default:
-         llvm_unreachable("bad type kind");
+   case Decl::ClassDeclID:
+      typeName += "class";
+      break;
+   case Decl::StructDeclID:
+      typeName += "struct";
+      break;
+   case Decl::EnumDeclID:
+      typeName += "enum";
+      break;
+   case Decl::UnionDeclID:
+      typeName += "union";
+      break;
+   default:
+      llvm_unreachable("bad type kind");
    }
 
    typeName += '.';
@@ -1142,7 +1071,7 @@ void IRGen::ForwardDeclareType(ast::RecordDecl *R)
    StructTypeMap[R] = llvmTy;
 }
 
-void IRGen::DeclareType(ast::RecordDecl *R)
+void IRGen::DeclareType(ast::RecordDecl* R)
 {
    if (isa<ProtocolDecl>(R))
       return;
@@ -1168,10 +1097,10 @@ void IRGen::DeclareType(ast::RecordDecl *R)
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       ContainedTypes.push_back(getStorageType(E->getRawType()));
 
-      auto CaseSize = TI.getSizeOfType(E->getType())
-         - TI.getSizeOfType(E->getRawType());
+      auto CaseSize
+          = TI.getSizeOfType(E->getType()) - TI.getSizeOfType(E->getRawType());
 
-      auto *ArrTy = llvm::ArrayType::get(Builder.getInt8Ty(), CaseSize);
+      auto* ArrTy = llvm::ArrayType::get(Builder.getInt8Ty(), CaseSize);
       ContainedTypes.push_back(ArrTy);
    }
 
@@ -1181,14 +1110,14 @@ void IRGen::DeclareType(ast::RecordDecl *R)
    Ty->setBody(ContainedTypes, true);
 }
 
-void IRGen::ForwardDeclareGlobal(il::GlobalVariable const *G)
+void IRGen::ForwardDeclareGlobal(il::GlobalVariable const* G)
 {
-   llvm::Type *globalTy = getGlobalType(G->getType()->getReferencedType());
+   llvm::Type* globalTy = getGlobalType(G->getType()->getReferencedType());
 
-   auto GV = new llvm::GlobalVariable(*M, globalTy,
-                            G->isConstant() && !G->isLazilyInitialized(),
-                            (llvm::GlobalVariable::LinkageTypes)G->getLinkage(),
-                            nullptr, G->getName());
+   auto GV = new llvm::GlobalVariable(
+       *M, globalTy, G->isConstant() && !G->isLazilyInitialized(),
+       (llvm::GlobalVariable::LinkageTypes)G->getLinkage(), nullptr,
+       G->getName());
 
    GV->setAlignment(TI.getAllocAlignOfType(G->getType()->getReferencedType()));
    GV->setUnnamedAddr((llvm::GlobalVariable::UnnamedAddr)G->getUnnamedAddr());
@@ -1197,7 +1126,7 @@ void IRGen::ForwardDeclareGlobal(il::GlobalVariable const *G)
    addMappedValue(G, GV);
 }
 
-void IRGen::DeclareGlobal(il::GlobalVariable const *G)
+void IRGen::DeclareGlobal(il::GlobalVariable const* G)
 {
    auto glob = cast<llvm::GlobalVariable>(ValueMap[G]);
    if (auto Init = G->getInitializer()) {
@@ -1206,8 +1135,9 @@ void IRGen::DeclareGlobal(il::GlobalVariable const *G)
       // this can happen with ConstantEnums that can't exactly match the
       // required type
       if (glob->getValueType() != InitVal->getType()) {
-         auto NewGlobal = new llvm::GlobalVariable(*M, InitVal->getType(),
-            glob->isConstant(), glob->getLinkage(), InitVal, glob->getName());
+         auto NewGlobal = new llvm::GlobalVariable(
+             *M, InitVal->getType(), glob->isConstant(), glob->getLinkage(),
+             InitVal, glob->getName());
 
          glob->replaceAllUsesWith(NewGlobal);
          glob->eraseFromParent();
@@ -1220,11 +1150,11 @@ void IRGen::DeclareGlobal(il::GlobalVariable const *G)
    }
    else if (!G->isDeclared()) {
       glob->setInitializer(llvm::ConstantAggregateZero::get(
-         glob->getType()->getPointerElementType()));
+          glob->getType()->getPointerElementType()));
    }
 }
 
-void IRGen::visitFunction(Function &F)
+void IRGen::visitFunction(Function& F)
 {
    if (F.isDeclared())
       return;
@@ -1242,13 +1172,13 @@ void IRGen::visitFunction(Function &F)
       Builder.SetCurrentDebugLocation(llvm::DebugLoc());
    }
 
-   llvm::BasicBlock *AllocaBB = nullptr;
+   llvm::BasicBlock* AllocaBB = nullptr;
    if (!F.isAsync()) {
       AllocaBB = llvm::BasicBlock::Create(Ctx, "alloca_block", func);
    }
 
    // Create PHIs for basic block arguments.
-   for (auto &BB : F.getBasicBlocks()) {
+   for (auto& BB : F.getBasicBlocks()) {
       if (BB.hasNoPredecessors())
          continue;
 
@@ -1256,7 +1186,7 @@ void IRGen::visitFunction(Function &F)
       Builder.SetInsertPoint(B);
 
       if (!BB.isEntryBlock() && !BB.getArgs().empty()) {
-         for (const auto &arg : BB.getArgs()) {
+         for (const auto& arg : BB.getArgs()) {
             auto ty = getParameterType(arg.getType());
             addMappedValue(&arg, Builder.CreatePHI(ty, 0));
          }
@@ -1275,14 +1205,14 @@ void IRGen::visitFunction(Function &F)
    // Allocate structs that were passed destructured.
    Builder.SetInsertPoint(AllocaBB);
 
-   for (auto &B : F.getBasicBlocks()) {
+   for (auto& B : F.getBasicBlocks()) {
       if (B.hasNoPredecessors())
          continue;
 
       visitBasicBlock(B);
    }
 
-   for (auto &B : F.getBasicBlocks()) {
+   for (auto& B : F.getBasicBlocks()) {
       if (!B.isEntryBlock() && !B.getArgs().empty()) {
          for (size_t i = 0; i < B.getArgs().size(); ++i) {
             auto llvmBB = getBasicBlock(&B);
@@ -1292,23 +1222,22 @@ void IRGen::visitFunction(Function &F)
                val = val->getNextNode();
 
             auto phi = cast<llvm::PHINode>(val);
-            for (BasicBlock *Pred : getPredecessors(B)) {
+            for (BasicBlock* Pred : getPredecessors(B)) {
                auto Term = Pred->getTerminator();
                assert(Term && "no terminator for basic block");
-               llvm::Value *PassedVal;
+               llvm::Value* PassedVal;
 
                if (auto Br = dyn_cast<BrInst>(Term)) {
                   PassedVal = getLlvmValue(&B == Br->getTargetBranch()
-                              ? Br->getTargetArgs()[i]
-                              : Br->getElseArgs()[i]);
+                                               ? Br->getTargetArgs()[i]
+                                               : Br->getElseArgs()[i]);
                }
                else if (auto Inv = dyn_cast<InvokeInst>(Term)) {
                   continue;
                }
                else if (auto Yield = dyn_cast<YieldInst>(Term)) {
                   PassedVal = getLlvmValue(Yield->getResumeArgs()[i]);
-                  PassedVal = Builder.CreateBitCast(PassedVal,
-                                                    phi->getType());
+                  PassedVal = Builder.CreateBitCast(PassedVal, phi->getType());
                }
                else {
                   llvm_unreachable("bad terminator kind");
@@ -1318,8 +1247,9 @@ void IRGen::visitFunction(Function &F)
             }
 
             if (!phi->getNumIncomingValues()) {
-               assert(B.hasNoPredecessors() && "branch didn't provide value "
-                                               "for block argument!");
+               assert(B.hasNoPredecessors()
+                      && "branch didn't provide value "
+                         "for block argument!");
                llvmBB->eraseFromParent();
             }
          }
@@ -1342,7 +1272,7 @@ void IRGen::visitFunction(Function &F)
    this->AllocaBB = nullptr;
 }
 
-llvm::GlobalVariable*IRGen::getOrCreateInitializedFlag(const il::Value *ForVal)
+llvm::GlobalVariable* IRGen::getOrCreateInitializedFlag(const il::Value* ForVal)
 {
    auto It = InitializedFlagMap.find(ForVal);
    if (It != InitializedFlagMap.end())
@@ -1356,20 +1286,17 @@ llvm::GlobalVariable*IRGen::getOrCreateInitializedFlag(const il::Value *ForVal)
    return Flag;
 }
 
-llvm::Value *IRGen::visitDebugLocInst(const DebugLocInst &I)
+llvm::Value* IRGen::visitDebugLocInst(const DebugLocInst& I)
 {
    if (DI) {
-      Builder.SetCurrentDebugLocation(llvm::DebugLoc::get(
-         I.getLine(),
-         I.getCol(),
-         ScopeStack.top()
-      ));
+      Builder.SetCurrentDebugLocation(
+          llvm::DebugLoc::get(I.getLine(), I.getCol(), ScopeStack.top()));
    }
 
    return nullptr;
 }
 
-llvm::Value *IRGen::visitDebugLocalInst(const DebugLocalInst &I)
+llvm::Value* IRGen::visitDebugLocalInst(const DebugLocalInst& I)
 {
    if (DI)
       emitLocalVarDI(I);
@@ -1377,7 +1304,7 @@ llvm::Value *IRGen::visitDebugLocalInst(const DebugLocalInst &I)
    return nullptr;
 }
 
-void IRGen::visitBasicBlock(BasicBlock &B)
+void IRGen::visitBasicBlock(BasicBlock& B)
 {
    Builder.SetInsertPoint(getBasicBlock(&B));
 
@@ -1397,24 +1324,24 @@ void IRGen::visitBasicBlock(BasicBlock &B)
           && "basic block not terminated!");
 }
 
-llvm::BasicBlock *IRGen::getBasicBlock(llvm::StringRef name)
+llvm::BasicBlock* IRGen::getBasicBlock(llvm::StringRef name)
 {
    assert(Builder.GetInsertBlock());
    auto func = Builder.GetInsertBlock()->getParent();
 
-   for (auto &BB : func->getBasicBlockList())
+   for (auto& BB : func->getBasicBlockList())
       if (BB.getName() == name)
          return &BB;
 
    return nullptr;
 }
 
-llvm::BasicBlock* IRGen::getBasicBlock(BasicBlock *BB)
+llvm::BasicBlock* IRGen::getBasicBlock(BasicBlock* BB)
 {
    return cast<llvm::BasicBlock>(ValueMap[BB]);
 }
 
-llvm::Function* IRGen::getFunction(il::Function *F)
+llvm::Function* IRGen::getFunction(il::Function* F)
 {
    return cast<llvm::Function>(ValueMap[F]);
 }
@@ -1424,27 +1351,28 @@ llvm::ConstantInt* IRGen::wordSizedInt(uint64_t val)
    return llvm::ConstantInt::get(WordTy, val);
 }
 
-llvm::Value* IRGen::toInt8Ptr(llvm::Value *V)
+llvm::Value* IRGen::toInt8Ptr(llvm::Value* V)
 {
    return Builder.CreateBitCast(V, Int8PtrTy);
 }
 
-llvm::Constant* IRGen::toInt8Ptr(llvm::Constant *V)
+llvm::Constant* IRGen::toInt8Ptr(llvm::Constant* V)
 {
    return llvm::ConstantExpr::getBitCast(V, Int8PtrTy);
 }
 
-llvm::Value* IRGen::CreateSizeOf(llvm::Type *Ty)
+llvm::Value* IRGen::CreateSizeOf(llvm::Type* Ty)
 {
    return Builder.CreatePtrToInt(
-      Builder.CreateInBoundsGEP(
-         llvm::ConstantPointerNull::get(Ty->getPointerTo()),
-         { Builder.getInt32(1) }),
-      Builder.getInt64Ty());
+       Builder.CreateInBoundsGEP(
+           llvm::ConstantPointerNull::get(Ty->getPointerTo()),
+           {Builder.getInt32(1)}),
+       Builder.getInt64Ty());
 }
 
-llvm::Value* IRGen::CreateCall(il::Function *F,
-                               llvm::SmallVector<llvm::Value*, 8> &args) {
+llvm::Value* IRGen::CreateCall(il::Function* F,
+                               llvm::SmallVector<llvm::Value*, 8>& args)
+{
    auto fun = getFunction(F);
 
    bool sret = F->hasStructReturn();
@@ -1464,7 +1392,8 @@ llvm::Value* IRGen::CreateCall(il::Function *F,
 
 llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
                                       size_t allocatedSize,
-                                      unsigned int alignment) {
+                                      unsigned int alignment)
+{
    auto IP = Builder.saveIP();
    auto Loc = Builder.getCurrentDebugLocation();
    Builder.SetCurrentDebugLocation(nullptr);
@@ -1474,8 +1403,8 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
    if (!alignment)
       alignment = TI.getAlignOfType(AllocatedType);
 
-   auto A = CreateAlloca(getStorageType(AllocatedType), allocatedSize,
-                         alignment);
+   auto A
+       = CreateAlloca(getStorageType(AllocatedType), allocatedSize, alignment);
 
    Builder.restoreIP(IP);
    Builder.SetCurrentDebugLocation(Loc);
@@ -1485,8 +1414,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
 }
 
 llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
-                                      il::Value *allocatedSize,
-                                      unsigned int alignment) {
+                                      il::Value* allocatedSize,
+                                      unsigned int alignment)
+{
    auto IP = Builder.saveIP();
 
    auto Loc = Builder.getCurrentDebugLocation();
@@ -1498,8 +1428,8 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
    if (!alignment)
       alignment = TI.getAlignOfType(AllocatedType);
 
-   auto A = CreateAlloca(getStorageType(AllocatedType), allocatedSize,
-                         alignment);
+   auto A
+       = CreateAlloca(getStorageType(AllocatedType), allocatedSize, alignment);
 
    Builder.restoreIP(IP);
    Builder.SetCurrentDebugLocation(Loc);
@@ -1510,9 +1440,10 @@ llvm::AllocaInst* IRGen::CreateAlloca(QualType AllocatedType,
    return A;
 }
 
-llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
-                                      il::Value *allocatedSize,
-                                      unsigned int alignment) {
+llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
+                                      il::Value* allocatedSize,
+                                      unsigned int alignment)
+{
    auto IP = Builder.saveIP();
 
    auto Loc = Builder.getCurrentDebugLocation();
@@ -1521,10 +1452,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
    if (!allocatedSize || isa<Constant>(allocatedSize))
       Builder.SetInsertPoint(AllocaBB, AllocaIt);
 
-   llvm::AllocaInst *alloca;
+   llvm::AllocaInst* alloca;
    if (allocatedSize != nullptr)
-      alloca = Builder.CreateAlloca(AllocatedType,
-                                    getLlvmValue(allocatedSize));
+      alloca = Builder.CreateAlloca(AllocatedType, getLlvmValue(allocatedSize));
    else
       alloca = Builder.CreateAlloca(AllocatedType);
 
@@ -1539,9 +1469,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
    return alloca;
 }
 
-llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
-                                      size_t allocatedSize,
-                                      unsigned alignment) {
+llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
+                                      size_t allocatedSize, unsigned alignment)
+{
    auto IP = Builder.saveIP();
 
    auto Loc = Builder.getCurrentDebugLocation();
@@ -1549,7 +1479,7 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
 
    Builder.SetInsertPoint(AllocaBB, AllocaIt);
 
-   llvm::AllocaInst *alloca;
+   llvm::AllocaInst* alloca;
    if (allocatedSize > 1)
       alloca = Builder.CreateAlloca(AllocatedType, wordSizedInt(allocatedSize));
    else
@@ -1564,18 +1494,18 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type *AllocatedType,
    return alloca;
 }
 
-llvm::Value *IRGen::CreateCopy(il::Value *Val)
+llvm::Value* IRGen::CreateCopy(il::Value* Val)
 {
    return CreateCopy(Val->getType(), getLlvmValue(Val));
 }
 
-llvm::Value *IRGen::CreateCopy(QualType Ty, llvm::Value *Val)
+llvm::Value* IRGen::CreateCopy(QualType Ty, llvm::Value* Val)
 {
    llvm_unreachable("TODO!");
 }
 
-unsigned IRGen::getFieldOffset(StructDecl *S,
-                               const DeclarationName &FieldName) {
+unsigned IRGen::getFieldOffset(StructDecl* S, const DeclarationName& FieldName)
+{
    unsigned offset = 0;
    if (isa<ClassDecl>(S))
       offset += 3;
@@ -1590,8 +1520,9 @@ unsigned IRGen::getFieldOffset(StructDecl *S,
    return offset;
 }
 
-QualType IRGen::getFieldType(ast::StructDecl *S,
-                             const DeclarationName &FieldName) {
+QualType IRGen::getFieldType(ast::StructDecl* S,
+                             const DeclarationName& FieldName)
+{
    for (auto F : S->getFields()) {
       if (F->getDeclName() == FieldName)
          return F->getType();
@@ -1600,21 +1531,20 @@ QualType IRGen::getFieldType(ast::StructDecl *S,
    llvm_unreachable("bad field name");
 }
 
-llvm::Value* IRGen::AccessField(ast::StructDecl *S,
-                                Value *Val,
-                                const DeclarationName &FieldName,
-                                bool load) {
+llvm::Value* IRGen::AccessField(ast::StructDecl* S, Value* Val,
+                                const DeclarationName& FieldName, bool load)
+{
    // Ignore a previous load of the value.
-   if (auto *ld = dyn_cast<LoadInst>(Val)) {
+   if (auto* ld = dyn_cast<LoadInst>(Val)) {
       Val = ld->getTarget();
    }
 
    auto offset = getFieldOffset(S, FieldName);
-   auto *StructVal = getLlvmValue(Val);
+   auto* StructVal = getLlvmValue(Val);
 
    if (StructVal->getType()->isStructTy()) {
-      auto *Val = Builder.CreateExtractValue(StructVal, offset);
-      auto *Alloc = Builder.CreateAlloca(Val->getType());
+      auto* Val = Builder.CreateExtractValue(StructVal, offset);
+      auto* Alloc = Builder.CreateAlloca(Val->getType());
       Builder.CreateStore(Val, Alloc);
 
       return Alloc;
@@ -1624,17 +1554,17 @@ llvm::Value* IRGen::AccessField(ast::StructDecl *S,
    return load ? (llvm::Value*)Builder.CreateLoad(Ptr) : Ptr;
 }
 
-llvm::Value* IRGen::getLlvmValue(il::Value const *V)
+llvm::Value* IRGen::getLlvmValue(il::Value const* V)
 {
    auto val = getPotentiallyBoxedValue(V);
-//   if (isa<AllocBoxInst>(V)) {
-//      val = unboxValue(val, V->getType());
-//   }
+   //   if (isa<AllocBoxInst>(V)) {
+   //      val = unboxValue(val, V->getType());
+   //   }
 
    return val;
 }
 
-llvm::Value* IRGen::getPotentiallyBoxedValue(const il::Value *V)
+llvm::Value* IRGen::getPotentiallyBoxedValue(const il::Value* V)
 {
    if (auto C = dyn_cast<Constant>(V))
       return getConstantVal(C);
@@ -1645,21 +1575,21 @@ llvm::Value* IRGen::getPotentiallyBoxedValue(const il::Value *V)
    return it->second;
 }
 
-llvm::Value* IRGen::unboxValue(llvm::Value *V, QualType Ty)
+llvm::Value* IRGen::unboxValue(llvm::Value* V, QualType Ty)
 {
    auto Unboxed = Builder.CreateStructGEP(
-      BoxTy, Builder.CreateBitCast(V, BoxTy->getPointerTo()),
-      BoxType::ObjPtr);
+       BoxTy, Builder.CreateBitCast(V, BoxTy->getPointerTo()), BoxType::ObjPtr);
 
    return Builder.CreateBitCast(Unboxed, getStorageType(Ty)->getPointerTo());
 }
 
-void IRGen::buildConstantClass(llvm::SmallVectorImpl<llvm::Constant*> &Vec,
-                               const ConstantClass *Class) {
+void IRGen::buildConstantClass(llvm::SmallVectorImpl<llvm::Constant*>& Vec,
+                               const ConstantClass* Class)
+{
    if (auto Base = Class->getBase())
       buildConstantClass(Vec, Base);
 
-   for (const auto &el : Class->getElements())
+   for (const auto& el : Class->getElements())
       Vec.push_back(getConstantVal(el));
 }
 
@@ -1682,8 +1612,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
 
    if (auto F = dyn_cast<ConstantFloat>(C)) {
       if (F->getType()->isFloatTy())
-         return llvm::ConstantFP::get(Builder.getFloatTy(),
-                                      F->getFloatVal());
+         return llvm::ConstantFP::get(Builder.getFloatTy(), F->getFloatVal());
 
       auto it = ValueMap.find(F);
       if (it != ValueMap.end())
@@ -1698,7 +1627,7 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    if (auto S = dyn_cast<ConstantString>(C)) {
       auto it = ValueMap.find(S);
       if (it != ValueMap.end()) {
-         auto *BC = cast<llvm::ConstantExpr>(it->getSecond());
+         auto* BC = cast<llvm::ConstantExpr>(it->getSecond());
          if (cast<llvm::GlobalVariable>(BC->getOperand(0))->getParent() == M)
             return BC;
       }
@@ -1721,16 +1650,16 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       if (it != ValueMap.end())
          return cast<llvm::Constant>(it->getSecond());
 
-      llvm::Constant *V;
+      llvm::Constant* V;
       if (A->isAllZerosValue()) {
          V = llvm::ConstantAggregateZero::get(getStorageType(A->getType()));
       }
       else {
          bool NeedStructTy = false;
-         llvm::Type *ElementTy = getStorageType(A->getElementType());
+         llvm::Type* ElementTy = getStorageType(A->getElementType());
 
-         SmallVector<llvm::Constant *, 8> Els;
-         for (const auto &el : A->getVec()) {
+         SmallVector<llvm::Constant*, 8> Els;
+         for (const auto& el : A->getVec()) {
             auto V = getConstantVal(el);
             if (!ElementTy) {
                ElementTy = V->getType();
@@ -1761,14 +1690,14 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       if (it != ValueMap.end())
          return cast<llvm::Constant>(it->getSecond());
 
-      llvm::Constant *V;
+      llvm::Constant* V;
       if (S->isAllZerosValue()) {
          V = llvm::ConstantAggregateZero::get(getStorageType(S->getType()));
       }
       else {
          bool NeedsCustomType = false;
-         SmallVector<llvm::Constant *, 8> Vals;
-         for (const auto &el : S->getElements()) {
+         SmallVector<llvm::Constant*, 8> Vals;
+         for (const auto& el : S->getElements()) {
             if (el->containsConstantEnum()) {
                NeedsCustomType = true;
             }
@@ -1780,8 +1709,8 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
             V = llvm::ConstantStruct::getAnon(Vals, true);
          }
          else {
-            V = llvm::ConstantStruct::get(cast<llvm::StructType>(
-               getStorageType(S->getType())), Vals);
+            V = llvm::ConstantStruct::get(
+                cast<llvm::StructType>(getStorageType(S->getType())), Vals);
          }
       }
 
@@ -1794,13 +1723,13 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       if (it != ValueMap.end())
          return cast<llvm::Constant>(it->getSecond());
 
-      llvm::Constant *V;
+      llvm::Constant* V;
       if (Tup->isAllZerosValue()) {
          V = llvm::ConstantAggregateZero::get(getStorageType(Tup->getType()));
       }
       else {
-         SmallVector<llvm::Constant *, 8> Vals;
-         for (const auto &el : Tup->getVec()) {
+         SmallVector<llvm::Constant*, 8> Vals;
+         for (const auto& el : Tup->getVec()) {
             Vals.push_back(getConstantVal(el));
          }
 
@@ -1814,13 +1743,13 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    if (auto Class = dyn_cast<ConstantClass>(C)) {
       auto it = ValueMap.find(Class);
       if (it != ValueMap.end()) {
-         auto *GV = cast<llvm::GlobalVariable>(it->getSecond());
+         auto* GV = cast<llvm::GlobalVariable>(it->getSecond());
          if (GV->getParent() == M)
             return llvm::ConstantExpr::getBitCast(
-               GV, getParameterType(C->getType()));
+                GV, getParameterType(C->getType()));
       }
 
-      auto *TI = Class->getTypeInfo();
+      auto* TI = Class->getTypeInfo();
 
       // FIXME ConstantClass should not be bound to a module!
       if (TI->getParent() != ILMod) {
@@ -1831,16 +1760,16 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       }
 
       llvm::SmallVector<llvm::Constant*, 8> Vals{
-         WordOne,                                        // strong refcount
-         WordZero,                                       // weak refcount
-         toInt8Ptr(getConstantVal(TI))                   // typeinfo
+          WordOne,                      // strong refcount
+          WordZero,                     // weak refcount
+          toInt8Ptr(getConstantVal(TI)) // typeinfo
       };
 
       buildConstantClass(Vals, Class);
 
       auto V = llvm::ConstantStruct::getAnon(Ctx, Vals);
-      auto GV = new llvm::GlobalVariable(*M, V->getType(), true,
-                                      llvm::GlobalVariable::InternalLinkage, V);
+      auto GV = new llvm::GlobalVariable(
+          *M, V->getType(), true, llvm::GlobalVariable::InternalLinkage, V);
 
       addMappedValue(Class, GV);
       return llvm::ConstantExpr::getBitCast(GV, getParameterType(C->getType()));
@@ -1850,8 +1779,8 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       auto it = ValueMap.find(U);
       if (it != ValueMap.end())
          return llvm::ConstantExpr::getBitCast(
-            cast<llvm::Constant>(it->getSecond()),
-            getStorageType(U->getType())->getPointerTo());
+             cast<llvm::Constant>(it->getSecond()),
+             getStorageType(U->getType())->getPointerTo());
 
       auto InitVal = getConstantVal(U->getInitVal());
       auto GV = new llvm::GlobalVariable(*M, InitVal->getType(), true,
@@ -1878,27 +1807,27 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
       unsigned TypeSize = TI.getSizeOfType(E->getType());
 
       llvm::SmallVector<llvm::Constant*, 4> CaseVals;
-      for (auto &Val : E->getCaseValues()) {
+      for (auto& Val : E->getCaseValues()) {
          CaseSize += TI.getSizeOfType(Val->getType());
          CaseVals.push_back(getConstantVal(Val));
       }
 
       // add padding if necessary
       if (CaseSize < TypeSize) {
-         auto PaddingTy = llvm::ArrayType::get(Builder.getInt8Ty(),
-                                               TypeSize - CaseSize);
+         auto PaddingTy
+             = llvm::ArrayType::get(Builder.getInt8Ty(), TypeSize - CaseSize);
          CaseVals.push_back(llvm::ConstantAggregateZero::get(PaddingTy));
       }
 
-      llvm::Constant *Vals = llvm::ConstantStruct::getAnon(Ctx, CaseVals);
+      llvm::Constant* Vals = llvm::ConstantStruct::getAnon(Ctx, CaseVals);
       if (E->getCase()->isIndirect()) {
          Vals = new llvm::GlobalVariable(*M, Vals->getType(), true,
                                          llvm::GlobalVariable::InternalLinkage,
                                          Vals);
       }
 
-      llvm::Constant *Val = llvm::ConstantStruct::getAnon(
-         Ctx, { getConstantVal(E->getCase()->getILValue()), Vals }, true);
+      llvm::Constant* Val = llvm::ConstantStruct::getAnon(
+          Ctx, {getConstantVal(E->getCase()->getILValue()), Vals}, true);
 
       addMappedValue(E, Val);
       return Val;
@@ -1920,14 +1849,13 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    }
 
    if (auto G = dyn_cast<GlobalVariable>(C)) {
-      auto *Ty = getParameterType(G->getType());
+      auto* Ty = getParameterType(G->getType());
       if (!Ty->isPointerTy()) {
          Ty = Ty->getPointerTo();
       }
 
       return llvm::ConstantExpr::getBitCast(
-         cast<llvm::GlobalVariable>(ValueMap[G]),
-         Ty);
+          cast<llvm::GlobalVariable>(ValueMap[G]), Ty);
    }
 
    if (auto Magic = dyn_cast<MagicConstant>(C)) {
@@ -1956,27 +1884,33 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
 
       using OPC = ConstantOperatorInst::OpCode;
       switch (Op->getOpCode()) {
-      case OPC::And:  return llvm::ConstantExpr::getAdd(lhs, rhs);
-      case OPC::Or:   return llvm::ConstantExpr::getOr(lhs, rhs);
-      case OPC::Xor:  return llvm::ConstantExpr::getXor(lhs, rhs);
-      case OPC::LShr: return llvm::ConstantExpr::getLShr(lhs, rhs);
-      case OPC::AShr: return llvm::ConstantExpr::getAShr(lhs, rhs);
-      case OPC::Shl:  return llvm::ConstantExpr::getShl(lhs, rhs);
-#  define INT_OR_FP_OP(Name)                                         \
-      case OPC::Name:                                                \
-         if (ty->isIntegerType()) {                                  \
-            if (ty->isUnsigned())                                    \
-               return llvm::ConstantExpr::getNUW##Name(lhs, rhs);    \
-                                                                     \
-            return llvm::ConstantExpr::getNSW##Name(lhs, rhs);       \
-         }                                                           \
-                                                                     \
-         return llvm::ConstantExpr::getF##Name(lhs, rhs);
-      INT_OR_FP_OP(Add)
-      INT_OR_FP_OP(Sub)
-      INT_OR_FP_OP(Mul)
+      case OPC::And:
+         return llvm::ConstantExpr::getAdd(lhs, rhs);
+      case OPC::Or:
+         return llvm::ConstantExpr::getOr(lhs, rhs);
+      case OPC::Xor:
+         return llvm::ConstantExpr::getXor(lhs, rhs);
+      case OPC::LShr:
+         return llvm::ConstantExpr::getLShr(lhs, rhs);
+      case OPC::AShr:
+         return llvm::ConstantExpr::getAShr(lhs, rhs);
+      case OPC::Shl:
+         return llvm::ConstantExpr::getShl(lhs, rhs);
+#define INT_OR_FP_OP(Name)                                                     \
+   case OPC::Name:                                                             \
+      if (ty->isIntegerType()) {                                               \
+         if (ty->isUnsigned())                                                 \
+            return llvm::ConstantExpr::getNUW##Name(lhs, rhs);                 \
+                                                                               \
+         return llvm::ConstantExpr::getNSW##Name(lhs, rhs);                    \
+      }                                                                        \
+                                                                               \
+      return llvm::ConstantExpr::getF##Name(lhs, rhs);
+         INT_OR_FP_OP(Add)
+         INT_OR_FP_OP(Sub)
+         INT_OR_FP_OP(Mul)
 
-#  undef INT_OR_FP_OP
+#undef INT_OR_FP_OP
       case OPC::Div:
          if (ty->isIntegerType()) {
             if (ty->isUnsigned())
@@ -2013,20 +1947,20 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
             idx += 3;
 
          return llvm::ConstantExpr::getInBoundsGetElementPtr(
-            val->getType(), val,
-            llvm::ArrayRef<llvm::Constant*>{ WordZero,
-               getConstantVal(GEP->getIdx()) });
+             val->getType(), val,
+             llvm::ArrayRef<llvm::Constant*>{WordZero,
+                                             getConstantVal(GEP->getIdx())});
       }
       if (val->getType()->getPointerElementType()->isArrayTy()) {
          return llvm::ConstantExpr::getInBoundsGetElementPtr(
-            val->getType(), val,
-            llvm::ArrayRef<llvm::Constant*>{ WordZero,
-               getConstantVal(GEP->getIdx()) });
+             val->getType(), val,
+             llvm::ArrayRef<llvm::Constant*>{WordZero,
+                                             getConstantVal(GEP->getIdx())});
       }
 
       return llvm::ConstantExpr::getInBoundsGetElementPtr(
-         val->getType(), val,
-         llvm::ArrayRef<llvm::Constant*>{ getConstantVal(GEP->getIdx()) });
+          val->getType(), val,
+          llvm::ArrayRef<llvm::Constant*>{getConstantVal(GEP->getIdx())});
    }
 
    if (auto IC = dyn_cast<ConstantIntCastInst>(C)) {
@@ -2074,13 +2008,13 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    llvm_unreachable("bad constant kind");
 }
 
-llvm::Value *IRGen::visitAllocaInst(AllocaInst const& I)
+llvm::Value* IRGen::visitAllocaInst(AllocaInst const& I)
 {
    if (I.isTagged()) {
       (void)getOrCreateInitializedFlag(&I);
    }
 
-   llvm::Value *V = nullptr;
+   llvm::Value* V = nullptr;
    if (I.canUseSRetValue()) {
       V = getCurrentSRetValue();
    }
@@ -2095,19 +2029,19 @@ llvm::Value *IRGen::visitAllocaInst(AllocaInst const& I)
          alignment = TI.getAlignOfType(I.getType()->getReferencedType());
       }
 
-      llvm::Type *allocatedType = getStorageType(
-         I.getType()->getReferencedType());
+      llvm::Type* allocatedType
+          = getStorageType(I.getType()->getReferencedType());
 
       if (I.isHeapAlloca()) {
-         auto TypeSize = TI.getAllocSizeOfType(
-            I.getType()->getReferencedType());
+         auto TypeSize
+             = TI.getAllocSizeOfType(I.getType()->getReferencedType());
 
-         llvm::Value *size = wordSizedInt(TypeSize);
+         llvm::Value* size = wordSizedInt(TypeSize);
          if (I.getAllocSize()) {
             size = Builder.CreateMul(size, getLlvmValue(I.getAllocSize()));
          }
 
-         auto buff = Builder.CreateCall(getMallocFn(), { size });
+         auto buff = Builder.CreateCall(getMallocFn(), {size});
          V = Builder.CreateBitCast(buff, allocatedType->getPointerTo());
       }
       else {
@@ -2118,14 +2052,14 @@ llvm::Value *IRGen::visitAllocaInst(AllocaInst const& I)
    return V;
 }
 
-llvm::Value *IRGen::visitAllocBoxInst(const il::AllocBoxInst &I)
+llvm::Value* IRGen::visitAllocBoxInst(const il::AllocBoxInst& I)
 {
    QualType Ty = I.getType()->getReferencedType();
 
    auto TypeSize = TI.getSizeOfType(I.getType()->getReferencedType());
    auto size = wordSizedInt(TypeSize + 3 * TI.getPointerSizeInBytes());
 
-   llvm::Value *Mem = Builder.CreateCall(getMallocFn(), { size });
+   llvm::Value* Mem = Builder.CreateCall(getMallocFn(), {size});
    Mem = Builder.CreateBitCast(Mem, BoxTy->getPointerTo());
 
    auto strongRefcountGEP = Builder.CreateStructGEP(BoxTy, Mem, 0);
@@ -2136,7 +2070,7 @@ llvm::Value *IRGen::visitAllocBoxInst(const il::AllocBoxInst &I)
 
    auto deinitGEP = Builder.CreateStructGEP(BoxTy, Mem, 2);
 
-   llvm::Constant *Deinit = nullptr;
+   llvm::Constant* Deinit = nullptr;
    if (Ty->isClass()) {
       Deinit = getReleaseFn();
    }
@@ -2154,17 +2088,14 @@ llvm::Value *IRGen::visitAllocBoxInst(const il::AllocBoxInst &I)
    return Builder.CreateBitCast(Mem, BoxTy->getPointerTo());
 }
 
-llvm::Value *IRGen::visitAssignInst(const AssignInst&)
+llvm::Value* IRGen::visitAssignInst(const AssignInst&)
 {
    llvm_unreachable("didn't replace assign with store or init!");
 }
 
-static unsigned short getMemCpyAlign(QualType Ty)
-{
-   return 1;
-}
+static unsigned short getMemCpyAlign(QualType Ty) { return 1; }
 
-llvm::Value *IRGen::visitStoreInst(StoreInst const& I)
+llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
 {
    auto Dst = getLlvmValue(I.getDst());
    auto Src = getLlvmValue(I.getSrc());
@@ -2226,7 +2157,7 @@ llvm::Value *IRGen::visitStoreInst(StoreInst const& I)
    return Store;
 }
 
-llvm::Value *IRGen::visitInitInst(const InitInst &I)
+llvm::Value* IRGen::visitInitInst(const InitInst& I)
 {
    auto Dst = getLlvmValue(I.getDst());
    auto Src = getLlvmValue(I.getSrc());
@@ -2288,48 +2219,48 @@ llvm::Value *IRGen::visitInitInst(const InitInst &I)
    return Store;
 }
 
-llvm::Value *IRGen::visitStrongRetainInst(const il::StrongRetainInst &I)
+llvm::Value* IRGen::visitStrongRetainInst(const il::StrongRetainInst& I)
 {
    auto Val = toInt8Ptr(getPotentiallyBoxedValue(I.getOperand(0)));
    if (I.getOperand(0)->getType()->isBoxType()) {
-      return Builder.CreateCall(getRetainBoxFn(), { Val });
+      return Builder.CreateCall(getRetainBoxFn(), {Val});
    }
 
    if (I.getOperand(0)->getType()->isLambdaType()) {
-      return Builder.CreateCall(getRetainLambdaFn(), { Val });
+      return Builder.CreateCall(getRetainLambdaFn(), {Val});
    }
 
-   return Builder.CreateCall(getRetainFn(), { Val });
+   return Builder.CreateCall(getRetainFn(), {Val});
 }
 
-llvm::Value *IRGen::visitStrongReleaseInst(const il::StrongReleaseInst &I)
+llvm::Value* IRGen::visitStrongReleaseInst(const il::StrongReleaseInst& I)
 {
    auto Val = toInt8Ptr(getPotentiallyBoxedValue(I.getOperand(0)));
    if (I.getOperand(0)->getType()->isBoxType()) {
-      return Builder.CreateCall(getReleaseBoxFn(), { Val });
+      return Builder.CreateCall(getReleaseBoxFn(), {Val});
    }
 
    if (I.getOperand(0)->getType()->isLambdaType()) {
-      return Builder.CreateCall(getReleaseLambdaFn(), { Val });
+      return Builder.CreateCall(getReleaseLambdaFn(), {Val});
    }
 
-   return Builder.CreateCall(getReleaseFn(), { Val });
+   return Builder.CreateCall(getReleaseFn(), {Val});
 }
 
-llvm::Value *IRGen::visitWeakRetainInst(const il::WeakRetainInst &I)
+llvm::Value* IRGen::visitWeakRetainInst(const il::WeakRetainInst& I)
 {
    llvm_unreachable("unimplemented");
 }
 
-llvm::Value *IRGen::visitWeakReleaseInst(const il::WeakReleaseInst &I)
+llvm::Value* IRGen::visitWeakReleaseInst(const il::WeakReleaseInst& I)
 {
    llvm_unreachable("unimplemented");
 }
 
-llvm::Value *IRGen::visitMoveInst(const il::MoveInst &I)
+llvm::Value* IRGen::visitMoveInst(const il::MoveInst& I)
 {
    // update the flag indicating this value was moved from
-   llvm::GlobalVariable *Flag = getOrCreateInitializedFlag(I.getOperand(0));
+   llvm::GlobalVariable* Flag = getOrCreateInitializedFlag(I.getOperand(0));
    Builder.CreateStore(Builder.getFalse(), Flag);
 
    auto It = InitializedFlagMap.find(&I);
@@ -2340,23 +2271,23 @@ llvm::Value *IRGen::visitMoveInst(const il::MoveInst &I)
    return getLlvmValue(I.getOperand(0));
 }
 
-llvm::Value *IRGen::visitBeginBorrowInst(const il::BeginBorrowInst &I)
+llvm::Value* IRGen::visitBeginBorrowInst(const il::BeginBorrowInst& I)
 {
    return getLlvmValue(I.getOperand(0));
 }
 
-llvm::Value *IRGen::visitEndBorrowInst(const il::EndBorrowInst &I)
+llvm::Value* IRGen::visitEndBorrowInst(const il::EndBorrowInst& I)
 {
    return nullptr;
 }
 
-llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
+llvm::Value* IRGen::visitGEPInst(GEPInst const& I)
 {
    auto val = getLlvmValue(I.getVal());
 
    if (I.getVal()->getType()->removeReference()->isRecordType()) {
       // Ignore a previous load of the value.
-      if (auto *ld = dyn_cast<llvm::LoadInst>(val)) {
+      if (auto* ld = dyn_cast<llvm::LoadInst>(val)) {
          val = ld->getOperand(0);
       }
 
@@ -2369,8 +2300,8 @@ llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
       }
 
       if (val->getType()->isStructTy()) {
-         auto *Val = Builder.CreateExtractValue(val, idx);
-         auto *Alloc = Builder.CreateAlloca(Val->getType());
+         auto* Val = Builder.CreateExtractValue(val, idx);
+         auto* Alloc = Builder.CreateAlloca(Val->getType());
          Builder.CreateStore(Val, Alloc);
 
          return Alloc;
@@ -2381,28 +2312,27 @@ llvm::Value *IRGen::visitGEPInst(GEPInst const& I)
 
    if (val->getType()->getPointerElementType()->isArrayTy()) {
       // Ignore a previous load of the value.
-      if (auto *ld = dyn_cast<llvm::LoadInst>(val)) {
+      if (auto* ld = dyn_cast<llvm::LoadInst>(val)) {
          val = ld->getOperand(0);
       }
 
       if (val->getType()->isArrayTy()) {
-         auto *Val = Builder.CreateExtractElement(val, getLlvmValue(I.getIndex()));
-         auto *Alloc = Builder.CreateAlloca(Val->getType());
+         auto* Val
+             = Builder.CreateExtractElement(val, getLlvmValue(I.getIndex()));
+         auto* Alloc = Builder.CreateAlloca(Val->getType());
          Builder.CreateStore(Val, Alloc);
 
          return Alloc;
       }
 
-      return Builder.CreateInBoundsGEP(val, {
-         wordSizedInt(0),
-         getLlvmValue(I.getIndex())
-      });
+      return Builder.CreateInBoundsGEP(
+          val, {wordSizedInt(0), getLlvmValue(I.getIndex())});
    }
 
    return Builder.CreateInBoundsGEP(val, getLlvmValue(I.getIndex()));
 }
 
-llvm::Value *IRGen::visitCaptureExtractInst(const CaptureExtractInst &I)
+llvm::Value* IRGen::visitCaptureExtractInst(const CaptureExtractInst& I)
 {
    auto F = Builder.GetInsertBlock()->getParent();
    auto env = F->arg_begin();
@@ -2414,33 +2344,33 @@ llvm::Value *IRGen::visitCaptureExtractInst(const CaptureExtractInst &I)
    return Builder.CreateLoad(Val);
 }
 
-llvm::Value *IRGen::visitFieldRefInst(FieldRefInst const& I)
+llvm::Value* IRGen::visitFieldRefInst(FieldRefInst const& I)
 {
    return AccessField(I.getAccessedType(), I.getOperand(0), I.getFieldName());
 }
 
-llvm::Value *IRGen::visitTupleExtractInst(TupleExtractInst const& I)
+llvm::Value* IRGen::visitTupleExtractInst(TupleExtractInst const& I)
 {
    auto tup = getLlvmValue(I.getOperand(0));
    if (tup->getType()->isStructTy()) {
-      auto *Val = Builder.CreateExtractValue(tup, I.getIdx()->getU32());
-      auto *Alloc = Builder.CreateAlloca(Val->getType());
+      auto* Val = Builder.CreateExtractValue(tup, I.getIdx()->getU32());
+      auto* Alloc = Builder.CreateAlloca(Val->getType());
       Builder.CreateStore(Val, Alloc);
 
       return Alloc;
    }
 
-   return Builder.CreateStructGEP(tup->getType()->getPointerElementType(),
-                                  tup, I.getIdx()->getU32());
+   return Builder.CreateStructGEP(tup->getType()->getPointerElementType(), tup,
+                                  I.getIdx()->getU32());
 }
 
-llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst &I)
+llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst& I)
 {
    auto Case = I.getCase();
    auto E = getLlvmValue(I.getOperand(0));
 
    // Ignore a previous load of the value.
-   if (auto *ld = dyn_cast<llvm::LoadInst>(E)) {
+   if (auto* ld = dyn_cast<llvm::LoadInst>(E)) {
       E = ld->getOperand(0);
    }
 
@@ -2449,7 +2379,7 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst &I)
 
    if (Case->isIndirect()) {
       BeginPtr = Builder.CreateLoad(
-         Builder.CreateBitCast(BeginPtr, Int8PtrTy->getPointerTo()));
+          Builder.CreateBitCast(BeginPtr, Int8PtrTy->getPointerTo()));
    }
 
    auto CaseTy = getEnumCaseTy(Case);
@@ -2466,12 +2396,12 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
    }
 
    // Ignore a previous load of the value.
-   if (auto *ld = dyn_cast<llvm::LoadInst>(E)) {
+   if (auto* ld = dyn_cast<llvm::LoadInst>(E)) {
       E = ld->getOperand(0);
    }
 
-   auto Val = Builder.CreateStructGEP(
-      E->getType()->getPointerElementType(), E, 0);
+   auto Val
+       = Builder.CreateStructGEP(E->getType()->getPointerElementType(), E, 0);
 
    if (!I.getType()->isReferenceType()) {
       return Builder.CreateLoad(Val);
@@ -2480,42 +2410,42 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
    return Val;
 }
 
-bool shouldReallyLoad(SemaPass &Sema, const LoadInst &I)
+bool shouldReallyLoad(SemaPass& Sema, const LoadInst& I)
 {
    if (Sema.NeedsStructReturn(I.getType())) {
       return false;
    }
 
    return true;
-//
-//   auto *singleUser = I.getSingleUser();
-//   if (!singleUser) {
-//      return true;
-//   }
-//
-//   if (isa<FieldRefInst>(singleUser)) {
-//      return false;
-//   }
-//   if (auto *GEP = dyn_cast<GEPInst>(singleUser)) {
-//      return !GEP->getVal()->getType()->isRecordType();
-//   }
-//
-//   if (auto *call = dyn_cast<IntrinsicCallInst>(singleUser)) {
-//      switch (call->getCalledIntrinsic()) {
-//      case Intrinsic::memcpy:
-//      case Intrinsic::memset:
-//      case Intrinsic::memcmp:
-//      case Intrinsic::typeinfo_cmp:
-//         return false;
-//      default:
-//         return true;
-//      }
-//   }
-//
-//   return true;
+   //
+   //   auto *singleUser = I.getSingleUser();
+   //   if (!singleUser) {
+   //      return true;
+   //   }
+   //
+   //   if (isa<FieldRefInst>(singleUser)) {
+   //      return false;
+   //   }
+   //   if (auto *GEP = dyn_cast<GEPInst>(singleUser)) {
+   //      return !GEP->getVal()->getType()->isRecordType();
+   //   }
+   //
+   //   if (auto *call = dyn_cast<IntrinsicCallInst>(singleUser)) {
+   //      switch (call->getCalledIntrinsic()) {
+   //      case Intrinsic::memcpy:
+   //      case Intrinsic::memset:
+   //      case Intrinsic::memcmp:
+   //      case Intrinsic::typeinfo_cmp:
+   //         return false;
+   //      default:
+   //         return true;
+   //      }
+   //   }
+   //
+   //   return true;
 }
 
-llvm::Value *IRGen::visitLoadInst(LoadInst const& I)
+llvm::Value* IRGen::visitLoadInst(LoadInst const& I)
 {
    auto val = getLlvmValue(I.getTarget());
    if (!shouldReallyLoad(Sema, I)) {
@@ -2527,8 +2457,8 @@ llvm::Value *IRGen::visitLoadInst(LoadInst const& I)
       alignment = Alloca->getAlignment();
    }
    else {
-      alignment = TI.getAlignOfType(I.getTarget()->getType()
-                                     ->getReferencedType());
+      alignment
+          = TI.getAlignOfType(I.getTarget()->getType()->getReferencedType());
    }
 
    auto Ld = Builder.CreateLoad(val);
@@ -2546,7 +2476,7 @@ llvm::Value* IRGen::visitAddrOfInst(AddrOfInst const& I)
    return getLlvmValue(I.getOperand(0));
 }
 
-llvm::Value * IRGen::visitPtrToLvalueInst(const PtrToLvalueInst &I)
+llvm::Value* IRGen::visitPtrToLvalueInst(const PtrToLvalueInst& I)
 {
    return getLlvmValue(I.getOperand(0));
 }
@@ -2581,39 +2511,39 @@ llvm::Value* IRGen::visitRetInst(RetInst const& I)
    return Builder.CreateRetVoid();
 }
 
-llvm::Value *IRGen::visitYieldInst(const il::YieldInst &I)
+llvm::Value* IRGen::visitYieldInst(const il::YieldInst& I)
 {
-   auto *CoroPromise = llvm::Intrinsic::getDeclaration(
-      M, llvm::Intrinsic::coro_promise);
+   auto* CoroPromise
+       = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::coro_promise);
 
-   auto *CurrentFn = Builder.GetInsertBlock()->getParent();
+   auto* CurrentFn = Builder.GetInsertBlock()->getParent();
 
-   auto *Hdl = CoroHandleMap[CurrentFn];
-   auto *Align = Builder.getInt32(
-      TI.getAllocAlignOfType(I.getYieldedValue()->getType()));
+   auto* Hdl = CoroHandleMap[CurrentFn];
+   auto* Align = Builder.getInt32(
+       TI.getAllocAlignOfType(I.getYieldedValue()->getType()));
 
-   auto *Promise = Builder.CreateCall(CoroPromise,
-                                      { Hdl, Align, Builder.getFalse() });
+   auto* Promise
+       = Builder.CreateCall(CoroPromise, {Hdl, Align, Builder.getFalse()});
 
    Builder.CreateMemCpy(Promise, getLlvmValue(I.getYieldedValue()),
                         TI.getAllocSizeOfType(I.getYieldedValue()->getType()),
                         (unsigned)Align->getZExtValue());
 
-   auto *CoroSuspend = llvm::Intrinsic::getDeclaration(
-      M, llvm::Intrinsic::coro_suspend);
+   auto* CoroSuspend
+       = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::coro_suspend);
 
-   auto *Final = I.isFinalYield() ? Builder.getTrue() : Builder.getFalse();
-   auto Next = Builder.CreateCall(
-      CoroSuspend, {llvm::ConstantTokenNone::get(Ctx), Final });
+   auto* Final = I.isFinalYield() ? Builder.getTrue() : Builder.getFalse();
+   auto Next = Builder.CreateCall(CoroSuspend,
+                                  {llvm::ConstantTokenNone::get(Ctx), Final});
 
-   auto *Switch = Builder.CreateSwitch(Next, CoroSuspendMap[CurrentFn]);
+   auto* Switch = Builder.CreateSwitch(Next, CoroSuspendMap[CurrentFn]);
 
-   auto *Zero = cast<llvm::ConstantInt>(
-      llvm::ConstantInt::get(Next->getType(), 0));
-   auto *One = cast<llvm::ConstantInt>(
-      llvm::ConstantInt::get(Next->getType(), 1));
+   auto* Zero
+       = cast<llvm::ConstantInt>(llvm::ConstantInt::get(Next->getType(), 0));
+   auto* One
+       = cast<llvm::ConstantInt>(llvm::ConstantInt::get(Next->getType(), 1));
 
-   llvm::BasicBlock *ResumeDst;
+   llvm::BasicBlock* ResumeDst;
    if (I.isFinalYield()) {
       ResumeDst = llvm::BasicBlock::Create(Ctx, "coro.unreachable");
 
@@ -2643,13 +2573,13 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
    auto ErrVal = getCurrentErrorValue();
 
    auto AllocSize = wordSizedInt(TypeSize + 2 * TI.getPointerSizeInBytes());
-   llvm::Value *Alloc = Builder.CreateCall(getMallocFn(), AllocSize);
+   llvm::Value* Alloc = Builder.CreateCall(getMallocFn(), AllocSize);
    Alloc = Builder.CreateBitCast(Alloc, ErrorTy->getPointerTo());
 
-   auto *TypeInfoPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 0);
+   auto* TypeInfoPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 0);
    Builder.CreateStore(toInt8Ptr(getLlvmValue(I.getTypeInfo())), TypeInfoPtr);
 
-   auto *CleanupFnPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 1);
+   auto* CleanupFnPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 1);
    if (auto Fn = I.getCleanupFn()) {
       Builder.CreateStore(toInt8Ptr(getLlvmValue(Fn)), CleanupFnPtr);
    }
@@ -2658,15 +2588,15 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
                           CleanupFnPtr);
    }
 
-   auto *ObjPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 2);
+   auto* ObjPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 2);
    if (NeedsStructReturn(ThrownTy)) {
       Builder.CreateMemCpy(ObjPtr, thrownVal, TypeSize,
                            getMemCpyAlign(ThrownTy));
    }
    else {
       Builder.CreateStore(
-         thrownVal,
-         Builder.CreateBitCast(ObjPtr, thrownVal->getType()->getPointerTo()));
+          thrownVal,
+          Builder.CreateBitCast(ObjPtr, thrownVal->getType()->getPointerTo()));
    }
 
    Builder.CreateStore(toInt8Ptr(Alloc), ErrVal);
@@ -2678,7 +2608,7 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
    return Builder.CreateRet(llvm::UndefValue::get(fn->getReturnType()));
 }
 
-llvm::Value *IRGen::visitRethrowInst(const il::RethrowInst &I)
+llvm::Value* IRGen::visitRethrowInst(const il::RethrowInst& I)
 {
    auto thrownVal = getLlvmValue(I.getThrownValue());
    auto ErrVal = getCurrentErrorValue();
@@ -2709,14 +2639,14 @@ llvm::Value* IRGen::visitBrInst(BrInst const& I)
 
 llvm::Value* IRGen::visitSwitchInst(SwitchInst const& I)
 {
-   llvm::BasicBlock *DefaultBB = nullptr;
+   llvm::BasicBlock* DefaultBB = nullptr;
    if (auto BB = I.getDefault()) {
       DefaultBB = getBasicBlock(BB);
    }
    else {
       auto IP = Builder.saveIP();
-      auto unreachableBB = llvm::BasicBlock::Create(Ctx, "",
-                                        Builder.GetInsertBlock()->getParent());
+      auto unreachableBB = llvm::BasicBlock::Create(
+          Ctx, "", Builder.GetInsertBlock()->getParent());
 
       Builder.SetInsertPoint(unreachableBB);
       Builder.CreateUnreachable();
@@ -2725,11 +2655,11 @@ llvm::Value* IRGen::visitSwitchInst(SwitchInst const& I)
       DefaultBB = unreachableBB;
    }
 
-   auto SwitchInst = Builder.CreateSwitch(getLlvmValue(I.getSwitchVal()),
-                                          DefaultBB,
-                                          unsigned(I.getCases().size()));
+   auto SwitchInst
+       = Builder.CreateSwitch(getLlvmValue(I.getSwitchVal()), DefaultBB,
+                              unsigned(I.getCases().size()));
 
-   for (const auto &C : I.getCases()) {
+   for (const auto& C : I.getCases()) {
       if (!C.first)
          continue;
 
@@ -2747,13 +2677,13 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
 
    Builder.CreateStore(llvm::ConstantPointerNull::get(Int8PtrTy), ErrAlloc);
 
-   llvm::SmallVector<llvm::Value*, 8> args{ ErrAlloc };
+   llvm::SmallVector<llvm::Value*, 8> args{ErrAlloc};
    PrepareCallArgs(args, I.getArgs(), isa<Method>(I.getCalledFunction()));
 
-   auto *Call = Builder.CreateCall(getFunction(I.getCalledFunction()), args);
+   auto* Call = Builder.CreateCall(getFunction(I.getCalledFunction()), args);
    Call->addParamAttr(0, llvm::Attribute::SwiftError);
 
-   llvm::Value *RetVal;
+   llvm::Value* RetVal;
    if (I.getCalledFunction()->hasStructReturn()) {
       RetVal = Call->getArgOperand(1);
    }
@@ -2764,70 +2694,71 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
    auto ErrLd = Builder.CreateLoad(ErrAlloc);
    auto IsNull = Builder.CreateIsNull(ErrLd);
 
-   llvm::BasicBlock *NormalBB = getBasicBlock(I.getNormalContinuation());
-   llvm::BasicBlock *LPadBB = getBasicBlock(I.getLandingPad());
+   llvm::BasicBlock* NormalBB = getBasicBlock(I.getNormalContinuation());
+   llvm::BasicBlock* LPadBB = getBasicBlock(I.getLandingPad());
 
    if (!RetVal->getType()->isVoidTy()) {
-      auto *ResultPhi = cast<llvm::PHINode>(&NormalBB->getInstList().front());
+      auto* ResultPhi = cast<llvm::PHINode>(&NormalBB->getInstList().front());
       ResultPhi->addIncoming(Call, Builder.GetInsertBlock());
    }
 
-   auto *ErrPhi = cast<llvm::PHINode>(&LPadBB->getInstList().front());
+   auto* ErrPhi = cast<llvm::PHINode>(&LPadBB->getInstList().front());
    ErrPhi->addIncoming(ErrLd, Builder.GetInsertBlock());
 
    Builder.CreateCondBr(IsNull, NormalBB, LPadBB);
    return PrepareReturnedValue(&I, RetVal);
 }
 
-llvm::Value *IRGen::visitVirtualInvokeInst(const VirtualInvokeInst &I)
+llvm::Value* IRGen::visitVirtualInvokeInst(const VirtualInvokeInst& I)
 {
    auto ErrAlloc = Builder.CreateAlloca(Int8PtrTy);
    ErrAlloc->setSwiftError(true);
 
    Builder.CreateStore(llvm::ConstantPointerNull::get(Int8PtrTy), ErrAlloc);
 
-   llvm::SmallVector<llvm::Value*, 8> args{ ErrAlloc, nullptr };
+   llvm::SmallVector<llvm::Value*, 8> args{ErrAlloc, nullptr};
    PrepareCallArgs(args, I.getArgs(), true);
 
-   auto *Callee = getLlvmValue(I.getCallee());
+   auto* Callee = getLlvmValue(I.getCallee());
 
-   llvm::Value *VTableRef;
+   llvm::Value* VTableRef;
    if (I.getCallee()->getType()->isClass()) {
       args[1] = Callee;
       VTableRef = Builder.CreateLoad(getVTable(Callee));
    }
    else {
-//      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
-//      Val = Builder.CreateBitCast(
-//         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
-//            ->getPointerTo());
-//
-//      args[1] = Builder.CreateLoad(Val);
+      //      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy,
+      //      Callee, 0); Val = Builder.CreateBitCast(
+      //         Val,
+      //         getParameterType(I.getFunctionType()->getParamTypes().front())
+      //            ->getPointerTo());
+      //
+      //      args[1] = Builder.CreateLoad(Val);
       args[1] = Callee;
 
-      VTableRef = Builder.CreateCall(getGetProtocolVTableFn(), {
-         // The existential container.
-         toInt8Ptr(Callee),
+      VTableRef = Builder.CreateCall(
+          getGetProtocolVTableFn(),
+          {// The existential container.
+           toInt8Ptr(Callee),
 
-         // The conformance we're looking for.
-         toInt8Ptr(getLlvmValue(I.getProtocolTypeInfo()))
-      });
+           // The conformance we're looking for.
+           toInt8Ptr(getLlvmValue(I.getProtocolTypeInfo()))});
    }
 
    auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
    auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
 
    auto FuncPtr = Builder.CreateInBoundsGEP(
-      VTable, { Builder.getInt32(0), Builder.getInt32(I.getOffset()) });
+       VTable, {Builder.getInt32(0), Builder.getInt32(I.getOffset())});
 
    auto TypedFnPtr = Builder.CreateBitCast(
-      Builder.CreateLoad(FuncPtr),
-      getStorageType(I.getFunctionType()->getCanonicalType()));
+       Builder.CreateLoad(FuncPtr),
+       getStorageType(I.getFunctionType()->getCanonicalType()));
 
-   auto *Call = Builder.CreateCall(TypedFnPtr, args);
+   auto* Call = Builder.CreateCall(TypedFnPtr, args);
    Call->addParamAttr(0, llvm::Attribute::SwiftError);
 
-   llvm::Value *RetVal;
+   llvm::Value* RetVal;
    if (NeedsStructReturn(I.getFunctionType()->getReturnType())) {
       RetVal = Call->getArgOperand(1);
    }
@@ -2838,15 +2769,15 @@ llvm::Value *IRGen::visitVirtualInvokeInst(const VirtualInvokeInst &I)
    auto ErrLd = Builder.CreateLoad(ErrAlloc);
    auto IsNull = Builder.CreateIsNull(ErrLd);
 
-   llvm::BasicBlock *NormalBB = getBasicBlock(I.getNormalContinuation());
-   llvm::BasicBlock *LPadBB = getBasicBlock(I.getLandingPad());
+   llvm::BasicBlock* NormalBB = getBasicBlock(I.getNormalContinuation());
+   llvm::BasicBlock* LPadBB = getBasicBlock(I.getLandingPad());
 
    if (!RetVal->getType()->isVoidTy()) {
-      auto *ResultPhi = cast<llvm::PHINode>(&NormalBB->getInstList().front());
+      auto* ResultPhi = cast<llvm::PHINode>(&NormalBB->getInstList().front());
       ResultPhi->addIncoming(Call, Builder.GetInsertBlock());
    }
 
-   auto *ErrPhi = cast<llvm::PHINode>(&LPadBB->getInstList().front());
+   auto* ErrPhi = cast<llvm::PHINode>(&LPadBB->getInstList().front());
    ErrPhi->addIncoming(ErrLd, Builder.GetInsertBlock());
 
    Builder.CreateCondBr(IsNull, NormalBB, LPadBB);
@@ -2858,60 +2789,56 @@ llvm::Value* IRGen::visitLandingPadInst(LandingPadInst const& I)
    llvm_unreachable("NOT YET");
 }
 
-llvm::Value* IRGen::getVTable(llvm::Value *llvmVal)
+llvm::Value* IRGen::getVTable(llvm::Value* llvmVal)
 {
-   auto TypeInfo = Builder.CreateStructGEP(llvmVal->getType()
-                                                  ->getPointerElementType(),
-                                           llvmVal, 2);
+   auto TypeInfo = Builder.CreateStructGEP(
+       llvmVal->getType()->getPointerElementType(), llvmVal, 2);
 
-   llvm::Value *Ld = Builder.CreateLoad(TypeInfo);
+   llvm::Value* Ld = Builder.CreateLoad(TypeInfo);
    Ld = Builder.CreateBitCast(Ld, TypeInfoTy->getPointerTo());
 
    return Builder.CreateStructGEP(TypeInfoTy, Ld, MetaType::VTable);
 }
 
-llvm::Value* IRGen::getTypeInfo(llvm::Value *llvmVal)
+llvm::Value* IRGen::getTypeInfo(llvm::Value* llvmVal)
 {
-   return Builder.CreateStructGEP(llvmVal->getType()
-                                         ->getPointerElementType(),
+   return Builder.CreateStructGEP(llvmVal->getType()->getPointerElementType(),
                                   llvmVal, 2);
 }
 
-llvm::Value* IRGen::getVirtualMethod(il::Value *CalleeVal, il::Value *Offset)
+llvm::Value* IRGen::getVirtualMethod(il::Value* CalleeVal, il::Value* Offset)
 {
-   llvm::Value *VTableRef;
-   llvm::Value *Callee = getLlvmValue(CalleeVal);
+   llvm::Value* VTableRef;
+   llvm::Value* Callee = getLlvmValue(CalleeVal);
 
    QualType CalleeType = CalleeVal->getType();
    if (CalleeType->isMetaType()) {
-      llvm::Value *Conf = Builder.CreateCall(getGetConformanceFn(), {
-         toInt8Ptr(Callee),
-         toInt8Ptr(getLlvmValue(
-            CI.getILGen().GetOrCreateTypeInfo(CalleeType->removeMetaType())))
-      });
+      llvm::Value* Conf = Builder.CreateCall(
+          getGetConformanceFn(),
+          {toInt8Ptr(Callee),
+           toInt8Ptr(getLlvmValue(CI.getILGen().GetOrCreateTypeInfo(
+               CalleeType->removeMetaType())))});
 
       Conf = Builder.CreateBitCast(Conf, ProtocolConformanceTy->getPointerTo());
       VTableRef = Builder.CreateLoad(
-         Builder.CreateStructGEP(ProtocolConformanceTy, Conf, 1));
+          Builder.CreateStructGEP(ProtocolConformanceTy, Conf, 1));
    }
    else if (CalleeType->isClass()) {
       VTableRef = Builder.CreateLoad(getVTable(Callee));
    }
    else {
-      auto *Conformance = Builder.CreateLoad(
-         Builder.CreateStructGEP(ExistentialContainerTy, Callee, 2));
+      auto* Conformance = Builder.CreateLoad(
+          Builder.CreateStructGEP(ExistentialContainerTy, Callee, 2));
 
-      VTableRef = Builder.CreateLoad(
-         Builder.CreateStructGEP(
-            Conformance->getType()->getPointerElementType(),
-            Conformance, 1));
+      VTableRef = Builder.CreateLoad(Builder.CreateStructGEP(
+          Conformance->getType()->getPointerElementType(), Conformance, 1));
    }
 
    auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
    auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
 
-   return Builder.CreateInBoundsGEP(VTable, { Builder.getInt32(0),
-      getLlvmValue(Offset) });
+   return Builder.CreateInBoundsGEP(
+       VTable, {Builder.getInt32(0), getLlvmValue(Offset)});
 }
 
 llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
@@ -2924,43 +2851,40 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::memcpy:
    case Intrinsic::memset:
    case Intrinsic::memcmp: {
-      llvm::Value *Args[] = {
-         getLlvmValue(I.getOperand(0)),
-         getLlvmValue(I.getOperand(1)),
-         getLlvmValue(I.getOperand(2))
-      };
+      llvm::Value* Args[]
+          = {getLlvmValue(I.getOperand(0)), getLlvmValue(I.getOperand(1)),
+             getLlvmValue(I.getOperand(2))};
 
       if (I.getCalledIntrinsic() == Intrinsic::memcpy) {
          return Builder.CreateMemCpy(Args[0], Args[1], Args[2], 1);
       }
 
       if (I.getCalledIntrinsic() == Intrinsic::memcmp) {
-         return Builder.CreateCall(getMemCmpFn(), {
-            toInt8Ptr(Args[0]), toInt8Ptr(Args[1]), Args[2]
-         });
+         return Builder.CreateCall(
+             getMemCmpFn(), {toInt8Ptr(Args[0]), toInt8Ptr(Args[1]), Args[2]});
       }
 
       return Builder.CreateMemSet(Args[0], Args[1], Args[2], 1);
    }
    case Intrinsic::likely: {
-      auto *Val = I.getArgs().front();
-      auto *LLVMVal = getLlvmValue(Val);
-
-      return Builder.CreateCall(getIntrinsic(
-         llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
-         { LLVMVal, Builder.getTrue() });
-   }
-   case Intrinsic::unlikely: {
-      auto *Val = I.getArgs().front();
-      auto *LLVMVal = getLlvmValue(Val);
+      auto* Val = I.getArgs().front();
+      auto* LLVMVal = getLlvmValue(Val);
 
       return Builder.CreateCall(
-         getIntrinsic(llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
-         { LLVMVal, Builder.getFalse() });
+          getIntrinsic(llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
+          {LLVMVal, Builder.getTrue()});
+   }
+   case Intrinsic::unlikely: {
+      auto* Val = I.getArgs().front();
+      auto* LLVMVal = getLlvmValue(Val);
+
+      return Builder.CreateCall(
+          getIntrinsic(llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
+          {LLVMVal, Builder.getFalse()});
    }
    case Intrinsic::lifetime_begin: {
-      auto *Val = I.getArgs().front();
-      auto *LLVMVal = getLlvmValue(Val);
+      auto* Val = I.getArgs().front();
+      auto* LLVMVal = getLlvmValue(Val);
       QualType Ty = Val->getType()->removeReference();
 
       if (Ty->isClass()) {
@@ -2968,12 +2892,11 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       }
 
       return Builder.CreateLifetimeStart(
-         LLVMVal,
-         Builder.getInt64(TI.getAllocSizeOfType(Ty)));
+          LLVMVal, Builder.getInt64(TI.getAllocSizeOfType(Ty)));
    }
    case Intrinsic::lifetime_end: {
-      auto *Val = I.getArgs().front();
-      auto *LLVMVal = getLlvmValue(Val);
+      auto* Val = I.getArgs().front();
+      auto* LLVMVal = getLlvmValue(Val);
       QualType Ty = Val->getType()->removeReference();
 
       if (Ty->isClass()) {
@@ -2981,8 +2904,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       }
 
       return Builder.CreateLifetimeEnd(
-         LLVMVal,
-         Builder.getInt64(TI.getAllocSizeOfType(Ty)));
+          LLVMVal, Builder.getInt64(TI.getAllocSizeOfType(Ty)));
    }
    case Intrinsic::get_lambda_env: {
       auto lambda = getLlvmValue(I.getArgs()[0]);
@@ -2993,19 +2915,19 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       return Builder.CreateStructGEP(LambdaTy, lambda, 0);
    }
    case Intrinsic::generic_value: {
-      auto *Val = getLlvmValue(I.getArgs()[0]);
+      auto* Val = getLlvmValue(I.getArgs()[0]);
       return Builder.CreateStructGEP(Val->getType()->getPointerElementType(),
                                      Val, 0);
    }
    case Intrinsic::generic_environment: {
-      auto *Val = getLlvmValue(I.getArgs()[0]);
+      auto* Val = getLlvmValue(I.getArgs()[0]);
       return Builder.CreateStructGEP(Val->getType()->getPointerElementType(),
                                      Val, 1);
    }
    case Intrinsic::generic_argument_ref: {
-      auto *Ptr = toInt8Ptr(getLlvmValue(I.getArgs()[0]));
-      auto *Depth = getLlvmValue(I.getArgs()[1]);
-      auto *Idx = getLlvmValue(I.getArgs()[2]);
+      auto* Ptr = toInt8Ptr(getLlvmValue(I.getArgs()[0]));
+      auto* Depth = getLlvmValue(I.getArgs()[1]);
+      auto* Idx = getLlvmValue(I.getArgs()[2]);
 
       return Builder.CreateCall(getGetGenericArgumentFn(), {Ptr, Depth, Idx});
    }
@@ -3014,7 +2936,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
                                 getLlvmValue(I.getArgs()[0]));
    }
    case Intrinsic::existential_ref: {
-      auto *Val = getLlvmValue(I.getArgs()[0]);
+      auto* Val = getLlvmValue(I.getArgs()[0]);
       return Builder.CreateStructGEP(Val->getType()->getPointerElementType(),
                                      Val, 0);
    }
@@ -3033,7 +2955,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    }
    case Intrinsic::virtual_method: {
       return Builder.CreateLoad(
-         getVirtualMethod(I.getArgs()[0], I.getArgs()[1]));
+          getVirtualMethod(I.getArgs()[0], I.getArgs()[1]));
    }
    case Intrinsic::typeinfo_ref: {
       return getTypeInfo(getLlvmValue(I.getArgs().front()));
@@ -3041,8 +2963,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::indirect_case_ref: {
       auto Val = getLlvmValue(I.getArgs().front());
       return Builder.CreateInBoundsGEP(
-         Builder.CreateBitCast(Val, Int8PtrTy->getPointerTo()),
-         { WordOne });
+          Builder.CreateBitCast(Val, Int8PtrTy->getPointerTo()), {WordOne});
    }
    case Intrinsic::unbox: {
       auto Val = getLlvmValue(I.getArgs().front());
@@ -3050,16 +2971,16 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    }
    case Intrinsic::typeinfo_cmp:
       return Builder.CreateCall(getTypeInfoCmpFn(),
-         { toInt8Ptr(getLlvmValue(I.getArgs()[0])),
-            toInt8Ptr(getLlvmValue(I.getArgs()[1]))});
+                                {toInt8Ptr(getLlvmValue(I.getArgs()[0])),
+                                 toInt8Ptr(getLlvmValue(I.getArgs()[1]))});
    case Intrinsic::excn_typeinfo_ref: {
-      llvm::Value *Val = getLlvmValue(I.getArgs()[0]);
+      llvm::Value* Val = getLlvmValue(I.getArgs()[0]);
       Val = Builder.CreateBitCast(Val, ErrorTy->getPointerTo());
 
       return Builder.CreateStructGEP(ErrorTy, Val, 0);
    }
    case Intrinsic::excn_object_ref: {
-      llvm::Value *Val = getLlvmValue(I.getArgs()[0]);
+      llvm::Value* Val = getLlvmValue(I.getArgs()[0]);
       Val = Builder.CreateBitCast(Val, ErrorTy->getPointerTo());
 
       return Builder.CreateStructGEP(ErrorTy, Val, 2);
@@ -3079,12 +3000,12 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       return Builder.CreateCall(getExitFn(), Builder.getInt32(1));
    case Intrinsic::print_runtime_error: {
       auto ID = static_cast<il::IntrinsicCallInst::FatalErrorKind>(
-         cast<ConstantInt>(I.getArgs().front())->getU32());
+          cast<ConstantInt>(I.getArgs().front())->getU32());
 
       SourceLocation Loc = I.getSourceLoc();
       assert(Loc && "error intrinsic without source location");
 
-      fs::FileManager &FileMgr = CI.getFileMgr();
+      fs::FileManager& FileMgr = CI.getFileMgr();
       llvm::StringRef FileName = FileMgr.getFileName(Loc);
       LineColPair LineAndCol = FileMgr.getLineAndCol(Loc);
 
@@ -3102,125 +3023,136 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       return Builder.CreateCall(getExitFn(), Builder.getInt32(1));
    }
    case Intrinsic::atomic_cmpxchg: {
-      auto *Ptr = getLlvmValue(I.getArgs()[0]);
-      auto *Cmp = getLlvmValue(I.getArgs()[1]);
-      auto *NewVal = getLlvmValue(I.getArgs()[2]);
+      auto* Ptr = getLlvmValue(I.getArgs()[0]);
+      auto* Cmp = getLlvmValue(I.getArgs()[1]);
+      auto* NewVal = getLlvmValue(I.getArgs()[2]);
       auto Success = static_cast<llvm::AtomicOrdering>(
-         cast<ConstantInt>(I.getArgs()[3])->getU32());
+          cast<ConstantInt>(I.getArgs()[3])->getU32());
       auto Failure = static_cast<llvm::AtomicOrdering>(
-         cast<ConstantInt>(I.getArgs()[4])->getU32());
+          cast<ConstantInt>(I.getArgs()[4])->getU32());
 
       return Builder.CreateAtomicCmpXchg(Ptr, Cmp, NewVal, Success, Failure);
    }
    case Intrinsic::atomic_rmw: {
-      ConstantInt *OpVal;
-      if (auto *CI = dyn_cast<ConstantInt>(I.getArgs()[0])) {
+      ConstantInt* OpVal;
+      if (auto* CI = dyn_cast<ConstantInt>(I.getArgs()[0])) {
          OpVal = CI;
       }
       else {
-         OpVal = cast<ConstantInt>(cast<EnumInitInst>(I.getArgs()[0])
-            ->getCase()->getILValue());
+         OpVal = cast<ConstantInt>(
+             cast<EnumInitInst>(I.getArgs()[0])->getCase()->getILValue());
       }
 
       auto Op = static_cast<llvm::AtomicRMWInst::BinOp>(OpVal->getU32());
-      auto *Ptr = getLlvmValue(I.getArgs()[1]);
-      auto *Val = getLlvmValue(I.getArgs()[2]);
+      auto* Ptr = getLlvmValue(I.getArgs()[1]);
+      auto* Val = getLlvmValue(I.getArgs()[2]);
       auto Order = static_cast<llvm::AtomicOrdering>(
-         cast<ConstantInt>(I.getArgs()[3])->getU32());
+          cast<ConstantInt>(I.getArgs()[3])->getU32());
 
       return Builder.CreateAtomicRMW(Op, Ptr, Val, Order);
    }
    case Intrinsic::coro_id: {
-      auto *coro_id = getIntrinsic(llvm::Intrinsic::coro_id);
-      return Builder.CreateCall(coro_id, {
-         Builder.getInt32(0),                        // alignment
-         toInt8Ptr(getLlvmValue(I.getArgs()[0])),    // promise
-         llvm::ConstantPointerNull::get(Int8PtrTy),  // coroaddr (keep null)
-         llvm::ConstantPointerNull::get(Int8PtrTy)   // fnaddr (keep null)
-      });
+      auto* coro_id = getIntrinsic(llvm::Intrinsic::coro_id);
+      return Builder.CreateCall(
+          coro_id,
+          {
+              Builder.getInt32(0),                       // alignment
+              toInt8Ptr(getLlvmValue(I.getArgs()[0])),   // promise
+              llvm::ConstantPointerNull::get(Int8PtrTy), // coroaddr (keep null)
+              llvm::ConstantPointerNull::get(Int8PtrTy)  // fnaddr (keep null)
+          });
    }
    case Intrinsic::coro_size: {
-      auto *coro_size = llvm::Intrinsic::getDeclaration(
-         M, llvm::Intrinsic::coro_size, WordTy);
+      auto* coro_size = llvm::Intrinsic::getDeclaration(
+          M, llvm::Intrinsic::coro_size, WordTy);
 
       return Builder.CreateCall(coro_size);
    }
    case Intrinsic::coro_suspend:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_suspend), {
-         getLlvmValue(I.getArgs().front()), // handle
-         getLlvmValue(I.getArgs()[1]),      // final
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_suspend),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // handle
+                                    getLlvmValue(I.getArgs()[1]),      // final
+                                });
    case Intrinsic::coro_begin:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_begin), {
-         getLlvmValue(I.getArgs().front()), // ID
-         getLlvmValue(I.getArgs()[1]),      // mem
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_begin),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // ID
+                                    getLlvmValue(I.getArgs()[1]),      // mem
+                                });
    case Intrinsic::coro_end:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_end), {
-         getLlvmValue(I.getArgs().front()), // handle
-         Builder.getFalse()                 // unwind
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_end),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // handle
+                                    Builder.getFalse()                 // unwind
+                                });
    case Intrinsic::coro_resume:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_resume), {
-         getLlvmValue(I.getArgs().front()), // handle
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_resume),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // handle
+                                });
    case Intrinsic::coro_destroy:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_destroy), {
-         getLlvmValue(I.getArgs().front()), // handle
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_destroy),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // handle
+                                });
    case Intrinsic::coro_save:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_save), {
-         getLlvmValue(I.getArgs().front()), // handle
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_save),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // handle
+                                });
    case Intrinsic::coro_alloc:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_alloc), {
-         getLlvmValue(I.getArgs().front()), // ID
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_alloc),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // ID
+                                });
    case Intrinsic::coro_free:
-      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_free), {
-         getLlvmValue(I.getArgs().front()), // ID
-         getLlvmValue(I.getArgs()[1]),      // handle
-      });
+      return Builder.CreateCall(getIntrinsic(llvm::Intrinsic::coro_free),
+                                {
+                                    getLlvmValue(I.getArgs().front()), // ID
+                                    getLlvmValue(I.getArgs()[1]),      // handle
+                                });
    case Intrinsic::coro_return:
       return Builder.CreateRet(getLlvmValue(I.getArgs().front()));
    }
 }
 
 llvm::Function* IRGen::getIntrinsic(llvm::Intrinsic::ID ID,
-                                    llvm::ArrayRef<llvm::Type*> Tys) {
+                                    llvm::ArrayRef<llvm::Type*> Tys)
+{
    auto It = IntrinsicDecls.find(ID);
    if (It != IntrinsicDecls.end())
       return It->getSecond();
 
-   auto *D = llvm::Intrinsic::getDeclaration(M, ID, Tys);
+   auto* D = llvm::Intrinsic::getDeclaration(M, ID, Tys);
    IntrinsicDecls[ID] = D;
 
    return D;
 }
 
-llvm::Value *IRGen::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
+llvm::Value* IRGen::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst& I)
 {
-   auto &Fn = Intrinsics[I.getIntrinsicName()];
+   auto& Fn = Intrinsics[I.getIntrinsicName()];
    if (!Fn) {
-      SmallVector<llvm::Type *, 4> ParamTys;
-      for (auto &Arg : I.getArgs()) {
+      SmallVector<llvm::Type*, 4> ParamTys;
+      for (auto& Arg : I.getArgs()) {
          ParamTys.push_back(getStorageType(Arg->getType()));
       }
 
-      auto *FnTy = llvm::FunctionType::get(getStorageType(I.getType()),
+      auto* FnTy = llvm::FunctionType::get(getStorageType(I.getType()),
                                            ParamTys, false);
 
       Fn = M->getOrInsertFunction(I.getIntrinsicName()->getIdentifier(), FnTy);
    }
 
    llvm::SmallVector<llvm::Value*, 8> args;
-   for (const auto &arg : I.getArgs())
+   for (const auto& arg : I.getArgs())
       args.push_back(getLlvmValue(arg));
 
    return Builder.CreateCall(Fn, args);
 }
 
-static il::Value *LookThroughLoad(il::Value *V)
+static il::Value* LookThroughLoad(il::Value* V)
 {
    if (auto Ld = dyn_cast<LoadInst>(V))
       return Ld->getTarget();
@@ -3228,16 +3160,17 @@ static il::Value *LookThroughLoad(il::Value *V)
    return V;
 }
 
-void IRGen::PrepareCallArgs(SmallVectorImpl<llvm::Value*> &Result,
-                            ArrayRef<il::Value*> Args,
-                            bool IsMethod) {
-   for (auto *Arg : Args) {
+void IRGen::PrepareCallArgs(SmallVectorImpl<llvm::Value*>& Result,
+                            ArrayRef<il::Value*> Args, bool IsMethod)
+{
+   for (auto* Arg : Args) {
       Result.push_back(getLlvmValue(Arg));
    }
 }
 
-llvm::Value* IRGen::PrepareReturnedValue(const il::Value *ILVal,
-                                         llvm::Value *RetVal) {
+llvm::Value* IRGen::PrepareReturnedValue(const il::Value* ILVal,
+                                         llvm::Value* RetVal)
+{
    if (ILVal->getType()->isEmptyTupleType()) {
       return EmptyTuple;
    }
@@ -3247,17 +3180,17 @@ llvm::Value* IRGen::PrepareReturnedValue(const il::Value *ILVal,
 
 llvm::Value* IRGen::visitCallInst(CallInst const& I)
 {
-   llvm::BasicBlock *MergeBB = nullptr;
+   llvm::BasicBlock* MergeBB = nullptr;
    if (I.isTaggedDeinit()) {
       // check the flag to see if it was moved
-      auto *Val = LookThroughLoad(I.getOperand(0));
-      llvm::GlobalVariable *Flag = getOrCreateInitializedFlag(Val);
+      auto* Val = LookThroughLoad(I.getOperand(0));
+      llvm::GlobalVariable* Flag = getOrCreateInitializedFlag(Val);
       auto FlagLd = Builder.CreateLoad(Flag);
 
-      auto *InitializedBB = llvm::BasicBlock::Create(
-         Ctx, "deinit.initialized", Builder.GetInsertBlock()->getParent());
-      MergeBB = llvm::BasicBlock::Create(
-         Ctx, "deinit.merge", Builder.GetInsertBlock()->getParent());
+      auto* InitializedBB = llvm::BasicBlock::Create(
+          Ctx, "deinit.initialized", Builder.GetInsertBlock()->getParent());
+      MergeBB = llvm::BasicBlock::Create(Ctx, "deinit.merge",
+                                         Builder.GetInsertBlock()->getParent());
 
       Builder.CreateCondBr(FlagLd, InitializedBB, MergeBB);
       Builder.SetInsertPoint(InitializedBB);
@@ -3266,8 +3199,8 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
    SmallVector<llvm::Value*, 8> args;
    PrepareCallArgs(args, I.getArgs(), isa<Method>(I.getCallee()));
 
-   llvm::Value *Call;
-   if (auto *Fn = I.getCalledFunction()) {
+   llvm::Value* Call;
+   if (auto* Fn = I.getCalledFunction()) {
       Call = CreateCall(Fn, args);
    }
    else {
@@ -3279,19 +3212,19 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
       Builder.SetInsertPoint(MergeBB);
    }
 
-   auto *FnTy = I.getCallee()->getType()->asFunctionType();
+   auto* FnTy = I.getCallee()->getType()->asFunctionType();
    if (FnTy->isAsync()) {
-      auto *CoroPromise = llvm::Intrinsic::getDeclaration(
-         M, llvm::Intrinsic::coro_promise);
+      auto* CoroPromise
+          = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::coro_promise);
 
       QualType RetTy = FnTy->getReturnType();
-      auto *Align = Builder.getInt32(TI.getAllocAlignOfType(RetTy));
+      auto* Align = Builder.getInt32(TI.getAllocAlignOfType(RetTy));
 
-      auto *Promise = Builder.CreateCall(CoroPromise,
-                                         {Call, Align, Builder.getFalse()});
+      auto* Promise
+          = Builder.CreateCall(CoroPromise, {Call, Align, Builder.getFalse()});
 
-      Call = Builder.CreateBitCast(
-         Promise, getStorageType(RetTy)->getPointerTo());
+      Call = Builder.CreateBitCast(Promise,
+                                   getStorageType(RetTy)->getPointerTo());
 
       if (!NeedsStructReturn(RetTy))
          Call = Builder.CreateLoad(Call);
@@ -3300,10 +3233,10 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
    return PrepareReturnedValue(&I, Call);
 }
 
-llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
+llvm::Value* IRGen::visitVirtualCallInst(VirtualCallInst const& I)
 {
    unsigned i = 0;
-   SmallVector<llvm::Value*, 8> args{ nullptr };
+   SmallVector<llvm::Value*, 8> args{nullptr};
 
    QualType RetTy = I.getFunctionType()->getReturnType();
    bool sret = NeedsStructReturn(RetTy);
@@ -3314,71 +3247,72 @@ llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
 
    PrepareCallArgs(args, I.getArgs(), true);
 
-   auto *Callee = getLlvmValue(I.getCallee());
+   auto* Callee = getLlvmValue(I.getCallee());
 
-   llvm::Value *VTableRef;
+   llvm::Value* VTableRef;
 
    QualType CalleeType = I.getCallee()->getType();
    if (CalleeType->isMetaType()) {
       args[i] = Callee;
-      llvm::Value *Conf = Builder.CreateCall(getGetConformanceFn(), {
-         toInt8Ptr(Callee),
-         toInt8Ptr(getLlvmValue(
-            CI.getILGen().GetOrCreateTypeInfo(CalleeType->removeMetaType())))
-      });
+      llvm::Value* Conf = Builder.CreateCall(
+          getGetConformanceFn(),
+          {toInt8Ptr(Callee),
+           toInt8Ptr(getLlvmValue(CI.getILGen().GetOrCreateTypeInfo(
+               CalleeType->removeMetaType())))});
 
       Conf = Builder.CreateBitCast(Conf, ProtocolConformanceTy->getPointerTo());
       VTableRef = Builder.CreateLoad(
-         Builder.CreateStructGEP(ProtocolConformanceTy, Conf, 1));
+          Builder.CreateStructGEP(ProtocolConformanceTy, Conf, 1));
    }
    else if (CalleeType->isClass()) {
       args[i] = Callee;
       VTableRef = Builder.CreateLoad(getVTable(Callee));
    }
    else {
-//      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy, Callee, 0);
-//      Val = Builder.CreateBitCast(
-//         Val, getParameterType(I.getFunctionType()->getParamTypes().front())
-//                 ->getPointerTo());
-//
-//      args[i] = Builder.CreateLoad(Val);
+      //      auto *Val = Builder.CreateStructGEP(ExistentialContainerTy,
+      //      Callee, 0); Val = Builder.CreateBitCast(
+      //         Val,
+      //         getParameterType(I.getFunctionType()->getParamTypes().front())
+      //                 ->getPointerTo());
+      //
+      //      args[i] = Builder.CreateLoad(Val);
 
       args[i] = Callee;
 
-      VTableRef = Builder.CreateCall(getGetProtocolVTableFn(), {
-         // The existential container.
-         toInt8Ptr(Callee),
+      VTableRef = Builder.CreateCall(
+          getGetProtocolVTableFn(),
+          {// The existential container.
+           toInt8Ptr(Callee),
 
-         // The conformance we're looking for.
-         toInt8Ptr(getLlvmValue(I.getProtocolTypeInfo()))
-      });
+           // The conformance we're looking for.
+           toInt8Ptr(getLlvmValue(I.getProtocolTypeInfo()))});
    }
 
    auto VTableTy = llvm::ArrayType::get(Int8PtrTy, 0);
    auto VTable = Builder.CreateBitCast(VTableRef, VTableTy->getPointerTo());
 
    auto FuncPtr = Builder.CreateInBoundsGEP(
-      VTable, { Builder.getInt32(0), Builder.getInt32(I.getOffset()) });
+       VTable, {Builder.getInt32(0), Builder.getInt32(I.getOffset())});
 
    auto TypedFnPtr = Builder.CreateBitCast(
-      Builder.CreateLoad(FuncPtr),
-      getStorageType(I.getFunctionType()->getCanonicalType()));
+       Builder.CreateLoad(FuncPtr),
+       getStorageType(I.getFunctionType()->getCanonicalType()));
 
-   auto *RetVal = PrepareReturnedValue(&I, Builder.CreateCall(TypedFnPtr,
-                                                              args));
+   auto* RetVal
+       = PrepareReturnedValue(&I, Builder.CreateCall(TypedFnPtr, args));
 
    if (I.getFunctionType()->isAsync()) {
-      auto *CoroPromise = llvm::Intrinsic::getDeclaration(
-         M, llvm::Intrinsic::coro_promise);
+      auto* CoroPromise
+          = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::coro_promise);
 
       QualType RetTy = I.getCalledFunction()->getReturnType();
-      auto *Align = Builder.getInt32(TI.getAllocAlignOfType(RetTy));
+      auto* Align = Builder.getInt32(TI.getAllocAlignOfType(RetTy));
 
-      auto *Promise = Builder.CreateCall(CoroPromise,
+      auto* Promise = Builder.CreateCall(CoroPromise,
                                          {RetVal, Align, Builder.getFalse()});
 
-      RetVal = Builder.CreateBitCast(
-         Promise, getStorageType(RetTy)->getPointerTo());
+      RetVal = Builder.CreateBitCast(Promise,
+                                     getStorageType(RetTy)->getPointerTo());
 
       if (!NeedsStructReturn(RetTy)) {
          RetVal = Builder.CreateLoad(RetVal);
@@ -3393,12 +3327,12 @@ llvm::Value *IRGen::visitVirtualCallInst(VirtualCallInst const& I)
    return RetVal;
 }
 
-llvm::FunctionType* IRGen::getLambdaType(FunctionType *FTy)
+llvm::FunctionType* IRGen::getLambdaType(FunctionType* FTy)
 {
-   llvm::SmallVector<llvm::Type*, 8> ArgTypes{ BoxTy->getPointerTo()
-                                                    ->getPointerTo() };
+   llvm::SmallVector<llvm::Type*, 8> ArgTypes{
+       BoxTy->getPointerTo()->getPointerTo()};
 
-   llvm::Type *retType;
+   llvm::Type* retType;
    if (NeedsStructReturn(FTy->getReturnType())) {
       retType = VoidTy;
       ArgTypes.push_back(getStorageType(FTy->getReturnType())->getPointerTo());
@@ -3410,7 +3344,7 @@ llvm::FunctionType* IRGen::getLambdaType(FunctionType *FTy)
       retType = getStorageType(FTy->getReturnType());
    }
 
-   for (const auto &arg : FTy->getParamTypes()) {
+   for (const auto& arg : FTy->getParamTypes()) {
       auto argTy = getStorageType(arg);
       if (argTy->isStructTy())
          argTy = argTy->getPointerTo();
@@ -3421,16 +3355,16 @@ llvm::FunctionType* IRGen::getLambdaType(FunctionType *FTy)
    return llvm::FunctionType::get(retType, ArgTypes, false);
 }
 
-llvm::Value *IRGen::visitLambdaCallInst(LambdaCallInst const& I)
+llvm::Value* IRGen::visitLambdaCallInst(LambdaCallInst const& I)
 {
    auto Lambda = getLlvmValue(I.getLambda());
 
    auto Env = Builder.CreateStructGEP(LambdaTy, Lambda, 2);
-   llvm::Value *Fun = Builder.CreateLoad(Builder.CreateStructGEP(LambdaTy,
-                                                                 Lambda, 0));
+   llvm::Value* Fun
+       = Builder.CreateLoad(Builder.CreateStructGEP(LambdaTy, Lambda, 0));
 
-   FunctionType *funTy = I.getLambda()->getType()->asFunctionType();
-   llvm::SmallVector<llvm::Value*, 8> args{ Env };
+   FunctionType* funTy = I.getLambda()->getType()->asFunctionType();
+   llvm::SmallVector<llvm::Value*, 8> args{Env};
 
    bool sret = NeedsStructReturn(funTy->getReturnType());
    if (sret) {
@@ -3441,7 +3375,7 @@ llvm::Value *IRGen::visitLambdaCallInst(LambdaCallInst const& I)
    PrepareCallArgs(args, I.getArgs());
 
    Fun = Builder.CreateBitCast(Fun, getLambdaType(funTy)->getPointerTo());
-   llvm::Value *ret = Builder.CreateCall(Fun, args);
+   llvm::Value* ret = Builder.CreateCall(Fun, args);
 
    if (sret)
       ret = args[1];
@@ -3451,18 +3385,18 @@ llvm::Value *IRGen::visitLambdaCallInst(LambdaCallInst const& I)
 
 llvm::Value* IRGen::visitStructInitInst(StructInitInst const& I)
 {
-   llvm::Value *alloca;
+   llvm::Value* alloca;
    if (I.isFallible()) {
-      auto *Opt = cast<EnumDecl>(I.getType()->getRecord());
-      auto *Some = Opt->getSomeCase();
+      auto* Opt = cast<EnumDecl>(I.getType()->getRecord());
+      auto* Some = Opt->getSomeCase();
       QualType ValueTy = Some->getArgs().front()->getType();
 
-      llvm::Value *ValAlloc;
+      llvm::Value* ValAlloc;
       if (ValueTy->isClass()) {
          auto TypeSize = TI.getAllocSizeOfType(ValueTy);
 
-         llvm::Value *size = wordSizedInt(TypeSize);
-         auto buff = Builder.CreateCall(getMallocFn(), { size });
+         llvm::Value* size = wordSizedInt(TypeSize);
+         auto buff = Builder.CreateCall(getMallocFn(), {size});
 
          ValAlloc = Builder.CreateBitCast(buff, getStorageType(ValueTy));
       }
@@ -3470,17 +3404,17 @@ llvm::Value* IRGen::visitStructInitInst(StructInitInst const& I)
          ValAlloc = CreateAlloca(ValueTy);
       }
 
-      alloca = InitEnum(Opt, Some, { ValAlloc });
+      alloca = InitEnum(Opt, Some, {ValAlloc});
    }
    else if (I.canUseSRetValue()) {
       alloca = getCurrentSRetValue();
    }
    else if (I.isHeapAllocated()) {
       alloca = Builder.CreateCall(
-         getMallocFn(), wordSizedInt(TI.getAllocSizeOfType(I.getType())));
+          getMallocFn(), wordSizedInt(TI.getAllocSizeOfType(I.getType())));
 
       alloca = Builder.CreateBitCast(
-         alloca, getStructTy(I.getInitializedType())->getPointerTo());
+          alloca, getStructTy(I.getInitializedType())->getPointerTo());
    }
    else if (I.getType()->isClass()) {
       alloca = CreateAlloca(getStructTy(I.getInitializedType()));
@@ -3489,7 +3423,7 @@ llvm::Value* IRGen::visitStructInitInst(StructInitInst const& I)
       alloca = CreateAlloca(I.getType());
    }
 
-   SmallVector<llvm::Value*, 8> args { alloca };
+   SmallVector<llvm::Value*, 8> args{alloca};
    PrepareCallArgs(args, I.getArgs(), true);
 
    Builder.CreateCall(getFunction(I.getInit()), args);
@@ -3501,20 +3435,20 @@ llvm::Value* IRGen::visitStructInitInst(StructInitInst const& I)
    return alloca;
 }
 
-llvm::Value *IRGen::visitLambdaInitInst(LambdaInitInst const& I)
+llvm::Value* IRGen::visitLambdaInitInst(LambdaInitInst const& I)
 {
    auto fun = getLlvmValue(I.getFunction());
 
-   llvm::Value *alloca;
+   llvm::Value* alloca;
    if (I.getNumOperands() != 0) {
-      llvm::Value *Size = CreateSizeOf(LambdaTy);
+      llvm::Value* Size = CreateSizeOf(LambdaTy);
 
       size_t EnvSize = TI.getPointerSizeInBytes();
       for (unsigned i = 0, numOps = I.getNumOperands(); i != numOps; ++i) {
          EnvSize += TI.getPointerSizeInBytes();
       }
 
-      llvm::Value *TotalSize = Builder.CreateAdd(Size, wordSizedInt(EnvSize));
+      llvm::Value* TotalSize = Builder.CreateAdd(Size, wordSizedInt(EnvSize));
 
       alloca = Builder.CreateCall(getMallocFn(), TotalSize);
       alloca = Builder.CreateBitCast(alloca, LambdaTy->getPointerTo());
@@ -3522,26 +3456,26 @@ llvm::Value *IRGen::visitLambdaInitInst(LambdaInitInst const& I)
       auto ptr = Builder.CreateStructGEP(LambdaTy, alloca, 2);
 
       unsigned i = 0;
-      for (const auto &capture : I.getOperands()) {
+      for (const auto& capture : I.getOperands()) {
          auto val = getPotentiallyBoxedValue(capture);
-         auto gep = Builder.CreateInBoundsGEP(ptr, { wordSizedInt(i) });
+         auto gep = Builder.CreateInBoundsGEP(ptr, {wordSizedInt(i)});
 
          Builder.CreateStore(
-            val, Builder.CreateBitCast(gep, val->getType()->getPointerTo()));
+             val, Builder.CreateBitCast(gep, val->getType()->getPointerTo()));
 
          ++i;
       }
 
       Builder.CreateStore(llvm::ConstantPointerNull::get(BoxTy->getPointerTo()),
-                          Builder.CreateInBoundsGEP(ptr, { wordSizedInt(i) }));
+                          Builder.CreateInBoundsGEP(ptr, {wordSizedInt(i)}));
    }
    else {
-      alloca = Builder.CreateCall(getMallocFn(), { CreateSizeOf(LambdaTy) });
+      alloca = Builder.CreateCall(getMallocFn(), {CreateSizeOf(LambdaTy)});
       alloca = Builder.CreateBitCast(alloca, LambdaTy->getPointerTo());
 
       auto envPtr = Builder.CreateStructGEP(LambdaTy, alloca, 2);
-      Builder.CreateStore(
-         llvm::ConstantPointerNull::get(BoxTy->getPointerTo()), envPtr);
+      Builder.CreateStore(llvm::ConstantPointerNull::get(BoxTy->getPointerTo()),
+                          envPtr);
    }
 
    auto funPtr = Builder.CreateStructGEP(LambdaTy, alloca, 0);
@@ -3556,7 +3490,7 @@ llvm::Value *IRGen::visitLambdaInitInst(LambdaInitInst const& I)
 llvm::Value* IRGen::visitUnionInitInst(UnionInitInst const& I)
 {
    auto UnionTy = getStructTy(I.getUnionTy());
-   llvm::Value *alloca;
+   llvm::Value* alloca;
    if (I.canUseSRetValue()) {
       alloca = getCurrentSRetValue();
    }
@@ -3573,20 +3507,19 @@ llvm::Value* IRGen::visitUnionInitInst(UnionInitInst const& I)
    return alloca;
 }
 
-llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
-                             ast::EnumCaseDecl *Case,
+llvm::Value* IRGen::InitEnum(ast::EnumDecl* EnumTy, ast::EnumCaseDecl* Case,
                              llvm::ArrayRef<llvm::Value*> CaseVals,
-                             bool CanUseSRetValue) {
+                             bool CanUseSRetValue)
+{
    if (EnumTy->getMaxAssociatedValues() == 0) {
       auto rawTy = getStorageType(EnumTy->getRawType());
-      return llvm::ConstantInt::get(rawTy,
-                                    cast<ConstantInt>(Case->getILValue())
-                                       ->getZExtValue());
+      return llvm::ConstantInt::get(
+          rawTy, cast<ConstantInt>(Case->getILValue())->getZExtValue());
    }
 
    auto LlvmTy = getStructTy(EnumTy);
 
-   llvm::Value *alloca;
+   llvm::Value* alloca;
    if (CanUseSRetValue) {
       alloca = getCurrentSRetValue();
    }
@@ -3601,14 +3534,14 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
 
    auto CaseTy = getEnumCaseTy(Case);
 
-   llvm::Value *StoreDst;
-   llvm::Value *IndirectStorage = nullptr;
-   llvm::Value *ValuePtr = Builder.CreateStructGEP(LlvmTy, alloca, 1);
+   llvm::Value* StoreDst;
+   llvm::Value* IndirectStorage = nullptr;
+   llvm::Value* ValuePtr = Builder.CreateStructGEP(LlvmTy, alloca, 1);
 
    // if the case is indirect, we need to heap allocate the storage for it
    // and store a pointer to that storage
    if (Case->isIndirect()) {
-      StoreDst = Builder.CreateCall(getMallocFn(), { CreateSizeOf(CaseTy) });
+      StoreDst = Builder.CreateCall(getMallocFn(), {CreateSizeOf(CaseTy)});
       IndirectStorage = StoreDst;
    }
    else {
@@ -3620,7 +3553,7 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
    assert(Case->getArgs().size() == CaseVals.size() && "bad argument count!");
 
    unsigned i = 0;
-   for (const auto &Arg : Case->getArgs()) {
+   for (const auto& Arg : Case->getArgs()) {
       auto GEP = Builder.CreateStructGEP(CaseTy, StoreDst, i);
 
       auto val = CaseVals[i];
@@ -3637,8 +3570,8 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
 
    if (Case->isIndirect()) {
       Builder.CreateStore(
-         IndirectStorage,
-         Builder.CreateBitCast(ValuePtr, Int8PtrTy->getPointerTo()));
+          IndirectStorage,
+          Builder.CreateBitCast(ValuePtr, Int8PtrTy->getPointerTo()));
    }
 
    return alloca;
@@ -3647,13 +3580,13 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl *EnumTy,
 llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
 {
    llvm::SmallVector<llvm::Value*, 4> CaseVals;
-   for (auto &Arg : I.getArgs())
+   for (auto& Arg : I.getArgs())
       CaseVals.push_back(getLlvmValue(Arg));
 
    return InitEnum(I.getEnumTy(), I.getCase(), CaseVals, I.canUseSRetValue());
 }
 
-llvm::Value *IRGen::visitDeallocInst(const DeallocInst &I)
+llvm::Value* IRGen::visitDeallocInst(const DeallocInst& I)
 {
    if (I.isHeap())
       Builder.CreateCall(getFreeFn(), toInt8Ptr(getLlvmValue(I.getValue())));
@@ -3661,38 +3594,43 @@ llvm::Value *IRGen::visitDeallocInst(const DeallocInst &I)
    return nullptr;
 }
 
-llvm::Value *IRGen::visitDeallocBoxInst(const DeallocBoxInst &I)
+llvm::Value* IRGen::visitDeallocBoxInst(const DeallocBoxInst& I)
 {
    return nullptr;
 }
 
-llvm::Value* IRGen::applyBinaryOp(unsigned OpCode,
-                                  QualType ty,
-                                  llvm::Value *lhs,
-                                  llvm::Value *rhs) {
+llvm::Value* IRGen::applyBinaryOp(unsigned OpCode, QualType ty,
+                                  llvm::Value* lhs, llvm::Value* rhs)
+{
    using OPC = BinaryOperatorInst::OpCode;
    switch ((OPC)OpCode) {
-   case OPC::And:  return Builder.CreateAnd(lhs, rhs);
-   case OPC::Or:   return Builder.CreateOr(lhs, rhs);
-   case OPC::Xor:  return Builder.CreateXor(lhs, rhs);
-   case OPC::LShr: return Builder.CreateLShr(lhs, rhs);
-   case OPC::AShr: return Builder.CreateAShr(lhs, rhs);
-   case OPC::Shl:  return Builder.CreateShl(lhs, rhs);
-#  define INT_OR_FP_OP(Name)                                      \
-   case OPC::Name:                                                \
-      if (ty->isIntegerType()) {                                  \
-         if (ty->isUnsigned())                                    \
-            return Builder.CreateNUW##Name(lhs, rhs);             \
-                                                                  \
-         return Builder.CreateNSW##Name(lhs, rhs);                \
-      }                                                           \
-                                                                  \
+   case OPC::And:
+      return Builder.CreateAnd(lhs, rhs);
+   case OPC::Or:
+      return Builder.CreateOr(lhs, rhs);
+   case OPC::Xor:
+      return Builder.CreateXor(lhs, rhs);
+   case OPC::LShr:
+      return Builder.CreateLShr(lhs, rhs);
+   case OPC::AShr:
+      return Builder.CreateAShr(lhs, rhs);
+   case OPC::Shl:
+      return Builder.CreateShl(lhs, rhs);
+#define INT_OR_FP_OP(Name)                                                     \
+   case OPC::Name:                                                             \
+      if (ty->isIntegerType()) {                                               \
+         if (ty->isUnsigned())                                                 \
+            return Builder.CreateNUW##Name(lhs, rhs);                          \
+                                                                               \
+         return Builder.CreateNSW##Name(lhs, rhs);                             \
+      }                                                                        \
+                                                                               \
       return Builder.CreateF##Name(lhs, rhs);
-   INT_OR_FP_OP(Add)
-   INT_OR_FP_OP(Sub)
-   INT_OR_FP_OP(Mul)
+      INT_OR_FP_OP(Add)
+      INT_OR_FP_OP(Sub)
+      INT_OR_FP_OP(Mul)
 
-#  undef INT_OR_FP_OP
+#undef INT_OR_FP_OP
    case OPC::Div:
       if (ty->isIntegerType()) {
          if (ty->isUnsigned())
@@ -3712,36 +3650,36 @@ llvm::Value* IRGen::applyBinaryOp(unsigned OpCode,
 
       return Builder.CreateFRem(lhs, rhs);
    case OPC::Exp: {
-      llvm::Constant *powFn;
+      llvm::Constant* powFn;
       if (lhs->getType()->isIntegerTy()) {
          powFn = getIntPowFn(ty);
       }
       else if (rhs->getType()->isIntegerTy()) {
          powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::powi,
-                                                 { lhs->getType() });
+                                                 {lhs->getType()});
       }
       else {
          powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::pow,
-                                                 { lhs->getType() });
+                                                 {lhs->getType()});
       }
 
-      return Builder.CreateCall(powFn, { lhs, rhs });
+      return Builder.CreateCall(powFn, {lhs, rhs});
    }
    }
 
    llvm_unreachable("bad opcode");
 }
 
-llvm::Value* IRGen::visitBinaryOperatorInst(const BinaryOperatorInst &I)
+llvm::Value* IRGen::visitBinaryOperatorInst(const BinaryOperatorInst& I)
 {
    auto ty = I.getType();
    auto lhs = getLlvmValue(I.getOperand(0));
    auto rhs = getLlvmValue(I.getOperand(1));
-   
+
    return applyBinaryOp(I.getOpCode(), ty, lhs, rhs);
 }
 
-llvm::Value* IRGen::visitCompInst(const CompInst &I)
+llvm::Value* IRGen::visitCompInst(const CompInst& I)
 {
    using OPC = CompInst::OpCode;
 
@@ -3751,13 +3689,15 @@ llvm::Value* IRGen::visitCompInst(const CompInst &I)
 
    switch (I.getOpCode()) {
    case OPC::CompEQ:
-      if (ty->isIntegerType() || ty->isPointerType() || ty->isThinFunctionTy()){
+      if (ty->isIntegerType() || ty->isPointerType()
+          || ty->isThinFunctionTy()) {
          return Builder.CreateICmpEQ(lhs, rhs);
       }
 
       return Builder.CreateFCmpOEQ(lhs, rhs);
    case OPC::CompNE:
-      if (ty->isIntegerType() || ty->isPointerType() || ty->isThinFunctionTy()){
+      if (ty->isIntegerType() || ty->isPointerType()
+          || ty->isThinFunctionTy()) {
          return Builder.CreateICmpNE(lhs, rhs);
       }
 
@@ -3813,7 +3753,7 @@ llvm::Value* IRGen::visitCompInst(const CompInst &I)
    }
 }
 
-llvm::Value* IRGen::visitUnaryOperatorInst(const UnaryOperatorInst &I)
+llvm::Value* IRGen::visitUnaryOperatorInst(const UnaryOperatorInst& I)
 {
    auto target = getLlvmValue(I.getOperand(0));
 
@@ -3825,8 +3765,8 @@ llvm::Value* IRGen::visitUnaryOperatorInst(const UnaryOperatorInst &I)
    case UnaryOperatorInst::Min: {
       if (target->getType()->isIntegerTy()) {
          return Builder.CreateNSWSub(
-            Builder.getIntN(target->getType()->getIntegerBitWidth(), 0),
-            target);
+             Builder.getIntN(target->getType()->getIntegerBitWidth(), 0),
+             target);
       }
 
       return Builder.CreateFNeg(target);
@@ -3842,7 +3782,7 @@ llvm::Value* IRGen::visitBitCastInst(BitCastInst const& I)
                                 getParameterType(I.getType()));
 }
 
-llvm::Value * IRGen::visitIntegerCastInst(IntegerCastInst const& I)
+llvm::Value* IRGen::visitIntegerCastInst(IntegerCastInst const& I)
 {
    auto val = getLlvmValue(I.getOperand(0));
    auto fromTy = I.getOperand(0)->getType();
@@ -3878,18 +3818,18 @@ llvm::Value * IRGen::visitIntegerCastInst(IntegerCastInst const& I)
    }
 }
 
-llvm::Value * IRGen::visitFPCastInst(FPCastInst const& I)
+llvm::Value* IRGen::visitFPCastInst(FPCastInst const& I)
 {
    auto val = getLlvmValue(I.getOperand(0));
    auto toTy = getStorageType(I.getType());
 
    switch (I.getKind()) {
-      case CastKind::FPTrunc:
-         return Builder.CreateFPTrunc(val, toTy);
-      case CastKind::FPExt:
-         return Builder.CreateFPExt(val, toTy);
-      default:
-         llvm_unreachable("not a fp cast");
+   case CastKind::FPTrunc:
+      return Builder.CreateFPTrunc(val, toTy);
+   case CastKind::FPExt:
+      return Builder.CreateFPExt(val, toTy);
+   default:
+      llvm_unreachable("not a fp cast");
    }
 }
 
@@ -3903,11 +3843,11 @@ llvm::Value* IRGen::visitUnionCastInst(UnionCastInst const& I)
 
 llvm::Value* IRGen::visitExistentialInitInst(ExistentialInitInst const& I)
 {
-   llvm::Value *Val = getLlvmValue(I.getOperand(0));
-   llvm::Value *ValPtr;
+   llvm::Value* Val = getLlvmValue(I.getOperand(0));
+   llvm::Value* ValPtr;
 
    if (!Val->getType()->isPointerTy()) {
-      auto *Alloc = Builder.CreateAlloca(Val->getType());
+      auto* Alloc = Builder.CreateAlloca(Val->getType());
       Builder.CreateStore(Val, Alloc);
 
       ValPtr = toInt8Ptr(Alloc);
@@ -3917,44 +3857,41 @@ llvm::Value* IRGen::visitExistentialInitInst(ExistentialInitInst const& I)
    }
 
    // Get the type info.
-   auto *valueTypeInfo = getLlvmValue(I.getValueTypeInfo());
+   auto* valueTypeInfo = getLlvmValue(I.getValueTypeInfo());
 
    // Get the protocol type info.
-   auto *protoTypeInfo = getConstantVal(I.getProtocolTypeInfo());
+   auto* protoTypeInfo = getConstantVal(I.getProtocolTypeInfo());
 
    // Initialize the existential container.
    auto alloca = CreateAlloca(ExistentialContainerTy);
    if (I.isPreallocated()) {
-      CallRuntimeFunction(
-         "_cdot_InitializeExistentialPreallocated",
-         { ValPtr, toInt8Ptr(valueTypeInfo),
-            toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca) });
+      CallRuntimeFunction("_cdot_InitializeExistentialPreallocated",
+                          {ValPtr, toInt8Ptr(valueTypeInfo),
+                           toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca)});
    }
    else {
-      Builder.CreateCall(
-         getInitializeExistentialFn(),
-         { ValPtr, toInt8Ptr(valueTypeInfo),
-            toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca) });
+      Builder.CreateCall(getInitializeExistentialFn(),
+                         {ValPtr, toInt8Ptr(valueTypeInfo),
+                          toInt8Ptr(protoTypeInfo), toInt8Ptr(alloca)});
    }
 
    return alloca;
 }
 
-llvm::Value *IRGen::visitGenericInitInst(const GenericInitInst &I)
+llvm::Value* IRGen::visitGenericInitInst(const GenericInitInst& I)
 {
    auto Val = getLlvmValue(I.getOperand(0));
    auto Env = getLlvmValue(I.getOperand(1));
 
    // A generic container is a tuple (Value, GenericEnvironment)
-   auto *Ty = getStorageType(I.getType());
-   auto *Alloc = CreateAlloca(Ty);
-   auto *ValRef = Builder.CreateStructGEP(Ty, Alloc, 0);
-   auto *EnvRef = Builder.CreateStructGEP(Ty, Alloc, 1);
+   auto* Ty = getStorageType(I.getType());
+   auto* Alloc = CreateAlloca(Ty);
+   auto* ValRef = Builder.CreateStructGEP(Ty, Alloc, 0);
+   auto* EnvRef = Builder.CreateStructGEP(Ty, Alloc, 1);
 
    QualType ValTy = I.getOperand(0)->getType();
    if (NeedsStructReturn(ValTy)) {
-      Builder.CreateMemCpy(ValRef, Val,
-                           TI.getAllocSizeOfType(ValTy),
+      Builder.CreateMemCpy(ValRef, Val, TI.getAllocSizeOfType(ValTy),
                            TI.getAllocAlignOfType(ValTy));
    }
    else {
@@ -3962,8 +3899,7 @@ llvm::Value *IRGen::visitGenericInitInst(const GenericInitInst &I)
    }
 
    QualType EnvTy = I.getOperand(1)->getType();
-   Builder.CreateMemCpy(EnvRef, Env,
-                        TI.getAllocSizeOfType(EnvTy),
+   Builder.CreateMemCpy(EnvRef, Env, TI.getAllocSizeOfType(EnvTy),
                         TI.getAllocAlignOfType(EnvTy));
 
    return Alloc;
@@ -3977,27 +3913,26 @@ llvm::Value* IRGen::visitExceptionCastInst(ExceptionCastInst const& I)
    return Builder.CreateBitCast(Exc, toTy);
 }
 
-llvm::Value* IRGen::visitDynamicCastInst(const DynamicCastInst &I)
+llvm::Value* IRGen::visitDynamicCastInst(const DynamicCastInst& I)
 {
-   auto *ResultAlloc = CreateAlloca(I.getType());
-   auto *TypeInfo = getLlvmValue(I.getTargetTypeInfo());
-   auto *Val = getLlvmValue(I.getOperand(0));
+   auto* ResultAlloc = CreateAlloca(I.getType());
+   auto* TypeInfo = getLlvmValue(I.getTargetTypeInfo());
+   auto* Val = getLlvmValue(I.getOperand(0));
 
    Builder.CreateCall(getDynamicDownCastFn(), {Val, TypeInfo, ResultAlloc});
    return ResultAlloc;
 }
 
-llvm::Value *IRGen::visitExistentialCastInst(const il::ExistentialCastInst &I)
+llvm::Value* IRGen::visitExistentialCastInst(const il::ExistentialCastInst& I)
 {
-   auto *Val = toInt8Ptr(getLlvmValue(I.getOperand(0)));
-   auto *TargetTI = toInt8Ptr(getLlvmValue(I.getTargetTypeInfo()));
-   auto *ResultAlloc = Builder.CreateAlloca(getStorageType(I.getType()));
+   auto* Val = toInt8Ptr(getLlvmValue(I.getOperand(0)));
+   auto* TargetTI = toInt8Ptr(getLlvmValue(I.getTargetTypeInfo()));
+   auto* ResultAlloc = Builder.CreateAlloca(getStorageType(I.getType()));
 
-   auto *AllocPtr = toInt8Ptr(ResultAlloc);
+   auto* AllocPtr = toInt8Ptr(ResultAlloc);
    switch (I.getKind()) {
    case CastKind::ExistentialCast:
-      CallRuntimeFunction("_cdot_ExistentialCast",
-                          {Val, TargetTI, AllocPtr});
+      CallRuntimeFunction("_cdot_ExistentialCast", {Val, TargetTI, AllocPtr});
       break;
    case CastKind::ExistentialCastFallible: {
       CallRuntimeFunction("_cdot_ExistentialCastFallible",
@@ -4005,8 +3940,7 @@ llvm::Value *IRGen::visitExistentialCastInst(const il::ExistentialCastInst &I)
       break;
    }
    case CastKind::ExistentialUnwrap:
-      CallRuntimeFunction("_cdot_ExistentialUnwrap",
-                          {Val, TargetTI, AllocPtr});
+      CallRuntimeFunction("_cdot_ExistentialUnwrap", {Val, TargetTI, AllocPtr});
       break;
    case CastKind::ExistentialUnwrapFallible:
       CallRuntimeFunction("_cdot_ExistentialUnwrapFallible",

@@ -1,15 +1,15 @@
-#include "Timer.h"
+#include "cdotc/Support/Timer.h"
 
 #include <chrono>
 
 using namespace cdot::support;
 
-Timer::Timer(CompilerInstance &CI, llvm::StringRef PhaseName, bool Enable)
-   : PhaseName(PhaseName), CI(CI), StartTime(0), Enable(Enable)
+Timer::Timer(CompilerInstance& CI, llvm::StringRef PhaseName, bool Enable)
+    : PhaseName(PhaseName), CI(CI), StartTime(0), Enable(Enable)
 {
    auto Now = std::chrono::high_resolution_clock().now().time_since_epoch();
-   StartTime =
-      std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
+   StartTime
+       = std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
 
    if (!CI.NumTimers) {
       CI.TimerStr += "Compilation Phases:\n";
@@ -24,8 +24,8 @@ Timer::~Timer()
       return;
 
    auto Now = std::chrono::high_resolution_clock().now().time_since_epoch();
-   auto EndTime =
-      std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
+   auto EndTime
+       = std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
 
    unsigned ActiveTimers = --CI.NumTimers;
    if (!ActiveTimers) {

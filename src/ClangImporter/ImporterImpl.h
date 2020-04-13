@@ -1,11 +1,11 @@
 #ifndef CDOT_IMPORTERIMPL_H
 #define CDOT_IMPORTERIMPL_H
 
-#include "AST/Type.h"
-#include "Basic/DeclarationName.h"
-#include "ClangImporter.h"
-#include "Lex/SourceLocation.h"
-#include "Lex/Token.h"
+#include "cdotc/AST/Type.h"
+#include "cdotc/Basic/DeclarationName.h"
+#include "cdotc/ClangImporter/ClangImporter.h"
+#include "cdotc/Lex/SourceLocation.h"
+#include "cdotc/Lex/Token.h"
 
 #include <clang/AST/Type.h>
 #include <clang/Basic/SourceLocation.h>

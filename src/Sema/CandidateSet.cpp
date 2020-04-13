@@ -1,14 +1,14 @@
-#include "CandidateSet.h"
+#include "cdotc/Sema/CandidateSet.h"
 
-#include "AST/Expression.h"
-#include "AST/Decl.h"
-#include "ConstraintBuilder.h"
-#include "Query/QueryContext.h"
-#include "SemaPass.h"
-#include "Support/Casting.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Expression.h"
+#include "cdotc/AST/PrettyPrinter.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/ConstraintBuilder.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Casting.h"
 
 #include <llvm/ADT/SmallString.h>
-#include <AST/PrettyPrinter.h>
 
 using namespace cdot::ast;
 using namespace cdot::diag;
@@ -18,30 +18,34 @@ namespace cdot {
 
 CandidateSet::Candidate::Candidate() = default;
 
-CandidateSet::Candidate::Candidate(CallableDecl *Func, unsigned Distance)
-   : CandDecl(Func), FR(None), IsAnonymousCand(false), Distance(Distance)
-{}
+CandidateSet::Candidate::Candidate(CallableDecl* Func, unsigned Distance)
+    : CandDecl(Func), FR(None), IsAnonymousCand(false), Distance(Distance)
+{
+}
 
-CandidateSet::Candidate::Candidate(AliasDecl *Alias, unsigned Distance)
-   : CandDecl(Alias), FR(None), IsAnonymousCand(false), Distance(Distance)
-{}
+CandidateSet::Candidate::Candidate(AliasDecl* Alias, unsigned Distance)
+    : CandDecl(Alias), FR(None), IsAnonymousCand(false), Distance(Distance)
+{
+}
 
-CandidateSet::Candidate::Candidate(Expression *FnExpr)
-   : CandDecl(FnExpr), FR(None), IsAnonymousCand(true), Distance(0)
-{}
+CandidateSet::Candidate::Candidate(Expression* FnExpr)
+    : CandDecl(FnExpr), FR(None), IsAnonymousCand(true), Distance(0)
+{
+}
 
-CandidateSet::Candidate::Candidate(NamedDecl *FnDecl)
-   : CandDecl(FnDecl), FR(None), IsAnonymousCand(true), Distance(0)
-{}
+CandidateSet::Candidate::Candidate(NamedDecl* FnDecl)
+    : CandDecl(FnDecl), FR(None), IsAnonymousCand(true), Distance(0)
+{
+}
 
 CandidateSet::Candidate::~Candidate() = default;
 
-CandidateSet::Candidate::Candidate(CandidateSet::Candidate &&)
-   noexcept = default;
+CandidateSet::Candidate::Candidate(CandidateSet::Candidate&&) noexcept
+    = default;
 
-CandidateSet::Candidate&
-CandidateSet::Candidate::operator=(CandidateSet::Candidate &&)
-   noexcept = default;
+CandidateSet::Candidate& CandidateSet::Candidate::
+operator=(CandidateSet::Candidate&&) noexcept
+    = default;
 
 CallableDecl* CandidateSet::Candidate::getFunc() const
 {
@@ -66,12 +70,14 @@ NamedDecl* CandidateSet::Candidate::getFuncDecl() const
 FunctionType* CandidateSet::Candidate::getFunctionType() const
 {
    if (isAnonymousCandidate()) {
-      if (auto *E = getFuncExpr()) {
+      if (auto* E = getFuncExpr()) {
          return E->getExprType()->removeReference()->asFunctionType();
       }
 
-      return cast<VarDecl>(getFuncDecl())->getType()->removeReference()
-                                         ->asFunctionType();
+      return cast<VarDecl>(getFuncDecl())
+          ->getType()
+          ->removeReference()
+          ->asFunctionType();
    }
 
    return getFunc()->getFunctionType();
@@ -80,7 +86,7 @@ FunctionType* CandidateSet::Candidate::getFunctionType() const
 SourceLocation CandidateSet::Candidate::getSourceLoc() const
 {
    if (isAnonymousCandidate()) {
-      if (auto *E = getFuncExpr()) {
+      if (auto* E = getFuncExpr()) {
          return E->getSourceLoc();
       }
 
@@ -90,7 +96,7 @@ SourceLocation CandidateSet::Candidate::getSourceLoc() const
    return getFunc()->getSourceLoc();
 }
 
-ast::PrecedenceGroupDecl *CandidateSet::Candidate::getPrecedenceGroup() const
+ast::PrecedenceGroupDecl* CandidateSet::Candidate::getPrecedenceGroup() const
 {
    assert(!isAnonymousCandidate());
    return getFunc()->getPrecedenceGroup();
@@ -113,27 +119,26 @@ unsigned CandidateSet::Candidate::getNumConstraints() const
    return (unsigned)getFunc()->getConstraints()->size();
 }
 
-CandidateSet::CandidateSet(CandidateSet &&Other) noexcept
-   : Status(Other.Status), IncludesSelfArgument(Other.IncludesSelfArgument),
-     InvalidCand(Other.InvalidCand), Dependent(Other.Dependent),
-     MatchIdx(Other.MatchIdx),
-     BestConversionPenalty(Other.BestConversionPenalty),
-     ResolvedArgs(move(Other.ResolvedArgs)), Candidates(move(Other.Candidates)),
-     CandidateFns(move(Other.CandidateFns))
+CandidateSet::CandidateSet(CandidateSet&& Other) noexcept
+    : Status(Other.Status), IncludesSelfArgument(Other.IncludesSelfArgument),
+      InvalidCand(Other.InvalidCand), Dependent(Other.Dependent),
+      MatchIdx(Other.MatchIdx),
+      BestConversionPenalty(Other.BestConversionPenalty),
+      ResolvedArgs(move(Other.ResolvedArgs)),
+      Candidates(move(Other.Candidates)), CandidateFns(move(Other.CandidateFns))
 {
-
 }
 
-CandidateSet& CandidateSet::operator=(CandidateSet &&Other) noexcept
+CandidateSet& CandidateSet::operator=(CandidateSet&& Other) noexcept
 {
    this->~CandidateSet();
-   new(this) CandidateSet(move(Other));
+   new (this) CandidateSet(move(Other));
 
    return *this;
 }
 
-CandidateSet::Candidate*
-CandidateSet::addCandidate(ast::CallableDecl *CD, unsigned Distance)
+CandidateSet::Candidate* CandidateSet::addCandidate(ast::CallableDecl* CD,
+                                                    unsigned Distance)
 {
    if (!CandidateFns.insert(CD).second)
       return nullptr;
@@ -142,8 +147,8 @@ CandidateSet::addCandidate(ast::CallableDecl *CD, unsigned Distance)
    return &Candidates.back();
 }
 
-CandidateSet::Candidate*
-CandidateSet::addCandidate(ast::AliasDecl *Alias, unsigned Distance)
+CandidateSet::Candidate* CandidateSet::addCandidate(ast::AliasDecl* Alias,
+                                                    unsigned Distance)
 {
    if (!CandidateFns.insert(Alias).second)
       return nullptr;
@@ -152,22 +157,21 @@ CandidateSet::addCandidate(ast::AliasDecl *Alias, unsigned Distance)
    return &Candidates.back();
 }
 
-CandidateSet::Candidate&
-CandidateSet::addCandidate(Expression *FnExpr)
+CandidateSet::Candidate& CandidateSet::addCandidate(Expression* FnExpr)
 {
    Candidates.emplace_back(FnExpr);
    return Candidates.back();
 }
 
-CandidateSet::Candidate&
-CandidateSet::addCandidate(NamedDecl *FnDecl)
+CandidateSet::Candidate& CandidateSet::addCandidate(NamedDecl* FnDecl)
 {
    Candidates.emplace_back(FnDecl);
    return Candidates.back();
 }
 
-static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
-                                   Expression *Expr) {
+static bool tryStringifyConstraint(llvm::SmallString<128>& Str,
+                                   Expression* Expr)
+{
    llvm::raw_svector_ostream sstream(Str);
    sstream << "'";
 
@@ -179,9 +183,10 @@ static bool tryStringifyConstraint(llvm::SmallString<128> &Str,
    return true;
 }
 
-static FakeSourceLocation makeFakeSourceLoc(CandidateSet &CandSet,
+static FakeSourceLocation makeFakeSourceLoc(CandidateSet& CandSet,
                                             DeclarationName funcName,
-                                            CandidateSet::Candidate &Cand) {
+                                            CandidateSet::Candidate& Cand)
+{
    assert(Cand.isAnonymousCandidate() && "not a builtin candidate!");
 
    auto FuncTy = Cand.getFunctionType();
@@ -191,18 +196,20 @@ static FakeSourceLocation makeFakeSourceLoc(CandidateSet &CandSet,
    OS << "def " << funcName << "(";
 
    size_t i = 0;
-   for (auto &arg : FuncTy->getParamTypes()) {
-      if (i++ != 0) OS << ", ";
+   for (auto& arg : FuncTy->getParamTypes()) {
+      if (i++ != 0)
+         OS << ", ";
       OS << arg;
    }
 
    OS << ") -> " << FuncTy->getReturnType();
 
-   return FakeSourceLocation{ str.str() };
+   return FakeSourceLocation{str.str()};
 }
 
-static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
-                                     llvm::ArrayRef<ast::Expression*> args) {
+static SourceLocation getArgumentLoc(CandidateSet::Candidate& Cand,
+                                     llvm::ArrayRef<ast::Expression*> args)
+{
    unsigned idx = Cand.Data1;
    if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
       ++idx;
@@ -212,7 +219,7 @@ static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
 
       // variadic template arguments might create more arguments
       if (ArgDecls.size() > idx) {
-         auto *D = ArgDecls[idx];
+         auto* D = ArgDecls[idx];
          if (D->getType().getTypeExpr())
             return D->getType().getTypeExpr()->getSourceLoc();
 
@@ -220,7 +227,7 @@ static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
       }
 
       if (!ArgDecls.empty()) {
-         auto *D = ArgDecls.back();
+         auto* D = ArgDecls.back();
          if (D->getType().getTypeExpr())
             return D->getType().getTypeExpr()->getSourceLoc();
 
@@ -236,7 +243,7 @@ static SourceLocation getArgumentLoc(CandidateSet::Candidate &Cand,
    return Cand.getSourceLoc();
 }
 
-static QualType getArgumentType(CandidateSet::Candidate &Cand)
+static QualType getArgumentType(CandidateSet::Candidate& Cand)
 {
    unsigned idx = Cand.Data1;
    if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
@@ -256,8 +263,9 @@ static QualType getArgumentType(CandidateSet::Candidate &Cand)
    return Cand.getFunctionType()->getParamTypes()[idx];
 }
 
-static QualType getArgumentType(CandidateSet::Candidate &Cand,
-                                ArrayRef<Expression*> args) {
+static QualType getArgumentType(CandidateSet::Candidate& Cand,
+                                ArrayRef<Expression*> args)
+{
    unsigned idx = Cand.Data1;
    if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
       ++idx;
@@ -270,15 +278,15 @@ static QualType getArgumentType(CandidateSet::Candidate &Cand,
    return args.back()->getExprType();
 }
 
-static void diagnoseCandidate(SemaPass &SP,
-                              CandidateSet &CandSet,
-                              CandidateSet::Candidate &Cand,
+static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
+                              CandidateSet::Candidate& Cand,
                               ArrayRef<Expression*> args,
                               ArrayRef<Expression*> templateArgs,
-                              Statement *Caller) {
+                              Statement* Caller)
+{
    bool IncludesSelf = false;
    if (!Cand.isAnonymousCandidate()) {
-      if (auto *I = dyn_cast<InitDecl>(Cand.getFunc())) {
+      if (auto* I = dyn_cast<InitDecl>(Cand.getFunc())) {
          IncludesSelf = I->isBaseInitializer();
       }
       else if (isa<MethodDecl>(Cand.getFunc())) {
@@ -287,7 +295,8 @@ static void diagnoseCandidate(SemaPass &SP,
    }
 
    switch (Cand.FR) {
-   case CandidateSet::None: llvm_unreachable("found a matching call!");
+   case CandidateSet::None:
+      llvm_unreachable("found a matching call!");
    case CandidateSet::IsInvalid:
    case CandidateSet::IsDependent:
       // diagnostics were already emitted for the invalid decl; we don't
@@ -295,89 +304,87 @@ static void diagnoseCandidate(SemaPass &SP,
       // declaration not contained errors
       break;
    case CandidateSet::TooFewArguments: {
-      auto &TemplateArgs = Cand.InnerTemplateArgs;
+      auto& TemplateArgs = Cand.InnerTemplateArgs;
 
       auto GivenArgAmt = Cand.Data1;
       auto NeededArgAmt = Cand.Data2;
 
       if (TemplateArgs.isInferred()) {
-         SP.diagnose(Caller, note_too_few_arguments_inferred,
-                     NeededArgAmt, GivenArgAmt,
-                     TemplateArgs.toString('\0', '\0', true),
+         SP.diagnose(Caller, note_too_few_arguments_inferred, NeededArgAmt,
+                     GivenArgAmt, TemplateArgs.toString('\0', '\0', true),
                      Cand.getSourceLoc());
       }
       else {
-         SP.diagnose(Caller, note_too_few_arguments, NeededArgAmt,
-                     GivenArgAmt, Cand.getSourceLoc(), false);
+         SP.diagnose(Caller, note_too_few_arguments, NeededArgAmt, GivenArgAmt,
+                     Cand.getSourceLoc(), false);
       }
 
       break;
    }
    case CandidateSet::TooManyArguments: {
-      auto &TemplateArgs = Cand.InnerTemplateArgs;
+      auto& TemplateArgs = Cand.InnerTemplateArgs;
 
       auto GivenArgAmt = Cand.Data1;
       auto NeededArgAmt = Cand.Data2;
 
       if (TemplateArgs.isInferred()) {
-         SP.diagnose(Caller, note_too_many_arguments_inferred,
-                     NeededArgAmt, GivenArgAmt,
-                     TemplateArgs.toString('\0', '\0', true),
+         SP.diagnose(Caller, note_too_many_arguments_inferred, NeededArgAmt,
+                     GivenArgAmt, TemplateArgs.toString('\0', '\0', true),
                      Cand.getSourceLoc());
       }
       else {
-         SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt,
-                     GivenArgAmt, Cand.getSourceLoc(), false);
+         SP.diagnose(Caller, note_too_many_arguments, NeededArgAmt, GivenArgAmt,
+                     Cand.getSourceLoc(), false);
       }
 
       break;
    }
    case CandidateSet::IncompatibleArgument: {
-      QualType neededTy = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data3));
+      QualType neededTy
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data3));
 
-      QualType givenTy = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data2));
+      QualType givenTy
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data2));
 
       SourceLocation loc = getArgumentLoc(Cand, args);
-      auto &TemplateArgs = Cand.InnerTemplateArgs;
+      auto& TemplateArgs = Cand.InnerTemplateArgs;
       SP.QC.SubstTemplateParamTypesNonFinal(neededTy, neededTy, TemplateArgs,
-                                      Caller->getSourceRange());
+                                            Caller->getSourceRange());
 
       auto ArgNo = Cand.Data1 + 1;
-      if (isa<MethodDecl>(Cand.getFunc()) && !Cand.getFunc()->isCompleteInitializer())
+      if (isa<MethodDecl>(Cand.getFunc())
+          && !Cand.getFunc()->isCompleteInitializer())
          --ArgNo;
 
       if (TemplateArgs.isInferred()) {
          SP.diagnose(Caller, note_cand_no_implicit_conv_inferred,
-                     diag::opt::show_constness,
-                     givenTy, neededTy, ArgNo,
+                     diag::opt::show_constness, givenTy, neededTy, ArgNo,
                      TemplateArgs.toString('\0', '\0', true), loc);
       }
       else {
          SP.diagnose(Caller, note_cand_no_implicit_conv,
-                     diag::opt::show_constness, givenTy, neededTy,
-                     ArgNo, false, loc);
+                     diag::opt::show_constness, givenTy, neededTy, ArgNo, false,
+                     loc);
       }
 
       break;
    }
    case CandidateSet::IncompatibleLabel: {
       auto ArgIdx = Cand.Data1;
-      auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
+      auto* GivenLabel = (IdentifierInfo*)Cand.Data2;
 
       SourceLocation loc = getArgumentLoc(Cand, args);
       auto ArgNo = ArgIdx + 1;
       if (IncludesSelf)
          --ArgNo;
 
-      IdentifierInfo *NeededLabel = nullptr;
-      if (!Cand.isAnonymousCandidate() && ArgIdx < Cand.getFunc()->getArgs().size()){
+      IdentifierInfo* NeededLabel = nullptr;
+      if (!Cand.isAnonymousCandidate()
+          && ArgIdx < Cand.getFunc()->getArgs().size()) {
          NeededLabel = Cand.getFunc()->getArgs()[ArgIdx]->getLabel();
       }
 
-      SP.diagnose(Caller, note_cand_label, NeededLabel, ArgNo,
-                  GivenLabel, loc);
+      SP.diagnose(Caller, note_cand_label, NeededLabel, ArgNo, GivenLabel, loc);
 
       break;
    }
@@ -405,10 +412,10 @@ static void diagnoseCandidate(SemaPass &SP,
       break;
    }
    case CandidateSet::IncompatibleReturnType: {
-      auto needed = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data1));
-      auto given = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data2));
+      auto needed
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data1));
+      auto given
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data2));
 
       SP.diagnose(Caller, note_cand_invalid_return, given, needed,
                   Cand.getSourceLoc());
@@ -421,16 +428,15 @@ static void diagnoseCandidate(SemaPass &SP,
       if (IncludesSelf)
          --ArgNo;
 
-      SP.diagnose(Caller, note_candidate_requires_context,
-                  ArgNo, loc);
+      SP.diagnose(Caller, note_candidate_requires_context, ArgNo, loc);
 
       break;
    }
    case CandidateSet::IncompatibleSelfArgument: {
-      auto needed = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data1));
-      auto given = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data2));
+      auto needed
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data1));
+      auto given
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data2));
 
       SP.diagnose(Caller, note_cand_invalid_self, needed, given,
                   Cand.getSourceLoc());
@@ -445,10 +451,9 @@ static void diagnoseCandidate(SemaPass &SP,
          Str = "failed constraint";
       }
 
-      auto &TemplateArgs = Cand.InnerTemplateArgs;
+      auto& TemplateArgs = Cand.InnerTemplateArgs;
       if (TemplateArgs.isInferred()) {
-         SP.diagnose(Caller, note_cand_failed_constraint_inferred,
-                     Str.str(),
+         SP.diagnose(Caller, note_cand_failed_constraint_inferred, Str.str(),
                      TemplateArgs.toString('\0', '\0', true),
                      Cand.getSourceLoc());
       }
@@ -462,27 +467,24 @@ static void diagnoseCandidate(SemaPass &SP,
       break;
    }
    case CandidateSet::MustBeStatic: {
-      SP.diagnose(Caller, note_method_must_be_static,
-                  Cand.getSourceLoc());
+      SP.diagnose(Caller, note_method_must_be_static, Cand.getSourceLoc());
 
       break;
    }
    case CandidateSet::MutatingOnConstSelf: {
-      SP.diagnose(Caller, note_candidate_is_mutating, 0,
-                  Cand.getSourceLoc());
+      SP.diagnose(Caller, note_candidate_is_mutating, 0, Cand.getSourceLoc());
 
       break;
    }
    case CandidateSet::MutatingOnRValueSelf: {
-      SP.diagnose(Caller, note_candidate_is_mutating, 1,
-                  Cand.getSourceLoc());
+      SP.diagnose(Caller, note_candidate_is_mutating, 1, Cand.getSourceLoc());
 
       break;
    }
    case CandidateSet::CouldNotInferTemplateArg: {
       auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
-      SP.diagnose(Caller, note_could_not_infer_template_arg,
-                  TP->getName(), Cand.getFunc()->getSourceLoc());
+      SP.diagnose(Caller, note_could_not_infer_template_arg, TP->getName(),
+                  Cand.getFunc()->getSourceLoc());
       SP.diagnose(note_declared_here, TP->getSourceLoc());
 
       break;
@@ -491,8 +493,8 @@ static void diagnoseCandidate(SemaPass &SP,
       auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
 
       if (Param->isTypeName()) {
-         auto conflictingTy = QualType::getFromOpaquePtr(
-            reinterpret_cast<void*>(Cand.Data1));
+         auto conflictingTy
+             = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data1));
 
          auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
          assert(templateArg && "bad diagnostic data");
@@ -500,16 +502,15 @@ static void diagnoseCandidate(SemaPass &SP,
          string name = Param->getName();
          if (templateArg->isVariadic()) {
             name += "[";
-            name += std::to_string(templateArg->getVariadicArgs().size()
-                                   - 1);
+            name += std::to_string(templateArg->getVariadicArgs().size() - 1);
             name += "]";
 
             templateArg = &templateArg->getVariadicArgs().back();
          }
 
-         SP.diagnose(Caller, note_inferred_template_arg_conflict,
-                     0 /*types*/, templateArg->getType(), conflictingTy,
-                     name, templateArg->getLoc());
+         SP.diagnose(Caller, note_inferred_template_arg_conflict, 0 /*types*/,
+                     templateArg->getType(), conflictingTy, name,
+                     templateArg->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());
@@ -522,40 +523,38 @@ static void diagnoseCandidate(SemaPass &SP,
    }
    case CandidateSet::TooManyTemplateArgs: {
       auto neededSize = Cand.getFunc()->getTemplateParams().size();
-      auto givenSize  = templateArgs.size();
+      auto givenSize = templateArgs.size();
 
-      SP.diagnose(Caller, note_too_many_template_args, neededSize,
-                  givenSize, Cand.getSourceLoc());
+      SP.diagnose(Caller, note_too_many_template_args, neededSize, givenSize,
+                  Cand.getSourceLoc());
 
       break;
    }
    case CandidateSet::IncompatibleTemplateArgKind: {
       unsigned diagSelect = unsigned(Cand.Data1);
-      unsigned select1    = diagSelect & 0x3u;
-      unsigned select2    = (diagSelect >> 2u) & 0x3u;
+      unsigned select1 = diagSelect & 0x3u;
+      unsigned select2 = (diagSelect >> 2u) & 0x3u;
 
       auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
-      SP.diagnose(Caller, note_template_arg_kind_mismatch, select2,
-                  select1, Param->getIndex() + 1,
+      SP.diagnose(Caller, note_template_arg_kind_mismatch, select2, select1,
+                  Param->getIndex() + 1,
                   Cand.InnerTemplateArgs.getArgForParam(Param)->getLoc());
 
-      SP.diagnose(Caller, note_template_parameter_here,
-                  Param->getSourceLoc());
+      SP.diagnose(Caller, note_template_parameter_here, Param->getSourceLoc());
 
       break;
    }
    case CandidateSet::IncompatibleTemplateArgVal: {
-      auto givenTy = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data1));
+      auto givenTy
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data1));
       auto P = reinterpret_cast<const TemplateParamDecl*>(Cand.Data2);
 
       auto neededTy = P->getValueType();
-      SP.diagnose(Caller, note_template_arg_type_mismatch,
-                  neededTy, P->getIndex() + 1, givenTy,
+      SP.diagnose(Caller, note_template_arg_type_mismatch, neededTy,
+                  P->getIndex() + 1, givenTy,
                   templateArgs[0]->getSourceRange());
 
-      SP.diagnose(Caller, note_template_parameter_here,
-                  P->getSourceLoc());
+      SP.diagnose(Caller, note_template_parameter_here, P->getSourceLoc());
 
       break;
    }
@@ -567,43 +566,41 @@ static void diagnoseCandidate(SemaPass &SP,
       assert(templateArg && "bad diagnostic data");
 
       QualType Covar = Param->getCovariance();
-      SP.diagnose(Caller, note_template_arg_covariance,
-                  Covar->isClass(), Covar,
+      SP.diagnose(Caller, note_template_arg_covariance, Covar->isClass(), Covar,
                   Param->getDeclName(), Given, templateArg->getLoc());
 
-      SP.diagnose(Caller, note_template_parameter_here,
-                  Param->getSourceLoc());
+      SP.diagnose(Caller, note_template_parameter_here, Param->getSourceLoc());
 
       break;
    }
    case CandidateSet::RecursivelyDependent: {
-      SP.diagnose(note_generic_note,
-                  "candidate cannot be referred to here",
+      SP.diagnose(note_generic_note, "candidate cannot be referred to here",
                   Cand.getFunc()->getSourceLoc());
       break;
    }
    }
 }
 
-static void diagnoseAnonymousCandidate(SemaPass &SP,
-                                       CandidateSet &CandSet,
-                                       CandidateSet::Candidate &Cand,
+static void diagnoseAnonymousCandidate(SemaPass& SP, CandidateSet& CandSet,
+                                       CandidateSet::Candidate& Cand,
                                        ArrayRef<Expression*> args,
                                        ArrayRef<Expression*> templateArgs,
-                                       Statement *Caller) {
+                                       Statement* Caller)
+{
    auto CandLoc = Cand.getSourceLoc();
    switch (Cand.FR) {
-   default: llvm_unreachable("should not happen on anonymous call");
+   default:
+      llvm_unreachable("should not happen on anonymous call");
    case CandidateSet::TooFewArguments:
       SP.diagnose(Caller, err_too_few_args_for_call,
-                  Cand.getFunctionType()->getParamTypes().size(),
-                  args.size(), CandLoc);
+                  Cand.getFunctionType()->getParamTypes().size(), args.size(),
+                  CandLoc);
 
       break;
    case CandidateSet::TooManyArguments:
       SP.diagnose(Caller, err_too_many_args_for_call,
-                  Cand.getFunctionType()->getParamTypes().size(),
-                  args.size(), CandLoc);
+                  Cand.getFunctionType()->getParamTypes().size(), args.size(),
+                  CandLoc);
 
       break;
    case CandidateSet::ArgumentRequiresRef: {
@@ -627,11 +624,11 @@ static void diagnoseAnonymousCandidate(SemaPass &SP,
    }
    case CandidateSet::IncompatibleLabel: {
       auto ArgIdx = Cand.Data1;
-      auto *GivenLabel = (IdentifierInfo*)Cand.Data2;
+      auto* GivenLabel = (IdentifierInfo*)Cand.Data2;
 
-      IdentifierInfo *NeededLabel = nullptr;
-      SP.diagnose(Caller, note_cand_label, NeededLabel, ArgIdx + 1,
-                  GivenLabel, args[ArgIdx]->getSourceRange());
+      IdentifierInfo* NeededLabel = nullptr;
+      SP.diagnose(Caller, note_cand_label, NeededLabel, ArgIdx + 1, GivenLabel,
+                  args[ArgIdx]->getSourceRange());
 
       break;
    }
@@ -646,13 +643,12 @@ static void diagnoseAnonymousCandidate(SemaPass &SP,
       break;
    }
    case CandidateSet::IncompatibleReturnType: {
-      auto needed = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data1));
-      auto given = QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Cand.Data2));
+      auto needed
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data1));
+      auto given
+          = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data2));
 
-      SP.diagnose(Caller, note_cand_invalid_return, given, needed,
-                  CandLoc);
+      SP.diagnose(Caller, note_cand_invalid_return, given, needed, CandLoc);
 
       break;
    }
@@ -665,12 +661,11 @@ static void diagnoseAnonymousCandidate(SemaPass &SP,
    }
 }
 
-void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
-                                            Expression *SelfVal,
-                                            ArrayRef<Expression*> constArgs,
-                                            ArrayRef<Expression*> constTemplateArgs,
-                                            Statement *Caller,
-                                            SourceLocation OpLoc) {
+void CandidateSet::diagnoseFailedCandidates(
+    SemaPass& SP, Expression* SelfVal, ArrayRef<Expression*> constArgs,
+    ArrayRef<Expression*> constTemplateArgs, Statement* Caller,
+    SourceLocation OpLoc)
+{
    if (InvalidCand) {
       Caller->setIsInvalid(true);
       return;
@@ -681,7 +676,7 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
 
    // Resolve all arguments ambiguous types.
    bool issuedDiag = false;
-   for (auto *&arg : args) {
+   for (auto*& arg : args) {
       if (!arg->getExprType()) {
          auto result = SP.typecheckExpr(arg);
          if (!result) {
@@ -692,7 +687,7 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
          arg = result.get();
       }
    }
-   for (auto *&arg : templateArgs) {
+   for (auto*& arg : templateArgs) {
       if (!arg->getExprType()) {
          auto result = SP.typecheckExpr(arg);
          if (!result) {
@@ -709,7 +704,7 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
    }
 
    DeclarationName FuncName;
-   for (auto &Cand : Candidates) {
+   for (auto& Cand : Candidates) {
       if (!Cand.isAnonymousCandidate()) {
          FuncName = Cand.getFunc()->getDeclName();
          break;
@@ -728,11 +723,11 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
                      OpLoc ? OpLoc : Caller->getSourceLoc());
       }
       else if (Kind == DeclarationName::PrefixOperatorName
-      || Kind == DeclarationName::PostfixOperatorName) {
+               || Kind == DeclarationName::PostfixOperatorName) {
          Diagnosed = true;
          bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
-         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix,
-                     FuncName, 0,
+         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix, FuncName,
+                     0,
                      SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
                      OpLoc ? OpLoc : Caller->getSourceLoc());
       }
@@ -741,16 +736,15 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
          enum : int { Matching = 0, Accessible = 1 };
          auto R = FuncName.getConstructorType()->getRecord();
          SP.diagnose(Caller, err_no_matching_initializer,
-                     Candidates.empty() ? Accessible : Matching,
-                     R, R->getFullName(),
-                     Caller->getSourceRange());
+                     Candidates.empty() ? Accessible : Matching, R,
+                     R->getFullName(), Caller->getSourceRange());
       }
    }
 
    if (!Diagnosed) {
       if (Candidates.empty()) {
-         SP.diagnose(Caller, err_func_not_found, Caller->getSourceRange(),
-                     0, FuncName);
+         SP.diagnose(Caller, err_func_not_found, Caller->getSourceRange(), 0,
+                     FuncName);
 
          return;
       }
@@ -764,13 +758,13 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
    ArgsWithSelf.push_back(SelfVal);
    ArgsWithSelf.append(args.begin(), args.end());
 
-   for (auto &Cand : Candidates) {
+   for (auto& Cand : Candidates) {
       if (Cand.isAnonymousCandidate()) {
          diagnoseAnonymousCandidate(SP, *this, Cand, ArgsWithSelf, templateArgs,
                                     Caller);
       }
       else {
-         auto *Fn = Cand.getFunc();
+         auto* Fn = Cand.getFunc();
          ArrayRef<Expression*> ArgValues;
 
          if (isa<MethodDecl>(Fn) && !Fn->isCompleteInitializer()) {
@@ -785,11 +779,10 @@ void CandidateSet::diagnoseFailedCandidates(SemaPass &SP,
    }
 }
 
-void
-CandidateSet::diagnoseAmbiguousCandidates(SemaPass &SP, Statement *Caller)
+void CandidateSet::diagnoseAmbiguousCandidates(SemaPass& SP, Statement* Caller)
 {
    DeclarationName FuncName;
-   for (auto &Cand : Candidates) {
+   for (auto& Cand : Candidates) {
       if (!Cand.isAnonymousCandidate()) {
          FuncName = Cand.getFunc()->getDeclName();
          break;
@@ -800,7 +793,7 @@ CandidateSet::diagnoseAmbiguousCandidates(SemaPass &SP, Statement *Caller)
    SP.diagnose(Caller, err_ambiguous_call, 0, FuncName,
                Caller->getSourceRange());
 
-   for (auto &Cand : Candidates) {
+   for (auto& Cand : Candidates) {
       if (!Cand || Cand.ConversionPenalty != BestConversionPenalty)
          continue;
 
@@ -814,10 +807,10 @@ CandidateSet::diagnoseAmbiguousCandidates(SemaPass &SP, Statement *Caller)
    }
 }
 
-void CandidateSet::diagnoseAlias(SemaPass &SP,
-                                 DeclarationName AliasName,
-                                 llvm::ArrayRef<Expression *> templateArgs,
-                                 Statement *Caller) {
+void CandidateSet::diagnoseAlias(SemaPass& SP, DeclarationName AliasName,
+                                 llvm::ArrayRef<Expression*> templateArgs,
+                                 Statement* Caller)
+{
    if (InvalidCand)
       return;
 
@@ -825,7 +818,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       SP.diagnose(Caller, err_ambiguous_call, 2 /*alias*/, AliasName,
                   Caller->getSourceRange());
 
-      for (auto &Cand : Candidates) {
+      for (auto& Cand : Candidates) {
          if (!Cand.isValid())
             continue;
 
@@ -840,7 +833,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
    SP.diagnose(Caller, err_no_matching_call, Caller->getSourceRange(),
                (bool)AliasName, 2, AliasName);
 
-   for (auto &Cand : Candidates) {
+   for (auto& Cand : Candidates) {
       switch (Cand.FR) {
       case None:
          llvm_unreachable("found a matching alias!");
@@ -870,10 +863,9 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
             Str = "failed constraint";
          }
 
-         auto &TemplateArgs = Cand.InnerTemplateArgs;
+         auto& TemplateArgs = Cand.InnerTemplateArgs;
          if (TemplateArgs.isInferred()) {
-            SP.diagnose(Caller, note_cand_failed_constraint_inferred,
-                        Str.str(),
+            SP.diagnose(Caller, note_cand_failed_constraint_inferred, Str.str(),
                         TemplateArgs.toString('\0', '\0', true),
                         Cand.getAlias()->getSourceLoc());
          }
@@ -888,8 +880,8 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       }
       case CouldNotInferTemplateArg: {
          auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
-         SP.diagnose(Caller, note_could_not_infer_template_arg,
-                     TP->getName(), TP->getSourceLoc());
+         SP.diagnose(Caller, note_could_not_infer_template_arg, TP->getName(),
+                     TP->getSourceLoc());
 
          break;
       }
@@ -899,15 +891,14 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
 
          if (Param->isTypeName()) {
             auto conflictingTy = QualType::getFromOpaquePtr(
-               reinterpret_cast<void*>(Cand.Data1));
-            auto templateArg =
-               Cand.InnerTemplateArgs.getArgForParam(Param);
+                reinterpret_cast<void*>(Cand.Data1));
+            auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
 
             string name = Param->getName();
             if (templateArg->isVariadic()) {
                name += "[";
-               name += std::to_string(templateArg->getVariadicArgs().size()
-                                      - 1);
+               name
+                   += std::to_string(templateArg->getVariadicArgs().size() - 1);
                name += "]";
 
                templateArg = &templateArg->getVariadicArgs().back();
@@ -928,22 +919,21 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
       }
       case TooManyTemplateArgs: {
          auto neededSize = Cand.getAlias()->getTemplateParams().size();
-         auto givenSize  = templateArgs.size();
+         auto givenSize = templateArgs.size();
 
-         SP.diagnose(Caller, note_too_many_template_args, neededSize,
-                     givenSize, Cand.getSourceLoc());
+         SP.diagnose(Caller, note_too_many_template_args, neededSize, givenSize,
+                     Cand.getSourceLoc());
 
          break;
       }
       case IncompatibleTemplateArgKind: {
          unsigned diagSelect = unsigned(Cand.Data1);
-         unsigned select1    = diagSelect & 0x3u;
-         unsigned select2    = (diagSelect >> 2u) & 0x3u;
+         unsigned select1 = diagSelect & 0x3u;
+         unsigned select2 = (diagSelect >> 2u) & 0x3u;
 
          auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
-         SP.diagnose(Caller, note_template_arg_kind_mismatch, select1,
-                     select2, 0,
-                     templateArgs[0]->getSourceRange());
+         SP.diagnose(Caller, note_template_arg_kind_mismatch, select1, select2,
+                     0, templateArgs[0]->getSourceRange());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());
@@ -951,8 +941,8 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
          break;
       }
       case IncompatibleTemplateArgVal: {
-         auto givenTy = QualType::getFromOpaquePtr(
-            reinterpret_cast<void*>(Cand.Data1));
+         auto givenTy
+             = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data1));
 
          auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
          SP.diagnose(Caller, note_template_arg_type_mismatch,
@@ -972,9 +962,8 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
          assert(templateArg && "bad diagnostic data");
 
          QualType Covar = Param->getCovariance();
-         SP.diagnose(Caller, note_template_arg_covariance,
-                     Covar->isClass(), Covar,
-                     Param->getDeclName(), Given, templateArg->getLoc());
+         SP.diagnose(Caller, note_template_arg_covariance, Covar->isClass(),
+                     Covar, Param->getDeclName(), Given, templateArg->getLoc());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());
@@ -982,8 +971,7 @@ void CandidateSet::diagnoseAlias(SemaPass &SP,
          break;
       }
       case RecursivelyDependent: {
-         SP.diagnose(note_generic_note,
-                     "candidate cannot be referred to here",
+         SP.diagnose(note_generic_note, "candidate cannot be referred to here",
                      Cand.getAlias()->getSourceLoc());
 
          break;

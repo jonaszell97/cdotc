@@ -1,21 +1,21 @@
-#include "AST/Decl.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
-#include "Serialization/ModuleFile.h"
-#include "QueryContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ModuleFile.h"
 
 using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::diag;
 using namespace cdot::support;
 
-static void instantiateArgumentList(QueryContext &QC, ASTContext &Context,
-                                    ArrayRef<FuncArgDecl*> Args,
-                                    QualType Self,
-                                    SmallVectorImpl<FuncArgDecl*> &Out) {
-   for (auto *Arg : Args) {
+static void instantiateArgumentList(QueryContext& QC, ASTContext& Context,
+                                    ArrayRef<FuncArgDecl*> Args, QualType Self,
+                                    SmallVectorImpl<FuncArgDecl*>& Out)
+{
+   for (auto* Arg : Args) {
       if (Arg->isSelf()) {
-         FuncArgDecl *SelfArg;
+         FuncArgDecl* SelfArg;
          if (QC.CreateSelfArgument(SelfArg, Self, Arg->getSourceLoc())) {
             return;
          }
@@ -30,20 +30,20 @@ static void instantiateArgumentList(QueryContext &QC, ASTContext &Context,
          SubstTy = Context.getErrorTy();
       }
 
-      auto *ArgInst = FuncArgDecl::Create(Context, Arg->getOwnershipLoc(),
-                                          Arg->getColonLoc(), Arg->getDeclName(),
-                                          Arg->getLabel(), Arg->getConvention(),
-                                          SourceType(SubstTy), Arg->getDefaultVal(),
-                                          Arg->isVariadicArgPackExpansion(),
-                                          Arg->isCstyleVararg(), Arg->isSelf());
+      auto* ArgInst = FuncArgDecl::Create(
+          Context, Arg->getOwnershipLoc(), Arg->getColonLoc(),
+          Arg->getDeclName(), Arg->getLabel(), Arg->getConvention(),
+          SourceType(SubstTy), Arg->getDefaultVal(),
+          Arg->isVariadicArgPackExpansion(), Arg->isCstyleVararg(),
+          Arg->isSelf());
 
       Out.push_back(ArgInst);
    }
 }
 
-static MethodDecl *InstantiateMethodDefaultImpl(QueryContext &QC,
-                                                MethodDecl *Impl,
-                                                QualType Self) {
+static MethodDecl* InstantiateMethodDefaultImpl(QueryContext& QC,
+                                                MethodDecl* Impl, QualType Self)
+{
    SmallVector<FuncArgDecl*, 4> ArgInsts;
    instantiateArgumentList(QC, QC.Context, Impl->getArgs(), Self, ArgInsts);
 
@@ -54,22 +54,23 @@ static MethodDecl *InstantiateMethodDefaultImpl(QueryContext &QC,
    }
 
    ASTVector<TemplateParamDecl*> TemplateParams(
-      QC.Context, (unsigned)Impl->getTemplateParams().size());
+       QC.Context, (unsigned)Impl->getTemplateParams().size());
    TemplateParams.append(QC.Context, Impl->getTemplateParams().begin(),
                          Impl->getTemplateParams().end());
 
-   MethodDecl *Inst;
-   if (auto *I = dyn_cast<InitDecl>(Impl)) {
-      auto &Tbl = QC.Context.getDeclNameTable();
-      Inst = InitDecl::Create(QC.Context, Impl->getAccess(),Impl->getSourceLoc(),
-                              ArgInsts, move(TemplateParams), nullptr,
+   MethodDecl* Inst;
+   if (auto* I = dyn_cast<InitDecl>(Impl)) {
+      auto& Tbl = QC.Context.getDeclNameTable();
+      Inst = InitDecl::Create(QC.Context, Impl->getAccess(),
+                              Impl->getSourceLoc(), ArgInsts,
+                              move(TemplateParams), nullptr,
                               Tbl.getConstructorName(Self), I->isFallible());
    }
    else {
-      Inst = MethodDecl::Create(QC.Context, Impl->getAccess(),Impl->getDefLoc(),
-                                Impl->getDeclName(), SourceType(ReturnType),
-                                ArgInsts, move(TemplateParams),
-                                nullptr, Impl->isStatic());
+      Inst = MethodDecl::Create(
+          QC.Context, Impl->getAccess(), Impl->getDefLoc(), Impl->getDeclName(),
+          SourceType(ReturnType), ArgInsts, move(TemplateParams), nullptr,
+          Impl->isStatic());
    }
 
    Inst->setBodyTemplate(Impl);
@@ -82,21 +83,22 @@ static MethodDecl *InstantiateMethodDefaultImpl(QueryContext &QC,
 QueryResult InstantiateProtocolDefaultImplQuery::run()
 {
    assert(isa<ExtensionDecl>(Impl->getNonTransparentDeclContext())
-      && cast<ExtensionDecl>(Impl->getNonTransparentDeclContext())
-           ->getExtendedRecord()->isProtocol()
-      && "not a protocol default impl!");
+          && cast<ExtensionDecl>(Impl->getNonTransparentDeclContext())
+                 ->getExtendedRecord()
+                 ->isProtocol()
+          && "not a protocol default impl!");
 
    if (QC.PrepareDeclInterface(Impl)) {
       return fail();
    }
 
-   NamedDecl *Inst;
-   if (auto *M = dyn_cast<MethodDecl>(Impl)) {
+   NamedDecl* Inst;
+   if (auto* M = dyn_cast<MethodDecl>(Impl)) {
       Inst = InstantiateMethodDefaultImpl(QC, M, Self);
    }
-   else if (auto *P = dyn_cast<PropDecl>(Impl)) {
-      MethodDecl *Getter = nullptr;
-      MethodDecl *Setter = nullptr;
+   else if (auto* P = dyn_cast<PropDecl>(Impl)) {
+      MethodDecl* Getter = nullptr;
+      MethodDecl* Setter = nullptr;
 
       QualType SubstTy;
       if (QC.SubstAssociatedTypes(SubstTy, P->getType(), Self,
@@ -104,31 +106,30 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
          SubstTy = QC.Context.getErrorTy();
       }
 
-      if (auto *GetterImpl = P->getGetterMethod()) {
+      if (auto* GetterImpl = P->getGetterMethod()) {
          Getter = InstantiateMethodDefaultImpl(QC, GetterImpl, Self);
       }
-      if (auto *SetterImpl = P->getSetterMethod()) {
+      if (auto* SetterImpl = P->getSetterMethod()) {
          Setter = InstantiateMethodDefaultImpl(QC, SetterImpl, Self);
       }
 
-      Inst = PropDecl::Create(sema().Context, P->getAccess(),
-                              P->getSourceRange(), P->getDeclName(),
-                              SourceType(SubstTy), P->isStatic(),
-                              P->isReadWrite(), Getter, Setter);
+      Inst = PropDecl::Create(
+          sema().Context, P->getAccess(), P->getSourceRange(), P->getDeclName(),
+          SourceType(SubstTy), P->isStatic(), P->isReadWrite(), Getter, Setter);
    }
-   else if (auto *S = dyn_cast<SubscriptDecl>(Impl)) {
-      MethodDecl *Getter = nullptr;
-      MethodDecl *Setter = nullptr;
+   else if (auto* S = dyn_cast<SubscriptDecl>(Impl)) {
+      MethodDecl* Getter = nullptr;
+      MethodDecl* Setter = nullptr;
 
       SourceType T;
-      if (auto *GetterImpl = S->getGetterMethod()) {
+      if (auto* GetterImpl = S->getGetterMethod()) {
          Getter = InstantiateMethodDefaultImpl(QC, GetterImpl, Self);
 
          if (Getter) {
             T = Getter->getReturnType();
          }
       }
-      if (auto *SetterImpl = S->getSetterMethod()) {
+      if (auto* SetterImpl = S->getSetterMethod()) {
          Setter = InstantiateMethodDefaultImpl(QC, SetterImpl, Self);
 
          if (!T && Setter) {
@@ -139,22 +140,21 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
       Inst = SubscriptDecl::Create(sema().Context, S->getAccess(),
                                    S->getSourceRange(), T, Getter, Setter);
    }
-   else if (auto *alias = dyn_cast<AliasDecl>(Impl)) {
+   else if (auto* alias = dyn_cast<AliasDecl>(Impl)) {
       QualType InstTy;
-      if (QC.SubstAssociatedTypes(InstTy, alias->getAliasedType(),
-                                  Self, alias->getSourceLoc())) {
+      if (QC.SubstAssociatedTypes(InstTy, alias->getAliasedType(), Self,
+                                  alias->getSourceLoc())) {
          return fail();
       }
 
       SourceType Ty(QC.Context.getMetaType(InstTy));
-      auto *typeExpr = new(QC.Context) IdentifierRefExpr(
-         alias->getSourceLoc(), IdentifierKind::MetaType, Ty);
+      auto* typeExpr = new (QC.Context) IdentifierRefExpr(
+          alias->getSourceLoc(), IdentifierKind::MetaType, Ty);
 
-      auto *rawTypeExpr = StaticExpr::Create(QC.Context, typeExpr);
+      auto* rawTypeExpr = StaticExpr::Create(QC.Context, typeExpr);
       Inst = AliasDecl::Create(QC.Context, alias->getSourceLoc(),
-                               AccessSpecifier::Public,
-                               alias->getDeclName(), Ty,
-                               rawTypeExpr, {});
+                               AccessSpecifier::Public, alias->getDeclName(),
+                               Ty, rawTypeExpr, {});
    }
    else {
       llvm_unreachable("bad protocol default implementation kind!");
@@ -175,7 +175,7 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
 
 QueryResult CheckTemplateExtensionApplicabilityQuery::run()
 {
-   auto &Context = QC.CI.getContext();
+   auto& Context = QC.CI.getContext();
 
    auto Constraints = QC.Sema->getDeclConstraints(Ext);
    if (Constraints->empty())
@@ -184,7 +184,7 @@ QueryResult CheckTemplateExtensionApplicabilityQuery::run()
    QualType Ty = Context.getRecordType(Inst);
 
    bool AllSatisfied;
-   for (auto *C : *Constraints) {
+   for (auto* C : *Constraints) {
       if (QC.IsConstraintSatisfied(AllSatisfied, C, Ty, Ext)) {
          return fail();
       }
@@ -201,12 +201,12 @@ QueryResult InstantiateFieldsQuery::run()
 {
    assert(S->isInstantiation() && "not an instantiation!");
 
-   for (auto *F : S->getSpecializedTemplate()->getDecls<FieldDecl>()) {
+   for (auto* F : S->getSpecializedTemplate()->getDecls<FieldDecl>()) {
       if (F->isStatic()) {
          continue;
       }
 
-      NamedDecl *Inst;
+      NamedDecl* Inst;
       if (auto Err = QC.InstantiateTemplateMember(Inst, F, S)) {
          return Query::finish(Err);
       }
@@ -219,8 +219,8 @@ QueryResult InstantiateCasesQuery::run()
 {
    assert(E->isInstantiation() && "not an instantiation!");
 
-   for (auto *Case : E->getSpecializedTemplate()->getDecls<EnumCaseDecl>()) {
-      NamedDecl *Inst;
+   for (auto* Case : E->getSpecializedTemplate()->getDecls<EnumCaseDecl>()) {
+      NamedDecl* Inst;
       if (auto Err = QC.InstantiateTemplateMember(Inst, Case, E)) {
          return Query::finish(Err);
       }

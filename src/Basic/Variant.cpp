@@ -1,24 +1,23 @@
-#include "Variant.h"
+#include "cdotc/Basic/Variant.h"
 
-#include "Lex/Token.h"
+#include "cdotc/Lex/Token.h"
+#include "cdotc/Support/Casting.h"
+#include "cdotc/Support/Format.h"
 
-#include "Support/Format.h"
-#include "Support/Casting.h"
-
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/FoldingSet.h>
+#include <llvm/Support/raw_ostream.h>
 
 #ifndef CDOT_SMALL_VARIANT
-#  include "AST/Decl.h"
-#  include "AST/Type.h"
-   using namespace cdot::ast;
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Type.h"
+using namespace cdot::ast;
 #else
-   namespace cdot {
-      class QualType {
-      public:
-         std::string toString() { llvm_unreachable(""); }
-      };
-   }
+namespace cdot {
+class QualType {
+public:
+   std::string toString() { llvm_unreachable(""); }
+};
+} // namespace cdot
 #endif
 
 using std::string;
@@ -29,46 +28,36 @@ using namespace cdot::lex;
 namespace cdot {
 
 #ifndef CDOT_SMALL_VARIANT
-   Variant::Variant(Type *Ty, bool isConst)
-      : kind(VariantType::MetaType), Data{}
-   {
-      static_assert(sizeof(Data) >= sizeof(QualType),
-                    "not enough space for QualType in Variant!");
-      new (Data.buffer) QualType(Ty);
-   }
+Variant::Variant(Type* Ty, bool isConst) : kind(VariantType::MetaType), Data{}
+{
+   static_assert(sizeof(Data) >= sizeof(QualType),
+                 "not enough space for QualType in Variant!");
+   new (Data.buffer) QualType(Ty);
+}
 
-   Variant::Variant(QualType const& ty)
-      : kind(VariantType::MetaType), Data{}
-   {
-      static_assert(sizeof(Data) >= sizeof(QualType),
-                    "not enough space for QualType in Variant!");
-      new (Data.buffer) QualType(ty);
-   }
+Variant::Variant(QualType const& ty) : kind(VariantType::MetaType), Data{}
+{
+   static_assert(sizeof(Data) >= sizeof(QualType),
+                 "not enough space for QualType in Variant!");
+   new (Data.buffer) QualType(ty);
+}
 #else
-   Variant::Variant(Type *Ty, bool isConst)
-      : kind(VariantType::MetaType), Data{}
-   {
-      llvm_unreachable("extended variant constructor called in small variant");
-   }
+Variant::Variant(Type* Ty, bool isConst) : kind(VariantType::MetaType), Data{}
+{
+   llvm_unreachable("extended variant constructor called in small variant");
+}
 
-   Variant::Variant(QualType const& ty)
-      : kind(VariantType::MetaType), Data{}
-   {
-      llvm_unreachable("extended variant constructor called in small variant");
-   }
+Variant::Variant(QualType const& ty) : kind(VariantType::MetaType), Data{}
+{
+   llvm_unreachable("extended variant constructor called in small variant");
+}
 #endif
 
-Variant::Variant(const Variant &var) : Data{}
-{
-   copyFrom(var);
-}
+Variant::Variant(const Variant& var) : Data{} { copyFrom(var); }
 
-Variant::Variant(Variant &&var) noexcept : Data{}
-{
-   copyFrom(std::move(var));
-}
+Variant::Variant(Variant&& var) noexcept : Data{} { copyFrom(std::move(var)); }
 
-Variant& Variant::operator=(const Variant &var)
+Variant& Variant::operator=(const Variant& var)
 {
    if (this == &var) {
       return *this;
@@ -80,32 +69,32 @@ Variant& Variant::operator=(const Variant &var)
    return *this;
 }
 
-void Variant::copyFrom(Variant const &var)
+void Variant::copyFrom(Variant const& var)
 {
    kind = var.kind;
    switch (kind) {
-      case VariantType::Array:
-      case VariantType::Struct:
-         new (Data.buffer) std::vector<Variant>(var.getVec());
-         break;
-      case VariantType::String:
-         new (Data.buffer) string(var.getString());
-         break;
-      case VariantType::Int:
-         new (Data.buffer) llvm::APSInt(var.getAPSInt());
-         break;
-      case VariantType::Floating:
-         new (Data.buffer) llvm::APFloat(var.getAPFloat());
-         break;
-      case VariantType::MetaType:
-         new (Data.buffer) QualType(var.getMetaType());
-         break;
-      default:
-         break;
+   case VariantType::Array:
+   case VariantType::Struct:
+      new (Data.buffer) std::vector<Variant>(var.getVec());
+      break;
+   case VariantType::String:
+      new (Data.buffer) string(var.getString());
+      break;
+   case VariantType::Int:
+      new (Data.buffer) llvm::APSInt(var.getAPSInt());
+      break;
+   case VariantType::Floating:
+      new (Data.buffer) llvm::APFloat(var.getAPFloat());
+      break;
+   case VariantType::MetaType:
+      new (Data.buffer) QualType(var.getMetaType());
+      break;
+   default:
+      break;
    }
 }
 
-Variant& Variant::operator=(Variant &&var)
+Variant& Variant::operator=(Variant&& var)
 {
    if (this == &var) {
       return *this;
@@ -117,54 +106,51 @@ Variant& Variant::operator=(Variant &&var)
    return *this;
 }
 
-void Variant::copyFrom(Variant &&var)
+void Variant::copyFrom(Variant&& var)
 {
    kind = var.kind;
    switch (kind) {
-      case VariantType::Array:
-      case VariantType::Struct:
-         new (Data.buffer) std::vector<Variant>(move(var.getVecRef()));
-         break;
-      case VariantType::String:
-         new (Data.buffer) string(move(var.getStringRef()));
-         break;
-      case VariantType::Int:
-         new (Data.buffer) llvm::APSInt(std::move(var.getAPSIntRef()));
-         break;
-      case VariantType::Floating:
-         new (Data.buffer) llvm::APFloat(std::move(var.getAPFloatRef()));
-         break;
-      case VariantType::MetaType:
-         new (Data.buffer) QualType(var.getMetaType());
-         break;
-      default:
-         break;
+   case VariantType::Array:
+   case VariantType::Struct:
+      new (Data.buffer) std::vector<Variant>(move(var.getVecRef()));
+      break;
+   case VariantType::String:
+      new (Data.buffer) string(move(var.getStringRef()));
+      break;
+   case VariantType::Int:
+      new (Data.buffer) llvm::APSInt(std::move(var.getAPSIntRef()));
+      break;
+   case VariantType::Floating:
+      new (Data.buffer) llvm::APFloat(std::move(var.getAPFloatRef()));
+      break;
+   case VariantType::MetaType:
+      new (Data.buffer) QualType(var.getMetaType());
+      break;
+   default:
+      break;
    }
 }
 
-Variant::~Variant()
-{
-   destroyValue();
-}
+Variant::~Variant() { destroyValue(); }
 
 void Variant::destroyValue()
 {
    switch (kind) {
-      case VariantType::Array:
-      case VariantType::Struct:
-         getVec().~vector();
-         break;
-      case VariantType::String:
-         getString().~string();
-         break;
-      case VariantType::Int:
-         getAPSInt().~APSInt();
-         break;
-      case VariantType::Floating:
-         getAPFloat().~APFloat();
-         break;
-      default:
-         break;
+   case VariantType::Array:
+   case VariantType::Struct:
+      getVec().~vector();
+      break;
+   case VariantType::String:
+      getString().~string();
+      break;
+   case VariantType::Int:
+      getAPSInt().~APSInt();
+      break;
+   case VariantType::Floating:
+      getAPFloat().~APFloat();
+      break;
+   default:
+      break;
    }
 
    Data.~AlignedCharArrayUnion();
@@ -176,128 +162,131 @@ QualType Variant::getMetaType() const
    return *reinterpret_cast<QualType const*>(Data.buffer);
 }
 
-void Variant::Profile(llvm::FoldingSetNodeID &ID) const
+void Variant::Profile(llvm::FoldingSetNodeID& ID) const
 {
    ID.AddInteger((unsigned)kind);
    switch (kind) {
-      case VariantType::Array:
-      case VariantType::Struct:
-         for (auto &V : *this)
-            V.Profile(ID);
-         break;
-      case VariantType::String:
-         ID.AddString(getString());
-         break;
-      case VariantType::Int:
-         getAPSInt().Profile(ID);
-         break;
-      case VariantType::Floating:
-         getAPFloat().Profile(ID);
-         break;
-      default:
-         break;
+   case VariantType::Array:
+   case VariantType::Struct:
+      for (auto& V : *this)
+         V.Profile(ID);
+      break;
+   case VariantType::String:
+      ID.AddString(getString());
+      break;
+   case VariantType::Int:
+      getAPSInt().Profile(ID);
+      break;
+   case VariantType::Floating:
+      getAPFloat().Profile(ID);
+      break;
+   default:
+      break;
    }
 }
 
 string Variant::toString(unsigned char opts) const
 {
    switch (kind) {
-      case VariantType::Int: {
-         if ((opts & Opt_IntAsPtr) != 0) {
-            string s;
-            llvm::raw_string_ostream ss(s);
-            ss << "0x" << getAPSInt().toString(16);
+   case VariantType::Int: {
+      if ((opts & Opt_IntAsPtr) != 0) {
+         string s;
+         llvm::raw_string_ostream ss(s);
+         ss << "0x" << getAPSInt().toString(16);
 
-            return ss.str();
-         }
-
-         auto bitwidth = getBitwidth();
-         if (bitwidth == 8) {
-            if (opts & Opt_ShowQuotes) {
-               string s;
-               s += '\'';
-               s += string(1, getChar());
-               s += '\'';
-
-               return s;
-            }
-
-            return string(1, getChar());
-         }
-
-         if (bitwidth == 1) {
-            return getSExtValue() ? "true" : "false";
-         }
-
-         return getAPSInt().toString(10);
+         return ss.str();
       }
-      case VariantType::MetaType:
-         return getMetaType().toString();
-      case VariantType::String: {
+
+      auto bitwidth = getBitwidth();
+      if (bitwidth == 8) {
          if (opts & Opt_ShowQuotes) {
             string s;
-            s += '"';
-            s += getString();
-            s += '"';
+            s += '\'';
+            s += string(1, getChar());
+            s += '\'';
 
             return s;
          }
 
-         return getString();
+         return string(1, getChar());
       }
-      case VariantType::Floating: {
-         llvm::SmallString<128> str;
-         getAPFloat().toString(str);
 
-         return str.str();
+      if (bitwidth == 1) {
+         return getSExtValue() ? "true" : "false";
       }
-      case VariantType::Void: return "Void";
-      case VariantType::Array: {
-         size_t i = 0;
-         string s("[");
-         for (auto &V : getVec()) {
-            if (i++ != 0) s += ", ";
-            s += V.toString(opts);
-         }
 
-         s += "]";
+      return getAPSInt().toString(10);
+   }
+   case VariantType::MetaType:
+      return getMetaType().toString();
+   case VariantType::String: {
+      if (opts & Opt_ShowQuotes) {
+         string s;
+         s += '"';
+         s += getString();
+         s += '"';
+
          return s;
       }
-      case VariantType::Struct: {
-         size_t i = 0;
-         string s = "{ ";
 
-         for (auto &F : getVec()) {
-            if (i != 0) s += ", ";
-            s += F.toString(opts);
+      return getString();
+   }
+   case VariantType::Floating: {
+      llvm::SmallString<128> str;
+      getAPFloat().toString(str);
 
-            ++i;
-         }
-
-         s += " }";
-         return s;
+      return str.str();
+   }
+   case VariantType::Void:
+      return "Void";
+   case VariantType::Array: {
+      size_t i = 0;
+      string s("[");
+      for (auto& V : getVec()) {
+         if (i++ != 0)
+            s += ", ";
+         s += V.toString(opts);
       }
-      default:
-         llvm_unreachable("unknown case");
+
+      s += "]";
+      return s;
+   }
+   case VariantType::Struct: {
+      size_t i = 0;
+      string s = "{ ";
+
+      for (auto& F : getVec()) {
+         if (i != 0)
+            s += ", ";
+         s += F.toString(opts);
+
+         ++i;
+      }
+
+      s += " }";
+      return s;
+   }
+   default:
+      llvm_unreachable("unknown case");
    }
 }
 
-#define BINARY_OPERATOR_INT(OP)                       \
-if(#OP == op) {                                       \
-   return Variant(getAPSInt() OP rhs.getAPSInt());    \
-}
+#define BINARY_OPERATOR_INT(OP)                                                \
+   if (#OP == op) {                                                            \
+      return Variant(getAPSInt() OP rhs.getAPSInt());                          \
+   }
 
-#define BINARY_OPERATOR_FLOAT(OP)                     \
-if(#OP == op) {                                       \
-   return Variant(getAPFloat() OP rhs.getAPFloat());  \
-}
+#define BINARY_OPERATOR_FLOAT(OP)                                              \
+   if (#OP == op) {                                                            \
+      return Variant(getAPFloat() OP rhs.getAPFloat());                        \
+   }
 
-#define BINARY_OPERATOR_STRING(OP)                    \
-if(#OP == op) {                                       \
-   return Variant(getString() OP rhs.getString());    \
-}
+#define BINARY_OPERATOR_STRING(OP)                                             \
+   if (#OP == op) {                                                            \
+      return Variant(getString() OP rhs.getString());                          \
+   }
 
-Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
+Variant Variant::applyBinaryOp(const Variant& rhs, const string& op) const
 {
    if (isVoid() || rhs.isVoid()) {
       return {};
@@ -314,29 +303,29 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
       uint64_t to;
 
       switch (kind) {
-         case VariantType::Int: {
-            from = getAPSInt().getZExtValue();
-            break;
-         }
-         case VariantType::Floating: {
-            from = (size_t)getDouble();
-            break;
-         }
-         default:
-            llvm_unreachable("other types should not get here");
+      case VariantType::Int: {
+         from = getAPSInt().getZExtValue();
+         break;
+      }
+      case VariantType::Floating: {
+         from = (size_t)getDouble();
+         break;
+      }
+      default:
+         llvm_unreachable("other types should not get here");
       }
 
       switch (rhs.kind) {
-         case VariantType::Int: {
-            to = rhs.getAPSInt().getZExtValue();
-            break;
-         }
-         case VariantType::Floating: {
-            to = (size_t)rhs.getDouble();
-            break;
-         }
-         default:
-            llvm_unreachable("other types should not get here");
+      case VariantType::Int: {
+         to = rhs.getAPSInt().getZExtValue();
+         break;
+      }
+      case VariantType::Floating: {
+         to = (size_t)rhs.getDouble();
+         break;
+      }
+      default:
+         llvm_unreachable("other types should not get here");
       }
 
       auto arr = Variant(VariantType::Array, {});
@@ -378,7 +367,7 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
 
       BINARY_OPERATOR_INT(&);
       BINARY_OPERATOR_INT(|);
-      BINARY_OPERATOR_INT(^);
+      BINARY_OPERATOR_INT (^);
 
       if (op == "&&") {
          return (getAPSInt() & rhs.getAPSInt()).getBoolValue();
@@ -404,7 +393,8 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
       BINARY_OPERATOR_INT(<=);
       BINARY_OPERATOR_INT(>=);
    }
-   else if (kind == VariantType::Floating || rhs.kind == VariantType::Floating) {
+   else if (kind == VariantType::Floating
+            || rhs.kind == VariantType::Floating) {
       BINARY_OPERATOR_FLOAT(+);
       BINARY_OPERATOR_FLOAT(-);
       BINARY_OPERATOR_FLOAT(*);
@@ -446,7 +436,7 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
       BINARY_OPERATOR_STRING(>=);
       BINARY_OPERATOR_STRING(+);
    }
-   else if  (kind == VariantType::String) {
+   else if (kind == VariantType::String) {
       if (op == "+") {
          llvm::SmallString<128> str;
 
@@ -462,7 +452,7 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
          return Variant(str.str());
       }
    }
-   else if  (rhs.kind == VariantType::String) {
+   else if (rhs.kind == VariantType::String) {
       if (op == "+") {
          llvm::SmallString<128> str;
 
@@ -486,17 +476,17 @@ Variant Variant::applyBinaryOp(const Variant &rhs, const string &op) const
 #undef BINARY_OPERATOR_FLOAT
 #undef BINARY_OPERATOR_STRING
 
-#define UNARY_OPERATOR_INT(OP) \
-if (op == #OP) {\
-   return Variant(OP getAPSInt());\
-}
+#define UNARY_OPERATOR_INT(OP)                                                 \
+   if (op == #OP) {                                                            \
+      return Variant(OP getAPSInt());                                          \
+   }
 
-#define UNARY_OPERATOR_FLOAT(OP) \
-if (op == #OP) {\
-   return Variant(OP getAPFloat());\
-}
+#define UNARY_OPERATOR_FLOAT(OP)                                               \
+   if (op == #OP) {                                                            \
+      return Variant(OP getAPFloat());                                         \
+   }
 
-Variant Variant::applyUnaryOp(const string &op) const
+Variant Variant::applyUnaryOp(const string& op) const
 {
    if (kind == VariantType::Int) {
       if (op == "+")
@@ -527,7 +517,7 @@ Variant Variant::applyUnaryOp(const string &op) const
 #undef UNARY_OPERATOR_INT
 #undef UNARY_OPERATOR_FLOAT
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &out, const Variant &V)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& out, const Variant& V)
 {
    return out << V.toString();
 }

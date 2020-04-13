@@ -1,11 +1,11 @@
-#include "FileManager.h"
+#include "cdotc/Basic/FileManager.h"
 
-#include "AST/Decl.h"
-#include "FileUtils.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/FileUtils.h"
 
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/ErrorOr.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 using std::string;
 
@@ -14,20 +14,17 @@ namespace fs {
 
 SourceID InvalidID = SourceID(-1);
 
-FileManager::FileManager() : sourceIdOffsets{ 1 }
-{
+FileManager::FileManager() : sourceIdOffsets{1} {}
 
-}
-
-OpenFile FileManager::openFile(const llvm::Twine &fileName, bool CreateSourceID)
+OpenFile FileManager::openFile(const llvm::Twine& fileName, bool CreateSourceID)
 {
    std::string name = fileName.str();
 
    auto it = MemBufferCache.find(name);
    if (it != MemBufferCache.end()) {
-      auto &File = it->getValue();
-      return OpenFile(File.FileName, File.SourceId,
-                      File.BaseOffset, File.Buf.get());
+      auto& File = it->getValue();
+      return OpenFile(File.FileName, File.SourceId, File.BaseOffset,
+                      File.Buf.get());
    }
 
    auto Buf = llvm::MemoryBuffer::getFileAsStream(fileName);
@@ -37,7 +34,7 @@ OpenFile FileManager::openFile(const llvm::Twine &fileName, bool CreateSourceID)
 
    SourceID id;
    SourceID previous;
-   llvm::MemoryBuffer *ptr = Buf.get().get();
+   llvm::MemoryBuffer* ptr = Buf.get().get();
 
    llvm::StringMap<CachedFile>::iterator Entry;
    if (CreateSourceID) {
@@ -46,9 +43,10 @@ OpenFile FileManager::openFile(const llvm::Twine &fileName, bool CreateSourceID)
 
       auto offset = unsigned(previous + ptr->getBufferSize());
 
-      Entry = MemBufferCache.try_emplace(name, string(name),
-                                         id, previous,
-                                         move(Buf.get())).first;
+      Entry
+          = MemBufferCache
+                .try_emplace(name, string(name), id, previous, move(Buf.get()))
+                .first;
 
       IdFileMap.try_emplace(id, &*Entry);
       sourceIdOffsets.push_back(offset);
@@ -57,8 +55,9 @@ OpenFile FileManager::openFile(const llvm::Twine &fileName, bool CreateSourceID)
       previous = 0;
       id = 0;
 
-      Entry = MemBufferCache.try_emplace(name, string(name),
-                                         0, 0, move(Buf.get())).first;
+      Entry = MemBufferCache
+                  .try_emplace(name, string(name), 0, 0, move(Buf.get()))
+                  .first;
    }
 
    return OpenFile(Entry->getValue().FileName, id, previous, ptr);
@@ -76,8 +75,10 @@ OpenFile FileManager::getBufferForString(llvm::StringRef Str)
    std::string key = "__";
    key += std::to_string(id);
 
-   auto Entry = MemBufferCache.try_emplace(key, "<mixin expression>",
-                                           id, previous, move(Buf)).first;
+   auto Entry
+       = MemBufferCache
+             .try_emplace(key, "<mixin expression>", id, previous, move(Buf))
+             .first;
    Entry->getValue().IsMixin = true;
 
    IdFileMap.try_emplace(id, &*Entry);
@@ -93,11 +94,11 @@ OpenFile FileManager::getOpenedFile(SourceID sourceId)
    auto index = IdFileMap.find(sourceId);
    assert(index != IdFileMap.end());
 
-   auto &F = index->getSecond()->getValue();
+   auto& F = index->getSecond()->getValue();
    return OpenFile(F.FileName, F.SourceId, F.BaseOffset, F.Buf.get());
 }
 
-llvm::MemoryBuffer *FileManager::getBuffer(SourceID sourceId)
+llvm::MemoryBuffer* FileManager::getBuffer(SourceID sourceId)
 {
    sourceId = getReplacementID(sourceId);
 
@@ -139,7 +140,7 @@ unsigned FileManager::getSourceId(SourceLocation loc)
 
 SourceID FileManager::getLexicalSourceId(SourceLocation loc)
 {
-   while (auto *Exp = getMacroExpansionLoc(loc)) {
+   while (auto* Exp = getMacroExpansionLoc(loc)) {
       loc = Exp->ExpandedFrom;
    }
 
@@ -157,8 +158,7 @@ llvm::StringRef FileManager::getFileName(SourceID sourceId)
    return index->getSecond()->getKey();
 }
 
-SourceLocation
-FileManager::createModuleImportLoc(SourceLocation Loc)
+SourceLocation FileManager::createModuleImportLoc(SourceLocation Loc)
 {
    auto previous = sourceIdOffsets.back();
    auto id = static_cast<SourceID>(sourceIdOffsets.size());
@@ -193,7 +193,7 @@ SourceLocation FileManager::getReplacementLocation(SourceLocation Loc)
    if (auto Import = getImportForID(getSourceId(Loc))) {
       return getReplacementLocation(Import);
    }
-   if (auto *Exp = getMacroExpansionLoc(Loc)) {
+   if (auto* Exp = getMacroExpansionLoc(Loc)) {
       return getReplacementLocation(Exp->PatternLoc);
    }
 
@@ -214,7 +214,8 @@ SourceID FileManager::getReplacementID(SourceID ID)
 }
 
 void FileManager::addFileInclude(SourceID IncludedFromID,
-                                 SourceID IncludedFileID) {
+                                 SourceID IncludedFileID)
+{
    auto FromIt = IdFileMap.find(IncludedFromID);
    assert(FromIt != IdFileMap.end() && "file does not exist!");
 
@@ -225,19 +226,20 @@ void FileManager::addFileInclude(SourceID IncludedFromID,
 }
 
 bool FileManager::wasIncludedFrom(SourceID CurrentFile,
-                                  SourceID PossiblyIncludedFile) {
+                                  SourceID PossiblyIncludedFile)
+{
    auto FromIt = IdFileMap.find(CurrentFile);
    assert(FromIt != IdFileMap.end() && "file does not exist!");
 
    auto IncIt = IdFileMap.find(PossiblyIncludedFile);
    assert(IncIt != IdFileMap.end() && "file does not exist!");
 
-   auto *BaseFileFromCurrent = FromIt->getSecond()->getValue().IncludedFrom;
+   auto* BaseFileFromCurrent = FromIt->getSecond()->getValue().IncludedFrom;
    while (BaseFileFromCurrent) {
       BaseFileFromCurrent = BaseFileFromCurrent->getValue().IncludedFrom;
    }
 
-   auto *BaseFileFromIncluded = IncIt->getSecond()->getValue().IncludedFrom;
+   auto* BaseFileFromIncluded = IncIt->getSecond()->getValue().IncludedFrom;
    while (BaseFileFromIncluded) {
       BaseFileFromIncluded = BaseFileFromIncluded->getValue().IncludedFrom;
    }
@@ -267,11 +269,10 @@ std::string FileManager::getSourceLocationAsString(SourceLocation Loc)
    return str;
 }
 
-FileManager::MacroExpansionLoc
-FileManager::createMacroExpansion(SourceLocation ExpansionLoc,
-                                  SourceLocation PatternLoc,
-                                  unsigned SourceLength,
-                                  const IdentifierInfo *MacroName) {
+FileManager::MacroExpansionLoc FileManager::createMacroExpansion(
+    SourceLocation ExpansionLoc, SourceLocation PatternLoc,
+    unsigned SourceLength, const IdentifierInfo* MacroName)
+{
    auto previous = sourceIdOffsets.back();
    SourceID id = sourceIdOffsets.size();
 
@@ -299,7 +300,7 @@ FileManager::getMacroExpansionLoc(SourceLocation Loc)
 LineColPair FileManager::getLineAndCol(SourceLocation loc)
 {
    if (!loc)
-      return { 0, 0 };
+      return {0, 0};
 
    auto file = getBuffer(loc);
    return getLineAndCol(loc, file);
@@ -318,12 +319,13 @@ FullSourceLoc FileManager::getFullSourceLoc(SourceLocation loc)
 }
 
 LineColPair FileManager::getLineAndCol(SourceLocation loc,
-                                       llvm::MemoryBuffer *Buf) {
+                                       llvm::MemoryBuffer* Buf)
+{
    auto ID = getSourceId(loc);
    auto it = LineOffsets.find(ID);
    auto const& offsets = it == LineOffsets.end()
-                         ? collectLineOffsetsForFile(ID, Buf)
-                         : it->second;
+                             ? collectLineOffsetsForFile(ID, Buf)
+                             : it->second;
 
    assert(!offsets.empty());
 
@@ -350,7 +352,7 @@ LineColPair FileManager::getLineAndCol(SourceLocation loc,
    if (!m)
       ++needle;
 
-   return { m + 1, needle - closestOffset + 1 };
+   return {m + 1, needle - closestOffset + 1};
 }
 
 llvm::ArrayRef<unsigned> FileManager::getLineOffsets(SourceID sourceID)
@@ -367,8 +369,9 @@ llvm::ArrayRef<unsigned> FileManager::getLineOffsets(SourceID sourceID)
 
 const std::vector<unsigned>&
 FileManager::collectLineOffsetsForFile(SourceID sourceId,
-                                       llvm::MemoryBuffer *Buf) {
-   std::vector<unsigned> newLines{ 0 };
+                                       llvm::MemoryBuffer* Buf)
+{
+   std::vector<unsigned> newLines{0};
 
    unsigned idx = 0;
    auto buf = Buf->getBufferStart();
@@ -376,11 +379,11 @@ FileManager::collectLineOffsetsForFile(SourceID sourceId,
 
    while (idx < size) {
       switch (*buf) {
-         case '\n':
-            newLines.push_back(idx);
-            break;
-         default:
-            break;
+      case '\n':
+         newLines.push_back(idx);
+         break;
+      default:
+         break;
       }
 
       ++idx;
@@ -390,10 +393,11 @@ FileManager::collectLineOffsetsForFile(SourceID sourceId,
    return LineOffsets.emplace(sourceId, move(newLines)).first->second;
 }
 
-static bool isNewline(const char *str)
+static bool isNewline(const char* str)
 {
    switch (str[0]) {
-   case '\n': case '\r':
+   case '\n':
+   case '\r':
       return true;
    default:
       return false;
@@ -407,7 +411,7 @@ void FileManager::dumpSourceLine(SourceLocation Loc)
 
 void FileManager::dumpSourceRange(SourceRange SR)
 {
-   auto &out = llvm::outs();
+   auto& out = llvm::outs();
 
    auto loc = SR.getStart();
    while (auto AliasLoc = getAliasLoc(loc)) {
@@ -425,19 +429,19 @@ void FileManager::dumpSourceRange(SourceRange SR)
    size_t ID = getSourceId(loc);
    auto File = getOpenedFile(ID);
 
-   llvm::MemoryBuffer *Buf = File.Buf;
+   llvm::MemoryBuffer* Buf = File.Buf;
    size_t srcLen = Buf->getBufferSize();
-   const char *src = Buf->getBufferStart();
+   const char* src = Buf->getBufferStart();
 
    // show file name, line number and column
    auto lineAndCol = getLineAndCol(loc, Buf);
-   out << "(" << fs::getFileNameAndExtension(File.FileName)
-       << ":" << lineAndCol.line << ":" << lineAndCol.col << ")\n";
+   out << "(" << fs::getFileNameAndExtension(File.FileName) << ":"
+       << lineAndCol.line << ":" << lineAndCol.col << ")\n";
 
    unsigned errLineNo = lineAndCol.line;
 
    // only source ranges that are on the same line as the "main index" are shown
-   unsigned errIndex     = loc.getOffset() - File.BaseOffset;
+   unsigned errIndex = loc.getOffset() - File.BaseOffset;
    unsigned newlineIndex = errIndex;
 
    // find offset of first newline before the error index
@@ -471,7 +475,7 @@ void FileManager::dumpSourceRange(SourceRange SR)
    std::fill(Markers.begin(), Markers.end(), ' ');
 
    auto Start = SR.getStart();
-   auto End   = SR.getEnd();
+   auto End = SR.getEnd();
 
    do {
       auto Diff = End.getOffset() - Start.getOffset();
@@ -511,8 +515,8 @@ void FileManager::dumpSourceRange(SourceRange SR)
          auto EndOffset = End.getOffset() - File.BaseOffset;
 
          unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
-         unsigned EndOffsetOnLine = std::min(EndOffset, lineEndIndex)
-                                    - newlineIndex - 1;
+         unsigned EndOffsetOnLine
+             = std::min(EndOffset, lineEndIndex) - newlineIndex - 1;
 
          if (EndOffsetOnLine > lineEndIndex)
             break;
@@ -528,7 +532,7 @@ void FileManager::dumpSourceRange(SourceRange SR)
 
          Markers[BeginOffsetOnLine] = '^';
       }
-   } while(0);
+   } while (0);
 
    // display line number to the left of the source
    std::string LinePrefix;

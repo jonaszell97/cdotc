@@ -1,14 +1,19 @@
 #include "ImporterImpl.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "Driver/Compiler.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Driver/Compiler.h"
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
 
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/Decl.h>
 #include <clang/Basic/TargetInfo.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Lex/Preprocessor.h>
+
+#pragma clang diagnostic pop
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -18,11 +23,11 @@ using ImporterImpl = ClangImporter::ImporterImpl;
 
 QualType ImporterImpl::getType(clang::QualType Ty)
 {
-   auto &Ctx = CI.getContext();
+   auto& Ctx = CI.getContext();
 
    switch (Ty->getTypeClass()) {
    case clang::Type::Builtin: {
-      clang::TargetInfo &TI = Instance->getTarget();
+      clang::TargetInfo& TI = Instance->getTarget();
       switch (Ty->castAs<clang::BuiltinType>()->getKind()) {
       case clang::BuiltinType::Void:
          return Ctx.getEmptyTupleType();
@@ -53,8 +58,7 @@ QualType ImporterImpl::getType(clang::QualType Ty)
                                  Ty->isUnsignedIntegerType());
       case clang::BuiltinType::Int:
       case clang::BuiltinType::UInt:
-         return Ctx.getIntegerTy(TI.getIntWidth(),
-                                 Ty->isUnsignedIntegerType());
+         return Ctx.getIntegerTy(TI.getIntWidth(), Ty->isUnsignedIntegerType());
       case clang::BuiltinType::Long:
       case clang::BuiltinType::ULong:
          return Ctx.getIntegerTy(TI.getLongWidth(),
@@ -65,16 +69,17 @@ QualType ImporterImpl::getType(clang::QualType Ty)
                                  Ty->isUnsignedIntegerType());
       case clang::BuiltinType::Int128:
       case clang::BuiltinType::UInt128:
-         return Ctx.getIntegerTy(128,
-                                 Ty->isUnsignedIntegerType());
+         return Ctx.getIntegerTy(128, Ty->isUnsignedIntegerType());
 
       /// Floating point types.
       case clang::BuiltinType::Half:
          return Ctx.getf16Ty();
       case clang::BuiltinType::LongDouble:
          switch (TI.getLongDoubleWidth()) {
-         case 64: return Ctx.getf64Ty();
-         case 128: return Ctx.getf128Ty();
+         case 64:
+            return Ctx.getf64Ty();
+         case 128:
+            return Ctx.getf128Ty();
          default:
             llvm_unreachable("unexpected long double width");
          }
@@ -92,7 +97,7 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       }
    }
    case clang::Type::Complex: {
-      auto *C = cast<clang::ComplexType>(Ty);
+      auto* C = cast<clang::ComplexType>(Ty);
       auto ElTy = getType(C->getElementType());
       if (!ElTy)
          return QualType();
@@ -150,8 +155,8 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       if (!ElementTy)
          return QualType();
 
-      auto &Size = cast<clang::ConstantArrayType>(Ty->getAsArrayTypeUnsafe())
-         ->getSize();
+      auto& Size = cast<clang::ConstantArrayType>(Ty->getAsArrayTypeUnsafe())
+                       ->getSize();
 
       return Ctx.getArrayType(ElementTy, Size.getZExtValue());
    }
@@ -164,7 +169,7 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       return Ctx.getPointerType(ElementTy);
    }
    case clang::Type::FunctionNoProto: {
-      auto *Fn = Ty->castAs<clang::FunctionNoProtoType>();
+      auto* Fn = Ty->castAs<clang::FunctionNoProtoType>();
       auto Ret = getType(Fn->getReturnType());
       if (!Ret)
          return QualType();
@@ -172,12 +177,12 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       return Ctx.getFunctionType(Ret, {}, {});
    }
    case clang::Type::FunctionProto: {
-      auto *Fn = Ty->castAs<clang::FunctionProtoType>();
+      auto* Fn = Ty->castAs<clang::FunctionProtoType>();
 
       SmallVector<QualType, 4> Params;
       SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
 
-      for (auto &ParamTy : Fn->getParamTypes()) {
+      for (auto& ParamTy : Fn->getParamTypes()) {
          auto Param = getType(ParamTy);
          if (!Param)
             return QualType();
@@ -204,9 +209,9 @@ QualType ImporterImpl::getType(clang::QualType Ty)
    case clang::Type::Attributed:
       return getType(Ty.getCanonicalType());
    case clang::Type::Record: {
-      auto *RecTy = Ty->castAs<clang::RecordType>();
+      auto* RecTy = Ty->castAs<clang::RecordType>();
       if (RecTy->getDecl()->isStruct()) {
-         auto *Rec = importStruct(RecTy->getDecl());
+         auto* Rec = importStruct(RecTy->getDecl());
          if (!Rec)
             return QualType();
 
@@ -214,10 +219,10 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       }
 
       if (RecTy->getDecl()->isUnion()) {
-         clang::ASTContext &ASTCtx = Instance->getASTContext();
+         clang::ASTContext& ASTCtx = Instance->getASTContext();
          unsigned Size = 0;
 
-         for (clang::FieldDecl *F : RecTy->getDecl()->fields()) {
+         for (clang::FieldDecl* F : RecTy->getDecl()->fields()) {
             Size += ASTCtx.getTypeSize(F->getType());
          }
 
@@ -227,7 +232,7 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       return QualType();
    }
    case clang::Type::Enum: {
-      auto *Rec = importEnum(Ty->castAs<clang::EnumType>()->getDecl());
+      auto* Rec = importEnum(Ty->castAs<clang::EnumType>()->getDecl());
       if (!Rec)
          return QualType();
 

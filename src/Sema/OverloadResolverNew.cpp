@@ -1,10 +1,10 @@
-#include "OverloadResolver.h"
+#include "cdotc/Sema/OverloadResolver.h"
 
-#include "AST/Decl.h"
-#include "AST/TypeVisitor.h"
-#include "ConstraintBuilder.h"
-#include "Query/QueryContext.h"
-#include "SemaPass.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/ConstraintBuilder.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -16,9 +16,9 @@ using PathElement = ConstraintLocator::PathElement;
 using DeclArgMapType = llvm::DenseMap<FuncArgDecl*, std::vector<Expression*>>;
 using TemplateParamSet = llvm::SmallPtrSet<TemplateParamDecl*, 2>;
 
-static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
-                               IdentifierInfo *GivenLabel,
-                               Expression *E) {
+static bool checkImplicitLabel(IdentifierInfo* NeededLabel,
+                               IdentifierInfo* GivenLabel, Expression* E)
+{
    if (GivenLabel && GivenLabel->isStr("_")) {
       return true;
    }
@@ -29,32 +29,36 @@ static bool checkImplicitLabel(IdentifierInfo *NeededLabel,
       return true;
    }
 
-   if (auto *declRef = dyn_cast<DeclRefExpr>(E->ignoreParensAndImplicitCasts())) {
+   if (auto* declRef
+       = dyn_cast<DeclRefExpr>(E->ignoreParensAndImplicitCasts())) {
       auto Name = declRef->getDecl()->getDeclName();
-      if (Name.isSimpleIdentifier() && Name.getIdentifierInfo() == NeededLabel) {
+      if (Name.isSimpleIdentifier()
+          && Name.getIdentifierInfo() == NeededLabel) {
          return true;
       }
    }
-//   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
-//      if ((!Ident->getParentExpr()
-//           || isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
-//          && Ident->getIdentInfo() == NeededLabel) {
-//         return true;
-//      }
-//   }
+   //   if (auto *Ident =
+   //   dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
+   //      if ((!Ident->getParentExpr()
+   //           ||
+   //           isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
+   //          && Ident->getIdentInfo() == NeededLabel) {
+   //         return true;
+   //      }
+   //   }
 
    return false;
 }
 
-static bool matchingLabels(SemaPass &Sema,
-                           CandidateSet &CandSet,
-                           CandidateSet::Candidate &Cand,
+static bool matchingLabels(SemaPass& Sema, CandidateSet& CandSet,
+                           CandidateSet::Candidate& Cand,
                            ArrayRef<Expression*> UnorderedArgs,
                            ArrayRef<IdentifierInfo*> Labels,
-                           DeclArgMapType &DeclArgMap) {
-   CallableDecl *CD = Cand.getFunc();
+                           DeclArgMapType& DeclArgMap)
+{
+   CallableDecl* CD = Cand.getFunc();
    ArrayRef<FuncArgDecl*> ArgDecls = CD->getArgs();
-   FuncArgDecl *VariadicArgDecl = nullptr;
+   FuncArgDecl* VariadicArgDecl = nullptr;
 
    bool CStyleVararg = CD->isCstyleVararg();
    unsigned NumGivenArgs = UnorderedArgs.size();
@@ -62,9 +66,9 @@ static bool matchingLabels(SemaPass &Sema,
    unsigned i = 0;
    unsigned LabelNo = 0;
 
-   for (auto *ArgVal : UnorderedArgs) {
+   for (auto* ArgVal : UnorderedArgs) {
       // Check if this argument is labeled.
-      IdentifierInfo *Label;
+      IdentifierInfo* Label;
       if (isa<MethodDecl>(CD) && i == 0 && !CD->isCompleteInitializer()) {
          Label = nullptr;
       }
@@ -78,7 +82,7 @@ static bool matchingLabels(SemaPass &Sema,
       // If so, look for an argument with that label.
       if (Label && !Label->isStr("_")) {
          bool FoundLabel = false;
-         for (auto *ArgDecl : ArgDecls) {
+         for (auto* ArgDecl : ArgDecls) {
             if (ArgDecl->getLabel() == Label) {
                FoundLabel = true;
                DeclArgMap[ArgDecl].push_back(ArgVal);
@@ -96,7 +100,7 @@ static bool matchingLabels(SemaPass &Sema,
       }
 
       // Otherwise, if the argument is labeled, bail out.
-      FuncArgDecl *ArgDecl;
+      FuncArgDecl* ArgDecl;
       if (!VariadicArgDecl && i < ArgDecls.size()) {
          ArgDecl = ArgDecls[i];
       }
@@ -135,24 +139,24 @@ static bool matchingLabels(SemaPass &Sema,
    return true;
 }
 
-static bool matchingAnonymousLabels(SemaPass &Sema,
-                                    CandidateSet &CandSet,
-                                    CandidateSet::Candidate &Cand,
+static bool matchingAnonymousLabels(SemaPass& Sema, CandidateSet& CandSet,
+                                    CandidateSet::Candidate& Cand,
                                     ArrayRef<Expression*> UnorderedArgs,
                                     ArrayRef<IdentifierInfo*> Labels,
-                                    std::vector<StmtOrDecl> &ArgExprs) {
+                                    std::vector<StmtOrDecl>& ArgExprs)
+{
    ArgExprs.resize(UnorderedArgs.size());
 
-   auto *FnTy = Cand.getFunctionType();
+   auto* FnTy = Cand.getFunctionType();
    auto ParamInfo = FnTy->getParamInfo();
    unsigned NumGivenArgs = UnorderedArgs.size();
 
    unsigned i = 0;
    unsigned LabelNo = 0;
 
-   for (auto *ArgVal : UnorderedArgs) {
+   for (auto* ArgVal : UnorderedArgs) {
       // Check if this argument is labeled.
-      IdentifierInfo *Label;
+      IdentifierInfo* Label;
       if (LabelNo < Labels.size()) {
          Label = Labels[LabelNo++];
       }
@@ -164,7 +168,7 @@ static bool matchingAnonymousLabels(SemaPass &Sema,
       if (Label && !Label->isStr("_")) {
          bool FoundLabel = false;
          unsigned j = 0;
-         for (auto &PI : ParamInfo) {
+         for (auto& PI : ParamInfo) {
             if (PI.getLabel() == Label) {
                FoundLabel = true;
                ArgExprs[j] = ArgVal;
@@ -184,7 +188,7 @@ static bool matchingAnonymousLabels(SemaPass &Sema,
       }
 
       // Otherwise, if the argument is labeled, bail out.
-      const FunctionType::ParamInfo *PI = nullptr;
+      const FunctionType::ParamInfo* PI = nullptr;
       if (i < ParamInfo.size()) {
          PI = &ParamInfo[i];
       }
@@ -210,16 +214,17 @@ static bool matchingAnonymousLabels(SemaPass &Sema,
 
 namespace {
 
-class TemplateParamVisitor: public RecursiveTypeVisitor<TemplateParamVisitor> {
+class TemplateParamVisitor : public RecursiveTypeVisitor<TemplateParamVisitor> {
    /// Set of encountered variadic template parameters.
-   TemplateParamSet &VariadicParams;
+   TemplateParamSet& VariadicParams;
 
 public:
-   explicit TemplateParamVisitor(TemplateParamSet &VariadicParams)
-      : VariadicParams(VariadicParams)
-   {}
+   explicit TemplateParamVisitor(TemplateParamSet& VariadicParams)
+       : VariadicParams(VariadicParams)
+   {
+   }
 
-   bool visitTemplateParamType(TemplateParamType *T)
+   bool visitTemplateParamType(TemplateParamType* T)
    {
       if (T->getParam()->isVariadic()) {
          VariadicParams.insert(T->getParam());
@@ -229,18 +234,18 @@ public:
    }
 };
 
-class TemplateParamFinder: public RecursiveTypeVisitor<TemplateParamFinder> {
+class TemplateParamFinder : public RecursiveTypeVisitor<TemplateParamFinder> {
    /// Reference to the Sema instance.
-   SemaPass &Sema;
+   SemaPass& Sema;
 
    /// Reference to the constraint builder.
-   ConstraintBuilder &Builder;
+   ConstraintBuilder& Builder;
 
    /// The template argument list.
-   MultiLevelTemplateArgList &TemplateArgs;
+   MultiLevelTemplateArgList& TemplateArgs;
 
    /// Set of encountered variadic template parameters.
-   TemplateParamSet &VariadicParams;
+   TemplateParamSet& VariadicParams;
 
    /// Set to true if we were able to infer the variadic parameter.
    bool CouldInfer = false;
@@ -253,7 +258,7 @@ public:
    bool EncounteredError = false;
 
 private:
-   ExprResult visitDefault(QualType T, Expression *&E)
+   ExprResult visitDefault(QualType T, Expression*& E)
    {
       auto Result = Sema.visitExpr(E);
       if (!Result) {
@@ -273,7 +278,7 @@ private:
       return E;
    }
 
-   void visit(QualType T, Expression *E = nullptr)
+   void visit(QualType T, Expression* E = nullptr)
    {
       switch (T->getTypeID()) {
       case Type::TupleTypeID: {
@@ -290,22 +295,24 @@ private:
       }
 
       switch (T->getTypeID()) {
-#     define CDOT_TYPE(NAME, Parent)                              \
-      case Type::NAME##ID: visit##NAME(T->as##NAME()); break;
-#     include "AST/Types.def"
+#define CDOT_TYPE(NAME, Parent)                                                \
+   case Type::NAME##ID:                                                        \
+      visit##NAME(T->as##NAME());                                              \
+      break;
+#include "cdotc/AST/Types.def"
       }
    }
 
 public:
-   explicit TemplateParamFinder(SemaPass &Sema,
-                                ConstraintBuilder &Builder,
-                                MultiLevelTemplateArgList &TemplateArgs,
-                                TemplateParamSet &VariadicParams)
-      : Sema(Sema), Builder(Builder), TemplateArgs(TemplateArgs),
-        VariadicParams(VariadicParams)
-   {}
+   explicit TemplateParamFinder(SemaPass& Sema, ConstraintBuilder& Builder,
+                                MultiLevelTemplateArgList& TemplateArgs,
+                                TemplateParamSet& VariadicParams)
+       : Sema(Sema), Builder(Builder), TemplateArgs(TemplateArgs),
+         VariadicParams(VariadicParams)
+   {
+   }
 
-   bool findTemplateParams(QualType ParamTy, Expression *&Expr)
+   bool findTemplateParams(QualType ParamTy, Expression*& Expr)
    {
       assert(ParamTy->containsTemplateParamType());
       visit(ParamTy, Expr);
@@ -317,16 +324,16 @@ public:
       return IncompatibleType;
    }
 
-   bool visitTupleType(TupleType *T, Expression *Expr = nullptr)
+   bool visitTupleType(TupleType* T, Expression* Expr = nullptr)
    {
-      auto *Tup = dyn_cast_or_null<TupleLiteral>(Expr);
-      TemplateParamDecl *VariadicParam = nullptr;
+      auto* Tup = dyn_cast_or_null<TupleLiteral>(Expr);
+      TemplateParamDecl* VariadicParam = nullptr;
 
       unsigned i = 0;
       unsigned VariadicIdx = -1;
 
-      for (auto &El : T->getContainedTypes()) {
-         auto *Param = El->asTemplateParamType();
+      for (auto& El : T->getContainedTypes()) {
+         auto* Param = El->asTemplateParamType();
          if (!Param) {
             if (El->properties().containsUnexpandedParameterPack()) {
                if (Tup) {
@@ -380,19 +387,19 @@ public:
       unsigned j = 0;
 
       for (i = VariadicIdx; i < Exprs.size() - LeftoverElements; ++i, ++j) {
-         auto *&Element = Exprs[i];
-         auto *Loc = Builder.makeLocator(
-            Element, PathElement::contextualType(Expr->getSourceRange()));
+         auto*& Element = Exprs[i];
+         auto* Loc = Builder.makeLocator(
+             Element, PathElement::contextualType(Expr->getSourceRange()));
 
          QualType Ty = Builder.visitExpr(Element, NeededTy, Loc);
-         if (auto *TV = Ty->asTypeVariableType()) {
+         if (auto* TV = Ty->asTypeVariableType()) {
             Builder.Sys.setVariadicParamIdx(TV, j);
 
             if (Inferrable) {
                auto it = Builder.Bindings.ParamBindings.find(VariadicParam);
                if (it != Builder.Bindings.ParamBindings.end()) {
-                  Builder.Sys.newConstraint<InferenceConstraint>(it->getSecond(), TV,
-                                                                 nullptr);
+                  Builder.Sys.newConstraint<InferenceConstraint>(
+                      it->getSecond(), TV, nullptr);
                }
             }
          }
@@ -401,16 +408,17 @@ public:
       return false;
    }
 
-   bool visitFunctionType(FunctionType *T, Expression *Expr = nullptr)
+   bool visitFunctionType(FunctionType* T, Expression* Expr = nullptr)
    {
       return false;
    }
 };
 
-static unsigned getPreviousNumVariadicArgs(TemplateParamDecl *Param,
-                                           DeclArgMapType &DeclArgMap) {
-   for (auto &ArgPair : DeclArgMap) {
-      auto *ArgDecl = ArgPair.getFirst();
+static unsigned getPreviousNumVariadicArgs(TemplateParamDecl* Param,
+                                           DeclArgMapType& DeclArgMap)
+{
+   for (auto& ArgPair : DeclArgMap) {
+      auto* ArgDecl = ArgPair.getFirst();
       if (!ArgDecl->isVariadic()) {
          continue;
       }
@@ -425,26 +433,21 @@ static unsigned getPreviousNumVariadicArgs(TemplateParamDecl *Param,
 
 } // anonymous namespace
 
-static bool createParamConstraints(ConstraintSystem &Sys,
-                                   DeclArgMapType &DeclArgMap,
-                                   CandidateSet::Candidate &Cand,
-                                   FuncArgDecl *ArgDecl,
-                                   unsigned NumGivenArgs,
-                                   unsigned i,
-                                   std::vector<StmtOrDecl> &ArgExprs,
-                                   TemplateParamSet &VariadicParams,
-                                   MultiLevelTemplateArgList &templateArgs,
-                                   ConstraintBuilder &Builder,
-                                   SemaPass &Sema,
-                                   Statement *Caller,
-                                   ConstraintBuilder *outerBuilder) {
-   auto *CD = Cand.getFunc();
+static bool createParamConstraints(
+    ConstraintSystem& Sys, DeclArgMapType& DeclArgMap,
+    CandidateSet::Candidate& Cand, FuncArgDecl* ArgDecl, unsigned NumGivenArgs,
+    unsigned i, std::vector<StmtOrDecl>& ArgExprs,
+    TemplateParamSet& VariadicParams, MultiLevelTemplateArgList& templateArgs,
+    ConstraintBuilder& Builder, SemaPass& Sema, Statement* Caller,
+    ConstraintBuilder* outerBuilder)
+{
+   auto* CD = Cand.getFunc();
 
    // If no argument is given, check if there is a default one.
    auto It = DeclArgMap.find(ArgDecl);
    if (It == DeclArgMap.end()) {
       if (ArgDecl->isVariadic()) {
-         auto *Param = ArgDecl->getType()->asTemplateParamType()->getParam();
+         auto* Param = ArgDecl->getType()->asTemplateParamType()->getParam();
          bool FirstOccurence = VariadicParams.count(Param) == 0;
 
          if (FirstOccurence) {
@@ -473,8 +476,8 @@ static bool createParamConstraints(ConstraintSystem &Sys,
       auto DefaultVal = ArgDecl->getDefaultVal();
       if (DefaultVal->isMagicArgumentValue()) {
          auto Alias = cast<IdentifierRefExpr>(DefaultVal)->getAlias();
-         auto Result = Sema.HandleReflectionAlias(Alias,
-                                                  cast<Expression>(Caller));
+         auto Result
+             = Sema.HandleReflectionAlias(Alias, cast<Expression>(Caller));
 
          if (Result) {
             ArgExprs.emplace_back(Result.getValue());
@@ -483,9 +486,8 @@ static bool createParamConstraints(ConstraintSystem &Sys,
             ArgExprs.emplace_back(DefaultVal);
          }
       }
-      else if (CD->isTemplate()
-      || CD->isInitializerOfTemplate()
-      || CD->isCaseOfTemplatedEnum()) {
+      else if (CD->isTemplate() || CD->isInitializerOfTemplate()
+               || CD->isCaseOfTemplatedEnum()) {
          ArgExprs.emplace_back(ArgDecl);
       }
       else {
@@ -500,27 +502,27 @@ static bool createParamConstraints(ConstraintSystem &Sys,
    // If the parameter type is a pack expansion, we can use the supplied
    // values directly.
    if (ArgDecl->isVariadic()) {
-      auto *Param = ArgDecl->getType()->asTemplateParamType()->getParam();
-      auto *Arg = templateArgs.getArgForParam(Param);
+      auto* Param = ArgDecl->getType()->asTemplateParamType()->getParam();
+      auto* Arg = templateArgs.getArgForParam(Param);
 
       if (!Arg->isFrozen() && Arg->getVariadicArgs().empty()) {
          bool Inferrable = VariadicParams.insert(Param).second;
          Builder.registerTemplateParam(Param);
 
          unsigned i = 0;
-         for (auto *ArgVal : ArgValues) {
-            auto *Loc = Builder.makeLocator(
-               ArgVal, PathElement::parameterType(ArgDecl));
+         for (auto* ArgVal : ArgValues) {
+            auto* Loc = Builder.makeLocator(
+                ArgVal, PathElement::parameterType(ArgDecl));
 
-            auto Result = Builder.generateConstraints(ArgVal,
-                                                      ArgDecl->getType(),
-                                                      Loc);
+            auto Result
+                = Builder.generateConstraints(ArgVal, ArgDecl->getType(), Loc);
 
             switch (Result.Kind) {
             case ConstraintBuilder::Success:
                break;
             case ConstraintBuilder::InvalidArgument:
-               Cand.setHasIncompatibleArgument(i, Result.Type, ArgDecl->getType());
+               Cand.setHasIncompatibleArgument(i, Result.Type,
+                                               ArgDecl->getType());
                return true;
             case ConstraintBuilder::Failure:
                Cand.setIsInvalid();
@@ -533,7 +535,7 @@ static bool createParamConstraints(ConstraintSystem &Sys,
             QualType Ty = Result.Type;
             ArgExprs.emplace_back(ArgVal);
 
-            TypeVariableType *TV = Ty->asTypeVariableType();
+            TypeVariableType* TV = Ty->asTypeVariableType();
             if (!TV) {
                TV = Sys.newTypeVariable();
                Sys.newConstraint<TypeBindingConstraint>(TV, Ty, Loc);
@@ -544,7 +546,8 @@ static bool createParamConstraints(ConstraintSystem &Sys,
             if (Inferrable) {
                auto it = Builder.Bindings.ParamBindings.find(Param);
                if (it != Builder.Bindings.ParamBindings.end()) {
-                  Sys.newConstraint<InferenceConstraint>(it->getSecond(), TV, nullptr);
+                  Sys.newConstraint<InferenceConstraint>(it->getSecond(), TV,
+                                                         nullptr);
                }
             }
 
@@ -552,27 +555,26 @@ static bool createParamConstraints(ConstraintSystem &Sys,
          }
       }
       else {
-         auto &VAs = Arg->getVariadicArgs();
+         auto& VAs = Arg->getVariadicArgs();
          if (VAs.size() > ArgValues.size()) {
-            Cand.setHasTooFewArguments(
-               NumGivenArgs, NumGivenArgs + VAs.size() - ArgValues.size());
+            Cand.setHasTooFewArguments(NumGivenArgs, NumGivenArgs + VAs.size()
+                                                         - ArgValues.size());
 
             return true;
          }
          else if (VAs.size() < ArgValues.size()) {
-            Cand.setHasTooManyArguments(
-               NumGivenArgs, NumGivenArgs - VAs.size() + ArgValues.size());
+            Cand.setHasTooManyArguments(NumGivenArgs, NumGivenArgs - VAs.size()
+                                                          + ArgValues.size());
 
             return true;
          }
 
-         for (auto *ArgVal : ArgValues) {
-            auto *Loc = Builder.makeLocator(
-               ArgVal, PathElement::parameterType(ArgDecl));
+         for (auto* ArgVal : ArgValues) {
+            auto* Loc = Builder.makeLocator(
+                ArgVal, PathElement::parameterType(ArgDecl));
 
-            auto Result =  Builder.generateConstraints(ArgVal,
-                                                       VAs[i].getType(),
-                                                       Loc);
+            auto Result
+                = Builder.generateConstraints(ArgVal, VAs[i].getType(), Loc);
 
             switch (Result.Kind) {
             case ConstraintBuilder::Success:
@@ -594,10 +596,12 @@ static bool createParamConstraints(ConstraintSystem &Sys,
          }
       }
    }
-   else if (ArgDecl->getType()->properties().containsUnexpandedParameterPack()){
+   else if (ArgDecl->getType()
+                ->properties()
+                .containsUnexpandedParameterPack()) {
       TemplateParamFinder Finder(Sema, Builder, templateArgs, VariadicParams);
 
-      for (auto *&ArgVal : ArgValues) {
+      for (auto*& ArgVal : ArgValues) {
          if (Finder.findTemplateParams(ArgDecl->getType(), ArgVal)) {
             Cand.setHasIncompatibleArgument(0, ArgVal->getExprType(),
                                             ArgDecl->getType());
@@ -609,13 +613,12 @@ static bool createParamConstraints(ConstraintSystem &Sys,
             return true;
          }
 
-         auto *Loc = Builder.makeLocator(
-            ArgVal, PathElement::parameterType(ArgDecl));
+         auto* Loc
+             = Builder.makeLocator(ArgVal, PathElement::parameterType(ArgDecl));
 
          QualType NeededTy = ArgDecl->getType();
-         Sema.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
-                                                 templateArgs,
-                                                 ArgVal->getSourceRange());
+         Sema.QC.SubstTemplateParamTypesNonFinal(
+             NeededTy, NeededTy, templateArgs, ArgVal->getSourceRange());
 
          auto Result = Builder.generateConstraints(ArgVal, NeededTy, Loc);
          switch (Result.Kind) {
@@ -638,18 +641,18 @@ static bool createParamConstraints(ConstraintSystem &Sys,
    else {
       assert(ArgValues.size() == 1);
 
-      auto *ArgVal = ArgValues.front();
-      auto *Loc = Builder.makeLocator(
-         ArgVal, PathElement::parameterType(ArgDecl));
+      auto* ArgVal = ArgValues.front();
+      auto* Loc
+          = Builder.makeLocator(ArgVal, PathElement::parameterType(ArgDecl));
 
       QualType NeededTy = ArgDecl->getType();
       if (Cand.getFunc()->isTemplate()) {
-         Sema.QC.SubstTemplateParamTypesNonFinal(NeededTy, NeededTy,
-                                                 templateArgs,
-                                                 ArgVal->getSourceRange());
+         Sema.QC.SubstTemplateParamTypesNonFinal(
+             NeededTy, NeededTy, templateArgs, ArgVal->getSourceRange());
       }
 
-      auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc, outerBuilder);
+      auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc,
+                                                        outerBuilder);
       switch (Result.Kind) {
       case ConstraintBuilder::Success:
          break;
@@ -666,7 +669,8 @@ static bool createParamConstraints(ConstraintSystem &Sys,
 
       if (!Result.Type->containsTypeVariable()) {
          IsValidParameterValueQuery::result_type result;
-         if (Sema.QC.IsValidParameterValue(result, Result.Type, NeededTy, ArgDecl->isSelf())) {
+         if (Sema.QC.IsValidParameterValue(result, Result.Type, NeededTy,
+                                           ArgDecl->isSelf())) {
             Cand.setIsInvalid();
             return true;
          }
@@ -685,16 +689,12 @@ static bool createParamConstraints(ConstraintSystem &Sys,
    return false;
 }
 
-static bool createAnonymousParamConstraints(ConstraintSystem &Sys,
-                                            CandidateSet::Candidate &Cand,
-                                            unsigned i,
-                                            CanType NeededTy,
-                                            ArgumentConvention Conv,
-                                            Expression *ArgVal,
-                                            ConstraintBuilder &Builder,
-                                            SemaPass &Sema,
-                                            Statement *Caller) {
-   auto *Loc = Builder.makeLocator(ArgVal, {});
+static bool createAnonymousParamConstraints(
+    ConstraintSystem& Sys, CandidateSet::Candidate& Cand, unsigned i,
+    CanType NeededTy, ArgumentConvention Conv, Expression* ArgVal,
+    ConstraintBuilder& Builder, SemaPass& Sema, Statement* Caller)
+{
+   auto* Loc = Builder.makeLocator(ArgVal, {});
    auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc);
    switch (Result.Kind) {
    case ConstraintBuilder::Success:
@@ -712,8 +712,7 @@ static bool createAnonymousParamConstraints(ConstraintSystem &Sys,
 
    if (!Result.Type->containsTypeVariable()) {
       IsImplicitlyConvertibleQuery::result_type result;
-      if (Sema.QC.IsImplicitlyConvertible(result, Result.Type,
-                                          NeededTy)) {
+      if (Sema.QC.IsImplicitlyConvertible(result, Result.Type, NeededTy)) {
          Cand.setIsInvalid();
          return true;
       }
@@ -731,15 +730,14 @@ static bool createAnonymousParamConstraints(ConstraintSystem &Sys,
 
 namespace {
 
-class CaptureMarker: public RecursiveASTVisitor<CaptureMarker> {
-   ASTContext &C;
-   LambdaExpr *LE;
+class CaptureMarker : public RecursiveASTVisitor<CaptureMarker> {
+   ASTContext& C;
+   LambdaExpr* LE;
 
 public:
-   CaptureMarker(ASTContext &C, LambdaExpr *LE) : C(C), LE(LE)
-   {}
+   CaptureMarker(ASTContext& C, LambdaExpr* LE) : C(C), LE(LE) {}
 
-   bool visitIdentifierRefExpr(IdentifierRefExpr *Expr)
+   bool visitIdentifierRefExpr(IdentifierRefExpr* Expr)
    {
       switch (Expr->getKind()) {
       case IdentifierKind::LocalVar:
@@ -757,7 +755,7 @@ public:
       return true;
    }
 
-   bool visitSelfExpr(SelfExpr *E)
+   bool visitSelfExpr(SelfExpr* E)
    {
       if (!E->isUppercase()) {
          E->setCaptureIndex(LE->addCapture(C, E->getSelfArg()));
@@ -766,7 +764,7 @@ public:
       return true;
    }
 
-   bool visitSuperExpr(SuperExpr *E)
+   bool visitSuperExpr(SuperExpr* E)
    {
       E->setCaptureIndex(LE->addCapture(C, E->getSelfArg()));
       return true;
@@ -775,11 +773,11 @@ public:
 
 } // anonymous namespace
 
-static bool applyConversions(SemaPass &SP,
-                             CandidateSet &CandSet,
-                             CandidateSet::Candidate &Cand,
-                             std::vector<StmtOrDecl> &ArgExprs,
-                             Statement *Caller) {
+static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
+                             CandidateSet::Candidate& Cand,
+                             std::vector<StmtOrDecl>& ArgExprs,
+                             Statement* Caller)
+{
    bool isTemplate = false;
    ArrayRef<FuncArgDecl*> ArgDecls;
    if (!Cand.isAnonymousCandidate()) {
@@ -796,8 +794,8 @@ static bool applyConversions(SemaPass &SP,
    auto ParamTys = Cand.getFunctionType()->getParamTypes();
    bool cstyleVararg = Cand.getFunctionType()->isCStyleVararg();
 
-   for (Expression *&E : CandSet.ResolvedArgs) {
-      FuncArgDecl *ArgDecl = nullptr;
+   for (Expression*& E : CandSet.ResolvedArgs) {
+      FuncArgDecl* ArgDecl = nullptr;
       QualType requiredType;
 
       if (i < ArgDecls.size()) {
@@ -861,11 +859,11 @@ static bool applyConversions(SemaPass &SP,
          // Handle @autoclosure
          if (ArgDecl->hasAttribute<AutoClosureAttr>()) {
             auto LE = LambdaExpr::Create(
-               SP.getContext(), E->getSourceRange(),
-               E->getSourceLoc(), SourceType(SP.getContext().getAutoType()),
-               {}, ReturnStmt::Create(SP.getContext(), E->getSourceLoc(), E));
+                SP.getContext(), E->getSourceRange(), E->getSourceLoc(),
+                SourceType(SP.getContext().getAutoType()), {},
+                ReturnStmt::Create(SP.getContext(), E->getSourceLoc(), E));
 
-            (void) SP.visitExpr(E, LE);
+            (void)SP.visitExpr(E, LE);
             CaptureMarker(SP.getContext(), LE).visit(E);
 
             E = LE;
@@ -881,27 +879,27 @@ static bool applyConversions(SemaPass &SP,
    return false;
 }
 
-static bool replaceDefaultValues(SemaPass &SP,
-                                 CandidateSet &CandSet,
-                                 CandidateSet::Candidate &Cand,
-                                 std::vector<StmtOrDecl> &ArgExprs) {
+static bool replaceDefaultValues(SemaPass& SP, CandidateSet& CandSet,
+                                 CandidateSet::Candidate& Cand,
+                                 std::vector<StmtOrDecl>& ArgExprs)
+{
    if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isInvalid()) {
       CandSet.InvalidCand = true;
       return true;
    }
 
-   for (auto &SOD : ArgExprs) {
+   for (auto& SOD : ArgExprs) {
       // Check if this is an argument with a default value.
-      if (auto *Decl = SOD.asDecl()) {
+      if (auto* Decl = SOD.asDecl()) {
          // Get the instantiated default value.
-         auto *Inst = Cand.getFunc()->lookupSingle<FuncArgDecl>(
-            cast<FuncArgDecl>(Decl)->getDeclName());
+         auto* Inst = Cand.getFunc()->lookupSingle<FuncArgDecl>(
+             cast<FuncArgDecl>(Decl)->getDeclName());
 
          if (Inst != Decl) {
             if (SP.QC.TypecheckDecl(Inst)) {
                CandSet.InvalidCand = true;
                CandSet.ResolvedArgs.push_back(
-                  cast<FuncArgDecl>(Decl)->getDefaultVal());
+                   cast<FuncArgDecl>(Decl)->getDefaultVal());
 
                continue;
             }
@@ -916,9 +914,9 @@ static bool replaceDefaultValues(SemaPass &SP,
    return false;
 }
 
-static void checkReturnType(SemaPass &Sema,
-                            CandidateSet::Candidate &Cand,
-                            CanType RequiredType) {
+static void checkReturnType(SemaPass& Sema, CandidateSet::Candidate& Cand,
+                            CanType RequiredType)
+{
    QualType ReturnType;
    if (Cand.isAnonymousCandidate()) {
       ReturnType = Cand.getFunctionType()->getReturnType();
@@ -932,9 +930,10 @@ static void checkReturnType(SemaPass &Sema,
 
    if (ReturnType->containsTemplateParamType()) {
       assert(Cand.getFunc()->isTemplateOrInTemplate()
-         && "function not correctly instantiated!");
+             && "function not correctly instantiated!");
 
-      if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType, Cand.InnerTemplateArgs, {})) {
+      if (Sema.QC.SubstTemplateParamTypesNonFinal(ReturnType, ReturnType,
+                                                  Cand.InnerTemplateArgs, {})) {
          return;
       }
    }
@@ -952,11 +951,12 @@ static void checkReturnType(SemaPass &Sema,
    }
 }
 
-static void bindTemplateParams(SemaPass &Sema,
-                               CandidateSet::Candidate &Cand,
-                               SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                               MultiLevelTemplateArgList &templateArgList) {
-   for (auto &B : Cand.Builder->Bindings.ParamBindings) {
+static void
+bindTemplateParams(SemaPass& Sema, CandidateSet::Candidate& Cand,
+                   SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+                   MultiLevelTemplateArgList& templateArgList)
+{
+   for (auto& B : Cand.Builder->Bindings.ParamBindings) {
       QualType ParamTy = Sema.Context.getTemplateArgType(B.getFirst());
       QualType AssignedTy = Solutions.front().AssignmentMap[B.getSecond()];
 
@@ -965,7 +965,7 @@ static void bindTemplateParams(SemaPass &Sema,
       }
 
       if (B.getFirst()->isVariadic()) {
-         auto *Tup = AssignedTy->asTupleType();
+         auto* Tup = AssignedTy->asTupleType();
          assert(Tup && "bad variadic argument");
 
          for (QualType Cont : Tup->getContainedTypes()) {
@@ -978,46 +978,43 @@ static void bindTemplateParams(SemaPass &Sema,
    }
 }
 
-static bool isBetterCandidate(CandidateSet::Candidate *BestCand,
-                              CandidateSet::Candidate &NewCand,
-                              ConstraintSystem::Solution &BestSolution,
-                              ConstraintSystem::Solution &NewSolution) {
+static bool isBetterCandidate(CandidateSet::Candidate* BestCand,
+                              CandidateSet::Candidate& NewCand,
+                              ConstraintSystem::Solution& BestSolution,
+                              ConstraintSystem::Solution& NewSolution)
+{
    if (!BestCand) {
       return true;
    }
 
    if (BestCand->FR == CandidateSet::IncompatibleReturnType
-   && NewCand.FR == CandidateSet::None) {
+       && NewCand.FR == CandidateSet::None) {
       return true;
    }
 
    return NewSolution.Score < BestSolution.Score;
 }
 
-static bool resolveCandidate(SemaPass &Sema,
-                        std::vector<StmtOrDecl> &ArgExprs,
-                        SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                        CandidateSet &CandSet,
-                        CandidateSet::Candidate &Cand,
-                        const SourceType &RequiredType,
-                        ArrayRef<Expression*> UnorderedArgs,
-                        ArrayRef<IdentifierInfo*> Labels,
-                        unsigned NumGivenArgs,
-                        ConstraintSystem::Solution &BestSolution,
-                        CandidateSet::Candidate *&BestCandidate,
-                        std::vector<StmtOrDecl> &BestMatchArgExprs,
-                        bool &FoundAmbiguity,
-                        Statement *Caller,
-                        bool isFunctionArgument,
-                        ConstraintBuilder *outerBuilder) {
-   if (Sema.QC.PrepareDeclInterface(Cand.getFunc()) || Cand.getFunc()->isInvalid()) {
+static bool resolveCandidate(
+    SemaPass& Sema, std::vector<StmtOrDecl>& ArgExprs,
+    SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+    CandidateSet& CandSet, CandidateSet::Candidate& Cand,
+    const SourceType& RequiredType, ArrayRef<Expression*> UnorderedArgs,
+    ArrayRef<IdentifierInfo*> Labels, unsigned NumGivenArgs,
+    ConstraintSystem::Solution& BestSolution,
+    CandidateSet::Candidate*& BestCandidate,
+    std::vector<StmtOrDecl>& BestMatchArgExprs, bool& FoundAmbiguity,
+    Statement* Caller, bool isFunctionArgument, ConstraintBuilder* outerBuilder)
+{
+   if (Sema.QC.PrepareDeclInterface(Cand.getFunc())
+       || Cand.getFunc()->isInvalid()) {
       Cand.setIsInvalid();
       CandSet.InvalidCand = true;
       return false;
    }
 
    bool isTemplateInitializer = Cand.getFunc()->isInitializerOfTemplate()
-      || Cand.getFunc()->isCaseOfTemplatedEnum();
+                                || Cand.getFunc()->isCaseOfTemplatedEnum();
 
    MultiLevelTemplateArgList templateArgList;
    TemplateArgList outerTemplateArgs;
@@ -1043,13 +1040,15 @@ static bool resolveCandidate(SemaPass &Sema,
    }
 
    // Check if the parameter amounts and labels match up.
-   if (!matchingLabels(Sema, CandSet, Cand, UnorderedArgs, Labels, DeclArgMap)) {
+   if (!matchingLabels(Sema, CandSet, Cand, UnorderedArgs, Labels,
+                       DeclArgMap)) {
       return false;
    }
 
    // Create a new constraint system for this overload.
-   Cand.Builder = std::make_unique<ConstraintBuilder>(Sema.QC, Caller->getSourceRange());
-   ConstraintSystem &Sys = Cand.Builder->Sys;
+   Cand.Builder
+       = std::make_unique<ConstraintBuilder>(Sema.QC, Caller->getSourceRange());
+   ConstraintSystem& Sys = Cand.Builder->Sys;
 
    // Generate the constraints for each parameter.
    bool Valid = true;
@@ -1057,7 +1056,7 @@ static bool resolveCandidate(SemaPass &Sema,
 
    // Register template parameters for the function itself.
    if (Cand.getFunc()->isTemplate()) {
-      for (auto *Param : Cand.getFunc()->getTemplateParams()) {
+      for (auto* Param : Cand.getFunc()->getTemplateParams()) {
          if (!Param->isVariadic()
              && Cand.InnerTemplateArgs.getArgForParam(Param)->isNull()) {
             Cand.Builder->registerTemplateParam(Param);
@@ -1067,7 +1066,7 @@ static bool resolveCandidate(SemaPass &Sema,
 
    // Register template parameters for the initialized record or enum.
    if (isTemplateInitializer) {
-      for (auto *Param : Cand.getFunc()->getRecord()->getTemplateParams()) {
+      for (auto* Param : Cand.getFunc()->getRecord()->getTemplateParams()) {
          if (!Param->isVariadic()
              && outerTemplateArgs.getArgForParam(Param)->isNull()) {
             Cand.Builder->registerTemplateParam(Param);
@@ -1084,12 +1083,10 @@ static bool resolveCandidate(SemaPass &Sema,
    }
 
    unsigned i = 0;
-   for (auto *ArgDecl : Cand.getFunc()->getArgs()) {
-      if (createParamConstraints(Sys, DeclArgMap, Cand, ArgDecl,
-                                 NumGivenArgs, i++, ArgExprs, VariadicParams,
-                                 templateArgList,
-                                 *Cand.Builder, Sema, Caller,
-                                 outerBuilder)) {
+   for (auto* ArgDecl : Cand.getFunc()->getArgs()) {
+      if (createParamConstraints(Sys, DeclArgMap, Cand, ArgDecl, NumGivenArgs,
+                                 i++, ArgExprs, VariadicParams, templateArgList,
+                                 *Cand.Builder, Sema, Caller, outerBuilder)) {
          Valid = false;
          break;
       }
@@ -1104,7 +1101,7 @@ static bool resolveCandidate(SemaPass &Sema,
    if (Cand.getFunc()->isCstyleVararg()) {
       auto It = DeclArgMap.find(nullptr);
       if (It != DeclArgMap.end()) {
-         for (Expression *argValue : It->getSecond()) {
+         for (Expression* argValue : It->getSecond()) {
             ArgExprs.emplace_back(argValue);
          }
       }
@@ -1147,7 +1144,8 @@ static bool resolveCandidate(SemaPass &Sema,
 
    // Instantiate the template record first.
    if (isTemplateInitializer) {
-      if (!Sema.maybeInstantiateRecord(Cand, templateArgList.outermost(), Caller)) {
+      if (!Sema.maybeInstantiateRecord(Cand, templateArgList.outermost(),
+                                       Caller)) {
          Cand.setIsInvalid();
          CandSet.InvalidCand = true;
 
@@ -1164,7 +1162,7 @@ static bool resolveCandidate(SemaPass &Sema,
    }
 
    // Check for ambiguity.
-   auto &S = Solutions.front();
+   auto& S = Solutions.front();
    S.Score += Cand.ConversionPenalty;
 
    if (isBetterCandidate(BestCandidate, Cand, BestSolution, S)) {
@@ -1198,20 +1196,17 @@ static bool resolveCandidate(SemaPass &Sema,
    return false;
 }
 
-static bool resolveAnonymousCandidate(SemaPass &Sema,
-                       SmallVectorImpl<ConstraintSystem::Solution> &Solutions,
-                       CandidateSet &CandSet,
-                       CandidateSet::Candidate &Cand,
-                       const SourceType &RequiredType,
-                       ArrayRef<Expression*> UnorderedArgs,
-                       ArrayRef<IdentifierInfo*> Labels,
-                       unsigned NumGivenArgs,
-                       ConstraintSystem::Solution &BestSolution,
-                       CandidateSet::Candidate *&BestCandidate,
-                       std::vector<StmtOrDecl> &BestMatchArgExprs,
-                       bool &FoundAmbiguity,
-                       Statement *Caller) {
-   auto *FnTy = Cand.getFunctionType();
+static bool resolveAnonymousCandidate(
+    SemaPass& Sema, SmallVectorImpl<ConstraintSystem::Solution>& Solutions,
+    CandidateSet& CandSet, CandidateSet::Candidate& Cand,
+    const SourceType& RequiredType, ArrayRef<Expression*> UnorderedArgs,
+    ArrayRef<IdentifierInfo*> Labels, unsigned NumGivenArgs,
+    ConstraintSystem::Solution& BestSolution,
+    CandidateSet::Candidate*& BestCandidate,
+    std::vector<StmtOrDecl>& BestMatchArgExprs, bool& FoundAmbiguity,
+    Statement* Caller)
+{
+   auto* FnTy = Cand.getFunctionType();
    std::vector<StmtOrDecl> ArgExprs;
 
    // Check if the returned type is viable.
@@ -1238,16 +1233,17 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
    }
 
    // Create a new constraint system for this overload.
-   Cand.Builder = std::make_unique<ConstraintBuilder>(Sema.QC, Caller->getSourceRange());
-   ConstraintSystem &Sys = Cand.Builder->Sys;
+   Cand.Builder
+       = std::make_unique<ConstraintBuilder>(Sema.QC, Caller->getSourceRange());
+   ConstraintSystem& Sys = Cand.Builder->Sys;
 
    // Generate the constraints for each parameter.
    bool Valid = true;
    TemplateParamSet VariadicParams;
 
    unsigned i = 0;
-   for (auto &ParamTy : Params) {
-      auto *ArgVal = cast<Expression>(ArgExprs[i].getStatement());
+   for (auto& ParamTy : Params) {
+      auto* ArgVal = cast<Expression>(ArgExprs[i].getStatement());
       if (createAnonymousParamConstraints(Sys, Cand, i, ParamTy,
                                           ParamInfo[i].getConvention(), ArgVal,
                                           *Cand.Builder, Sema, Caller)) {
@@ -1294,7 +1290,7 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
    }
 
    // Check for ambiguity.
-   auto &S = Solutions.front();
+   auto& S = Solutions.front();
    S.Score += Cand.ConversionPenalty;
 
    if (!BestCandidate || BestSolution.Score > S.Score) {
@@ -1328,9 +1324,10 @@ static bool resolveAnonymousCandidate(SemaPass &Sema,
    return false;
 }
 
-static bool shouldUseSelfArgument(CallableDecl *Fn, Expression *SelfArg,
-                                  ArrayRef<Expression*> UnorderedArgs) {
-   auto *M = dyn_cast<MethodDecl>(Fn);
+static bool shouldUseSelfArgument(CallableDecl* Fn, Expression* SelfArg,
+                                  ArrayRef<Expression*> UnorderedArgs)
+{
+   auto* M = dyn_cast<MethodDecl>(Fn);
    if (!M || M->isCompleteInitializer()) {
       return Fn->isOperator();
    }
@@ -1344,18 +1341,13 @@ static bool shouldUseSelfArgument(CallableDecl *Fn, Expression *SelfArg,
    return UnorderedArgs.size() < M->getArgs().size();
 }
 
-CandidateSet::Candidate*
-sema::resolveCandidateSet(SemaPass &Sema,
-                          CandidateSet &CandSet,
-                          Expression *SelfArg,
-                          ArrayRef<Expression*> UnorderedArgs,
-                          ArrayRef<IdentifierInfo*> Labels,
-                          ArrayRef<Expression*> TemplateArgExprs,
-                          SourceType RequiredType,
-                          Statement *Caller,
-                          bool DiagnoseFailure,
-                          bool isFunctionArgument,
-                          ConstraintBuilder *outerBuilder) {
+CandidateSet::Candidate* sema::resolveCandidateSet(
+    SemaPass& Sema, CandidateSet& CandSet, Expression* SelfArg,
+    ArrayRef<Expression*> UnorderedArgs, ArrayRef<IdentifierInfo*> Labels,
+    ArrayRef<Expression*> TemplateArgExprs, SourceType RequiredType,
+    Statement* Caller, bool DiagnoseFailure, bool isFunctionArgument,
+    ConstraintBuilder* outerBuilder)
+{
    unsigned NumGivenArgs = UnorderedArgs.size();
 
    std::vector<StmtOrDecl> ArgExprs;
@@ -1364,14 +1356,14 @@ sema::resolveCandidateSet(SemaPass &Sema,
    bool FoundAmbiguity = false;
    SmallVector<ConstraintSystem::Solution, 2> Solutions;
    ConstraintSystem::Solution BestSolution;
-   CandidateSet::Candidate *BestCandidate = nullptr;
+   CandidateSet::Candidate* BestCandidate = nullptr;
 
    SmallVector<Expression*, 4> ArgsWithSelf;
    ArgsWithSelf.reserve(NumGivenArgs + 1);
    ArgsWithSelf.push_back(SelfArg);
    ArgsWithSelf.append(UnorderedArgs.begin(), UnorderedArgs.end());
 
-   for (auto *&argValue : ArgsWithSelf) {
+   for (auto*& argValue : ArgsWithSelf) {
       if (argValue == nullptr) {
          continue;
       }
@@ -1389,27 +1381,27 @@ sema::resolveCandidateSet(SemaPass &Sema,
    unsigned bestMatchIdx = 0;
    unsigned i = 0;
 
-   for (auto &Cand : CandSet.Candidates) {
+   for (auto& Cand : CandSet.Candidates) {
       if (Cand.isAnonymousCandidate()) {
-         if (resolveAnonymousCandidate(Sema, Solutions, CandSet, Cand,
-                                   RequiredType, UnorderedArgs, Labels,
-                                   NumGivenArgs, BestSolution, BestCandidate,
-                                   BestMatchArgExprs, FoundAmbiguity, Caller)) {
+         if (resolveAnonymousCandidate(
+                 Sema, Solutions, CandSet, Cand, RequiredType, UnorderedArgs,
+                 Labels, NumGivenArgs, BestSolution, BestCandidate,
+                 BestMatchArgExprs, FoundAmbiguity, Caller)) {
             bestMatchIdx = i;
          }
       }
       else {
-         auto *Fn = Cand.getFunc();
+         auto* Fn = Cand.getFunc();
          ArrayRef<Expression*> ArgValues = ArgsWithSelf;
          if (!shouldUseSelfArgument(Fn, SelfArg, UnorderedArgs)) {
             ArgValues = ArgValues.drop_front(1);
          }
 
          if (resolveCandidate(Sema, ArgExprs, Solutions, CandSet, Cand,
-                             RequiredType, ArgValues, Labels, NumGivenArgs + 1,
-                             BestSolution, BestCandidate, BestMatchArgExprs,
-                             FoundAmbiguity, Caller, isFunctionArgument,
-                             outerBuilder)) {
+                              RequiredType, ArgValues, Labels, NumGivenArgs + 1,
+                              BestSolution, BestCandidate, BestMatchArgExprs,
+                              FoundAmbiguity, Caller, isFunctionArgument,
+                              outerBuilder)) {
             bestMatchIdx = i;
          }
       }
@@ -1447,7 +1439,8 @@ sema::resolveCandidateSet(SemaPass &Sema,
    // Apply implicit argument conversions.
    // Note: there can still be errors here if there were any template parameters
    // to resolve.
-   if (applyConversions(Sema, CandSet, *BestCandidate, BestMatchArgExprs, Caller)) {
+   if (applyConversions(Sema, CandSet, *BestCandidate, BestMatchArgExprs,
+                        Caller)) {
       return nullptr;
    }
 

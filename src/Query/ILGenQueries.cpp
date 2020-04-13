@@ -1,10 +1,10 @@
-#include "AST/Decl.h"
-#include "IL/Constants.h"
-#include "IL/ILBuilder.h"
-#include "ILGen/ILGenPass.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
-#include "QueryContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/ILBuilder.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -36,8 +36,8 @@ QueryResult CreateILModuleQuery::run()
       return fail();
    }
 
-   auto *ILMod = Mod->getILModule();
-   auto &ILGen = QC.Sema->getILGen();
+   auto* ILMod = Mod->getILModule();
+   auto& ILGen = QC.Sema->getILGen();
    ILGen.Builder.SetModule(ILMod);
 
    // Generate IL for the source files.
@@ -60,13 +60,13 @@ QueryResult GenerateILForContextQuery::run()
    }
 
    Status S = Done;
-   for (auto *D : DC->getDecls()) {
+   for (auto* D : DC->getDecls()) {
       switch (D->getKind()) {
       case Decl::FunctionDeclID:
       case Decl::MethodDeclID:
       case Decl::InitDeclID:
       case Decl::DeinitDeclID: {
-         auto *Fn = cast<CallableDecl>(D);
+         auto* Fn = cast<CallableDecl>(D);
          if (Fn->isTemplate()) {
             continue;
          }
@@ -79,7 +79,7 @@ QueryResult GenerateILForContextQuery::run()
          break;
       }
       case Decl::GlobalVarDeclID: {
-         auto *GV = cast<GlobalVarDecl>(D);
+         auto* GV = cast<GlobalVarDecl>(D);
          if (QC.GenerateLazyILGlobalDefinition(GV)) {
             S = DoneWithError;
             continue;
@@ -88,7 +88,7 @@ QueryResult GenerateILForContextQuery::run()
          break;
       }
       case Decl::FieldDeclID: {
-         auto *F = cast<FieldDecl>(D);
+         auto* F = cast<FieldDecl>(D);
          if (!F->isStatic()) {
             continue;
          }
@@ -103,7 +103,7 @@ QueryResult GenerateILForContextQuery::run()
       case Decl::StructDeclID:
       case Decl::ClassDeclID:
       case Decl::EnumDeclID: {
-         auto *R = cast<RecordDecl>(D);
+         auto* R = cast<RecordDecl>(D);
          if (R->isTemplate()) {
             continue;
          }
@@ -116,14 +116,14 @@ QueryResult GenerateILForContextQuery::run()
          break;
       }
       case Decl::ProtocolDeclID: {
-         auto *P = cast<ProtocolDecl>(D);
+         auto* P = cast<ProtocolDecl>(D);
          QC.Sema->getILGen().AssignProtocolMethodOffsets(P);
 
          break;
       }
       case Decl::ExtensionDeclID: {
          // Only visit protocol extensions if runtime generics are enabled.
-         auto *R = cast<ExtensionDecl>(D)->getExtendedRecord();
+         auto* R = cast<ExtensionDecl>(D)->getExtendedRecord();
          if (isa<ProtocolDecl>(R) && !QC.CI.getOptions().runtimeGenerics()) {
             continue;
          }
@@ -137,7 +137,7 @@ QueryResult GenerateILForContextQuery::run()
          break;
       }
 
-      if (auto *InnerDC = dyn_cast<DeclContext>(D)) {
+      if (auto* InnerDC = dyn_cast<DeclContext>(D)) {
          if (QC.GenerateILForContext(InnerDC)) {
             return fail();
          }
@@ -158,7 +158,7 @@ QueryResult GenerateRecordILQuery::run()
    }
 
    if (R->isExternal()) {
-      il::GlobalVariable *TI;
+      il::GlobalVariable* TI;
       if (QC.GetILTypeInfo(TI, R->getType())) {
          return fail();
       }
@@ -166,7 +166,7 @@ QueryResult GenerateRecordILQuery::run()
       return finish();
    }
 
-   auto &ILGen = QC.Sema->getILGen();
+   auto& ILGen = QC.Sema->getILGen();
 
    // Register type in the module.
    ILGen.ForwardDeclareRecord(R);
@@ -174,9 +174,9 @@ QueryResult GenerateRecordILQuery::run()
    // Make sure all fields, virtual methods and protocol implementations are
    // instantiated.
    if (R->isInstantiation()) {
-      SmallPtrSet<NamedDecl *, 4> DeclsToInstantiate;
-      for (auto &Decls : R->getAllNamedDecls()) {
-         for (auto *D : Decls.getSecond().getAsLookupResult()) {
+      SmallPtrSet<NamedDecl*, 4> DeclsToInstantiate;
+      for (auto& Decls : R->getAllNamedDecls()) {
+         for (auto* D : Decls.getSecond().getAsLookupResult()) {
             if (D->getDeclContext() == R)
                continue;
 
@@ -187,7 +187,7 @@ QueryResult GenerateRecordILQuery::run()
                break;
             case Decl::MethodDeclID:
             case Decl::InitDeclID: {
-               auto *M = cast<MethodDecl>(D);
+               auto* M = cast<MethodDecl>(D);
                if (M->isVirtualOrOverride() || M->isMemberwiseInitializer()) {
                   DeclsToInstantiate.insert(M);
                }
@@ -200,44 +200,44 @@ QueryResult GenerateRecordILQuery::run()
          }
       }
 
-      for (auto *D : DeclsToInstantiate) {
-         NamedDecl *Inst;
+      for (auto* D : DeclsToInstantiate) {
+         NamedDecl* Inst;
          if (QC.InstantiateTemplateMember(Inst, D, R)) {
             return fail();
          }
       }
    }
 
-   il::GlobalVariable *TI;
+   il::GlobalVariable* TI;
    if (QC.GetILTypeInfo(TI, R->getType())) {
       return fail();
    }
 
    // Generate protocol VTables.
    if (!isa<ProtocolDecl>(R)) {
-      auto Conformances = QC.Sema->Context.getConformanceTable()
-                                .getAllConformances(R);
+      auto Conformances
+          = QC.Sema->Context.getConformanceTable().getAllConformances(R);
 
-      for (auto *Conf : Conformances) {
+      for (auto* Conf : Conformances) {
          // FIXME into-query
          ILGen.GetOrCreatePTable(R, Conf->getProto());
       }
    }
 
    // Synthesize default- and memberwise initializers.
-   if (auto *S = dyn_cast<StructDecl>(R)) {
+   if (auto* S = dyn_cast<StructDecl>(R)) {
       ILGen.DefineDefaultInitializer(S);
 
-      auto *MemberwiseInit = S->getMemberwiseInitializer();
+      auto* MemberwiseInit = S->getMemberwiseInitializer();
       if (MemberwiseInit && MemberwiseInit->isSynthesized()) {
          ILGen.DefineMemberwiseInitializer(S);
       }
    }
 
    // Synthesize deinitializer.
-   if (auto *Deinit = R->getDeinitializer()) {
+   if (auto* Deinit = R->getDeinitializer()) {
       if (Deinit->isSynthesized()) {
-         il::Function *F;
+         il::Function* F;
          if (QC.GetILFunction(F, Deinit)) {
             return fail();
          }
@@ -251,7 +251,7 @@ QueryResult GenerateRecordILQuery::run()
    }
 
    // Synthesize derived conformances.
-   const RecordMetaInfo *Meta;
+   const RecordMetaInfo* Meta;
    if (auto Err = QC.GetRecordMeta(Meta, R)) {
       return Query::finish(Err);
    }
@@ -277,9 +277,9 @@ QueryResult GenerateRecordILQuery::run()
 
 QueryResult GetILFunctionQuery::run()
 {
-   auto &ILGen = QC.Sema->getILGen();
+   auto& ILGen = QC.Sema->getILGen();
    if (auto Err = QC.PrepareDeclInterface(C)) {
-       return Query::finish(Err);
+      return Query::finish(Err);
    }
 
    return finish(ILGen.DeclareFunction(C));
@@ -287,7 +287,7 @@ QueryResult GetILFunctionQuery::run()
 
 QueryResult GetILGlobalQuery::run()
 {
-   auto &ILGen = QC.Sema->getILGen();
+   auto& ILGen = QC.Sema->getILGen();
    if (auto Err = QC.PrepareDeclInterface(GV)) {
       return Query::finish(Err);
    }
@@ -304,7 +304,7 @@ QueryResult GenerateILFunctionBodyQuery::run()
       return fail();
    }
 
-   auto &ILGen = QC.Sema->getILGen();
+   auto& ILGen = QC.Sema->getILGen();
    if (C->shouldBeSpecialized()) {
       ILGen.SpecializeFunction(C->getBodyTemplate(), C);
       return finish();
@@ -321,7 +321,7 @@ QueryResult GenerateILFunctionBodyQuery::run()
       return fail();
    }
 
-   if (auto *M = dyn_cast<MethodDecl>(C)) {
+   if (auto* M = dyn_cast<MethodDecl>(C)) {
       if (M->isProtocolRequirement()) {
          return finish();
       }
@@ -347,9 +347,9 @@ QueryResult GenerateLazyILGlobalDefinitionQuery::run()
       return finish();
    }
 
-   auto &ILGen = QC.Sema->getILGen();
+   auto& ILGen = QC.Sema->getILGen();
 
-   il::GlobalVariable *G;
+   il::GlobalVariable* G;
    if (QC.GetILGlobal(G, GV)) {
       return fail();
    }
@@ -360,9 +360,9 @@ QueryResult GenerateLazyILGlobalDefinitionQuery::run()
 
 QueryResult GetBoolValueQuery::run()
 {
-   il::Constant *C = this->C;
+   il::Constant* C = this->C;
    if (AllowWrapperTypes && C->getType()->isRecordType()) {
-      auto *R = C->getType()->getRecord();
+      auto* R = C->getType()->getRecord();
       if (!QC.IsBuiltinBoolType(R)) {
          return fail();
       }
@@ -370,7 +370,7 @@ QueryResult GetBoolValueQuery::run()
       C = cast<il::ConstantStruct>(C)->getElements().front();
    }
 
-   auto *CI = dyn_cast<il::ConstantInt>(C);
+   auto* CI = dyn_cast<il::ConstantInt>(C);
    if (!CI) {
       return fail();
    }
@@ -380,9 +380,9 @@ QueryResult GetBoolValueQuery::run()
 
 QueryResult GetIntValueQuery::run()
 {
-   il::Constant *C = this->C;
+   il::Constant* C = this->C;
    if (AllowWrapperTypes && C->getType()->isRecordType()) {
-      auto *R = C->getType()->getRecord();
+      auto* R = C->getType()->getRecord();
       if (!QC.IsBuiltinIntegerType(R)) {
          return fail();
       }
@@ -390,7 +390,7 @@ QueryResult GetIntValueQuery::run()
       C = cast<il::ConstantStruct>(C)->getElements().front();
    }
 
-   auto *CI = dyn_cast<il::ConstantInt>(C);
+   auto* CI = dyn_cast<il::ConstantInt>(C);
    if (!CI) {
       return fail();
    }
@@ -400,7 +400,7 @@ QueryResult GetIntValueQuery::run()
 
 QueryResult GetStringValueQuery::run()
 {
-   auto *CS = dyn_cast<il::ConstantString>(C);
+   auto* CS = dyn_cast<il::ConstantString>(C);
    if (!CS) {
       return fail();
    }

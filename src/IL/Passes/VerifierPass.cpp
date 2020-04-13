@@ -1,12 +1,12 @@
-#include "VerifierPass.h"
+#include "cdotc/IL/Passes/VerifierPass.h"
 
-#include "Basic/CastKind.h"
-#include "IL/Constants.h"
-#include "IL/Writer/ModuleWriter.h"
+#include "cdotc/Basic/CastKind.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Writer/ModuleWriter.h"
 
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
-#include <IL/Instructions.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::support;
 
@@ -43,7 +43,7 @@ void VerifierPass::emitError(GlobalVariable const& G)
    Writer.WriteTo(llvm::outs());
 }
 
-void VerifierPass::emitError(BasicBlock const &B)
+void VerifierPass::emitError(BasicBlock const& B)
 {
    emitError(*B.getParent());
    llvm::outs() << "\n   ";
@@ -52,9 +52,9 @@ void VerifierPass::emitError(BasicBlock const &B)
    Writer.WriteBasicBlockDeclTo(llvm::outs());
 }
 
-void VerifierPass::visitGlobals(il::Module &M)
+void VerifierPass::visitGlobals(il::Module& M)
 {
-   for (const auto &G : M.getGlobalList())
+   for (const auto& G : M.getGlobalList())
       visitGlobalVariable(G);
 
    if (!IsValid) {
@@ -93,18 +93,18 @@ void VerifierPass::checkOperandAccessibility(il::Instruction const& I)
    }
 }
 
-void VerifierPass::visitGlobalVariable(GlobalVariable const &G)
+void VerifierPass::visitGlobalVariable(GlobalVariable const& G)
 {
    if (auto Init = G.getInitializer()) {
-      errorIf(!typesCompatible(Init->getType(),
-                               G.getType()->getReferencedType()),
-              "global initializer type does not equal global type", G);
+      errorIf(
+          !typesCompatible(Init->getType(), G.getType()->getReferencedType()),
+          "global initializer type does not equal global type", G);
    }
 }
 
 void VerifierPass::run()
 {
-   for (const auto &BB : F->getBasicBlocks())
+   for (const auto& BB : F->getBasicBlocks())
       visitBasicBlock(BB);
 
    if (!IsValid)
@@ -113,14 +113,14 @@ void VerifierPass::run()
    F->setVerified(true);
 }
 
-void VerifierPass::visitBasicBlock(BasicBlock const &B)
+void VerifierPass::visitBasicBlock(BasicBlock const& B)
 {
    errorIf(!B.getTerminator(), "basic block does not have a terminator!", B);
 
    size_t i = 0;
    size_t numInsts = B.getInstructions().size();
 
-   for (const auto &I : B.getInstructions()) {
+   for (const auto& I : B.getInstructions()) {
       checkOperandAccessibility(I);
       visit(I);
 
@@ -131,37 +131,29 @@ void VerifierPass::visitBasicBlock(BasicBlock const &B)
    }
 }
 
-
 void VerifierPass::visitAllocaInst(AllocaInst const& I)
 {
    errorIf((I.getType()->getReferencedType()->isVoidType()),
            "allocated type cannot be void", I);
-   errorIf(I.getAlignment() != 1 && I.getAlignment() % 2 != 0, "invalid "
-      "alignment", I);
+   errorIf(I.getAlignment() != 1 && I.getAlignment() % 2 != 0,
+           "invalid "
+           "alignment",
+           I);
 }
 
-void VerifierPass::visitAllocBoxInst(const il::AllocBoxInst &I)
+void VerifierPass::visitAllocBoxInst(const il::AllocBoxInst& I)
 {
    errorIf((I.getType()->getReferencedType()->isVoidType()),
            "allocated type cannot be void", I);
 }
 
-void VerifierPass::visitDeallocInst(const il::DeallocInst &I)
-{
+void VerifierPass::visitDeallocInst(const il::DeallocInst& I) {}
 
-}
+void VerifierPass::visitDeallocBoxInst(const il::DeallocBoxInst& I) {}
 
-void VerifierPass::visitDeallocBoxInst(const il::DeallocBoxInst &I)
-{
+void VerifierPass::visitLambdaInitInst(LambdaInitInst const& I) {}
 
-}
-
-void VerifierPass::visitLambdaInitInst(LambdaInitInst const& I)
-{
-   
-}
-
-void VerifierPass::visitAssignInst(const AssignInst &I)
+void VerifierPass::visitAssignInst(const AssignInst& I)
 {
    auto dst = I.getDst()->getType();
    auto src = I.getSrc()->getType();
@@ -179,7 +171,7 @@ void VerifierPass::visitAssignInst(const AssignInst &I)
    }
 }
 
-void  VerifierPass::visitStoreInst(StoreInst const& I)
+void VerifierPass::visitStoreInst(StoreInst const& I)
 {
    auto dst = I.getDst()->getType();
    auto src = I.getSrc()->getType();
@@ -199,7 +191,7 @@ void  VerifierPass::visitStoreInst(StoreInst const& I)
    }
 }
 
-void VerifierPass::visitInitInst(const InitInst &I)
+void VerifierPass::visitInitInst(const InitInst& I)
 {
    auto dst = I.getDst()->getType();
    auto src = I.getSrc()->getType();
@@ -217,93 +209,65 @@ void VerifierPass::visitInitInst(const InitInst &I)
    }
 }
 
-static bool isRetainable(Value *V)
+static bool isRetainable(Value* V)
 {
    return V->getType()->isRefcounted() || V->getType()->isBoxType();
 }
 
-void VerifierPass::visitStrongRetainInst(const il::StrongRetainInst &I)
+void VerifierPass::visitStrongRetainInst(const il::StrongRetainInst& I)
 {
    errorIf(!isRetainable(I.getTarget()), "value is not retainable", I);
 }
 
-void VerifierPass::visitStrongReleaseInst(const il::StrongReleaseInst &I)
+void VerifierPass::visitStrongReleaseInst(const il::StrongReleaseInst& I)
 {
    errorIf(!isRetainable(I.getTarget()), "value is not releasable", I);
 }
 
-void VerifierPass::visitWeakRetainInst(const il::WeakRetainInst &I)
+void VerifierPass::visitWeakRetainInst(const il::WeakRetainInst& I)
 {
    errorIf(!isRetainable(I.getTarget()), "value is not retainable", I);
 }
 
-void VerifierPass::visitWeakReleaseInst(const il::WeakReleaseInst &I)
+void VerifierPass::visitWeakReleaseInst(const il::WeakReleaseInst& I)
 {
    errorIf(!isRetainable(I.getTarget()), "value is not releasable", I);
 }
 
-void VerifierPass::visitMoveInst(const il::MoveInst &I)
-{
+void VerifierPass::visitMoveInst(const il::MoveInst& I) {}
 
-}
+void VerifierPass::visitBeginBorrowInst(const BeginBorrowInst& I) {}
 
-void VerifierPass::visitBeginBorrowInst(const BeginBorrowInst &I)
-{
-
-}
-
-void VerifierPass::visitEndBorrowInst(const EndBorrowInst &I)
-{
-
-}
+void VerifierPass::visitEndBorrowInst(const EndBorrowInst& I) {}
 
 void VerifierPass::visitGEPInst(GEPInst const& I)
 {
-   errorIf(!I.getIndex()->getType()->isIntegerType(), "gep index must be "
-      "integral", I);
+   errorIf(!I.getIndex()->getType()->isIntegerType(),
+           "gep index must be "
+           "integral",
+           I);
 }
 
-void VerifierPass::visitCaptureExtractInst(const CaptureExtractInst &I)
-{
+void VerifierPass::visitCaptureExtractInst(const CaptureExtractInst& I) {}
 
-}
+void VerifierPass::visitFieldRefInst(FieldRefInst const& I) {}
 
-void VerifierPass::visitFieldRefInst(FieldRefInst const& I)
-{
-   
-}
+void VerifierPass::visitTupleExtractInst(TupleExtractInst const& I) {}
 
-void  VerifierPass::visitTupleExtractInst(TupleExtractInst const& I)
-{
-   
-}
+void VerifierPass::visitEnumExtractInst(const EnumExtractInst& I) {}
 
-void VerifierPass::visitEnumExtractInst(const EnumExtractInst &I)
-{
+void VerifierPass::visitEnumRawValueInst(EnumRawValueInst const& I) {}
 
-}
-
-void  VerifierPass::visitEnumRawValueInst(EnumRawValueInst const& I)
-{
-   
-}
-
-void  VerifierPass::visitLoadInst(LoadInst const& I)
+void VerifierPass::visitLoadInst(LoadInst const& I)
 {
    auto OpType = I.getOperand(0)->getType();
    errorIf(!OpType->isReferenceType() && !OpType->isPointerType(),
            "cannot load value", I);
 }
 
-void VerifierPass::visitAddrOfInst(AddrOfInst const& I)
-{
+void VerifierPass::visitAddrOfInst(AddrOfInst const& I) {}
 
-}
-
-void VerifierPass::visitPtrToLvalueInst(const PtrToLvalueInst &I)
-{
-
-}
+void VerifierPass::visitPtrToLvalueInst(const PtrToLvalueInst& I) {}
 
 void VerifierPass::visitRetInst(RetInst const& I)
 {
@@ -318,7 +282,7 @@ void VerifierPass::visitRetInst(RetInst const& I)
    }
 }
 
-void VerifierPass::visitYieldInst(const il::YieldInst &I)
+void VerifierPass::visitYieldInst(const il::YieldInst& I)
 {
    auto func = I.getParent()->getParent();
    if (auto Val = I.getYieldedValue()) {
@@ -331,48 +295,42 @@ void VerifierPass::visitYieldInst(const il::YieldInst &I)
    }
 }
 
-void VerifierPass::visitThrowInst(ThrowInst const& I)
-{
+void VerifierPass::visitThrowInst(ThrowInst const& I) {}
 
-}
+void VerifierPass::visitRethrowInst(const il::RethrowInst& I) {}
 
-void VerifierPass::visitRethrowInst(const il::RethrowInst &I)
-{
-
-}
-
-void VerifierPass::visitUnreachableInst(UnreachableInst const& I)
-{
-
-}
+void VerifierPass::visitUnreachableInst(UnreachableInst const& I) {}
 
 void VerifierPass::visitBrInst(BrInst const& I)
 {
    if (auto Cond = I.getCondition()) {
-      errorIf(!Cond->getType()->isInt1Ty(), "condition must have i1 "
-         "type", I);
+      errorIf(!Cond->getType()->isInt1Ty(),
+              "condition must have i1 "
+              "type",
+              I);
    }
 
    if (auto Br = I.getTargetBranch()) {
-      auto &NeededArgs = Br->getArgs();
+      auto& NeededArgs = Br->getArgs();
       auto GivenArgs = I.getTargetArgs();
 
       auto InstFn = I.getParent()->getParent();
       auto BBFn = Br->getParent();
 
-      errorIf(InstFn != BBFn, "cannot branch to basic block in different "
-         "function", I);
+      errorIf(InstFn != BBFn,
+              "cannot branch to basic block in different "
+              "function",
+              I);
 
       if (NeededArgs.size() != GivenArgs.size()) {
-         errorIf(true, "invalid number of arguments passed to br", I,
-                 *Br);
+         errorIf(true, "invalid number of arguments passed to br", I, *Br);
 
          return;
       }
 
       size_t i = 0;
-      for (const auto &needed : NeededArgs) {
-         auto &given = GivenArgs[i];
+      for (const auto& needed : NeededArgs) {
+         auto& given = GivenArgs[i];
 
          errorIf(!typesCompatible(needed.getType(), given->getType()),
                  "invalid argument type", I, *Br);
@@ -381,25 +339,26 @@ void VerifierPass::visitBrInst(BrInst const& I)
       }
    }
    if (auto Else = I.getElseBranch()) {
-      auto &NeededArgs = Else->getArgs();
+      auto& NeededArgs = Else->getArgs();
       auto GivenArgs = I.getElseArgs();
 
       auto InstFn = I.getParent()->getParent();
       auto BBFn = Else->getParent();
 
-      errorIf(InstFn != BBFn, "cannot branch to basic block in different "
-         "function", I);
+      errorIf(InstFn != BBFn,
+              "cannot branch to basic block in different "
+              "function",
+              I);
 
       if (NeededArgs.size() != GivenArgs.size()) {
-         errorIf(true, "invalid number of arguments passed to br", I,
-                 *Else);
+         errorIf(true, "invalid number of arguments passed to br", I, *Else);
 
          return;
       }
 
       size_t i = 0;
-      for (const auto &needed : NeededArgs) {
-         auto &given = GivenArgs[i];
+      for (const auto& needed : NeededArgs) {
+         auto& given = GivenArgs[i];
 
          errorIf(!typesCompatible(needed.getType(), given->getType()),
                  "invalid argument type", I, *Else);
@@ -411,34 +370,38 @@ void VerifierPass::visitBrInst(BrInst const& I)
 
 void VerifierPass::visitSwitchInst(SwitchInst const& I)
 {
-   errorIf(!I.getSwitchVal()->getType()->isIntegerType(), "switch type must be "
-      "integral", I);
+   errorIf(!I.getSwitchVal()->getType()->isIntegerType(),
+           "switch type must be "
+           "integral",
+           I);
 
    errorIf(!I.getDefault(), "no default destination provided for switch", I);
 
    auto InstFn = I.getParent()->getParent();
 
    llvm::SmallDenseSet<uint64_t> CaseVals;
-   for (const auto &C : I.getCases()) {
+   for (const auto& C : I.getCases()) {
       if (C.first) {
          errorIf(!CaseVals.insert(C.first->getZExtValue()).second,
-                 "duplicate case value " + std::to_string(
-                    C.first->getZExtValue()),
+                 "duplicate case value "
+                     + std::to_string(C.first->getZExtValue()),
                  I);
       }
 
       auto BBFn = C.second->getParent();
-      errorIf(InstFn != BBFn, "cannot branch to basic block in different "
-         "function", I);
+      errorIf(InstFn != BBFn,
+              "cannot branch to basic block in different "
+              "function",
+              I);
    }
 }
 
 namespace {
 
-bool compatibleArgCount(BasicBlock::ArgList const &Needed,
-                        llvm::ArrayRef<il::Value *> Given,
-                        bool vararg,
-                        bool omitSelf = false) {
+bool compatibleArgCount(BasicBlock::ArgList const& Needed,
+                        llvm::ArrayRef<il::Value*> Given, bool vararg,
+                        bool omitSelf = false)
+{
    auto neededCnt = Needed.size();
    auto givenCnt = Given.size();
 
@@ -454,7 +417,8 @@ bool compatibleArgCount(BasicBlock::ArgList const &Needed,
 
 LLVM_ATTRIBUTE_UNUSED
 bool compatibleArgCount(FunctionType const* FuncTy,
-                        llvm::ArrayRef<il::Value *> Given) {
+                        llvm::ArrayRef<il::Value*> Given)
+{
    bool vararg = FuncTy->isCStyleVararg();
    auto neededCnt = FuncTy->getParamTypes().size();
    auto givenCnt = Given.size();
@@ -474,10 +438,14 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    auto NormalBBFn = I.getNormalContinuation()->getParent();
    auto UnwindBBFn = I.getLandingPad()->getParent();
 
-   errorIf(InstFn != NormalBBFn, "cannot branch to basic block in different "
-      "function", I);
-   errorIf(InstFn != UnwindBBFn, "cannot branch to basic block in different "
-      "function", I);
+   errorIf(InstFn != NormalBBFn,
+           "cannot branch to basic block in different "
+           "function",
+           I);
+   errorIf(InstFn != UnwindBBFn,
+           "cannot branch to basic block in different "
+           "function",
+           I);
 
    auto F = I.getCalledFunction();
    if (!F)
@@ -486,7 +454,7 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    errorIf(F->getParent() != I.getParent()->getParent()->getParent(),
            "referencing function in a different module", I, *F);
 
-   auto &NeededArgs = F->getEntryBlock()->getArgs();
+   auto& NeededArgs = F->getEntryBlock()->getArgs();
    auto GivenArgs = I.getArgs();
 
    if (!compatibleArgCount(NeededArgs, GivenArgs, F->isCStyleVararg())) {
@@ -495,8 +463,8 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    }
 
    size_t i = 0;
-   for (const auto &needed : NeededArgs) {
-      auto &given = GivenArgs[i];
+   for (const auto& needed : NeededArgs) {
+      auto& given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
 
@@ -504,14 +472,14 @@ void VerifierPass::visitInvokeInst(InvokeInst const& I)
    }
 }
 
-void VerifierPass::visitVirtualInvokeInst(const il::VirtualInvokeInst &I)
+void VerifierPass::visitVirtualInvokeInst(const il::VirtualInvokeInst& I)
 {
    auto NeededArgs = I.getFunctionType()->getParamTypes().drop_front(1);
    auto GivenArgs = I.getArgs();
 
    size_t i = 0;
-   for (const auto &needed : NeededArgs) {
-      auto &given = GivenArgs[i];
+   for (const auto& needed : NeededArgs) {
+      auto& given = GivenArgs[i];
       errorIf(!typesCompatible(needed, given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
 
@@ -519,20 +487,11 @@ void VerifierPass::visitVirtualInvokeInst(const il::VirtualInvokeInst &I)
    }
 }
 
-void VerifierPass::visitLandingPadInst(LandingPadInst const& I)
-{
+void VerifierPass::visitLandingPadInst(LandingPadInst const& I) {}
 
-}
+void VerifierPass::visitIntrinsicCallInst(IntrinsicCallInst const& I) {}
 
-void VerifierPass::visitIntrinsicCallInst(IntrinsicCallInst const& I)
-{
-
-}
-
-void VerifierPass::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
-{
-
-}
+void VerifierPass::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst& I) {}
 
 void VerifierPass::visitCallInst(CallInst const& I)
 {
@@ -543,7 +502,7 @@ void VerifierPass::visitCallInst(CallInst const& I)
    errorIf(F->getParent() != I.getParent()->getParent()->getParent(),
            "referencing function in a different module", I, *F);
 
-   auto &NeededArgs = F->getEntryBlock()->getArgs();
+   auto& NeededArgs = F->getEntryBlock()->getArgs();
    auto GivenArgs = I.getArgs();
 
    if (!compatibleArgCount(NeededArgs, GivenArgs, F->isCStyleVararg())) {
@@ -552,8 +511,8 @@ void VerifierPass::visitCallInst(CallInst const& I)
    }
 
    size_t i = 0;
-   for (const auto &needed : NeededArgs) {
-      auto &given = GivenArgs[i];
+   for (const auto& needed : NeededArgs) {
+      auto& given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I, *F);
 
@@ -561,14 +520,14 @@ void VerifierPass::visitCallInst(CallInst const& I)
    }
 }
 
-void  VerifierPass::visitVirtualCallInst(VirtualCallInst const& I)
+void VerifierPass::visitVirtualCallInst(VirtualCallInst const& I)
 {
    auto NeededArgs = I.getFunctionType()->getParamTypes().drop_front(1);
    auto GivenArgs = I.getArgs();
 
    size_t i = 0;
-   for (const auto &needed : NeededArgs) {
-      auto &given = GivenArgs[i];
+   for (const auto& needed : NeededArgs) {
+      auto& given = GivenArgs[i];
       errorIf(!typesCompatible(needed, given->getType()),
               "invalid argument type for argument " + std::to_string(i), I);
 
@@ -576,18 +535,15 @@ void  VerifierPass::visitVirtualCallInst(VirtualCallInst const& I)
    }
 }
 
-void  VerifierPass::visitLambdaCallInst(LambdaCallInst const& I)
-{
+void VerifierPass::visitLambdaCallInst(LambdaCallInst const& I) {}
 
-}
-
-void  VerifierPass::visitStructInitInst(StructInitInst const& I)
+void VerifierPass::visitStructInitInst(StructInitInst const& I)
 {
    auto F = I.getCalledFunction();
    errorIf(F->getParent() != I.getParent()->getParent()->getParent(),
            "referencing function in a different module", I, *F);
 
-   auto &NeededArgs = F->getEntryBlock()->getArgs();
+   auto& NeededArgs = F->getEntryBlock()->getArgs();
    auto GivenArgs = I.getArgs();
 
    if (!compatibleArgCount(NeededArgs, GivenArgs, F->isCStyleVararg(), true)) {
@@ -598,13 +554,13 @@ void  VerifierPass::visitStructInitInst(StructInitInst const& I)
    size_t i = 0;
    bool first = true;
 
-   for (const auto &needed : NeededArgs) {
+   for (const auto& needed : NeededArgs) {
       if (first) {
          first = false;
          continue;
       }
 
-      auto &given = GivenArgs[i];
+      auto& given = GivenArgs[i];
       errorIf(!typesCompatible(needed.getType(), given->getType()),
               "invalid argument type for argument " + std::to_string(i), I, *F);
 
@@ -612,15 +568,9 @@ void  VerifierPass::visitStructInitInst(StructInitInst const& I)
    }
 }
 
-void VerifierPass::visitUnionInitInst(UnionInitInst const& I)
-{
+void VerifierPass::visitUnionInitInst(UnionInitInst const& I) {}
 
-}
-
-void VerifierPass::visitEnumInitInst(EnumInitInst const& I)
-{
-
-}
+void VerifierPass::visitEnumInitInst(EnumInitInst const& I) {}
 
 namespace {
 
@@ -628,25 +578,29 @@ bool hasValidBinOpType(Value const* V)
 {
    auto ty = V->getType();
    switch (ty->getTypeID()) {
-      case Type::BuiltinTypeID:
-         return ty->isIntegerType() || ty->isFPType();
-      case Type::PointerTypeID:
-      case Type::MutablePointerTypeID:
-      case Type::FunctionTypeID:
-         return true;
-      default:
-         return false;
+   case Type::BuiltinTypeID:
+      return ty->isIntegerType() || ty->isFPType();
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::FunctionTypeID:
+      return true;
+   default:
+      return false;
    }
 }
 
 } // anonymous namespace
 
-void VerifierPass::visitBinaryOperatorInst(const BinaryOperatorInst &I)
+void VerifierPass::visitBinaryOperatorInst(const BinaryOperatorInst& I)
 {
    using OP = BinaryOperatorInst::OpCode;
 
    switch (I.getOpCode()) {
-   case OP::Add: case OP::Sub: case OP::Mul: case OP::Div: case OP::Mod:
+   case OP::Add:
+   case OP::Sub:
+   case OP::Mul:
+   case OP::Div:
+   case OP::Mod:
       errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);
       errorIf(!hasValidBinOpType(I.getOperand(1)), "invalid operand type", I);
       errorIf(!typesCompatible(I.getOperand(0)->getType(),
@@ -659,7 +613,11 @@ void VerifierPass::visitBinaryOperatorInst(const BinaryOperatorInst &I)
       errorIf(!hasValidBinOpType(I.getOperand(1)), "invalid operand type", I);
 
       break;
-   case OP::And: case OP::Or: case OP::Xor: case OP::Shl: case OP::AShr:
+   case OP::And:
+   case OP::Or:
+   case OP::Xor:
+   case OP::Shl:
+   case OP::AShr:
    case OP::LShr:
       errorIf(!I.getOperand(0)->getType()->isIntegerType(),
               "invalid operand type", I);
@@ -673,16 +631,16 @@ void VerifierPass::visitBinaryOperatorInst(const BinaryOperatorInst &I)
    }
 }
 
-void VerifierPass::visitCompInst(const CompInst &I)
+void VerifierPass::visitCompInst(const CompInst& I)
 {
    errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);
    errorIf(!hasValidBinOpType(I.getOperand(1)), "invalid operand type", I);
-   errorIf(!typesCompatible(I.getOperand(0)->getType(),
-                            I.getOperand(1)->getType()),
-           "operands are not of the same type", I);
+   errorIf(
+       !typesCompatible(I.getOperand(0)->getType(), I.getOperand(1)->getType()),
+       "operands are not of the same type", I);
 }
 
-void VerifierPass::visitUnaryOperatorInst(const UnaryOperatorInst &I)
+void VerifierPass::visitUnaryOperatorInst(const UnaryOperatorInst& I)
 {
    errorIf(!hasValidBinOpType(I.getOperand(0)), "invalid operand type", I);
 }
@@ -690,31 +648,29 @@ void VerifierPass::visitUnaryOperatorInst(const UnaryOperatorInst &I)
 static bool isValidBitCastType(QualType Ty)
 {
    return Ty->isPointerType() || Ty->isReferenceType() || Ty->isClass()
-          || Ty->isArrayType() || Ty->isMetaType()
-          || Ty->isThinFunctionTy();
+          || Ty->isArrayType() || Ty->isMetaType() || Ty->isThinFunctionTy();
 }
 
 void VerifierPass::visitBitCastInst(BitCastInst const& I)
 {
    errorIf(!isValidBitCastType(I.getType())
-           || !isValidBitCastType(I.getOperand(0)->getType()),
+               || !isValidBitCastType(I.getOperand(0)->getType()),
            "bitcast type must be a pointer type", I);
 }
 
-void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
+void VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
 {
    auto from = I.getOperand(0)->getType();
    auto to = I.getType();
 
    switch (I.getKind()) {
    case CastKind::IntToPtr:
-      errorIf(!from->isIntegerType(),"inttoptr operand must be integral", I);
+      errorIf(!from->isIntegerType(), "inttoptr operand must be integral", I);
       errorIf(!isValidBitCastType(to), "not a pointer type", I);
       break;
    case CastKind::PtrToInt:
       errorIf(!to->isIntegerType(), "ptrtoint result type must be integral", I);
-      errorIf(!isValidBitCastType(from),
-              "ptrtoint operand must be pointer", I);
+      errorIf(!isValidBitCastType(from), "ptrtoint operand must be pointer", I);
       break;
    case CastKind::IntToFP:
       errorIf(!from->isIntegerType(), "inttofp operand must be integral", I);
@@ -728,24 +684,30 @@ void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
       errorIf(!to->isIntegerType(), "not an integer type", I);
       errorIf(!from->isIntegerType(), "not an integer type", I);
 
-      errorIf(to->getBitwidth() < from->getBitwidth(), "ext result "
-         "bitwidth must be higher or equal", I);
+      errorIf(to->getBitwidth() < from->getBitwidth(),
+              "ext result "
+              "bitwidth must be higher or equal",
+              I);
 
       break;
    case CastKind::Trunc:
       errorIf(!to->isIntegerType(), "not an integer type", I);
       errorIf(!from->isIntegerType(), "not an integer type", I);
 
-      errorIf(to->getBitwidth() > from->getBitwidth(), "trunc result "
-         "bitwidth must be lower or equal", I);
+      errorIf(to->getBitwidth() > from->getBitwidth(),
+              "trunc result "
+              "bitwidth must be lower or equal",
+              I);
 
       break;
    case CastKind::SignFlip:
       errorIf(!to->isIntegerType(), "not an integer type", I);
       errorIf(!from->isIntegerType(), "not an integer type", I);
 
-      errorIf(to->isUnsigned() == from->isUnsigned(), "same sign on operand "
-         "and result types", I);
+      errorIf(to->isUnsigned() == from->isUnsigned(),
+              "same sign on operand "
+              "and result types",
+              I);
 
       errorIf(to->getBitwidth() != from->getBitwidth(),
               "sign cast to different bitwidth", I);
@@ -759,61 +721,47 @@ void  VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)
    }
 }
 
-void  VerifierPass::visitFPCastInst(FPCastInst const& I)
+void VerifierPass::visitFPCastInst(FPCastInst const& I)
 {
    auto from = I.getOperand(0)->getType();
    auto to = I.getType();
 
    switch (I.getKind()) {
-      case CastKind::FPExt:
-         errorIf(!to->isFPType(), "not a floating type", I);
-         errorIf(!from->isFPType(), "not a floating type", I);
+   case CastKind::FPExt:
+      errorIf(!to->isFPType(), "not a floating type", I);
+      errorIf(!from->isFPType(), "not a floating type", I);
 
-         errorIf(to->getPrecision()
-                 < from->getPrecision(),
-                 "fpext result bitwidth must be higher or equal", I);
+      errorIf(to->getPrecision() < from->getPrecision(),
+              "fpext result bitwidth must be higher or equal", I);
 
-         break;
-      case CastKind::FPTrunc:
-         errorIf(!to->isFPType(), "not a floating type", I);
-         errorIf(!from->isFPType(), "not a floating type", I);
+      break;
+   case CastKind::FPTrunc:
+      errorIf(!to->isFPType(), "not a floating type", I);
+      errorIf(!from->isFPType(), "not a floating type", I);
 
-         errorIf(to->getPrecision()
-                 > from->getPrecision(),
-                 "fpext result bitwidth must be higher or equal", I);
+      errorIf(to->getPrecision() > from->getPrecision(),
+              "fpext result bitwidth must be higher or equal", I);
 
-         break;
-      default:
-         llvm_unreachable("bad fp cast kind");
+      break;
+   default:
+      llvm_unreachable("bad fp cast kind");
    }
 }
 
-void VerifierPass::visitUnionCastInst(UnionCastInst const& I)
-{
+void VerifierPass::visitUnionCastInst(UnionCastInst const& I) {}
 
-}
+void VerifierPass::visitExistentialInitInst(ExistentialInitInst const& I) {}
 
-void VerifierPass::visitExistentialInitInst(ExistentialInitInst const& I)
-{
-
-}
-
-void VerifierPass::visitGenericInitInst(const GenericInitInst &I)
+void VerifierPass::visitGenericInitInst(const GenericInitInst& I)
 {
    errorIf(!I.getType()->isDependentRecordType(), "not a generic type", I);
 }
 
-void VerifierPass::visitExceptionCastInst(ExceptionCastInst const& I)
-{
+void VerifierPass::visitExceptionCastInst(ExceptionCastInst const& I) {}
 
-}
+void VerifierPass::visitDynamicCastInst(const DynamicCastInst& I) {}
 
-void  VerifierPass::visitDynamicCastInst(const DynamicCastInst &I)
-{
-
-}
-
-void VerifierPass::visitExistentialCastInst(const ExistentialCastInst &I)
+void VerifierPass::visitExistentialCastInst(const ExistentialCastInst& I)
 {
    switch (I.getKind()) {
    case CastKind::ExistentialCast:
@@ -827,15 +775,9 @@ void VerifierPass::visitExistentialCastInst(const ExistentialCastInst &I)
    }
 }
 
-void VerifierPass::visitDebugLocInst(const DebugLocInst &I)
-{
+void VerifierPass::visitDebugLocInst(const DebugLocInst& I) {}
 
-}
-
-void VerifierPass::visitDebugLocalInst(const DebugLocalInst &I)
-{
-
-}
+void VerifierPass::visitDebugLocalInst(const DebugLocalInst& I) {}
 
 } // namespace il
 } // namespace cdot

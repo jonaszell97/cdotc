@@ -5,8 +5,8 @@
 #include "tblgen/Value.h"
 
 #include <llvm/ADT/DenseMap.h>
-#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -20,27 +20,25 @@ using std::string;
 
 namespace {
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, std::string_view str)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, std::string_view str)
 {
    return OS << string(str);
 }
 
-std::ostream &operator<<(std::ostream &OS, StringRef str)
+std::ostream& operator<<(std::ostream& OS, StringRef str)
 {
    return OS << str.str();
 }
 
 class QueryDefEmitter {
    /// Reference to the record keeper.
-   RecordKeeper &RK;
+   RecordKeeper& RK;
 
    /// The stream to write to.
-   std::ostream &OS;
+   std::ostream& OS;
 
 public:
-   QueryDefEmitter(std::ostream &OS, RecordKeeper &RK)
-      : RK(RK), OS(OS)
-   {}
+   QueryDefEmitter(std::ostream& OS, RecordKeeper& RK) : RK(RK), OS(OS) {}
 
    void Emit();
 };
@@ -57,7 +55,7 @@ void QueryDefEmitter::Emit()
    std::vector<Record*> Queries;
    RK.getAllDefinitionsOf(RK.lookupClass("Query"), Queries);
 
-   for (auto *Q : Queries) {
+   for (auto* Q : Queries) {
       std::string Name = Q->getName();
       Name += "Query";
 
@@ -71,7 +69,7 @@ namespace {
 
 class QueryClassEmitter {
    /// The stream to write to.
-   std::ostream &OS;
+   std::ostream& OS;
 
    /// All query def's.
    std::vector<Record*> Queries;
@@ -79,8 +77,8 @@ class QueryClassEmitter {
    struct QueryParam {
       QueryParam(string Type, StringRef Name, StringRef DefaultVal,
                  bool InnerType, bool Excluded, bool Nullable)
-         : Type(Type), Name(std::move(Name)), DefaultVal(DefaultVal),
-           InnerType(InnerType), Excluded(Excluded), Nullable(Nullable)
+          : Type(Type), Name(std::move(Name)), DefaultVal(DefaultVal),
+            InnerType(InnerType), Excluded(Excluded), Nullable(Nullable)
       {
          this->Nullable |= DefaultVal == "nullptr";
       }
@@ -148,15 +146,19 @@ class QueryClassEmitter {
    };
 
    enum ParamKind {
-      Integer, QualType, Pointer, String, Other,
+      Integer,
+      QualType,
+      Pointer,
+      String,
+      Other,
    };
 
    ParamKind getParamKind(StringRef Str);
-   void appendParam(ParamKind K, std::ostream &OS,
-                    StringRef TypeName, StringRef VarName);
+   void appendParam(ParamKind K, std::ostream& OS, StringRef TypeName,
+                    StringRef VarName);
 
-   void appendString(ParamKind K, std::ostream &OS,
-                     StringRef TypeName, StringRef VarName);
+   void appendString(ParamKind K, std::ostream& OS, StringRef TypeName,
+                     StringRef VarName);
 
    bool shouldBeMoved(StringRef TypeName);
 
@@ -164,8 +166,7 @@ class QueryClassEmitter {
    llvm::DenseMap<Record*, QueryInfo> QueryMap;
 
 public:
-   QueryClassEmitter(RecordKeeper &RK, std::ostream &OS)
-      : OS(OS)
+   QueryClassEmitter(RecordKeeper& RK, std::ostream& OS) : OS(OS)
    {
       RK.getAllDefinitionsOf(RK.lookupClass("Query"), Queries);
       Setup();
@@ -183,10 +184,10 @@ private:
    void Setup();
 
    /// Query
-   void EmitDecl(Record *Query);
-   void EmitSimpleDecl(Record *Query, QueryInfo &Info);
+   void EmitDecl(Record* Query);
+   void EmitSimpleDecl(Record* Query, QueryInfo& Info);
 
-   void EmitImpl(Record *Query);
+   void EmitImpl(Record* Query);
    void EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries);
 
    /// Query Macros
@@ -197,7 +198,7 @@ private:
 
 void QueryClassEmitter::EmitQueryDecls()
 {
-   for (auto *Q : Queries) {
+   for (auto* Q : Queries) {
       EmitDecl(Q);
    }
 }
@@ -206,63 +207,80 @@ void QueryClassEmitter::EmitQueryImpls()
 {
    EmitQueryClassImpls(Queries);
 
-   for (auto *Q : Queries) {
+   for (auto* Q : Queries) {
       EmitImpl(Q);
    }
 }
 
 void QueryClassEmitter::Setup()
 {
-   for (auto *Query : Queries) {
-      auto &Info = QueryMap[Query];
+   for (auto* Query : Queries) {
+      auto& Info = QueryMap[Query];
 
       Info.ClassName = Query->getName();
       Info.ClassName += "Query";
 
-      Info.Type = cast<StringLiteral>(Query->getFieldValue("type"))
-         ->getVal();
+      Info.Type = cast<StringLiteral>(Query->getFieldValue("type"))->getVal();
 
-      Info.GetReturnType = cast<StringLiteral>(
-         Query->getFieldValue("getReturnType"))->getVal();
-      Info.CustomKeyType = cast<StringLiteral>(
-         Query->getFieldValue("customKeyType"))->getVal();
-      Info.CustomGet = cast<CodeBlock>(Query->getFieldValue("customGet"))
-         ->getCode();
-      Info.CustomAssign = cast<CodeBlock>(Query->getFieldValue("customAssign"))
-         ->getCode();
-      Info.CustomHeaderCode = cast<CodeBlock>(
-         Query->getFieldValue("customHeaderCode"))->getCode();
-      Info.CustomPreReturnCode = cast<CodeBlock>(
-         Query->getFieldValue("customPreReturnCode"))->getCode();
-      Info.EarlyExitCode = cast<CodeBlock>(
-         Query->getFieldValue("earlyExitCode"))->getCode();
-      Info.ConstructorCode = cast<CodeBlock>(
-         Query->getFieldValue("constructorCode"))->getCode();
-      Info.PersistentState = cast<CodeBlock>(
-         Query->getFieldValue("persistentState"))->getCode();
-      Info.RefreshCondition = cast<CodeBlock>(
-         Query->getFieldValue("refreshCondition"))->getCode();
-      Info.SimpleQuery = cast<IntegerLiteral>(
-         Query->getFieldValue("simpleQuery"))->getVal() != 0;
-      Info.CanBeCached = cast<IntegerLiteral>(
-         Query->getFieldValue("canBeCached"))->getVal() != 0;
-      Info.CanBeSerialized = cast<IntegerLiteral>(
-         Query->getFieldValue("canBeSerialized"))->getVal() != 0;
-      Info.CanBeDependent = cast<IntegerLiteral>(
-         Query->getFieldValue("canBeDependent"))->getVal() != 0;
-      Info.ShouldMoveResult = cast<IntegerLiteral>(
-         Query->getFieldValue("shouldMoveResult"))->getVal() != 0;
-      Info.IgnoreCircularDependency = cast<IntegerLiteral>(
-         Query->getFieldValue("ignoreCircularDependency"))->getVal() != 0;
-      Info.Private = cast<IntegerLiteral>(
-         Query->getFieldValue("private"))->getVal() != 0;
-      Info.Infallible = cast<IntegerLiteral>(
-         Query->getFieldValue("infallible"))->getVal() != 0;
+      Info.GetReturnType
+          = cast<StringLiteral>(Query->getFieldValue("getReturnType"))
+                ->getVal();
+      Info.CustomKeyType
+          = cast<StringLiteral>(Query->getFieldValue("customKeyType"))
+                ->getVal();
+      Info.CustomGet
+          = cast<CodeBlock>(Query->getFieldValue("customGet"))->getCode();
+      Info.CustomAssign
+          = cast<CodeBlock>(Query->getFieldValue("customAssign"))->getCode();
+      Info.CustomHeaderCode
+          = cast<CodeBlock>(Query->getFieldValue("customHeaderCode"))
+                ->getCode();
+      Info.CustomPreReturnCode
+          = cast<CodeBlock>(Query->getFieldValue("customPreReturnCode"))
+                ->getCode();
+      Info.EarlyExitCode
+          = cast<CodeBlock>(Query->getFieldValue("earlyExitCode"))->getCode();
+      Info.ConstructorCode
+          = cast<CodeBlock>(Query->getFieldValue("constructorCode"))->getCode();
+      Info.PersistentState
+          = cast<CodeBlock>(Query->getFieldValue("persistentState"))->getCode();
+      Info.RefreshCondition
+          = cast<CodeBlock>(Query->getFieldValue("refreshCondition"))
+                ->getCode();
+      Info.SimpleQuery
+          = cast<IntegerLiteral>(Query->getFieldValue("simpleQuery"))->getVal()
+            != 0;
+      Info.CanBeCached
+          = cast<IntegerLiteral>(Query->getFieldValue("canBeCached"))->getVal()
+            != 0;
+      Info.CanBeSerialized
+          = cast<IntegerLiteral>(Query->getFieldValue("canBeSerialized"))
+                ->getVal()
+            != 0;
+      Info.CanBeDependent
+          = cast<IntegerLiteral>(Query->getFieldValue("canBeDependent"))
+                ->getVal()
+            != 0;
+      Info.ShouldMoveResult
+          = cast<IntegerLiteral>(Query->getFieldValue("shouldMoveResult"))
+                ->getVal()
+            != 0;
+      Info.IgnoreCircularDependency
+          = cast<IntegerLiteral>(
+                Query->getFieldValue("ignoreCircularDependency"))
+                ->getVal()
+            != 0;
+      Info.Private
+          = cast<IntegerLiteral>(Query->getFieldValue("private"))->getVal()
+            != 0;
+      Info.Infallible
+          = cast<IntegerLiteral>(Query->getFieldValue("infallible"))->getVal()
+            != 0;
 
-      auto *TrailingObjects = cast<ListLiteral>(
-         Query->getFieldValue("trailingObjects"));
+      auto* TrailingObjects
+          = cast<ListLiteral>(Query->getFieldValue("trailingObjects"));
 
-      for (auto *Val : TrailingObjects->getValues()) {
+      for (auto* Val : TrailingObjects->getValues()) {
          Info.TrailingObjects.push_back(cast<StringLiteral>(Val)->getVal());
       }
 
@@ -272,33 +290,39 @@ void QueryClassEmitter::Setup()
       llvm::raw_string_ostream ParamNoMoveOS(Info.ParamStrNoMove);
       llvm::raw_string_ostream ParamNoMoveNoTypeOS(Info.ParamStrNoMoveNoTypes);
       llvm::raw_string_ostream ParamNoExcludeOS(Info.ParamStrNoExclude);
-      llvm::raw_string_ostream ParamNoExcludeNoTypeOS(Info.ParamStrNoExcludeNoTypes);
+      llvm::raw_string_ostream ParamNoExcludeNoTypeOS(
+          Info.ParamStrNoExcludeNoTypes);
       llvm::raw_string_ostream FieldOS(Info.Fields);
 
-      auto &ParamInfo = Info.Params;
+      auto& ParamInfo = Info.Params;
 
       unsigned i = 0;
       unsigned j = 0;
 
       // Use a HashMap instead of a FoldingSet if there's a single key.
-      auto *ParamsVal = cast<ListLiteral>(Query->getFieldValue("parameters"));
+      auto* ParamsVal = cast<ListLiteral>(Query->getFieldValue("parameters"));
       Info.HashMap = ParamsVal->getValues().size() == 1 || Info.SimpleQuery;
 
-      for (auto *ParamVal : ParamsVal->getValues()) {
-         auto *Param = cast<RecordVal>(ParamVal)->getRecord();
+      for (auto* ParamVal : ParamsVal->getValues()) {
+         auto* Param = cast<RecordVal>(ParamVal)->getRecord();
 
-         StringRef Name = cast<StringLiteral>(Param->getFieldValue("name"))
-            ->getVal();
-         string Type = cast<StringLiteral>(Param->getFieldValue("type"))
-            ->getVal();
-         StringRef DefaultVal = cast<StringLiteral>(Param->getFieldValue("defaultVal"))
-            ->getVal();
-         bool InnerType = cast<IntegerLiteral>(Param->getFieldValue("isInnerType"))
-            ->getVal() != 0;
-         bool Exclude = cast<IntegerLiteral>(Param->getFieldValue("exclude"))
-            ->getVal() != 0;
-         bool Nullable = cast<IntegerLiteral>(Param->getFieldValue("nullable"))
-            ->getVal() != 0;
+         StringRef Name
+             = cast<StringLiteral>(Param->getFieldValue("name"))->getVal();
+         string Type
+             = cast<StringLiteral>(Param->getFieldValue("type"))->getVal();
+         StringRef DefaultVal
+             = cast<StringLiteral>(Param->getFieldValue("defaultVal"))
+                   ->getVal();
+         bool InnerType
+             = cast<IntegerLiteral>(Param->getFieldValue("isInnerType"))
+                   ->getVal()
+               != 0;
+         bool Exclude
+             = cast<IntegerLiteral>(Param->getFieldValue("exclude"))->getVal()
+               != 0;
+         bool Nullable
+             = cast<IntegerLiteral>(Param->getFieldValue("nullable"))->getVal()
+               != 0;
 
          if (Info.SimpleQuery && Type == "bool") {
             Type = "uint8_t";
@@ -307,15 +331,17 @@ void QueryClassEmitter::Setup()
          if (InnerType) {
             Type = Info.ClassName + "::" + Type;
          }
-         else if (Param->getBases().front().getBase()->getName() == "ArrayParam") {
+         else if (Param->getBases().front().getBase()->getName()
+                  == "ArrayParam") {
             Type = "llvm::ArrayRef<" + Type + ">";
          }
-         else if (Param->getBases().front().getBase()->getName() == "FunctionRefParam") {
+         else if (Param->getBases().front().getBase()->getName()
+                  == "FunctionRefParam") {
             Type = "llvm::function_ref<" + Type + ">";
          }
 
-         ParamInfo.emplace_back(Type, Name, DefaultVal,
-                                InnerType, Exclude, Nullable);
+         ParamInfo.emplace_back(Type, Name, DefaultVal, InnerType, Exclude,
+                                Nullable);
 
          if (i++ != 0) {
             ParamOS << ", ";
@@ -341,7 +367,8 @@ void QueryClassEmitter::Setup()
             ParamNoMoveOS << "const " << Type << " &" << Name;
 
             if (!Exclude) {
-               ParamNoExcludeOS << "const " << Type << " &" << Name;;
+               ParamNoExcludeOS << "const " << Type << " &" << Name;
+               ;
             }
          }
          else {
@@ -371,9 +398,9 @@ void QueryClassEmitter::Setup()
    }
 }
 
-void QueryClassEmitter::EmitDecl(Record *Query)
+void QueryClassEmitter::EmitDecl(Record* Query)
 {
-   auto &Info = QueryMap[Query];
+   auto& Info = QueryMap[Query];
 
    OS << "class " << Info.ClassName << ": public Query";
 
@@ -381,7 +408,7 @@ void QueryClassEmitter::EmitDecl(Record *Query)
       OS << ", public llvm::FoldingSetNode";
    }
 
-   for (auto &TO : Info.TrailingObjects) {
+   for (auto& TO : Info.TrailingObjects) {
       OS << ", llvm::TrailingObjects<" << TO << ">";
    }
 
@@ -395,7 +422,8 @@ void QueryClassEmitter::EmitDecl(Record *Query)
       << "   static bool classof(const Query *Q) "
          "{ return classofKind(Q->kind()); }\n"
       << "   static bool classofKind(Kind K) "
-         "{ return K == Kind::" << Info.ClassName << "ID; }\n\n";
+         "{ return K == Kind::"
+      << Info.ClassName << "ID; }\n\n";
 
    // result_type
    OS << "   using result_type = " << Info.GetReturnType << ";\n\n";
@@ -431,8 +459,7 @@ void QueryClassEmitter::EmitDecl(Record *Query)
    // C'tor.
    OS << "   " << Info.ClassName << "(QueryContext &QC"
       << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
-      << Info.ParamStrWithDefaultVals
-      << ");\n\n";
+      << Info.ParamStrWithDefaultVals << ");\n\n";
 
    // finish()
    if (Info.GetReturnType != "void") {
@@ -444,8 +471,8 @@ void QueryClassEmitter::EmitDecl(Record *Query)
          Result = "Result";
       }
 
-      OS << "   QueryResult finish(" << Info.Type << " "
-         << Result << ", Status St = Done);\n\n";
+      OS << "   QueryResult finish(" << Info.Type << " " << Result
+         << ", Status St = Done);\n\n";
    }
 
    OS << Info.Fields;
@@ -460,8 +487,7 @@ void QueryClassEmitter::EmitDecl(Record *Query)
       OS << "   void Profile(llvm::FoldingSetNodeID &ID) const;\n";
       OS << "   static void Profile(llvm::FoldingSetNodeID &ID"
          << (Info.ParamStrNoExclude.empty() ? "" : ", ")
-         << Info.ParamStrNoExclude
-         << ");\n\n";
+         << Info.ParamStrNoExclude << ");\n\n";
    }
 
    OS << "};\n\n";
@@ -472,26 +498,26 @@ QueryClassEmitter::ParamKind QueryClassEmitter::getParamKind(StringRef Str)
    if (Str.back() == '*')
       return Pointer;
 
-   return StringSwitch<ParamKind >(Str)
-      .Case("int", Integer)
-      .Case("unsigned", Integer)
-      .Case("bool", Integer)
-      .Case("char", Integer)
-      .Case("uint8_t", Integer)
-      .Case("int8_t", Integer)
-      .Case("uint16_t", Integer)
-      .Case("int16_t", Integer)
-      .Case("uint32_t", Integer)
-      .Case("int32_t", Integer)
-      .Case("uint64_t", Integer)
-      .Case("int64_t", Integer)
-      .Case("intptr_t", Integer)
-      .Case("uintptr_t", Integer)
-      .Case("size_t", Integer)
-      .Case("QualType", QualType)
-      .Case("StringRef", String)
-      .Case("std::string", String)
-      .Default(Other);
+   return StringSwitch<ParamKind>(Str)
+       .Case("int", Integer)
+       .Case("unsigned", Integer)
+       .Case("bool", Integer)
+       .Case("char", Integer)
+       .Case("uint8_t", Integer)
+       .Case("int8_t", Integer)
+       .Case("uint16_t", Integer)
+       .Case("int16_t", Integer)
+       .Case("uint32_t", Integer)
+       .Case("int32_t", Integer)
+       .Case("uint64_t", Integer)
+       .Case("int64_t", Integer)
+       .Case("intptr_t", Integer)
+       .Case("uintptr_t", Integer)
+       .Case("size_t", Integer)
+       .Case("QualType", QualType)
+       .Case("StringRef", String)
+       .Case("std::string", String)
+       .Default(Other);
 }
 
 bool QueryClassEmitter::shouldBeMoved(StringRef TypeName)
@@ -501,17 +527,16 @@ bool QueryClassEmitter::shouldBeMoved(StringRef TypeName)
    }
 
    return StringSwitch<bool>(TypeName)
-      .Case("std::string", true)
-      .Case("SingleLevelLookupResult", true)
-      .Case("MultiLevelLookupResult", true)
-      .Case("sema::MultiLevelFinalTemplateArgList", true)
-      .Default(false);
+       .Case("std::string", true)
+       .Case("SingleLevelLookupResult", true)
+       .Case("MultiLevelLookupResult", true)
+       .Case("sema::MultiLevelFinalTemplateArgList", true)
+       .Default(false);
 }
 
-void QueryClassEmitter::appendParam(ParamKind K,
-                                    std::ostream &OS,
-                                    StringRef TypeName,
-                                    StringRef VarName) {
+void QueryClassEmitter::appendParam(ParamKind K, std::ostream& OS,
+                                    StringRef TypeName, StringRef VarName)
+{
    switch (K) {
    case Integer:
       OS << "ID.AddInteger(" << VarName << ");";
@@ -561,26 +586,23 @@ void QueryClassEmitter::appendParam(ParamKind K,
    }
 }
 
-void QueryClassEmitter::appendString(ParamKind K,
-                                     std::ostream &OS,
-                                     StringRef TypeName,
-                                     StringRef VarName) {
+void QueryClassEmitter::appendString(ParamKind K, std::ostream& OS,
+                                     StringRef TypeName, StringRef VarName)
+{
    switch (K) {
    case Integer:
       OS << "OS << " << VarName << ";";
       break;
    case Pointer: {
       if (TypeName.find("DeclContext") != string::npos) {
-         OS << "OS << \"'\" << ("
-            << VarName << " ? " << VarName
+         OS << "OS << \"'\" << (" << VarName << " ? " << VarName
             << "->getNameAsString() : \"<null>\") << \"'\";";
       }
       else if (TypeName.find("DeclConstraint") != string::npos) {
          OS << "OS << " << VarName << ";";
       }
       else if (TypeName.find("Decl") != string::npos) {
-         OS << "OS << \"'\" << ("
-            << VarName << " ? " << VarName
+         OS << "OS << \"'\" << (" << VarName << " ? " << VarName
             << "->Decl::getNameAsString() : \"<null>\") << \"'\";";
       }
       else if (TypeName == "sema::FinalTemplateArgumentList*") {
@@ -613,7 +635,7 @@ void QueryClassEmitter::appendString(ParamKind K,
          OS << "   OS << ']';\n";
       }
       else if (TypeName.back() == '&') {
-         OS << "OS << &" << VarName  << ";";
+         OS << "OS << &" << VarName << ";";
       }
       else if (TypeName == "sema::MultiLevelFinalTemplateArgList") {
          OS << VarName << ".print(OS);";
@@ -640,20 +662,21 @@ void QueryClassEmitter::appendString(ParamKind K,
    }
 }
 
-void QueryClassEmitter::EmitImpl(Record *Query)
+void QueryClassEmitter::EmitImpl(Record* Query)
 {
-   auto &Info = QueryMap[Query];
+   auto& Info = QueryMap[Query];
 
    // C'tor.
    OS << Info.ClassName << "::" << Info.ClassName << "(QueryContext &QC"
-      << (Info.ParamStr.empty() ? "" : ", ")
-      << Info.ParamStr << ") "
-                          ": Query(" << Info.ClassName << "ID, QC)";
+      << (Info.ParamStr.empty() ? "" : ", ") << Info.ParamStr
+      << ") "
+         ": Query("
+      << Info.ClassName << "ID, QC)";
 
    std::string NullChecks;
    llvm::raw_string_ostream NullOS(NullChecks);
 
-   for (auto &P : Info.Params) {
+   for (auto& P : Info.Params) {
       OS << ", " << P.Name << "(";
 
       if (shouldBeMoved(P.Type)) {
@@ -673,8 +696,7 @@ void QueryClassEmitter::EmitImpl(Record *Query)
    }
 
    OS << " {\n"
-      << NullOS.str()
-      << Info.ConstructorCode << "\n"
+      << NullOS.str() << Info.ConstructorCode << "\n"
       << "}\n\n";
 
    // custom code.
@@ -685,15 +707,15 @@ void QueryClassEmitter::EmitImpl(Record *Query)
       OS << "void " << Info.ClassName << "::refresh()\n{\n";
       OS << R"__(
    if (Stat == Idle) return;
-   if ()__" << Info.RefreshCondition << R"__() Stat = Idle;
+   if ()__"
+         << Info.RefreshCondition << R"__() Stat = Idle;
 )__";
       OS << "\n}\n\n";
    }
 
    // get
    if (Info.GetReturnType != "void") {
-      OS << Info.GetReturnType << " " << Info.ClassName
-         << "::get() const\n{";
+      OS << Info.GetReturnType << " " << Info.ClassName << "::get() const\n{";
 
       if (Info.CustomGet.empty()) {
          OS << R"__(
@@ -706,7 +728,8 @@ void QueryClassEmitter::EmitImpl(Record *Query)
       else {
          OS << R"__(
    assert(ok() && "query has not successfully completed!");
-   )__" << Info.CustomGet << R"__(
+   )__" << Info.CustomGet
+            << R"__(
 }
 
 )__";
@@ -716,8 +739,8 @@ void QueryClassEmitter::EmitImpl(Record *Query)
    // description
    {
       unsigned i = 0;
-      std::string DescStr = cast<StringLiteral>(
-         Query->getFieldValue("description"))->getVal();
+      std::string DescStr
+          = cast<StringLiteral>(Query->getFieldValue("description"))->getVal();
 
       auto Idx = DescStr.find('\\');
       while (Idx != string::npos) {
@@ -746,8 +769,12 @@ void QueryClassEmitter::EmitImpl(Record *Query)
 
                while (OpenBraces != CloseBraces) {
                   switch (Desc[i++]) {
-                  case '{': ++OpenBraces; break;
-                  case '}': ++CloseBraces; break;
+                  case '{':
+                     ++OpenBraces;
+                     break;
+                  case '}':
+                     ++CloseBraces;
+                     break;
                   default:
                      break;
                   }
@@ -791,7 +818,7 @@ void QueryClassEmitter::EmitImpl(Record *Query)
       OS << "   OS << \"[" << Query->getName() << "]\"\n;";
 
       unsigned i = 0;
-      for (auto &Param : Info.Params) {
+      for (auto& Param : Info.Params) {
          if (Param.Excluded)
             continue;
 
@@ -820,8 +847,8 @@ void QueryClassEmitter::EmitImpl(Record *Query)
          AssignResult = "this->Result = Result;";
       }
 
-      auto customFinish = cast<CodeBlock>(
-         Query->getFieldValue("customFinish"))->getCode();
+      auto customFinish
+          = cast<CodeBlock>(Query->getFieldValue("customFinish"))->getCode();
 
       OS << "QueryResult " << Info.ClassName << "::"
          << "finish(" << Info.Type << " " << Result << ", Status St)\n{\n"
@@ -837,15 +864,14 @@ void QueryClassEmitter::EmitImpl(Record *Query)
          << "Profile(llvm::FoldingSetNodeID &ID) const\n{\n"
          << "   Profile(ID"
          << (Info.ParamStrNoExcludeNoTypes.empty() ? "" : ", ")
-         << Info.ParamStrNoExcludeNoTypes
-         << ");\n}\n\n";
+         << Info.ParamStrNoExcludeNoTypes << ");\n}\n\n";
 
       OS << "void " << Info.ClassName << "::"
          << "Profile(llvm::FoldingSetNodeID &ID"
          << (Info.ParamStrNoExclude.empty() ? "" : ", ")
          << Info.ParamStrNoExclude << ")\n{\n";
 
-      for (auto &P : Info.Params) {
+      for (auto& P : Info.Params) {
          if (P.Excluded)
             continue;
 
@@ -864,10 +890,9 @@ void QueryClassEmitter::EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries)
    OS << "bool Query::isPure() const\n{\n"
       << "   switch (K) {\n";
 
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
-      bool Val = cast<IntegerLiteral>(Q->getFieldValue("pure"))
-         ->getVal() != 0;
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
+      bool Val = cast<IntegerLiteral>(Q->getFieldValue("pure"))->getVal() != 0;
 
       OS << "   case " << Info.ClassName << "ID: return "
          << (Val ? "true" : "false") << ";\n";
@@ -879,8 +904,8 @@ void QueryClassEmitter::EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries)
    OS << "bool Query::canBeCached() const\n{\n"
       << "   switch (K) {\n";
 
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
       OS << "   case " << Info.ClassName << "ID: return "
          << (Info.CanBeCached ? "true" : "false") << ";\n";
    }
@@ -891,8 +916,8 @@ void QueryClassEmitter::EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries)
    OS << "bool Query::canBeSerialized() const\n{\n"
       << "   switch (K) {\n";
 
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
       OS << "   case " << Info.ClassName << "ID: return "
          << (Info.CanBeSerialized ? "true" : "false") << ";\n";
    }
@@ -903,8 +928,8 @@ void QueryClassEmitter::EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries)
    OS << "bool Query::canBeDependent() const\n{\n"
       << "   switch (K) {\n";
 
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
       OS << "   case " << Info.ClassName << "ID: return "
          << (Info.CanBeDependent ? "true" : "false") << ";\n";
    }
@@ -914,8 +939,8 @@ void QueryClassEmitter::EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries)
 
 void QueryClassEmitter::EmitQueryContextFields()
 {
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
       OS << Info.PersistentState << "\n";
 
       if (!Info.CanBeCached)
@@ -930,25 +955,26 @@ void QueryClassEmitter::EmitQueryContextFields()
                OS << "bool Ran" << Q->getName() << "Query = false;\n";
             }
             else {
-               OS << "llvm::Optional<" << Info.Type << "> "
-                  << Q->getName() << "Result = nullptr;\n";
+               OS << "llvm::Optional<" << Info.Type << "> " << Q->getName()
+                  << "Result = nullptr;\n";
             }
          }
          else {
-            OS << Info.ClassName << " *"
-               << Q->getName() << "Instance = nullptr;\n";
+            OS << Info.ClassName << " *" << Q->getName()
+               << "Instance = nullptr;\n";
          }
       }
       else if (Info.HashMap) {
-         OS << "/// \\brief Maps from query kinds to a folding set containing instances of\n"
+         OS << "/// \\brief Maps from query kinds to a folding set containing "
+               "instances of\n"
                "/// that query.\n"
             << "private:   ";
 
          if (Info.SimpleQuery && Info.Type == "void") {
             OS << "llvm::DenseSet<"
                << (Info.CustomKeyType.empty()
-                   ? std::string_view(Info.Params.front().Type)
-                   : Info.CustomKeyType)
+                       ? std::string_view(Info.Params.front().Type)
+                       : Info.CustomKeyType)
                << "> " << Q->getName() << "Queries;\n";
          }
          else if (Info.SimpleQuery) {
@@ -969,8 +995,9 @@ void QueryClassEmitter::EmitQueryContextFields()
                unsigned NumPairs = 1;
                unsigned NumParams = Info.Params.size();
 
-               for (auto &P : Info.Params) {
-                  if (i != 0) OS << ", ";
+               for (auto& P : Info.Params) {
+                  if (i != 0)
+                     OS << ", ";
 
                   // If we're at an uneven number and it's not the last one,
                   // we need to start a new pair.
@@ -993,26 +1020,27 @@ void QueryClassEmitter::EmitQueryContextFields()
          else {
             OS << "llvm::DenseMap<"
                << (Info.CustomKeyType.empty()
-                   ? std::string_view(Info.Params.front().Type)
-                   : Info.CustomKeyType)
+                       ? std::string_view(Info.Params.front().Type)
+                       : Info.CustomKeyType)
                << ", " << Info.ClassName << "*> " << Q->getName()
                << "Queries;\n";
          }
       }
       else {
-         OS << "/// \\brief Maps from query kinds to a folding set containing instances of\n"
+         OS << "/// \\brief Maps from query kinds to a folding set containing "
+               "instances of\n"
                "/// that query.\n"
             << "private:   "
-            << "llvm::FoldingSet<" << Info.ClassName << "> "
-            << Q->getName() << "Queries;\n";
+            << "llvm::FoldingSet<" << Info.ClassName << "> " << Q->getName()
+            << "Queries;\n";
       }
    }
 }
 
 void QueryClassEmitter::EmitQueryContextDecls()
 {
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
       if (Info.Private) {
          OS << "private: ";
       }
@@ -1029,16 +1057,13 @@ void QueryClassEmitter::EmitQueryContextDecls()
       }
 
       if (Info.GetReturnType == "void" || Info.Infallible) {
-         OS << Type << " " << Q->getName()
-            << "(" << Info.ParamStrWithDefaultVals
-            << ");\n";
+         OS << Type << " " << Q->getName() << "("
+            << Info.ParamStrWithDefaultVals << ");\n";
       }
       else {
-         OS << Type <<  " " << Q->getName()
-            << "(" << Info.GetReturnType << " &Result"
-            << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
-            << Info.ParamStrWithDefaultVals
-            << ");\n";
+         OS << Type << " " << Q->getName() << "(" << Info.GetReturnType
+            << " &Result" << (Info.ParamStrWithDefaultVals.empty() ? "" : ", ")
+            << Info.ParamStrWithDefaultVals << ");\n";
       }
 
       // Queries can also be retrieved without running them.
@@ -1047,15 +1072,15 @@ void QueryClassEmitter::EmitQueryContextDecls()
 
    OS << "\n\n";
 
-   for (auto *Q : Queries) {
+   for (auto* Q : Queries) {
       OS << "friend class " << QueryMap[Q].ClassName << ";\n";
    }
 }
 
 void QueryClassEmitter::EmitQueryContextSpecializations()
 {
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
       if (Info.SimpleQuery || !Info.CanBeCached) {
          continue;
       }
@@ -1068,8 +1093,8 @@ void QueryClassEmitter::EmitQueryContextSpecializations()
 
 void QueryClassEmitter::EmitQueryContextImpls()
 {
-   for (auto *Q : Queries) {
-      auto &Info = QueryMap[Q];
+   for (auto* Q : Queries) {
+      auto& Info = QueryMap[Q];
 
       // getQuery specialization
       if (Info.CanBeCached && !Info.SimpleQuery) {
@@ -1120,14 +1145,13 @@ void QueryClassEmitter::EmitQueryContextImpls()
 
       // query run implementation
       if (Info.GetReturnType == "void" || Info.Infallible) {
-         OS << RetType << " QueryContext::" << Q->getName()
-            << "(" << Info.ParamStr << ")\n";
+         OS << RetType << " QueryContext::" << Q->getName() << "("
+            << Info.ParamStr << ")\n";
       }
       else {
-         OS << RetType << " QueryContext::" << Q->getName()
-            << "(" << Info.GetReturnType << " &Result"
-            << (Info.ParamStr.empty() ? "" : ", ")
-            << Info.ParamStr << ")\n";
+         OS << RetType << " QueryContext::" << Q->getName() << "("
+            << Info.GetReturnType << " &Result"
+            << (Info.ParamStr.empty() ? "" : ", ") << Info.ParamStr << ")\n";
       }
 
       OS << "\n{\n" << Info.EarlyExitCode;
@@ -1152,8 +1176,9 @@ void QueryClassEmitter::EmitQueryContextImpls()
                unsigned NumPairs = 1;
                unsigned NumParams = Info.Params.size();
 
-               for (auto &P : Info.Params) {
-                  if (i != 0) KeyOS << ", ";
+               for (auto& P : Info.Params) {
+                  if (i != 0)
+                     KeyOS << ", ";
 
                   // If we're at an uneven number and it's not the last one,
                   // we need to start a new pair.
@@ -1178,7 +1203,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
             OS << "   auto It = " << HashMap << ".find(Key);\n";
 
             if (Info.SimpleQuery) {
-               OS << "   if (It != " << HashMap << ".end() && !shouldReset()) {\n";
+               OS << "   if (It != " << HashMap
+                  << ".end() && !shouldReset()) {\n";
 
                if (Info.Infallible) {
                   if (!Info.CustomPreReturnCode.empty()) {
@@ -1236,7 +1262,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
                << Info.ParamStrNoExcludeNoTypes << ");\n";
 
             OS << "   void *InsertPos;\n";
-            OS << "   auto *_Q = " << FoldingSet << ".FindNodeOrInsertPos(ID, InsertPos);\n";
+            OS << "   auto *_Q = " << FoldingSet
+               << ".FindNodeOrInsertPos(ID, InsertPos);\n";
 
             OS << "   if (!_Q) {\n"
                << "      _Q = new(*this) " << Info.ClassName << "(*this"
@@ -1252,13 +1279,17 @@ void QueryClassEmitter::EmitQueryContextImpls()
 
             if (Info.Infallible) {
                OS << "   if (" << Instance << " && !shouldReset()) {\n"
-                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
+                  << (Info.CustomPreReturnCode.empty()
+                          ? ""
+                          : Info.CustomPreReturnCode)
                   << "      return;"
                   << "   }\n";
             }
             else {
                OS << "   if (" << Instance << " && !shouldReset()) {\n"
-                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
+                  << (Info.CustomPreReturnCode.empty()
+                          ? ""
+                          : Info.CustomPreReturnCode)
                   << "      return QueryResult(QueryResult::Success);"
                   << "   }\n";
             }
@@ -1268,13 +1299,17 @@ void QueryClassEmitter::EmitQueryContextImpls()
 
             if (Info.Infallible) {
                OS << "   if (" << Instance << " && !shouldReset()) {\n"
-                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
+                  << (Info.CustomPreReturnCode.empty()
+                          ? ""
+                          : Info.CustomPreReturnCode)
                   << "      return Instance.getValue();"
                   << "   }\n";
             }
             else {
                OS << "   if (" << Instance << " && !shouldReset()) {\n"
-                  << (Info.CustomPreReturnCode.empty() ? "" : Info.CustomPreReturnCode)
+                  << (Info.CustomPreReturnCode.empty()
+                          ? ""
+                          : Info.CustomPreReturnCode)
                   << "      Result = Instance.getValue();"
                   << "      return QueryResult(QueryResult::Success);"
                   << "   }\n";
@@ -1284,9 +1319,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
             Instance += "Instance";
 
             OS << "   if (!" << Instance << ")\n"
-               << "      " << Instance
-               << " = new(*this) " << Info.ClassName << "(*this"
-               << (Info.ParamStrNoTypes.empty() ? "" : ", ")
+               << "      " << Instance << " = new(*this) " << Info.ClassName
+               << "(*this" << (Info.ParamStrNoTypes.empty() ? "" : ", ")
                << Info.ParamStrNoTypes << ");\n";
 
             OS << "auto *_Q = " << Instance << ";\n";
@@ -1305,8 +1339,7 @@ void QueryClassEmitter::EmitQueryContextImpls()
       if (Info.SimpleQuery && Info.Type == "void") {
          OS << Info.ClassName << " _Q(*this"
             << (Info.ParamStrNoTypes.empty() ? "" : ", ")
-            << Info.ParamStrNoTypes
-            << ");\n\n"
+            << Info.ParamStrNoTypes << ");\n\n"
             << "ExecutingQuery EQ(*this, &_Q);\n"
             << "auto MaybeErr = _Q.run();\n"
             << "if (MaybeErr.isErr()) ";
@@ -1343,8 +1376,7 @@ void QueryClassEmitter::EmitQueryContextImpls()
       else if (Info.SimpleQuery) {
          OS << Info.ClassName << " _Q(*this"
             << (Info.ParamStrNoTypes.empty() ? "" : ", ")
-            << Info.ParamStrNoTypes
-            << ");\n\n"
+            << Info.ParamStrNoTypes << ");\n\n"
             << "ExecutingQuery EQ(*this, &_Q);\n"
             << "auto MaybeErr = _Q.run();\n"
             << "if (MaybeErr.isErr()) ";
@@ -1420,7 +1452,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
    case Query::Idle:
       {
          ExecutingQuery EQ(*this, _Q);
-         )__" << beginExecution << R"__(
+         )__"
+            << beginExecution << R"__(
          if (auto _R = _Q->run()) {
             llvm_unreachable("infallible query failed!");
          }
@@ -1428,7 +1461,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
 
       )__" << ReturnResult << R"__(;
    case Query::Done:
-      )__" << ReturnResult << R"__(;
+      )__" << ReturnResult
+            << R"__(;
    case Query::Aborted:
    case Query::Dependent:
    case Query::DoneWithError:
@@ -1466,7 +1500,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
    case Query::Idle:
       {
          ExecutingQuery EQ(*this, _Q);
-         )__" << beginExecution << R"__(
+         )__"
+            << beginExecution << R"__(
          if (auto _R = _Q->run()) {
             return _R;
          }
@@ -1476,7 +1511,8 @@ void QueryClassEmitter::EmitQueryContextImpls()
       return QueryResult(QueryResult::Success);
    case Query::Done:
    case Query::DoneWithError:
-      )__" << AssignResult << R"__(
+      )__" << AssignResult
+            << R"__(
       return QueryResult(QueryResult::Success);
    case Query::Aborted:
       return QueryResult(QueryResult::Error);
@@ -1490,44 +1526,41 @@ void QueryClassEmitter::EmitQueryContextImpls()
    }
 }
 
-void QueryClassEmitter::EmitQueryMacros(llvm::ArrayRef<Record *> Queries)
-{
-
-}
+void QueryClassEmitter::EmitQueryMacros(llvm::ArrayRef<Record*> Queries) {}
 
 extern "C" {
 
-void EmitQueryDefs(std::ostream &out, RecordKeeper &RK)
+void EmitQueryDefs(std::ostream& out, RecordKeeper& RK)
 {
    QueryDefEmitter(out, RK).Emit();
 }
 
-void EmitQueryDecls(std::ostream &out, RecordKeeper &RK)
+void EmitQueryDecls(std::ostream& out, RecordKeeper& RK)
 {
    QueryClassEmitter(RK, out).EmitQueryDecls();
 }
 
-void EmitQueryImpls(std::ostream &out, RecordKeeper &RK)
+void EmitQueryImpls(std::ostream& out, RecordKeeper& RK)
 {
    QueryClassEmitter(RK, out).EmitQueryImpls();
 }
 
-void EmitQueryContextFields(std::ostream &out, RecordKeeper &RK)
+void EmitQueryContextFields(std::ostream& out, RecordKeeper& RK)
 {
    QueryClassEmitter(RK, out).EmitQueryContextFields();
 }
 
-void EmitQueryContextDecls(std::ostream &out, RecordKeeper &RK)
+void EmitQueryContextDecls(std::ostream& out, RecordKeeper& RK)
 {
    QueryClassEmitter(RK, out).EmitQueryContextDecls();
 }
 
-void EmitQueryContextSpecializations(std::ostream &out, RecordKeeper &RK)
+void EmitQueryContextSpecializations(std::ostream& out, RecordKeeper& RK)
 {
    QueryClassEmitter(RK, out).EmitQueryContextSpecializations();
 }
 
-void EmitQueryContextImpls(std::ostream &out, RecordKeeper &RK)
+void EmitQueryContextImpls(std::ostream& out, RecordKeeper& RK)
 {
    QueryClassEmitter(RK, out).EmitQueryContextImpls();
 }
