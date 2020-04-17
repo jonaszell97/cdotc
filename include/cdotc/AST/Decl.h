@@ -72,9 +72,11 @@ class TemplateArgListExpr;
 template<class T> struct InstantiationInfo {
    InstantiationInfo(const SourceLocation& instantiatedFrom,
                      sema::FinalTemplateArgumentList* templateArgs,
-                     T* specializedTemplate, unsigned Depth = 0)
+                     T* specializedTemplate, unsigned Depth = 0,
+                     RecordDecl *OuterInst = nullptr)
        : instantiatedFrom(instantiatedFrom), templateArgs(templateArgs),
-         specializedTemplate(specializedTemplate), Depth(Depth)
+         specializedTemplate(specializedTemplate), Depth(Depth),
+         OuterInst(OuterInst)
    {
    }
 
@@ -84,6 +86,7 @@ template<class T> struct InstantiationInfo {
    mutable sema::FinalTemplateArgumentList* templateArgs;
    T* specializedTemplate = nullptr;
    unsigned Depth = 0;
+   RecordDecl *OuterInst = nullptr;
 };
 
 template<class T> struct DefaultImplementable {

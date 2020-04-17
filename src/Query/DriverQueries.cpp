@@ -203,9 +203,10 @@ QueryResult ParseMainSourceFileQuery::run()
    SemaPass::DeclScopeRAII DSR(*QC.Sema, FileDecl);
 
    Lexer lex(Context.getIdentifiers(), Sema.getDiags(), File.Buf, File.SourceId,
-             File.BaseOffset);
+             File.BaseOffset, '$', false);
    Parser parser(Context, &lex, Sema);
 
+   lex.advance(false, true);
    parser.parseMainFile();
 
    if (QC.Sema->encounteredError()) {

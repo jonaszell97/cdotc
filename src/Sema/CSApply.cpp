@@ -114,6 +114,11 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
 
    if (!Cand.isAnonymousCandidate()) {
       auto* Fn = Cand.getFunc();
+      if (Fn->isInitializerOfTemplate()) {
+         Expr->setExprType(Sys.QC.Context.getRecordType(Fn->getRecord()));
+         return Expr;
+      }
+
       auto* callExpr = Sys.QC.Sema->CreateCall(Fn, Data.CandSet.ResolvedArgs,
                                                Expr->getSourceLoc());
 

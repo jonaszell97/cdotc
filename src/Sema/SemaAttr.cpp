@@ -231,6 +231,8 @@ void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*) {}
 
 void SemaPass::checkVersionDeclAttr(Decl*, VersionDeclAttr*) {}
 
+void SemaPass::check_DebugAttr(Decl *D, _DebugAttr *A) {}
+
 #define CDOT_ATTR_SEMA
 #include "cdotc/AST/Attr.inc"
 

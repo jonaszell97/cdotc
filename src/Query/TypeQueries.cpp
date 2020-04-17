@@ -6,6 +6,7 @@
 #include "cdotc/IL/Constants.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -918,22 +919,44 @@ QueryResult IsCovariantQuery::run()
    if (Covar->isUnknownAnyType()) {
       return finish(true);
    }
-   if (T->getCanonicalType() == Covar->getCanonicalType()) {
+
+   CanType T = this->T->getCanonicalType();
+   CanType Covar = this->Covar->getCanonicalType();
+
+   if (T == Covar) {
       return finish(true);
    }
 
-   QualType T = this->T;
-   QualType Covar = this->Covar;
+   if (auto *RT = Covar->asRecordType()) {
+      auto *R = RT->getRecord();
+      if (auto *P = dyn_cast<ProtocolDecl>(R)) {
+         return finish(QC.Sema->ConformsTo(T, P));
+      }
 
-   if (!T->isMetaType()) {
-      T = QC.Context.getMetaType(T);
+      if (auto *C = dyn_cast<ClassDecl>(R)) {
+         if (!T->isRecordType() || !isa<ClassDecl>(T->getRecord())) {
+            return finish(false);
+         }
+
+         return finish(QC.Sema->IsSubClassOf(cast<ClassDecl>(T->getRecord()), C));
+      }
    }
-   if (!Covar->isMetaType()) {
-      Covar = QC.Context.getMetaType(Covar);
+   else if (auto *Ext = Covar->asExistentialType()) {
+      for (QualType Inner : Ext->getExistentials()) {
+         bool IsCovariant;
+         if (auto Err = QC.IsCovariant(IsCovariant, T, Inner)) {
+            return Query::finish(Err);
+         }
+
+         if (!IsCovariant) {
+            return finish(false);
+         }
+      }
+
+      return finish(true);
    }
 
-   auto ConvSeq = QC.Sema->getConversionSequence(T, Covar);
-   return finish(ConvSeq.isImplicit());
+   return finish(false);
 }
 
 QueryResult IsContravariantQuery::run() { llvm_unreachable("TODO"); }
@@ -981,16 +1004,18 @@ public:
       }
 
       QualType LookupTy = this->SP.Context.getRecordType(DC);
-      bool conforms = this->SP.ConformsTo(
-          LookupTy, cast<ProtocolDecl>(T->getDecl()->getRecord()));
-
-      // Don't substitute unrelated associated types.
-      if (!conforms) {
-         return T;
-      }
-
       if (T->getDecl()->isSelf()) {
          if (this->SP.QC.DeclareSelfAlias(DC)) {
+            return T;
+         }
+      }
+      else {
+         bool conforms = this->SP.ConformsTo(
+            LookupTy, cast<ProtocolDecl>(T->getDecl()->getRecord()),
+               this->SP.getExtensionCtx(CurCtx));
+
+         // Don't substitute unrelated associated types.
+         if (!conforms) {
             return T;
          }
       }
@@ -1034,12 +1059,17 @@ public:
          return T;
       }
 
-      auto* Inst = QC.InstantiateTemplateMember(Impl, DC);
-      if (QC.PrepareDeclInterface(Inst)) {
+      auto* Inst = QC.Sema->getInstantiator().InstantiateTemplateMember(Impl, DC);
+      if (!Inst || QC.PrepareDeclInterface(Inst)) {
          return T;
       }
 
-      return this->Ctx.getTypedefType(Inst);
+      auto *A = cast<AliasDecl>(Inst);
+      if (!A->getType()->isMetaType()) {
+         return A->getType();
+      }
+
+      return this->Ctx.getTypedefType(A);
    }
 };
 
@@ -1225,9 +1255,10 @@ public:
       case NestedNameSpecifier::Alias: {
          auto* Alias = Name->getAlias();
          if (TemplateArgs) {
-            AliasDecl* Inst;
-            if (!this->SP.QC.InstantiateAlias(Inst, Alias, TemplateArgs,
-                                              this->SR.getStart())) {
+            AliasDecl* Inst = this->SP.getInstantiator().InstantiateAlias(
+               Inst, Alias, TemplateArgs, this->SR.getStart());
+
+            if (Inst) {
                Alias = Inst;
             }
          }
@@ -1552,6 +1583,26 @@ public:
 
       return LHS->getCanonicalType() == RHS->getCanonicalType();
    }
+
+   bool visitRecordType(RecordType *LHS, QualType RHS)
+   {
+      auto *Ext = RHS->asExistentialType();
+      if (!Ext) {
+         return TypeComparer::visitRecordType(LHS, RHS);
+      }
+
+      return Ext->contains(LHS);
+   }
+
+   bool visitExistentialType(ExistentialType *LHS, QualType RHS)
+   {
+      auto *Ext = RHS->asExistentialType();
+      if (!Ext) {
+         return TypeComparer::visitExistentialType(LHS, RHS);
+      }
+
+      return Ext->contains(LHS->getCanonicalType());
+   }
 };
 
 } // anonymous namespace
@@ -1577,6 +1628,10 @@ QueryResult CheckTypeEquivalenceQuery::run()
 
       RHS = templateParamTypeSubstVisitor.visit(RHS);
       LHS = templateParamTypeSubstVisitor.visit(LHS);
+
+      // Revisit in case an outer associated type was replaced.
+      RHS = substVisitor.visit(RHS);
+      LHS = substVisitor.visit(LHS);
    }
 
    return finish(TypeEquivalenceChecker().visit(LHS, RHS));
@@ -1607,14 +1662,8 @@ QueryResult ContainsAssociatedTypeConstraintQuery::run()
    return finish(Finder.FoundAssociatedType);
 }
 
-QueryResult CheckTypeCapabilitiesQuery::run()
-{
-   auto* Constraints = QC.Sema->getDeclConstraints(ND);
-   if (Constraints->empty()) {
-      return finish({});
-   }
-
-   std::vector<TypeCapability> Capabilities;
+static void FindCapabilities(std::vector<TypeCapability> &Capabilities,
+                             ConstraintSet *Constraints) {
    for (auto* C : *Constraints) {
       QualType CT = C->getConstrainedType();
 
@@ -1627,9 +1676,17 @@ QueryResult CheckTypeCapabilitiesQuery::run()
       switch (C->getKind()) {
       case DeclConstraint::TypeEquality:
          Capabilities.emplace_back(CT, T, TypeCapability::Equality);
+         if (T->isAssociatedType()) {
+            Capabilities.emplace_back(T, CT, TypeCapability::Equality);
+         }
+
          break;
       case DeclConstraint::TypeInequality:
          Capabilities.emplace_back(CT, T, TypeCapability::Inequality);
+         if (T->isAssociatedType()) {
+            Capabilities.emplace_back(T, CT, TypeCapability::Inequality);
+         }
+
          break;
       case DeclConstraint::TypePredicate: {
          QualType SingleType = T;
@@ -1694,9 +1751,19 @@ QueryResult CheckTypeCapabilitiesQuery::run()
          llvm_unreachable("handled above");
       }
    }
+}
+
+QueryResult CheckTypeCapabilitiesQuery::run()
+{
+   auto* Constraints = QC.Sema->getDeclConstraints(ND);
+   if (Constraints->empty()) {
+      return finish({});
+   }
+
+   std::vector<TypeCapability> Capabilities;
+   FindCapabilities(Capabilities, Constraints);
 
    // FIXME verify capabilities.
-
    return finish(move(Capabilities));
 }
 
@@ -1754,9 +1821,10 @@ static void applyCapabilities(QueryContext& QC,
          break;
       case TypeCapability::Equality:
          // Only one equality constraint is allowed in any given context,
-         // so we know that this is the concrete type.
+         // so we know that this is the concrete type, unless the equality
+         // is not for a concrete type.
          NewTy = C.getType();
-         done = true;
+         done = !NewTy->isAssociatedType();
 
          break;
       case TypeCapability::NonConformance: {

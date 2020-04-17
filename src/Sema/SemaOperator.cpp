@@ -240,16 +240,17 @@ ExprResult SemaPass::visitBinaryOperator(BinaryOperator* BinOp)
 
 static ExprResult checkAccessorAssignment(SemaPass& Sema, AssignExpr* Expr)
 {
-   auto Ident = dyn_cast<IdentifierRefExpr>(Expr->getLhs());
+   auto Ident = dyn_cast<MemberRefExpr>(Expr->getLhs());
    if (!Ident) {
       return ExprError();
    }
 
-   if (Ident->getKind() != IdentifierKind::Accessor) {
+   auto *propDecl = dyn_cast<PropDecl>(Ident->getMemberDecl());
+   if (!propDecl) {
       return ExprError();
    }
 
-   auto Setter = Ident->getAccessor()->getSetterMethod();
+   auto Setter = propDecl->getSetterMethod();
    if (!Setter) {
       // Sema should have issued a diagnostic about the missing setter
       assert(Ident->isInvalid() && "didn't complain about missing setter!");
@@ -257,8 +258,8 @@ static ExprResult checkAccessorAssignment(SemaPass& Sema, AssignExpr* Expr)
    }
 
    // Build a call to the appropriate accessor method.
-   auto* Call = Sema.CreateCall(Ident->getAccessor()->getSetterMethod(),
-                                {Expr->getLhs(), Expr->getRhs()},
+   auto* Call = Sema.CreateCall(propDecl->getSetterMethod(),
+                                {Ident->getParentExpr(), Expr->getRhs()},
                                 Expr->getEqualsLoc());
 
    return Sema.visitExpr(Call);
@@ -405,6 +406,10 @@ ExprResult SemaPass::visitCastExpr(CastExpr* Cast)
       // recover by pretending the cast worked
       Cast->setExprType(to);
       return Cast;
+   }
+
+   if (Result.get()->getExprType()->getCanonicalType() == to->getCanonicalType()) {
+      return Result;
    }
 
    Cast->setTarget(Result.get());

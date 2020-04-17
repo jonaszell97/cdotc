@@ -106,7 +106,7 @@ private:
 
 } // anonymous namespace
 
-extern "C" void EmitDiagnostics(llvm::raw_ostream& out, RecordKeeper& RK)
+extern "C" void EmitDiagnostics(std::ostream& out, RecordKeeper& RK)
 {
    std::string s;
 

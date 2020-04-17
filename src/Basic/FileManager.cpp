@@ -312,6 +312,11 @@ FullSourceLoc FileManager::getFullSourceLoc(SourceLocation loc)
       return FullSourceLoc("<invalid sloc>", 0, 0);
    }
 
+   while (auto Exp = getMacroExpansionLoc(loc)) {
+      auto diff = loc.getOffset() - Exp->BaseOffset;
+      loc = SourceLocation(Exp->PatternLoc.getOffset() + diff);
+   }
+
    auto fileName = getFileName(loc);
    auto lineAndCol = getLineAndCol(loc);
 

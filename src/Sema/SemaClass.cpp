@@ -38,9 +38,9 @@ QueryResult PrepareRecordInterfaceQuery::run()
       return finish(DoneWithError);
    }
 
-   if (QC.CheckConformances(Ty)) {
-      return finish(DoneWithError);
-   }
+//   if (QC.CheckConformances(Ty)) {
+//      return finish(DoneWithError);
+//   }
 
    return finish();
 }
@@ -137,8 +137,8 @@ QueryResult DeclareImplicitDefaultInitQuery::run()
 QueryResult DeclareMemberwiseInitQuery::run()
 {
    if (S->isInstantiation()) {
-      if (auto Err = QC.InstantiateFields(S)) {
-         return Query::finish(Err);
+      if (QC.Sema->getInstantiator().InstantiateFields(S)) {
+         return fail();
       }
    }
 
@@ -414,8 +414,13 @@ static void synthesizeValue(SemaPass& Sema, EnumCaseDecl* Case,
                             QualType RawType, int64_t RawVal)
 {
    if (auto* R = RawType->asRecordType()) {
-      RawType
-          = cast<StructDecl>(R->getRecord())->getFields().front()->getType();
+      auto *F = cast<StructDecl>(R->getRecord())->getFields().front();
+      if (!Sema.QC.PrepareDeclInterface(F)) {
+         RawType = F->getType();
+      }
+      else {
+         RawType = Sema.Context.getIntTy();
+      }
    }
 
    Case->setILValue(Sema.getILGen().Builder.GetConstantInt(RawType, RawVal));
@@ -1016,10 +1021,11 @@ QueryResult PreparePropInterfaceQuery::run()
          auto* Args = FinalTemplateArgumentList::Create(QC.Context, TA);
 
          if (!TA.isStillDependent()) {
-            RecordDecl* Inst;
-            if (auto Err = QC.InstantiateRecord(Inst, Ptr, Args,
-                                                Getter->getSourceLoc())) {
-               return Query::finish(Err);
+            RecordDecl* Inst = QC.Sema->getInstantiator().InstantiateRecord(
+               Ptr, Args, Getter->getSourceLoc());
+
+            if (!Inst) {
+               return fail();
             }
 
             Getter->setReturnType(SourceType(QC.Context.getRecordType(Inst)));
@@ -1122,8 +1128,9 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
    }
 
    if (auto* Setter = Decl->getSetterMethod()) {
-      Setter->getArgs().back()->setType(res.get());
-      Setter->getArgs().back()->getDefaultVal()->setExprType(res.get());
+      auto *newVal = Setter->getArgs().back();
+      newVal->setType(res.get());
+      cast<BuiltinExpr>(newVal->getDefaultVal())->setType(res.get());
 
       Setter->setSynthesized(true);
       Setter->setSubscript(true);
@@ -1514,8 +1521,8 @@ QueryResult CheckBuiltinConformancesQuery::run()
       }
 
       if (S->isInstantiation()) {
-         if (auto Err = QC.InstantiateFields(S)) {
-            return Query::finish(Err);
+         if (QC.Sema->getInstantiator().InstantiateFields(S)) {
+            return fail();
          }
       }
 
@@ -1557,8 +1564,8 @@ QueryResult CheckBuiltinConformancesQuery::run()
       bool AddRawRepresentable = true;
 
       if (E->isInstantiation()) {
-         if (auto Err = QC.InstantiateCases(E)) {
-            return Query::finish(Err);
+         if (QC.Sema->getInstantiator().InstantiateCases(E)) {
+            return fail();
          }
       }
 

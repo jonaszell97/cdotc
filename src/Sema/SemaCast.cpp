@@ -2,6 +2,7 @@
 
 #include "cdotc/AST/TypeVisitor.h"
 #include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 
 using namespace cdot::support;
 
@@ -521,8 +522,10 @@ static bool lookupImplicitInitializer(SemaPass& SP, CanType from, CanType to,
          auto* outerTemplateArgs
              = sema::FinalTemplateArgumentList::Create(SP.Context, OuterArgs);
 
-         if (SP.QC.InstantiateRecord(R, R, outerTemplateArgs,
-                                     I->getSourceLoc())) {
+         R = SP.getInstantiator().InstantiateRecord(R, outerTemplateArgs,
+                                                    I->getSourceLoc());
+
+         if (!R) {
             Seq = ConversionSequenceBuilder::MakeNoop(to);
             return true;
          }
@@ -541,9 +544,10 @@ static bool lookupImplicitInitializer(SemaPass& SP, CanType from, CanType to,
          auto* innerTemplateArgs
              = sema::FinalTemplateArgumentList::Create(SP.Context, InnerArgs);
 
-         MethodDecl* Inst;
-         if (SP.QC.InstantiateMethod(Inst, I, innerTemplateArgs,
-                                     I->getSourceLoc())) {
+         MethodDecl* Inst = SP.getInstantiator().InstantiateMethod(
+            I, innerTemplateArgs, I->getSourceLoc());
+
+         if (!Inst) {
             Seq = ConversionSequenceBuilder::MakeNoop(to);
             return true;
          }

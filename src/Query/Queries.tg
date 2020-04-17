@@ -48,6 +48,8 @@ class StreamParam<name: string, exclude: i1 = false> :
     QueryParam<name, "llvm::raw_ostream&", "", exclude>
 class ArrayParam<name: string, type: string, exclude: i1 = false> :
     QueryParam<name, type, "", exclude>
+class MutableArrayParam<name: string, type: string, exclude: i1 = false> :
+    QueryParam<name, type, "", exclude>
 class OptionalParam<name: string, type: string, exclude: i1 = false> :
     QueryParam<name, type, "", exclude>
 class DeclNameParam<name: string, exclude: i1 = false> :
@@ -985,7 +987,7 @@ def ResolveConformancesToProtocols : Query<"llvm::SmallVector<ast::ProtocolDecl*
         TypeParam<"T">,
 
         // The declaration that declares the conformances.
-        ArrayParam<"Conformances", "ast::SourceType">,
+        MutableArrayParam<"Conformances", "ast::SourceType">,
     ]
 
     shouldMoveResult = true
@@ -999,7 +1001,7 @@ def ResolveDeclaredConformances : VoidQuery {
         TypeParam<"T">,
 
         // The conformance types as they appeared in the source.
-        ArrayParam<"Conformances", "ast::SourceType">,
+        MutableArrayParam<"Conformances", "ast::SourceType">,
 
         // The kind of conformance to add.
         QueryParam<"Kind", "ConformanceKind">,
@@ -1215,7 +1217,10 @@ def GetNeededAssociatedTypes : Query<"llvm::SmallVector<ast::AssociatedTypeDecl*
 def CheckConformances : VoidQuery {
     parameters = [
         // The type to check.
-        TypeParam<"T">
+        TypeParam<"T">,
+
+        // Optional vector of extension decls to be filled.
+        QueryParam<"ExtensionDecls", "std::vector<ast::NamedDecl*> *", "nullptr">,
     ]
 
     description = "checking conformances of '${T.toDiagString()}'"
@@ -1333,7 +1338,7 @@ def CalculateRecordSize : Query<"unsigned"> {
     canBeSerialized = true
 
     persistentState = {
-    private:
+    public:
         /// Map from records to their computed meta info.
         llvm::DenseMap<ast::RecordDecl*, RecordMetaInfo> RecordMeta;
     }
@@ -1879,20 +1884,6 @@ def PrepareNameLookup : VoidQuery {
     description = "preparing '${DC->getNameAsString()}' for name lookup"
 }
 
-/// Instantiate the stored fields of a struct instantiation.
-def InstantiateFields : VoidQuery {
-     parameters = [
-        QueryParam<"S", "ast::StructDecl*">
-     ]
-}
-
-/// Instantiate the cases of an enum instantiation.
-def InstantiateCases : VoidQuery {
-     parameters = [
-        QueryParam<"E", "ast::EnumDecl*">
-     ]
-}
-
 /// Get an associated type by name.
 def GetAssociatedTypeImpl : Query<"ast::AliasDecl*"> {
     parameters = [
@@ -1951,137 +1942,6 @@ def CheckTypeEquivalence : BoolQuery {
 
 /// *** Template instantiation queries. ***
 
-/// Instantiate a protocol default implementation for a type.
-def InstantiateProtocolDefaultImpl : Query<"ast::NamedDecl*"> {
-    parameters = [
-        /// The default implementation.
-        NamedDeclParam<"Impl">,
-
-        /// The 'Self' type we are instantiating the declaration for.
-        TypeParam<"Self">,
-
-        BoolParam<"ActOnDecl", "true">
-    ]
-}
-
-/// Instantiate a record declaration without actually instantiating
-/// any of its contents.
-def InstantiateRecord : Query<"ast::RecordDecl*"> {
-    parameters = [
-        /// The template to instantiate.
-        RecordDeclParam<"Template">,
-
-        /// The template argument list to instantiate with.
-        TemplateArgsParam<"TemplateArgs">,
-
-        /// The location where the instantiation was requested.
-        QueryParam<"PointOfInstantiation", "SourceLocation", "", true>,
-
-        /// Whether or not this is a nested record.
-        RecordDeclParam<"OuterInst", "nullptr", false, true>
-    ]
-
-    constructorCode = {
-        assert(!TemplateArgs->isStillDependent()
-            && "don't call this with dependent template arguments");
-    }
-}
-
-/// Instantiates an alias declaration.
-def InstantiateAlias : Query<"ast::AliasDecl*"> {
-    parameters = [
-        /// The template to instantiate.
-        AliasDeclParam<"Template">,
-
-        /// The template argument list to instantiate with.
-        TemplateArgsParam<"TemplateArgs">,
-
-        /// The location where the instantiation was requested.
-        QueryParam<"PointOfInstantiation", "SourceLocation", "", true>
-    ]
-
-    constructorCode = {
-        assert(!TemplateArgs->isStillDependent()
-            && "don't call this with dependent template arguments");
-    }
-}
-
-/// Instantiates a callable declaration.
-def InstantiateCallable : Query<"ast::CallableDecl*"> {
-    parameters = [
-        /// The template to instantiate.
-        CallableDeclParam<"Template">,
-
-        /// The template argument list to instantiate with.
-        TemplateArgsParam<"TemplateArgs">,
-
-        /// The location where the instantiation was requested.
-        QueryParam<"PointOfInstantiation", "SourceLocation", "", true>
-    ]
-
-    constructorCode = {
-        assert(!TemplateArgs->isStillDependent()
-            && "don't call this with dependent template arguments");
-    }
-}
-
-/// Instantiates a function declaration.
-def InstantiateFunction : Query<"ast::FunctionDecl*"> {
-    parameters = [
-        /// The template to instantiate.
-        FunctionDeclParam<"Template">,
-
-        /// The template argument list to instantiate with.
-        TemplateArgsParam<"TemplateArgs">,
-
-        /// The location where the instantiation was requested.
-        QueryParam<"PointOfInstantiation", "SourceLocation", "", true>
-    ]
-
-    constructorCode = {
-        assert(!TemplateArgs->isStillDependent()
-            && "don't call this with dependent template arguments");
-    }
-}
-
-/// Instantiates a method declaration.
-def InstantiateMethod : Query<"ast::MethodDecl*"> {
-    parameters = [
-        /// The template to instantiate.
-        MethodDeclParam<"Template">,
-
-        /// The template argument list to instantiate with.
-        TemplateArgsParam<"TemplateArgs">,
-
-        /// The location where the instantiation was requested.
-        QueryParam<"PointOfInstantiation", "SourceLocation", "", true>
-    ]
-
-    constructorCode = {
-        assert(!TemplateArgs->isStillDependent()
-            && "don't call this with dependent template arguments");
-    }
-}
-
-/// Instantiates a method body.
-def InstantiateMethodBody : VoidQuery {
-    parameters = [
-        /// The template to instantiate.
-        CallableDeclParam<"Inst">
-    ]
-}
-
-/// Instantiates any declaration.
-def InstantiateDecl : Query<"ast::Decl*"> {
-    parameters = [
-        /// The declaration to instantiate.
-        DeclParam<"Template">,
-
-        /// The template argument list to instantiate with.
-        MultiLevelTemplateArgsParam<"TemplateArgs">
-    ]
-}
-
 /// Check whether or not a template extension applies to a concrete instantiation.
 def CheckTemplateExtensionApplicability : BoolQuery {
     parameters = [
@@ -2090,55 +1950,6 @@ def CheckTemplateExtensionApplicability : BoolQuery {
 
         /// The extension to check.
         QueryParam<"Ext", "ast::ExtensionDecl*">
-    ]
-}
-
-/// Prepare a declaration for instantiation.
-def PrepareDeclForInstantiation : VoidQuery {
-    parameters = [
-        NamedDeclParam<"ND">
-    ]
-}
-
-/// Instantiate an as-of-yet uninstantiated template member.
-def InstantiateTemplateMember : Query<"ast::NamedDecl*"> {
-    parameters = [
-        /// The member to instantiate.
-        NamedDeclParam<"TemplateMember">,
-
-        /// The record instantiation to instantiate it for.
-        RecordDeclParam<"Inst">,
-
-        /// The template argument list to instantiate with.
-        TemplateArgsParam<"TemplateArgs", "nullptr">,
-
-        /// The location where the instantiation was requested.
-        QueryParam<"PointOfInstantiation", "SourceLocation", "SourceLocation()", true>,
-    ]
-
-    persistentState = {
-    public:
-        template<class T>
-        T *InstantiateTemplateMember(T *Decl, ast::RecordDecl *Inst)
-        {
-            if (Decl->getDeclContext()->lookThroughExtension() == Inst)
-                return Decl;
-
-            ast::NamedDecl *DeclInst;
-            if (InstantiateTemplateMember(DeclInst, Decl, Inst)) {
-                return Decl;
-            }
-
-            return support::cast<T>(DeclInst);
-        }
-    }
-}
-
-/// Prepare an instantiation for name lookup by instantiating the visible declarations.
-def PrepareInstantiationForNameLookup : VoidQuery {
-    parameters = [
-        /// The record instantiation.
-        RecordDeclParam<"Inst">,
     ]
 }
 

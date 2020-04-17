@@ -336,6 +336,10 @@ void QueryClassEmitter::Setup()
             Type = "llvm::ArrayRef<" + Type + ">";
          }
          else if (Param->getBases().front().getBase()->getName()
+                  == "MutableArrayParam") {
+            Type = "llvm::MutableArrayRef<" + Type + ">";
+         }
+         else if (Param->getBases().front().getBase()->getName()
                   == "FunctionRefParam") {
             Type = "llvm::function_ref<" + Type + ">";
          }
@@ -551,7 +555,7 @@ void QueryClassEmitter::appendParam(ParamKind K, std::ostream& OS,
       OS << "ID.AddString(" << VarName << ");";
       break;
    case Other:
-      if (TypeName.consume_front("llvm::ArrayRef<")) {
+      if (TypeName.consume_front("llvm::ArrayRef<") || TypeName.consume_front("llvm::MutableArrayRef<")) {
          auto ElementName = TypeName.drop_back(1);
          OS << "for (auto &El : " << VarName << ")\n      ";
          appendParam(getParamKind(ElementName), OS, ElementName, "El");
@@ -594,7 +598,10 @@ void QueryClassEmitter::appendString(ParamKind K, std::ostream& OS,
       OS << "OS << " << VarName << ";";
       break;
    case Pointer: {
-      if (TypeName.find("DeclContext") != string::npos) {
+      if (TypeName.find("vector") != string::npos) {
+         OS << "OS << " << VarName << ";";
+      }
+      else if (TypeName.find("DeclContext") != string::npos) {
          OS << "OS << \"'\" << (" << VarName << " ? " << VarName
             << "->getNameAsString() : \"<null>\") << \"'\";";
       }
@@ -621,7 +628,7 @@ void QueryClassEmitter::appendString(ParamKind K, std::ostream& OS,
       OS << "OS << \"'\" << " << VarName << " << \"'\";";
       break;
    case Other: {
-      if (TypeName.consume_front("llvm::ArrayRef<")) {
+      if (TypeName.consume_front("llvm::ArrayRef<") || TypeName.consume_front("llvm::MutableArrayRef<")) {
          auto ElementName = TypeName.drop_back(1);
          OS << "OS << '[';\n"
             << "   unsigned i = 0;\n"

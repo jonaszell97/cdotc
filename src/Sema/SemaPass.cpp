@@ -125,22 +125,26 @@ SemaPass::DiagConsumerRAII::~DiagConsumerRAII()
 SemaPass::IgnoreDiagsRAII::IgnoreDiagsRAII(SemaPass& SP, bool Enabled)
     : DiagConsumerRAII(SP, SP.DiagConsumer.get()), Enabled(Enabled)
 {
-   if (Enabled)
-      static_cast<SemaDiagConsumer*>(SP.DiagConsumer.get())->Ignore = true;
+   if (Enabled) {
+      static_cast<SemaDiagConsumer *>(SP.DiagConsumer.get())->Ignore = true;
+   }
 }
 
 SemaPass::IgnoreDiagsRAII::~IgnoreDiagsRAII()
 {
-   if (Enabled)
-      static_cast<SemaDiagConsumer*>(SP.DiagConsumer.get())->Ignore = false;
+   if (Enabled) {
+      static_cast<SemaDiagConsumer *>(SP.DiagConsumer.get())->Ignore = false;
+   }
 }
 
 SemaPass::SemaPass(CompilerInstance& compilationUnit)
-    : compilationUnit(&compilationUnit), QC(compilationUnit.getQueryContext()),
+    : compilationUnit(&compilationUnit),
       DiagConsumer(std::make_unique<SemaDiagConsumer>(*this)),
       Diags(DiagConsumer.get(), &compilationUnit.getFileMgr()),
-      Context(compilationUnit.getContext()), mangle(*this), Evaluator(*this),
-      CandBuilder(*this), Instantiator(*this),
+      QC(compilationUnit.getQueryContext()),
+      Context(compilationUnit.getContext()), mangle(*this),
+      Evaluator(*this), CandBuilder(*this),
+      Instantiator(std::make_unique<TemplateInstantiator>(*this)),
       ILGen(std::make_unique<ILGenPass>(compilationUnit.getILCtx(), *this)),
       fatalError(false), fatalErrorInScope(false), EncounteredError(false),
       UnknownAnyTy(Context.getUnknownAnyTy()), ErrorTy(Context.getErrorTy())
@@ -188,6 +192,11 @@ void SemaPass::updateParent(Statement* Child, Statement* Parent) const
 void SemaPass::createParentMap(Statement* Stmt) const
 {
    getContext().getParentMap().updateParentMap(Stmt);
+}
+
+TemplateInstantiator& SemaPass::getInstantiator() const
+{
+   return *Instantiator;
 }
 
 void SemaPass::diagnoseRedeclaration(DeclContext& Ctx,
@@ -504,7 +513,7 @@ static void updateStatusFlags(Expression* E, QualType ExprTy)
 ExprResult SemaPass::visit(Expression* Expr, bool)
 {
    if (Expr->isInvalid()) {
-      if (Expr->getExprType()->isErrorType()) {
+      if (!Expr->getExprType() || Expr->getExprType()->isErrorType()) {
          return ExprError();
       }
 
@@ -867,11 +876,20 @@ static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto)
    return result;
 }
 
-bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto)
+bool SemaPass::ConformsTo(CanType T, ProtocolDecl *Proto)
 {
    // Check if we are in an extension that adds additional conformances.
    auto* Ext = getCurrentExtensionCtx();
-   if (!Ext) {
+   if (Ext != nullptr) {
+      return ConformsTo(T, Proto, Ext);
+   }
+
+   return conformsToImpl(*this, T, Proto);
+}
+
+bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *Ext)
+{
+   if (Ext == nullptr) {
       return conformsToImpl(*this, T, Proto);
    }
 
@@ -891,9 +909,10 @@ bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto)
       return true;
    }
 
-   auto it = std::find(newProtocols.begin(), newProtocols.end(), Proto);
-   if (it != newProtocols.end()) {
-      return true;
+   for (auto *NewProto : newProtocols) {
+      if (conformsToImpl(*this, Context.getRecordType(NewProto), Proto)) {
+         return true;
+      }
    }
 
    return conformsToImpl(*this, T, Proto);
@@ -3811,11 +3830,11 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
       }
    }
 
-   SourceType declaredReturnType = fn->getReturnType();
+   QualType declaredReturnType = ApplyCapabilities(fn->getReturnType());
 
    // Async functions return their awaited type.
    if (fn->isAsync()) {
-      declaredReturnType.setResolvedType(
+      fn->getReturnType().setResolvedType(
           getCoroutineInfo(declaredReturnType).AwaitedType);
    }
 
@@ -3826,7 +3845,7 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
 
    // Check that the returned value is compatible with the declared return type.
    if (auto retVal = Stmt->getReturnValue()) {
-      auto result = typecheckExpr(retVal, fn->getReturnType(), Stmt);
+       auto result = typecheckExpr(retVal, declaredReturnType, Stmt);
       if (!result) {
          return Stmt;
       }
@@ -3857,7 +3876,6 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
          retType = RVal->getExprType();
 
          fn->getReturnType().setResolvedType(retType);
-         declaredReturnType.setResolvedType(retType);
       }
 
       // check NRVO candidate
@@ -4102,10 +4120,8 @@ ExprResult SemaPass::visitTupleLiteral(TupleLiteral* Expr)
    }
    // only interpret '()' as a type if either the contextual type is a type
    // or the expression is in type position
-   else if (Meta) {
-      if (contextualTy && contextualTy->isMetaType()) {
-         Expr->setExprType(Context.getMetaType(Expr->getExprType()));
-      }
+   else if (Meta && contextualTy && contextualTy->isMetaType()) {
+      Expr->setExprType(Context.getMetaType(Expr->getExprType()));
    }
 
    return Expr;
@@ -4565,12 +4581,12 @@ StmtResult SemaPass::visitStaticIfStmt(StaticIfStmt* Stmt)
 
       StmtResult Inst;
       if (CondIsTrue) {
-         Inst = Instantiator.InstantiateStatement(
+         Inst = Instantiator->InstantiateStatement(
              Stmt->getStaticLoc(), Template->getIfBranch(), move(TemplateArgs));
       }
       else if (auto Else = Template->getElseBranch()) {
-         Inst = Instantiator.InstantiateStatement(Stmt->getStaticLoc(), Else,
-                                                  move(TemplateArgs));
+         Inst = Instantiator->InstantiateStatement(Stmt->getStaticLoc(), Else,
+                                                   move(TemplateArgs));
       }
 
       if (Inst) {
@@ -4955,8 +4971,8 @@ StmtResult SemaPass::visitStaticForStmt(StaticForStmt* Stmt)
 
    llvm::SmallVector<Statement*, 8> Stmts;
    for (auto& V : Values) {
-      auto Inst = Instantiator.InstantiateStatement(Stmt, Stmt->getBody(),
-                                                    SubstName, V);
+      auto Inst = Instantiator->InstantiateStatement(Stmt, Stmt->getBody(),
+                                                     SubstName, V);
 
       if (Inst)
          Stmts.push_back(Inst.getValue());

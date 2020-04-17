@@ -46,8 +46,9 @@ public:
       Unsafe = 0x200,
       SpecializationCandidate = 0x400,
       NeedsInstantiation = 0x800,
+      InTypePosition = 0x1000,
 
-      _lastFlag = SpecializationCandidate,
+      _lastFlag = InTypePosition,
    };
 
    static_assert((int)ContainsGenericParam

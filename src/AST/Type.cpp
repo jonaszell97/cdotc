@@ -1281,6 +1281,16 @@ ArrayRef<QualType> ExistentialType::getExistentials() const
 
 bool ExistentialType::contains(CanType T) const
 {
+   if (auto *otherExt = T->asExistentialType()) {
+      for (CanType ext : otherExt->getExistentials()) {
+         if (!contains(ext)) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
    for (CanType ext : getExistentials()) {
       if (ext == T) {
          return true;

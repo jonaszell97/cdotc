@@ -136,6 +136,17 @@ public:
       auto* ExprRes = Result.get();
 
       ExprRes->setExprType(Sema.ApplyCapabilities(ExprRes->getExprType()));
+
+      // Update the original expression's type. Sometimes SourceTypes are reused
+      // (for example for synthesized properties), so the original expression
+      // may still be used.
+      if (QualType Ty = ExprRes->getExprType()) {
+         Expr->setExprType(Ty);
+      }
+      else {
+         Expr->setSemanticallyChecked(false);
+      }
+
       return ExprRes;
    }
 
@@ -1235,21 +1246,22 @@ QualType ConstraintBuilder::visitCallExpr(CallExpr* Expr, SourceType T)
 }
 
 static bool addCandidateDecl(CandidateSet& CandSet, SemaPass& Sema,
-                             NamedDecl* ND)
+                             NamedDecl* ND, Expression *Expr)
 {
    if (auto* C = dyn_cast<CallableDecl>(ND)) {
       CandSet.addCandidate(C, 0);
       return false;
    }
 
-   QualType T;
-   if (auto* P = dyn_cast<TemplateParamDecl>(ND)) {
-      T = Sema.Context.getMetaType(P->getCovariance());
-   }
-   else {
-      T = Sema.getTypeForDecl(ND);
-   }
+//   QualType T;
+//   if (auto* P = dyn_cast<TemplateParamDecl>(ND)) {
+//      T = Sema.Context.getMetaType(P->getCovariance());
+//   }
+//   else {
+//      T = Sema.getTypeForDecl(ND);
+//   }
 
+   QualType T = Expr->getExprType();
    if (!T) {
       return false;
    }
@@ -1262,7 +1274,8 @@ static bool addCandidateDecl(CandidateSet& CandSet, SemaPass& Sema,
 
    // Constructor call.
    if (auto* Meta = T->asMetaType()) {
-      if (auto* RT = Meta->getUnderlyingType()->asRecordType()) {
+      if (Meta->getUnderlyingType()->isRecordType()) {
+         QualType RT = Sema.Context.getRecordType(Meta->getUnderlyingType()->getRecord());
          DeclarationName Name
              = Sema.Context.getDeclNameTable().getConstructorName(RT);
 
@@ -1403,7 +1416,7 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
 
    if (auto* DeclRef = dyn_cast<DeclRefExpr>(ParentExpr)) {
       auto* ND = DeclRef->getDecl();
-      if (addCandidateDecl(CandSet, Sema, ND)) {
+      if (addCandidateDecl(CandSet, Sema, ND, DeclRef)) {
          Call->setIsInvalid(true);
       }
 
@@ -1412,7 +1425,7 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
    }
    else if (auto* MemRef = dyn_cast<MemberRefExpr>(ParentExpr)) {
       auto* ND = MemRef->getMemberDecl();
-      if (addCandidateDecl(CandSet, Sema, ND)) {
+      if (addCandidateDecl(CandSet, Sema, ND, MemRef)) {
          Call->setIsInvalid(true);
       }
 
@@ -1421,7 +1434,7 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
    }
    else if (auto* Ovl = dyn_cast<OverloadedDeclRefExpr>(ParentExpr)) {
       for (auto* ND : Ovl->getOverloads()) {
-         if (addCandidateDecl(CandSet, Sema, ND)) {
+         if (addCandidateDecl(CandSet, Sema, ND, Ovl)) {
             Call->setIsInvalid(true);
          }
 
@@ -1690,7 +1703,7 @@ QualType ConstraintBuilder::visitExprSequence(ExprSequence* Expr, SourceType T)
 
 QualType ConstraintBuilder::visitCastExpr(CastExpr* Cast, SourceType T)
 {
-   // right hand side might not have been parsed as a type, check if we were
+   // Right hand side might not have been parsed as a type, check if we were
    // actually given a meta type
    auto TypeResult = Sema.visitSourceType(Cast, Cast->getTargetType(), true);
    if (!TypeResult) {
@@ -1704,14 +1717,16 @@ QualType ConstraintBuilder::visitCastExpr(CastExpr* Cast, SourceType T)
       Cast->setIsTypeDependent(true);
    }
 
-   auto to = Cast->getTargetType();
+   auto &to = Cast->getTargetType();
    if (!to->isMetaType()) {
       Sema.diagnose(
           Cast, err_expression_in_type_position,
           Cast->getTargetType().getSourceRange(Cast->getSourceRange()));
    }
 
-   (void)visitExpr(Cast->getTarget());
+   auto resultType = visitExpr(Cast->getTarget());
+   (void)resultType;
+
    return to->removeMetaType();
 }
 

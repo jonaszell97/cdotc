@@ -315,7 +315,7 @@ public:
    QualType visitAssociatedType(AssociatedType* T)
    {
       if (auto OuterAT = T->getOuterAT()) {
-         return this->Ctx.getAssociatedType(T->getDecl(), OuterAT);
+         return this->Ctx.getAssociatedType(T->getDecl(), visit(OuterAT));
       }
 
       return T;

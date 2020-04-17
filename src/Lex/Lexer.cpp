@@ -25,6 +25,8 @@ Lexer::Lexer(IdentifierTable& Idents, DiagnosticsEngine& Diags,
       BufEnd(buf->getBufferEnd()), InterpolationBegin(InterpolationBegin),
       offset(offset)
 {
+   Idents.addKeywords();
+
    if (primeLexer)
       advance(false, true);
 }
@@ -36,6 +38,8 @@ Lexer::Lexer(IdentifierTable& Idents, DiagnosticsEngine& Diags,
       sourceId(sourceId), CurPtr(nullptr), BufStart(nullptr), BufEnd(nullptr),
       InterpolationBegin('$'), offset(offset), IsTokenLexer(true)
 {
+   Idents.addKeywords();
+
    if (LookaheadVec.empty() || !LookaheadVec.back().is(tok::eof))
       LookaheadVec.emplace_back(tok::eof);
 

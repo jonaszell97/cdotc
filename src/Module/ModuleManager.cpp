@@ -346,9 +346,7 @@ void ModuleManager::ImportModule(ImportDecl* I)
    }
 
    // diagnose circular dependencies
-   auto* CurrentMod
-       = CI.getSema().getDeclContext().getDeclModule()->getModule();
-
+   auto* CurrentMod = I->getDeclContext()->getDeclModule()->getModule();
    if (Mod->importsModule(CurrentMod)) {
       Sema.diagnose(I, diag::err_circular_module_dependency,
                     I->getSourceRange(), Mod->getFullName(),

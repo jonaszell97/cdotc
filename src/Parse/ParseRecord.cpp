@@ -173,8 +173,13 @@ ParseResult Parser::parseRecordLevelDecl()
          NextDecl = parseCompoundDecl(false);
          break;
       case tok::ident: {
-         if (currentTok().is(Ident_macro))
+         if (currentTok().is(Ident_macro)) {
+            SP.diagnose(err_generic_error,
+                        "macros cannot be members of a type",
+                        currentTok().getSourceLoc());
+
             return parseMacro();
+         }
 
          goto case_bad_token;
       }
@@ -601,27 +606,71 @@ ParseResult Parser::parseFieldDecl()
       typeref = SourceType(Context.getAutoType());
    }
 
-   auto field = FieldDecl::Create(Context, CurDeclAttrs.Access, Loc, ColonLoc,
-                                  fieldName, typeref, CurDeclAttrs.StaticLoc,
-                                  isConst, nullptr);
-
-   field->setVariadic(Variadic);
-
+   // Rename the field to _fieldName and synthesize a property that modifies it.
+   FieldDecl *field;
    if (lookahead().is(tok::open_brace)) {
       AccessorInfo Info;
       SmallVector<FuncArgDecl*, 2> Args{nullptr};
       parseAccessor(Loc, fieldName, typeref, CurDeclAttrs.StaticLoc.isValid(),
                     Args, Info, true);
 
-      SourceRange SR(Loc, currentTok().getSourceLoc());
+      if ((Info.GetterMethod && Info.GetterMethod->getBody())
+      || (Info.SetterMethod && Info.SetterMethod->getBody())) {
+         SourceLocation loc = (Info.GetterMethod && Info.GetterMethod->getBody())
+            ? Info.GetterMethod->getSourceLoc()
+            : Info.SetterMethod->getSourceLoc();
 
+         SP.diagnose(err_generic_error, "field accessor cannot have a body", loc);
+      }
+
+      std::string newFieldName = "_";
+      newFieldName += fieldName->getIdentifier();
+
+      auto *newFieldNameIdent = &Idents.get(newFieldName);
+      field = FieldDecl::Create(Context, CurDeclAttrs.Access, Loc, ColonLoc,
+                                newFieldNameIdent, typeref,
+                                CurDeclAttrs.StaticLoc, isConst, nullptr);
+
+      // Synthesize the return statement for the 'get' accessor.
+      if (Info.GetterMethod) {
+         auto loc = Info.GetterMethod->getSourceLoc();
+         auto *self = DeclRefExpr::Create(Context, Info.GetterMethod->getArgs()[0], loc);
+         auto *retExpr = MemberRefExpr::Create(Context, self, field, loc);
+         auto *ret = ReturnStmt::Create(Context, loc, retExpr);
+         auto *cs = CompoundStmt::Create(Context, ret, false, loc, loc);
+         Info.GetterMethod->setBody(cs);
+      }
+
+      // Synthesize the assign statement for the 'set' accessor.
+      if (Info.SetterMethod) {
+         auto loc = Info.SetterMethod->getSourceLoc();
+         if (isConst) {
+            SP.diagnose(err_generic_error, "'let' field cannot have a 'set' accessor", loc);
+         }
+
+         auto *self = DeclRefExpr::Create(Context, Info.SetterMethod->getArgs()[0], loc);
+         auto *lhs = MemberRefExpr::Create(Context, self, field, loc);
+         auto *rhs = DeclRefExpr::Create(Context, Info.SetterMethod->getArgs()[1], loc);
+         auto *assign = AssignExpr::Create(Context, loc, lhs, rhs);
+         auto *cs = CompoundStmt::Create(Context, assign, false, loc, loc);
+         Info.SetterMethod->setBody(cs);
+      }
+
+      SourceRange SR(Loc, currentTok().getSourceLoc());
       auto prop = PropDecl::Create(Context, CurDeclAttrs.Access, SR, fieldName,
                                    typeref, CurDeclAttrs.StaticLoc, false,
                                    Info.GetterMethod, Info.SetterMethod);
 
       prop->setSynthesized(true);
-      field->setAccessor(prop);
+      ActOnDecl(prop);
    }
+   else {
+      field = FieldDecl::Create(Context, CurDeclAttrs.Access, Loc, ColonLoc,
+                                fieldName, typeref, CurDeclAttrs.StaticLoc,
+                                isConst, nullptr);
+   }
+
+   field->setVariadic(Variadic);
 
    // optional default value
    if (lookahead().is(tok::equals)) {
@@ -639,7 +688,49 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
                            AccessorInfo& Info, bool IsProperty)
 {
    Token next = lookahead();
-   if (next.is(tok::open_brace)) {
+   if (next.is(tok::arrow_double)) {
+      if (ParsingProtocol) {
+         SP.diagnose(err_definition_in_protocol, IsProperty ? 1 : 2,
+                     currentTok().getSourceLoc());
+      }
+
+      advance();
+      auto ArrowLoc = consumeToken();
+      if (Info.GetterMethod) {
+         SP.diagnose(err_duplicate_getter_setter,
+                     currentTok().getSourceLoc(), 0);
+      }
+
+      DeclarationName DN;
+      if (IsProperty) {
+         DN = Context.getDeclNameTable().getAccessorName(
+            *Name, DeclarationName::Getter);
+      }
+      else {
+         DN = Context.getDeclNameTable().getSubscriptName(
+            DeclarationName::SubscriptKind::Getter);
+      }
+
+      Args[0] = SP.MakeSelfArg(ArrowLoc);
+      Info.GetterMethod = MethodDecl::Create(
+         Context, AccessSpecifier::Default, ArrowLoc, DN, Type, Args, {},
+         nullptr, IsStatic);
+
+      Info.GetterMethod->setSynthesized(true);
+
+      {
+         DeclContextRAII DCR(*this, Info.GetterMethod);
+         EnterFunctionScope EF(*this);
+
+         auto retExpr = parseExprSequence().tryGetExpr();
+         if (retExpr != nullptr) {
+            auto *ret = ReturnStmt::Create(Context, ArrowLoc, retExpr);
+            auto *cs = CompoundStmt::Create(Context, ret, false, ArrowLoc, ArrowLoc);
+            Info.GetterMethod->setBody(cs);
+         }
+      }
+   }
+   else if (next.is(tok::open_brace)) {
       advance();
 
       AccessSpecifier AS = AccessSpecifier::Default;
@@ -737,7 +828,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
 
             Expression* DefaultVal = nullptr;
             if (!IsProperty) {
-               // the argument needs a dummy default value for overload
+               // The argument needs a dummy default value for overload
                // resolution.
                DefaultVal = BuiltinExpr::Create(Context, Type);
             }

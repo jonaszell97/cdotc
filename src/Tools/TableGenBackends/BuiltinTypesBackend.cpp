@@ -97,8 +97,15 @@ private:
 
 extern "C" {
 
-void EmitBuiltinTypes(llvm::raw_ostream& out, RecordKeeper& RK)
+void EmitBuiltinTypes(std::ostream &out, RecordKeeper& RK)
 {
-   AttrDefEmitter(out, RK).emit();
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      AttrDefEmitter(OS, RK).emit();
+   }
+
+   out << s;
 }
+
 };

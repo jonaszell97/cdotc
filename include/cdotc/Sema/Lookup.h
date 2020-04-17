@@ -8,6 +8,20 @@ namespace cdot {
 
 class LambdaScope;
 
+enum class LookupLevel {
+   /// Only very basic lookup is possible.
+   None = 0x0,
+
+   /// Lookup in extensions is possible.
+   Extensions = 0x1,
+
+   /// Lookup in conformances is possible.
+   Conformances = 0x2,
+
+   /// Full lookup is possible.
+   Complete = ~None,
+};
+
 struct SingleLevelLookupResult : public ast::DeclContextLookupResult {
    SingleLevelLookupResult(const ast::DeclContextLookupResult& Result,
                            LambdaScope* LS)

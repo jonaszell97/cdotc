@@ -59,7 +59,7 @@ void IRGen::finalize(const CompilerInstance& CU)
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(
-             "/Users/Jonas/CDotProjects/ex/stdlib/_error.ll", EC,
+             "/Users/Jonas/CDotProjects/StdLib/main/_error.ll", EC,
              llvm::sys::fs::F_RW);
 
          llvm::AssemblyAnnotationWriter AAW;
@@ -68,7 +68,7 @@ void IRGen::finalize(const CompilerInstance& CU)
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(
-             "/Users/Jonas/CDotProjects/ex/stdlib/_error.cdotil", EC,
+             "/Users/Jonas/CDotProjects/StdLib/main/_error.cdotil", EC,
              llvm::sys::fs::F_RW);
 
          CU.getCompilationModule()->getILModule()->writeTo(fd);

@@ -85,7 +85,9 @@ void ConformanceTable::insertConformance(RecordDecl* Rec, Conformance* Conf)
 
 bool ConformanceTable::addConformance(ASTContext& C, ConformanceKind Kind,
                                       RecordDecl* Decl, ProtocolDecl* P,
+                                      ast::DeclContext* introducedIn,
                                       ast::ConstraintSet* constraints,
+                                      int depth,
                                       Conformance** NewConf)
 {
    assert(Kind != ConformanceKind::None && "invalid conformance kind!");
@@ -95,7 +97,10 @@ bool ConformanceTable::addConformance(ASTContext& C, ConformanceKind Kind,
       }
    }
 
-   Conformance* Conf = new (C) Conformance(Kind, P, constraints);
+   assert((!constraints || introducedIn)
+      && "constrained conformance should have a DeclContext!");
+
+   Conformance* Conf = new (C) Conformance(Kind, P, constraints, introducedIn, depth);
    insertConformance(Decl, Conf);
 
    if (NewConf) {
@@ -154,6 +159,20 @@ ConformanceKind ConformanceTable::lookupConformance(RecordDecl* Decl,
    }
 
    return ConformanceKind::None;
+}
+
+Conformance *ConformanceTable::getConformance(RecordDecl *Decl, ProtocolDecl *P) const
+{
+   auto It = Conformances.find(Decl);
+   if (It == Conformances.end())
+      return nullptr;
+
+   for (auto& Conf : It->getSecond()) {
+      if (Conf->getProto() == P)
+         return Conf;
+   }
+
+   return nullptr;
 }
 
 bool ConformanceTable::conformsTo(RecordDecl* Decl, ProtocolDecl* P) const

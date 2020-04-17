@@ -111,11 +111,27 @@ checkProtocolDefaultDecl(SemaPass& SP, ProtocolDecl* P, ExtensionDecl* Ext,
                          NamedDecl* ND, ArrayRef<ProtocolDecl*> newConformances,
                          SmallPtrSetImpl<ProtocolDecl*>& checkedConformances)
 {
+   // Associated type default implementations must refer to a type.
+   if (auto *AT = dyn_cast<AliasDecl>(ND)) {
+      if (SP.QC.PrepareDeclInterface(AT)) {
+         return false;
+      }
+
+      if (!AT->getType()->isMetaType()) {
+         SP.diagnose(
+            err_generic_error,
+            "associated type implementation must refer to a type",
+            AT->getSourceRange());
+
+         return false;
+      }
+   }
+
    NamedDecl* Req = nullptr;
    QualType SelfTy = SP.Context.getRecordType(P);
-
    bool encounteredError = false;
 
+   // Look in the protocol itself first.
    auto Result = SP.QC.FindEquivalentDecl(Req, ND, P, SelfTy, false);
    encounteredError |= Result.isErr();
 
@@ -125,8 +141,10 @@ checkProtocolDefaultDecl(SemaPass& SP, ProtocolDecl* P, ExtensionDecl* Ext,
           cast<ProtocolDecl>(Req->getDeclContext()), Req, ND);
    }
 
+   // If nothing was found, look in conformances.
    auto* constraints = SP.Context.getExtConstraints(Ext);
    auto Conformances = SP.Context.getConformanceTable().getAllConformances(P);
+
    for (auto& Conf : Conformances) {
       if (Conf->getKind() == ConformanceKind::Conditional) {
          if (!SP.QC.IsSupersetOf(Conf->getConstraints(), constraints)) {
@@ -334,15 +352,20 @@ RecordDecl* SemaPass::getCurrentRecordCtx()
    return nullptr;
 }
 
-ExtensionDecl* SemaPass::getCurrentExtensionCtx()
+ExtensionDecl* SemaPass::getExtensionCtx(DeclContext *CurCtx)
 {
-   for (auto ctx = DeclCtx; ctx; ctx = ctx->getParentCtx()) {
+   for (auto ctx = CurCtx; ctx; ctx = ctx->getParentCtx()) {
       if (auto* Ext = dyn_cast<ExtensionDecl>(ctx)) {
          return Ext;
       }
    }
 
    return nullptr;
+}
+
+ExtensionDecl* SemaPass::getCurrentExtensionCtx()
+{
+   return getExtensionCtx(DeclCtx);
 }
 
 void SemaPass::noteInstantiationContext()
@@ -436,6 +459,11 @@ void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
    D->setLexicalContext(DC);
    if (auto* DeclCtx = dyn_cast<DeclContext>(D)) {
       DeclCtx->setParentCtx(DC);
+   }
+
+   if (D->isDefault() && !isa<ExtensionDecl>(DC)) {
+      diagnose(err_generic_error, "'default' is only allowed in protocol extensions",
+               D->getSourceLoc());
    }
 
    switch (D->getKind()) {
@@ -653,7 +681,7 @@ void SemaPass::ActOnFieldDecl(DeclContext* DC, FieldDecl* F)
    addDeclToContext(*DC, F);
    checkDefaultAccessibility(F);
 
-   // field accessor is not visible via normal lookup
+   // Field accessor is not visible via normal lookup
    if (auto Acc = F->getAccessor()) {
       addDeclToContext(*DC, (Decl*)Acc);
       //      ActOnPropDecl(DC, Acc);
@@ -1225,6 +1253,9 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
       assert(Ty.getResolvedType() && "source ty with no expr or resolved type");
       return Ty.getResolvedType();
    }
+
+   // Don't apply capabilities to meta types.
+   DontApplyCapabilitiesRAII NoCapabilities(*this);
 
    auto Result = typecheckExpr(Ty.getTypeExpr());
    if (!Result || Result.get()->isInvalid()) {

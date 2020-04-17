@@ -74,7 +74,6 @@ Parser::Parser(ASTContext& Context, lex::Lexer* lexer, SemaPass& SP,
       CurDeclAttrs()
 {
    AllowTrailingClosureStack.push(true);
-   Context.getIdentifiers().addKeywords();
 }
 
 Parser::~Parser() = default;
@@ -583,13 +582,16 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
                         currentTok().getSourceLoc());
 
          auto* II = &Context.getIdentifiers().get("Option");
-
          auto OptTy = new (Context) IdentifierRefExpr(SR, II);
          auto TAs = TemplateArgListExpr::Create(Context, SR, OptTy,
                                                 typeref.getTypeExpr());
 
          OptTy->setIsSynthesized(true);
          typeref = SourceType(TAs);
+      }
+      else if (next.is(tok::period)) {
+         auto subExpr = maybeParseSubExpr(typeref.getTypeExpr(), true);
+         typeref = SourceType(subExpr.tryGetExpr());
       }
       else {
          break;
@@ -640,6 +642,7 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
           Context, currentTok().getSourceLoc(), typeref.getTypeExpr()));
    }
 
+   typeref.getTypeExpr()->setIsInTypePosition(InTypePosition);
    return typeref;
 }
 

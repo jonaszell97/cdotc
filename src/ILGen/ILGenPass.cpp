@@ -18,6 +18,7 @@
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ModuleFile.h"
 #include "cdotc/Support/SaveAndRestore.h"
 
@@ -1903,8 +1904,8 @@ CallableDecl* ILGenPass::MaybeSpecialize(CallableDecl* C, Expression* SelfArg)
    auto* List
        = sema::FinalTemplateArgumentList::Create(Context, SpecializedArgs);
 
-   CallableDecl* Inst;
-   if (SP.QC.InstantiateCallable(Inst, C, List, C->getSourceLoc())) {
+   auto *Inst = SP.getInstantiator().InstantiateCallable(C, List, C->getSourceLoc());
+   if (!Inst) {
       return C;
    }
 
@@ -5854,7 +5855,7 @@ il::Value* ILGenPass::visitCharLiteral(CharLiteral* Expr)
 {
    QualType T = Expr->getExprType();
    if (Expr->getType()->isIntegerType()) {
-      return Builder.GetConstantInt(SP.getContext().getCharTy(),
+      return Builder.GetConstantInt(Expr->getType(),
                                     (uint64_t)Expr->getNarrow());
    }
 

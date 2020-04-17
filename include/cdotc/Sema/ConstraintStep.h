@@ -94,7 +94,7 @@ protected:
    /// Reference to a vector of solutions.
    SmallVectorImpl<ConstraintSystem::Solution>& Solutions;
 
-   /// Reference to the worklist of steps to take.
+   /// Reference to the allDecls of steps to take.
    SmallVectorImpl<SolverStep*>& NextSteps;
 
 #ifndef NDEBUG
