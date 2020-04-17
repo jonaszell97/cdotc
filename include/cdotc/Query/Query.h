@@ -208,6 +208,9 @@ enum class LookupOpts : uint8_t {
 
    /// \brief Whether or not to look in protocol conformances.
    LookInConformances = 0x10,
+
+   /// \brief Whether or not to do a restricted lookup.
+   Restricted = 0x20,
 };
 
 extern LookupOpts DefaultLookupOpts;

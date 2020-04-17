@@ -165,7 +165,10 @@ public:
       /// This function should be specialized.
       DF_Specialize = DF_UnboundedTemplate << 1u,
 
-      DF_Last = DF_ContainsAssociatedType,
+      /// This decl is an implementation of a protocol requirement.
+      DF_ImplOfProtocolRequirement = DF_Specialize << 1u,
+
+      DF_Last = DF_ImplOfProtocolRequirement,
       StatusFlags = DF_TypeDependent | DF_ValueDependent | DF_IsInvalid
                     | DF_ContainsGenericParam
                     | DF_ContainsUnexpandedPack
@@ -295,6 +298,9 @@ public:
 
    bool shouldBeSpecialized() const { return declFlagSet(DF_Specialize); }
    void setShouldBeSpecialized(bool V) { setDeclFlag(DF_Specialize, V); }
+
+   bool isImplOfProtocolRequirement() const { return declFlagSet(DF_ImplOfProtocolRequirement); }
+   void setImplOfProtocolRequirement(bool u) { setDeclFlag(DF_ImplOfProtocolRequirement, u); }
 
    bool isProtocolDefaultImpl() const
    {

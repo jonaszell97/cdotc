@@ -9,6 +9,9 @@
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Support/Timer.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
+
 #include <clang/AST/ASTContext.h>
 #include <clang/CodeGen/ObjectFilePCHContainerOperations.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -20,6 +23,8 @@
 #include <clang/Parse/Parser.h>
 #include <clang/Sema/Sema.h>
 #include <llvm/Support/Program.h>
+
+#pragma clang diagnostic pop
 
 using namespace cdot;
 using namespace cdot::ast;

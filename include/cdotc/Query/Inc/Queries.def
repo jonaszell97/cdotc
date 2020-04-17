@@ -1,5 +1,5 @@
 #ifndef CDOT_QUERY
-#error "define CDOT_QUERY before including this!"
+   #error "define CDOT_QUERY before including this!"
 #endif
 
 CDOT_QUERY(CompileModuleQuery)
@@ -177,23 +177,10 @@ CDOT_QUERY(ResolveWildcardDeclarationsQuery)
 CDOT_QUERY(ResolveMetaDeclarationsQuery)
 CDOT_QUERY(PrepareTypeNameLookupQuery)
 CDOT_QUERY(PrepareNameLookupQuery)
-CDOT_QUERY(InstantiateFieldsQuery)
-CDOT_QUERY(InstantiateCasesQuery)
 CDOT_QUERY(GetAssociatedTypeImplQuery)
 CDOT_QUERY(GetAssociatedTypeDeclQuery)
 CDOT_QUERY(CheckTypeEquivalenceQuery)
-CDOT_QUERY(InstantiateProtocolDefaultImplQuery)
-CDOT_QUERY(InstantiateRecordQuery)
-CDOT_QUERY(InstantiateAliasQuery)
-CDOT_QUERY(InstantiateCallableQuery)
-CDOT_QUERY(InstantiateFunctionQuery)
-CDOT_QUERY(InstantiateMethodQuery)
-CDOT_QUERY(InstantiateMethodBodyQuery)
-CDOT_QUERY(InstantiateDeclQuery)
 CDOT_QUERY(CheckTemplateExtensionApplicabilityQuery)
-CDOT_QUERY(PrepareDeclForInstantiationQuery)
-CDOT_QUERY(InstantiateTemplateMemberQuery)
-CDOT_QUERY(PrepareInstantiationForNameLookupQuery)
 CDOT_QUERY(GetILModuleForDeclQuery)
 CDOT_QUERY(GenerateILForContextQuery)
 CDOT_QUERY(GenerateRecordILQuery)

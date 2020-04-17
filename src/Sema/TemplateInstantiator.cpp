@@ -52,10 +52,10 @@ public:
    }
 
    InstantiatorImpl(SemaPass& SP, MultiLevelFinalTemplateArgList&& templateArgs,
-                    NamedDecl* Template, QualType Self = QualType(),
-                    SourceLocation POI = {})
+                    NamedDecl* Template, DeclContext* InstCtx = nullptr,
+                    QualType Self = QualType(), SourceLocation POI = {})
        : ASTTypeVisitor(false), TypeBuilder(SP, SourceRange(POI)), SP(SP),
-         Context(SP.getContext()), InstScope(SP, Template->getDeclContext()),
+         Context(SP.getContext()), InstScope(SP, InstCtx ? InstCtx : Template->getDeclContext()),
          templateArgs(move(templateArgs)), Template(Template), Self(Self),
          POI(POI)
    {
@@ -77,7 +77,7 @@ public:
           SP.getCurrentDecl()->getSourceLoc());
    }
 
-   friend class cdot::TemplateInstantiator;
+   friend class cdot::ast::TemplateInstantiator;
 
    RecordDecl* instantiateRecordDecl(RecordDecl* Decl);
    RecordDecl* instantiateRecordDefinition(RecordDecl* Template,
@@ -1671,6 +1671,8 @@ InstantiatorImpl::instantiateConversionStep(ConversionSequenceBuilder& builder,
                       CastStrength::Implicit);
 
       break;
+   case CastKind::NoOp:
+      break;
    default:
       builder.addStep(step.getKind(), visit(step.getResultType()),
                       CastStrength::Implicit);
@@ -2148,15 +2150,18 @@ Expression* InstantiatorImpl::visitMemberRefExpr(MemberRefExpr* Expr)
    }
 
    QualType lookupType = instantiatedType->removeReference()->removeMetaType();
-   NamedDecl* decl;
 
-   if (SP.QC.FindEquivalentDecl(decl, Expr->getMemberDecl(),
+   NamedDecl *decl = SP.Context.getProtocolImpl(lookupType->getRecord(), Expr->getMemberDecl());
+   if (decl == nullptr) {
+      if (SP.QC.FindEquivalentDecl(decl, Expr->getMemberDecl(),
                                 cast<DeclContext>(SP.getTypeDecl(lookupType)),
                                 lookupType)) {
-      return nullptr;
+         return nullptr;
+      }
    }
 
    assert(decl && "no instantiated decl!");
+   decl = SP.maybeInstantiateTemplateMember(lookupType->getRecord(), decl);
 
    if (MemberRefExpr::needsMemberRefExpr(decl->getKind())) {
       return MemberRefExpr::Create(Context, visit(Expr->getParentExpr()), decl,
@@ -2249,15 +2254,20 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr* node)
           = visit(SourceType(PE->getExprType()->removeReference()))
                 ->removeMetaType();
 
-      NamedDecl* decl;
-      if (SP.QC.FindEquivalentDecl(
-              decl, func, cast<DeclContext>(SP.getTypeDecl(lookupType)),
-              lookupType)) {
-         return nullptr;
+      auto *decl = SP.Context.getProtocolImpl(lookupType->getRecord(), func);
+      if (decl == nullptr) {
+         if (SP.QC.FindEquivalentDecl(
+               decl, func, cast<DeclContext>(SP.getTypeDecl(lookupType)),
+            lookupType)) {
+            return nullptr;
+         }
       }
 
       assert(decl && "no instantiated decl!");
+      decl = SP.maybeInstantiateTemplateMember(lookupType->getRecord(), decl);
+
       func = cast<CallableDecl>(decl);
+      func = SP.maybeInstantiateMemberFunction(func, node);
    }
 
    if (auto* templateArgs = node->getTemplateArgs()) {
@@ -2269,87 +2279,15 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr* node)
          return callInst;
       }
 
-      if (SP.QC.InstantiateCallable(func, func, instTemplateArgs,
-                                    POI.getStart())) {
+      func = SP.getInstantiator().InstantiateCallable(
+         func, instTemplateArgs, POI.getStart());
+
+      if (!func) {
          return node;
       }
    }
 
    return SP.CreateCall(func, ArgVec, node->getSourceLoc());
-
-   //   DeclarationName FuncName = node->getDeclName();
-   //   if (auto Arg = hasTemplateArg(FuncName)) {
-   //      if (Arg->isVariadic()) {
-   //         auto Subst = getParameterSubst(FuncName);
-   //         assert(Subst && "didn't diagnose unexpanded parameter pack!");
-   //
-   //         Arg = Subst;
-   //      }
-   //
-   //      if (!Arg->isType()) {
-   //         auto *SE = StaticExpr::Create(Context,
-   //         Arg->getParam()->getValueType(),
-   //                                       node->getSourceRange(),
-   //                                       Arg->getValue());
-   //
-   //         return AnonymousCallExpr::Create(Context, node->getParenRange(),
-   //         SE,
-   //                                          ArgVec, Labels);
-   //      }
-   //
-   //      QualType Ty = Arg->getType();
-   //      if (true||!Ty->isRecordType()) {
-   //         auto *IE = new(Context) IdentifierRefExpr(
-   //            node->getSourceRange(), IdentifierKind::MetaType,
-   //            Context.getMetaType(Ty));
-   //
-   //         return AnonymousCallExpr::Create(Context, node->getParenRange(),
-   //         IE,
-   //                                          ArgVec, Labels);
-   //      }
-   //
-   //      FuncName = Context.getDeclNameTable().getConstructorName(Ty);
-   //   }
-   //
-   //   auto call = CallExpr::Create(Context,
-   //                                node->getIdentLoc(), node->getParenRange(),
-   //                                copyOrNull(node->getParentExpr()),
-   //                                astvec(ArgVec), Labels,
-   //                                FuncName, node->isDotInit(),
-   //                                node->isDotDeinit());
-   //
-   //   call->setContext(Ctx);
-   //   call->setDirectCall(node->isDirectCall());
-   //   call->setIsPointerAccess(node->isPointerAccess());
-   //   call->setLeadingDot(node->hasLeadingDot());
-
-   //   if (!node->isTypeDependent()) {
-   //      assert(node->isValueDependent() && "instantiating non-dependent "
-   //                                         "expression!");
-   //
-   //      call->setKind(node->getKind());
-   //      call->setExprType(node->getExprType());
-   //
-   //      switch (node->getKind()) {
-   //      case CallKind::Builtin:
-   //         call->setBuiltinKind(node->getBuiltinKind());
-   //         break;
-   //      case CallKind::NamedFunctionCall:
-   //      case CallKind::MethodCall:
-   //      case CallKind::StaticMethodCall:
-   //      case CallKind::InitializerCall:
-   //      case CallKind::CallOperator:
-   //         call->setFunc(node->getFunc());
-   //         break;
-   //      case CallKind::UnionInitializer:
-   //         call->setUnion(node->getUnion());
-   //         break;
-   //      default:
-   //         break;
-   //      }
-   //   }
-
-   //   return call;
 }
 
 Expression* InstantiatorImpl::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
@@ -3206,14 +3144,45 @@ static void updateSpecialFunction(QueryContext& QC, NamedDecl* D,
    }
 }
 
-QueryResult PrepareDeclForInstantiationQuery::run()
+TemplateInstantiator::TemplateInstantiator(SemaPass &SP)
+   : SP(SP), QC(SP.QC)
+{
+
+}
+
+NamedDecl*
+TemplateInstantiator::getInstantiationImpl(NamedDecl *Template,
+                                           FinalTemplateArgumentList *TemplateArgs)
+{
+   auto key = std::make_pair(Template, (uintptr_t)TemplateArgs);
+
+   auto it = InstMap.find(key);
+   if (it == InstMap.end()) {
+      return nullptr;
+   }
+
+   return InstMap[key];
+}
+
+void TemplateInstantiator::registerInstantiation(NamedDecl *Template,
+                                                 FinalTemplateArgumentList *TemplateArgs,
+                                                 NamedDecl *Inst)
+{
+   auto key = std::make_pair(Template, (uintptr_t)TemplateArgs);
+   auto result = InstMap.try_emplace(key, Inst);
+
+   (void)result;
+   assert(result.second && "duplicate instantiation!");
+}
+
+bool TemplateInstantiator::PrepareForInstantiation(NamedDecl *ND)
 {
    switch (ND->getKind()) {
    case Decl::StructDeclID:
    case Decl::ClassDeclID:
    case Decl::EnumDeclID:
-      if (auto Err = QC.PrepareTypeNameLookup(cast<DeclContext>(ND))) {
-         return Query::finish(Err);
+      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(cast<RecordDecl>(ND)))) {
+         return true;
       }
 
       break;
@@ -3221,76 +3190,139 @@ QueryResult PrepareDeclForInstantiationQuery::run()
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:
-      if (auto Err = QC.PrepareDeclInterface(ND)) {
-         return Query::finish(Err);
+      if (QC.PrepareDeclInterface(ND)) {
+         return true;
       }
 
       // Make sure default values are instantiated.
       for (auto* Arg : cast<CallableDecl>(ND)->getArgs()) {
          if (auto Err = QC.TypecheckDecl(Arg)) {
-            return Query::finish(Err);
+            return true;
          }
       }
 
       break;
    case Decl::PropDeclID:
       if (auto Err = QC.PrepareDeclInterface(ND)) {
-         return Query::finish(Err);
+         return true;
       }
 
       if (auto* G = cast<PropDecl>(ND)->getGetterMethod()) {
-         if (auto Err = QC.PrepareDeclForInstantiation(G)) {
-            return Query::finish(Err);
+         if (auto Err = PrepareForInstantiation(G)) {
+            return true;
          }
       }
 
       if (auto* S = cast<PropDecl>(ND)->getSetterMethod()) {
-         if (auto Err = QC.PrepareDeclForInstantiation(S)) {
-            return Query::finish(Err);
+         if (auto Err = PrepareForInstantiation(S)) {
+            return true;
          }
       }
 
       break;
    case Decl::SubscriptDeclID:
       if (auto Err = QC.PrepareDeclInterface(ND)) {
-         return Query::finish(Err);
+         return true;
       }
 
       if (auto* G = cast<SubscriptDecl>(ND)->getGetterMethod()) {
-         if (auto Err = QC.PrepareDeclForInstantiation(G)) {
-            return Query::finish(Err);
+         if (auto Err = PrepareForInstantiation(G)) {
+            return true;
          }
       }
 
       if (auto* S = cast<SubscriptDecl>(ND)->getSetterMethod()) {
-         if (auto Err = QC.PrepareDeclForInstantiation(S)) {
-            return Query::finish(Err);
+         if (auto Err = PrepareForInstantiation(S)) {
+            return true;
          }
       }
 
       break;
    default:
       if (auto Err = QC.TypecheckDecl(ND)) {
-         return Query::finish(Err);
+         return true;
       }
 
       break;
    }
 
    if (ND->isInvalid()) {
-      return fail();
+      return true;
    }
 
-   return finish();
+   return false;
 }
 
-QueryResult InstantiateRecordQuery::run()
+static bool InstantiateAssociatedTypeImpls(QueryContext &QC,
+                                           TemplateInstantiator &Instantiator,
+                                           RecordDecl *Template,
+                                           RecordDecl *Inst)
 {
-   if (QC.PrepareDeclForInstantiation(Template)) {
-      return fail();
+   ArrayRef<AssociatedTypeDecl*> NeededATs;
+   if (QC.GetNeededAssociatedTypes(NeededATs, Template)) {
+      return true;
    }
 
-   auto& SP = sema();
+   for (auto *AT : NeededATs) {
+      auto *Impl = QC.Context.getProtocolImpl(Template, AT);
+      assert(Impl && "associated type not implemented!");
+
+      if (!Instantiator.InstantiateTemplateMember(Impl, Inst)) {
+         return true;
+      }
+   }
+
+   return false;
+}
+
+static bool InstantiateConformances(QueryContext &QC,
+                                    RecordDecl *Template,
+                                    RecordDecl *Inst)
+{
+   QualType Self = QC.Context.getRecordType(Inst);
+
+   auto &ConfTable = QC.Context.getConformanceTable();
+   for (auto *Conf : ConfTable.getAllConformances(Template)) {
+      if (Conf->isConditional()) {
+         auto *CS = Conf->getConstraints();
+
+         bool include = true;
+         for (auto *C : *CS) {
+            if (QC.IsConstraintSatisfied(include, C, Self, Inst)) {
+               return true;
+            }
+
+            if (!include) {
+               break;
+            }
+         }
+
+         if (!include) {
+            continue;
+         }
+      }
+
+      ConfTable.addConformance(QC.Context, ConformanceKind::Explicit, Inst,
+                               Conf->getProto(), Conf->getDeclarationCtx(),
+                               nullptr, Conf->getDepth());
+   }
+
+   return false;
+}
+
+RecordDecl*
+TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
+                                        FinalTemplateArgumentList *TemplateArgs,
+                                        SourceLocation PointOfInstantiation,
+                                        RecordDecl *OuterInst)
+{
+   if (auto *Inst = getInstantiation(Template, TemplateArgs)) {
+      return Inst;
+   }
+
+   if (PrepareForInstantiation(Template)) {
+      return nullptr;
+   }
 
    // Check if this instantiation exists in an external module.
    if (auto* MF = Template->getModFile()) {
@@ -3305,24 +3337,25 @@ QueryResult InstantiateRecordQuery::run()
 
    if (auto Inst = lookupExternalInstantiation<RecordDecl>(MangledName, SP)) {
       Inst->setImportedInstantiation(true);
-      return finish(Inst);
+      return Inst;
    }
 
-   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   unsigned Depth = ::getInstantiationDepth(Template, TemplateArgs);
    if (checkDepth(SP, PointOfInstantiation, Depth)) {
-      return fail();
+      return nullptr;
    }
 
    // Instantiate the interface only for now.
-   InstantiatorImpl Instantiator(SP, *TemplateArgs, Template, QualType(),
-                                 PointOfInstantiation);
+   InstantiatorImpl Instantiator(SP, *TemplateArgs, Template, nullptr,
+                                 QualType(), PointOfInstantiation);
 
    auto* Inst = Instantiator.instantiateRecordDecl(Template);
    if (!OuterInst) {
       // Remember the scope in which this instantiation was requested.
       auto* InstScope = SP.getCurrentDecl();
       auto InstInfo = new (QC.Context) InstantiationInfo<RecordDecl>(
-          PointOfInstantiation, TemplateArgs, Template, Depth);
+         PointOfInstantiation, TemplateArgs, Template, Depth,
+         OuterInst);
 
       Inst->setInstantiationInfo(InstInfo);
       Inst->setIsInstantiation(true);
@@ -3336,22 +3369,35 @@ QueryResult InstantiateRecordQuery::run()
       QC.Sema->ActOnDecl(OuterInst, Inst);
    }
 
-   // Make this instantiation usable from here onwards.
-   finish(Inst);
+   registerInstantiation(Template, TemplateArgs, Inst);
 
    LOG(Instantiations, "instantiated record '", Inst->getFullName(),
        "', requested from ",
        QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
 
-   if (QC.PrepareDeclInterface(Template)) {
-      return fail();
+   if (InstantiateAssociatedTypeImpls(QC, *this, Template, Inst)) {
+      return nullptr;
    }
 
-   QueryResult::ResultKind K = QueryResult::Success;
-   SemaPass::DeclScopeRAII DSR(SP, Inst);
+   if (InstantiateConformances(QC, Template, Inst)) {
+      return nullptr;
+   }
+
+//   if (!Template->hasAttribute<_BuiltinAttr>() && !QC.Sema->shouldCompleteInstantiations()) {
+//      QC.Sema->incompleteRecordInstantiations.push_back(Inst);
+//      return Inst;
+//   }
 
    auto& TemplateInfo = QC.RecordMeta[Template];
    auto& InstInfo = QC.RecordMeta[Inst];
+
+   // Make all protocol requirements visible.
+   auto *ProtocolImpls = QC.Context.getProtocolImpls(Template);
+   if (ProtocolImpls != nullptr) {
+      for (auto [req, impl] : *ProtocolImpls) {
+         QC.Context.addProtocolImpl(Inst, req, impl);
+      }
+   }
 
    // Make all declarations visible without instantiating them.
    for (auto* ND : Template->getDecls<NamedDecl>()) {
@@ -3365,10 +3411,9 @@ QueryResult InstantiateRecordQuery::run()
       }
 
       if (OuterInst) {
-         NamedDecl* InstResult;
-         if (auto Err = QC.InstantiateTemplateMember(
-                 InstResult, ND, Inst, TemplateArgs, PointOfInstantiation)) {
-            QueryResult::update(K, Err.K);
+         if (!InstantiateTemplateMember(ND, Inst, TemplateArgs,
+                                        PointOfInstantiation)) {
+            return nullptr;
          }
       }
       else {
@@ -3388,21 +3433,15 @@ QueryResult InstantiateRecordQuery::run()
       if (!Applies)
          continue;
 
-      // Copy the extensions conformances.
-      auto Conformances = Ext->getConformanceTypes();
-      Inst->getConformanceTypes().append(SP.Context, Conformances.begin(),
-                                         Conformances.end());
-
       for (auto* D : Ext->getDecls<NamedDecl>()) {
          if (D->isSynthesized()) {
             continue;
          }
 
          if (OuterInst) {
-            NamedDecl* InstResult;
-            if (auto Err = QC.InstantiateTemplateMember(
-                    InstResult, D, Inst, TemplateArgs, PointOfInstantiation)) {
-               QueryResult::update(K, Err.K);
+            if (!InstantiateTemplateMember(D, Inst, TemplateArgs,
+                                           PointOfInstantiation)) {
+               return nullptr;
             }
          }
          else {
@@ -3415,13 +3454,13 @@ QueryResult InstantiateRecordQuery::run()
 
    // Instantiate fields and cases.
    if (auto* S = dyn_cast<StructDecl>(Inst)) {
-      if (auto Err = QC.InstantiateFields(S)) {
-         return Query::finish(Err);
+      if (InstantiateFields(S)) {
+         return nullptr;
       }
    }
    else if (auto* E = dyn_cast<EnumDecl>(Inst)) {
-      if (auto Err = QC.InstantiateCases(E)) {
-         return Query::finish(Err);
+      if (InstantiateCases(E)) {
+         return nullptr;
       }
    }
 
@@ -3453,9 +3492,9 @@ QueryResult InstantiateRecordQuery::run()
 
          if (auto* compoundDecl = dyn_cast<CompoundDecl>(inst)) {
             for (auto* innerCompoundDecl :
-                 compoundDecl->getDecls<CompoundDecl>()) {
+               compoundDecl->getDecls<CompoundDecl>()) {
                for (auto* innerDecl :
-                    innerCompoundDecl->getDecls<NamedDecl>()) {
+                  innerCompoundDecl->getDecls<NamedDecl>()) {
                   QC.Sema->makeDeclAvailable(*Inst, innerDecl);
                }
             }
@@ -3463,38 +3502,48 @@ QueryResult InstantiateRecordQuery::run()
       }
    }
 
-   if (auto Err = QC.PrepareDeclInterface(Inst)) {
-      return Query::finish(Err);
+   QC.Sema->updateLookupLevel(Inst, LookupLevel::Complete);
+
+   if (QC.Sema->PrepareNameLookup(Inst)) {
+      return nullptr;
    }
 
-   return finish(Inst);
+   return Inst;
 }
 
-QueryResult InstantiateTemplateMemberQuery::run()
+NamedDecl*
+TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
+                                                RecordDecl *Inst,
+                                                FinalTemplateArgumentList *TemplateArgs,
+                                                SourceLocation PointOfInstantiation)
 {
-   if (QC.PrepareDeclForInstantiation(TemplateMember)) {
-      return fail();
+   if (auto *MemberInst = getInstantiation(TemplateMember, TemplateArgs)) {
+      return MemberInst;
+   }
+
+   if (PrepareForInstantiation(TemplateMember)) {
+      return nullptr;
    }
 
    if (auto* C = dyn_cast<CallableDecl>(TemplateMember)) {
-      if (C->getBodyTemplate()
-          && QC.PrepareDeclForInstantiation(C->getBodyTemplate())) {
-         return fail();
+      if (C->getBodyTemplate() && PrepareForInstantiation(C->getBodyTemplate())) {
+         return nullptr;
       }
    }
 
    // Instantiate declarations provided by protocol extensions.
    if (isa<ProtocolDecl>(TemplateMember->getRecord())) {
-      NamedDecl* Result;
-      if (auto Err = QC.InstantiateProtocolDefaultImpl(
-              Result, TemplateMember, QC.Context.getRecordType(Inst), false)) {
-         return Query::finish(Err);
+      NamedDecl* Result = InstantiateProtocolDefaultImpl(
+         TemplateMember, QC.Context.getRecordType(Inst), false);
+
+      if (!Result) {
+         return nullptr;
       }
 
       Inst->removeVisibleDecl(TemplateMember, Result->getDeclName());
       QC.Sema->ActOnDecl(Inst, Result);
 
-      return finish(Result);
+      return Result;
    }
 
    if (!TemplateArgs) {
@@ -3506,38 +3555,45 @@ QueryResult InstantiateTemplateMemberQuery::run()
 
    NamedDecl* MemberInst;
    if (auto* R = dyn_cast<RecordDecl>(TemplateMember)) {
-      if (QC.InstantiateRecord(R, R, TemplateArgs, PointOfInstantiation,
-                               Inst)) {
-         return fail();
+      if (InstantiateRecord(R, TemplateArgs, PointOfInstantiation, Inst)) {
+         return nullptr;
       }
 
       MemberInst = R;
 
       if (MemberInst == TemplateMember) {
-         return finish(MemberInst);
+         return MemberInst;
       }
       if (!MemberInst) {
-         return fail();
+         return nullptr;
       }
    }
    else {
       InstantiatorImpl Instantiator(
-          *QC.Sema, *TemplateArgs, TemplateMember->getRecord(),
-          QC.Context.getRecordType(Inst), PointOfInstantiation);
+         *QC.Sema, *TemplateArgs, TemplateMember->getRecord(),
+         TemplateMember->getRecord(),
+         QC.Context.getRecordType(Inst), PointOfInstantiation);
 
       MemberInst = cast_or_null<NamedDecl>(
-          Instantiator.instantiateDecl(TemplateMember));
+         Instantiator.instantiateDecl(TemplateMember));
 
       if (MemberInst == TemplateMember) {
-         return finish(MemberInst);
+         return MemberInst;
       }
       if (!MemberInst) {
-         return fail();
+         return nullptr;
       }
 
       // Declaration was visible under the new name.
       Inst->removeVisibleDecl(TemplateMember, MemberInst->getDeclName());
       QC.Sema->ActOnDecl(Inst, MemberInst);
+   }
+
+   registerInstantiation(TemplateMember, TemplateArgs, MemberInst);
+
+   if (TemplateMember->isImplOfProtocolRequirement()) {
+      MemberInst->setImplOfProtocolRequirement(true);
+      QC.Context.updateProtocolImpl(Inst, TemplateMember, MemberInst);
    }
 
    LOG(Instantiations, "instantiated template member '",
@@ -3547,8 +3603,8 @@ QueryResult InstantiateTemplateMemberQuery::run()
    if (TemplateMember->shouldBeSpecialized()) {
       MemberInst->setShouldBeSpecialized(true);
       cast<CallableDecl>(MemberInst)
-          ->setBodyTemplate(
-              cast<CallableDecl>(TemplateMember)->getBodyTemplate());
+         ->setBodyTemplate(
+            cast<CallableDecl>(TemplateMember)->getBodyTemplate());
    }
 
    // Don't do this for inner records.
@@ -3560,46 +3616,33 @@ QueryResult InstantiateTemplateMemberQuery::run()
                             TemplateInfo, InstInfo);
    }
 
-   return finish(MemberInst);
+   return MemberInst;
 }
 
-QueryResult PrepareInstantiationForNameLookupQuery::run()
+CallableDecl*
+TemplateInstantiator::InstantiateCallable(CallableDecl *Template,
+                                          FinalTemplateArgumentList *TemplateArgs,
+                                          SourceLocation PointOfInstantiation)
 {
-   llvm_unreachable("unimplemented");
-}
-
-QueryResult InstantiateCallableQuery::run()
-{
-   CallableDecl* Inst;
    if (auto* F = dyn_cast<FunctionDecl>(Template)) {
-      FunctionDecl* InstFn;
-      if (QC.InstantiateFunction(InstFn, F, TemplateArgs,
-                                 PointOfInstantiation)) {
-         return fail();
-      }
-
-      Inst = InstFn;
-   }
-   else {
-      MethodDecl* InstFn;
-      if (QC.InstantiateMethod(InstFn, cast<MethodDecl>(Template), TemplateArgs,
-                               PointOfInstantiation)) {
-         return fail();
-      }
-
-      Inst = InstFn;
+      return InstantiateFunction(F, TemplateArgs, PointOfInstantiation);
    }
 
-   return finish(Inst);
+   return InstantiateMethod(cast<MethodDecl>(Template), TemplateArgs, PointOfInstantiation);
 }
 
-QueryResult InstantiateFunctionQuery::run()
+FunctionDecl*
+TemplateInstantiator::InstantiateFunction(FunctionDecl *Template,
+                                          FinalTemplateArgumentList *TemplateArgs,
+                                          SourceLocation PointOfInstantiation)
 {
-   if (QC.PrepareDeclForInstantiation(Template)) {
-      return fail();
+   if (auto *Inst = getInstantiation(Template, TemplateArgs)) {
+      return nullptr;
    }
 
-   auto& SP = sema();
+   if (PrepareForInstantiation(Template)) {
+      return nullptr;
+   }
 
    std::string MangledName;
    {
@@ -3609,31 +3652,33 @@ QueryResult InstantiateFunctionQuery::run()
 
    if (auto Inst = lookupExternalInstantiation<FunctionDecl>(MangledName, SP)) {
       Inst->setImportedInstantiation(true);
-      return finish(Inst);
+      return Inst;
    }
 
-   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   unsigned Depth = ::getInstantiationDepth(Template, TemplateArgs);
    if (checkDepth(SP, PointOfInstantiation, Depth)) {
-      return fail();
+      return nullptr;
    }
 
    auto* InstScope = SP.getCurrentDecl();
 
-   InstantiatorImpl Instantiator(SP, *TemplateArgs, Template, QualType(),
-                                 PointOfInstantiation);
+   InstantiatorImpl Instantiator(SP, *TemplateArgs, Template, nullptr,
+                                 QualType(), PointOfInstantiation);
 
    auto Inst = Instantiator.instantiateFunctionDecl(Template);
    if (!Inst) {
-      return fail();
+      return nullptr;
    }
 
    // Remember where this template was instantiated.
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>(
-       PointOfInstantiation, TemplateArgs, Template, Depth);
+      PointOfInstantiation, TemplateArgs, Template, Depth);
 
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
+
    SP.registerInstantiation(Inst, InstScope);
+   registerInstantiation(Template, TemplateArgs, Inst);
 
    Instantiator.ActOnDecl(Inst, Template->getDeclContext());
 
@@ -3641,12 +3686,22 @@ QueryResult InstantiateFunctionQuery::run()
        "', requested from ",
        QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
 
-   return finish(Inst);
+   return Inst;
 }
 
-QueryResult InstantiateMethodQuery::run()
+MethodDecl*
+TemplateInstantiator::InstantiateMethod(MethodDecl *Template,
+                                        FinalTemplateArgumentList *TemplateArgs,
+                                        SourceLocation PointOfInstantiation)
 {
-   auto& SP = sema();
+   if (auto *Inst = getInstantiation(Template, TemplateArgs)) {
+      return nullptr;
+   }
+
+   if (PrepareForInstantiation(Template)) {
+      return nullptr;
+   }
+
    SemaPass::DeclScopeRAII DSR(SP, Template->getDeclContext());
 
    // Only instantiate the complete initializer, the base initializer will be
@@ -3663,12 +3718,12 @@ QueryResult InstantiateMethodQuery::run()
 
    if (auto Inst = lookupExternalInstantiation<MethodDecl>(MangledName, SP)) {
       Inst->setImportedInstantiation(true);
-      return finish(Inst);
+      return Inst;
    }
 
-   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   unsigned Depth = ::getInstantiationDepth(Template, TemplateArgs);
    if (checkDepth(SP, PointOfInstantiation, Depth)) {
-      return fail();
+      return nullptr;
    }
 
    if (auto BT = Template->getBodyTemplate()) {
@@ -3677,13 +3732,13 @@ QueryResult InstantiateMethodQuery::run()
          Info->loadBody(BT);
       }
 
-      if (QC.PrepareDeclForInstantiation(BT)) {
-         return fail();
+      if (PrepareForInstantiation(BT)) {
+         return nullptr;
       }
    }
    else {
-      if (QC.PrepareDeclForInstantiation(Template)) {
-         return fail();
+      if (PrepareForInstantiation(Template)) {
+         return nullptr;
       }
    }
 
@@ -3694,8 +3749,8 @@ QueryResult InstantiateMethodQuery::run()
       MultiLevelList.addOuterList(Template->getRecord()->getTemplateArgs());
    }
 
-   InstantiatorImpl Instantiator(SP, move(MultiLevelList), Template, QualType(),
-                                 PointOfInstantiation);
+   InstantiatorImpl Instantiator(SP, move(MultiLevelList), Template, nullptr,
+                                 QualType(), PointOfInstantiation);
 
    MethodDecl* Inst;
    if (auto C = dyn_cast<InitDecl>(Template)) {
@@ -3709,15 +3764,17 @@ QueryResult InstantiateMethodQuery::run()
    }
 
    if (!Inst) {
-      return fail();
+      return nullptr;
    }
 
    auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>(
-       PointOfInstantiation, TemplateArgs, Template, Depth);
+      PointOfInstantiation, TemplateArgs, Template, Depth);
 
    Inst->setInstantiationInfo(instInfo);
    Inst->setIsInstantiation(true);
+
    SP.registerInstantiation(Inst, InstScope);
+   registerInstantiation(Template, TemplateArgs, Inst);
 
    Instantiator.ActOnDecl(Inst, Template->getDeclContext());
 
@@ -3725,7 +3782,7 @@ QueryResult InstantiateMethodQuery::run()
        "', requested from ",
        QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
 
-   return finish(Inst);
+   return Inst;
 }
 
 StmtResult TemplateInstantiator::InstantiateStatement(
@@ -3742,18 +3799,7 @@ StmtResult TemplateInstantiator::InstantiateStatement(
     MultiLevelFinalTemplateArgList&& templateArgs)
 {
    InstantiatorImpl Instantiator(SP, move(templateArgs));
-   auto* Inst = Instantiator.instantiateStatement(stmt);
-   assert(Instantiator.DelayedTypeDecls.empty());
-
-   return Inst;
-}
-
-ExprResult TemplateInstantiator::InstantiateTypeExpr(RecordDecl* Rec,
-                                                     Expression* E)
-{
-   llvm_unreachable("needed?");
-   //   InstantiatorImpl Instantiator(SP, Rec);
-   //   return cast<Expression>(Instantiator.instantiateStatement(E));
+   return Instantiator.instantiateStatement(stmt);
 }
 
 QueryResult InstantiateDeclQuery::run()
@@ -3789,25 +3835,29 @@ StmtResult TemplateInstantiator::InstantiateStatement(StmtOrDecl,
    return Instantiator.instantiateStatement(stmt);
 }
 
-QueryResult InstantiateMethodBodyQuery::run()
+bool TemplateInstantiator::InstantiateMethodBody(MethodDecl *Inst)
 {
+   if (Inst->getBody() != nullptr) {
+      return false;
+   }
+
    assert(Inst->getBodyTemplate() && "function does not need instantiation");
 
    if (auto Err = QC.TypecheckDecl(Inst->getBodyTemplate())) {
-      return Query::finish(Err);
+      return true;
    }
    if (auto Err = QC.TypecheckDecl(Inst)) {
-      return Query::finish(Err);
+      return true;
    }
 
    if (Inst->getBodyTemplate()->isInvalid()) {
       Inst->setIsInvalid(true);
-      return Query::finish(DoneWithError);
+      return true;
    }
 
    if (!Inst->getBodyTemplate()->getBody()) {
       assert(Inst->getBodyTemplate()->hasAttribute<_BuiltinAttr>());
-      return finish();
+      return false;
    }
 
    MultiLevelFinalTemplateArgList ArgList;
@@ -3837,7 +3887,7 @@ QueryResult InstantiateMethodBodyQuery::run()
    auto BodyInst = Instantiator.instantiateFunctionBody(Inst);
    Inst->setBody(BodyInst);
 
-   Status S = Done;
+   bool error = false;
    {
       SemaPass::DeclScopeRAII raii(*QC.Sema, Inst);
       SemaPass::ScopeGuard scope(*QC.Sema, Inst);
@@ -3848,7 +3898,7 @@ QueryResult InstantiateMethodBodyQuery::run()
       }
 
       if (!res || BodyInst->isInvalid()) {
-         S = DoneWithError;
+         error = true;
       }
    }
 
@@ -3865,7 +3915,7 @@ QueryResult InstantiateMethodBodyQuery::run()
    // define the body
    if (IsExternallyLoaded && isa<MethodDecl>(Inst)) {
       QC.Sema->getILGen().registerInstantiatedImportedMethod(
-          cast<MethodDecl>(Inst));
+         cast<MethodDecl>(Inst));
    }
 
    if (auto Init = dyn_cast<InitDecl>(Inst)) {
@@ -3875,27 +3925,22 @@ QueryResult InstantiateMethodBodyQuery::run()
    }
 
    LOG(Instantiations, "instantiated body of '", Inst->getFullName(), "'");
-   return finish(S);
+   return error;
 }
 
-ExprResult TemplateInstantiator::InstantiateStaticExpr(
-    SourceLocation instantiatedFrom, Expression* expr,
-    const sema::TemplateArgList& templateArgs)
+AliasDecl*
+TemplateInstantiator::InstantiateAlias(AliasDecl *Template,
+                                       FinalTemplateArgumentList *TemplateArgs,
+                                       SourceLocation PointOfInstantiation)
 {
-   auto Stmt = InstantiateStatement(instantiatedFrom, expr, templateArgs);
-   if (!Stmt)
-      return ExprError();
-
-   return cast<Expression>(Stmt.getValue());
-}
-
-QueryResult InstantiateAliasQuery::run()
-{
-   if (auto Err = QC.PrepareDeclForInstantiation(Template)) {
-      return Query::finish(Err);
+   if (auto *Inst = getInstantiation(Template, TemplateArgs)) {
+      return nullptr;
    }
 
-   auto& SP = sema();
+   if (PrepareForInstantiation(Template)) {
+      return nullptr;
+   }
+
    SemaPass::DeclScopeRAII DSR(SP, Template->getDeclContext());
 
    std::string MangledName;
@@ -3906,29 +3951,31 @@ QueryResult InstantiateAliasQuery::run()
 
    if (auto Inst = lookupExternalInstantiation<AliasDecl>(MangledName, SP)) {
       Inst->setImportedInstantiation(true);
-      return finish(Inst);
+      return Inst;
    }
 
-   unsigned Depth = getInstantiationDepth(Template, TemplateArgs);
+   unsigned Depth = ::getInstantiationDepth(Template, TemplateArgs);
    if (checkDepth(SP, PointOfInstantiation, Depth)) {
-      return fail();
+      return nullptr;
    }
 
    auto* InstScope = SP.getCurrentDecl();
    auto* InstInfo = new (SP.getContext()) InstantiationInfo<AliasDecl>(
-       PointOfInstantiation, TemplateArgs, Template, Depth);
+      PointOfInstantiation, TemplateArgs, Template, Depth);
 
    InstantiatorImpl Instantiator(SP, *InstInfo->templateArgs, Template,
-                                 QualType(), PointOfInstantiation);
+                                 nullptr, QualType(), PointOfInstantiation);
 
    auto Inst = Instantiator.instantiateAliasDecl(Template);
    if (!Inst) {
-      return fail();
+      return nullptr;
    }
 
    Inst->setInstantiationInfo(InstInfo);
    Inst->setIsInstantiation(true);
+
    SP.registerInstantiation(Inst, InstScope);
+   registerInstantiation(Template, TemplateArgs, Inst);
 
    Instantiator.ActOnDecl(Inst, Template->getDeclContext());
 
@@ -3936,5 +3983,5 @@ QueryResult InstantiateAliasQuery::run()
        "', requested from ",
        QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
 
-   return finish(Inst);
+   return Inst;
 }

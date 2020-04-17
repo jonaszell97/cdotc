@@ -11,6 +11,7 @@
 
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/FoldingSet.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Allocator.h>
 
 namespace cdot {
@@ -78,7 +79,7 @@ public:
    mutable llvm::BumpPtrAllocator Allocator;
    mutable llvm::BumpPtrAllocator TmpAllocator;
 
-   mutable llvm::SmallPtrSet<ExtensionDecl*, 16> UnresolvedExtensions;
+   mutable llvm::SetVector<ExtensionDecl*> UnresolvedExtensions;
    mutable llvm::FoldingSet<DeclConstraint> DeclConstraints;
    mutable llvm::FoldingSet<ConstraintSet> ConstraintSets;
 
@@ -224,6 +225,8 @@ public:
 
    void addProtocolImpl(const RecordDecl* R, const NamedDecl* Req,
                         NamedDecl* Impl);
+
+   void updateProtocolImpl(const RecordDecl* R, NamedDecl *OldImpl, NamedDecl* NewImpl);
 
    NamedDecl* getProtocolImpl(const RecordDecl* R, const NamedDecl* Req);
 

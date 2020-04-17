@@ -2,6 +2,7 @@
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ModuleFile.h"
 
 using namespace cdot;
@@ -80,16 +81,26 @@ static MethodDecl* InstantiateMethodDefaultImpl(QueryContext& QC,
    return Inst;
 }
 
-QueryResult InstantiateProtocolDefaultImplQuery::run()
+NamedDecl*
+TemplateInstantiator::InstantiateProtocolDefaultImpl(NamedDecl *Impl,
+                                                     QualType Self,
+                                                     bool ActOnDecl)
 {
+   auto key = std::make_pair(Impl, (uintptr_t)Self.getAsOpaquePtr());
+
+   auto it = InstMap.find(key);
+   if (it == InstMap.end()) {
+      return nullptr;
+   }
+
    assert(isa<ExtensionDecl>(Impl->getNonTransparentDeclContext())
           && cast<ExtensionDecl>(Impl->getNonTransparentDeclContext())
-                 ->getExtendedRecord()
-                 ->isProtocol()
+             ->getExtendedRecord()
+             ->isProtocol()
           && "not a protocol default impl!");
 
    if (QC.PrepareDeclInterface(Impl)) {
-      return fail();
+      return nullptr;
    }
 
    NamedDecl* Inst;
@@ -114,8 +125,8 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
       }
 
       Inst = PropDecl::Create(
-          sema().Context, P->getAccess(), P->getSourceRange(), P->getDeclName(),
-          SourceType(SubstTy), P->isStatic(), P->isReadWrite(), Getter, Setter);
+         SP.Context, P->getAccess(), P->getSourceRange(), P->getDeclName(),
+         SourceType(SubstTy), P->isStatic(), P->isReadWrite(), Getter, Setter);
    }
    else if (auto* S = dyn_cast<SubscriptDecl>(Impl)) {
       MethodDecl* Getter = nullptr;
@@ -137,19 +148,19 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
          }
       }
 
-      Inst = SubscriptDecl::Create(sema().Context, S->getAccess(),
+      Inst = SubscriptDecl::Create(SP.Context, S->getAccess(),
                                    S->getSourceRange(), T, Getter, Setter);
    }
    else if (auto* alias = dyn_cast<AliasDecl>(Impl)) {
       QualType InstTy;
       if (QC.SubstAssociatedTypes(InstTy, alias->getAliasedType(), Self,
                                   alias->getSourceLoc())) {
-         return fail();
+         return nullptr;
       }
 
       SourceType Ty(QC.Context.getMetaType(InstTy));
       auto* typeExpr = new (QC.Context) IdentifierRefExpr(
-          alias->getSourceLoc(), IdentifierKind::MetaType, Ty);
+         alias->getSourceLoc(), IdentifierKind::MetaType, Ty);
 
       auto* rawTypeExpr = StaticExpr::Create(QC.Context, typeExpr);
       Inst = AliasDecl::Create(QC.Context, alias->getSourceLoc(),
@@ -161,16 +172,22 @@ QueryResult InstantiateProtocolDefaultImplQuery::run()
    }
 
    if (!Inst) {
-      return fail();
+      return nullptr;
    }
 
+   if (Impl->isImplOfProtocolRequirement()) {
+      Inst->setImplOfProtocolRequirement(true);
+      QC.Context.updateProtocolImpl(Self->getRecord(), Impl, Inst);
+   }
+
+   InstMap[key] = Inst;
    QC.Context.setAttributes(Inst, Impl->getAttributes());
 
    if (ActOnDecl) {
       QC.Sema->ActOnDecl(Self->getRecord(), Inst);
    }
 
-   return finish(Inst);
+   return Inst;
 }
 
 QueryResult CheckTemplateExtensionApplicabilityQuery::run()
@@ -197,34 +214,36 @@ QueryResult CheckTemplateExtensionApplicabilityQuery::run()
    return finish(true);
 }
 
-QueryResult InstantiateFieldsQuery::run()
+bool TemplateInstantiator::InstantiateFields(StructDecl *S)
 {
    assert(S->isInstantiation() && "not an instantiation!");
 
+   bool error = false;
    for (auto* F : S->getSpecializedTemplate()->getDecls<FieldDecl>()) {
       if (F->isStatic()) {
          continue;
       }
 
-      NamedDecl* Inst;
-      if (auto Err = QC.InstantiateTemplateMember(Inst, F, S)) {
-         return Query::finish(Err);
+      NamedDecl* Inst = InstantiateTemplateMember(F, S);
+      if (!Inst) {
+         error = true;
       }
    }
 
-   return finish();
+   return error;
 }
 
-QueryResult InstantiateCasesQuery::run()
+bool TemplateInstantiator::InstantiateCases(EnumDecl *E)
 {
    assert(E->isInstantiation() && "not an instantiation!");
 
+   bool error = false;
    for (auto* Case : E->getSpecializedTemplate()->getDecls<EnumCaseDecl>()) {
-      NamedDecl* Inst;
-      if (auto Err = QC.InstantiateTemplateMember(Inst, Case, E)) {
-         return Query::finish(Err);
+      NamedDecl* Inst = InstantiateTemplateMember(Case, E);
+      if (!Inst) {
+         error = true;
       }
    }
 
-   return finish();
+   return error;
 }

@@ -108,7 +108,7 @@ QueryResult GetBuiltinFuncQuery::run()
    }
 
    NamedDecl* LookupRes;
-   if (QC.LookupSingle(LookupRes, Mod->getDecl(), II)) {
+   if (QC.LookupSingle(LookupRes, Mod->getDecl(), II, LookupOpts::Restricted)) {
       return fail();
    }
 
@@ -163,14 +163,14 @@ QueryResult GetBuiltinAliasQuery::run()
    }
 
    NamedDecl* LookupRes;
-   if (QC.LookupSingle(LookupRes, DC, II)) {
+   if (QC.LookupSingle(LookupRes, DC, II, LookupOpts::Restricted)) {
       return fail();
    }
 
 #ifndef NDEBUG
    if (!LookupRes) {
       if (QC.LookupSingle(LookupRes, QC.CI.getCompilationModule()->getDecl(),
-                          II)) {
+                          II, LookupOpts::Restricted)) {
          return fail();
       }
    }
@@ -251,7 +251,7 @@ QueryResult GetBuiltinRecordQuery::run()
       auto& name = Idents.get(getBuiltinRecordName(R));
       NamedDecl* LookupRes;
       if (QC.LookupSingle(LookupRes, QC.CI.getCompilationModule()->getDecl(),
-                          &name)) {
+                          &name, LookupOpts::Restricted)) {
          return fail();
       }
 
@@ -673,7 +673,7 @@ QueryResult GetBuiltinRecordQuery::run()
    }
 
    NamedDecl* LookupRes;
-   if (QC.LookupSingle(LookupRes, Mod->getDecl(), II)) {
+   if (QC.LookupSingle(LookupRes, Mod->getDecl(), II, LookupOpts::Restricted)) {
       return fail();
    }
 
@@ -734,7 +734,7 @@ QueryResult GetBuiltinProtocolQuery::run()
 
       NamedDecl* LookupRes;
       if (QC.LookupSingle(LookupRes, QC.CI.getCompilationModule()->getDecl(),
-                          &name)) {
+                          &name, LookupOpts::Restricted)) {
          return fail();
       }
 
@@ -1024,7 +1024,7 @@ QueryResult GetBuiltinProtocolQuery::run()
    }
 
    NamedDecl* LookupRes;
-   if (QC.LookupSingle(LookupRes, Mod->getDecl(), II)) {
+   if (QC.LookupSingle(LookupRes, Mod->getDecl(), II, LookupOpts::Restricted)) {
       return fail();
    }
 

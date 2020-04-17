@@ -23,8 +23,8 @@
 #include "cdotc/Sema/Lookup.h"
 #include "cdotc/Sema/Scope/Scope.h"
 #include "cdotc/Sema/Template.h"
-#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Support/Casting.h"
+#include "cdotc/Support/Optional.h"
 
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/SetVector.h>
@@ -42,12 +42,10 @@ class ConformanceCheckerImpl;
 
 namespace ast {
 
-class ILGenPass;
-class OverloadResolver;
 class DeclContextLookupResult;
-class ExprResolverImpl;
+class ILGenPass;
 class ReflectionBuilder;
-class NameBinder;
+class TemplateInstantiator;
 
 class SemaPass : public EmptyASTVisitor<ExprResult, StmtResult, DeclResult> {
 public:
@@ -70,7 +68,7 @@ public:
    void setDeclContext(DeclContext& Ctx) { DeclCtx = &Ctx; }
 
    const SymbolMangler& getMangler() const { return mangle; }
-   TemplateInstantiator& getInstantiator() const { return Instantiator; }
+   TemplateInstantiator& getInstantiator() const;
 
    void pushDeclContext(DeclContext* Ctx);
    void popDeclContext();
@@ -561,7 +559,6 @@ public:
 
    NamedDecl* getInstantiationScope(NamedDecl* Inst);
 
-   void visitDelayedDecl(Decl* ND);
    void checkVirtualOrOverrideMethod(MethodDecl* M);
    void checkIfAbstractMethodsOverridden(ClassDecl* R);
 
@@ -570,13 +567,14 @@ public:
 
    enum class Stage {
       Parsing = 0,
-      Declaration,
+      PreparingNameLookup,
       Sema,
-      Finalization,
       ILGen,
    };
 
    Stage getStage() const { return stage; }
+   bool shouldCompleteInstantiations() const { return !Bits.DelayRecordInstantiations; }
+
    CallableDecl* getCurrentFun() const;
 
    template<std::size_t StrLen>
@@ -799,11 +797,6 @@ private:
    /// Pointer to the compiler instance this Sema object belongs to.
    CompilerInstance* compilationUnit;
 
-public:
-   /// Convenience reference to the global query context.
-   QueryContext& QC;
-
-private:
    /// Current diagnostic consumer. Default behaviour is to store the
    /// diagnostics and emit them when Sema is destructed.
    std::unique_ptr<DiagnosticConsumer> DiagConsumer;
@@ -812,6 +805,9 @@ private:
    DiagnosticsEngine Diags;
 
 public:
+   /// Convenience reference to the global query context.
+   QueryContext& QC;
+
    /// Reference to the compilation's AST context.
    ASTContext& Context;
 
@@ -828,16 +824,8 @@ private:
    /// Next scope ID to assign.
    unsigned NextScopeID = 1;
 
-   /// Declarations that could not be handled yet, or need special treatment
-   /// at a later stage of compilation.
-   SmallVector<Decl*, 0> DelayedDecls;
-
-   /// Macro expansions that were encountered at the top level and need to be
-   /// expanded after parsing.
-   std::queue<MacroExpansionDecl*> TopLevelMacros;
-
-   /// Instantiations that have been declared but not yet visited.
-   SmallVector<std::pair<StmtOrDecl, NamedDecl*>, 0> DelayedInstantiations;
+   /// The lookup level for each decl context.
+   llvm::DenseMap<DeclContext*, LookupLevel> lookupLevels;
 
    /// Set of method declarations that fulfill protocol requirements.
    llvm::SmallVector<MethodDecl*, 4> ProtocolImplementations;
@@ -851,25 +839,6 @@ public:
    llvm::SetVector<CallableDecl*> QueuedInstantiations;
 
 private:
-   struct UnresolvedPredecenceGroup {
-      const IdentifierInfo* Name;
-      ModuleDecl* InModule;
-
-      bool operator==(const UnresolvedPredecenceGroup& rhs) const
-      {
-         return Name == rhs.Name && InModule == rhs.InModule;
-      }
-
-      bool operator!=(const UnresolvedPredecenceGroup& rhs) const
-      {
-         return !(rhs == *this);
-      }
-   };
-
-   /// Dependency graph for Precedence groups. Detects circular higherThan /
-   /// lowerThan relationships
-   DependencyGraph<UnresolvedPredecenceGroup> PrecedenceDependency;
-
    /// Symbol mangler instance.
    SymbolMangler mangle;
 
@@ -880,10 +849,7 @@ private:
    BuiltinCandidateBuilder CandBuilder;
 
    /// Instantiator instance.
-   mutable TemplateInstantiator Instantiator;
-
-   /// Function declarations marked extern C with a particular name.
-   llvm::DenseMap<IdentifierInfo*, CallableDecl*> ExternCFuncs;
+   std::unique_ptr<TemplateInstantiator> Instantiator;
 
    /// Stack of do / catch scopes.
    std::vector<bool> DoScopeStack;
@@ -983,9 +949,6 @@ private:
    /// Information about a particular type's coroutine implementation.
    llvm::DenseMap<QualType, CoroutineInfo> CoroutineInfoMap;
 
-   /// Global declarations that we visited.
-   llvm::SmallPtrSet<Decl*, 8> VisitedGlobalDecls;
-
    /// Number of global variables encountered.
    size_t numGlobals = 0;
 
@@ -1007,7 +970,7 @@ private:
       bool InDefaultArgumentValue : 1;
       bool InUnitTest : 1;
       bool DontApplyCapabilities : 1;
-      bool RestrictedLookup : 1;
+      bool DelayRecordInstantiations : 1;
    };
 
    union {
@@ -1046,7 +1009,7 @@ public:
    }
 
    BITS_RAII(DontApplyCapabilities, true);
-   BITS_RAII(RestrictedLookup, true);
+   BITS_RAII(DelayRecordInstantiations, true);
 
    enum class InitializableByKind {
       Integer = 0,
@@ -1074,6 +1037,9 @@ private:
    llvm::DenseMap<NamedDecl*, NamedDecl*> InstScopeMap;
 
 public:
+   /// Set of incomplete instantiations.
+   std::vector<RecordDecl*> incompleteRecordInstantiations;
+
    /// The unknown any type, here for convenience.
    QualType UnknownAnyTy;
 
@@ -1175,6 +1141,7 @@ public:
 
    RecordDecl* getCurrentRecordCtx();
    ExtensionDecl* getCurrentExtensionCtx();
+   ExtensionDecl* getExtensionCtx(DeclContext *CurCtx);
 
    bool inTemplate();
    bool inUnboundedTemplate();
@@ -1194,6 +1161,8 @@ public:
    bool ShouldPassByValue(QualType Ty);
 
    bool ConformsTo(CanType T, ProtocolDecl* Proto);
+   bool ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *InDeclCtx);
+
    bool IsSubClassOf(ClassDecl* C, ClassDecl* Base, bool errorVal = true);
 
    bool ContainsAssociatedTypeConstraint(QualType Ty);
@@ -1216,6 +1185,21 @@ public:
    {
       ProtocolImplementations.push_back(Impl);
    }
+
+   //===-------------------------------------------------------===//
+   // Lookup
+   //===-------------------------------------------------------===//
+
+   /// Prepare a DeclContext for complete name lookup.
+   bool PrepareNameLookup(DeclContext *DC, bool isBaseModule = false);
+
+   /// Complete delayed record instantiations.
+   bool CompleteRecordInstantiations();
+
+   /// Query lookup status of a DeclContext.
+   LookupLevel getLookupLevel(DeclContext *DC) const;
+   void updateLookupLevel(DeclContext *DC, LookupLevel newLevel);
+   bool hasLookupLevel(DeclContext *DC, LookupLevel level) const;
 
 private:
    template<class T, class... Args>
@@ -1347,26 +1331,12 @@ public:
                        ArrayRef<IdentifierInfo*> labels = {},
                        Statement* Expr = nullptr, bool suppressDiags = false);
 
-   CandidateSet checkAnonymousCall(FunctionType* FTy,
-                                   ArrayRef<Expression*> args,
-                                   ArrayRef<IdentifierInfo*> labels,
-                                   Statement* Caller = nullptr);
-
-   /// -1 indicates that the type cannot be returned, other values are the
-   /// respective conversion penalty, if any
-   int ExprCanReturn(Expression* E, CanType Ty);
-   int ExprCanReturnImpl(Expression* E, CanType Ty);
-
-   QualType ResolveContextualLambdaExpr(LambdaExpr* E, QualType Ty);
-   QualType GetDefaultExprType(Expression* E);
 
    ExprResult visitTypeDependentContextualExpr(Expression* E);
 
    DeclResult doDestructure(DestructuringDecl* D, QualType DestructuredTy);
 
    MethodDecl* getEquivalentMethod(MethodDecl* Orig, RecordDecl* Inst);
-
-   void CheckReturnedSelfType(QualType ParentType, Expression* E);
 
    void maybeInstantiate(CandidateSet& CandSet, Statement* Caller);
    void maybeInstantiate(CandidateSet::Candidate& Cand, Statement* Caller);
@@ -1438,10 +1408,12 @@ public:
                                         ArrayRef<Expression*> templateArgs);
 
    RecordDecl* checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
-                                    ArrayRef<Expression*> templateArgs);
+                                    ArrayRef<Expression*> templateArgs,
+                                    bool diagnoseTemplateErrors);
 
    AliasDecl* checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
-                                  ArrayRef<Expression*> templateArgs);
+                                  ArrayRef<Expression*> templateArgs,
+                                  bool diagnoseTemplateErrors);
 
    struct AliasResult {
       explicit AliasResult(AliasDecl* Alias)
@@ -1488,12 +1460,6 @@ public:
       AliasDecl* Result;
    };
 
-   AliasResult checkAlias(const MultiLevelLookupResult& MultiLevelResult,
-                          llvm::ArrayRef<Expression*> templateArgs,
-                          Expression* E);
-
-   bool checkAlias(AliasDecl* alias, CandidateSet::Candidate& Cand);
-
    // checks whether the parent expression of the given expression refers to
    // a namespace rather than a value and adjusts the expression appropriately
    NestedNameSpecifierWithLoc* checkNamespaceRef(Expression* Expr);
@@ -1506,27 +1472,10 @@ public:
    QualType getParentType(Expression* ParentExpr);
 
 private:
-   ExprResult HandleBuiltinTypeMember(IdentifierRefExpr* Expr, QualType Ty);
-   ExprResult HandleStaticTypeMember(IdentifierRefExpr* Expr, QualType Ty);
-
    QualType HandleFieldAccess(Expression* Expr, FieldDecl* F);
    QualType HandlePropAccess(Expression* Expr, PropDecl* P);
-   ExprResult HandleEnumCase(Expression* Expr, EnumCaseDecl* Case);
 
    Expression* checkDeref(Expression* E, QualType T);
-
-   // CallExpr
-
-   ExprResult HandleStaticTypeCall(CallExpr* Call, TemplateArgListExpr* ArgExpr,
-                                   CanType Ty, bool AllowProtocol = true);
-
-   ExprResult HandleConstructorCall(CallExpr* Call,
-                                    TemplateArgListExpr* ArgExpr, QualType T,
-                                    const MultiLevelLookupResult* LookupRes
-                                    = nullptr,
-                                    TemplateParamDecl* Param = nullptr,
-                                    AssociatedTypeDecl* AT = nullptr,
-                                    bool AllowProtocol = true);
 
 public:
    CallExpr* CreateCall(CallableDecl* C, ArrayRef<Expression*> Args,
@@ -1540,7 +1489,6 @@ public:
                                = diag::err_member_not_found,
                                SourceRange SR = SourceRange());
 
-   bool isAccessible(NamedDecl* ND);
    void checkAccessibility(NamedDecl* ND, StmtOrDecl SOD);
 
 private:
@@ -1549,8 +1497,6 @@ private:
                                llvm::ArrayRef<lex::Token> Tokens,
                                unsigned Kind);
 
-   Expression* UnwrapExistential(QualType ParentType, Expression* Expr);
-
 public:
    FuncArgDecl* MakeSelfArg(SourceLocation Loc);
 
@@ -1558,9 +1504,6 @@ public:
    void addDependency(NamedDecl* DependentDecl, Decl* ReferencedDecl);
 
    unsigned getSerializationFile(Decl* D);
-
-   void calculateRecordSize(RecordDecl* R, bool CheckDependencies = true);
-   bool finalizeRecordDecls();
 
    void checkDefaultAccessibility(NamedDecl* ND);
 
@@ -1606,7 +1549,6 @@ private:
 
 public:
    ExprResult HandleReflectionAlias(AliasDecl* Al, Expression* Expr);
-   ExprResult HandleReflectionCall(CallableDecl* C);
 
    ExprResult HandleBuiltinAlias(AliasDecl* Al, Expression* Expr);
    void SetBuiltinAliasType(AliasDecl* A);
@@ -1614,7 +1556,6 @@ public:
    NamespaceDecl* getPrivateNamespace();
 
    friend class ReflectionBuilder;
-   friend class NameBinder;
 };
 
 } // namespace ast

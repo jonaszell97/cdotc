@@ -96,7 +96,7 @@ public:
       buffer.push_back(root);
    }
 
-   /// Gets the next block from the worklist.
+   /// Gets the next block from the allDecls.
    ///
    il::BasicBlock* getNext()
    {
@@ -105,15 +105,15 @@ public:
       return buffer[srcIdx++];
    }
 
-   /// Pushes the dominator children of a block onto the worklist.
+   /// Pushes the dominator children of a block onto the allDecls.
    void pushChildren(il::BasicBlock* block)
    {
       pushChildrenIf(block, [](il::BasicBlock*) { return true; });
    }
 
-   /// Conditionally pushes the dominator children of a block onto the worklist.
+   /// Conditionally pushes the dominator children of a block onto the allDecls.
    /// \p pred Takes a block (= a dominator child) as argument and returns true
-   ///         if it should be added to the worklist.
+   ///         if it should be added to the allDecls.
    ///
    template<typename Pred> void pushChildrenIf(il::BasicBlock* block, Pred pred)
    {

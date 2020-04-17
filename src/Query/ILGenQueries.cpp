@@ -5,6 +5,7 @@
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -19,6 +20,15 @@ QueryResult CreateILModuleQuery::run()
    }
 
    QC.PrintUsedMemory();
+
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
+   // Prepare name lookup.
+   if (QC.Sema->PrepareNameLookup(Mod->getDecl(), true)) {
+      return fail();
+   }
 
    if (QC.Sema->encounteredError()) {
       return fail();
@@ -56,6 +66,10 @@ QueryResult CreateILModuleQuery::run()
 QueryResult GenerateILForContextQuery::run()
 {
    if (QC.TypeCheckDeclContext(DC)) {
+      return fail();
+   }
+
+   if (QC.Sema->encounteredError()) {
       return fail();
    }
 
@@ -201,8 +215,8 @@ QueryResult GenerateRecordILQuery::run()
       }
 
       for (auto* D : DeclsToInstantiate) {
-         NamedDecl* Inst;
-         if (QC.InstantiateTemplateMember(Inst, D, R)) {
+         NamedDecl* Inst = QC.Sema->getInstantiator().InstantiateTemplateMember(D, R);
+         if (!Inst) {
             return fail();
          }
       }
@@ -312,9 +326,10 @@ QueryResult GenerateILFunctionBodyQuery::run()
 
    // Check if we still need to instantiate the body of this function.
    if (QC.Sema->QueuedInstantiations.remove(C)) {
-      if (auto Err = QC.InstantiateMethodBody(C)) {
-         return Query::finish(Err);
-      }
+//      if (auto Err = QC.InstantiateMethodBody(C)) {
+//         return Query::finish(Err);
+//      }
+      //FIXME needed?
    }
 
    if (C->isInvalid()) {

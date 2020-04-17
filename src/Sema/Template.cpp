@@ -25,7 +25,8 @@ TemplateArgument::TemplateArgument(TemplateParamDecl* Param, QualType type,
       Dependent(type->isDependentType() || type->containsAssociatedType()
                 || type->containsTypeVariable()),
       Frozen(false), Runtime(type->containsRuntimeGenericParam()),
-      ManuallySpecifiedVariadicArgs(0), Param(Param), Type(type), Loc(loc)
+      ManuallySpecifiedVariadicArgs(0), Param(Param),
+      Type(type->getCanonicalType()), Loc(loc)
 {
 }
 
@@ -449,8 +450,6 @@ public:
                            Expression* TA)
    {
       auto res = SP.visitExpr(TA);
-      StillDependent |= TA->isTypeDependent() || TA->containsAssociatedType();
-
       if (!res) {
          HadError = true;
          return false;
@@ -479,6 +478,8 @@ public:
          checkDependentType(ty);
 
          HasRuntimeParam |= ty->containsRuntimeGenericParam();
+         StillDependent |= ty->isDependentType();
+
          Out = TemplateArgument(P, ty, TA->getSourceLoc());
       }
       else if (ty->isMetaType()) {
@@ -494,6 +495,8 @@ public:
          checkDependentType(RealTy);
 
          HasRuntimeParam |= RealTy->containsRuntimeGenericParam();
+         StillDependent |= RealTy->isDependentType();
+
          Out = TemplateArgument(P, RealTy, TA->getSourceLoc());
       }
       else {
@@ -513,7 +516,9 @@ public:
             return false;
          }
 
-         if (StatExp->isDependent() || StatExp->containsAssociatedType()) {
+         ty = StatExp->getExprType();
+
+         if (ty->isDependentType()) {
             StillDependent = true;
          }
          else if (StatExp->getExprType() != P->getValueType()) {

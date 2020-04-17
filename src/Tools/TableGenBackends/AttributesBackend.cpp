@@ -1487,23 +1487,47 @@ void AttrSerializeEmitter::emitDeserialize(llvm::ArrayRef<Record*> Attrs)
 
 extern "C" {
 
-void EmitAttributeDefs(llvm::raw_ostream& out, RecordKeeper& RK)
+void EmitAttributeDefs(std::ostream& out, RecordKeeper& RK)
 {
-   AttrDefEmitter(out, RK).emit();
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      AttrDefEmitter(OS, RK).emit();
+   }
+
+   out << s;
 }
 
-void EmitAttributeClasses(llvm::raw_ostream& out, RecordKeeper& RK)
+void EmitAttributeClasses(std::ostream& out, RecordKeeper& RK)
 {
-   AttrClassEmitter(out, RK).emit();
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      AttrClassEmitter(OS, RK).emit();
+   }
+
+   out << s;
 }
 
-void EmitAttributeParse(llvm::raw_ostream& out, RecordKeeper& RK)
+void EmitAttributeParse(std::ostream& out, RecordKeeper& RK)
 {
-   AttrParseEmitter(out, RK).emit();
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      AttrParseEmitter(OS, RK).emit();
+   }
+
+   out << s;
 }
 
-void EmitAttributeSerialize(llvm::raw_ostream& out, RecordKeeper& RK)
+void EmitAttributeSerialize(std::ostream& out, RecordKeeper& RK)
 {
-   AttrSerializeEmitter(out, RK).emit();
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      AttrSerializeEmitter(OS, RK).emit();
+   }
+
+   out << s;
 }
 };

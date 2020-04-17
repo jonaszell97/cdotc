@@ -4,6 +4,7 @@
 #include "cdotc/Module/ModuleManager.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ModuleFile.h"
 #include "cdotc/Support/SaveAndRestore.h"
 #include "cdotc/Support/StringSwitch.h"
@@ -160,7 +161,8 @@ QueryResult ResolveMetaDeclarationsQuery::run()
 
 QueryResult PrepareTypeNameLookupQuery::run()
 {
-   finish();
+   return finish();
+//   finish();
 
    // Prepare the enclosing context.
    if (DC->getParentCtx() && QC.PrepareTypeNameLookup(DC->getParentCtx())) {
@@ -185,9 +187,10 @@ QueryResult PrepareTypeNameLookupQuery::run()
    return finish();
 }
 
+/*
 QueryResult PrepareNameLookupQuery::run()
 {
-   finish();
+//   finish();
 
    if (auto Err = QC.PrepareTypeNameLookup(DC)) {
       return Query::finish(Err);
@@ -237,7 +240,7 @@ QueryResult PrepareNameLookupQuery::run()
    }
 
    return finish();
-}
+}*/
 
 static void updateSpecialNames(SemaPass& Sema, QualType T, ExtensionDecl* Ext)
 {
@@ -267,7 +270,7 @@ QueryResult FindExtensionsQuery::run()
 {
    using ResultKind = MatchExtensionTypeQuery::ResultKind;
 
-   auto& Context = QC.CI.getContext();
+   auto& Context = QC.Context;
    SmallPtrSet<ExtensionDecl*, 2> ExtensionsToRemove;
 
    Status S = Done;
@@ -303,10 +306,25 @@ QueryResult FindExtensionsQuery::run()
       }
    }
 
+   bool isProtocol = T->isRecordType() && T->getRecord()->isProtocol();
    for (auto* Ext : ExtensionsToRemove) {
-      Context.UnresolvedExtensions.erase(Ext);
+      // Diagnose invalid 'default' attributes.
+      if (!isProtocol) {
+         for (auto *Decl : Ext->getDecls()) {
+            if (Decl->isDefault()) {
+               QC.Sema->diagnose(err_generic_error,
+                  "'default' is only allowed in protocol extensions",
+                  Decl->getSourceLoc());
+
+               Decl->setDefault(false);
+            }
+         }
+      }
+
+      Context.UnresolvedExtensions.remove(Ext);
    }
 
+   QC.Sema->updateLookupLevel(T->getRecord(), LookupLevel::Extensions);
    return finish(S);
 }
 
@@ -403,7 +421,7 @@ QueryResult GetExtendedDeclQuery::run()
    auto* PatternTypeExpr = ExtendedTy.getTypeExpr();
 
    if (!isa<IdentifierRefExpr>(PatternTypeExpr)
-       && !isa<TemplateArgListExpr>(PatternTypeExpr)) {
+   && !isa<TemplateArgListExpr>(PatternTypeExpr)) {
       return finish(nullptr);
    }
 
@@ -425,7 +443,7 @@ QueryResult GetExtendedDeclQuery::run()
       if (i == 0) {
          const SingleLevelLookupResult* Result;
          if (QC.LookupFirst(Result, DC, Ident->getDeclName(),
-                            LookupOpts::None)) {
+                            LookupOpts::Restricted)) {
             return fail();
          }
 
@@ -434,7 +452,7 @@ QueryResult GetExtendedDeclQuery::run()
       else {
          const MultiLevelLookupResult* Result;
          if (QC.DirectLookup(Result, DC, Ident->getDeclName(), true,
-                             LookupOpts::None)) {
+                             LookupOpts::Restricted)) {
             return fail();
          }
 
@@ -976,7 +994,9 @@ static bool LookupInRecord(RecordDecl* R, DeclarationName Name,
                            LookupData& Data)
 {
    bool LookupInConformances
-       = isa<ProtocolDecl>(R) && Data.Opts.LookInConformances;
+       = isa<ProtocolDecl>(R) && Data.Opts.LookInConformances
+          && Data.SP.hasLookupLevel(R, LookupLevel::Conformances);
+
    ASTContext& Context = Data.SP.Context;
 
    // Lookup in protocol conformances.
@@ -994,9 +1014,8 @@ static bool LookupInRecord(RecordDecl* R, DeclarationName Name,
       }
    }
 
-   // Make sure extensions are found.
-   if (Data.SP.QC.FindExtensions(Data.SP.Context.getRecordType(R))) {
-      return true;
+   if (!Data.SP.hasLookupLevel(R, LookupLevel::Extensions)) {
+      return false;
    }
 
    // Lookup in all extensions. Accessibility will be checked later.
@@ -1055,7 +1074,7 @@ static bool LookupInExtension(ExtensionDecl* Ext, DeclarationName Name,
 
    // Only look in conformances of protocols, since all types that implement
    // a protocol are required to provide visible declarations.
-   if (!isa<ProtocolDecl>(Rec)) {
+   if (!isa<ProtocolDecl>(Rec) || !Data.SP.hasLookupLevel(Rec, LookupLevel::Conformances)) {
       return false;
    }
 
@@ -1113,6 +1132,10 @@ static bool instantiateTemplateMembers(QueryContext& QC, DeclContext* Ctx,
                                        DeclarationName Name,
                                        DeclContextLookupResult& Result)
 {
+   if (auto *Ext = dyn_cast<ExtensionDecl>(Ctx)) {
+      Ctx = Ext->getExtendedRecord();
+   }
+
    auto* R = dyn_cast<RecordDecl>(Ctx);
    if (!R) {
       return false;
@@ -1121,8 +1144,8 @@ static bool instantiateTemplateMembers(QueryContext& QC, DeclContext* Ctx,
    if (Result.size() == 1) {
       auto* D = Result.front();
       if (D->getRecord() != R) {
-         NamedDecl* Res;
-         if (QC.InstantiateTemplateMember(Res, D, R)) {
+         NamedDecl* Res = QC.Sema->getInstantiator().InstantiateTemplateMember(D, R);
+         if (!Res) {
             return true;
          }
 
@@ -1141,8 +1164,8 @@ static bool instantiateTemplateMembers(QueryContext& QC, DeclContext* Ctx,
    bool MadeChanges = false;
    for (auto* D : Decls) {
       if (D->getRecord() != R) {
-         NamedDecl* Res;
-         if (QC.InstantiateTemplateMember(Res, D, R)) {
+         NamedDecl* Res = QC.Sema->getInstantiator().InstantiateTemplateMember(D, R);
+         if (!Res) {
             return true;
          }
 
@@ -1197,7 +1220,10 @@ static bool MultiStageLookup(DeclContext* DC, DeclarationName Name,
       return HandleFoundDecl(DC, Name, Data);
    }
 
-   if (!Data.Opts.LookInConformances) {
+   return false;
+
+   /*
+   if (!Data.Opts.LookInConformances || !Data.SP.hasLookupLevel(DC, LookupLevel::Conformances)) {
       return false;
    }
 
@@ -1222,7 +1248,7 @@ static bool MultiStageLookup(DeclContext* DC, DeclarationName Name,
       return HandleFoundDecl(DC, Name, Data);
    }
 
-   if (!Data.Opts.PrepareNameLookup || Data.Opts.TypeLookup) {
+   if (Data.Opts.Restricted || !Data.Opts.PrepareNameLookup || Data.Opts.TypeLookup) {
       return false;
    }
 
@@ -1289,25 +1315,32 @@ static bool MultiStageLookup(DeclContext* DC, DeclarationName Name,
 
    // Nothing more we can do, the lookup did not yield any results.
    return false;
+    */
 }
 
 static bool PrepareNameLookup(DeclContext* Ctx, LookupData& Data)
 {
-   if (Data.Opts.PrepareNameLookup) {
-      if (Data.Opts.TypeLookup) {
-         if (Data.SP.QC.PrepareTypeNameLookup(Ctx)) {
-            return true;
-         }
-      }
-      else if (Data.SP.QC.PrepareNameLookup(Ctx)) {
-         return true;
-      }
-   }
-   else if (Data.SP.QC.ResolveMetaDeclarations(Ctx)) {
-      return true;
-   }
-
+   // FIXME yeet this
    return false;
+//   if (Data.Opts.Restricted) {
+//      return false;
+//   }
+//
+//   if (Data.Opts.PrepareNameLookup) {
+//      if (Data.Opts.TypeLookup) {
+//         if (Data.SP.QC.PrepareTypeNameLookup(Ctx)) {
+//            return true;
+//         }
+//      }
+//      else if (Data.SP.QC.PrepareNameLookup(Ctx)) {
+//         return true;
+//      }
+//   }
+//   else if (Data.SP.QC.ResolveMetaDeclarations(Ctx)) {
+//      return true;
+//   }
+//
+//   return false;
 }
 
 static bool MultiLevelLookupImpl(DeclContext& CtxRef, DeclarationName Name,
@@ -1549,17 +1582,6 @@ QueryResult MultiLevelTypeLookupQuery::run()
 
 QueryResult DirectLookupQuery::run()
 {
-   if ((this->Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None) {
-      if ((this->Opts & LookupOpts::TypeLookup) != LookupOpts::None) {
-         if (QC.PrepareTypeNameLookup(DC)) {
-            return fail();
-         }
-      }
-      else if (QC.PrepareNameLookup(DC)) {
-         return fail();
-      }
-   }
-
    MultiLevelLookupResult Result;
 
    auto DirectLookup = DC->lookup(Name);
@@ -1575,12 +1597,12 @@ QueryResult DirectLookupQuery::run()
    // Try looking in record extensions.
    if (auto* R = dyn_cast<RecordDecl>(DC)) {
       auto& Context = QC.Sema->Context;
-      if (LookInExtensions) {
+      if (LookInExtensions && QC.Sema->hasLookupLevel(DC, LookupLevel::Extensions)) {
          auto Extensions = R->getExtensions();
          for (auto* Ext : Extensions) {
             if (Constraints) {
                auto* CS = QC.Sema->getDeclConstraints(Ext);
-               if (!QC.IsSupersetOf(CS, Constraints)) {
+               if (!QC.IsSupersetOf(Constraints, CS)) {
                   continue;
                }
             }
@@ -1597,7 +1619,8 @@ QueryResult DirectLookupQuery::run()
       }
 
       // Make sure unconditional conformances are declared.
-      if (QC.ResolveExplicitConformances(QC.Context.getRecordType(R))) {
+      if (((int)Opts & (int)LookupOpts::LookInConformances) == 0
+      || !QC.Sema->hasLookupLevel(DC, LookupLevel::Conformances)) {
          return fail();
       }
 
@@ -1650,40 +1673,9 @@ QueryResult DirectLookupQuery::run()
    return finish(move(Result));
 }
 
-static bool shouldPerformRestrictedLookupIn(DeclContext* DC)
-{
-   switch (DC->getDeclKind()) {
-   case Decl::NamespaceDeclID:
-   case Decl::SourceFileDeclID:
-   case Decl::ModuleDeclID:
-   case Decl::CompoundDeclID:
-      return true;
-   default:
-      return false;
-   }
-}
-
 QueryResult RestrictedLookupQuery::run()
 {
-   MultiLevelLookupResult result;
-
-   auto* CurDC = DC;
-   while (CurDC) {
-      if (shouldPerformRestrictedLookupIn(CurDC)) {
-         if (QC.ResolveMetaDeclarations(CurDC)) {
-            return fail();
-         }
-
-         auto singleResult = CurDC->lookup(Name);
-         if (!singleResult.empty()) {
-            result.addResult(singleResult);
-         }
-      }
-
-      CurDC = CurDC->getParentCtx();
-   }
-
-   return finish(move(result));
+   assert(false && "yeet this");
 }
 
 QueryResult NestedNameLookupQuery::run()

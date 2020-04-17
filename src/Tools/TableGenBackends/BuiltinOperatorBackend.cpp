@@ -184,8 +184,15 @@ void AttrDefEmitter::emitOp(Record& Op, Fix fix)
 
 extern "C" {
 
-void EmitBuiltinOperators(llvm::raw_ostream& out, RecordKeeper& RK)
+void EmitBuiltinOperators(std::ostream& out, RecordKeeper& RK)
 {
-   AttrDefEmitter(out, RK).emit();
+   std::string s;
+   {
+      llvm::raw_string_ostream OS(s);
+      AttrDefEmitter(OS, RK).emit();
+   }
+
+   out << s;
 }
+
 };

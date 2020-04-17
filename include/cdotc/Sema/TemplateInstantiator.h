@@ -14,26 +14,12 @@
 
 namespace cdot {
 
-struct Variant;
-struct SourceLocation;
-class IdentifierInfo;
+class QueryContext;
+struct QueryResult;
 
 namespace il {
 class Constant;
 } // namespace il
-
-namespace ast {
-class Expression;
-class NamedDecl;
-class FunctionDecl;
-class RecordDecl;
-class MethodDecl;
-class Statement;
-class StaticExpr;
-class SemaPass;
-class AliasDecl;
-class CallableDecl;
-} // namespace ast
 
 namespace sema {
 class TemplateArgList;
@@ -42,76 +28,59 @@ class MultiLevelFinalTemplateArgList;
 class FinalTemplateArgumentList;
 } // namespace sema
 
-template<> struct IsLowBitAvailable<ast::RecordDecl*> {
-   static constexpr bool value = true;
-};
-
-template<> struct IsLowBitAvailable<ast::CallableDecl*> {
-   static constexpr bool value = true;
-};
-
-template<> struct IsLowBitAvailable<ast::FunctionDecl*> {
-   static constexpr bool value = true;
-};
-
-template<> struct IsLowBitAvailable<ast::MethodDecl*> {
-   static constexpr bool value = true;
-};
-
-template<> struct IsLowBitAvailable<ast::AliasDecl*> {
-   static constexpr bool value = true;
-};
-
-using RecordInstResult = ActionResult<ast::RecordDecl*>;
-using CallableInstResult = ActionResult<ast::CallableDecl*>;
-using FunctionInstResult = ActionResult<ast::FunctionDecl*>;
-using MethodInstResult = ActionResult<ast::MethodDecl*>;
-using AliasInstResult = ActionResult<ast::AliasDecl*>;
-
-class InstantiatorImpl;
+namespace ast {
+class AliasDecl;
+class CallableDecl;
+class EnumDecl;
+class Expression;
+class FunctionDecl;
+class MethodDecl;
+class NamedDecl;
+class RecordDecl;
+class SemaPass;
+class Statement;
+class StaticExpr;
+class StructDecl;
 
 class TemplateInstantiator {
 public:
-   using TemplateArgs = sema::FinalTemplateArgumentList;
+   explicit TemplateInstantiator(SemaPass& SP);
 
-   explicit TemplateInstantiator(ast::SemaPass& SP) : SP(SP) {}
+   RecordDecl *InstantiateRecord(RecordDecl *Template,
+                                 sema::FinalTemplateArgumentList *TemplateArgs,
+                                 SourceLocation POI,
+                                 RecordDecl *OuterInst = nullptr);
 
-   RecordInstResult InstantiateRecord(StmtOrDecl POI, ast::RecordDecl* rec,
-                                      TemplateArgs* templateArgs,
-                                      bool* isNew = nullptr);
+   AliasDecl *InstantiateAlias(AliasDecl *Template,
+                               sema::FinalTemplateArgumentList *TemplateArgs,
+                               SourceLocation POI);
 
-   RecordInstResult InstantiateRecord(StmtOrDecl POI, ast::RecordDecl* rec,
-                                      const sema::TemplateArgList& templateArgs,
-                                      bool* isNew = nullptr);
+   CallableDecl *InstantiateCallable(CallableDecl *Template,
+                                     sema::FinalTemplateArgumentList *TemplateArgs,
+                                     SourceLocation POI);
 
-   CallableInstResult InstantiateCallable(StmtOrDecl POI, ast::CallableDecl* F,
-                                          TemplateArgs* templateArgs,
-                                          bool* isNew = nullptr);
+   FunctionDecl *InstantiateFunction(FunctionDecl *Template,
+                                     sema::FinalTemplateArgumentList *TemplateArgs,
+                                     SourceLocation POI);
 
-   FunctionInstResult InstantiateFunction(StmtOrDecl POI, ast::FunctionDecl* F,
-                                          TemplateArgs* templateArgs,
-                                          bool* isNew = nullptr);
+   MethodDecl *InstantiateMethod(MethodDecl *Template,
+                                 sema::FinalTemplateArgumentList *TemplateArgs,
+                                 SourceLocation POI);
 
-   FunctionInstResult
-   InstantiateFunction(StmtOrDecl POI, ast::FunctionDecl* F,
-                       const sema::TemplateArgList& templateArgs,
-                       bool* isNew = nullptr);
+   bool InstantiateMethodBody(MethodDecl *MethodInst);
 
-   MethodInstResult InstantiateMethod(StmtOrDecl POI, ast::MethodDecl* M,
-                                      TemplateArgs* templateArgs,
-                                      bool* isNew = nullptr);
+   Decl *InstantiateDecl(Decl *Template,
+                         sema::MultiLevelFinalTemplateArgList *TemplateArgs,
+                         SourceLocation POI);
 
-   MethodInstResult InstantiateMethod(StmtOrDecl POI, ast::MethodDecl* M,
-                                      const sema::TemplateArgList& templateArgs,
-                                      bool* isNew = nullptr);
+   NamedDecl *InstantiateTemplateMember(NamedDecl *TemplateMember,
+                                        RecordDecl *Inst,
+                                        sema::FinalTemplateArgumentList *TemplateArgs = nullptr,
+                                        SourceLocation POI = SourceLocation());
 
-   FunctionType*
-   InstantiateFunctionType(StmtOrDecl SOD, ast::CallableDecl* Template,
-                           const sema::TemplateArgList& templateArgs);
-
-   MethodInstResult
-   InstantiateProtocolDefaultImpl(SourceLocation instantiatedFrom,
-                                  ast::RecordDecl* Rec, ast::MethodDecl* M);
+   NamedDecl *InstantiateProtocolDefaultImpl(NamedDecl *Impl,
+                                             QualType Self,
+                                             bool ActOnDecl = true);
 
    StmtResult InstantiateStatement(SourceLocation instantiatedFrom,
                                    ast::Statement* stmt,
@@ -121,8 +90,6 @@ public:
    InstantiateStatement(SourceLocation instantiatedFrom, ast::Statement* stmt,
                         sema::MultiLevelFinalTemplateArgList&& templateArgs);
 
-   ExprResult InstantiateTypeExpr(ast::RecordDecl* Rec, ast::Expression* E);
-
    DeclResult
    InstantiateDecl(SourceLocation instantiatedFrom, ast::Decl* D,
                    sema::MultiLevelFinalTemplateArgList&& templateArgs);
@@ -131,54 +98,38 @@ public:
                                    IdentifierInfo* SubstName,
                                    il::Constant* SubstVal);
 
-   StmtResult InstantiateMethodBody(StmtOrDecl POI, ast::MethodDecl* Method);
-
-   ExprResult InstantiateStaticExpr(SourceLocation instantiatedFrom,
-                                    ast::Expression* stmt,
-                                    const sema::TemplateArgList& templateArgs);
-
-   AliasInstResult InstantiateAlias(ast::AliasDecl* alias,
-                                    SourceLocation instantiatedFrom,
-                                    TemplateArgs* templateArgs);
+   bool InstantiateFields(StructDecl *S);
+   bool InstantiateCases(EnumDecl *E);
 
    unsigned getInstantiationDepth(ast::NamedDecl* Decl);
    void setInstantiationDepth(ast::NamedDecl* Decl, unsigned Depth);
 
-   void visitPendingInstantiations();
+   template<class T>
+   T *getInstantiation(T *Template,
+                       sema::FinalTemplateArgumentList* TemplateArgs) {
+      return support::dyn_cast_or_null<T>(getInstantiationImpl((NamedDecl*)Template, TemplateArgs));
+   }
 
-   struct InstantiationDepthRAII {
-      InstantiationDepthRAII(TemplateInstantiator& Inst) : Inst(Inst)
-      {
-         ++Inst.InstantiationDepth;
-      }
 
-      void pop()
-      {
-         assert(!Popped);
-         --Inst.InstantiationDepth;
-         Popped = true;
-      }
-
-      ~InstantiationDepthRAII()
-      {
-         if (!Popped)
-            pop();
-      }
-
-      TemplateInstantiator& Inst;
-      bool Popped = false;
-   };
+   void registerInstantiation(NamedDecl *Template,
+                              sema::FinalTemplateArgumentList* TemplateArgs,
+                              NamedDecl *Inst);
 
 private:
-   ast::SemaPass& SP;
+   SemaPass& SP;
+   QueryContext &QC;
    unsigned InstantiationDepth = 0;
-   std::queue<ast::NamedDecl*> PendingInstantiations;
-   llvm::DenseMap<ast::NamedDecl*, unsigned> InstantiationDepthMap;
 
-   bool checkInstantiationDepth(ast::NamedDecl* Inst, ast::NamedDecl* CurDecl,
-                                SourceLocation POI);
+   llvm::DenseMap<NamedDecl*, unsigned> InstantiationDepthMap;
+   llvm::DenseMap<std::pair<NamedDecl*, uintptr_t>, NamedDecl*> InstMap;
+
+   NamedDecl *getInstantiationImpl(NamedDecl *Template,
+                                   sema::FinalTemplateArgumentList* TemplateArgs);
+
+   bool PrepareForInstantiation(NamedDecl *D);
 };
 
+} // namespace ast
 } // namespace cdot
 
 #endif // CDOT_TEMPLATEINSTANTIATOR_H

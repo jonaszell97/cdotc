@@ -89,11 +89,8 @@ void ASTContext::updateConstraintLocs(
 {
    assert(parsedConstraints.size() == declConstraints.size());
 
-   auto map = ConstraintLocs[D];
+   auto &map = ConstraintLocs[D];
    for (int i = 0; i < parsedConstraints.size(); ++i) {
-      if (!parsedConstraints[i].SR) {
-         NO_OP;
-      }
       map[declConstraints[i]] = parsedConstraints[i].SR;
    }
 }
@@ -212,6 +209,20 @@ void ASTContext::addProtocolImpl(const RecordDecl* R, const NamedDecl* Req,
    LOG(ProtocolImpls, "implementation of '", Req->getFullName(), "' for '",
        R->getFullName(), "': ", Impl->getFullName(), " [",
        CI.getFileMgr().getFullSourceLoc(Impl->getSourceLoc()), "]");
+}
+
+void ASTContext::updateProtocolImpl(const RecordDecl *R, NamedDecl *OldImpl, NamedDecl *NewImpl)
+{
+   const NamedDecl *Req = nullptr;
+   for (auto &[req, impl] : ProtocolImplMap[R]) {
+      if (impl == OldImpl) {
+         Req = req;
+         break;
+      }
+   }
+
+   assert(Req && "no impl to update!");
+   ProtocolImplMap[R][Req] = NewImpl;
 }
 
 NamedDecl* ASTContext::getProtocolImpl(const RecordDecl* R,

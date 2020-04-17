@@ -38,7 +38,7 @@ class PassManager {
       unsigned NumRestarts = 0;
    };
 
-   /// The worklist of functions to be processed by function passes.
+   /// The allDecls of functions to be processed by function passes.
    std::vector<WorklistEntry> FunctionWorklist;
 
    /// A mask which has one bit for each pass. A one for a pass-bit means that
@@ -107,10 +107,10 @@ public:
       CompletedPassesMap.clear();
    }
 
-   /// \brief Add the function \p F to the function pass worklist.
+   /// \brief Add the function \p F to the function pass allDecls.
    /// If not null, the function \p DerivedFrom is the function from which \p F
    /// is derived. This is used to avoid an infinite amount of functions pushed
-   /// on the worklist (e.g. caused by a bug in a specializing optimization).
+   /// on the allDecls (e.g. caused by a bug in a specializing optimization).
    void addFunctionToWorklist(Function* F);
 
    /// \brief Iterate over all analysis and notify them of the function.

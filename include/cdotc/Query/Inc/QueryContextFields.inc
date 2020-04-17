@@ -1,1089 +1,752 @@
 
 /// \brief Single query instance.
-private:
-CompileModuleQuery* CompileModuleInstance = nullptr;
+private:   CompileModuleQuery *CompileModuleInstance = nullptr;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<StringRef, ParseModuleFileQuery*> ParseModuleFileQueries;
+private:   llvm::DenseMap<StringRef, ParseModuleFileQuery*> ParseModuleFileQueries;
 
 /// \brief Single query instance.
-private:
-CreateDefaultModuleQuery* CreateDefaultModuleInstance = nullptr;
+private:   CreateDefaultModuleQuery *CreateDefaultModuleInstance = nullptr;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ParseSourceFileQuery> ParseSourceFileQueries;
+private:   llvm::FoldingSet<ParseSourceFileQuery> ParseSourceFileQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ParseMainSourceFileQuery> ParseMainSourceFileQueries;
+private:   llvm::FoldingSet<ParseMainSourceFileQuery> ParseMainSourceFileQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<Module*, ParseSourceFilesQuery*> ParseSourceFilesQueries;
+private:   llvm::DenseMap<Module*, ParseSourceFilesQuery*> ParseSourceFilesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<Module*, CreateILModuleQuery*> CreateILModuleQueries;
+private:   llvm::DenseMap<Module*, CreateILModuleQuery*> CreateILModuleQueries;
 
 /// \brief Single query instance.
-private:
-SetupIRGenQuery* SetupIRGenInstance = nullptr;
+private:   SetupIRGenQuery *SetupIRGenInstance = nullptr;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<Module*, CreateLLVMModuleQuery*> CreateLLVMModuleQueries;
+private:   llvm::DenseMap<Module*, CreateLLVMModuleQuery*> CreateLLVMModuleQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<Query*, MeasureExecutionTimeQuery*> MeasureExecutionTimeQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<CanType, IsPersistableQuery*> IsPersistableQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<CanType, IsEquatableQuery*> IsEquatableQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<CanType, IsCopyableQuery*> IsCopyableQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<CanType, IsMoveOnlyQuery*> IsMoveOnlyQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<CanType, IsUnpopulatedQuery*> IsUnpopulatedQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<CanType, IsImplicitlyCopyableQuery*> IsImplicitlyCopyableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, IsTriviallyCopyableQuery*> IsTriviallyCopyableQueries;
+private:   llvm::DenseMap<Query*, MeasureExecutionTimeQuery*> MeasureExecutionTimeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, NeedsRetainOrReleaseQuery*> NeedsRetainOrReleaseQueries;
+private:   llvm::DenseMap<CanType, IsPersistableQuery*> IsPersistableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, NeedsDeinitilizationQuery*> NeedsDeinitilizationQueries;
+private:   llvm::DenseMap<CanType, IsEquatableQuery*> IsEquatableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, NeedsStructReturnQuery*> NeedsStructReturnQueries;
+private:   llvm::DenseMap<CanType, IsCopyableQuery*> IsCopyableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, PassByValueQuery*> PassByValueQueries;
+private:   llvm::DenseMap<CanType, IsMoveOnlyQuery*> IsMoveOnlyQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, ContainsAssociatedTypeConstraintQuery*>
-    ContainsAssociatedTypeConstraintQueries;
+private:   llvm::DenseMap<CanType, IsUnpopulatedQuery*> IsUnpopulatedQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<QualType, QualType>,
-               IsImplicitlyConvertibleQuery::ResultType>
-    IsImplicitlyConvertibleQueries;
+private:   llvm::DenseMap<CanType, IsImplicitlyCopyableQuery*> IsImplicitlyCopyableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<QualType, std::pair<QualType, uint8_t>>,
-               IsValidParameterValueQuery::ResultType>
-    IsValidParameterValueQueries;
+private:   llvm::DenseMap<CanType, IsTriviallyCopyableQuery*> IsTriviallyCopyableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<QualType, QualType>, ConversionSequence*>
-    GetConversionSequenceQueries;
+private:   llvm::DenseMap<CanType, NeedsRetainOrReleaseQuery*> NeedsRetainOrReleaseQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<SubstAssociatedTypesQuery> SubstAssociatedTypesQueries;
+private:   llvm::DenseMap<CanType, NeedsDeinitilizationQuery*> NeedsDeinitilizationQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<SubstTemplateParamTypesQuery> SubstTemplateParamTypesQueries;
+private:   llvm::DenseMap<CanType, NeedsStructReturnQuery*> NeedsStructReturnQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamedDecl*, std::vector<TypeCapability>>
-    CheckTypeCapabilitiesQueries;
+private:   llvm::DenseMap<CanType, PassByValueQuery*> PassByValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<QualType, ast::DeclContext*>, QualType>
-    ApplyCapabilitesQueries;
+private:   llvm::DenseMap<CanType, ContainsAssociatedTypeConstraintQuery*> ContainsAssociatedTypeConstraintQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<char, GetBuiltinModuleQuery*> GetBuiltinModuleQueries;
+private:   llvm::DenseMap<std::pair<QualType, QualType>, IsImplicitlyConvertibleQuery::ResultType> IsImplicitlyConvertibleQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<char, GetBuiltinFuncQuery*> GetBuiltinFuncQueries;
+private:   llvm::DenseMap<std::pair<QualType, std::pair<QualType, uint8_t>>, IsValidParameterValueQuery::ResultType> IsValidParameterValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<GetBuiltinAliasQuery> GetBuiltinAliasQueries;
+private:   llvm::DenseMap<std::pair<QualType, QualType>, ConversionSequence*> GetConversionSequenceQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<uint32_t, GetBuiltinRecordQuery*> GetBuiltinRecordQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<char, GetBuiltinProtocolQuery*> GetBuiltinProtocolQueries;
+private:   llvm::FoldingSet<SubstAssociatedTypesQuery> SubstAssociatedTypesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<FindPrecedenceGroupQuery> FindPrecedenceGroupQueries;
+private:   llvm::FoldingSet<SubstTemplateParamTypesQuery> SubstTemplateParamTypesQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::FoldingSet<FindOperatorQuery> FindOperatorQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveImportQuery> ResolveImportQueries;
+private:   llvm::DenseMap<ast::NamedDecl*, std::vector<TypeCapability>> CheckTypeCapabilitiesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveUsingQuery> ResolveUsingQueries;
+private:   llvm::DenseMap<std::pair<QualType, ast::DeclContext*>, QualType> ApplyCapabilitesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StaticIfDecl*, ResolveStaticIfQuery*>
-    ResolveStaticIfQueries;
+private:   llvm::DenseMap<char, GetBuiltinModuleQuery*> GetBuiltinModuleQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StaticForDecl*, ResolveStaticForQuery*>
-    ResolveStaticForQueries;
+private:   llvm::DenseMap<char, GetBuiltinFuncQuery*> GetBuiltinFuncQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StaticAssertDecl*, ResolveStaticAssertQuery*>
-    ResolveStaticAssertQueries;
+private:   llvm::FoldingSet<GetBuiltinAliasQuery> GetBuiltinAliasQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StaticPrintDecl*, ResolveStaticPrintQuery*>
-    ResolveStaticPrintQueries;
+private:   llvm::DenseMap<uint32_t, GetBuiltinRecordQuery*> GetBuiltinRecordQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StaticExpr*, ResolveStaticExprQuery*>
-    ResolveStaticExprQueries;
+private:   llvm::DenseMap<char, GetBuiltinProtocolQuery*> GetBuiltinProtocolQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveStaticExprToBoolQuery> ResolveStaticExprToBoolQueries;
+private:   llvm::FoldingSet<FindPrecedenceGroupQuery> FindPrecedenceGroupQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ExpandMacroQuery> ExpandMacroQueries;
+private:   llvm::FoldingSet<FindOperatorQuery> FindOperatorQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::MacroExpansionDecl*, ExpandMacroDeclQuery*>
-    ExpandMacroDeclQueries;
+private:   llvm::FoldingSet<ResolveImportQuery> ResolveImportQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<StringRef, ExpandMacrosQuery*> ExpandMacrosQueries;
+private:   llvm::FoldingSet<ResolveUsingQuery> ResolveUsingQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ImportExternalSourceFileQuery> ImportExternalSourceFileQueries;
+private:   llvm::DenseMap<ast::StaticIfDecl*, ResolveStaticIfQuery*> ResolveStaticIfQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<QualType, FindExtensionsQuery*> FindExtensionsQueries;
+private:   llvm::DenseMap<ast::StaticForDecl*, ResolveStaticForQuery*> ResolveStaticForQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::SourceType, GetExtensionTypeKindQuery*>
-    GetExtensionTypeKindQueries;
+private:   llvm::DenseMap<ast::StaticAssertDecl*, ResolveStaticAssertQuery*> ResolveStaticAssertQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<MatchExtensionTypeQuery> MatchExtensionTypeQueries;
+private:   llvm::DenseMap<ast::StaticPrintDecl*, ResolveStaticPrintQuery*> ResolveStaticPrintQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ExtensionAppliesQuery> ExtensionAppliesQueries;
+private:   llvm::DenseMap<ast::StaticExpr*, ResolveStaticExprQuery*> ResolveStaticExprQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::SourceType, GetExtendedDeclQuery*> GetExtendedDeclQueries;
+private:   llvm::FoldingSet<ResolveStaticExprToBoolQuery> ResolveStaticExprToBoolQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ExtensionDecl*, ResolveExtensionQuery*>
-    ResolveExtensionQueries;
+private:   llvm::FoldingSet<ExpandMacroQuery> ExpandMacroQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveConformanceToProtocolQuery>
-    ResolveConformanceToProtocolQueries;
+private:   llvm::DenseMap<ast::MacroExpansionDecl*, ExpandMacroDeclQuery*> ExpandMacroDeclQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<QualType, ResolveExplicitConformancesQuery*>
-    ResolveExplicitConformancesQueries;
+private:   llvm::DenseMap<StringRef, ExpandMacrosQuery*> ExpandMacrosQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveConformancesToProtocolsQuery>
-    ResolveConformancesToProtocolsQueries;
+private:   llvm::FoldingSet<ImportExternalSourceFileQuery> ImportExternalSourceFileQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveDeclaredConformancesQuery>
-    ResolveDeclaredConformancesQueries;
+private:   llvm::DenseMap<QualType, FindExtensionsQuery*> FindExtensionsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<AddSingleConformanceQuery> AddSingleConformanceQueries;
+private:   llvm::DenseMap<ast::SourceType, GetExtensionTypeKindQuery*> GetExtensionTypeKindQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseSet<ast::RecordDecl*> DeclareSelfAliasQueries;
+private:   llvm::FoldingSet<MatchExtensionTypeQuery> MatchExtensionTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveAssociatedTypesQuery> ResolveAssociatedTypesQueries;
+private:   llvm::FoldingSet<ExtensionAppliesQuery> ExtensionAppliesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<CheckProtocolExtensionApplicabilityQuery>
-    CheckProtocolExtensionApplicabilityQueries;
+private:   llvm::DenseMap<ast::SourceType, GetExtendedDeclQuery*> GetExtendedDeclQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<VerifyConstraintQuery> VerifyConstraintQueries;
+private:   llvm::DenseMap<ast::ExtensionDecl*, ResolveExtensionQuery*> ResolveExtensionQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamedDecl*, VerifyConstraintsQuery*>
-    VerifyConstraintsQueries;
+private:   llvm::FoldingSet<ResolveConformanceToProtocolQuery> ResolveConformanceToProtocolQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<IsConstraintSatisfiedQuery> IsConstraintSatisfiedQueries;
+private:   llvm::DenseMap<QualType, ResolveExplicitConformancesQuery*> ResolveExplicitConformancesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<GetConstrainedTypeQuery> GetConstrainedTypeQueries;
+private:   llvm::FoldingSet<ResolveConformancesToProtocolsQuery> ResolveConformancesToProtocolsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<ast::ConstraintSet*, ast::ConstraintSet*>, bool>
-    IsSupersetOfQueries;
+private:   llvm::FoldingSet<ResolveDeclaredConformancesQuery> ResolveDeclaredConformancesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ConstraintSet*, GetReferencedAssociatedTypesQuery*>
-    GetReferencedAssociatedTypesQueries;
+private:   llvm::FoldingSet<AddSingleConformanceQuery> AddSingleConformanceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, GetNeededAssociatedTypesQuery*>
-    GetNeededAssociatedTypesQueries;
+private:   llvm::DenseSet<ast::RecordDecl*> DeclareSelfAliasQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<QualType, CheckConformancesQuery*> CheckConformancesQueries;
+private:   llvm::FoldingSet<ResolveAssociatedTypesQuery> ResolveAssociatedTypesQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::FoldingSet<CheckSingleConformanceQuery> CheckSingleConformanceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, CheckAssociatedTypeConstraintsQuery*>
-    CheckAssociatedTypeConstraintsQueries;
+private:   llvm::FoldingSet<CheckProtocolExtensionApplicabilityQuery> CheckProtocolExtensionApplicabilityQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamedDecl*, TypecheckConstraintsQuery*>
-    TypecheckConstraintsQueries;
+private:   llvm::FoldingSet<VerifyConstraintQuery> VerifyConstraintQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ConformsToQuery> ConformsToQueries;
+private:   llvm::DenseMap<ast::NamedDecl*, VerifyConstraintsQuery*> VerifyConstraintsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<IsCovariantQuery> IsCovariantQueries;
+private:   llvm::FoldingSet<IsConstraintSatisfiedQuery> IsConstraintSatisfiedQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<IsContravariantQuery> IsContravariantQueries;
+private:   llvm::FoldingSet<GetConstrainedTypeQuery> GetConstrainedTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, GetTypeSizeQuery*> GetTypeSizeQueries;
+private:   llvm::DenseMap<std::pair<ast::ConstraintSet*, ast::ConstraintSet*>, bool> IsSupersetOfQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, GetTypeAlignmentQuery*> GetTypeAlignmentQueries;
+private:   llvm::DenseMap<ast::ConstraintSet*, GetReferencedAssociatedTypesQuery*> GetReferencedAssociatedTypesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<CanType, GetTypeStrideQuery*> GetTypeStrideQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, GetNeededAssociatedTypesQuery*> GetNeededAssociatedTypesQueries;
 
-private:
-llvm::DenseMap<ast::RecordDecl*, RecordMetaInfo> RecordMeta;
-
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, CalculateRecordSizeQuery*>
-    CalculateRecordSizeQueries;
+private:   llvm::FoldingSet<CheckConformancesQuery> CheckConformancesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, bool> IsBuiltinIntegerTypeQueries;
+private:   llvm::FoldingSet<CheckSingleConformanceQuery> CheckSingleConformanceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, bool> IsBuiltinFloatingPointTypeQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, CheckAssociatedTypeConstraintsQuery*> CheckAssociatedTypeConstraintsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, bool> IsBuiltinBoolTypeQueries;
+private:   llvm::DenseMap<ast::NamedDecl*, TypecheckConstraintsQuery*> TypecheckConstraintsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<
-    std::pair<ast::RecordDecl*,
-              std::pair<ast::ImplicitConformanceKind, ast::MethodDecl*>>,
-    ast::MethodDecl*>
-    AddImplicitConformanceQueries;
+private:   llvm::FoldingSet<ConformsToQuery> ConformsToQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, CheckBuiltinConformancesQuery*>
-    CheckBuiltinConformancesQueries;
+private:   llvm::FoldingSet<IsCovariantQuery> IsCovariantQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<IsAccessibleQuery> IsAccessibleQueries;
+private:   llvm::FoldingSet<IsContravariantQuery> IsContravariantQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<CheckAccessibilityQuery> CheckAccessibilityQueries;
+private:   llvm::DenseMap<CanType, GetTypeSizeQuery*> GetTypeSizeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveNestedNameSpecToTypeQuery>
-    ResolveNestedNameSpecToTypeQueries;
+private:   llvm::DenseMap<CanType, GetTypeAlignmentQuery*> GetTypeAlignmentQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<ResolveNestedNameSpecToDeclQuery>
-    ResolveNestedNameSpecToDeclQueries;
+private:   llvm::DenseMap<CanType, GetTypeStrideQuery*> GetTypeStrideQueries;
 
+    public:
+        /// Map from records to their computed meta info.
+        llvm::DenseMap<ast::RecordDecl*, RecordMetaInfo> RecordMeta;
+    
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeclContext*, TypeCheckDeclContextQuery*>
-    TypeCheckDeclContextQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, CalculateRecordSizeQuery*> CalculateRecordSizeQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseSet<ast::Decl*> PrepareDeclInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseSet<ast::Decl*> TypecheckDeclQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, bool> IsBuiltinIntegerTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::PrecedenceGroupDecl*, PreparePrecedenceGroupInterfaceQuery*>
-    PreparePrecedenceGroupInterfaceQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, bool> IsBuiltinFloatingPointTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::PrecedenceGroupDecl*, TypecheckPrecedenceGroupQuery*>
-    TypecheckPrecedenceGroupQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, bool> IsBuiltinBoolTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::OperatorDecl*, PrepareOperatorInterfaceQuery*>
-    PrepareOperatorInterfaceQueries;
+private:   llvm::DenseMap<std::pair<ast::RecordDecl*, std::pair<ast::ImplicitConformanceKind, ast::MethodDecl*>>, ast::MethodDecl*> AddImplicitConformanceQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::DenseMap<ast::OperatorDecl*, TypecheckOperatorQuery*>
-    TypecheckOperatorQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::GlobalVarDecl*, PrepareGlobalVarInterfaceQuery*>
-    PrepareGlobalVarInterfaceQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, CheckBuiltinConformancesQuery*> CheckBuiltinConformancesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::GlobalVarDecl*, TypecheckGlobalVarQuery*>
-    TypecheckGlobalVarQueries;
+private:   llvm::FoldingSet<IsAccessibleQuery> IsAccessibleQueries;
 
-private:
-llvm::DenseMap<IdentifierInfo*, ast::CallableDecl*> ExternCFuncs;
-
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CallableDecl*, PrepareCallableInterfaceQuery*>
-    PrepareCallableInterfaceQueries;
+private:   llvm::FoldingSet<CheckAccessibilityQuery> CheckAccessibilityQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CallableDecl*, TypecheckCallableQuery*>
-    TypecheckCallableQueries;
+private:   llvm::FoldingSet<ResolveNestedNameSpecToTypeQuery> ResolveNestedNameSpecToTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::FunctionDecl*, PrepareFunctionInterfaceQuery*>
-    PrepareFunctionInterfaceQueries;
+private:   llvm::FoldingSet<ResolveNestedNameSpecToDeclQuery> ResolveNestedNameSpecToDeclQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::FunctionDecl*, TypecheckFunctionQuery*>
-    TypecheckFunctionQueries;
+private:   llvm::DenseMap<ast::DeclContext*, TypeCheckDeclContextQuery*> TypeCheckDeclContextQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::MethodDecl*, PrepareMethodInterfaceQuery*>
-    PrepareMethodInterfaceQueries;
+private:   llvm::DenseSet<ast::Decl*> PrepareDeclInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::MethodDecl*, TypecheckMethodQuery*> TypecheckMethodQueries;
+private:   llvm::DenseSet<ast::Decl*> TypecheckDeclQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::InitDecl*, PrepareInitInterfaceQuery*>
-    PrepareInitInterfaceQueries;
+private:   llvm::DenseMap<ast::PrecedenceGroupDecl*, PreparePrecedenceGroupInterfaceQuery*> PreparePrecedenceGroupInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::InitDecl*, TypecheckInitQuery*> TypecheckInitQueries;
+private:   llvm::DenseMap<ast::PrecedenceGroupDecl*, TypecheckPrecedenceGroupQuery*> TypecheckPrecedenceGroupQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeinitDecl*, PrepareDeinitInterfaceQuery*>
-    PrepareDeinitInterfaceQueries;
+private:   llvm::DenseMap<ast::OperatorDecl*, PrepareOperatorInterfaceQuery*> PrepareOperatorInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeinitDecl*, TypecheckDeinitQuery*> TypecheckDeinitQueries;
+private:   llvm::DenseMap<ast::OperatorDecl*, TypecheckOperatorQuery*> TypecheckOperatorQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::FuncArgDecl*, PrepareFuncArgInterfaceQuery*>
-    PrepareFuncArgInterfaceQueries;
+private:   llvm::DenseMap<ast::GlobalVarDecl*, PrepareGlobalVarInterfaceQuery*> PrepareGlobalVarInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::FuncArgDecl*, TypecheckFuncArgQuery*>
-    TypecheckFuncArgQueries;
+private:   llvm::DenseMap<ast::GlobalVarDecl*, TypecheckGlobalVarQuery*> TypecheckGlobalVarQueries;
 
+            private:
+                /// Function declarations marked extern(C) with a particular name.
+                llvm::DenseMap<IdentifierInfo*, ast::CallableDecl*> ExternCFuncs;
+            
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::TemplateParamDecl*, PrepareTemplateParamInterfaceQuery*>
-    PrepareTemplateParamInterfaceQueries;
+private:   llvm::DenseMap<ast::CallableDecl*, PrepareCallableInterfaceQuery*> PrepareCallableInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::TemplateParamDecl*, TypecheckTemplateParamQuery*>
-    TypecheckTemplateParamQueries;
+private:   llvm::DenseMap<ast::CallableDecl*, TypecheckCallableQuery*> TypecheckCallableQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::AssociatedTypeDecl*, PrepareAssociatedTypeInterfaceQuery*>
-    PrepareAssociatedTypeInterfaceQueries;
+private:   llvm::DenseMap<ast::FunctionDecl*, PrepareFunctionInterfaceQuery*> PrepareFunctionInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::AssociatedTypeDecl*, TypecheckAssociatedTypeQuery*>
-    TypecheckAssociatedTypeQueries;
+private:   llvm::DenseMap<ast::FunctionDecl*, TypecheckFunctionQuery*> TypecheckFunctionQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::AliasDecl*, PrepareAliasInterfaceQuery*>
-    PrepareAliasInterfaceQueries;
+private:   llvm::DenseMap<ast::MethodDecl*, PrepareMethodInterfaceQuery*> PrepareMethodInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::AliasDecl*, TypecheckAliasQuery*> TypecheckAliasQueries;
+private:   llvm::DenseMap<ast::MethodDecl*, TypecheckMethodQuery*> TypecheckMethodQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, PrepareRecordInterfaceQuery*>
-    PrepareRecordInterfaceQueries;
+private:   llvm::DenseMap<ast::InitDecl*, PrepareInitInterfaceQuery*> PrepareInitInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, TypecheckRecordQuery*> TypecheckRecordQueries;
+private:   llvm::DenseMap<ast::InitDecl*, TypecheckInitQuery*> TypecheckInitQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StructDecl*, PrepareStructInterfaceQuery*>
-    PrepareStructInterfaceQueries;
+private:   llvm::DenseMap<ast::DeinitDecl*, PrepareDeinitInterfaceQuery*> PrepareDeinitInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StructDecl*, TypecheckStructQuery*> TypecheckStructQueries;
+private:   llvm::DenseMap<ast::DeinitDecl*, TypecheckDeinitQuery*> TypecheckDeinitQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ClassDecl*, PrepareClassInterfaceQuery*>
-    PrepareClassInterfaceQueries;
+private:   llvm::DenseMap<ast::FuncArgDecl*, PrepareFuncArgInterfaceQuery*> PrepareFuncArgInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ClassDecl*, TypecheckClassQuery*> TypecheckClassQueries;
+private:   llvm::DenseMap<ast::FuncArgDecl*, TypecheckFuncArgQuery*> TypecheckFuncArgQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::EnumDecl*, PrepareEnumInterfaceQuery*>
-    PrepareEnumInterfaceQueries;
+private:   llvm::DenseMap<ast::TemplateParamDecl*, PrepareTemplateParamInterfaceQuery*> PrepareTemplateParamInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::EnumDecl*, TypecheckEnumQuery*> TypecheckEnumQueries;
+private:   llvm::DenseMap<ast::TemplateParamDecl*, TypecheckTemplateParamQuery*> TypecheckTemplateParamQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ProtocolDecl*, PrepareProtocolInterfaceQuery*>
-    PrepareProtocolInterfaceQueries;
+private:   llvm::DenseMap<ast::AssociatedTypeDecl*, PrepareAssociatedTypeInterfaceQuery*> PrepareAssociatedTypeInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ProtocolDecl*, TypecheckProtocolQuery*>
-    TypecheckProtocolQueries;
+private:   llvm::DenseMap<ast::AssociatedTypeDecl*, TypecheckAssociatedTypeQuery*> TypecheckAssociatedTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ExtensionDecl*, PrepareExtensionInterfaceQuery*>
-    PrepareExtensionInterfaceQueries;
+private:   llvm::DenseMap<ast::AliasDecl*, PrepareAliasInterfaceQuery*> PrepareAliasInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ExtensionDecl*, TypecheckExtensionQuery*>
-    TypecheckExtensionQueries;
+private:   llvm::DenseMap<ast::AliasDecl*, TypecheckAliasQuery*> TypecheckAliasQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::FieldDecl*, PrepareFieldInterfaceQuery*>
-    PrepareFieldInterfaceQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, PrepareRecordInterfaceQuery*> PrepareRecordInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::FieldDecl*, TypecheckFieldQuery*> TypecheckFieldQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, TypecheckRecordQuery*> TypecheckRecordQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::PropDecl*, PreparePropInterfaceQuery*>
-    PreparePropInterfaceQueries;
+private:   llvm::DenseMap<ast::StructDecl*, PrepareStructInterfaceQuery*> PrepareStructInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::PropDecl*, TypecheckPropQuery*> TypecheckPropQueries;
+private:   llvm::DenseMap<ast::StructDecl*, TypecheckStructQuery*> TypecheckStructQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::SubscriptDecl*, PrepareSubscriptInterfaceQuery*>
-    PrepareSubscriptInterfaceQueries;
+private:   llvm::DenseMap<ast::ClassDecl*, PrepareClassInterfaceQuery*> PrepareClassInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::SubscriptDecl*, TypecheckSubscriptQuery*>
-    TypecheckSubscriptQueries;
+private:   llvm::DenseMap<ast::ClassDecl*, TypecheckClassQuery*> TypecheckClassQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::EnumCaseDecl*, PrepareEnumCaseInterfaceQuery*>
-    PrepareEnumCaseInterfaceQueries;
+private:   llvm::DenseMap<ast::EnumDecl*, PrepareEnumInterfaceQuery*> PrepareEnumInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::EnumCaseDecl*, TypecheckEnumCaseQuery*>
-    TypecheckEnumCaseQueries;
+private:   llvm::DenseMap<ast::EnumDecl*, TypecheckEnumQuery*> TypecheckEnumQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamespaceDecl*, PrepareNamespaceInterfaceQuery*>
-    PrepareNamespaceInterfaceQueries;
+private:   llvm::DenseMap<ast::ProtocolDecl*, PrepareProtocolInterfaceQuery*> PrepareProtocolInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamespaceDecl*, TypecheckNamespaceQuery*>
-    TypecheckNamespaceQueries;
+private:   llvm::DenseMap<ast::ProtocolDecl*, TypecheckProtocolQuery*> TypecheckProtocolQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CompoundDecl*, PrepareCompoundInterfaceQuery*>
-    PrepareCompoundInterfaceQueries;
+private:   llvm::DenseMap<ast::ExtensionDecl*, PrepareExtensionInterfaceQuery*> PrepareExtensionInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CompoundDecl*, TypecheckCompoundQuery*>
-    TypecheckCompoundQueries;
+private:   llvm::DenseMap<ast::ExtensionDecl*, TypecheckExtensionQuery*> TypecheckExtensionQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ModuleDecl*, PrepareModuleInterfaceQuery*>
-    PrepareModuleInterfaceQueries;
+private:   llvm::DenseMap<ast::FieldDecl*, PrepareFieldInterfaceQuery*> PrepareFieldInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::ModuleDecl*, TypecheckModuleQuery*> TypecheckModuleQueries;
+private:   llvm::DenseMap<ast::FieldDecl*, TypecheckFieldQuery*> TypecheckFieldQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamedDecl*, PrepareTemplateParametersQuery*>
-    PrepareTemplateParametersQueries;
+private:   llvm::DenseMap<ast::PropDecl*, PreparePropInterfaceQuery*> PreparePropInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, DeclareImplicitInitializersQuery*>
-    DeclareImplicitInitializersQueries;
+private:   llvm::DenseMap<ast::PropDecl*, TypecheckPropQuery*> TypecheckPropQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StructDecl*, DeclareImplicitDefaultInitQuery*>
-    DeclareImplicitDefaultInitQueries;
+private:   llvm::DenseMap<ast::SubscriptDecl*, PrepareSubscriptInterfaceQuery*> PrepareSubscriptInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StructDecl*, DeclareMemberwiseInitQuery*>
-    DeclareMemberwiseInitQueries;
+private:   llvm::DenseMap<ast::SubscriptDecl*, TypecheckSubscriptQuery*> TypecheckSubscriptQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, DeclareImplicitDefaultDeinitQuery*>
-    DeclareImplicitDefaultDeinitQueries;
+private:   llvm::DenseMap<ast::EnumCaseDecl*, PrepareEnumCaseInterfaceQuery*> PrepareEnumCaseInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::EnumDecl*, ResolveRawTypeQuery*> ResolveRawTypeQueries;
+private:   llvm::DenseMap<ast::EnumCaseDecl*, TypecheckEnumCaseQuery*> TypecheckEnumCaseQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::InitDecl*, AssignInitNameQuery*> AssignInitNameQueries;
+private:   llvm::DenseMap<ast::NamespaceDecl*, PrepareNamespaceInterfaceQuery*> PrepareNamespaceInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseSet<ast::InitDecl*> CreateBaseInitQueries;
+private:   llvm::DenseMap<ast::NamespaceDecl*, TypecheckNamespaceQuery*> TypecheckNamespaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<LookupFirstQuery> LookupFirstQueries;
-
-public:
-template<class T>
-T* LookupSingleAs(ast::DeclContext* DC, DeclarationName Name,
-                  LookupOpts Opts = DefaultLookupOpts)
-{
-   ast::NamedDecl* Result;
-   if (LookupSingle(Result, DC, Name, Opts)) {
-      return nullptr;
-   }
+private:   llvm::DenseMap<ast::CompoundDecl*, PrepareCompoundInterfaceQuery*> PrepareCompoundInterfaceQueries;
 
-   return support::dyn_cast_or_null<T>(Result);
-}
-
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<LookupSingleQuery> LookupSingleQueries;
+private:   llvm::DenseMap<ast::CompoundDecl*, TypecheckCompoundQuery*> TypecheckCompoundQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<RestrictedLookupQuery> RestrictedLookupQueries;
+private:   llvm::DenseMap<ast::ModuleDecl*, PrepareModuleInterfaceQuery*> PrepareModuleInterfaceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<DirectLookupQuery> DirectLookupQueries;
+private:   llvm::DenseMap<ast::ModuleDecl*, TypecheckModuleQuery*> TypecheckModuleQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseSet<ast::DeclContext*> ResolveMacrosQueries;
+private:   llvm::DenseMap<ast::NamedDecl*, PrepareTemplateParametersQuery*> PrepareTemplateParametersQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseSet<ast::DeclContext*> ResolveStaticDeclarationsQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, DeclareImplicitInitializersQuery*> DeclareImplicitInitializersQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseSet<ast::DeclContext*> ResolveWildcardDeclarationsQueries;
+private:   llvm::DenseMap<ast::StructDecl*, DeclareImplicitDefaultInitQuery*> DeclareImplicitDefaultInitQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeclContext*, ResolveMetaDeclarationsQuery*>
-    ResolveMetaDeclarationsQueries;
+private:   llvm::DenseMap<ast::StructDecl*, DeclareMemberwiseInitQuery*> DeclareMemberwiseInitQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeclContext*, PrepareTypeNameLookupQuery*>
-    PrepareTypeNameLookupQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, DeclareImplicitDefaultDeinitQuery*> DeclareImplicitDefaultDeinitQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeclContext*, PrepareNameLookupQuery*>
-    PrepareNameLookupQueries;
+private:   llvm::DenseMap<ast::EnumDecl*, ResolveRawTypeQuery*> ResolveRawTypeQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::StructDecl*, InstantiateFieldsQuery*>
-    InstantiateFieldsQueries;
+private:   llvm::DenseMap<ast::InitDecl*, AssignInitNameQuery*> AssignInitNameQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::EnumDecl*, InstantiateCasesQuery*> InstantiateCasesQueries;
+private:   llvm::DenseSet<ast::InitDecl*> CreateBaseInitQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<CheckTypeEquivalenceQuery> CheckTypeEquivalenceQueries;
+private:   llvm::FoldingSet<LookupFirstQuery> LookupFirstQueries;
 
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:
-llvm::FoldingSet<InstantiateProtocolDefaultImplQuery>
-    InstantiateProtocolDefaultImplQueries;
+    public:
+        template<class T>
+        T *LookupSingleAs(ast::DeclContext *DC, DeclarationName Name,
+                          LookupOpts Opts = DefaultLookupOpts) {
+            ast::NamedDecl *Result;
+            if (LookupSingle(Result, DC, Name, Opts)) {
+                return nullptr;
+            }
 
+            return support::dyn_cast_or_null<T>(Result);
+        }
+    
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateRecordQuery> InstantiateRecordQueries;
+private:   llvm::FoldingSet<LookupSingleQuery> LookupSingleQueries;
+
 
+
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateAliasQuery> InstantiateAliasQueries;
+private:   llvm::FoldingSet<RestrictedLookupQuery> RestrictedLookupQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateCallableQuery> InstantiateCallableQueries;
+private:   llvm::FoldingSet<DirectLookupQuery> DirectLookupQueries;
+
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateFunctionQuery> InstantiateFunctionQueries;
+private:   llvm::DenseSet<ast::DeclContext*> ResolveMacrosQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateMethodQuery> InstantiateMethodQueries;
+private:   llvm::DenseSet<ast::DeclContext*> ResolveStaticDeclarationsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CallableDecl*, InstantiateMethodBodyQuery*>
-    InstantiateMethodBodyQueries;
+private:   llvm::DenseSet<ast::DeclContext*> ResolveWildcardDeclarationsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateDeclQuery> InstantiateDeclQueries;
+private:   llvm::DenseMap<ast::DeclContext*, ResolveMetaDeclarationsQuery*> ResolveMetaDeclarationsQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<CheckTemplateExtensionApplicabilityQuery>
-    CheckTemplateExtensionApplicabilityQueries;
+private:   llvm::DenseMap<ast::DeclContext*, PrepareTypeNameLookupQuery*> PrepareTypeNameLookupQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::NamedDecl*, PrepareDeclForInstantiationQuery*>
-    PrepareDeclForInstantiationQueries;
+private:   llvm::DenseMap<ast::DeclContext*, PrepareNameLookupQuery*> PrepareNameLookupQueries;
 
-public:
-template<class T> T* InstantiateTemplateMember(T* Decl, ast::RecordDecl* Inst)
-{
-   if (Decl->getDeclContext()->lookThroughExtension() == Inst)
-      return Decl;
 
-   ast::NamedDecl* DeclInst;
-   if (InstantiateTemplateMember(DeclInst, Decl, Inst)) {
-      return Decl;
-   }
 
-   return support::cast<T>(DeclInst);
-}
-
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<InstantiateTemplateMemberQuery>
-    InstantiateTemplateMemberQueries;
+private:   llvm::FoldingSet<CheckTypeEquivalenceQuery> CheckTypeEquivalenceQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, PrepareInstantiationForNameLookupQuery*>
-    PrepareInstantiationForNameLookupQueries;
+private:   llvm::FoldingSet<CheckTemplateExtensionApplicabilityQuery> CheckTemplateExtensionApplicabilityQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::Decl*, GetILModuleForDeclQuery*> GetILModuleForDeclQueries;
+private:   llvm::DenseMap<ast::Decl*, GetILModuleForDeclQuery*> GetILModuleForDeclQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::DeclContext*, GenerateILForContextQuery*>
-    GenerateILForContextQueries;
+private:   llvm::DenseMap<ast::DeclContext*, GenerateILForContextQuery*> GenerateILForContextQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, GenerateRecordILQuery*>
-    GenerateRecordILQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, GenerateRecordILQuery*> GenerateRecordILQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::VarDecl*, GetILGlobalQuery*> GetILGlobalQueries;
+private:   llvm::DenseMap<ast::VarDecl*, GetILGlobalQuery*> GetILGlobalQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::VarDecl*, GenerateLazyILGlobalDefinitionQuery*>
-    GenerateLazyILGlobalDefinitionQueries;
+private:   llvm::DenseMap<ast::VarDecl*, GenerateLazyILGlobalDefinitionQuery*> GenerateLazyILGlobalDefinitionQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CallableDecl*, GetILFunctionQuery*> GetILFunctionQueries;
+private:   llvm::DenseMap<ast::CallableDecl*, GetILFunctionQuery*> GetILFunctionQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::CallableDecl*, GenerateILFunctionBodyQuery*>
-    GenerateILFunctionBodyQueries;
+private:   llvm::DenseMap<ast::CallableDecl*, GenerateILFunctionBodyQuery*> GenerateILFunctionBodyQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<QualType, GetILTypeInfoQuery*> GetILTypeInfoQueries;
+private:   llvm::DenseMap<QualType, GetILTypeInfoQuery*> GetILTypeInfoQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<QualType, CreateILBasicTypeInfoQuery*>
-    CreateILBasicTypeInfoQueries;
+private:   llvm::DenseMap<QualType, CreateILBasicTypeInfoQuery*> CreateILBasicTypeInfoQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::RecordDecl*, CreateILRecordTypeInfoQuery*>
-    CreateILRecordTypeInfoQueries;
+private:   llvm::DenseMap<ast::RecordDecl*, CreateILRecordTypeInfoQuery*> CreateILRecordTypeInfoQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<il::Constant*, uint8_t>, bool> GetBoolValueQueries;
+private:   llvm::DenseMap<std::pair<il::Constant*, uint8_t>, bool> GetBoolValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<il::Constant*, uint8_t>, llvm::StringRef>
-    GetStringValueQueries;
+private:   llvm::DenseMap<std::pair<il::Constant*, uint8_t>, llvm::StringRef> GetStringValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<std::pair<il::Constant*, uint8_t>, llvm::APSInt>
-    GetIntValueQueries;
+private:   llvm::DenseMap<std::pair<il::Constant*, uint8_t>, llvm::APSInt> GetIntValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<StringRef, OpenFileForReadQuery*> OpenFileForReadQueries;
+private:   llvm::DenseMap<StringRef, OpenFileForReadQuery*> OpenFileForReadQueries;
 
+
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::DenseMap<ast::TemplateParamDecl*, GetDefaultTemplateArgQuery*>
-    GetDefaultTemplateArgQueries;
+private:   llvm::DenseMap<ast::TemplateParamDecl*, GetDefaultTemplateArgQuery*> GetDefaultTemplateArgQueries;
+
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<FindEquivalentDeclQuery> FindEquivalentDeclQueries;
+private:   llvm::FoldingSet<FindEquivalentDeclQuery> FindEquivalentDeclQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:
-llvm::FoldingSet<EquivalentSignaturesQuery> EquivalentSignaturesQueries;
+private:   llvm::FoldingSet<EquivalentSignaturesQuery> EquivalentSignaturesQueries;

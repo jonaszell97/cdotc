@@ -71,7 +71,7 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
    const unsigned MaxNumRestarts = 20;
 
    // Run all transforms for all functions, starting at the tail of the
-   // worklist.
+   // allDecls.
    while (!FunctionWorklist.empty() && continueTransforming()) {
       unsigned TailIdx = (unsigned)FunctionWorklist.size() - 1;
       unsigned PipelineIdx = FunctionWorklist[TailIdx].PipelineIdx;
@@ -79,7 +79,7 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
 
       if (PipelineIdx >= (ToTransIdx - FromTransIdx)) {
          // All passes did already run for the function. Pop it off the
-         // worklist.
+         // allDecls.
          FunctionWorklist.pop_back();
          continue;
       }
@@ -91,7 +91,7 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
       runPassOnFunction(FromTransIdx + PipelineIdx, F);
 
       // Note: Don't get entry reference prior to runPassOnFunction().
-      // A pass can push a new function to the worklist which may cause a
+      // A pass can push a new function to the allDecls which may cause a
       // reallocation of the buffer and that would invalidate the reference.
       WorklistEntry& Entry = FunctionWorklist[TailIdx];
       if (shouldRestartPipeline() && Entry.NumRestarts < MaxNumRestarts) {
@@ -152,7 +152,7 @@ void PassManager::execute()
 
 void PassManager::runPassesOnFunction(il::Function& F)
 {
-   assert(isMandatoryPipeline && "only call this with empty worklist!");
+   assert(isMandatoryPipeline && "only call this with empty allDecls!");
 
    for (auto P : Passes) {
       if (auto FP = dyn_cast<FunctionPass>(P)) {

@@ -11,8 +11,9 @@
 namespace cdot {
 namespace ast {
 class ASTContext;
-class ExtensionDecl;
 class ConstraintSet;
+class DeclContext;
+class ExtensionDecl;
 } // namespace ast
 
 enum class ConformanceKind : unsigned char {
@@ -38,19 +39,31 @@ class Conformance {
    ConformanceKind Kind;
    ast::ProtocolDecl* Proto;
 
-   // The constraints of this conformance (only for conditional conformances).
+   /// The constraints of this conformance (only for conditional conformances).
    ast::ConstraintSet* constraints;
+
+   /// The context where this conformance was introduced (or null for implicit
+   /// conformances)
+   ast::DeclContext* introducedIn;
+
+   /// The 'depth' of the conformance.
+   int depth;
 
 public:
    Conformance(ConformanceKind Kind, ast::ProtocolDecl* Proto,
-               ast::ConstraintSet* constraints = nullptr)
-       : Kind(Kind), Proto(Proto), constraints(constraints)
+               ast::ConstraintSet* constraints = nullptr,
+               ast::DeclContext* introducedIn = nullptr,
+               int depth = 0)
+       : Kind(Kind), Proto(Proto), constraints(constraints),
+         introducedIn(introducedIn), depth(depth)
    {
    }
 
    ConformanceKind getKind() const { return Kind; }
    ast::ProtocolDecl* getProto() const { return Proto; }
    ast::ConstraintSet* getConstraints() const { return constraints; }
+   ast::DeclContext* getDeclarationCtx() const { return introducedIn; }
+   int getDepth() const { return depth; }
 
    bool isConditional() const { return Kind == ConformanceKind::Conditional; }
 };
@@ -81,11 +94,16 @@ public:
    ConformanceKind lookupConformance(ast::RecordDecl* Decl,
                                      ast::ProtocolDecl* P) const;
 
+   Conformance *getConformance(ast::RecordDecl* Decl,
+                               ast::ProtocolDecl* P) const;
+
    bool conformsTo(ast::RecordDecl* Decl, ast::ProtocolDecl* P) const;
 
    bool addConformance(ast::ASTContext& C, ConformanceKind Kind,
                        ast::RecordDecl* Decl, ast::ProtocolDecl* P,
+                       ast::DeclContext* introducedIn,
                        ast::ConstraintSet* constraints = nullptr,
+                       int depth = 0,
                        Conformance** NewConf = nullptr);
 
    bool addExplicitConformance(ast::ASTContext& C, ast::RecordDecl* Decl,

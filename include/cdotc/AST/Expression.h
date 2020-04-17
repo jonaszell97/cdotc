@@ -88,6 +88,9 @@ public:
    bool allowTemplate() const { return AllowTemplate; }
    void setAllowTemplate(bool V) { AllowTemplate = V; }
 
+   bool isInTypePosition() const { return flagIsSet(InTypePosition); }
+   void setIsInTypePosition(bool b) { setFlag(InTypePosition, b); }
+
    bool allowNamespaceRef() const;
    void setAllowNamespaceRef(bool V);
 
