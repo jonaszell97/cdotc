@@ -34,11 +34,8 @@
 
 namespace cdot {
 
+class ConformanceResolver;
 class QueryContext;
-
-namespace sema {
-class ConformanceCheckerImpl;
-} // namespace sema
 
 namespace ast {
 
@@ -69,6 +66,12 @@ public:
 
    const SymbolMangler& getMangler() const { return mangle; }
    TemplateInstantiator& getInstantiator() const;
+
+   ConformanceResolver &getConformanceResolver();
+   bool AddDeclContextToConformanceResolutionWorklist(DeclContext *DC);
+   bool AddRecordInstToConformanceResolutionWorklist(RecordDecl *Inst);
+   bool TrySolveConformanceResolutionWorklist();
+   bool IsBeingResolved(RecordDecl *R);
 
    void pushDeclContext(DeclContext* Ctx);
    void popDeclContext();
@@ -474,13 +477,16 @@ public:
    QualType getTypeForDecl(NamedDecl* ND);
 
    void printConstraint(llvm::raw_ostream& OS, QualType ConstrainedType,
-                        DeclConstraint* C);
+                        DeclConstraint* C, QualType Self = QualType());
 
    bool getStringValue(Expression* Expr, il::Constant* V, llvm::StringRef& Str);
 
    bool getBoolValue(Expression* Expr, il::Constant* V, bool& Val);
 
    void checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl);
+
+   QualType CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
+                                                 QualType Outer);
 
    template<class T, class... Args> T* makeStmt(Args&&... args)
    {
@@ -857,6 +863,9 @@ private:
    /// Stack of try scopes.
    std::vector<bool> TryScopeStack;
 
+   /// The conformance resolver instance.
+   ConformanceResolver *ConfResolver;
+
 public:
    struct TryScopeRAII {
       explicit TryScopeRAII(SemaPass& SP) : SP(SP)
@@ -1160,8 +1169,11 @@ public:
    bool NeedsStructReturn(QualType Ty);
    bool ShouldPassByValue(QualType Ty);
 
-   bool ConformsTo(CanType T, ProtocolDecl* Proto);
-   bool ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *InDeclCtx);
+   bool ConformsTo(CanType T, ProtocolDecl* Proto,
+                   bool AllowConditional = false);
+
+   bool ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *InDeclCtx,
+                   bool AllowConditional = false);
 
    bool IsSubClassOf(ClassDecl* C, ClassDecl* Base, bool errorVal = true);
 
@@ -1191,10 +1203,7 @@ public:
    //===-------------------------------------------------------===//
 
    /// Prepare a DeclContext for complete name lookup.
-   bool PrepareNameLookup(DeclContext *DC, bool isBaseModule = false);
-
-   /// Complete delayed record instantiations.
-   bool CompleteRecordInstantiations();
+   bool PrepareNameLookup(DeclContext *DC);
 
    /// Query lookup status of a DeclContext.
    LookupLevel getLookupLevel(DeclContext *DC) const;
@@ -1407,7 +1416,7 @@ public:
    CallableDecl* checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
                                         ArrayRef<Expression*> templateArgs);
 
-   RecordDecl* checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
+   RecordDecl *checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
                                     ArrayRef<Expression*> templateArgs,
                                     bool diagnoseTemplateErrors);
 

@@ -211,10 +211,12 @@ void ASTContext::addProtocolImpl(const RecordDecl* R, const NamedDecl* Req,
        CI.getFileMgr().getFullSourceLoc(Impl->getSourceLoc()), "]");
 }
 
-void ASTContext::updateProtocolImpl(const RecordDecl *R, NamedDecl *OldImpl, NamedDecl *NewImpl)
+void ASTContext::updateProtocolImpl(const RecordDecl *R,
+                                    NamedDecl *OldImpl,
+                                    NamedDecl *NewImpl)
 {
    const NamedDecl *Req = nullptr;
-   for (auto &[req, impl] : ProtocolImplMap[R]) {
+   for (auto &[req, impl] : ProtocolImplMap[OldImpl->getRecord()]) {
       if (impl == OldImpl) {
          Req = req;
          break;
@@ -823,6 +825,9 @@ ASTContext::getTemplateArgType(TemplateParamDecl* Param) const
 AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl* AT,
                                               QualType OuterAT) const
 {
+   if (OuterAT&&OuterAT->isExistentialType()) {
+       NO_OP;
+   }
    if (!OuterAT && !AT->isSelf()) {
       CI.getQueryContext().DeclareSelfAlias(AT->getRecord());
       auto* SelfDecl = AT->getRecord()->lookupSingle<AssociatedTypeDecl>(

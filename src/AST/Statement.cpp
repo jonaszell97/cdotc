@@ -48,12 +48,6 @@ bool Statement::isValueDependent() const
    return false;
 }
 
-bool Statement::needsInstantiation() const
-{
-   static constexpr unsigned Mask = Statement::TypeDependent;
-   return (SubclassData & Mask) != 0;
-}
-
 void Statement::copyStatusFlags(Statement* Stmt)
 {
 #ifndef NDEBUG

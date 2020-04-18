@@ -4,12 +4,13 @@
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/LLVM.h"
 
-#include <string>
-
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/FoldingSet.h>
 #include <llvm/ADT/PointerIntPair.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/StringMap.h>
+
+#include <string>
 
 namespace cdot {
 
@@ -128,8 +129,8 @@ public:
       /// This type contains an UnknownAny type.
       ContainsUnknownAny = 0x40,
 
-      /// This type contains a runtime generic parameter.
-      ContainsRuntimeGenericParam = 0x80,
+      /// This type contains a protocol with associated types.
+      ContainsProtocolWithAssociatedTypes = 0x80,
 
       /// This type contains a template with no specified template parameters.
       ContainsTemplate = 0x100,
@@ -178,7 +179,7 @@ public:
    bool containsAssociatedType() const;
    bool containsTemplate() const;
    bool containsUnexpandedParameterPack() const;
-   bool containsRuntimeGenericParam() const;
+   bool containsProtocolWithAssociatedTypes() const;
    bool containsTypeVariable() const;
 };
 
@@ -269,9 +270,9 @@ public:
       return properties().containsAssociatedType();
    }
 
-   bool containsRuntimeGenericParam() const
+   bool containsProtocolWithAssociatedTypes() const
    {
-      return properties().containsRuntimeGenericParam();
+      return properties().containsProtocolWithAssociatedTypes();
    }
 
    bool containsTypeVariable() const
@@ -308,6 +309,7 @@ public:
    bool isStringRepresentable() const;
    bool isSelfComparable() const;
    bool isHashable() const;
+   bool isAnyType() const;
 
    bool isUnsigned() const;
    unsigned short getBitwidth() const;
@@ -1239,8 +1241,8 @@ public:
 class DependentRecordType : public RecordType {
 protected:
    DependentRecordType(ast::RecordDecl* record,
-                       sema::FinalTemplateArgumentList* templateArgs,
-                       QualType Parent, Type* CanonicalType);
+                         sema::FinalTemplateArgumentList* templateArgs,
+                         QualType Parent, Type* CanonicalType);
 
    QualType Parent;
    mutable sema::FinalTemplateArgumentList* templateArgs;
@@ -1267,6 +1269,7 @@ public:
    {
       return *templateArgs;
    }
+
    bool hasTemplateArgs() const { return true; }
 };
 
@@ -1522,6 +1525,18 @@ template<class T> bool Type::isa() const
 
    return support::isa<T>(CanonicalType);
 }
+
+struct ExistentialTypeBuilder {
+private:
+   llvm::SetVector<QualType> _Tys;
+
+public:
+   size_t size() const { return _Tys.size(); }
+   bool empty() const { return _Tys.empty(); }
+   void push_back(QualType T);
+   void remove(QualType T);
+   QualType Build(ast::ASTContext &C);
+};
 
 } // namespace cdot
 

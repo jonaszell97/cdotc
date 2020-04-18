@@ -68,8 +68,7 @@ public:
    void dumpFlags() const;
    void printFlags(llvm::raw_ostream& OS) const;
 
-   bool isDependent() const { return isTypeDependent() || isValueDependent(); }
-
+   bool isDependent() const { return false; }
    bool isTypeDependent() const;
    bool isValueDependent() const;
 
@@ -88,8 +87,8 @@ public:
       setFlag(ValueDependent, valueDependent);
    }
 
-   bool needsInstantiation() const;
-   void setNeedsInstantiation(bool b) { setFlag(TypeDependent, b); }
+   bool needsInstantiation() const { return flagIsSet(NeedsInstantiation); }
+   void setNeedsInstantiation(bool b) { setFlag(NeedsInstantiation, b); }
 
    bool containsGenericParam() const { return flagIsSet(ContainsGenericParam); }
    void setContainsGenericParam(bool b) { setFlag(ContainsGenericParam, b); }

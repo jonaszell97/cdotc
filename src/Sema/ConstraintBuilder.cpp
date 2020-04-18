@@ -1310,7 +1310,6 @@ static bool addCandidateType(CandidateSet& CandSet, SemaPass& Sema,
          initializedType = AT->getDecl()->getCovariance();
       }
 
-      // TODO make primitive types initializeable like this?
       if (!initializedType->isRecordType()) {
          return false;
       }

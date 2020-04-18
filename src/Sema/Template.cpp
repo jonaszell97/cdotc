@@ -23,8 +23,10 @@ TemplateArgument::TemplateArgument(TemplateParamDecl* Param, QualType type,
                                    SourceLocation loc) noexcept
     : IsType(true), IsVariadic(false), IsNull(false),
       Dependent(type->isDependentType() || type->containsAssociatedType()
-                || type->containsTypeVariable()),
-      Frozen(false), Runtime(type->containsRuntimeGenericParam()),
+                || type->containsTypeVariable()
+                || type->containsTemplateParamType()
+                || type->containsProtocolWithAssociatedTypes()),
+      Frozen(false), Runtime(false),
       ManuallySpecifiedVariadicArgs(0), Param(Param),
       Type(type->getCanonicalType()), Loc(loc)
 {
@@ -297,8 +299,9 @@ public:
       bool variadic = false;
 
       for (auto* E : OriginalArgs) {
-         if (E->isDependent() || E->getExprType()->containsAssociatedType()) {
+         if (E->isDependent()) {
             StillDependent = true;
+            break;
          }
       }
 
@@ -395,7 +398,8 @@ public:
 
    void checkDependentType(QualType T)
    {
-      if (T->isDependentType() || T->containsAssociatedType()) {
+      if (T->isDependentType() || T->containsAssociatedType()
+      || T->containsTemplateParamType()) {
          StillDependent = true;
       }
    }
@@ -477,7 +481,6 @@ public:
          checkCovariance(P, ty);
          checkDependentType(ty);
 
-         HasRuntimeParam |= ty->containsRuntimeGenericParam();
          StillDependent |= ty->isDependentType();
 
          Out = TemplateArgument(P, ty, TA->getSourceLoc());
@@ -494,7 +497,6 @@ public:
          checkCovariance(P, RealTy);
          checkDependentType(RealTy);
 
-         HasRuntimeParam |= RealTy->containsRuntimeGenericParam();
          StillDependent |= RealTy->isDependentType();
 
          Out = TemplateArgument(P, RealTy, TA->getSourceLoc());

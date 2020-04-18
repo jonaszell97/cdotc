@@ -71,18 +71,9 @@ private:
 public:
    /// Create the lookup resolver for the base decl context.
    LookupResolver(QueryContext &QC, DeclContext *BaseDC)
-      : QC(QC), BaseDC(BaseDC), currentNode(nullptr)
+      : QC(QC), BaseDC(BaseDC)
    {
 
-   }
-
-   /// D'tor.
-   ~LookupResolver()
-   {
-      for (auto &node : nodes)
-      {
-         delete &node;
-      }
    }
 
    /// Run the lookup resolver.
@@ -128,65 +119,74 @@ bool LookupResolver::Run(bool gatherDeclContexts)
    }
 
    // Resolve associated types of protocols.
-   for (auto *DC : allDecls) {
-      auto *R = dyn_cast<ProtocolDecl>(DC);
-      if (!R) {
-         continue;
-      }
-
-      SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
-      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
-         return true;
-      }
-   }
+//   for (auto *DC : allDecls) {
+//      auto *R = dyn_cast<ProtocolDecl>(DC);
+//      if (!R) {
+//         continue;
+//      }
+//
+//      SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
+//      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
+//         return true;
+//      }
+//   }
 
    // Resolve associated types of known builtin types.
-   for (auto *R : builtinDecls) {
-      SemaPass::DeclScopeRAII DSR(*QC.Sema, R);
-      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
-         return true;
-      }
-   }
+//   for (auto *R : builtinDecls) {
+//      SemaPass::DeclScopeRAII DSR(*QC.Sema, R);
+//      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
+//         return true;
+//      }
+//   }
 
    // Check protocol extensions.
-   for (auto *DC : allDecls) {
-      auto *P = dyn_cast<ProtocolDecl>(DC);
-      if (!P) {
-         continue;
-      }
-
-      SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
-      for (auto *Ext : P->getExtensions()) {
-         if (QC.PrepareDeclInterface(Ext)) {
-            return true;
-         }
-      }
-   }
+//   for (auto *DC : allDecls) {
+//      auto *P = dyn_cast<ProtocolDecl>(DC);
+//      if (!P) {
+//         continue;
+//      }
+//
+//      SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
+//      for (auto *Ext : P->getExtensions()) {
+//         if (QC.PrepareDeclInterface(Ext)) {
+//            return true;
+//         }
+//      }
+//   }
 
    // Check protocol conformances.
-   for (auto *DC : allDecls) {
-      auto *R = dyn_cast<ProtocolDecl>(DC);
-      if (!R) {
-         continue;
-      }
-
-      QualType T = QC.Context.getRecordType(R);
-      if (QC.CheckConformances(T)) {
-         return true;
-      }
-   }
+//   for (auto *DC : allDecls) {
+//      auto *R = dyn_cast<ProtocolDecl>(DC);
+//      if (!R) {
+//         continue;
+//      }
+//
+//      QualType T = QC.Context.getRecordType(R);
+//      if (QC.CheckConformances(T)) {
+//         return true;
+//      }
+//   }
 
    // Resolve associated types of other records.
-   for (auto *DC : allDecls) {
-      auto *R = dyn_cast<RecordDecl>(DC);
-      if (!R || isa<ProtocolDecl>(R) || builtinDecls.count(R) != 0) {
-         continue;
-      }
+//   for (auto *DC : allDecls) {
+//      auto *R = dyn_cast<RecordDecl>(DC);
+//      if (!R || isa<ProtocolDecl>(R) || builtinDecls.count(R) != 0) {
+//         continue;
+//      }
+//
+//      SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
+//      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
+//         return true;
+//      }
+//   }
 
-      SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
-      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
-         return true;
-      }
+   // Resolve associated types and conformances.
+   if (QC.Sema->AddDeclContextToConformanceResolutionWorklist(BaseDC)) {
+      return true;
+   }
+
+   if (QC.Sema->TrySolveConformanceResolutionWorklist()) {
+      return true;
    }
 
    // Declare implicit declarations.
@@ -374,39 +374,6 @@ bool LookupResolver::PrepareImplicitDecls(DeclContext *DC)
    }
 
    return false;
-}
-
-bool SemaPass::PrepareNameLookup(DeclContext *DC, bool isBaseModule)
-{
-   DelayRecordInstantiationsRAII Delay(*this, isBaseModule);
-
-   LookupResolver resolver(QC, DC);
-   if (resolver.Run(true, isBaseModule)) {
-      return true;
-   }
-
-   if (isBaseModule) {
-      if (CompleteRecordInstantiations()) {
-         return true;
-      }
-   }
-
-   return false;
-}
-
-bool SemaPass::CompleteRecordInstantiations()
-{
-   if (incompleteRecordInstantiations.empty()) {
-      return false;
-   }
-
-   LookupResolver resolver(QC, DC);
-   for (auto *Inst : incompleteRecordInstantiations) {
-      resolver.allDecls.insert(Inst);
-   }
-
-   incompleteRecordInstantiations.clear();
-   return resolver.Run(false);
 }
 
 LookupLevel SemaPass::getLookupLevel(DeclContext *DC) const

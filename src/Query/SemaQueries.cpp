@@ -370,14 +370,16 @@ QueryResult ResolveStaticIfQuery::run()
 
       ast::Decl* Inst;
       if (CondIsTrue) {
-         if (!QC.Sema->getInstantiator().InstantiateDecl(Template->getIfDecl(), &TemplateArgs,
-                                                         Template->getSourceLoc())) {
+         Inst = QC.Sema->getInstantiator().InstantiateDecl(Template->getIfDecl(), &TemplateArgs,
+                                                           Template->getSourceLoc());
+         if (!Inst) {
             return fail();
          }
       }
       else if (auto Else = Template->getElseDecl()) {
-         if (!QC.Sema->getInstantiator().InstantiateDecl(Else, &TemplateArgs,
-                                                         Template->getSourceLoc())) {
+         Inst = QC.Sema->getInstantiator().InstantiateDecl(Else, &TemplateArgs,
+                                                           Template->getSourceLoc());
+         if (!Inst) {
             return fail();
          }
       }
@@ -1572,7 +1574,7 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
          SelfTy = Context.getTypedefType(AT);
       }
 
-      QC.ApplyCapabilites(SelfTy, SelfTy, D->getDeclContext());
+      SelfTy = QC.Sema->ApplyCapabilities(SelfTy, D->getDeclContext());
 
       ArgumentConvention Conv;
       if (M->isStatic() && !M->isBaseInitializer()) {
@@ -2151,6 +2153,10 @@ QueryResult PrepareAliasInterfaceQuery::run()
    }
 
    if (!D->getAliasExpr()) {
+      if (D->isImplOfProtocolRequirement()) {
+         return finish();
+      }
+
       if (D->hasAttribute<_BuiltinAttr>()) {
          QC.Sema->SetBuiltinAliasType(D);
       }
@@ -2179,6 +2185,7 @@ QueryResult PrepareAliasInterfaceQuery::run()
    }
 
    D->getAliasExpr()->setExpr(ExprRes.get());
+   D->getAliasExpr()->copyStatusFlags(ExprRes.get());
 
    QualType valueType = ExprRes.get()->getExprType();
    D->getType().setResolvedType(valueType);
@@ -2211,5 +2218,7 @@ QueryResult TypecheckAliasQuery::run()
                                      GivenType, true, D->getSourceLoc());
 
    D->getAliasExpr()->setExpr(Val);
+   D->getAliasExpr()->copyStatusFlags(Val);
+
    return finish();
 }

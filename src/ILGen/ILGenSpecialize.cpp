@@ -194,10 +194,7 @@ public:
 
 QualType ILGenPass::getSubstitution(QualType Ty)
 {
-   if (!Ty->containsRuntimeGenericParam())
-      return Ty;
-
-   return TypeSubstVisitor(*this).visit(Ty);
+   return Ty;
 }
 
 void ILGenPass::SpecializeFunction(CallableDecl* Template, CallableDecl* Inst)

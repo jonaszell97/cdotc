@@ -119,10 +119,6 @@ private:   llvm::DenseMap<ast::NamedDecl*, std::vector<TypeCapability>> CheckTyp
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:   llvm::DenseMap<std::pair<QualType, ast::DeclContext*>, QualType> ApplyCapabilitesQueries;
-
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
 private:   llvm::DenseMap<char, GetBuiltinModuleQuery*> GetBuiltinModuleQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of

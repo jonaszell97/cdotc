@@ -5,6 +5,7 @@
 #include "cdotc/IRGen/IRGen.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
 
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>

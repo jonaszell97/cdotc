@@ -4,6 +4,7 @@
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ASTReader.h"
 #include "cdotc/Serialization/ModuleReader.h"
 

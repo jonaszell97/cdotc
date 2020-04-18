@@ -35,7 +35,6 @@ public: QueryResult SubstAssociatedTypes(QualType &Result, QualType T, QualType 
 public: QueryResult SubstTemplateParamTypes(QualType &Result, QualType T, sema::MultiLevelFinalTemplateArgList TemplateArgs, SourceRange SR);
 public: QueryResult SubstTemplateParamTypesNonFinal(QualType &Result, QualType T, const sema::MultiLevelTemplateArgList& TemplateArgs, SourceRange SR);
 public: QueryResult CheckTypeCapabilities(ArrayRef<TypeCapability> &Result, ast::NamedDecl* ND);
-public: QueryResult ApplyCapabilites(QualType &Result, QualType T, ast::DeclContext* DC);
 public: QueryResult GetBuiltinModule(Module* &Result, GetBuiltinModuleQuery::ModuleKind Mod);
 public: QueryResult GetBuiltinFunc(ast::CallableDecl* &Result, GetBuiltinFuncQuery::FunctionKind Fn);
 public: QueryResult GetBuiltinAlias(ast::AliasDecl* &Result, GetBuiltinAliasQuery::AliasKind K, ast::DeclContext* DC = nullptr);
@@ -235,7 +234,6 @@ friend class SubstAssociatedTypesQuery;
 friend class SubstTemplateParamTypesQuery;
 friend class SubstTemplateParamTypesNonFinalQuery;
 friend class CheckTypeCapabilitiesQuery;
-friend class ApplyCapabilitesQuery;
 friend class GetBuiltinModuleQuery;
 friend class GetBuiltinFuncQuery;
 friend class GetBuiltinAliasQuery;

@@ -26,7 +26,7 @@ QueryResult CreateILModuleQuery::run()
    }
 
    // Prepare name lookup.
-   if (QC.Sema->PrepareNameLookup(Mod->getDecl(), true)) {
+   if (QC.Sema->PrepareNameLookup(Mod->getDecl())) {
       return fail();
    }
 

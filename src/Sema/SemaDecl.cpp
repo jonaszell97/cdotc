@@ -188,10 +188,7 @@ checkProtocolDefaultDecl(SemaPass& SP, ProtocolDecl* P, ExtensionDecl* Ext,
    QualType Self = SP.Context.getAssociatedType(
        SP.QC.LookupSingleAs<AssociatedTypeDecl>(P, SP.getIdentifier("Self")));
 
-   QualType Constrained = Self;
-   if (SP.QC.ApplyCapabilites(Constrained, Constrained, &SP.getDeclContext())) {
-      return false;
-   }
+   QualType Constrained = SP.ApplyCapabilities(Self, &SP.getDeclContext());
 
    if (Self != Constrained) {
       if (auto* Ext = Constrained->asExistentialType()) {
@@ -371,7 +368,7 @@ ExtensionDecl* SemaPass::getCurrentExtensionCtx()
 void SemaPass::noteInstantiationContext()
 {
    auto D = getCurrentDecl();
-   unsigned Depth = Instantiator.getInstantiationDepth(D);
+   unsigned Depth = Instantiator->getInstantiationDepth(D);
 
    // We are reporting an instantiation depth error right now.
    bool PrintElidedMessage = false;
@@ -531,11 +528,16 @@ void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
    case Decl::SubscriptDeclID:
       ActOnSubscriptDecl(DC, cast<SubscriptDecl>(D));
       break;
+   case Decl::AssociatedTypeDeclID:
+      cast<ProtocolDecl>(DC)->setHasAssociatedTypeConstraint(true);
+      addDeclToContext(*DC, cast<NamedDecl>(D));
+      checkDefaultAccessibility(cast<NamedDecl>(D));
+
+      break;
    case Decl::EnumCaseDeclID:
       ActOnCallableDecl(*this, cast<EnumCaseDecl>(D));
       LLVM_FALLTHROUGH;
    case Decl::GlobalVarDeclID:
-   case Decl::AssociatedTypeDeclID:
    case Decl::NamespaceDeclID:
    case Decl::ModuleDeclID:
    case Decl::MacroDeclID:
@@ -1500,31 +1502,7 @@ ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr* Expr)
       ResultTy = ErrorTy;
    }
    else {
-      auto Opt = getOptionDecl();
-      if (Opt) {
-         TemplateArgument Arg(Opt->getTemplateParams().front(), TypeRes.get(),
-                              Expr->getSubType().getTypeExpr()->getSourceLoc());
-
-         auto TemplateArgs = FinalTemplateArgumentList::Create(Context, Arg);
-
-         QualType T = TypeRes.get();
-         if (T->isDependentType() || T->containsAssociatedType()) {
-            ResultTy = Context.getDependentRecordType(Opt, TemplateArgs);
-         }
-         else {
-            auto Inst
-                = InstantiateRecord(Expr->getSourceLoc(), Opt, TemplateArgs);
-
-            if (Inst)
-               ResultTy = Context.getRecordType(Inst);
-            else
-               ResultTy = Context.getRecordType(Opt);
-         }
-      }
-      else {
-         diagnose(Expr, err_no_builtin_decl, /*Option type*/ 1);
-         ResultTy = ErrorTy;
-      }
+      ResultTy = getOptionOf(TypeRes.get(), Expr);
    }
 
    Expr->setExprType(Context.getMetaType(ResultTy));

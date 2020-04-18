@@ -474,15 +474,8 @@ ExprResult SemaPass::visitCastExpr(CastExpr* Cast)
          diagnose(Cast, err_no_builtin_decl, 8, Cast->getAsLoc());
       }
       else {
-         TemplateArgument Arg(Opt->getTemplateParams().front(),
-                              Cast->getExprType(), Cast->getSourceLoc());
-
-         auto TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
-
-         auto Inst = InstantiateRecord(Cast->getSourceLoc(), Opt, TemplateArgs);
-
          // Instantiation of Optional should never fail
-         Cast->setExprType(Context.getRecordType(Inst));
+         Cast->setExprType(QC.Sema->getOptionOf(Cast->getExprType(), Cast));
       }
 
       for (auto& Step : ConvSeq.getSteps()) {
