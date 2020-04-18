@@ -11,6 +11,7 @@
 #include <llvm/ADT/DenseMap.h>
 
 #include <queue>
+#include <unordered_map>
 
 namespace cdot {
 
@@ -110,6 +111,13 @@ public:
       return support::dyn_cast_or_null<T>(getInstantiationImpl((NamedDecl*)Template, TemplateArgs));
    }
 
+   template<class T>
+   T *getMemberInstantiation(RecordDecl *Inst,
+                             T *TemplateMember,
+                             sema::FinalTemplateArgumentList* TemplateArgs) {
+      return support::dyn_cast_or_null<T>(getMemberInstantiationImpl(
+         Inst, TemplateMember, TemplateArgs));
+   }
 
    void registerInstantiation(NamedDecl *Template,
                               sema::FinalTemplateArgumentList* TemplateArgs,
@@ -122,9 +130,15 @@ private:
 
    llvm::DenseMap<NamedDecl*, unsigned> InstantiationDepthMap;
    llvm::DenseMap<std::pair<NamedDecl*, uintptr_t>, NamedDecl*> InstMap;
+   llvm::DenseMap<std::pair<RecordDecl*, NamedDecl*>,
+      llvm::DenseMap<sema::FinalTemplateArgumentList*, NamedDecl*>> MemberInstMap;
 
    NamedDecl *getInstantiationImpl(NamedDecl *Template,
                                    sema::FinalTemplateArgumentList* TemplateArgs);
+
+   NamedDecl *getMemberInstantiationImpl(RecordDecl *Inst,
+                                         NamedDecl *TemplateMember,
+                                         sema::FinalTemplateArgumentList* TemplateArgs);
 
    bool PrepareForInstantiation(NamedDecl *D);
 };

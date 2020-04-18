@@ -1378,7 +1378,8 @@ QueryResult QueryContext::SubstAssociatedTypes(QualType &Result, QualType T, Qua
    if (!_Q) {
       _Q = new(*this) SubstAssociatedTypesQuery(*this, T, Self, SR);
       SubstAssociatedTypesQueries.InsertNode(_Q, InsertPos);
-   }
+   }   _Q->refresh();
+
 #ifndef NDEBUG
    if (shouldReset()) _Q->Stat = Query::Idle;
 #endif
@@ -1486,24 +1487,6 @@ if (MaybeErr.isErr()) return MaybeErr;
 
 Result = _Q.get();
 CheckTypeCapabilitiesQueries[Key] = Result;
-return QueryResult(QueryResult::Success);
-}
-
-QueryResult QueryContext::ApplyCapabilites(QualType &Result, QualType T, ast::DeclContext* DC)
-
-{
-   auto Key = std::make_pair(T, DC);
-   auto It = ApplyCapabilitesQueries.find(Key);
-   if (It != ApplyCapabilitesQueries.end() && !shouldReset()) {
-      Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
-ApplyCapabilitesQuery _Q(*this, T, DC);
-
-ExecutingQuery EQ(*this, &_Q);
-auto MaybeErr = _Q.run();
-if (MaybeErr.isErr()) return MaybeErr;
-
-Result = _Q.get();
-ApplyCapabilitesQueries[Key] = Result;
 return QueryResult(QueryResult::Success);
 }
 
@@ -3667,7 +3650,8 @@ QueryResult QueryContext::ConformsTo(bool &Result, CanType T, ast::ProtocolDecl*
    if (!_Q) {
       _Q = new(*this) ConformsToQuery(*this, T, P);
       ConformsToQueries.InsertNode(_Q, InsertPos);
-   }
+   }   _Q->refresh();
+
 #ifndef NDEBUG
    if (shouldReset()) _Q->Stat = Query::Idle;
 #endif
@@ -3716,7 +3700,8 @@ QueryResult QueryContext::IsCovariant(bool &Result, QualType T, QualType Covar)
    if (!_Q) {
       _Q = new(*this) IsCovariantQuery(*this, T, Covar);
       IsCovariantQueries.InsertNode(_Q, InsertPos);
-   }
+   }   _Q->refresh();
+
 #ifndef NDEBUG
    if (shouldReset()) _Q->Stat = Query::Idle;
 #endif
@@ -3765,7 +3750,8 @@ QueryResult QueryContext::IsContravariant(bool &Result, QualType T, QualType Con
    if (!_Q) {
       _Q = new(*this) IsContravariantQuery(*this, T, Contravar);
       IsContravariantQueries.InsertNode(_Q, InsertPos);
-   }
+   }   _Q->refresh();
+
 #ifndef NDEBUG
    if (shouldReset()) _Q->Stat = Query::Idle;
 #endif

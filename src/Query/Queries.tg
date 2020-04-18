@@ -432,6 +432,9 @@ def SubstAssociatedTypes : Query<"QualType"> {
     ]
 
     description = "substituting ${T.toDiagString()} with Self = ${Self.toDiagString()}"
+    refreshCondition = {
+        Self && Self->isRecordType() && QC.Sema->IsBeingResolved(Self->getRecord())
+    }
 }
 
 /// Substitute all generic types within a type.
@@ -479,19 +482,6 @@ def CheckTypeCapabilities : Query<"std::vector<TypeCapability>"> {
 
     getReturnType = "ArrayRef<TypeCapability>"
     shouldMoveResult = true
-    simpleQuery = true
-}
-
-/// Apply the capabilities that are added in a context to a type.
-def ApplyCapabilites : Query<"QualType"> {
-    parameters = [
-        // The type to apply the capabilities to.
-        TypeParam<"T">,
-
-        // The context to check.
-        DeclContextParam<"DC">
-    ]
-
     simpleQuery = true
 }
 
@@ -1265,6 +1255,10 @@ def ConformsTo : BoolQuery {
 
     description = "checking if ${T.toDiagString()} conforms to ${P->getFullName()}"
     canBeDependent = true
+
+    refreshCondition = {
+        T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
+    }
 }
 
 /// Check whether or not a type is covariant wrt another type.
@@ -1278,6 +1272,10 @@ def IsCovariant : BoolQuery {
     ]
 
     canBeDependent = true
+
+    refreshCondition = {
+        T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
+    }
 }
 
 /// Check whether or not a type is contravariant wrt another type.
@@ -1291,6 +1289,10 @@ def IsContravariant : BoolQuery {
     ]
 
     canBeDependent = true
+
+    refreshCondition = {
+        T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
+    }
 }
 
 /// Get or compute the size of a type.

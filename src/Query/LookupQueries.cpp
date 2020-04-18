@@ -1111,23 +1111,6 @@ static bool LookupInImports(DeclContext* Ctx, DeclarationName Name,
    return false;
 }
 
-static bool isNameOfBuiltinConformance(DeclarationName Name)
-{
-   switch (Name.getKind()) {
-   case DeclarationName::NormalIdentifier: {
-      // copy() is implicit for most types.
-      return Name.isStr("copy");
-   }
-   case DeclarationName::InfixOperatorName: {
-      // infix ==, infix != are builtin for enums.
-      auto* II = Name.getIdentifierInfo();
-      return II->isStr("==") || II->isStr("!=");
-   }
-   default:
-      return false;
-   }
-}
-
 static bool instantiateTemplateMembers(QueryContext& QC, DeclContext* Ctx,
                                        DeclarationName Name,
                                        DeclContextLookupResult& Result)
@@ -1621,7 +1604,7 @@ QueryResult DirectLookupQuery::run()
       // Make sure unconditional conformances are declared.
       if (((int)Opts & (int)LookupOpts::LookInConformances) == 0
       || !QC.Sema->hasLookupLevel(DC, LookupLevel::Conformances)) {
-         return fail();
+         return finish(move(Result));
       }
 
       // If this is a protocol, look in conformances.

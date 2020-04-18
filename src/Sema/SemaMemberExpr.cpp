@@ -820,6 +820,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
                                     Ident->getSourceLoc());
             assert(ArgList.checkCompatibility() && "can this happen?");
 
+            Ident->setNeedsInstantiation(true);
             Ident->setExprType(
                 Context.getMetaType(Context.getDependentRecordType(
                     R, FinalTemplateArgumentList::Create(Context, ArgList))));
@@ -982,8 +983,7 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr* Expr)
       }
 
       Expr->setContainsGenericParam(true);
-      Expr->setIsTypeDependent(ResultType->isDependentType()
-                               || Param->isUnbounded());
+      Expr->setNeedsInstantiation(true);
 
       break;
    }
@@ -1484,7 +1484,8 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
    }
 
    for (auto* ArgExpr : TemplateArgs) {
-      if (ArgExpr->getExprType()->isDependentType()) {
+      if (ArgExpr->getExprType()->containsAssociatedType()
+      || ArgExpr->getExprType()->containsTemplateParamType()) {
          E->setNeedsInstantiation(true);
          return R;
       }

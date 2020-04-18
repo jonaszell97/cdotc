@@ -315,7 +315,13 @@ public:
    QualType visitAssociatedType(AssociatedType* T)
    {
       if (auto OuterAT = T->getOuterAT()) {
-         return this->Ctx.getAssociatedType(T->getDecl(), visit(OuterAT));
+         QualType Outer = visit(OuterAT);
+         if (Outer->isAssociatedType() || Outer->isTemplateParamType()) {
+            return this->Ctx.getAssociatedType(T->getDecl(), visit(OuterAT));
+         }
+         else {
+            return this->SP.CreateConcreteTypeFromAssociatedType(T, Outer);
+         }
       }
 
       return T;

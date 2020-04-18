@@ -939,6 +939,8 @@ public:
 private:
    QueryResult run();
 
+   void refresh();
+
    SubstAssociatedTypesQuery(QueryContext &QC, QualType T, QualType Self, SourceRange SR);
 
    QueryResult finish(QualType Result, Status St = Done);
@@ -1040,37 +1042,6 @@ private:
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
    static void Profile(llvm::FoldingSetNodeID &ID, ast::NamedDecl* ND);
-
-};
-
-class ApplyCapabilitesQuery: public Query {
-public:
-   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
-   static bool classofKind(Kind K) { return K == Kind::ApplyCapabilitesQueryID; }
-
-   using result_type = QualType;
-
-   std::string description() const;
-   std::string summary() const;
-
-   QualType get() const;
-
-   friend class Query; // for run().
-   friend class QueryContext; // for C'tor.
-
-private:
-   QueryResult run();
-
-   ApplyCapabilitesQuery(QueryContext &QC, QualType T, ast::DeclContext* DC);
-
-   QueryResult finish(QualType Result, Status St = Done);
-
-   QualType T;
-   ast::DeclContext* DC;
-   llvm::Optional<QualType> Result;
-public:
-   void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType T, ast::DeclContext* DC);
 
 };
 
@@ -2566,6 +2537,8 @@ public:
 private:
    QueryResult run();
 
+   void refresh();
+
    ConformsToQuery(QueryContext &QC, CanType T, ast::ProtocolDecl* P);
 
    QueryResult finish(bool Result, Status St = Done);
@@ -2597,6 +2570,8 @@ public:
 private:
    QueryResult run();
 
+   void refresh();
+
    IsCovariantQuery(QueryContext &QC, QualType T, QualType Covar);
 
    QueryResult finish(bool Result, Status St = Done);
@@ -2627,6 +2602,8 @@ public:
 
 private:
    QueryResult run();
+
+   void refresh();
 
    IsContravariantQuery(QueryContext &QC, QualType T, QualType Contravar);
 

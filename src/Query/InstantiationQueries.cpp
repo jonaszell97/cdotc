@@ -89,8 +89,8 @@ TemplateInstantiator::InstantiateProtocolDefaultImpl(NamedDecl *Impl,
    auto key = std::make_pair(Impl, (uintptr_t)Self.getAsOpaquePtr());
 
    auto it = InstMap.find(key);
-   if (it == InstMap.end()) {
-      return nullptr;
+   if (it != InstMap.end()) {
+      return it->getSecond();
    }
 
    assert(isa<ExtensionDecl>(Impl->getNonTransparentDeclContext())
@@ -158,14 +158,24 @@ TemplateInstantiator::InstantiateProtocolDefaultImpl(NamedDecl *Impl,
          return nullptr;
       }
 
-      SourceType Ty(QC.Context.getMetaType(InstTy));
+      assert(!InstTy->containsAssociatedType());
+
+      if (!InstTy->isMetaType()) {
+         InstTy = QC.Context.getMetaType(InstTy);
+      }
+
       auto* typeExpr = new (QC.Context) IdentifierRefExpr(
-         alias->getSourceLoc(), IdentifierKind::MetaType, Ty);
+         alias->getSourceLoc(), IdentifierKind::MetaType, InstTy);
 
       auto* rawTypeExpr = StaticExpr::Create(QC.Context, typeExpr);
+      if (InstTy->containsTemplateParamType()) {
+         typeExpr->setNeedsInstantiation(true);
+         rawTypeExpr->setNeedsInstantiation(true);
+      }
+
       Inst = AliasDecl::Create(QC.Context, alias->getSourceLoc(),
                                AccessSpecifier::Public, alias->getDeclName(),
-                               Ty, rawTypeExpr, {});
+                               InstTy, rawTypeExpr, {});
    }
    else {
       llvm_unreachable("bad protocol default implementation kind!");

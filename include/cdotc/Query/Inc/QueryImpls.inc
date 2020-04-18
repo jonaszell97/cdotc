@@ -38,7 +38,6 @@ bool Query::isPure() const
    case SubstTemplateParamTypesQueryID: return false;
    case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return false;
-   case ApplyCapabilitesQueryID: return false;
    case GetBuiltinModuleQueryID: return false;
    case GetBuiltinFuncQueryID: return false;
    case GetBuiltinAliasQueryID: return false;
@@ -242,7 +241,6 @@ bool Query::canBeCached() const
    case SubstTemplateParamTypesQueryID: return true;
    case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return true;
-   case ApplyCapabilitesQueryID: return true;
    case GetBuiltinModuleQueryID: return true;
    case GetBuiltinFuncQueryID: return true;
    case GetBuiltinAliasQueryID: return true;
@@ -446,7 +444,6 @@ bool Query::canBeSerialized() const
    case SubstTemplateParamTypesQueryID: return false;
    case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return false;
-   case ApplyCapabilitesQueryID: return false;
    case GetBuiltinModuleQueryID: return false;
    case GetBuiltinFuncQueryID: return false;
    case GetBuiltinAliasQueryID: return false;
@@ -650,7 +647,6 @@ bool Query::canBeDependent() const
    case SubstTemplateParamTypesQueryID: return false;
    case SubstTemplateParamTypesNonFinalQueryID: return false;
    case CheckTypeCapabilitiesQueryID: return false;
-   case ApplyCapabilitesQueryID: return false;
    case GetBuiltinModuleQueryID: return false;
    case GetBuiltinFuncQueryID: return false;
    case GetBuiltinAliasQueryID: return false;
@@ -2215,6 +2211,16 @@ SubstAssociatedTypesQuery::SubstAssociatedTypesQuery(QueryContext &QC, QualType 
 
 }
 
+void SubstAssociatedTypesQuery::refresh()
+{
+
+   if (Stat == Idle) return;
+   if (
+        Self && Self->isRecordType() && QC.Sema->IsBeingResolved(Self->getRecord())
+    ) Stat = Idle;
+
+}
+
 QualType SubstAssociatedTypesQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
@@ -2409,59 +2415,6 @@ void CheckTypeCapabilitiesQuery::Profile(llvm::FoldingSetNodeID &ID) const
 void CheckTypeCapabilitiesQuery::Profile(llvm::FoldingSetNodeID &ID, ast::NamedDecl* ND)
 {
    ID.AddPointer(ND);
-}
-
-ApplyCapabilitesQuery::ApplyCapabilitesQuery(QueryContext &QC, QualType T, ast::DeclContext* DC) : Query(ApplyCapabilitesQueryID, QC), T(T), DC(DC) {
-assert(DC && "parameter 'DC' should not be null!");
-
-}
-
-QualType ApplyCapabilitesQuery::get() const
-{
-   assert(ok() && "query has not successfully completed!");
-   return Result.getValue();
-}
-
-std::string ApplyCapabilitesQuery::description() const
-{
-   std::string s;
-   s += "running ";
-   s += "ApplyCapabilites";
-   return s;
-}
-
-std::string ApplyCapabilitesQuery::summary() const
-{
-   std::string s;
-   llvm::raw_string_ostream OS(s);
-
-   OS << "[ApplyCapabilites]"
-;   OS << " T = ";
-OS << "'" << T << "'";
-   OS << ',';
-   OS << " DC = ";
-OS << "'" << (DC ? DC->getNameAsString() : "<null>") << "'";
-;
-
-   return OS.str();
-}
-
-QueryResult ApplyCapabilitesQuery::finish(QualType Result, Status St)
-{
-   this->Result = Result;
-
-   return Query::finish(St);
-}
-
-void ApplyCapabilitesQuery::Profile(llvm::FoldingSetNodeID &ID) const
-{
-   Profile(ID, T, DC);
-}
-
-void ApplyCapabilitesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, ast::DeclContext* DC)
-{
-   ID.AddPointer(T.getAsOpaquePtr());
-   ID.AddPointer(DC);
 }
 
 GetBuiltinModuleQuery::GetBuiltinModuleQuery(QueryContext &QC, GetBuiltinModuleQuery::ModuleKind Mod) : Query(GetBuiltinModuleQueryID, QC), Mod(Mod) {
@@ -4583,6 +4536,16 @@ assert(P && "parameter 'P' should not be null!");
 
 }
 
+void ConformsToQuery::refresh()
+{
+
+   if (Stat == Idle) return;
+   if (
+        T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
+    ) Stat = Idle;
+
+}
+
 bool ConformsToQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
@@ -4637,6 +4600,16 @@ IsCovariantQuery::IsCovariantQuery(QueryContext &QC, QualType T, QualType Covar)
 
 }
 
+void IsCovariantQuery::refresh()
+{
+
+   if (Stat == Idle) return;
+   if (
+        T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
+    ) Stat = Idle;
+
+}
+
 bool IsCovariantQuery::get() const
 {
    assert(ok() && "query has not successfully completed!");
@@ -4686,6 +4659,16 @@ void IsCovariantQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T, QualType 
 }
 
 IsContravariantQuery::IsContravariantQuery(QueryContext &QC, QualType T, QualType Contravar) : Query(IsContravariantQueryID, QC), T(T), Contravar(Contravar) {
+
+}
+
+void IsContravariantQuery::refresh()
+{
+
+   if (Stat == Idle) return;
+   if (
+        T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
+    ) Stat = Idle;
 
 }
 

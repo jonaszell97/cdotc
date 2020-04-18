@@ -3,14 +3,10 @@
 #include "cdotc/AST/ASTContext.h"
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/TypeVisitor.h"
-#include "cdotc/Basic/CastKind.h"
 #include "cdotc/IL/Constant.h"
 #include "cdotc/Message/Diagnostics.h"
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/StringSwitch.h"
-
-#include <llvm/ADT/SmallString.h>
-#include <sstream>
 
 using std::string;
 
@@ -23,8 +19,7 @@ namespace cdot {
 bool TypeProperties::isDependent() const
 {
    static constexpr uint16_t DependentMask
-       = ContainsDependentSizeArrayType | ContainsUnknownAny
-         | ContainsTemplateParamType | ContainsAssociatedType;
+       = ContainsDependentSizeArrayType | ContainsUnknownAny;
 
    return (Props & DependentMask) != 0;
 }
@@ -49,9 +44,9 @@ bool TypeProperties::containsUnexpandedParameterPack() const
    return (Props & ContainsUnexpandedParameterPack) != 0;
 }
 
-bool TypeProperties::containsRuntimeGenericParam() const
+bool TypeProperties::containsProtocolWithAssociatedTypes() const
 {
-   return (Props & ContainsRuntimeGenericParam) != 0;
+   return (Props & ContainsProtocolWithAssociatedTypes) != 0;
 }
 
 bool TypeProperties::containsTypeVariable() const
@@ -324,6 +319,16 @@ bool Type::isSelfComparable() const
 }
 
 bool Type::isHashable() const { return true; }
+
+bool Type::isAnyType() const
+{
+   if (auto *R = asRecordType()) {
+      return support::isa<ProtocolDecl>(R->getRecord())
+         && support::cast<ProtocolDecl>(R->getRecord())->isAny();
+   }
+
+   return false;
+}
 
 QualType Type::getPointeeType() const
 {
@@ -929,15 +934,15 @@ public:
 
    void visitTemplateParamType(const TemplateParamType* Ty)
    {
-      auto Cov = cast<TemplateParamType>(Ty)->getCovariance();
-      OS << Ty->getTemplateParamTypeName() << ": ";
+//      auto Cov = cast<TemplateParamType>(Ty)->getCovariance();
+      OS << Ty->getTemplateParamTypeName(); // << ": ";
 
-      if (!Cov->isUnknownAnyType()) {
-         visit(Cov);
-      }
-      else {
-         OS << "?";
-      }
+//      if (!Cov->isUnknownAnyType()) {
+//         visit(Cov);
+//      }
+//      else {
+//         OS << "?";
+//      }
    }
 
    void visitTypedefType(const TypedefType* Ty)
@@ -952,7 +957,14 @@ public:
    {
       auto AT = Ty->getDecl();
       if (auto Outer = Ty->getOuterAT()) {
-         OS << QualType(Outer) << "." << AT->getDeclName();
+         if (Outer->isExistentialType()) {
+            OS << "(" << QualType(Outer) << ")";
+         }
+         else {
+            OS << QualType(Outer);
+         }
+
+         OS << "." << AT->getDeclName();
          return;
       }
       else {
@@ -1147,6 +1159,12 @@ RecordType::RecordType(RecordDecl* record)
     : Type(TypeID::RecordTypeID, nullptr), Rec(record)
 {
    assert(!record->isTemplate() && "should be a DependentRecordType!");
+
+   if (auto *P = dyn_cast<ProtocolDecl>(record)) {
+      if (P->hasAssociatedTypeConstraint()) {
+         Bits.Props |= TypeProperties::ContainsProtocolWithAssociatedTypes;
+      }
+   }
 
    if (record->isTemplateOrInTemplate()) {
       Bits.Props |= TypeProperties::ContainsTemplate;
@@ -1411,7 +1429,7 @@ TemplateParamType::TemplateParamType(TemplateParamDecl* Param)
       Bits.Props |= TypeProperties::ContainsUnconstrainedGeneric;
    }
    else {
-      Bits.Props |= TypeProperties::ContainsRuntimeGenericParam;
+      Bits.Props |= TypeProperties::ContainsProtocolWithAssociatedTypes;
    }
 }
 
@@ -1568,6 +1586,46 @@ TypeVariableType::TypeVariableType(unsigned ID)
     : Type(TypeVariableTypeID, nullptr), ID(ID)
 {
    Bits.Props |= TypeProperties::ContainsTypeVariable;
+}
+
+void ExistentialTypeBuilder::push_back(QualType T)
+{
+   if (T->isAnyType()) {
+      return;
+   }
+
+   if (auto *Ext = T->asExistentialType()) {
+      for (QualType Inner : Ext->getExistentials()) {
+         push_back(Inner);
+      }
+   }
+   else {
+      _Tys.insert(T);
+   }
+}
+
+void ExistentialTypeBuilder::remove(QualType T)
+{
+   if (auto *Ext = T->asExistentialType()) {
+      for (QualType Inner : Ext->getExistentials()) {
+         remove(Inner);
+      }
+   }
+   else {
+      auto it = std::find(_Tys.begin(), _Tys.end(), T);
+      if (it != _Tys.end()) {
+         _Tys.erase(it);
+      }
+   }
+}
+
+QualType ExistentialTypeBuilder::Build(ASTContext &C)
+{
+   if (_Tys.size() == 1) {
+      return _Tys.front();
+   }
+
+   return C.getExistentialType(_Tys.takeVector());
 }
 
 } // namespace cdot

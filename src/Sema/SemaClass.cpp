@@ -136,12 +136,6 @@ QueryResult DeclareImplicitDefaultInitQuery::run()
 
 QueryResult DeclareMemberwiseInitQuery::run()
 {
-   if (S->isInstantiation()) {
-      if (QC.Sema->getInstantiator().InstantiateFields(S)) {
-         return fail();
-      }
-   }
-
    SmallVector<FuncArgDecl*, 4> args;
    for (auto F : S->getFields()) {
       if (!F->isStatic() && !F->getDefaultVal()) {
@@ -744,53 +738,7 @@ QueryResult PrepareInitInterfaceQuery::run()
    }
 
    if (D->isFallible()) {
-      RecordDecl* Opt;
-      if (QC.GetBuiltinRecord(Opt, GetBuiltinRecordQuery::Option)) {
-         return fail();
-      }
-
-      if (!Opt) {
-         QC.Sema->diagnose(D, err_no_builtin_decl, D->getSourceLoc(),
-                           /*fallible init*/ 10);
-
-         return fail();
-      }
-
-      if (D->getRecord()->isTemplate()) {
-         return finish();
-      }
-
-      sema::TemplateArgument Arg(Opt->getTemplateParams().front(), RecordTy,
-                                 D->getSourceLoc());
-
-      auto TemplateArgs = sema::FinalTemplateArgumentList::Create(Context, Arg);
-      auto Inst
-          = QC.Sema->InstantiateRecord(D->getSourceLoc(), Opt, TemplateArgs);
-
-      QualType ResultTy;
-      if (Inst) {
-         ResultTy = Context.getRecordType(Inst);
-
-         // Make sure both the 'Some' and 'None' cases are instantiated.
-         auto* Some = cast<EnumDecl>(Inst)->getSomeCase();
-         Some = QC.Sema->maybeInstantiateTemplateMember(Inst, Some);
-
-         if (QC.PrepareDeclInterface(Some)) {
-            return fail();
-         }
-
-         auto* None = cast<EnumDecl>(Inst)->getNoneCase();
-         None = QC.Sema->maybeInstantiateTemplateMember(Inst, None);
-
-         if (QC.PrepareDeclInterface(None)) {
-            return fail();
-         }
-      }
-      else {
-         ResultTy = Context.getRecordType(Opt);
-      }
-
-      D->setOptionTy(ResultTy);
+      D->setOptionTy(QC.Sema->getOptionOf(RecordTy, D));
    }
 
    return finish();
@@ -1520,12 +1468,6 @@ QueryResult CheckBuiltinConformancesQuery::run()
          TrivialLayout = false;
       }
 
-      if (S->isInstantiation()) {
-         if (QC.Sema->getInstantiator().InstantiateFields(S)) {
-            return fail();
-         }
-      }
-
       ArrayRef<FieldDecl*> Fields = S->getStoredFields();
       for (const auto& F : Fields.drop_front(BaseClassFields)) {
          if (QC.PrepareDeclInterface(F)) {
@@ -1562,12 +1504,6 @@ QueryResult CheckBuiltinConformancesQuery::run()
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       bool AllEquatable = true;
       bool AddRawRepresentable = true;
-
-      if (E->isInstantiation()) {
-         if (QC.Sema->getInstantiator().InstantiateCases(E)) {
-            return fail();
-         }
-      }
 
       for (auto C : E->getCases()) {
          if (QC.PrepareDeclInterface(C)) {

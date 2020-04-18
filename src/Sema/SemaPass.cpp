@@ -145,6 +145,7 @@ SemaPass::SemaPass(CompilerInstance& compilationUnit)
       Context(compilationUnit.getContext()), mangle(*this),
       Evaluator(*this), CandBuilder(*this),
       Instantiator(std::make_unique<TemplateInstantiator>(*this)),
+      ConfResolver(nullptr),
       ILGen(std::make_unique<ILGenPass>(compilationUnit.getILCtx(), *this)),
       fatalError(false), fatalErrorInScope(false), EncounteredError(false),
       UnknownAnyTy(Context.getUnknownAnyTy()), ErrorTy(Context.getErrorTy())
@@ -334,30 +335,6 @@ NamedDecl* SemaPass::getInstantiationScope(NamedDecl* Inst)
    }
 
    return nullptr;
-}
-
-QualType SemaPass::ApplyCapabilities(QualType T, DeclContext* DeclCtx)
-{
-   if (Bits.DontApplyCapabilities || !T) {
-      return T;
-   }
-
-   if (!DeclCtx) {
-      auto it = typeSubstitutions.find(T);
-      if (it != typeSubstitutions.end()) {
-         return it->getSecond();
-      }
-
-      DeclCtx = this->DeclCtx;
-   }
-
-   QualType Subst;
-   if (QC.ApplyCapabilites(Subst, T, DeclCtx)) {
-      return T;
-   }
-
-   typeSubstitutions.try_emplace(T, Subst);
-   return Subst;
 }
 
 ConstraintSet* SemaPass::getDeclConstraints(NamedDecl* ND)
@@ -866,8 +843,16 @@ bool SemaPass::ContainsAssociatedTypeConstraint(QualType Ty)
    return Result;
 }
 
-static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto)
+static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
+                           bool AllowConditional)
 {
+   if (AllowConditional && T->getRecord()->isInstantiation()) {
+      auto *Conf = Sema.Context.getConformanceTable().getConformance(
+         T->getRecord()->getSpecializedTemplate(), Proto);
+
+      return Conf != nullptr;
+   }
+
    bool result;
    if (Sema.QC.ConformsTo(result, T, Proto)) {
       return true;
@@ -876,7 +861,7 @@ static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto)
    return result;
 }
 
-bool SemaPass::ConformsTo(CanType T, ProtocolDecl *Proto)
+bool SemaPass::ConformsTo(CanType T, ProtocolDecl *Proto, bool AllowConditional)
 {
    // Check if we are in an extension that adds additional conformances.
    auto* Ext = getCurrentExtensionCtx();
@@ -884,23 +869,23 @@ bool SemaPass::ConformsTo(CanType T, ProtocolDecl *Proto)
       return ConformsTo(T, Proto, Ext);
    }
 
-   return conformsToImpl(*this, T, Proto);
+   return conformsToImpl(*this, T, Proto, AllowConditional);
 }
 
-bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *Ext)
+bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *Ext, bool AllowConditional)
 {
    if (Ext == nullptr) {
-      return conformsToImpl(*this, T, Proto);
+      return conformsToImpl(*this, T, Proto, AllowConditional);
    }
 
    CanType extendedType = Context.getRecordType(Ext->getExtendedRecord());
    if (extendedType != T) {
-      return conformsToImpl(*this, T, Proto);
+      return conformsToImpl(*this, T, Proto, AllowConditional);
    }
 
    auto conformanceTypes = Ext->getConformanceTypes();
    if (conformanceTypes.empty()) {
-      return conformsToImpl(*this, T, Proto);
+      return conformsToImpl(*this, T, Proto, AllowConditional);
    }
 
    ArrayRef<ProtocolDecl*> newProtocols;
@@ -910,12 +895,12 @@ bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *Ext)
    }
 
    for (auto *NewProto : newProtocols) {
-      if (conformsToImpl(*this, Context.getRecordType(NewProto), Proto)) {
+      if (conformsToImpl(*this, Context.getRecordType(NewProto), Proto, AllowConditional)) {
          return true;
       }
    }
 
-   return conformsToImpl(*this, T, Proto);
+   return conformsToImpl(*this, T, Proto, AllowConditional);
 }
 
 bool SemaPass::IsSubClassOf(ClassDecl* C, ClassDecl* Base, bool errorVal)
@@ -4436,28 +4421,57 @@ Optional<bool> SemaPass::evaluateAsBool(StmtOrDecl DependentStmt,
 }
 
 void SemaPass::printConstraint(llvm::raw_ostream& OS, QualType ConstrainedType,
-                               DeclConstraint* C)
+                               DeclConstraint* C, QualType Self)
 {
+   QualType RHSType;
+   if (Self) {
+      if (QC.SubstAssociatedTypes(ConstrainedType, ConstrainedType, Self, {})) {
+         return;
+      }
+
+      switch (C->getKind()) {
+      case DeclConstraint::TypeEquality:
+      case DeclConstraint::TypeInequality:
+      case DeclConstraint::TypePredicate:
+      case DeclConstraint::TypePredicateNegated:
+         if (QC.SubstAssociatedTypes(RHSType, C->getType(), Self, {})) {
+            return;
+         }
+
+         break;
+      default:
+         break;
+      }
+   }
+   else {
+      switch (C->getKind()) {
+      case DeclConstraint::TypeEquality:
+      case DeclConstraint::TypeInequality:
+      case DeclConstraint::TypePredicate:
+      case DeclConstraint::TypePredicateNegated:
+         RHSType = C->getType();
+         break;
+      default:
+         break;
+      }
+   }
+
    switch (C->getKind()) {
    case DeclConstraint::Concept: {
       OS << C->getConcept()->getDeclName() << "<" << ConstrainedType << ">";
       break;
    }
    case DeclConstraint::TypeEquality:
-      OS << ConstrainedType.toDiagString()
-         << " == " << C->getType().toDiagString();
+      OS << ConstrainedType.toDiagString() << " == " << RHSType.toDiagString();
       break;
    case DeclConstraint::TypeInequality:
-      OS << ConstrainedType.toDiagString()
-         << " != " << C->getType().toDiagString();
+      OS << ConstrainedType.toDiagString() << " != " << RHSType.toDiagString();
       break;
    case DeclConstraint::TypePredicate:
-      OS << ConstrainedType.toDiagString() << " is "
-         << C->getType().toDiagString();
+      OS << ConstrainedType.toDiagString() << " is " << RHSType.toDiagString();
       break;
    case DeclConstraint::TypePredicateNegated:
-      OS << ConstrainedType.toDiagString() << " !is "
-         << C->getType().toDiagString();
+      OS << ConstrainedType.toDiagString() << " !is " << RHSType.toDiagString();
       break;
    case DeclConstraint::Struct:
       OS << ConstrainedType.toDiagString() << " is struct";

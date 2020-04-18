@@ -4,6 +4,7 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/Statement.h"
 #include "cdotc/Driver/Compiler.h"
+#include "cdotc/Module/Module.h"
 #include "cdotc/Serialization/ModuleFile.h"
 
 #include <llvm/Support/raw_ostream.h>
@@ -268,7 +269,14 @@ void Decl::copyStatusFlags(Decl* D)
    flags |= (D->flags & StatusFlags);
 }
 
-void Decl::setIsInvalid(bool error) { setDeclFlag(DF_IsInvalid, error); }
+void Decl::setIsInvalid(bool error)
+{
+   if (error) {
+       NO_OP;
+   }
+
+   setDeclFlag(DF_IsInvalid, error);
+}
 
 bool Decl::isInExtension() const
 {
@@ -426,8 +434,19 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile,
 
    auto* Ctx = getNonTransparentDeclContext()->lookThroughExtension();
    if (support::isa<NamedDecl>(Ctx)) {
-      OS << support::cast<NamedDecl>(Ctx)->getJoinedName(join, includeFile);
-      OS << join;
+      bool printCtx = true;
+
+      if (auto *fn = support::dyn_cast<FunctionDecl>(Ctx)) {
+         printCtx &= !fn->isMain();
+      }
+      else if (auto *Mod = support::dyn_cast<ModuleDecl>(Ctx)) {
+         printCtx &= Mod->getModule()->isImported();
+      }
+
+      if (printCtx) {
+         OS << support::cast<NamedDecl>(Ctx)->getJoinedName(join, includeFile);
+         OS << join;
+      }
    }
 
    if (auto* E = support::dyn_cast<ExtensionDecl>(this);

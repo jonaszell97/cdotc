@@ -53,6 +53,12 @@ enum LogKind : uint64_t {
    /// \brief Log protocol implementations.
    ProtocolImpls = 0x200,
 
+   /// \brief Log type substitutions.
+   TypeSubstitutions = 0x400,
+
+   /// \brief Log associated type implementations.
+   AssociatedTypeImpls = 0x800,
+
    /// \brief Log variable declarations,
    Variables = LocalVariables | GlobalVariables,
 

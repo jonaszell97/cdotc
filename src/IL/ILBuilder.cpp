@@ -82,8 +82,7 @@ void ILBuilder::restoreIP(InsertPoint& IP)
 
 void ILBuilder::SetDebugLoc(SourceLocation debugLoc)
 {
-   if (!EmitDebugInfo || !InsertBlock || !debugLoc
-       || LastDebugLoc == debugLoc) {
+   if (!EmitDebugInfo || !InsertBlock || !debugLoc || LastDebugLoc == debugLoc) {
       LastDebugLoc = debugLoc;
       return;
    }
