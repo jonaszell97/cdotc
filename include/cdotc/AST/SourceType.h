@@ -79,6 +79,13 @@ struct SourceType {
       return *this;
    }
 
+   const SourceType& operator=(const SourceType &Ty) const
+   {
+      TypeExpr = Ty.TypeExpr;
+      ResolvedType = Ty.ResolvedType;
+      return *this;
+   }
+
 private:
    mutable Expression* TypeExpr;
    mutable QualType ResolvedType;

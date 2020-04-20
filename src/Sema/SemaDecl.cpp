@@ -1157,7 +1157,7 @@ void SemaPass::checkDuplicateFunctionDeclaration(CallableDecl* C,
    }
 
    const MultiLevelLookupResult* Result;
-   LookupOpts Opts = DefaultLookupOpts & ~LookupOpts::PrepareNameLookup;
+   LookupOpts Opts = DefaultLookupOpts;
 
    if (QC.DirectLookup(Result, C->getDeclContext(), C->getDeclName(), true,
                        Opts)) {
@@ -2027,8 +2027,7 @@ bool SemaPass::isInReflectModule(Decl* D)
    return D->getModule()->getModule() == getReflectModule();
 }
 
-static LookupOpts BuiltinOpts
-    = LookupOpts::TypeLookup | LookupOpts::PrepareNameLookup;
+static LookupOpts BuiltinOpts = LookupOpts::TypeLookup;
 
 StructDecl* SemaPass::getArrayDecl()
 {

@@ -5,7 +5,6 @@
 #include "tblgen/Value.h"
 
 #include <llvm/ADT/DenseMap.h>
-#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
@@ -102,6 +101,8 @@ class QueryClassEmitter {
       bool HashMap;
       bool IgnoreCircularDependency;
       bool Infallible;
+      bool NeedsStableCaching;
+
       std::vector<QueryParam> Params;
 
       /// The parameter string with types and parameter names.
@@ -276,6 +277,10 @@ void QueryClassEmitter::Setup()
       Info.Infallible
           = cast<IntegerLiteral>(Query->getFieldValue("infallible"))->getVal()
             != 0;
+
+      llvm::StringRef TypeName(Info.Type.data(), Info.Type.size());
+      Info.NeedsStableCaching =
+          TypeName.startswith("std::vector") || TypeName.startswith("llvm::SmallVector");
 
       auto* TrailingObjects
           = cast<ListLiteral>(Query->getFieldValue("trailingObjects"));

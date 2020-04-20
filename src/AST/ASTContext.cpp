@@ -237,7 +237,7 @@ NamedDecl* ASTContext::getProtocolImpl(const RecordDecl* R,
    return It->getSecond()[Req];
 }
 
-const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+const llvm::MapVector<const NamedDecl*, NamedDecl*>*
 ASTContext::getProtocolImpls(const RecordDecl* R)
 {
    auto It = ProtocolImplMap.find(R);
@@ -389,6 +389,8 @@ QualType ASTContext::getExistentialType(ArrayRef<QualType> Existentials) const
    if (Existentials.size() == 1) {
       return Existentials.front();
    }
+
+   assert(!Existentials.empty() && "invalid existential type!");
 
    llvm::FoldingSetNodeID ID;
    ExistentialType::Profile(ID, Existentials);

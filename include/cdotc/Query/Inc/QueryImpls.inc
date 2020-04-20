@@ -69,7 +69,6 @@ bool Query::isPure() const
    case ResolveDeclaredConformancesQueryID: return false;
    case AddSingleConformanceQueryID: return false;
    case DeclareSelfAliasQueryID: return false;
-   case ResolveAssociatedTypesQueryID: return false;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return false;
    case VerifyConstraintQueryID: return false;
@@ -173,8 +172,6 @@ bool Query::isPure() const
    case ResolveStaticDeclarationsQueryID: return false;
    case ResolveWildcardDeclarationsQueryID: return false;
    case ResolveMetaDeclarationsQueryID: return false;
-   case PrepareTypeNameLookupQueryID: return false;
-   case PrepareNameLookupQueryID: return false;
    case GetAssociatedTypeImplQueryID: return false;
    case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return false;
@@ -272,7 +269,6 @@ bool Query::canBeCached() const
    case ResolveDeclaredConformancesQueryID: return true;
    case AddSingleConformanceQueryID: return true;
    case DeclareSelfAliasQueryID: return true;
-   case ResolveAssociatedTypesQueryID: return true;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return true;
    case VerifyConstraintQueryID: return true;
@@ -376,8 +372,6 @@ bool Query::canBeCached() const
    case ResolveStaticDeclarationsQueryID: return true;
    case ResolveWildcardDeclarationsQueryID: return true;
    case ResolveMetaDeclarationsQueryID: return true;
-   case PrepareTypeNameLookupQueryID: return true;
-   case PrepareNameLookupQueryID: return true;
    case GetAssociatedTypeImplQueryID: return false;
    case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return true;
@@ -475,7 +469,6 @@ bool Query::canBeSerialized() const
    case ResolveDeclaredConformancesQueryID: return false;
    case AddSingleConformanceQueryID: return false;
    case DeclareSelfAliasQueryID: return false;
-   case ResolveAssociatedTypesQueryID: return false;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return false;
    case VerifyConstraintQueryID: return false;
@@ -579,8 +572,6 @@ bool Query::canBeSerialized() const
    case ResolveStaticDeclarationsQueryID: return false;
    case ResolveWildcardDeclarationsQueryID: return false;
    case ResolveMetaDeclarationsQueryID: return false;
-   case PrepareTypeNameLookupQueryID: return false;
-   case PrepareNameLookupQueryID: return false;
    case GetAssociatedTypeImplQueryID: return false;
    case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return false;
@@ -678,7 +669,6 @@ bool Query::canBeDependent() const
    case ResolveDeclaredConformancesQueryID: return false;
    case AddSingleConformanceQueryID: return true;
    case DeclareSelfAliasQueryID: return false;
-   case ResolveAssociatedTypesQueryID: return false;
    case ReferencedAssociatedTypesReadyQueryID: return false;
    case CheckProtocolExtensionApplicabilityQueryID: return false;
    case VerifyConstraintQueryID: return false;
@@ -782,8 +772,6 @@ bool Query::canBeDependent() const
    case ResolveStaticDeclarationsQueryID: return false;
    case ResolveWildcardDeclarationsQueryID: return false;
    case ResolveMetaDeclarationsQueryID: return false;
-   case PrepareTypeNameLookupQueryID: return false;
-   case PrepareNameLookupQueryID: return false;
    case GetAssociatedTypeImplQueryID: return false;
    case GetAssociatedTypeDeclQueryID: return false;
    case CheckTypeEquivalenceQueryID: return false;
@@ -3880,41 +3868,6 @@ void DeclareSelfAliasQuery::Profile(llvm::FoldingSetNodeID &ID, ast::RecordDecl*
    ID.AddPointer(R);
 }
 
-ResolveAssociatedTypesQuery::ResolveAssociatedTypesQuery(QueryContext &QC, QualType T, bool FinishImmediately) : Query(ResolveAssociatedTypesQueryID, QC), T(T), FinishImmediately(FinishImmediately) {
-
-}
-
-std::string ResolveAssociatedTypesQuery::description() const
-{
-   std::string s;
-   s += "running ";
-   s += "ResolveAssociatedTypes";
-   return s;
-}
-
-std::string ResolveAssociatedTypesQuery::summary() const
-{
-   std::string s;
-   llvm::raw_string_ostream OS(s);
-
-   OS << "[ResolveAssociatedTypes]"
-;   OS << " T = ";
-OS << "'" << T << "'";
-;
-
-   return OS.str();
-}
-
-void ResolveAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID) const
-{
-   Profile(ID, T);
-}
-
-void ResolveAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, QualType T)
-{
-   ID.AddPointer(T.getAsOpaquePtr());
-}
-
 ReferencedAssociatedTypesReadyQuery::ReferencedAssociatedTypesReadyQuery(QueryContext &QC, QualType T, ast::ConstraintSet* CS) : Query(ReferencedAssociatedTypesReadyQueryID, QC), T(T), CS(CS) {
 
 }
@@ -4110,7 +4063,7 @@ void VerifyConstraintsQuery::Profile(llvm::FoldingSetNodeID &ID, ast::NamedDecl*
    ID.AddPointer(ConstrainedDecl);
 }
 
-IsConstraintSatisfiedQuery::IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup) : Query(IsConstraintSatisfiedQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl), PrepareNameLookup(PrepareNameLookup) {
+IsConstraintSatisfiedQuery::IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl) : Query(IsConstraintSatisfiedQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl) {
 assert(OriginalDecl && "parameter 'OriginalDecl' should not be null!");
 
 }
@@ -4143,9 +4096,6 @@ OS << "'" << Self << "'";
    OS << ',';
    OS << " OriginalDecl = ";
 OS << "'" << (OriginalDecl ? OriginalDecl->Decl::getNameAsString() : "<null>") << "'";
-   OS << ',';
-   OS << " PrepareNameLookup = ";
-OS << PrepareNameLookup;
 ;
 
    return OS.str();
@@ -4160,15 +4110,14 @@ QueryResult IsConstraintSatisfiedQuery::finish(bool Result, Status St)
 
 void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, C, Self, OriginalDecl, PrepareNameLookup);
+   Profile(ID, C, Self, OriginalDecl);
 }
 
-void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
+void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
 {
    ID.AddPointer(C);
    ID.AddPointer(Self.getAsOpaquePtr());
    ID.AddPointer(OriginalDecl);
-   ID.AddInteger(PrepareNameLookup);
 }
 
 GetConstrainedTypeQuery::GetConstrainedTypeQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl) : Query(GetConstrainedTypeQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl) {
@@ -8220,80 +8169,6 @@ void ResolveMetaDeclarationsQuery::Profile(llvm::FoldingSetNodeID &ID) const
 }
 
 void ResolveMetaDeclarationsQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC)
-{
-   ID.AddPointer(DC);
-}
-
-PrepareTypeNameLookupQuery::PrepareTypeNameLookupQuery(QueryContext &QC, ast::DeclContext* DC) : Query(PrepareTypeNameLookupQueryID, QC), DC(DC) {
-assert(DC && "parameter 'DC' should not be null!");
-
-}
-
-std::string PrepareTypeNameLookupQuery::description() const
-{
-   std::string s;
-   s += "preparing '";
-   s += DC->getNameAsString();
-   s += "' for type name lookup";
-   return s;
-}
-
-std::string PrepareTypeNameLookupQuery::summary() const
-{
-   std::string s;
-   llvm::raw_string_ostream OS(s);
-
-   OS << "[PrepareTypeNameLookup]"
-;   OS << " DC = ";
-OS << "'" << (DC ? DC->getNameAsString() : "<null>") << "'";
-;
-
-   return OS.str();
-}
-
-void PrepareTypeNameLookupQuery::Profile(llvm::FoldingSetNodeID &ID) const
-{
-   Profile(ID, DC);
-}
-
-void PrepareTypeNameLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC)
-{
-   ID.AddPointer(DC);
-}
-
-PrepareNameLookupQuery::PrepareNameLookupQuery(QueryContext &QC, ast::DeclContext* DC) : Query(PrepareNameLookupQueryID, QC), DC(DC) {
-assert(DC && "parameter 'DC' should not be null!");
-
-}
-
-std::string PrepareNameLookupQuery::description() const
-{
-   std::string s;
-   s += "preparing '";
-   s += DC->getNameAsString();
-   s += "' for name lookup";
-   return s;
-}
-
-std::string PrepareNameLookupQuery::summary() const
-{
-   std::string s;
-   llvm::raw_string_ostream OS(s);
-
-   OS << "[PrepareNameLookup]"
-;   OS << " DC = ";
-OS << "'" << (DC ? DC->getNameAsString() : "<null>") << "'";
-;
-
-   return OS.str();
-}
-
-void PrepareNameLookupQuery::Profile(llvm::FoldingSetNodeID &ID) const
-{
-   Profile(ID, DC);
-}
-
-void PrepareNameLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC)
 {
    ID.AddPointer(DC);
 }

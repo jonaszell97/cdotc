@@ -394,39 +394,24 @@ void SemaPass::maybeInstantiate(CandidateSet::Candidate& Cand,
 }
 
 CallableDecl*
-SemaPass::maybeInstantiateMemberFunction(CallableDecl* M, StmtOrDecl Caller,
+SemaPass::maybeInstantiateMemberFunction(CallableDecl* Fn, StmtOrDecl Caller,
                                          bool NeedImmediateInstantiation)
 {
-   if (M->getBody() || !M->getBodyTemplate()) {
-      return M;
+   if (Fn->getBody() || !Fn->getBodyTemplate()) {
+      return Fn;
    }
 
-   CallableDecl* Template = M->getBodyTemplate();
+   CallableDecl* Template = Fn->getBodyTemplate();
    if (Template->isInvalid()) {
-      return M;
+      return Fn;
    }
 
    if (auto FnInfo = Template->getLazyFnInfo()) {
       FnInfo->loadBody(Template);
    }
 
-   if (!Template->isInUnboundedTemplate() && !Template->isExternal()
-       && RuntimeGenerics) {
-      M->setShouldBeSpecialized(true);
-      return M;
-   }
-
-   // FIXME needed?
-   if (true||NeedImmediateInstantiation) {
-      Instantiator->InstantiateMethodBody(cast<MethodDecl>(M));
-      QueuedInstantiations.remove(M);
-   }
-   else {
-      // Queue the instantiation for later.
-      QueuedInstantiations.insert(M);
-   }
-
-   return M;
+   Instantiator->InstantiateFunctionBody(Fn);
+   return Fn;
 }
 
 MethodDecl* SemaPass::InstantiateMethod(RecordDecl* R, StringRef Name,

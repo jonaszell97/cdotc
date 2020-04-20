@@ -159,89 +159,6 @@ QueryResult ResolveMetaDeclarationsQuery::run()
    return finish();
 }
 
-QueryResult PrepareTypeNameLookupQuery::run()
-{
-   return finish();
-//   finish();
-
-   // Prepare the enclosing context.
-   if (DC->getParentCtx() && QC.PrepareTypeNameLookup(DC->getParentCtx())) {
-      return fail();
-   }
-
-   if (QC.ResolveMetaDeclarations(DC)) {
-      return fail();
-   }
-
-   // If this is not a record, we're done.
-   auto* R = dyn_cast<RecordDecl>(DC);
-   if (!R) {
-      return finish();
-   }
-
-   // Now resolve extensions and associated types.
-   if (auto Err = QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
-      return Query::finish(Err);
-   }
-
-   return finish();
-}
-
-/*
-QueryResult PrepareNameLookupQuery::run()
-{
-//   finish();
-
-   if (auto Err = QC.PrepareTypeNameLookup(DC)) {
-      return Query::finish(Err);
-   }
-
-   // Prepare the enclosing context.
-   if (DC->getParentCtx() && QC.PrepareNameLookup(DC->getParentCtx())) {
-      return fail();
-   }
-
-   // Make sure all transparent inner contexts are prepared.
-   for (auto* D : DC->getDecls()) {
-      auto* InnerDC = dyn_cast<DeclContext>(D);
-      if (!InnerDC || !InnerDC->isTransparent()) {
-         continue;
-      }
-
-      if (auto Err = QC.PrepareNameLookup(InnerDC)) {
-         return Query::finish(Err);
-      }
-   }
-
-   // If this is not a record, we're done.
-   auto* R = dyn_cast<RecordDecl>(DC);
-   if (!R) {
-      return finish();
-   }
-
-   // Make sure implicit initializers / deinitializers are declared.
-   if (auto Err = QC.DeclareImplicitInitializers(R)) {
-      return Query::finish(Err);
-   }
-
-   // Resolve the initializer names and declare base ones.
-   for (auto* Init : R->getDecls<InitDecl>()) {
-      if (auto Err = QC.AssignInitName(Init)) {
-         return Query::finish(Err);
-      }
-      if (auto Err = QC.CreateBaseInit(Init)) {
-         return Query::finish(Err);
-      }
-   }
-
-   // Now resolve extensions and associated types.
-   if (auto Err = QC.CheckConformances(QC.Context.getRecordType(R))) {
-      return Err;
-   }
-
-   return finish();
-}*/
-
 static void updateSpecialNames(SemaPass& Sema, QualType T, ExtensionDecl* Ext)
 {
    if (!T->isRecordType())
@@ -877,9 +794,6 @@ struct LookupOptions {
    /// If true, stop after the first result that was found.
    bool FindFirst = false;
 
-   /// If true, prepare each context for lookup.
-   bool PrepareNameLookup = true;
-
    /// If true, only look for types.
    bool TypeLookup = false;
 
@@ -1204,135 +1118,12 @@ static bool MultiStageLookup(DeclContext* DC, DeclarationName Name,
    }
 
    return false;
-
-   /*
-   if (!Data.Opts.LookInConformances || !Data.SP.hasLookupLevel(DC, LookupLevel::Conformances)) {
-      return false;
-   }
-
-   auto& QC = Data.SP.QC;
-   if (auto* Q = QC.getQuery<PrepareTypeNameLookupQuery>(DC)) {
-      if (Q->done()) {
-         return false;
-      }
-   }
-
-   // If there's still nothing and this is not a record, we're done.
-   auto* R = dyn_cast<RecordDecl>(DC);
-   if (!R) {
-      return false;
-   }
-
-   if (QC.ResolveAssociatedTypes(R->getType())) {
-      return true;
-   }
-
-   if (DC->hasAnyDeclNamed(Name)) {
-      return HandleFoundDecl(DC, Name, Data);
-   }
-
-   if (Data.Opts.Restricted || !Data.Opts.PrepareNameLookup || Data.Opts.TypeLookup) {
-      return false;
-   }
-
-   // Check builtin conformances.
-   if (isNameOfBuiltinConformance(Name)) {
-      if (QC.CheckBuiltinConformances(R)) {
-         return true;
-      }
-
-      if (DC->hasAnyDeclNamed(Name)) {
-         return HandleFoundDecl(DC, Name, Data);
-      }
-   }
-
-   // Now resolve extensions and associated types.
-   if (!Data.Opts.TypeLookup) {
-      if (QC.CheckConformances(QC.Context.getRecordType(R))) {
-         return true;
-      }
-   }
-
-   if (DC->hasAnyDeclNamed(Name)) {
-      return HandleFoundDecl(DC, Name, Data);
-   }
-
-   // If we're looking for an initializer, make sure all the implicit ones
-   // are declared.
-   bool IsCompleteInit = Name.getKind() == DeclarationName::ConstructorName;
-   bool IsBaseInit = Name.getKind() == DeclarationName::BaseConstructorName;
-   bool IsDeinit = Name.getKind() == DeclarationName::DestructorName;
-
-   bool AppliesToType = false;
-   if (IsCompleteInit || IsBaseInit) {
-      AppliesToType = Name.getConstructorType()->getRecord() == R;
-   }
-   else if (IsDeinit) {
-      AppliesToType = Name.getDestructorType()->getRecord() == R;
-   }
-
-   if (AppliesToType && (IsCompleteInit || IsBaseInit)) {
-      if (QC.DeclareImplicitInitializers(R)) {
-         return true;
-      }
-
-      // Resolve the initializer names and declare base ones.
-      for (auto* Init : R->getDecls<InitDecl>()) {
-         if (QC.AssignInitName(Init)) {
-            return true;
-         }
-         if (IsCompleteInit && QC.CreateBaseInit(Init)) {
-            return true;
-         }
-      }
-   }
-   else if (AppliesToType && IsDeinit && !R->getDeinitializer()) {
-      if (QC.DeclareImplicitInitializers(R)) {
-         return true;
-      }
-   }
-
-   if (DC->hasAnyDeclNamed(Name)) {
-      return HandleFoundDecl(DC, Name, Data);
-   }
-
-   // Nothing more we can do, the lookup did not yield any results.
-   return false;
-    */
-}
-
-static bool PrepareNameLookup(DeclContext* Ctx, LookupData& Data)
-{
-   // FIXME yeet this
-   return false;
-//   if (Data.Opts.Restricted) {
-//      return false;
-//   }
-//
-//   if (Data.Opts.PrepareNameLookup) {
-//      if (Data.Opts.TypeLookup) {
-//         if (Data.SP.QC.PrepareTypeNameLookup(Ctx)) {
-//            return true;
-//         }
-//      }
-//      else if (Data.SP.QC.PrepareNameLookup(Ctx)) {
-//         return true;
-//      }
-//   }
-//   else if (Data.SP.QC.ResolveMetaDeclarations(Ctx)) {
-//      return true;
-//   }
-//
-//   return false;
 }
 
 static bool MultiLevelLookupImpl(DeclContext& CtxRef, DeclarationName Name,
                                  LookupData& Data)
 {
    auto* Ctx = &CtxRef;
-   if (PrepareNameLookup(Ctx, Data)) {
-      return true;
-   }
 
    // First do a local lookup considering scoped names. This can only be
    // valid in the current context.
@@ -1431,11 +1222,6 @@ static bool MultiLevelLookupImpl(DeclContext& CtxRef, DeclarationName Name,
       }
 
       Ctx = Ctx->getParentCtx();
-      if (Ctx) {
-         if (PrepareNameLookup(Ctx, Data)) {
-            return true;
-         }
-      }
    }
 
    return false;
@@ -1459,8 +1245,6 @@ LookupOptions prepareLookupOptions(LookupOpts Opts)
    LookupOptions Options;
    Options.TypeLookup = (Opts & LookupOpts::TypeLookup) != LookupOpts::None;
    Options.LocalLookup = (Opts & LookupOpts::LocalLookup) != LookupOpts::None;
-   Options.PrepareNameLookup
-       = (Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None;
    Options.LookInConformances
        = (Opts & LookupOpts::LookInConformances) != LookupOpts::None;
 

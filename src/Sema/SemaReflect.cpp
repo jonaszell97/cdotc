@@ -927,10 +927,6 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl* Alias, Expression* Expr)
       return ExprError();
    }
 
-   if (QC.PrepareNameLookup(ReflectMod->getDecl())) {
-      return ExprError();
-   }
-
    auto It = ReflectionValues.find(Alias);
    if (It != ReflectionValues.end())
       return It->getSecond();

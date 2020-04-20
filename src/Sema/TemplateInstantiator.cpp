@@ -1260,7 +1260,6 @@ RecordDecl* InstantiatorImpl::instantiateRecordDecl(RecordDecl* Decl)
           Decl->getDeclName(), templateArgs.innermost());
    }
 
-   auto conformances = copyConformances(Decl->getConformanceTypes());
    auto templateParmams = copyTemplateParameters(Decl);
 
    SourceType enumRawTypeOrExtends;
@@ -1278,25 +1277,17 @@ RecordDecl* InstantiatorImpl::instantiateRecordDecl(RecordDecl* Decl)
    switch (Decl->getKind()) {
    case Decl::StructDeclID:
       Inst = StructDecl::Create(Context, access, Decl->getKeywordLoc(), Name,
-                                move(conformances), move(templateParmams));
+                                {}, move(templateParmams));
       break;
    case Decl::ClassDeclID:
       Inst = ClassDecl::Create(Context, access, Decl->getKeywordLoc(), Name,
-                               move(conformances), move(templateParmams),
+                               {}, move(templateParmams),
                                enumRawTypeOrExtends, isAbstract);
       break;
    case Decl::EnumDeclID:
       Inst = EnumDecl::Create(Context, access, Decl->getKeywordLoc(), Name,
-                              move(conformances), move(templateParmams),
+                              {}, move(templateParmams),
                               enumRawTypeOrExtends);
-      break;
-   case Decl::UnionDeclID:
-      Inst = UnionDecl::Create(Context, access, Decl->getKeywordLoc(), Name,
-                               move(conformances), move(templateParmams));
-      break;
-   case Decl::ProtocolDeclID:
-      Inst = ProtocolDecl::Create(Context, access, Decl->getKeywordLoc(), Name,
-                                  move(conformances), move(templateParmams));
       break;
    default:
       llvm_unreachable("not a record decl!");
@@ -1307,7 +1298,6 @@ RecordDecl* InstantiatorImpl::instantiateRecordDecl(RecordDecl* Decl)
    if (auto MF = Decl->getModFile())
       Inst->setModFile(MF->copy());
 
-   instantiateConstraints(Decl, Inst);
    Inst->setLastMethodID(Decl->getLastMethodID());
    Context.setAttributes(Inst, Decl->getAttributes());
 
@@ -3208,9 +3198,6 @@ bool TemplateInstantiator::PrepareForInstantiation(NamedDecl *ND)
    case Decl::ClassDeclID:
    case Decl::EnumDeclID: {
       auto *R = cast<RecordDecl>(ND);
-      if (QC.ResolveAssociatedTypes(QC.Context.getRecordType(R))) {
-         return true;
-      }
       if (QC.DeclareImplicitInitializers(R)) {
          return true;
       }
@@ -3284,340 +3271,6 @@ bool TemplateInstantiator::PrepareForInstantiation(NamedDecl *ND)
    return false;
 }
 
-/*
-static int depth = 0;
-
-static bool InstantiateAssociatedTypeImpls(QueryContext &QC,
-                                           TemplateInstantiator &Instantiator,
-                                           RecordDecl *Template,
-                                           RecordDecl *Inst)
-{
-   ArrayRef<AssociatedTypeDecl*> NeededATs;
-   if (QC.GetNeededAssociatedTypes(NeededATs, Template)) {
-      return true;
-   }
-
-   QC.Sema->increaseConformanceResolutionDepth();
-
-   QualType Self = QC.Context.getRecordType(Inst);
-
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, Inst);
-   SmallPtrSet<IdentifierInfo*, 4> doneSet;
-
-   for (auto *AT : NeededATs) {
-      if (!doneSet.insert(AT->getIdentifierInfo()).second) {
-         continue;
-      }
-
-      auto *Impl = cast<AliasDecl>(QC.Context.getProtocolImpl(Template, AT));
-      assert(Impl && "associated type not implemented!");
-
-      if (Impl->getType()->containsAssociatedType()
-          || Impl->getType()->containsTemplateParamType()) {
-         QC.Sema->addToConformanceResolutionWorklist(Self, Inst, Impl);
-         continue;
-      }
-
-      auto *AliasInst = Instantiator.InstantiateTemplateMember(Impl, Inst);
-      if (AliasInst == nullptr) {
-         return true;
-      }
-   }
-
-   auto &ConfTable = QC.Context.getConformanceTable();
-   for (auto *Conf : ConfTable.getAllConformances(Template)) {
-      if (Conf->isConditional()) {
-         auto *CS = Conf->getConstraints();
-
-         ReferencedAssociatedTypesReadyQuery::ResultKind K;
-         if (QC.ReferencedAssociatedTypesReady(K, Self, CS)) {
-            return true;
-         }
-
-         if (K != ReferencedAssociatedTypesReadyQuery::ResultKind::Ready) {
-            QC.Sema->addToConformanceResolutionWorklist(Self, Inst, Conf);
-            continue;
-         }
-
-         bool include = true;
-         for (auto *C : *CS) {
-            if (QC.IsConstraintSatisfied(include, C, Self, Inst)) {
-               return true;
-            }
-
-            if (!include) {
-               break;
-            }
-         }
-
-         if (!include) {
-            continue;
-         }
-      }
-
-      ConfTable.addConformance(QC.Context, ConformanceKind::Explicit, Inst,
-                               Conf->getProto(), Conf->getDeclarationCtx(),
-                               nullptr, Conf->getDepth());
-   }
-
-   QC.Sema->decreaseConformanceResolutionDepth();
-   return QC.Sema->TrySolveConformanceResolutionWorklist();
-}
-
-static bool InstantiateAssociatedTypeImplsOLD(QueryContext &QC,
-                                           TemplateInstantiator &Instantiator,
-                                           RecordDecl *Template,
-                                           RecordDecl *Inst)
-{
-   struct WorklistItem {
-      QualType Self;
-      RecordDecl *Inst;
-      llvm::PointerUnion<AliasDecl*, Conformance*> Item;
-
-      std::string to_string()
-      {
-         std::string str;
-         {
-            llvm::raw_string_ostream OS(str);
-            if (auto *IMPL = Item.dyn_cast<AliasDecl *>()) {
-               OS << Self.toDiagString() << "." << IMPL->getDeclName();
-            }
-            else {
-               OS << Self.toDiagString() << ": "
-                  << Item.dyn_cast<Conformance *>()->getProto()->getDeclName()
-                  << " where ";
-
-               Item.dyn_cast<Conformance *>()->getConstraints()->print(OS);
-            }
-         }
-
-         return str;
-      }
-
-      WorklistItem(QualType self, RecordDecl *inst,
-                   llvm::PointerUnion<AliasDecl *, Conformance *> item)
-         : Self(self), Inst(inst), Item(item)
-      { }
-   };
-
-   ArrayRef<AssociatedTypeDecl*> NeededATs;
-   if (QC.GetNeededAssociatedTypes(NeededATs, Template)) {
-      return true;
-   }
-
-   QualType Self = QC.Context.getRecordType(Inst);
-
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, Inst);
-   SmallPtrSet<IdentifierInfo*, 4> doneSet;
-   static SmallVector<WorklistItem, 8> Worklist;
-
-   for (auto *AT : NeededATs) {
-      if (!doneSet.insert(AT->getIdentifierInfo()).second) {
-         continue;
-      }
-
-      auto *Impl = cast<AliasDecl>(QC.Context.getProtocolImpl(Template, AT));
-      assert(Impl && "associated type not implemented!");
-
-      if (Impl->getType()->containsAssociatedType()
-      || Impl->getType()->containsTemplateParamType()) {
-         Worklist.emplace_back(Self, Inst, Impl);
-         continue;
-      }
-
-      auto *AliasInst = Instantiator.InstantiateTemplateMember(Impl, Inst);
-      if (AliasInst == nullptr) {
-         return true;
-      }
-   }
-
-   auto &ConfTable = QC.Context.getConformanceTable();
-   for (auto *Conf : ConfTable.getAllConformances(Template)) {
-      if (Conf->isConditional()) {
-         auto *CS = Conf->getConstraints();
-
-         ReferencedAssociatedTypesReadyQuery::ResultKind K;
-         if (QC.ReferencedAssociatedTypesReady(K, Self, CS)) {
-            return true;
-         }
-
-         if (K != ReferencedAssociatedTypesReadyQuery::ResultKind::Ready) {
-            Worklist.emplace_back(Self, Inst, Conf);
-            continue;
-         }
-
-         bool include = true;
-         for (auto *C : *CS) {
-            if (QC.IsConstraintSatisfied(include, C, Self, Inst)) {
-               return true;
-            }
-
-            if (!include) {
-               break;
-            }
-         }
-
-         if (!include) {
-            continue;
-         }
-      }
-
-      ConfTable.addConformance(QC.Context, ConformanceKind::Explicit, Inst,
-                               Conf->getProto(), Conf->getDeclarationCtx(),
-                               nullptr, Conf->getDepth());
-   }
-
-   if (depth != 0) {
-      return false;
-   }
-
-   ++depth;
-
-   auto &LocalWorklist = Worklist;
-   if (Self.toDiagString()=="core.Slice<core.EmptyCollection>") {
-      for (auto &Item : LocalWorklist) {
-         llvm::outs()<<Item.to_string()<<"\n";
-      }
-
-       NO_OP;
-   }
-   for (int i = 0; i < Worklist.size();) {
-      auto worklistItem = Worklist[i++];
-
-      SemaPass::DeclScopeRAII InnerDSR(*QC.Sema, worklistItem.Inst);
-      if (auto *ATImpl = worklistItem.Item.dyn_cast<AliasDecl*>()) {
-         QualType RealTy = ATImpl->getType();
-         uint16_t Props = RealTy->properties().getRawProperties();
-
-         bool done = false;
-         while ((Props & DependentMask) != 0) {
-            QualType TypeInst = RealTy;
-            if (TypeInst->containsAssociatedType()) {
-               if (QC.SubstAssociatedTypes(TypeInst, TypeInst, worklistItem.Self, {})) {
-                  return true;
-               }
-            }
-
-            if ((Props & GenericMask) != 0) {
-               if (QC.SubstTemplateParamTypes(
-                     TypeInst, TypeInst, worklistItem.Inst->getTemplateArgs(), {})) {
-                  return true;
-               }
-            }
-
-            // No more changes.
-            if (TypeInst == RealTy) {
-               break;
-            }
-
-            RealTy = TypeInst;
-            Props = RealTy->properties().getRawProperties();
-         }
-
-         if (done) {
-            break;
-         }
-
-         if (RealTy->containsAssociatedType()) {
-            Worklist.emplace_back(worklistItem);
-         }
-         else {
-            auto *AliasInst = Instantiator.InstantiateTemplateMember(ATImpl, worklistItem.Inst);
-            if (AliasInst == nullptr) {
-               return true;
-            }
-         }
-      }
-      else {
-         auto *Conf = worklistItem.Item.get<Conformance*>();
-         auto *CS = Conf->getConstraints();
-
-         ReferencedAssociatedTypesReadyQuery::ResultKind K;
-         if (QC.ReferencedAssociatedTypesReady(K, worklistItem.Self, CS)) {
-            return true;
-         }
-
-         if (K != ReferencedAssociatedTypesReadyQuery::ResultKind::Ready) {
-            Worklist.emplace_back(worklistItem);
-            continue;
-         }
-
-         bool include = true;
-         bool done = false;
-
-         for (auto *C : *CS) {
-            if (QC.IsConstraintSatisfied(include, C, worklistItem.Self, Inst)) {
-               return true;
-            }
-
-            if (!include) {
-               break;
-            }
-         }
-
-         if (done) {
-            break;
-         }
-
-         if (!include) {
-            continue;
-         }
-
-         ConfTable.addConformance(QC.Context, ConformanceKind::Explicit,
-                                  worklistItem.Inst,
-                                  Conf->getProto(), Conf->getDeclarationCtx(),
-                                  nullptr, Conf->getDepth());
-      }
-
-      if (i >= 10'000) {
-         for (auto &Item : LocalWorklist) {
-            llvm::outs()<<Item.to_string()<<"\n";
-         }
-      }
-      assert(i < 10'000 && "can't resolve associated types!");
-   }
-
-   --depth;
-   Worklist.clear();
-
-   return false;
-}
-
-static bool InstantiateConformances(QueryContext &QC,
-                                    RecordDecl *Template,
-                                    RecordDecl *Inst)
-{
-   QualType Self = QC.Context.getRecordType(Inst);
-
-   auto &ConfTable = QC.Context.getConformanceTable();
-   for (auto *Conf : ConfTable.getAllConformances(Template)) {
-      if (Conf->isConditional()) {
-         auto *CS = Conf->getConstraints();
-
-         bool include = true;
-         for (auto *C : *CS) {
-            if (QC.IsConstraintSatisfied(include, C, Self, Inst)) {
-               return true;
-            }
-
-            if (!include) {
-               break;
-            }
-         }
-
-         if (!include) {
-            continue;
-         }
-      }
-
-      ConfTable.addConformance(QC.Context, ConformanceKind::Explicit, Inst,
-                               Conf->getProto(), Conf->getDeclarationCtx(),
-                               nullptr, Conf->getDepth());
-   }
-
-   return false;
-}*/
-
 RecordDecl*
 TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
                                         FinalTemplateArgumentList *TemplateArgs,
@@ -3625,11 +3278,18 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
                                         RecordDecl *OuterInst)
 {
    if (auto *Inst = getInstantiation(Template, TemplateArgs)) {
+      if (!Inst->getInstantiatedFrom()) {
+         Inst->getInstantiationInfo()->instantiatedFrom = PointOfInstantiation;
+      }
+
       return Inst;
    }
 
-   if (PrepareForInstantiation(Template)) {
-      return nullptr;
+   bool shouldInstantiateShallowly = this->InstantiateShallowly;
+   if (!shouldInstantiateShallowly) {
+      if (PrepareForInstantiation(Template)) {
+         return nullptr;
+      }
    }
 
    // Check if this instantiation exists in an external module.
@@ -3686,7 +3346,151 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
 
    LOG(Instantiations, "instantiated record '", Inst->getFullName(),
        "', requested from ",
-       QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation));
+       QC.CI.getFileMgr().getSourceLocationAsString(PointOfInstantiation),
+       shouldInstantiateShallowly ? " (shallow)" : "");
+
+   // Now instantiate meta declarations.
+   SmallVector<Decl*, 2> metaDecls;
+   for (auto* D : Template->getDecls<Decl>()) {
+      switch (D->getKind()) {
+      case Decl::StaticIfDeclID:
+      case Decl::StaticForDeclID:
+      case Decl::StaticAssertDeclID:
+      case Decl::StaticPrintDeclID: {
+         metaDecls.push_back(D);
+         break;
+      }
+      default:
+         break;
+      }
+   }
+
+   if (!metaDecls.empty()) {
+      Instantiator.setSelfType(QC.Context.getRecordType(Inst));
+
+      SemaPass::DeclContextRAII DCR(*QC.Sema, Inst);
+      for (auto* metaDecl : metaDecls) {
+         auto* inst = Instantiator.instantiateDecl(metaDecl);
+         if (!inst) {
+            continue;
+         }
+
+         if (auto* compoundDecl = dyn_cast<CompoundDecl>(inst)) {
+            for (auto* innerCompoundDecl :
+                compoundDecl->getDecls<CompoundDecl>()) {
+               for (auto* innerDecl :
+                   innerCompoundDecl->getDecls<NamedDecl>()) {
+                  QC.Sema->makeDeclAvailable(*Inst, innerDecl);
+               }
+            }
+         }
+      }
+   }
+
+   if (shouldInstantiateShallowly) {
+      ShallowInstantiations.insert(Inst);
+      QC.Sema->FindDependencies(Inst);
+      return Inst;
+   }
+
+   completeShallowInstantiation(Inst);
+   return Inst;
+}
+
+static bool InstantiateAssociatedTypeImpls(QueryContext &QC,
+                                           TemplateInstantiator &Instantiator,
+                                           RecordDecl *Template,
+                                           RecordDecl *Inst)
+{
+   ArrayRef<AssociatedTypeDecl*> NeededATs;
+   if (QC.GetNeededAssociatedTypes(NeededATs, Template)) {
+      return true;
+   }
+
+   for (auto *AT : NeededATs) {
+      auto *Impl = QC.Context.getProtocolImpl(Template, AT);
+      assert(Impl && "associated type not implemented!");
+
+      if (!Instantiator.InstantiateTemplateMember(Impl, Inst)) {
+         return true;
+      }
+   }
+
+   return false;
+}
+
+static bool InstantiateConformances(QueryContext &QC,
+                                    RecordDecl *Template,
+                                    RecordDecl *Inst)
+{
+   QualType Self = QC.Context.getRecordType(Inst);
+
+   auto &ConfTable = QC.Context.getConformanceTable();
+   for (auto *Conf : ConfTable.getAllConformances(Template)) {
+      if (Conf->isConditional()) {
+         auto *CS = Conf->getConstraints();
+
+         bool include = true;
+         for (auto *C : *CS) {
+            if (QC.IsConstraintSatisfied(include, C, Self, Inst)) {
+               return true;
+            }
+
+            if (!include) {
+               break;
+            }
+         }
+
+         if (!include) {
+            continue;
+         }
+      }
+
+      ConfTable.addConformance(QC.Context, ConformanceKind::Explicit, Inst,
+                               Conf->getProto(), Conf->getDeclarationCtx(),
+                               nullptr, Conf->getDepth());
+   }
+
+   return false;
+}
+
+static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
+{
+   string result = "[";
+
+   ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypes;
+   QC.GetNeededAssociatedTypes(NeededAssociatedTypes, Rec);
+
+   auto extensions = Rec->getExtensions();
+
+   int i = 0;
+   for (auto *AT : NeededAssociatedTypes) {
+      if (i++ != 0)
+         result += ", ";
+
+      result += AT->getDeclName().getIdentifierInfo()->getIdentifier();
+      result += " = ";
+
+      AliasDecl *Impl;
+      QC.GetAssociatedTypeImpl(Impl, Rec, AT->getDeclName(), extensions);
+      QC.PrepareDeclInterface(Impl);
+
+      result += Impl->getType()->removeMetaType()->toDiagString();
+   }
+
+   result += "]";
+   return result;
+}
+
+bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
+{
+   bool wasShallow = ShallowInstantiations.remove(Inst);
+
+   auto *Info = Inst->getInstantiationInfo();
+   auto *Template = Info->specializedTemplate;
+   auto PointOfInstantiation = Info->instantiatedFrom;
+   auto *OuterInst = Info->OuterInst;
+   auto *TemplateArgs = Info->templateArgs;
 
    auto& TemplateInfo = QC.RecordMeta[Template];
    auto& InstInfo = QC.RecordMeta[Inst];
@@ -3707,14 +3511,14 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
 
       // Don't instantiate template parameters and associated type impls.
       if (isa<TemplateParamDecl>(ND)
-      || (isa<AliasDecl>(ND) && ND->isImplOfProtocolRequirement())) {
+          || (isa<AliasDecl>(ND) && ND->isImplOfProtocolRequirement())) {
          continue;
       }
 
       if (OuterInst) {
          if (!InstantiateTemplateMember(ND, Inst, TemplateArgs,
                                         PointOfInstantiation)) {
-            return nullptr;
+            return true;
          }
       }
       else {
@@ -3747,7 +3551,7 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
          if (OuterInst) {
             if (!InstantiateTemplateMember(D, Inst, TemplateArgs,
                                            PointOfInstantiation)) {
-               return nullptr;
+               return true;
             }
          }
          else {
@@ -3758,62 +3562,50 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
       }
    }
 
-   if (QC.Sema->PrepareNameLookup(Inst)) {
-      return nullptr;
-   }
-
    // Instantiate fields and cases.
    if (auto* S = dyn_cast<StructDecl>(Inst)) {
       if (InstantiateFields(S)) {
-         return nullptr;
+         return true;
       }
    }
    else if (auto* E = dyn_cast<EnumDecl>(Inst)) {
       if (InstantiateCases(E)) {
-         return nullptr;
+         return true;
       }
    }
 
-   // Now instantiate meta declarations.
-   SmallVector<Decl*, 2> metaDecls;
-   for (auto* D : Template->getDecls<Decl>()) {
-      switch (D->getKind()) {
-      case Decl::StaticIfDeclID:
-      case Decl::StaticForDeclID:
-      case Decl::StaticAssertDeclID:
-      case Decl::StaticPrintDeclID: {
-         metaDecls.push_back(D);
-         break;
+   if (wasShallow) {
+      // Instantiate associated types.
+      if (InstantiateAssociatedTypeImpls(QC, *this, Template, Inst)) {
+         return true;
       }
-      default:
-         break;
+
+      // Instantiate conformances.
+      if (InstantiateConformances(QC, Template, Inst)) {
+         return true;
       }
+
+      LOG(AssociatedTypeImpls, Inst->getFullName(), " ", PrintAssociatedTypes(QC, Inst));
+
+      // Check conformances.
+      if (QC.CheckConformances(QC.Context.getRecordType(Inst))) {
+         return true;
+      }
+
+      LOG(ProtocolConformances, Inst->getFullName(), " ✅");
    }
+   else {
+      if (QC.Sema->PrepareNameLookup(Inst)) {
+         return true;
+      }
 
-   if (!metaDecls.empty()) {
-      Instantiator.setSelfType(QC.Context.getRecordType(Inst));
-
-      SemaPass::DeclContextRAII DCR(*QC.Sema, Inst);
-      for (auto* metaDecl : metaDecls) {
-         auto* inst = Instantiator.instantiateDecl(metaDecl);
-         if (!inst) {
-            continue;
-         }
-
-         if (auto* compoundDecl = dyn_cast<CompoundDecl>(inst)) {
-            for (auto* innerCompoundDecl :
-               compoundDecl->getDecls<CompoundDecl>()) {
-               for (auto* innerDecl :
-                  innerCompoundDecl->getDecls<NamedDecl>()) {
-                  QC.Sema->makeDeclAvailable(*Inst, innerDecl);
-               }
-            }
-         }
+      if (QC.TypecheckDecl(Inst)) {
+         return true;
       }
    }
 
    QC.Sema->updateLookupLevel(Inst, LookupLevel::Complete);
-   return Inst;
+   return false;
 }
 
 NamedDecl*
@@ -4144,7 +3936,7 @@ StmtResult TemplateInstantiator::InstantiateStatement(StmtOrDecl,
    return Instantiator.instantiateStatement(stmt);
 }
 
-bool TemplateInstantiator::InstantiateMethodBody(MethodDecl *Inst)
+bool TemplateInstantiator::InstantiateFunctionBody(CallableDecl *Inst)
 {
    if (Inst->getBody() != nullptr) {
       return false;

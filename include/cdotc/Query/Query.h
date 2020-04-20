@@ -200,9 +200,6 @@ enum class LookupOpts : uint8_t {
    /// \brief Look for types only.
    TypeLookup = 0x2,
 
-   /// \brief Prepare all declaration contexts for lookup.
-   PrepareNameLookup = 0x4,
-
    /// \brief Whether to issue a diagnostic if no result is found.
    IssueDiag = 0x8,
 

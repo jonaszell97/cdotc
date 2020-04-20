@@ -320,7 +320,7 @@ public:
             return this->Ctx.getAssociatedType(T->getDecl(), visit(OuterAT));
          }
          else {
-            return this->SP.CreateConcreteTypeFromAssociatedType(T, Outer);
+            return this->SP.CreateConcreteTypeFromAssociatedType(T, Outer, T);
          }
       }
 

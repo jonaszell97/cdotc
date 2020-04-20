@@ -68,9 +68,6 @@ public:
    TemplateInstantiator& getInstantiator() const;
 
    ConformanceResolver &getConformanceResolver();
-   bool AddDeclContextToConformanceResolutionWorklist(DeclContext *DC);
-   bool AddRecordInstToConformanceResolutionWorklist(RecordDecl *Inst);
-   bool TrySolveConformanceResolutionWorklist();
    bool IsBeingResolved(RecordDecl *R);
 
    void pushDeclContext(DeclContext* Ctx);
@@ -486,7 +483,8 @@ public:
    void checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl);
 
    QualType CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
-                                                 QualType Outer);
+                                                 QualType Outer,
+                                                 QualType Original);
 
    template<class T, class... Args> T* makeStmt(Args&&... args)
    {
@@ -1204,6 +1202,7 @@ public:
 
    /// Prepare a DeclContext for complete name lookup.
    bool PrepareNameLookup(DeclContext *DC);
+   bool FindDependencies(RecordDecl *Inst);
 
    /// Query lookup status of a DeclContext.
    LookupLevel getLookupLevel(DeclContext *DC) const;
@@ -1364,7 +1363,7 @@ public:
                                                  NamedDecl* Member);
 
    CallableDecl*
-   maybeInstantiateMemberFunction(CallableDecl* M, StmtOrDecl Caller,
+   maybeInstantiateMemberFunction(CallableDecl* Fn, StmtOrDecl Caller,
                                   bool NeedImmediateInstantiation = false);
 
    MethodDecl* InstantiateMethod(RecordDecl* R, StringRef Name, StmtOrDecl SOD);

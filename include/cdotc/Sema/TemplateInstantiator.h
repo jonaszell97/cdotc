@@ -68,7 +68,7 @@ public:
                                  sema::FinalTemplateArgumentList *TemplateArgs,
                                  SourceLocation POI);
 
-   bool InstantiateMethodBody(MethodDecl *MethodInst);
+   bool InstantiateFunctionBody(CallableDecl *Inst);
 
    Decl *InstantiateDecl(Decl *Template,
                          sema::MultiLevelFinalTemplateArgList *TemplateArgs,
@@ -123,11 +123,26 @@ public:
                               sema::FinalTemplateArgumentList* TemplateArgs,
                               NamedDecl *Inst);
 
+   const llvm::SetVector<RecordDecl*> &getShallowInstantiations() const
+   {
+      return ShallowInstantiations;
+   }
+
+   void completeShallowInstantiations();
+   bool completeShallowInstantiation(RecordDecl *Inst);
+
+   bool isShallowInstantiation(RecordDecl *Inst) const
+   {
+      return ShallowInstantiations.count(Inst) != 0;
+   }
+
+   bool InstantiateShallowly = false;
+
 private:
    SemaPass& SP;
    QueryContext &QC;
-   unsigned InstantiationDepth = 0;
 
+   llvm::SetVector<RecordDecl*> ShallowInstantiations;
    llvm::DenseMap<NamedDecl*, unsigned> InstantiationDepthMap;
    llvm::DenseMap<std::pair<NamedDecl*, uintptr_t>, NamedDecl*> InstMap;
    llvm::DenseMap<std::pair<RecordDecl*, NamedDecl*>,

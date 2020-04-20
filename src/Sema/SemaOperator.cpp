@@ -140,13 +140,17 @@ ExprResult SemaPass::visitExprSequence(ExprSequence* ExprSeq)
       if (ExprSeq->isInvalid())
          return ExprError();
 
+      ExprSeq->setIsInvalid(true);
       ExprSeq->setExprType(ErrorTy);
       return ExprSeq;
    }
 
    auto result = typecheckExpr(Expr, ExprSeq->getContextualType(), ExprSeq);
-   if (!result)
+   if (!result) {
+      ExprSeq->setIsInvalid(true);
+      ExprSeq->setExprType(ErrorTy);
       return ExprError();
+   }
 
    return result.get();
 }

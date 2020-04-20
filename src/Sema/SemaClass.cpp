@@ -22,9 +22,6 @@ using namespace cdot::support;
 QueryResult PrepareRecordInterfaceQuery::run()
 {
    auto* Rec = D;
-   if (QC.PrepareNameLookup(Rec)) {
-      return fail();
-   }
 
    auto& Meta = QC.RecordMeta[Rec];
    Meta.Opaque = Rec->hasAttribute<OpaqueAttr>();

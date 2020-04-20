@@ -354,10 +354,6 @@ ArrayRef<Conformance*> SemaPass::getAllConformances(RecordDecl* R)
 
 ArrayRef<Conformance*> SemaPass::getAllConformances(CanType T)
 {
-   if (QC.ResolveAssociatedTypes(T)) {
-      return {};
-   }
-
    return Context.getConformanceTable().getAllConformances(T->getRecord());
 }
 
@@ -429,6 +425,16 @@ ExprResult SemaPass::typecheckExpr(Expression* Expr, SourceType RequiredType,
       if (!Sys.diagnoseFailure(Builder.Bindings)) {
          diagnose(err_generic_error, "expression does not typecheck",
                   Expr->getSourceRange());
+
+#ifndef NDEBUG
+         std::string s;
+         {
+            llvm::raw_string_ostream OS(s);
+            Sys.printConstraints(OS);
+         }
+
+         diagnose(note_generic_note, "Constraints:\n" + s);
+#endif
       }
 
       return ExprError();
@@ -640,6 +646,7 @@ StmtResult SemaPass::visit(Statement* stmt, bool)
    if (auto* E = dyn_cast<Expression>(stmt)) {
       auto Result = typecheckExpr(E);
       if (!Result) {
+         stmt->setIsInvalid(true);
          return StmtError();
       }
 
@@ -3369,11 +3376,6 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
    }
 
    auto DC = getAsContext(matchType);
-   if (DC.first && QC.PrepareNameLookup(DC.first)) {
-      Expr->setIsInvalid(true);
-      return ExprError();
-   }
-
    auto caseVal = Expr->getExpr()->getExprType();
 
    auto* MatchII = &Context.getIdentifiers().get("~=");

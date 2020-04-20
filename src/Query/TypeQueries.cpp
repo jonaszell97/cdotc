@@ -1047,10 +1047,6 @@ public:
                return T;
             }
 
-            if (!Impl || Impl->getDeclContext() != DC) {
-               return T;
-            }
-
             if (QC.PrepareDeclInterface(Impl)) {
                return T;
             }
@@ -2047,8 +2043,7 @@ class CapabilitiesApplier: public TypeBuilder<CapabilitiesApplier> {
       }
 
       QualType NewTy;
-      auto _Cache = Capabilities.vec();
-      applyCapabilities(QC, _Cache, Builder, T, NewTy);
+      applyCapabilities(QC, Capabilities, Builder, T, NewTy);
 
       assert((!NewTy || NewTy->isAssociatedType())
          && "concrete equality constraints shouldn't be allowed on a declaration!");
@@ -2065,8 +2060,7 @@ class CapabilitiesApplier: public TypeBuilder<CapabilitiesApplier> {
             }
 
             QualType ConcreteTy;
-            _Cache = Capabilities.vec();
-            applyCapabilities(QC, _Cache, Builder, T, ConcreteTy);
+            applyCapabilities(QC, Capabilities, Builder, T, ConcreteTy);
 
             if (ConcreteTy) {
                if (!ConcreteTy->isAssociatedType() && ConcreteTy != NewTy) {
@@ -2086,11 +2080,16 @@ class CapabilitiesApplier: public TypeBuilder<CapabilitiesApplier> {
          return NewTy;
       }
 
-      if (Builder.size() <= 1) {
+      if (Builder.empty()) {
          return T;
       }
 
-      return Builder.Build(QC.Context);
+      QualType Result = Builder.Build(QC.Context);
+      if (Result == Covar) {
+          return T;
+      }
+
+      return Result;
    }
 
 public:
@@ -2111,7 +2110,7 @@ public:
 
          // Check if the type is already concrete.
          if (!Outer->containsAssociatedType() && !Outer->containsTemplateParamType()) {
-            return SP.CreateConcreteTypeFromAssociatedType(AT, Outer);
+            return SP.CreateConcreteTypeFromAssociatedType(AT, Outer, AT);
          }
       }
 
@@ -2165,7 +2164,8 @@ QualType SemaPass::ApplyCapabilities(QualType T, DeclContext* DeclCtx)
 }
 
 QualType SemaPass::CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
-                                                        QualType Outer)
+                                                        QualType Outer,
+                                                        QualType Original)
 {
    ExistentialTypeBuilder Builder;
    if (QualType R = Outer->asRecordType()) {
@@ -2191,8 +2191,7 @@ QualType SemaPass::CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
          }
 
          QualType NewTy;
-         auto _Cache = Capabilities.vec();
-         applyCapabilities(QC, _Cache, Builder,
+         applyCapabilities(QC, Capabilities, Builder,
                            QC.Context.getAssociatedType(ATDecl), NewTy);
 
          assert((!NewTy || NewTy->isAssociatedType())
@@ -2219,11 +2218,15 @@ QualType SemaPass::CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
 
    if (auto *Ext = Outer->asExistentialType()) {
       for (QualType T : Ext->getExistentials()) {
-         QualType NewTy = CreateConcreteTypeFromAssociatedType(AT, T);
+         QualType NewTy = CreateConcreteTypeFromAssociatedType(AT, T, T);
          if (!NewTy->isErrorType()) {
             Builder.push_back(NewTy);
          }
       }
+   }
+
+   if (Builder.empty()) {
+      return Original;
    }
 
    return Builder.Build(QC.Context);

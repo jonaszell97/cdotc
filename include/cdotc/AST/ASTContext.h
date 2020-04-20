@@ -11,6 +11,7 @@
 
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/FoldingSet.h>
+#include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Allocator.h>
 
@@ -109,7 +110,7 @@ private:
        ProtocolDefaultImplMap;
 
    mutable llvm::DenseMap<const RecordDecl*,
-                          llvm::DenseMap<const NamedDecl*, NamedDecl*>>
+                          llvm::MapVector<const NamedDecl*, NamedDecl*>>
        ProtocolImplMap;
 
    mutable llvm::DenseMap<const IdentifierInfo*, PrecedenceGroupDecl*>
@@ -230,7 +231,7 @@ public:
 
    NamedDecl* getProtocolImpl(const RecordDecl* R, const NamedDecl* Req);
 
-   const llvm::DenseMap<const NamedDecl*, NamedDecl*>*
+   const llvm::MapVector<const NamedDecl*, NamedDecl*>*
    getProtocolImpls(const RecordDecl* R);
 
    void registerDecl(unsigned SourceID, Decl* D)

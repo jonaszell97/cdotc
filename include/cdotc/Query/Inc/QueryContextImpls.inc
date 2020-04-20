@@ -1472,22 +1472,53 @@ Result = _Q.get();
 return QueryResult(QueryResult::Success);
 }
 
+template<> CheckTypeCapabilitiesQuery *QueryContext::getQuery<CheckTypeCapabilitiesQuery>(ast::NamedDecl* ND)
+{
+   auto It = CheckTypeCapabilitiesQueries.find(ND);
+   if (It != CheckTypeCapabilitiesQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
 QueryResult QueryContext::CheckTypeCapabilities(ArrayRef<TypeCapability> &Result, ast::NamedDecl* ND)
 
 {
    auto Key = ND;
    auto It = CheckTypeCapabilitiesQueries.find(Key);
-   if (It != CheckTypeCapabilitiesQueries.end() && !shouldReset()) {
-      Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
-CheckTypeCapabilitiesQuery _Q(*this, ND);
+   CheckTypeCapabilitiesQuery *_Q;
+   if (It == CheckTypeCapabilitiesQueries.end()) {
+      _Q = new(*this) CheckTypeCapabilitiesQuery(*this, ND);
+      CheckTypeCapabilitiesQueries[_Q->ND] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
 
-ExecutingQuery EQ(*this, &_Q);
-auto MaybeErr = _Q.run();
-if (MaybeErr.isErr()) return MaybeErr;
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
 
-Result = _Q.get();
-CheckTypeCapabilitiesQueries[Key] = Result;
-return QueryResult(QueryResult::Success);
 }
 
 template<> GetBuiltinModuleQuery *QueryContext::getQuery<GetBuiltinModuleQuery>(GetBuiltinModuleQuery::ModuleKind Mod)
@@ -2977,55 +3008,6 @@ DeclareSelfAliasQueries.insert(R);
 return QueryResult(QueryResult::Success);
 }
 
-template<> ResolveAssociatedTypesQuery *QueryContext::getQuery<ResolveAssociatedTypesQuery>(QualType T)
-{
-   llvm::FoldingSetNodeID ID;
-   ResolveAssociatedTypesQuery::Profile(ID, T);
-   void *InsertPos;
-   return ResolveAssociatedTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
-}
-
-QueryResult QueryContext::ResolveAssociatedTypes(QualType T, bool FinishImmediately)
-
-{
-   llvm::FoldingSetNodeID ID;
-   ResolveAssociatedTypesQuery::Profile(ID, T);
-   void *InsertPos;
-   auto *_Q = ResolveAssociatedTypesQueries.FindNodeOrInsertPos(ID, InsertPos);
-   if (!_Q) {
-      _Q = new(*this) ResolveAssociatedTypesQuery(*this, T, FinishImmediately);
-      ResolveAssociatedTypesQueries.InsertNode(_Q, InsertPos);
-   }
-#ifndef NDEBUG
-   if (shouldReset()) _Q->Stat = Query::Idle;
-#endif
-   switch (_Q->status()) {
-   case Query::Running:
-      diagnoseCircularDependency(_Q);
-      return QueryResult(QueryResult::Error);
-   case Query::Idle:
-      {
-         ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Running;
-         if (auto _R = _Q->run()) {
-            return _R;
-         }
-      }
-
-      
-      return QueryResult(QueryResult::Success);
-   case Query::Done:
-   case Query::DoneWithError:
-      
-      return QueryResult(QueryResult::Success);
-   case Query::Aborted:
-      return QueryResult(QueryResult::Error);
-   case Query::Dependent:
-      return QueryResult(QueryResult::Dependent);
-   }
-
-}
-
 QueryResult QueryContext::ReferencedAssociatedTypesReady(ReferencedAssociatedTypesReadyQuery::ResultKind &Result, QualType T, ast::ConstraintSet* CS)
 
 {
@@ -3212,23 +3194,23 @@ QueryResult QueryContext::VerifyConstraints(ast::ConstraintSet* &Result, ast::Na
 
 }
 
-template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
+template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
 {
    llvm::FoldingSetNodeID ID;
-   IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl, PrepareNameLookup);
+   IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl);
    void *InsertPos;
    return IsConstraintSatisfiedQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup)
+QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
 
 {
    llvm::FoldingSetNodeID ID;
-   IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl, PrepareNameLookup);
+   IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl);
    void *InsertPos;
    auto *_Q = IsConstraintSatisfiedQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) IsConstraintSatisfiedQuery(*this, C, Self, OriginalDecl, PrepareNameLookup);
+      _Q = new(*this) IsConstraintSatisfiedQuery(*this, C, Self, OriginalDecl);
       IsConstraintSatisfiedQueries.InsertNode(_Q, InsertPos);
    }
 #ifndef NDEBUG
@@ -7596,104 +7578,6 @@ QueryResult QueryContext::ResolveMetaDeclarations(ast::DeclContext* DC)
       {
          ExecutingQuery EQ(*this, _Q);
          _Q->Stat = Query::Idle;
-         if (auto _R = _Q->run()) {
-            return _R;
-         }
-      }
-
-      
-      return QueryResult(QueryResult::Success);
-   case Query::Done:
-   case Query::DoneWithError:
-      
-      return QueryResult(QueryResult::Success);
-   case Query::Aborted:
-      return QueryResult(QueryResult::Error);
-   case Query::Dependent:
-      return QueryResult(QueryResult::Dependent);
-   }
-
-}
-
-template<> PrepareTypeNameLookupQuery *QueryContext::getQuery<PrepareTypeNameLookupQuery>(ast::DeclContext* DC)
-{
-   auto It = PrepareTypeNameLookupQueries.find(DC);
-   if (It != PrepareTypeNameLookupQueries.end()) return It->getSecond();
-   return nullptr;
-}
-
-QueryResult QueryContext::PrepareTypeNameLookup(ast::DeclContext* DC)
-
-{
-   auto Key = DC;
-   auto It = PrepareTypeNameLookupQueries.find(Key);
-   PrepareTypeNameLookupQuery *_Q;
-   if (It == PrepareTypeNameLookupQueries.end()) {
-      _Q = new(*this) PrepareTypeNameLookupQuery(*this, DC);
-      PrepareTypeNameLookupQueries[_Q->DC] = _Q;
-   } else {
-      _Q = It->getSecond();
-   }
-#ifndef NDEBUG
-   if (shouldReset()) _Q->Stat = Query::Idle;
-#endif
-   switch (_Q->status()) {
-   case Query::Running:
-      diagnoseCircularDependency(_Q);
-      return QueryResult(QueryResult::Error);
-   case Query::Idle:
-      {
-         ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Running;
-         if (auto _R = _Q->run()) {
-            return _R;
-         }
-      }
-
-      
-      return QueryResult(QueryResult::Success);
-   case Query::Done:
-   case Query::DoneWithError:
-      
-      return QueryResult(QueryResult::Success);
-   case Query::Aborted:
-      return QueryResult(QueryResult::Error);
-   case Query::Dependent:
-      return QueryResult(QueryResult::Dependent);
-   }
-
-}
-
-template<> PrepareNameLookupQuery *QueryContext::getQuery<PrepareNameLookupQuery>(ast::DeclContext* DC)
-{
-   auto It = PrepareNameLookupQueries.find(DC);
-   if (It != PrepareNameLookupQueries.end()) return It->getSecond();
-   return nullptr;
-}
-
-QueryResult QueryContext::PrepareNameLookup(ast::DeclContext* DC)
-
-{
-   auto Key = DC;
-   auto It = PrepareNameLookupQueries.find(Key);
-   PrepareNameLookupQuery *_Q;
-   if (It == PrepareNameLookupQueries.end()) {
-      _Q = new(*this) PrepareNameLookupQuery(*this, DC);
-      PrepareNameLookupQueries[_Q->DC] = _Q;
-   } else {
-      _Q = It->getSecond();
-   }
-#ifndef NDEBUG
-   if (shouldReset()) _Q->Stat = Query::Idle;
-#endif
-   switch (_Q->status()) {
-   case Query::Running:
-      diagnoseCircularDependency(_Q);
-      return QueryResult(QueryResult::Error);
-   case Query::Idle:
-      {
-         ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Running;
          if (auto _R = _Q->run()) {
             return _R;
          }

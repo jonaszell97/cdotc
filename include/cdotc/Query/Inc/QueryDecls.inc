@@ -2092,32 +2092,6 @@ public:
 
 };
 
-class ResolveAssociatedTypesQuery: public Query, public llvm::FoldingSetNode {
-public:
-   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
-   static bool classofKind(Kind K) { return K == Kind::ResolveAssociatedTypesQueryID; }
-
-   using result_type = void;
-
-   std::string description() const;
-   std::string summary() const;
-
-   friend class Query; // for run().
-   friend class QueryContext; // for C'tor.
-
-private:
-   QueryResult run();
-
-   ResolveAssociatedTypesQuery(QueryContext &QC, QualType T, bool FinishImmediately = false);
-
-   QualType T;
-   bool FinishImmediately;
-public:
-   void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType T);
-
-};
-
 class ReferencedAssociatedTypesReadyQuery: public Query {
 
     public:
@@ -2279,18 +2253,17 @@ public:
 private:
    QueryResult run();
 
-   IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup = false);
+   IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
 
    QueryResult finish(bool Result, Status St = Done);
 
    const ast::DeclConstraint* C;
    QualType Self;
    ast::NamedDecl* OriginalDecl;
-   bool PrepareNameLookup;
    llvm::Optional<bool> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup);
+   static void Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
 
 };
 
@@ -4911,56 +4884,6 @@ private:
    QueryResult run();
 
    ResolveMetaDeclarationsQuery(QueryContext &QC, ast::DeclContext* DC);
-
-   ast::DeclContext* DC;
-public:
-   void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC);
-
-};
-
-class PrepareTypeNameLookupQuery: public Query {
-public:
-   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
-   static bool classofKind(Kind K) { return K == Kind::PrepareTypeNameLookupQueryID; }
-
-   using result_type = void;
-
-   std::string description() const;
-   std::string summary() const;
-
-   friend class Query; // for run().
-   friend class QueryContext; // for C'tor.
-
-private:
-   QueryResult run();
-
-   PrepareTypeNameLookupQuery(QueryContext &QC, ast::DeclContext* DC);
-
-   ast::DeclContext* DC;
-public:
-   void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC);
-
-};
-
-class PrepareNameLookupQuery: public Query {
-public:
-   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
-   static bool classofKind(Kind K) { return K == Kind::PrepareNameLookupQueryID; }
-
-   using result_type = void;
-
-   std::string description() const;
-   std::string summary() const;
-
-   friend class Query; // for run().
-   friend class QueryContext; // for C'tor.
-
-private:
-   QueryResult run();
-
-   PrepareNameLookupQuery(QueryContext &QC, ast::DeclContext* DC);
 
    ast::DeclContext* DC;
 public:
