@@ -69,6 +69,7 @@ public:
 
    ConformanceResolver &getConformanceResolver();
    bool IsBeingResolved(RecordDecl *R);
+   bool UncheckedConformanceExists(RecordDecl *R, ProtocolDecl *P);
 
    void pushDeclContext(DeclContext* Ctx);
    void popDeclContext();

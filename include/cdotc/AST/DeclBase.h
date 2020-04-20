@@ -614,14 +614,51 @@ public:
       {
          return SingleElement ? SingleElement : IteratorBase::operator*();
       }
+
+      iterator operator++(int)
+      {
+         if (SingleElement) {
+            SingleElement++;
+         }
+         else {
+            IteratorBase::operator++(0);
+         }
+
+         return *this;
+      }
+
+      iterator &operator++()
+      {
+         if (SingleElement) {
+            ++SingleElement;
+         }
+         else {
+            IteratorBase::operator++();
+         }
+
+         return *this;
+      }
    };
 
    using const_iterator = iterator;
    using pointer = iterator::pointer;
    using reference = iterator::reference;
 
-   iterator begin() const { return iterator(Result.begin(), Single); }
-   iterator end() const { return iterator(Result.end(), Single); }
+   iterator begin() const
+   {
+      if (Single)
+         return iterator(nullptr, Single);
+
+      return iterator(Result.begin(), nullptr);
+   }
+
+   iterator end() const
+   {
+      if (Single)
+         return iterator(nullptr, Single + 1);
+
+      return iterator(Result.end(), nullptr);
+   }
 
    bool empty() const { return Result.empty(); }
    pointer data() const { return Single ? &Single : Result.data(); }

@@ -1553,6 +1553,9 @@ QueryResult TypecheckGlobalVarQuery::run()
 
 QueryResult PrepareFuncArgInterfaceQuery::run()
 {
+   if (D->getDeclName().isStr("functionPointer")) {
+       NO_OP;
+   }
    auto& Context = QC.CI.getContext();
    if (D->isSelf()) {
       auto M = cast<MethodDecl>(D->getDeclContext());

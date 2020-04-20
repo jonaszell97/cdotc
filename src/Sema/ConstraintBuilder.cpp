@@ -319,6 +319,7 @@ ExprResult ConstraintBuilder::rebuildExpression(ast::SemaPass& Sema,
 
    auto Result = ExprBuilder.visitExpr(E);
    if (!Result || ExprBuilder.EncounteredError) {
+      E->setIsInvalid(true);
       return ExprError();
    }
 

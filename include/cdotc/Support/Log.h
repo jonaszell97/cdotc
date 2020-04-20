@@ -59,6 +59,9 @@ enum LogKind : uint64_t {
    /// \brief Log associated type implementations.
    AssociatedTypeImpls = 0x800,
 
+   /// \brief Log conformance resolution dependency graphs.
+   ConformanceDependencies = 0x1000,
+
    /// \brief Log variable declarations,
    Variables = LocalVariables | GlobalVariables,
 
@@ -85,14 +88,21 @@ void log_impl(llvm::raw_ostream& OS, const T& t, const Ts&... ts)
 } // namespace cdot
 
 #ifndef NDEBUG
-#define LOG(KIND, ...)                                                         \
+#  define LOG(KIND, ...)                                                       \
    if ((::cdot::support::log::detail::ActiveLogs()                             \
-        & ::cdot::support::log::KIND)                                          \
-       != 0)                                                                   \
+        & ::cdot::support::log::KIND) != 0)                                    \
    ::cdot::support::log::detail::log_impl(                                     \
        llvm::errs(), "LOG(" #KIND "): ", __VA_ARGS__, "\n")
+
+#  define BEGIN_LOG(KIND)                                                      \
+   if ((::cdot::support::log::detail::ActiveLogs()                             \
+        & ::cdot::support::log::KIND) != 0) {
+
+#  define END_LOG }
 #else
-#define LOG(KIND, ...)
+#  define LOG(KIND, ...)
+#  define BEGIN_LOG(KIND)
+#  define END_LOG
 #endif
 
 #endif // CDOT_LOG_H

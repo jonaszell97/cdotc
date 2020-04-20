@@ -4,7 +4,6 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/Expression.h"
 #include "cdotc/AST/Statement.h"
-#include "cdotc/Basic/FileManager.h"
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Basic/Variant.h"
 #include "cdotc/Lex/Lexer.h"

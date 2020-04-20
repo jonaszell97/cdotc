@@ -708,18 +708,20 @@ QueryResult PrepareInitInterfaceQuery::run()
       return fail();
    }
 
-   SmallPtrSet<TemplateParamDecl*, 4> Params;
-   Params.insert(D->getTemplateParams().begin(), D->getTemplateParams().end());
+   if (!D->getTemplateParams().empty()) {
+      SmallPtrSet<TemplateParamDecl*, 4> Params;
+      Params.insert(D->getTemplateParams().begin(), D->getTemplateParams().end());
 
-   ParamTypeVisitor V(Params);
-   for (auto& arg : D->getArgs()) {
-      V.RecursiveTypeVisitor::visit(arg->getType().getResolvedType());
-   }
+      ParamTypeVisitor V(Params);
+      for (auto& arg : D->getArgs()) {
+         V.RecursiveTypeVisitor::visit(arg->getType().getResolvedType());
+      }
 
-   if (!Params.empty()) {
-      QC.Sema->diagnose(D, err_initializer_templ_args_must_be_inferrable,
-                        0 /*initializer*/, (*Params.begin())->getDeclName(),
-                        (*Params.begin())->getSourceRange());
+      if (!Params.empty()) {
+         QC.Sema->diagnose(D, err_initializer_templ_args_must_be_inferrable,
+                           0 /*initializer*/, (*Params.begin())->getDeclName(),
+                           (*Params.begin())->getSourceRange());
+      }
    }
 
    if (!isa<ClassDecl>(R)) {

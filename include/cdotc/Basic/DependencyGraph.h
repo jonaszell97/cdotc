@@ -176,19 +176,18 @@ public:
 
    bool empty() const { return Vertices.empty(); }
 
-   bool wasAccessed() const { return accessed; }
-   void resetAccessed() { accessed = false; }
-
 #ifndef NDEBUG
-   template<class PrintFn> void print(const PrintFn& Fn)
+   template<class PrintFn> void print(const PrintFn& Fn,
+                                      llvm::raw_ostream &OS = llvm::outs())
    {
       int i = 0;
       for (auto& Vert : Vertices) {
          if (i++ != 0)
-            llvm::outs() << "\n\n";
-         llvm::outs() << Fn(Vert->getPtr());
+            OS << "\n\n";
+
+         OS << Fn(Vert->getPtr());
          for (auto Out : Vert->getIncoming()) {
-            llvm::outs() << "\n    depends on " << Fn(Out->getPtr());
+            OS << "\n    depends on " << Fn(Out->getPtr());
          }
       }
    }

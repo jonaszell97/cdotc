@@ -56,6 +56,18 @@ ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind)
       llvm_unreachable("not a record decl!");
    }
 
+   if (head.ColonLoc && !isa<ClassDecl>(decl)) {
+      SP.diagnose(
+          err_generic_error, "only classes can have an inheritance clause",
+          head.ColonLoc);
+   }
+
+   if (head.OpenParenLoc && !isa<EnumDecl>(decl)) {
+      SP.diagnose(
+          err_generic_error, "only enums can define a raw type",
+          head.OpenParenLoc);
+   }
+
    Context.setParsedConstraints(decl, move(head.constraints));
 
    decl->setAccessLoc(CurDeclAttrs.AccessLoc);
@@ -412,6 +424,8 @@ void Parser::parseClassHead(RecordHead& Head)
 
    if (lexer->lookahead().is(tok::open_paren)) {
       advance();
+
+      Head.OpenParenLoc = currentTok().getSourceLoc();
       advance();
 
       Head.enumRawType = parseType().get();
@@ -426,6 +440,8 @@ void Parser::parseClassHead(RecordHead& Head)
    auto next = lookahead();
    while (!next.is(tok::open_brace)) {
       if (next.is(tok::colon)) {
+         Head.ColonLoc = next.getSourceLoc();
+
          if (Head.parentClass) {
             SP.diagnose(err_multiple_inheritance, currentTok().getSourceLoc());
          }
@@ -436,6 +452,8 @@ void Parser::parseClassHead(RecordHead& Head)
          Head.parentClass = parseType().tryGet();
       }
       else if (next.is(Ident_with)) {
+         Head.WithLoc = next.getSourceLoc();
+
          advance();
          advance();
 

@@ -245,14 +245,17 @@ bool ConformanceCheckerImpl::checkTypeCompatibility(QualType given,
                                                     NamedDecl* LookupDecl,
                                                     ProtocolDecl* P)
 {
-   if (Sema.ApplyCapabilities(given, LookupDecl->getDeclContext())) {
-      return true;
-   }
-
    QualType Self(Sema.Context.getRecordType(LookupDecl->getRecord()));
    bool Equivalent;
    if (Sema.QC.CheckTypeEquivalence(Equivalent, needed, given, Self, P, P)) {
       return true;
+   }
+
+   if (!Equivalent) {
+      given = Sema.ApplyCapabilities(given, LookupDecl->getDeclContext());
+      if (Sema.QC.CheckTypeEquivalence(Equivalent, needed, given, Self, P, P)) {
+         return true;
+      }
    }
 
    return Equivalent;
@@ -1161,6 +1164,7 @@ NamedDecl* ConformanceCheckerImpl::checkMethodImpl(RecordDecl *Rec,
                                                    MethodDecl *Method)
 {
    auto *Proto = Conf.conformance;
+
    // Make sure all methods with this name are deserialized.
    if (FindImplementations(Rec, Method->getDeclName(), Conf)) {
       return nullptr;
@@ -1687,6 +1691,17 @@ struct DependencyNode : public llvm::FoldingSetNode {
       }
    }
 
+   std::string to_string() const
+   {
+      std::string res;
+      {
+         llvm::raw_string_ostream OS(res);
+         print(OS);
+      }
+
+      return res;
+   }
+
    void dump() const { print(llvm::errs()); }
 #endif
 };
@@ -1909,189 +1924,15 @@ private:
 } // anonymous namespace
 
 class cdot::ConformanceResolver {
+   using AssociatedTypeImplMap = llvm::DenseMap<
+       RecordDecl*, llvm::DenseMap<
+           AssociatedTypeDecl*, llvm::SetVector<std::pair<NamedDecl*, ConstraintSet*>>>>;
+
    /// Reference to the query context.
    QueryContext &QC;
 
    /// Reference to the conformance table.
    ConformanceTable &ConfTbl;
-
-   /// An item in the global resolution worklist.
-   struct WorklistItem {
-      enum WorklistItemKind {
-         /// A conformance of a non-instantiation record.
-         Conformance,
-
-         /// A complete record instantiation. Needed when the template is still
-         /// being resolved.
-         Instantiation,
-
-         /// An associated type implementation of a record instantiation.
-         AssociatedTypeOfInstantiation,
-
-         /// A conditional conformance of a record instantiation.
-         ConformanceOfInstantiation,
-      };
-
-      WorklistItemKind Kind;
-      QualType Self;
-      RecordDecl *Inst;
-
-      union {
-         AliasDecl *ATImpl;
-         cdot::Conformance *Conf;
-         UncheckedConformance* TmpConf;
-         uintptr_t _Opaque;
-      };
-
-      std::string to_string() const
-      {
-         std::string str;
-         {
-            llvm::raw_string_ostream OS(str);
-            switch (Kind) {
-            case AssociatedTypeOfInstantiation:
-               OS << Self.toDiagString() << "." << ATImpl->getDeclName();
-               break;
-            case Conformance:
-               OS << Self.toDiagString() << ": " << TmpConf->proto->getDeclName();
-               if (TmpConf->constraints && !TmpConf->constraints->empty()) {
-                  OS << " where ";
-                  TmpConf->constraints->print(OS);
-               }
-
-               break;
-            case ConformanceOfInstantiation:
-               OS << Self.toDiagString() << ": "
-                  << Conf->getProto()->getDeclName()
-                  << " where ";
-
-               Conf->getConstraints()->print(OS);
-               break;
-            case Instantiation:
-               OS << Self.toDiagString();
-               break;
-            }
-         }
-
-         return str;
-      }
-
-      WorklistItem(QualType self, RecordDecl *inst, AliasDecl *ATImpl)
-         : Kind(AssociatedTypeOfInstantiation), Self(self), Inst(inst), ATImpl(ATImpl)
-      { }
-
-      WorklistItem(QualType self, RecordDecl *inst, cdot::Conformance *Conf)
-         : Kind(ConformanceOfInstantiation), Self(self), Inst(inst), Conf(Conf)
-      { }
-
-      WorklistItem(QualType self, RecordDecl *inst, UncheckedConformance* TmpConf)
-         : Kind(Conformance), Self(self), Inst(inst), TmpConf(TmpConf)
-      { }
-
-      WorklistItem(QualType self, RecordDecl *inst)
-         : Kind(Instantiation), Self(self), Inst(inst), _Opaque(0)
-      { }
-
-      uintptr_t getHashValue() const
-      {
-         return llvm::hash_combine(Kind, Self.getAsOpaquePtr(), _Opaque);
-      }
-   };
-
-   struct ResolutionWorklist {
-   private:
-      /// The worklist vector.
-      std::vector<WorklistItem> Vec;
-
-      /// Remaining items per record.
-      llvm::DenseMap<RecordDecl*, int> RemainingItems;
-
-   public:
-      /// Return the number of remaining items for a record.
-      int NumRemainingItems(RecordDecl* R) const
-      {
-         auto it = RemainingItems.find(R);
-         if (it == RemainingItems.end())
-            return 0;
-
-         return it->getSecond();
-      }
-
-      /// Add an item to the worklist.
-      template<class ...Ts>
-      void emplace_back(QualType self, RecordDecl *inst, Ts&&... ts)
-      {
-         assert(self->getRecord() == inst);
-         Vec.emplace_back(self, inst, std::forward<Ts>(ts)...);
-         RemainingItems[inst]++;
-      }
-
-      /// Add an item to the worklist.
-      void emplace_back(const WorklistItem &Item)
-      {
-         Vec.emplace_back(Item);
-         RemainingItems[Item.Inst]++;
-      }
-
-      /// Take an item from the worklist.
-      const WorklistItem &Take(int i)
-      {
-         auto &result = Vec[i];
-         RemainingItems[result.Inst]--;
-         assert(RemainingItems[result.Inst] >= 0);
-
-         return result;
-      }
-
-      /// Return an item without 'removing' it.
-      const WorklistItem &operator[](int index) const
-      {
-         return Vec[index];
-      }
-
-      /// The size of the worklist.
-      size_t size() const { return Vec.size(); }
-
-      /// Clear the worklist.
-      void clear()
-      {
-         Vec.clear();
-
-         assert(std::all_of(RemainingItems.begin(),
-                            RemainingItems.end(),
-                            [](auto &i1) {
-                               return i1.second == 0;
-                            }) && "unresolved items in worklist!");
-
-         RemainingItems.clear();
-      }
-
-      /// Return an array ref to the vector.
-      ArrayRef<WorklistItem> items() const { return Vec; }
-
-#ifndef NDEBUG
-      LLVM_ATTRIBUTE_UNUSED
-      void print(llvm::raw_ostream &OS) const
-      {
-         for (int i = 0; i < Vec.size(); ++i) {
-            if (i != 0)
-               OS << "\n";
-
-            OS << Vec[i].to_string();
-         }
-      }
-
-      LLVM_ATTRIBUTE_UNUSED
-      void dump() const { print(llvm::errs()); }
-#endif
-   };
-
-   using AssociatedTypeImplMap = llvm::DenseMap<
-       RecordDecl*, llvm::DenseMap<
-           AssociatedTypeDecl*, llvm::SetVector<std::pair<NamedDecl*, ConstraintSet*>>>>;
-
-   /// The global worklist.
-   ResolutionWorklist Worklist;
 
    /// Set of all encountered decl contexts.
    std::vector<DeclContext*> DeclContexts;
@@ -2100,19 +1941,19 @@ class cdot::ConformanceResolver {
    std::vector<std::unique_ptr<UncheckedConformance>> Cache;
 
    /// Map of current base conformances.
-   llvm::DenseMap<QualType, int> BaseConformances;
+   llvm::DenseMap<RecordDecl*, int> BaseConformances;
 
-   /// Set of pending record decls.
-   llvm::SetVector<RecordDecl*> PendingRecordDecls;
-
-   /// Whether or not we are currently in the process of resolving the worklist.
-   bool IsResolving = false;
+   /// Set of records and protocols to which they might conform.
+   llvm::DenseSet<std::pair<RecordDecl*, ProtocolDecl*>> PotentialConformances;
 
    /// The DeclContexts we have already added to the worklist.
    llvm::DenseSet<DeclContext*> DoneSet;
 
    /// The record decls that are fully resolved.
    llvm::DenseSet<RecordDecl*> CompletedRecordDecls;
+
+   /// The record decls that need to have their conformances checked.
+   llvm::SetVector<RecordDecl*> PendingRecordDecls;
 
    /// The resolution dependency graph.
    DependencyGraph<DependencyNode*> Dependencies;
@@ -2136,7 +1977,7 @@ class cdot::ConformanceResolver {
    bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf,
                          DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
 
-   bool ResolveDependencyNode(DependencyNode *Node);
+   bool ResolveDependencyNode(DependencyNode *Node, bool &error);
 
    friend class SemaPass;
 
@@ -2242,15 +2083,6 @@ public:
    bool ensureUniqueDeclaration(std::pair<AliasDecl*, AliasDecl*>& impls);
 
    bool isTemplateMember(NamedDecl* impl);
-
-   bool addConformancesToWorklist(CanType Self, UncheckedConformance& conf);
-
-   bool verifyConformance(CanType Self, UncheckedConformance& conf,
-                          bool checkSelf, bool &foundChanges);
-
-   void diagnoseMissingATs();
-
-   void inheritDefaultValues(UncheckedConformance&base, ProtocolDecl *P);
 };
 
 namespace {
@@ -2558,8 +2390,13 @@ static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
 
       AliasDecl *Impl;
       QC.GetAssociatedTypeImpl(Impl, Rec, AT->getDeclName(), extensions);
-      QC.PrepareDeclInterface(Impl);
+      if (!Impl) {
+         assert(Rec->isInvalid());
+         result += "???";
+         continue;
+      }
 
+      QC.PrepareDeclInterface(Impl);
       result += Impl->getType()->removeMetaType()->toDiagString();
    }
 
@@ -2652,6 +2489,7 @@ bool ConformanceResolver::registerConformance(
       proto, constraints, introducedBy, &outer);
 
    newConf.exclude = exclude;
+   PotentialConformances.insert(std::make_pair(Self->getRecord(), proto));
 
    auto insertResult = testSet.insert(newConf.hashVal);
    if (!insertResult.second) {
@@ -2965,190 +2803,6 @@ bool ConformanceResolver::isTemplateMember(NamedDecl* impl)
    return ND->isTemplate();
 }
 
-bool ConformanceResolver::verifyConformance(CanType Self,
-                                            UncheckedConformance &conf,
-                                            bool checkSelf,
-                                            bool &foundChanges)
-{
-   using ReadyKind = ReferencedAssociatedTypesReadyQuery::ResultKind;
-
-   if (conf.done) {
-      return false;
-   }
-
-   if (conf.proto && conf.associatedTypeStatus == ReadyKind::NotReady) {
-      if (conf.constraints && !conf.constraints->empty()) {
-         // Check if the associated types are ready.
-         if (QC.ReferencedAssociatedTypesReady(conf.associatedTypeStatus, Self,
-                                               conf.constraints)) {
-            return false;
-         }
-
-         if (conf.associatedTypeStatus == ReadyKind::NotReady
-         || (!checkSelf && conf.associatedTypeStatus == ReadyKind::ReferencesSelf)) {
-            Worklist.emplace_back(Self, Self->getRecord(), &conf);
-            return false;
-         }
-      }
-      else {
-         conf.associatedTypeStatus = ReadyKind::Ready;
-      }
-   }
-   else if (conf.proto) {
-      ConfTbl.addConformance(QC.Context, ConformanceKind::Explicit,
-                             Self->getRecord(), conf.proto,
-                             conf.introducedBy, nullptr, conf.depth);
-   }
-
-   foundChanges = true;
-
-   UncheckedConformance &baseConf = *Cache[BaseConformances[Self]];
-
-   // Verify that all associated types are present in declarations that meet
-   // all of the constraints so far.
-   bool foundMissing = false;
-   for (auto* AT : conf.proto->getDecls<AssociatedTypeDecl>()) {
-      if (AT->isSelf()) {
-         continue;
-      }
-
-      auto impls = findAssociatedType(Self->getRecord(), AT, baseConf,
-                                      conf.combinedConstraints);
-
-      if (!impls.first) {
-         if (!AT->getDefaultType()) {
-            foundMissing = true;
-            continue;
-         }
-
-         impls.first = makeAssociatedType(*QC.Sema, AT, Self->getRecord());
-      }
-      else if (impls.first->isDefault()) {
-         NamedDecl* inst = QC.Sema->getInstantiator().InstantiateProtocolDefaultImpl(
-            impls.first, Self);
-
-         if (!inst) {
-            return true;
-         }
-
-         impls.first = cast<AliasDecl>(inst);
-      }
-      else if (isTemplateMember(impls.first) && Self->getRecord()->isInstantiation()) {
-         NamedDecl* inst = QC.Sema->getInstantiator().InstantiateTemplateMember(
-            impls.first, Self->getRecord());
-
-         if (!inst) {
-            return true;
-         }
-
-         impls.first = cast<AliasDecl>(inst);
-      }
-
-      // We already found this one in a previous iteration.
-      if (impls.first->isImplOfProtocolRequirement()) {
-         QC.Context.addProtocolImpl(Self->getRecord(), AT, impls.first);
-         continue;
-      }
-
-      // Verify that this associated type is not implemented again in
-      // an extension.
-      if (ensureUniqueDeclaration(impls)) {
-         return true;
-      }
-
-      impls.first->setImplOfProtocolRequirement(true);
-      QC.Context.addProtocolImpl(Self->getRecord(), AT, impls.first);
-   }
-
-   if (foundMissing) {
-      Worklist.emplace_back(Self, Self->getRecord(), &conf);
-      return false;
-   }
-
-   ConstraintSet* dependentConstraints
-      = getDependentConstraints(conf.combinedConstraints, Self);
-
-   if (dependentConstraints) {
-      ConfTbl.addConformance(QC.Context, ConformanceKind::Conditional,
-                             Self->getRecord(), conf.proto,
-                             conf.introducedBy, dependentConstraints,
-                             conf.depth);
-   }
-   else {
-      ConfTbl.addConformance(QC.Context, ConformanceKind::Explicit,
-                             Self->getRecord(), conf.proto,
-                             conf.introducedBy, nullptr,
-                             conf.depth);
-   }
-
-   conf.done = true;
-   return false;
-}
-
-bool
-ConformanceResolver::addConformancesToWorklist(CanType Self,
-                                               UncheckedConformance& conf)
-{
-   if (conf.proto != nullptr) {
-      Worklist.emplace_back(Self, Self->getRecord(), &conf);
-   }
-
-   // Add inner conformances.
-   if (conf.innerConformances) {
-      for (auto& innerConf : *conf.innerConformances) {
-         if (addConformancesToWorklist(Self, innerConf)) {
-            return true;
-         }
-      }
-   }
-
-   return false;
-}
-
-// Inherit default values from inherited protocols for redefined associated
-// types.
-void ConformanceResolver::inheritDefaultValues(UncheckedConformance&base, ProtocolDecl *P)
-{
-   llvm::SmallDenseSet<AssociatedTypeDecl*, 2> Impls;
-   llvm::SmallDenseSet<SourceType, 2> Tys;
-
-   for (auto *AT : P->getDecls<AssociatedTypeDecl>()) {
-      if (AT->getDefaultType()) {
-         continue;
-      }
-
-      base.FindWithDefault(AT->getDeclName(), Impls);
-      if (Impls.empty()) {
-         continue;
-      }
-
-      if (Impls.size() == 1) {
-         auto *Impl = *Impls.begin();
-         if (QC.PrepareDeclInterface(Impl)) {
-            continue;
-         }
-
-         AT->setDefaultType(Impl->getDefaultType());
-      }
-      else {
-         for (auto *Impl : Impls) {
-            if (QC.PrepareDeclInterface(Impl)) {
-               continue;
-            }
-
-            Tys.insert(Impl->getDefaultType());
-         }
-
-         if (Tys.size() == 1) {
-            AT->setDefaultType(*Tys.begin());
-         }
-      }
-
-      Impls.clear();
-      Tys.clear();
-   }
-}
-
 bool ConformanceResolver::PrepareMacros(DeclContext *DC)
 {
    auto fail = false;
@@ -3293,6 +2947,8 @@ bool ConformanceResolver::FindDeclContexts(DeclContext *DC)
 
 bool ConformanceResolver::BuildWorklist()
 {
+   bool error = false;
+
    // Resolve protocols first.
    for (auto *DC : DeclContexts) {
       auto *Proto = dyn_cast<ProtocolDecl>(DC);
@@ -3300,19 +2956,23 @@ bool ConformanceResolver::BuildWorklist()
          continue;
       }
 
-      if (BuildWorklist(DC)) {
-         return true;
-      }
+      error |= BuildWorklist(DC);
    }
 
    for (auto *DC : DeclContexts) {
-      if (BuildWorklist(DC)) {
-         return true;
-      }
+      error |= BuildWorklist(DC);
+   }
+
+   for (auto *DC : DeclContexts) {
+      auto *R = dyn_cast<RecordDecl>(DC);
+      if (!R || isa<ProtocolDecl>(R))
+         continue;
+
+      error |= FindDependencies(R, *Cache[BaseConformances[R]]);
    }
 
    DeclContexts.clear();
-   return false;
+   return error;
 }
 
 bool ConformanceResolver::BuildWorklist(DeclContext *DC)
@@ -3331,8 +2991,7 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
       }
 
       return FindDependencies(
-          Rec, *Cache[BaseConformances[
-                   QC.Context.getRecordType(Rec->getSpecializedTemplate())]]);
+          Rec, *Cache[BaseConformances[Rec->getSpecializedTemplate()]]);
    }
 
    // Make sure 'Self' and template parameters are ready.
@@ -3367,7 +3026,7 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
    // algorithm.
    UncheckedConformance &baseConf = CreateCondConformance();
    baseConf.initializerInnerConformances();
-   BaseConformances[Self] = Cache.size() - 1;
+   BaseConformances[Rec] = Cache.size() - 1;
 
    // Gather all (conditional) conformances.
    if (registerConformances(Self, Rec, testSet, directConformances, baseConf)) {
@@ -3376,19 +3035,6 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
 
    LOG(ConformanceHierarchy, Rec->getDeclName(), ": \n", baseConf.indented());
    QC.Sema->updateLookupLevel(Rec, LookupLevel::Conformances);
-
-   // Protocols do not need to implement associated types.
-   if (auto *Proto = dyn_cast<ProtocolDecl>(Rec)) {
-      return false;
-   }
-
-   // Add constrained conformances to the worklist.
-   if (addConformancesToWorklist(Self, baseConf)) {
-      return true;
-   }
-
-   // Find the dependencies.
-   FindDependencies(Rec, baseConf);
 
    return false;
 }
@@ -3444,8 +3090,7 @@ ConformanceResolver::AddConformanceDependency(DependencyVertex &Node,
       return false;
    }
 
-   CanType Self = QC.Context.getRecordType(R);
-   auto &baseConf = *Cache[BaseConformances[Self]];
+   auto &baseConf = *Cache[BaseConformances[R]];
 
    bool found = false;
    bool error = false;
@@ -3530,24 +3175,14 @@ static bool FindPossibleAssociatedTypeImpls(
 
    for (auto *Ext : LookupCtx->getExtensions()) {
       auto *CS = QC.Context.getExtConstraints(Ext);
-      if (Ext != conf.introducedBy && CS != nullptr
-      && !QC.IsSupersetOf(conf.constraints, CS)) {
-         continue;
-      }
-
       Impl = Ext->lookupSingle<AliasDecl>(AT->getDeclName());
 
       if (Impl) {
-         Result.insert(std::make_pair(Impl, (ConstraintSet*)nullptr));
+         Result.insert(std::make_pair(Impl, CS));
       }
    }
 
    if (!Result.empty()) {
-      return false;
-   }
-
-   if (AT->getDefaultType()) {
-      Result.insert(std::make_pair(AT, (ConstraintSet*)nullptr));
       return false;
    }
 
@@ -3747,7 +3382,8 @@ bool ConformanceResolver::BuildWorklistForShallowInstantiation(RecordDecl *Inst)
    return false;
 }
 
-bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
+bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
+                                                bool &error)
 {
    if (Node->Done) {
       return false;
@@ -3755,19 +3391,28 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
 
    switch (Node->Kind) {
    case DependencyNode::Complete: {
-      QualType Self = QC.Context.getRecordType(cast<RecordDecl>(Node->Decl));
+      auto *Rec = cast<RecordDecl>(Node->Decl);
 
       auto &Instantiator = QC.Sema->getInstantiator();
-      if (Instantiator.isShallowInstantiation(Self->getRecord())) {
-         if (Instantiator.completeShallowInstantiation(Self->getRecord())) {
+      if (Instantiator.isShallowInstantiation(Rec)) {
+         if (Instantiator.completeShallowInstantiation(Rec)) {
             return true;
          }
       }
       else {
-         PendingRecordDecls.insert(Self->getRecord());
+         PendingRecordDecls.insert(Rec);
+         LOG(AssociatedTypeImpls, Rec->getFullName(), " ", PrintAssociatedTypes(QC, Rec));
+
+         QualType T = QC.Context.getRecordType(Rec);
+         if (QC.CheckConformances(T)) {
+            error = true;
+            Rec->setIsInvalid(true);
+
+            return false;
+         }
       }
 
-      CompletedRecordDecls.insert(Self->getRecord());
+      CompletedRecordDecls.insert(Rec);
       break;
    }
    case DependencyNode::ConcreteTypeOfAssociatedType: {
@@ -3782,6 +3427,8 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
          return false;
       }
 
+      SemaPass::DeclScopeRAII DSR(*QC.Sema, R);
+
       QualType Self = QC.Context.getRecordType(R);
       auto &possibleImpls = PossibleAssociatedTypeImpls[R][AT];
 
@@ -3790,9 +3437,14 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
          if (CS && !CS->empty()) {
             bool Satisfied;
             for (DeclConstraint *C : *CS) {
-               if (QC.IsConstraintSatisfied(Satisfied, C, Self, Impl)) {
-                  return true;
+               if (auto Err = QC.IsConstraintSatisfied(Satisfied, C, Self, Impl)) {
+                  if (!Err.isDependent()) {
+                     return true;
+                  }
+
+                  Satisfied = true;
                }
+
                if (!Satisfied) {
                   break;
                }
@@ -3856,7 +3508,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
 
       QualType Self = QC.Context.getRecordType(R);
       auto &baseConf = *Cache[BaseConformances[
-         R->isInstantiation() ? R->getSpecializedTemplate()->getType() : Self]];
+         R->isInstantiation() ? R->getSpecializedTemplate() : R]];
 
       bool found = false;
       baseConf.ForEach([&](UncheckedConformance &conf) {
@@ -3889,8 +3541,9 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
         bool Satisfied = true;
         if (conf.combinedConstraints && !conf.combinedConstraints->empty()) {
            for (auto* C : *conf.combinedConstraints) {
-              if (QC.IsConstraintSatisfied(
+              if (auto Err = QC.IsConstraintSatisfied(
                       Satisfied, C, Self, cast<NamedDecl>(conf.introducedBy))) {
+                 assert(!Err.isDependent() && "can this happen?");
                  return true;
               }
               if (!Satisfied) {
@@ -3928,75 +3581,79 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node)
 
 bool ConformanceResolver::ResolveDependencyGraph()
 {
-   llvm::outs()<< "#####\n";
-   Dependencies.print([](DependencyNode *Node) {
-     std::string str;
-     {
-        llvm::raw_string_ostream OS(str);
-        Node->print(OS);
-     }
-
-     return str;
-   });
-
-   llvm::outs()<< "\n#####\n";
-
    auto dag = Dependencies.constructOrderedList();
+
+BEGIN_LOG(ConformanceDependencies)
+   std::string str = "\n### CONSTRAINTS\n";
+   llvm::raw_string_ostream OS(str);
+
+   Dependencies.print([](DependencyNode *Node) {
+     return Node->to_string();
+   }, OS);
+
    if (!dag.second) {
       auto offending = Dependencies.getOffendingPair();
-      llvm::outs() << "CONFLICT ";
-      offending.first->print(llvm::outs());
+      OS << "CONFLICT ";
+      offending.first->print(OS);
       llvm::outs() << " <-> ";
-      offending.second->print(llvm::outs());
-      llvm::outs() << "\n";
-      return true;
+      offending.second->print(OS);
+      OS << "\n";
    }
    else {
+      OS << "\n### RESOLUTION ORDER\n";
+
       int i = 1;
       for (auto *Node : dag.first) {
-         llvm::outs() << i++ << " ";
-         Node->print(llvm::outs());
-         llvm::outs() << "\n";
+         OS << i++ << " ";
+         Node->print(OS);
+         OS << "\n";
       }
    }
-   llvm::outs()<< "#####\n";
 
+   LOG(ConformanceDependencies, OS.str());
+END_LOG
+
+   assert(dag.second && "loop in conformance dependency graph!");
    Dependencies.clear();
 
+   bool error = false;
+   int i = 0;
+   (void)i;
+
    for (auto *Node : dag.first) {
-      if (ResolveDependencyNode(Node)) {
+      LOG(ConformanceDependencies, "Resolving item ", ++i, " / ",
+          dag.first.size(), " (", Node->to_string(), ")");
+
+      if (ResolveDependencyNode(Node, error)) {
          return true;
       }
    }
 
-   auto LocalPending = move(PendingRecordDecls);
+   // Resolve new instantiations that were introduced.
+   if (!Dependencies.empty()) {
+      return error || ResolveDependencyGraph();
+   }
+
+   if (error) {
+      return true;
+   }
+
+   auto PendingDecls = move(PendingRecordDecls);
    PendingRecordDecls.clear();
 
-   bool error = false;
-   for (auto *Rec : LocalPending) {
-      LOG(AssociatedTypeImpls, Rec->getFullName(), " ", PrintAssociatedTypes(QC, Rec));
-
-      QualType T = QC.Context.getRecordType(Rec);
-      if (QC.CheckConformances(T)) {
-         error = true;
-         continue;
-      }
-
+   for (auto *Rec : PendingDecls) {
       if (QC.CheckAssociatedTypeConstraints(Rec)) {
          error = true;
-         continue;
+         Rec->setIsInvalid(true);
+
+         return false;
       }
 
       QC.Sema->updateLookupLevel(Rec, LookupLevel::Complete);
       LOG(ProtocolConformances, Rec->getFullName(), " ✅");
    }
 
-   // Resolve new instantiations that were introduced.
-   if (!Dependencies.empty()) {
-      return ResolveDependencyGraph();
-   }
-
-   return false;
+   return error;
 }
 
 bool SemaPass::PrepareNameLookup(DeclContext *DC)
@@ -4018,6 +3675,14 @@ bool SemaPass::FindDependencies(RecordDecl *Inst)
 {
    auto &Resolver = getConformanceResolver();
    return Resolver.BuildWorklistForShallowInstantiation(Inst);
+}
+
+bool SemaPass::UncheckedConformanceExists(RecordDecl *R, ProtocolDecl *P)
+{
+   auto &Resolver = getConformanceResolver();
+   auto key = std::make_pair(R, P);
+
+   return Resolver.PotentialConformances.count(key) != 0;
 }
 
 QueryResult CheckConformancesQuery::run()
@@ -4149,6 +3814,11 @@ QueryResult CheckAssociatedTypeConstraintsQuery::run()
 
 QueryResult ResolveConformanceToProtocolQuery::run()
 {
+   SourceLocation Loc;
+   if (auto* E = Conf.getTypeExpr()) {
+      Loc = E->getSourceLoc();
+   }
+
    auto res = QC.Sema->visitSourceType(Conf);
    if (!res) {
       return fail();
@@ -4157,21 +3827,16 @@ QueryResult ResolveConformanceToProtocolQuery::run()
    auto protoTy = res.get();
    if (!protoTy->isRecordType()) {
       QC.Sema->diagnose(Conf.getTypeExpr(), err_conforming_to_non_protocol,
-                        protoTy);
+                        protoTy, Loc);
       return fail();
    }
 
    auto Proto = protoTy->getRecord();
    if (!isa<ProtocolDecl>(Proto)) {
       QC.Sema->diagnose(Conf.getTypeExpr(), err_conforming_to_non_protocol,
-                        Proto->getDeclName());
+                        Proto->getDeclName(), Loc);
 
       return fail();
-   }
-
-   SourceLocation Loc;
-   if (auto* E = Conf.getTypeExpr()) {
-      Loc = E->getSourceLoc();
    }
 
    QC.CheckAccessibility(T->getRecord(), Proto, Loc);
