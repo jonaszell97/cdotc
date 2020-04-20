@@ -3286,10 +3286,8 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
    }
 
    bool shouldInstantiateShallowly = this->InstantiateShallowly;
-   if (!shouldInstantiateShallowly) {
-      if (PrepareForInstantiation(Template)) {
-         return nullptr;
-      }
+   if (PrepareForInstantiation(Template)) {
+      return nullptr;
    }
 
    // Check if this instantiation exists in an external module.
@@ -3473,8 +3471,13 @@ static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
 
       AliasDecl *Impl;
       QC.GetAssociatedTypeImpl(Impl, Rec, AT->getDeclName(), extensions);
-      QC.PrepareDeclInterface(Impl);
+      if (!Impl) {
+         assert(Rec->isInvalid());
+         result += "???";
+         continue;
+      }
 
+      QC.PrepareDeclInterface(Impl);
       result += Impl->getType()->removeMetaType()->toDiagString();
    }
 

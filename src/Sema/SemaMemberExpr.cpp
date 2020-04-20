@@ -816,8 +816,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
             Ident->setExprType(Context.getMetaType(Context.getRecordType(R)));
          }
          else {
-            TemplateArgList ArgList(*this, R, TemplateArgs,
-                                    Ident->getSourceLoc());
+            TemplateArgList ArgList(*this, R, TemplateArgs, Ident->getSourceLoc());
             assert(ArgList.checkCompatibility() && "can this happen?");
 
             Ident->setNeedsInstantiation(true);
@@ -1489,12 +1488,10 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
       if (ArgExpr->getExprType()->containsAssociatedType()
       || ArgExpr->getExprType()->containsTemplateParamType()) {
          E->setNeedsInstantiation(true);
-         return R;
       }
    }
 
    TemplateArgList ArgList(*this, R, TemplateArgs, E->getSourceLoc());
-   assert(!ArgList.isStillDependent() && "should have been handled before!");
 
    auto CompRes = ArgList.checkCompatibility();
    if (!CompRes) {
@@ -1507,6 +1504,11 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
       }
 
       return nullptr;
+   }
+
+   if (ArgList.isStillDependent()) {
+      E->setNeedsInstantiation(true);
+      return R;
    }
 
    auto* FinalList = FinalTemplateArgumentList::Create(Context, ArgList);

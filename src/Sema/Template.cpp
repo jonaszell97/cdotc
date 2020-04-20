@@ -377,6 +377,10 @@ public:
       if (SP.QC.PrepareDeclInterface(P))
          return;
 
+      if (Ty.toDiagString()=="Self (aka Array<T>)") {
+          NO_OP;
+      }
+
       bool IsCovariant;
       if (SP.QC.IsCovariant(IsCovariant, Ty, P->getCovariance()) || IsCovariant)
          return;

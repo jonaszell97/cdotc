@@ -671,6 +671,9 @@ private:
       ASTVector<SourceType> conformances;
       std::vector<ParsedConstraint> constraints;
       ASTVector<TemplateParamDecl*> templateParams;
+      SourceLocation ColonLoc;
+      SourceLocation WithLoc;
+      SourceLocation OpenParenLoc;
 
       union {
          SourceType enumRawType;

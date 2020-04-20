@@ -24,6 +24,11 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/raw_ostream.h>
 
+#ifndef NDEBUG
+#   include <chrono>
+#   include <thread>
+#endif
+
 using namespace cdot::diag;
 using namespace cdot::support;
 using namespace cdot::sema;
@@ -78,6 +83,11 @@ public:
 
    void issueDiags(DiagnosticsEngine& Engine)
    {
+#ifndef NDEBUG
+      llvm::errs().flush();
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+#endif
+
       for (auto& Diag : StoredDiags)
          llvm::outs() << Diag;
 
@@ -853,12 +863,26 @@ bool SemaPass::ContainsAssociatedTypeConstraint(QualType Ty)
 static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
                            bool AllowConditional)
 {
-   if (AllowConditional && T->getRecord()->isInstantiation()) {
-      auto *Conf = Sema.Context.getConformanceTable().getConformance(
-         T->getRecord()->getSpecializedTemplate(), Proto);
-
-      return Conf != nullptr;
+   if (auto *RT = T->asRecordType()) {
+      if (Sema.IsBeingResolved(RT->getRecord())) {
+         if (Sema.UncheckedConformanceExists(RT->getRecord(), Proto)) {
+            return true;
+         }
+      }
+      if (Sema.getInstantiator().isShallowInstantiation(RT->getRecord())) {
+         if (Sema.UncheckedConformanceExists(
+                 RT->getRecord()->getSpecializedTemplate(), Proto)) {
+            return true;
+         }
+      }
    }
+
+//   if (AllowConditional && T->getRecord()->isInstantiation()) {
+//      auto *Conf = Sema.Context.getConformanceTable().getConformance(
+//          T->getRecord()->getSpecializedTemplate(), Proto);
+//
+//      return Conf != nullptr;
+//   }
 
    bool result;
    if (Sema.QC.ConformsTo(result, T, Proto)) {
@@ -3375,7 +3399,6 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
       return visitCasePattern(casePattern, MatchVal);
    }
 
-   auto DC = getAsContext(matchType);
    auto caseVal = Expr->getExpr()->getExprType();
 
    auto* MatchII = &Context.getIdentifiers().get("~=");
