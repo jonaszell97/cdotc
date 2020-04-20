@@ -1,7 +1,7 @@
 #ifndef CDOT_DEPENDENCYGRAPH_H
 #define CDOT_DEPENDENCYGRAPH_H
 
-#include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
 
 #ifndef NDEBUG
@@ -32,8 +32,8 @@ public:
 
       void removeOutgoing(Vertex* vert)
       {
-         Outgoing.erase(vert);
-         vert->Incoming.erase(this);
+         Outgoing.remove(vert);
+         vert->Incoming.remove(this);
       }
 
       void addIncoming(Vertex* vert)
@@ -44,17 +44,17 @@ public:
 
       void removeIncoming(Vertex* vert)
       {
-         Incoming.erase(vert);
-         vert->Outgoing.erase(this);
+         Incoming.remove(vert);
+         vert->Outgoing.remove(this);
       }
 
       void reset()
       {
          for (auto* Out : Outgoing) {
-            Out->Incoming.erase(this);
+            Out->Incoming.remove(this);
          }
          for (auto* In : Incoming) {
-            In->Outgoing.erase(this);
+            In->Outgoing.remove(this);
          }
 
          Outgoing.clear();
@@ -63,20 +63,20 @@ public:
 
       const T& getPtr() { return Ptr; }
 
-      const llvm::SmallPtrSet<Vertex*, 4>& getOutgoing() const
+      const llvm::SetVector<Vertex*>& getOutgoing() const
       {
          return Outgoing;
       }
 
-      const llvm::SmallPtrSet<Vertex*, 4>& getIncoming() const
+      const llvm::SetVector<Vertex*>& getIncoming() const
       {
          return Incoming;
       }
 
    private:
       T Ptr;
-      llvm::SmallPtrSet<Vertex*, 4> Incoming;
-      llvm::SmallPtrSet<Vertex*, 4> Outgoing;
+      llvm::SetVector<Vertex*> Incoming;
+      llvm::SetVector<Vertex*> Outgoing;
    };
 
    DependencyGraph() = default;
@@ -197,7 +197,7 @@ public:
 private:
    bool getEvaluationOrder(llvm::SmallVector<T, 8>& Order)
    {
-      llvm::SmallPtrSet<Vertex*, 4> VerticesWithoutIncomingEdges;
+      llvm::SmallSetVector<Vertex*, 4> VerticesWithoutIncomingEdges;
       for (auto& vert : Vertices)
          if (vert->getIncoming().empty())
             VerticesWithoutIncomingEdges.insert(vert);
@@ -205,7 +205,7 @@ private:
       size_t cnt = 0;
       while (!VerticesWithoutIncomingEdges.empty()) {
          auto vert = *VerticesWithoutIncomingEdges.begin();
-         VerticesWithoutIncomingEdges.erase(vert);
+         VerticesWithoutIncomingEdges.remove(vert);
 
          Order.push_back(vert->getPtr());
 

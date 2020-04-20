@@ -1098,7 +1098,9 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr* Expr)
       return ExprError();
    }
 
-   checkAccessibility(ND, Expr);
+   if (!isa<FieldDecl>(ND) && !isa<PropDecl>(ND)) {
+      checkAccessibility(ND, Expr);
+   }
 
    QualType ResultType;
    switch (ND->getKind()) {
@@ -1747,9 +1749,8 @@ QualType SemaPass::HandleFieldAccess(Expression* Expr, FieldDecl* F)
    if (ty->isDependentType()) {
       Expr->setIsTypeDependent(true);
    }
-   if (QC.CheckAccessibility(&getDeclContext(), F, Expr->getSourceLoc())) {
-      Expr->setIsInvalid(true);
-   }
+
+   checkAccessibility(F, Expr);
 
    bool ParentIsConst = false;
    bool BeingInitialized = false;
@@ -1808,10 +1809,7 @@ QualType SemaPass::HandlePropAccess(Expression* Expr, PropDecl* P)
          return Context.getVoidType();
       }
 
-      if (QC.CheckAccessibility(&getDeclContext(), P->getSetterMethod(),
-                                Expr->getSourceLoc())) {
-         Expr->setIsInvalid(true);
-      }
+      checkAccessibility(P->getSetterMethod(), Expr);
 
       MutableSelf = P->getSetterMethod()->hasMutableSelf();
       SelfType = P->getSetterMethod()->getSelfType();
@@ -1833,10 +1831,7 @@ QualType SemaPass::HandlePropAccess(Expression* Expr, PropDecl* P)
          return P->getType();
       }
 
-      if (QC.CheckAccessibility(&getDeclContext(), P->getGetterMethod(),
-                                Expr->getSourceLoc())) {
-         Expr->setIsInvalid(true);
-      }
+      checkAccessibility(P->getGetterMethod(), Expr);
 
       MutableSelf = P->getGetterMethod()->hasMutableSelf();
       SelfType = P->getGetterMethod()->getSelfType();
@@ -2080,20 +2075,6 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr* Expr)
    }
    else if (ArrayType* Arr = SubscriptedTy->asArrayType()) {
       resultType = Arr->getElementType();
-   }
-   // give more accurate diagnostic if this subscript was likely meant to be
-   // a templare argument list
-   else if (SubscriptedTy->isMetaType()
-            && SubscriptedTy->asMetaType()
-                   ->getUnderlyingType()
-                   ->isRecordType()) {
-      auto R = SubscriptedTy->asMetaType()->getUnderlyingType()->getRecord();
-      diagnose(Expr, err_not_a_template, R->getDeclName(),
-               Expr->getSourceRange());
-
-      diagnose(note_declared_here, R->getSourceLoc());
-
-      return ExprError();
    }
    else {
       diagnose(Expr, err_illegal_subscript, Expr->getSourceLoc(),

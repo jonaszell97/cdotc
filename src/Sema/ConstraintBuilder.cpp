@@ -445,6 +445,22 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
          Binder.visit(RequiredType->removeReference(), T->removeReference());
       }
 
+      if (RequiredType && isHardRequirement) {
+         QualType NeededTy = RequiredType;
+         if (RequiredType->containsTemplateParamType()) {
+            TypeParamSubstVisitor Builder(
+               Sema, Expr->getSourceRange(), *this, Bindings);
+
+            NeededTy = Builder.visit(RequiredType)->getDesugaredType();
+         }
+
+         auto *Var = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+         Sys.newConstraint<TypeBindingConstraint>(Var, T, nullptr);
+         Sys.newConstraint<ImplicitConversionConstraint>(
+            Var, NeededTy, makeLocator(
+               Expr, PathElement::contextualType(RequiredType.getSourceRange())));
+      }
+
       return T;
    }
 
@@ -452,13 +468,13 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
    bool shouldGenerateConversionConstraint = isHardRequirement;
 
    if (RequiredType) {
-      if (GeneratingArgConstraints) {
-         TemplateParamRemover remover(Sema, {}, *this);
-         remover.visit(RequiredType);
-
-         shouldGenerateConversionConstraint
-             = remover.shouldGenerateConversionConstraint;
-      }
+//      if (GeneratingArgConstraints) {
+//         TemplateParamRemover remover(Sema, {}, *this);
+//         remover.visit(RequiredType);
+//
+//         shouldGenerateConversionConstraint
+//             = remover.shouldGenerateConversionConstraint;
+//      }
 
       contextualType = RequiredType;
    }
@@ -466,10 +482,12 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
    QualType T;
    switch (Expr->getTypeID()) {
 #define CDOT_EXPR(NAME)                                                        \
-   case Expression::NAME##ID:                                                  \
-      T = visit##NAME(static_cast<NAME*>(Expr), contextualType);               \
-      break;
+case Expression::NAME##ID:                                                  \
+   T = visit##NAME(static_cast<NAME*>(Expr), contextualType);               \
+   break;
+
 #include "cdotc/AST/AstNode.def"
+
    default:
       llvm_unreachable("not an expression!");
    }

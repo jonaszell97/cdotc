@@ -1441,10 +1441,6 @@ QueryResult TypeCheckDeclContextQuery::run()
 {
    SemaPass::DeclScopeRAII DSR(sema(), DC);
 
-   if (QC.PrepareNameLookup(DC)) {
-      return fail();
-   }
-
    for (auto* D : DC->getDecls()) {
       QC.TypecheckDecl(D);
    }
@@ -1834,7 +1830,10 @@ QueryResult PrepareAssociatedTypeInterfaceQuery::run()
    return finish(S);
 }
 
-QueryResult TypecheckAssociatedTypeQuery::run() { return finish(); }
+QueryResult TypecheckAssociatedTypeQuery::run()
+{
+   return finish();
+}
 
 QueryResult PrepareCallableInterfaceQuery::run()
 {
@@ -2174,6 +2173,8 @@ QueryResult PrepareAliasInterfaceQuery::run()
       return finish();
    }
 
+   SemaPass::DontApplyCapabilitiesRAII NoCapabilities(*QC.Sema);
+
    // Set status to 'Done' now, since this declaration can be reffered to in
    // the following expression.
    finish(Done);
@@ -2204,7 +2205,8 @@ QueryResult TypecheckAliasQuery::run()
       return finish();
    }
 
-   SemaPass::DeclScopeRAII DSR(sema(), D);
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, D);
+   SemaPass::DontApplyCapabilitiesRAII NoCapabilities(*QC.Sema);
 
    auto ExprRes = QC.Sema->typecheckExpr(Expr->getExpr(), D->getType(), D);
    if (!ExprRes) {

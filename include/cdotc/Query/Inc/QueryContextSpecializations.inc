@@ -22,6 +22,7 @@ template<> PassByValueQuery *QueryContext::getQuery<PassByValueQuery>(CanType T)
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T);
 template<> SubstAssociatedTypesQuery *QueryContext::getQuery<SubstAssociatedTypesQuery>(QualType T, QualType Self);
 template<> SubstTemplateParamTypesQuery *QueryContext::getQuery<SubstTemplateParamTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs);
+template<> CheckTypeCapabilitiesQuery *QueryContext::getQuery<CheckTypeCapabilitiesQuery>(ast::NamedDecl* ND);
 template<> GetBuiltinModuleQuery *QueryContext::getQuery<GetBuiltinModuleQuery>(GetBuiltinModuleQuery::ModuleKind Mod);
 template<> GetBuiltinFuncQuery *QueryContext::getQuery<GetBuiltinFuncQuery>(GetBuiltinFuncQuery::FunctionKind Fn);
 template<> GetBuiltinAliasQuery *QueryContext::getQuery<GetBuiltinAliasQuery>(GetBuiltinAliasQuery::AliasKind K, ast::DeclContext* DC);
@@ -52,11 +53,10 @@ template<> ResolveExplicitConformancesQuery *QueryContext::getQuery<ResolveExpli
 template<> ResolveConformancesToProtocolsQuery *QueryContext::getQuery<ResolveConformancesToProtocolsQuery>(QualType T, llvm::MutableArrayRef<ast::SourceType> Conformances);
 template<> ResolveDeclaredConformancesQuery *QueryContext::getQuery<ResolveDeclaredConformancesQuery>(QualType T, llvm::MutableArrayRef<ast::SourceType> Conformances, ConformanceKind Kind, ast::ConstraintSet* CS);
 template<> AddSingleConformanceQuery *QueryContext::getQuery<AddSingleConformanceQuery>(QualType T, ast::ProtocolDecl* Proto, ConformanceKind Kind, ast::ConstraintSet* CS, bool AddRecursiveConformances);
-template<> ResolveAssociatedTypesQuery *QueryContext::getQuery<ResolveAssociatedTypesQuery>(QualType T);
 template<> CheckProtocolExtensionApplicabilityQuery *QueryContext::getQuery<CheckProtocolExtensionApplicabilityQuery>(QualType T, ast::ExtensionDecl* Ext);
 template<> VerifyConstraintQuery *QueryContext::getQuery<VerifyConstraintQuery>(const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl);
 template<> VerifyConstraintsQuery *QueryContext::getQuery<VerifyConstraintsQuery>(ast::NamedDecl* ConstrainedDecl);
-template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl, bool PrepareNameLookup);
+template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
 template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
 template<> GetReferencedAssociatedTypesQuery *QueryContext::getQuery<GetReferencedAssociatedTypesQuery>(ast::ConstraintSet* CS);
 template<> GetNeededAssociatedTypesQuery *QueryContext::getQuery<GetNeededAssociatedTypesQuery>(ast::RecordDecl* R);
@@ -139,8 +139,6 @@ template<> LookupSingleQuery *QueryContext::getQuery<LookupSingleQuery>(ast::Dec
 template<> RestrictedLookupQuery *QueryContext::getQuery<RestrictedLookupQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
 template<> DirectLookupQuery *QueryContext::getQuery<DirectLookupQuery>(ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints);
 template<> ResolveMetaDeclarationsQuery *QueryContext::getQuery<ResolveMetaDeclarationsQuery>(ast::DeclContext* DC);
-template<> PrepareTypeNameLookupQuery *QueryContext::getQuery<PrepareTypeNameLookupQuery>(ast::DeclContext* DC);
-template<> PrepareNameLookupQuery *QueryContext::getQuery<PrepareNameLookupQuery>(ast::DeclContext* DC);
 template<> CheckTypeEquivalenceQuery *QueryContext::getQuery<CheckTypeEquivalenceQuery>(QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl, ast::DeclContext* DeclCtx);
 template<> CheckTemplateExtensionApplicabilityQuery *QueryContext::getQuery<CheckTemplateExtensionApplicabilityQuery>(ast::RecordDecl* Inst, ast::ExtensionDecl* Ext);
 template<> GetILModuleForDeclQuery *QueryContext::getQuery<GetILModuleForDeclQuery>(ast::Decl* D);

@@ -482,7 +482,6 @@ def CheckTypeCapabilities : Query<"std::vector<TypeCapability>"> {
 
     getReturnType = "ArrayRef<TypeCapability>"
     shouldMoveResult = true
-    simpleQuery = true
 }
 
 /// *** Builtin declaration lookup queries. ****
@@ -1034,17 +1033,6 @@ def DeclareSelfAlias : VoidQuery {
     simpleQuery = true
 }
 
-/// Resolve only the associated types of all conformances of a protocol
-def ResolveAssociatedTypes : VoidQuery {
-    parameters = [
-        // The type to check.
-        TypeParam<"T">,
-
-        // If true, allow this query to be called during its execution.
-        BoolParam<"FinishImmediately", "false", true>
-    ]
-}
-
 /// Check whether or not all associated types that are referenced in 
 /// a set of constraints are ready.
 def ReferencedAssociatedTypesReady : Query<"ReferencedAssociatedTypesReadyQuery::ResultKind"> {
@@ -1135,10 +1123,7 @@ def IsConstraintSatisfied : BoolQuery {
         TypeParam<"Self">,
 
         /// The original declaration the constraint was defined on.
-        NamedDeclParam<"OriginalDecl">,
-
-        /// Whether or not to call PrepareNameLookup on the constrained types.
-        BoolParam<"PrepareNameLookup", "false">
+        NamedDeclParam<"OriginalDecl">
     ]
 
     canBeDependent = true
@@ -1864,26 +1849,6 @@ def ResolveMetaDeclarations : VoidQuery {
     ]
 
     ignoreCircularDependency = true
-}
-
-/// Prepare a declaration context for type lookup, i.e. types that are contained within it.
-def PrepareTypeNameLookup : VoidQuery {
-    parameters = [
-        /// The context to prepare for lookup.
-        DeclContextParam<"DC">
-    ]
-
-    description = "preparing '${DC->getNameAsString()}' for type name lookup"
-}
-
-/// Prepare a declaration context for name lookup within it.
-def PrepareNameLookup : VoidQuery {
-    parameters = [
-        /// The context to prepare for lookup.
-        DeclContextParam<"DC">
-    ]
-
-    description = "preparing '${DC->getNameAsString()}' for name lookup"
 }
 
 /// Get an associated type by name.

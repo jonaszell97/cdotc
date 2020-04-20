@@ -62,6 +62,8 @@ Expression* Expression::getParentExpr() const
       return cast<CallExpr>(this)->getParentExpr();
    case MacroExpansionExprID:
       return cast<MacroExpansionExpr>(this)->getParentExpr();
+   case TemplateArgListExprID:
+      return cast<TemplateArgListExpr>(this)->getParentExpr();
    default:
       break;
    }
@@ -84,6 +86,8 @@ void Expression::setParentExpr(Expression* E)
       return cast<CallExpr>(this)->setParentExpr(E);
    case MacroExpansionExprID:
       return cast<MacroExpansionExpr>(this)->setParentExpr(E);
+   case TemplateArgListExprID:
+      return cast<TemplateArgListExpr>(this)->setParentExpr(E);
    default:
       break;
    }

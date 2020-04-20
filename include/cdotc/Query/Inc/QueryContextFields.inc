@@ -115,7 +115,7 @@ private:   llvm::FoldingSet<SubstTemplateParamTypesQuery> SubstTemplateParamType
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:   llvm::DenseMap<ast::NamedDecl*, std::vector<TypeCapability>> CheckTypeCapabilitiesQueries;
+private:   llvm::DenseMap<ast::NamedDecl*, CheckTypeCapabilitiesQuery*> CheckTypeCapabilitiesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
@@ -240,10 +240,6 @@ private:   llvm::FoldingSet<AddSingleConformanceQuery> AddSingleConformanceQueri
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
 private:   llvm::DenseSet<ast::RecordDecl*> DeclareSelfAliasQueries;
-
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:   llvm::FoldingSet<ResolveAssociatedTypesQuery> ResolveAssociatedTypesQueries;
 
 
 /// \brief Maps from query kinds to a folding set containing instances of
@@ -658,14 +654,6 @@ private:   llvm::DenseSet<ast::DeclContext*> ResolveWildcardDeclarationsQueries;
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
 private:   llvm::DenseMap<ast::DeclContext*, ResolveMetaDeclarationsQuery*> ResolveMetaDeclarationsQueries;
-
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:   llvm::DenseMap<ast::DeclContext*, PrepareTypeNameLookupQuery*> PrepareTypeNameLookupQueries;
-
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
-private:   llvm::DenseMap<ast::DeclContext*, PrepareNameLookupQuery*> PrepareNameLookupQueries;
 
 
 

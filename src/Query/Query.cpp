@@ -16,7 +16,7 @@ using namespace cdot::diag;
 using namespace cdot::support;
 
 LookupOpts cdot::DefaultLookupOpts
-    = LookupOpts::PrepareNameLookup | LookupOpts::LookInConformances;
+    = LookupOpts::LookInConformances;
 
 llvm::raw_ostream& cdot::operator<<(llvm::raw_ostream& OS, LookupOpts Opts)
 {
@@ -34,11 +34,6 @@ llvm::raw_ostream& cdot::operator<<(llvm::raw_ostream& OS, LookupOpts Opts)
       if (i++ != 0)
          OS << ", ";
       OS << "type lookup";
-   }
-   if ((Opts & LookupOpts::PrepareNameLookup) != LookupOpts::None) {
-      if (i++ != 0)
-         OS << ", ";
-      OS << "prepare name lookup";
    }
    if ((Opts & LookupOpts::IssueDiag) != LookupOpts::None) {
       if (i++ != 0)
