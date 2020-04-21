@@ -85,7 +85,7 @@ public:
    {
 #ifndef NDEBUG
       llvm::errs().flush();
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
 #endif
 
       for (auto& Diag : StoredDiags)
@@ -3380,7 +3380,8 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
       if (auto* EC = dyn_cast<EnumCaseDecl>(memberRef->getMemberDecl())) {
          casePattern = CasePattern::Create(
              Context, Expr->getSourceRange(), CasePattern::K_EnumOrStruct,
-             nullptr, EC->getDeclName().getIdentifierInfo(), {});
+             memberRef->getParentExpr(),
+             EC->getDeclName().getIdentifierInfo(), {});
       }
    }
    else if (auto* Call = dyn_cast<CallExpr>(resultExpr)) {
@@ -3390,7 +3391,8 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 
          casePattern = CasePattern::Create(
              Context, Expr->getSourceRange(), CasePattern::K_EnumOrStruct,
-             nullptr, EC->getDeclName().getIdentifierInfo(), resultVec);
+             memberRef->getParentExpr(),
+             EC->getDeclName().getIdentifierInfo(), resultVec);
       }
    }
 

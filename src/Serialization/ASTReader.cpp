@@ -584,20 +584,16 @@ ConformanceLookupTrait::ReadData(const internal_key_type& key,
           = (ConformanceKind)endian::readNext<uint8_t, little, unaligned>(data);
       auto* Proto = cast<ProtocolDecl>(
           Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data)));
+      auto *Decl = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
+      auto *DC = cast_or_null<DeclContext>(Decl);
+      auto Depth = endian::readNext<uint8_t, little, unaligned>(data);
 
-      switch (Kind) {
-      case ConformanceKind::Explicit:
-         ConfTable.addExplicitConformance(Ctx, R, Proto);
-         break;
-      case ConformanceKind::Implicit:
-         ConfTable.addImplicitConformance(Ctx, R, Proto);
-         break;
-      case ConformanceKind::Inherited:
-         ConfTable.addInheritedConformance(Ctx, R, Proto);
-         break;
-      default:
-         llvm_unreachable("bad conformance kind");
+      ConstraintSet *CS = nullptr;
+      if (DC) {
+         CS = Ctx.getExtConstraints(Decl);
       }
+
+      ConfTable.addConformance(Ctx, Kind, R, Proto, DC, CS, Depth);
    }
 }
 

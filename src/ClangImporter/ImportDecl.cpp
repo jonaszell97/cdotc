@@ -214,6 +214,8 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
       DeclMap[F] = Field;
    }
 
+   Sema.ActOnDecl(&Sema.getDeclContext(), Rec);
+
    // Add implicit Copyable and ImplicitlyCopyable conformances.
    if (auto* Copyable = Sema.getCopyableDecl()) {
       Ctx.getConformanceTable().addExplicitConformance(Ctx, Rec, Copyable);
@@ -222,9 +224,7 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
       Ctx.getConformanceTable().addExplicitConformance(Ctx, Rec, Copyable);
    }
 
-   Sema.ActOnDecl(&Sema.getDeclContext(), Rec);
    importDecls(ClangRec, Rec);
-
    return Rec;
 }
 

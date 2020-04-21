@@ -1553,9 +1553,6 @@ QueryResult TypecheckGlobalVarQuery::run()
 
 QueryResult PrepareFuncArgInterfaceQuery::run()
 {
-   if (D->getDeclName().isStr("functionPointer")) {
-       NO_OP;
-   }
    auto& Context = QC.CI.getContext();
    if (D->isSelf()) {
       auto M = cast<MethodDecl>(D->getDeclContext());
@@ -2152,6 +2149,10 @@ QueryResult PrepareAliasInterfaceQuery::run()
    auto TypeRes = QC.Sema->visitSourceType(D->getType(), true);
    if (!TypeRes) {
       return finish(DoneWithError);
+   }
+
+   if (TypeRes.get()->isMetaType()) {
+      TypeRes = TypeRes.get()->removeMetaType();
    }
 
    if (!D->getAliasExpr()) {

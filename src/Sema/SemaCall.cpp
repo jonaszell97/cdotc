@@ -576,6 +576,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
 
    unsigned i = 0;
    MutableArrayRef<FuncArgDecl*> params = C->getArgs();
+   bool isTemplate = C->isTemplateOrInTemplate();
 
    for (Expression*& argVal : Call->getArgs()) {
       QualType neededType;
@@ -589,6 +590,17 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
       }
       else {
          neededType = params.back()->getType();
+      }
+
+      if (isTemplate && Call->getTemplateArgs()) {
+         if (QC.SubstTemplateParamTypes(neededType, neededType,
+                                        *Call->getTemplateArgs(),
+                                         Call->getSourceRange())) {
+            ++i;
+            Call->setIsInvalid(true);
+
+            continue;
+         }
       }
 
       auto typecheckResult = typecheckExpr(argVal, neededType, Call);

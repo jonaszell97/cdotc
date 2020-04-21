@@ -835,7 +835,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
       // Convert to the parameter type and apply automatic promotion.
       if (i < ParamTys.size()) {
-         E = SP.implicitCastIfNecessary(E, ParamTys[i]);
+         E = SP.implicitCastIfNecessary(E, requiredType);
       }
       else if (cstyleVararg) {
          E = SP.convertCStyleVarargParam(E);

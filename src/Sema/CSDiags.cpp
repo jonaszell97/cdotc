@@ -203,6 +203,31 @@ diagnoseCovarianceFailure(ConstraintSystem& Sys, CovarianceConstraint* C,
    return true;
 }
 
+static bool
+diagnoseConformanceFailure(ConstraintSystem& Sys, ConformanceConstraint* C,
+                           ConstraintSystem::SolutionBindings& Bindings,
+                           OverloadCandidate* Cand)
+{
+   QualType BoundTy = Sys.getConcreteType(C->getConstrainedType());
+   SourceRange TypeLoc;
+
+   if (auto* L = C->getLocator()) {
+      auto Elements = L->getPathElements();
+      if (!Elements.empty()
+          && Elements.back().getKind() == ConstraintLocator::ContextualType) {
+         TypeLoc = Elements.front().getSourceRange();
+      }
+   }
+
+   auto* Loc = C->getLocator();
+   Sys.QC.Sema->diagnose(err_generic_error, BoundTy.toDiagString()
+                           + " does not conform to "
+                           + C->getProtoDecl()->getFullName(), TypeLoc,
+                         Loc->getAnchor()->getSourceLoc());
+
+   return true;
+}
+
 static bool diagnoseMemberFailure(ConstraintSystem& Sys, MemberConstraint* C,
                                   OverloadCandidate* Cand)
 {
@@ -255,8 +280,8 @@ static bool diagnoseMemberFailure(ConstraintSystem& Sys, MemberConstraint* C,
    return true;
 }
 
-static bool diagnoseLiteralFailre(ConstraintSystem& Sys, LiteralConstraint* LC,
-                                  OverloadCandidate* Cand)
+static bool diagnoseLiteralFailure(ConstraintSystem& Sys, LiteralConstraint* LC,
+                                   OverloadCandidate* Cand)
 {
    if (!LC->getLocator()) {
       return false;
@@ -316,6 +341,16 @@ static bool diagnoseLiteralFailre(ConstraintSystem& Sys, LiteralConstraint* LC,
       // not satisfied.
       auto* Conv = Sys.getFirstConstraint<ImplicitConversionConstraint>(
           LC->getConstrainedType());
+
+      if (!Conv) {
+         // The default type does not conform to the ExpressibleBy* protocol.
+         Sys.QC.Sema->diagnose(err_generic_error,
+                               BoundTy.toDiagString()
+                                   + " is not expressible by " + Desc.str(),
+                               ExprLoc, TypeLoc);
+
+         return true;
+      }
 
       Sys.bindTypeVariable(LC->getConstrainedType(),
                            LC->getDefaultLiteralType(Sys.QC), -1, true);
@@ -506,6 +541,14 @@ static bool diagnoseFailureImpl(ConstraintSystem& Sys,
 
       break;
    }
+   case Constraint::ConformanceID: {
+      auto* Cov = cast<ConformanceConstraint>(FailedConstraint);
+      if (diagnoseConformanceFailure(Sys, Cov, Bindings, Cand)) {
+         return true;
+      }
+
+      break;
+   }
    case Constraint::ImplicitConversionID: {
       auto* Conv = cast<ImplicitConversionConstraint>(FailedConstraint);
       if (diagnoseConversionFailure(Sys, Conv, Cand)) {
@@ -524,7 +567,7 @@ static bool diagnoseFailureImpl(ConstraintSystem& Sys,
    }
    case Constraint::LiteralID: {
       auto* LC = cast<LiteralConstraint>(FailedConstraint);
-      if (diagnoseLiteralFailre(Sys, LC, Cand)) {
+      if (diagnoseLiteralFailure(Sys, LC, Cand)) {
          return true;
       }
 

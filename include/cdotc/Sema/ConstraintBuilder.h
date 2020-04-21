@@ -109,6 +109,12 @@ public:
                       ConstraintLocator* Locator = nullptr,
                       bool isHardRequirement = true);
 
+   /// Generate constraints for an expression.
+   QualType getRValue(ast::Expression* Expr,
+                      ast::SourceType RequiredType = ast::SourceType(),
+                      ConstraintLocator* Locator = nullptr,
+                      bool isHardRequirement = true);
+
    /// Create a locator for an expression.
    Locator makeLocator(ast::Expression* E,
                        ArrayRef<ConstraintLocator::PathElement> Elements = {});

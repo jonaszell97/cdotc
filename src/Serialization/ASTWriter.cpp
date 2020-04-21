@@ -1212,6 +1212,8 @@ void ASTWriter::WriteConformanceData()
          for (auto Conf : Conformances) {
             Writer.write<uint8_t>(static_cast<uint8_t>(Conf->getKind()));
             Writer.write<uint32_t>(GetDeclRef(Conf->getProto()));
+            Writer.write<uint32_t>(GetDeclRef(cast_or_null<NamedDecl>(Conf->getDeclarationCtx())));
+            Writer.write<uint8_t>(Conf->getDepth());
          }
       }
    }

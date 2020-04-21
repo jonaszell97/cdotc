@@ -2354,14 +2354,23 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
 
       // All extensions within the same file can access private declarations.
       bool SameFile = ND->getModule() == getDeclContext().getDeclModule();
-
-      if (SameFile)
+      if (SameFile) {
          Ctx = Ctx->lookThroughExtension();
+      }
 
       for (auto* Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (SameFile && Curr->lookThroughExtension() == Ctx) {
-            return;
+         if (SameFile && isa<ExtensionDecl>(Curr)) {
+            auto *R = cast<ExtensionDecl>(Curr)->getExtendedRecord();
+            if (R == Ctx) {
+               return;
+            }
+            if (auto *Other = dyn_cast<RecordDecl>(Ctx)) {
+               if (Other->isInstantiation() && Other->getSpecializedTemplate() == R) {
+                  return;
+               }
+            }
          }
+
          if (Curr == Ctx) {
             return;
          }
@@ -2374,17 +2383,27 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
       break;
    }
    case AccessSpecifier::Protected: {
-      // only visible within declaration context or subclasses (should have
+      // Only visible within declaration context or subclasses (should have
       // been rejected outside of classes)
       auto C = cast<ClassDecl>(ND->getNonTransparentDeclContext());
-      auto* Ctx = ND->getDeclContext();
+      auto* Ctx = ND->getDeclContext()->lookThroughExtension();
       for (auto* Curr = &getDeclContext(); Curr; Curr = Curr->getParentCtx()) {
-         if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
-            return;
+         if (auto *Ext = dyn_cast<ExtensionDecl>(Curr)) {
+            auto *R = Ext->getExtendedRecord();
+            if (R == Ctx) {
+               return;
+            }
+            if (auto *Other = dyn_cast<RecordDecl>(Ctx)) {
+               if (Other->isInstantiation() && Other->getSpecializedTemplate() == R) {
+                  return;
+               }
+            }
+         }
 
          auto SubClass = dyn_cast<ClassDecl>(Curr);
-         if (SubClass && C->isBaseClassOf(SubClass))
+         if (SubClass && C->isBaseClassOf(SubClass)) {
             return;
+         }
       }
 
       // declaration is not accessible here

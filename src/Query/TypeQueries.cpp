@@ -2045,8 +2045,9 @@ class CapabilitiesApplier: public TypeBuilder<CapabilitiesApplier> {
       QualType NewTy;
       applyCapabilities(QC, Capabilities, Builder, T, NewTy);
 
-      assert((!NewTy || NewTy->isAssociatedType())
-         && "concrete equality constraints shouldn't be allowed on a declaration!");
+      if (NewTy && !NewTy->containsAssociatedType()) {
+         return NewTy;
+      }
 
       auto* CurDC = this->DC;
       int concreteTypes = 0;

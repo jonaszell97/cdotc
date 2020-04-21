@@ -284,6 +284,14 @@ FindSolutionStep::FindSolutionStep(
 
 void FindSolutionStep::execute(bool PrevFailed)
 {
+   if (PrevFailed) {
+      return done(/*isFailure=*/true);
+   }
+
+   // Begin a new solver scope.
+   Scope = nullptr;
+   Scope = std::make_unique<ConstraintSystem::SolverScope>(Sys);
+
    // Create a guessing constraint for each type variable that has possible
    // bindings.
    bool FoundUnassigned = false;
@@ -328,13 +336,16 @@ void FindSolutionStep::execute(bool PrevFailed)
 
    if (!FoundPotentialBindings) {
       if (FoundUnassigned) {
+         Scope = nullptr;
          LOG_ERR("incomplete solution\n");
          return done(/*IsFailure=*/Solutions.empty());
       }
 
       // Found a new solution.
       Sys.appendCurrentSolution(Solutions, TypeVariables);
-      LOG_ERR("solution found (", Sys.getCurrentScore(), ")\n");
+      LOG_ERR("partial solution found (", Sys.getCurrentScore(), ")\n");
+
+      Scope = nullptr;
    }
 
    return done();

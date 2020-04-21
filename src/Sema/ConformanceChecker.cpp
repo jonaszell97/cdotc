@@ -797,6 +797,12 @@ void ConformanceCheckerImpl::checkRecordCommon(RecordDecl* Rec,
       return;
    }
 
+   if (Conf.conformance->isExternal()) {
+      if (auto *ModFile = Conf.conformance->getModFile()) {
+         ModFile->LoadAllDecls(*Conf.conformance);
+      }
+   }
+
    for (auto& decl : Conf.conformance->getDecls()) {
       if (Rec->isInvalid())
          return;
@@ -1321,7 +1327,7 @@ bool ConformanceCheckerImpl::CompareArgumentLists(
    }
 
    bool ArgsValid = true;
-   unsigned i = 1;
+   unsigned i = isa<InitDecl>(Method) ? 0 : 1;
 
    for (; i < NumGiven; ++i) {
       if (GivenArgs[i]->getLabel() && !NeededArgs[i]->getLabel()) {
@@ -2058,30 +2064,8 @@ public:
                         SmallPtrSetImpl<ProtocolDecl*>& directConformances,
                              UncheckedConformance& baseConf);
 
-   bool constraintsAreMet(ConstraintSet* givenCS, ConstraintSet* neededCS);
-
-   bool updateResult(AliasDecl* otherImpl, std::pair<AliasDecl*, AliasDecl*>& impls);
-
-   AliasDecl* findAssociatedTypeImpl(AssociatedTypeDecl* AT, DeclContext* ext);
-
-   bool findAssociatedTypeImpl(AssociatedTypeDecl* AT,
-                               RecordDecl* R, ConstraintSet* givenCS,
-                               std::pair<AliasDecl*, AliasDecl*>& impls);
-
-   bool findAssociatedTypeRecursive(AssociatedTypeDecl* AT,
-                                    UncheckedConformance& conf,
-                                    ConstraintSet* givenCS,
-                                    std::pair<AliasDecl*, AliasDecl*>& impls);
-
-   std::pair<AliasDecl*, AliasDecl*>
-   findAssociatedType(RecordDecl* Rec, AssociatedTypeDecl* AT,
-                      UncheckedConformance& baseConf,
-                      ConstraintSet* givenCS);
 
    ConstraintSet* getDependentConstraints(ConstraintSet* CS, QualType Self);
-
-   bool ensureUniqueDeclaration(std::pair<AliasDecl*, AliasDecl*>& impls);
-
    bool isTemplateMember(NamedDecl* impl);
 };
 
@@ -2593,148 +2577,6 @@ bool ConformanceResolver::registerConformances(
    return false;
 }
 
-bool ConformanceResolver::constraintsAreMet(ConstraintSet* givenCS,
-                                            ConstraintSet* neededCS)
-{
-   return QC.IsSupersetOf(givenCS, neededCS);
-}
-
-bool ConformanceResolver::updateResult(
-   AliasDecl* otherImpl,
-   std::pair<AliasDecl*, AliasDecl*>& impls)
-{
-   if (!impls.first) {
-      impls.first = otherImpl;
-      return false;
-   }
-
-   if (QC.PrepareDeclInterface(impls.first)) {
-      return false;
-   }
-   if (QC.PrepareDeclInterface(otherImpl)) {
-      return false;
-   }
-   if (!otherImpl->isTypedef()) {
-      return false;
-   }
-
-   if (impls.first->getAliasedType().getCanonicalType()
-       == otherImpl->getAliasedType().getCanonicalType()) {
-      return false;
-   }
-
-   impls.second = otherImpl;
-   return true;
-}
-
-AliasDecl* ConformanceResolver::findAssociatedTypeImpl(
-   AssociatedTypeDecl* AT, DeclContext* ext)
-{
-   return ext->lookupSingle<AliasDecl>(AT->getDeclName());
-}
-
-bool ConformanceResolver::findAssociatedTypeImpl(
-   AssociatedTypeDecl* AT,
-   RecordDecl* R, ConstraintSet* givenCS,
-   std::pair<AliasDecl*, AliasDecl*>& impls)
-{
-   auto extensions = QC.Context.getExtensions(QC.Context.getRecordType(R));
-   for (auto* ext : extensions) {
-      auto* neededCS = QC.Context.getExtConstraints(ext);
-      if (!constraintsAreMet(givenCS, neededCS)) {
-         continue;
-      }
-
-      auto* impl = ext->lookupSingle<AliasDecl>(AT->getDeclName());
-      if (impl && updateResult(impl, impls)) {
-         return true;
-      }
-   }
-
-   return false;
-}
-
-bool ConformanceResolver::findAssociatedTypeRecursive(
-    AssociatedTypeDecl* AT, UncheckedConformance& conf,
-    ConstraintSet* givenCS, std::pair<AliasDecl*, AliasDecl*>& impls)
-{
-#ifndef NDEBUG
-   if (conf.exclude) {
-      return false;
-   }
-#endif
-
-   if (!constraintsAreMet(givenCS, conf.combinedConstraints)) {
-      return false;
-   }
-
-   if (findAssociatedTypeImpl(AT, conf.proto, givenCS, impls)) {
-      return true;
-   }
-
-   if (!conf.innerConformances) {
-      return false;
-   }
-
-   for (auto& innerConf : *conf.innerConformances) {
-      if (findAssociatedTypeRecursive(AT, innerConf, givenCS, impls)) {
-         return true;
-      }
-   }
-
-   return false;
-}
-
-std::pair<AliasDecl*, AliasDecl*>
-ConformanceResolver::findAssociatedType(
-   RecordDecl* Rec, AssociatedTypeDecl* AT,
-    UncheckedConformance& baseConf, ConstraintSet* givenCS)
-{
-   std::pair<AliasDecl*, AliasDecl*> impls;
-
-   // Look in the record itself first.
-   auto* impl = Rec->lookupSingle<AliasDecl>(AT->getDeclName());
-   if (impl && updateResult(impl, impls)) {
-      return impls;
-   }
-
-   // Now look in extensions with a matching constraint set.
-   if (findAssociatedTypeImpl(AT, Rec, givenCS, impls) || impls.first) {
-      return impls;
-   }
-
-   // For the first level, we need to do a breadth-first search to ensure that
-   // implementations provided by the type are found before implementations
-   // provided by protocol extensions.
-   for (auto& conf : *baseConf.innerConformances) {
-      if (!isa<ExtensionDecl>(conf.introducedBy)) {
-         continue;
-      }
-
-      if (!constraintsAreMet(givenCS, conf.combinedConstraints)) {
-         continue;
-      }
-
-      impl = findAssociatedTypeImpl(AT, conf.introducedBy);
-      if (impl && updateResult(impl, impls)) {
-         return impls;
-      }
-   }
-
-   if (impls.first) {
-      return impls;
-   }
-
-   // After that, do a depth-first search through all inner conformances.
-   for (auto& innerConf : *baseConf.innerConformances) {
-      if (findAssociatedTypeRecursive(AT, innerConf, givenCS, impls)) {
-         break;
-      }
-   }
-
-   return impls;
-}
-
 ConstraintSet* ConformanceResolver::getDependentConstraints(ConstraintSet* CS,
                                                             QualType Self)
 {
@@ -2762,36 +2604,6 @@ ConstraintSet* ConformanceResolver::getDependentConstraints(ConstraintSet* CS,
    }
 
    return ConstraintSet::Create(QC.Context, dependentConstraints);
-}
-
-bool ConformanceResolver::ensureUniqueDeclaration(std::pair<AliasDecl*, AliasDecl*>& impls)
-{
-   if (!impls.second) {
-      return false;
-   }
-
-   auto* firstImpl = impls.first;
-   auto* otherImpl = impls.second;
-
-   if (firstImpl->getRecord() != otherImpl->getRecord()) {
-      return false;
-   }
-
-   std::string msg = "associated types can only be implemented once";
-
-   auto* CS1 = QC.Sema->getDeclConstraints(
-       cast<NamedDecl>(otherImpl->getDeclContext()));
-   auto* CS2 = QC.Sema->getDeclConstraints(
-       cast<NamedDecl>(firstImpl->getDeclContext()));
-
-   if (CS1 != CS2) {
-      msg += ", even if they have different constraints";
-   }
-
-   QC.Sema->diagnose(err_generic_error, msg, firstImpl->getSourceRange());
-   QC.Sema->diagnose(note_previous_decl, otherImpl->getSourceRange());
-
-   return true;
 }
 
 bool ConformanceResolver::isTemplateMember(NamedDecl* impl)
@@ -3402,6 +3214,13 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
       else {
          PendingRecordDecls.insert(Rec);
          LOG(AssociatedTypeImpls, Rec->getFullName(), " ", PrintAssociatedTypes(QC, Rec));
+
+         if (PrepareImplicitDecls(Rec)) {
+            error = true;
+            Rec->setIsInvalid(true);
+
+            return false;
+         }
 
          QualType T = QC.Context.getRecordType(Rec);
          if (QC.CheckConformances(T)) {

@@ -239,12 +239,14 @@ QueryResult GenerateRecordILQuery::run()
    }
 
    // Synthesize default- and memberwise initializers.
-   if (auto* S = dyn_cast<StructDecl>(R)) {
-      ILGen.DefineDefaultInitializer(S);
+   if (!QC.RecordMeta[R].Opaque) {
+      if (auto* S = dyn_cast<StructDecl>(R)) {
+         ILGen.DefineDefaultInitializer(S);
 
-      auto* MemberwiseInit = S->getMemberwiseInitializer();
-      if (MemberwiseInit && MemberwiseInit->isSynthesized()) {
-         ILGen.DefineMemberwiseInitializer(S);
+         auto* MemberwiseInit = S->getMemberwiseInitializer();
+         if (MemberwiseInit && MemberwiseInit->isSynthesized()) {
+            ILGen.DefineMemberwiseInitializer(S);
+         }
       }
    }
 
