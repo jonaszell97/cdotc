@@ -146,6 +146,9 @@ class FindSolutionStep : public SolverStep {
    /// The type variables in this component.
    ArrayRef<TypeVariableType*> TypeVariables;
 
+   /// The solver scope introduced for this component.
+   std::unique_ptr<ConstraintSystem::SolverScope> Scope;
+
 public:
    FindSolutionStep(ConstraintSystem& Sys,
                     SmallVectorImpl<ConstraintSystem::Solution>& Solutions,

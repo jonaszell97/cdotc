@@ -1179,6 +1179,9 @@ public:
    /// Print the constraint system to a stream.
    void printConstraints(llvm::raw_ostream& OS);
 
+   /// Enable logging for the constraint system.
+   void enableLogging();
+
    /// Allocator Implementation.
    void* Allocate(size_t size, size_t alignment = 8) const
    {

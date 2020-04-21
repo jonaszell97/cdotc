@@ -428,6 +428,32 @@ TypeVariableType* ConstraintBuilder::getClosureParam(DeclarationName Name)
    return It->getSecond();
 }
 
+QualType ConstraintBuilder::getRValue(Expression *Expr, SourceType RequiredType,
+                                      ConstraintLocator *Locator,
+                                      bool isHardRequirement) {
+   auto Result = visitExpr(Expr, RequiredType, Locator, isHardRequirement);
+   if (!Result) {
+      return Result;
+   }
+
+   if (Result->isReferenceType()) {
+      auto *Deref = Sys.newTypeVariable();
+
+      QualType Ref;
+      if (Result->isMutableReferenceType()) {
+         Ref = Sema.Context.getMutableReferenceType(Deref);
+      }
+      else {
+         Ref = Sema.Context.getReferenceType(Deref);
+      }
+
+      newConstraint<TypeEqualityConstraint>(Result, Ref, nullptr);
+      Result = Deref;
+   }
+
+   return Result;
+}
+
 QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
                                       ConstraintLocator* Locator,
                                       bool isHardRequirement)
@@ -460,6 +486,8 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
          Sys.newConstraint<ImplicitConversionConstraint>(
             Var, NeededTy, makeLocator(
                Expr, PathElement::contextualType(RequiredType.getSourceRange())));
+
+         T = Var;
       }
 
       return T;
@@ -493,7 +521,7 @@ case Expression::NAME##ID:                                                  \
       llvm_unreachable("not an expression!");
    }
 
-   if (!T || Expr->isInvalid() || T->isErrorType()) {
+   if (!T || T->isErrorType()) {
       T = Sys.newTypeVariable();
    }
 
@@ -509,8 +537,14 @@ case Expression::NAME##ID:                                                  \
 
    auto* Var = T->asTypeVariableType();
    if (!Var) {
-      Var = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
-      Sys.newConstraint<TypeBindingConstraint>(Var, T, nullptr);
+      if (T->containsTypeVariable()) {
+         Var = Sys.newTypeVariable();
+         Sys.newConstraint<TypeEqualityConstraint>(Var, T, nullptr);
+      }
+      else {
+         Var = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+         Sys.newConstraint<TypeBindingConstraint>(Var, T, nullptr);
+      }
    }
 
    typeVarMap[Expr] = Var;
@@ -823,10 +857,8 @@ QualType ConstraintBuilder::visitStringInterpolation(StringInterpolation* Expr,
 
    // Constrain all interpolation segments to be StringRepresentable.
    for (auto* Val : Expr->getSegments()) {
-      QualType Ty = visitExpr(Val);
-
-      // Constrain the key type to be hashable.
-      newConstraint<ConformanceConstraint>(Ty, StrRep, nullptr);
+      QualType Ty = getRValue(Val);
+      newConstraint<ConformanceConstraint>(Ty, StrRep, makeLocator(Val));
    }
 
    auto* Var = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
@@ -999,9 +1031,6 @@ QualType ConstraintBuilder::visitTupleLiteral(TupleLiteral* Expr, SourceType T)
       ContextualElementTypes = Tup->getContainedTypes();
    }
 
-   TypeVariable TupleTy
-       = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
-
    SmallVector<QualType, 2> ElementTypes;
    ElementTypes.reserve(Arity);
 
@@ -1021,7 +1050,16 @@ QualType ConstraintBuilder::visitTupleLiteral(TupleLiteral* Expr, SourceType T)
    // Equate the type of the whole expression with a tuple type containing
    // the element types.
    QualType ExprType = Sema.Context.getTupleType(ElementTypes);
-   Sys.newConstraint<TypeBindingConstraint>(TupleTy, ExprType, nullptr);
+   TypeVariable TupleTy;
+
+   if (ExprType->containsTypeVariable()) {
+      TupleTy = Sys.newTypeVariable();
+      Sys.newConstraint<TypeEqualityConstraint>(TupleTy, ExprType, nullptr);
+   }
+   else {
+      TupleTy = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+      Sys.newConstraint<TypeBindingConstraint>(TupleTy, ExprType, nullptr);
+   }
 
    return TupleTy;
 }
@@ -1490,6 +1528,10 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
 QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
                                                    SourceType T)
 {
+   if (T && T->containsTypeVariable()) {
+      T = SourceType();
+   }
+
    DeclarationName Name;
    Expression* SelfVal = nullptr;
    SmallVector<NamedDecl*, 2> Decls;

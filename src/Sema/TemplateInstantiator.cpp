@@ -247,13 +247,17 @@ private:
          case Decl::MacroDeclID:
          case Decl::MacroExpansionDeclID:
             return true;
-         case Decl::FuncArgDeclID:
-            return !cast<FuncArgDecl>(D)->getType()->isDependentType()
-                   && !cast<FuncArgDecl>(D)->isSelf();
-         case Decl::AssociatedTypeDeclID:
-            return !cast<AssociatedTypeDecl>(D)
-                        ->getDefaultType()
-                        ->isDependentType();
+         case Decl::FuncArgDeclID: {
+            auto *Arg = cast<FuncArgDecl>(D);
+            return !Arg->getType()->isDependentType()
+                   && !Arg->getType()->containsTemplateParamType()
+                   && !Arg->isSelf();
+         }
+         case Decl::AssociatedTypeDeclID: {
+            auto *AT = cast<AssociatedTypeDecl>(D);
+            return !AT->getDefaultType()->isDependentType()
+                   && !AT->getDefaultType()->containsTemplateParamType();
+         }
          default:
             return false;
          }
@@ -2243,8 +2247,7 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr* node)
    copyArgumentList(node->getArgs(), node->getLabels(), ArgVec, Labels);
 
    auto* func = node->getFunc();
-   if (Expression* PE
-       = dyn_cast_or_null<MemberRefExpr>(node->getParentExpr())) {
+   if (Expression* PE = dyn_cast_or_null<MemberRefExpr>(node->getParentExpr())) {
       PE = PE->getParentExpr();
 
       QualType lookupType
@@ -2255,10 +2258,13 @@ Expression* InstantiatorImpl::visitCallExpr(CallExpr* node)
       if (func->isImplOfProtocolRequirement() || func->isProtocolRequirement()) {
          decl = SP.Context.getProtocolImpl(lookupType->getRecord(), func);
       }
-      else {
+      else if (func->getRecord()->isTemplate()) {
          decl = SP.getInstantiator().getMemberInstantiation(
-            lookupType->getRecord(), func,
-            &lookupType->getRecord()->getTemplateArgs());
+             lookupType->getRecord(), func,
+             &lookupType->getRecord()->getTemplateArgs());
+      }
+      else {
+         decl = func;
       }
 
       assert(decl && "no instantiated decl!");
@@ -3700,6 +3706,9 @@ TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
    if (TemplateMember->isImplOfProtocolRequirement()) {
       MemberInst->setImplOfProtocolRequirement(true);
       QC.Context.updateProtocolImpl(Inst, TemplateMember, MemberInst);
+   }
+   if (TemplateMember->instantiatedFromProtocolDefaultImpl()) {
+      MemberInst->setInstantiatedFromProtocolDefaultImpl(true);
    }
 
    LOG(Instantiations, "instantiated template member '",

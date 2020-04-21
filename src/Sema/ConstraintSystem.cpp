@@ -1809,3 +1809,8 @@ void ConstraintSystem::printConstraints(llvm::raw_ostream& OS)
       OS << "\n";
    }
 }
+
+void ConstraintSystem::enableLogging()
+{
+   LogStream = &llvm::errs();
+}

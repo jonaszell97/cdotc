@@ -53,8 +53,6 @@ QueryResult TypecheckRecordQuery::run()
 
 QueryResult DeclareImplicitInitializersQuery::run()
 {
-   finish();
-
    if (isa<ProtocolDecl>(R)) {
       return finish();
    }

@@ -545,6 +545,15 @@ void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
       addDeclToContext(*DC, cast<NamedDecl>(D));
       checkDefaultAccessibility(cast<NamedDecl>(D));
       break;
+   case Decl::DestructuringDeclID: {
+      auto *DS = cast<DestructuringDecl>(D);
+      for (auto *V : DS->getDecls()) {
+         checkDefaultAccessibility(V);
+      }
+
+      addDeclToContext(*DC, D);
+      break;
+   }
    default:
       addDeclToContext(*DC, D);
       break;

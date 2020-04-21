@@ -610,6 +610,18 @@ public:
       {
       }
 
+      bool operator==(const iterator &RHS) const
+      {
+         return SingleElement
+                         ? SingleElement == RHS.SingleElement
+                         : IteratorBase::I == RHS.I;
+      }
+
+      bool operator!=(const iterator &RHS) const
+      {
+         return !(*this == RHS);
+      }
+
       reference operator*() const
       {
          return SingleElement ? SingleElement : IteratorBase::operator*();
