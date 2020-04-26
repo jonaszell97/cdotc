@@ -11,7 +11,7 @@
 #include "cdotc/IL/Transforms/StackPromotion.h"
 #include "cdotc/IL/Utils/BlockIterator.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Sema/SemaPass.h"
 
 #ifndef NDEBUG

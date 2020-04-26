@@ -3,7 +3,6 @@
 
 #include "cdotc/AST/ConformanceTable.h"
 #include "cdotc/AST/DeclDenseMapInfo.h"
-#include "cdotc/AST/ParentMap.h"
 #include "cdotc/AST/Type.h"
 #include "cdotc/Basic/DeclarationName.h"
 #include "cdotc/Basic/TargetInfo.h"
@@ -63,7 +62,6 @@ public:
    llvm::BumpPtrAllocator& getAllocator() const { return Allocator; }
    IdentifierTable& getIdentifiers() const { return Identifiers; }
    DeclarationNameTable& getDeclNameTable() const { return DeclNames; }
-   ParentMap& getParentMap() const { return parentMap; }
    ConformanceTable& getConformanceTable() const { return Conformances; }
 
    const TargetInfo& getTargetInfo() const { return TI; }
@@ -87,7 +85,6 @@ public:
    mutable ConstraintSet* EmptyConstraintSet = nullptr;
 
 private:
-   mutable ParentMap parentMap;
    mutable ConformanceTable Conformances;
    mutable IdentifierTable Identifiers;
    mutable DeclarationNameTable DeclNames;

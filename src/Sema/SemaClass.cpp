@@ -4,7 +4,7 @@
 #include "cdotc/Basic/DependencyGraph.h"
 #include "cdotc/IL/Constants.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ModuleFile.h"
@@ -612,8 +612,7 @@ QueryResult TypecheckMethodQuery::run()
 
 namespace {
 
-class ParamTypeVisitor : public RecursiveTypeVisitor<ParamTypeVisitor>,
-                         public RecursiveASTVisitor<ParamTypeVisitor> {
+class ParamTypeVisitor : public RecursiveTypeVisitor<ParamTypeVisitor> {
    SmallPtrSetImpl<TemplateParamDecl*>& Params;
 
 public:
@@ -635,19 +634,13 @@ public:
 
    bool visitDependentSizeArrayType(const DependentSizeArrayType* T)
    {
-      RecursiveASTVisitor::visit(T->getSizeExpr());
+      visitSpecificStatement<DeclRefExpr>([&](DeclRefExpr *E) {
+         if (auto *P = dyn_cast<TemplateParamDecl>(E->getDecl())) {
+            Params.erase(P);
+         }
+      }, T->getSizeExpr());
+
       return true;
-   }
-
-   bool visitIdentifierRefExpr(IdentifierRefExpr* E)
-   {
-      if (E->getParentExpr())
-         return false;
-
-      if (E->getKind() == IdentifierKind::TemplateParam)
-         Params.erase(E->getTemplateParam());
-
-      return false;
    }
 };
 
@@ -712,7 +705,7 @@ QueryResult PrepareInitInterfaceQuery::run()
 
       ParamTypeVisitor V(Params);
       for (auto& arg : D->getArgs()) {
-         V.RecursiveTypeVisitor::visit(arg->getType().getResolvedType());
+         V.visit(arg->getType().getResolvedType());
       }
 
       if (!Params.empty()) {

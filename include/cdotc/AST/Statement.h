@@ -2,7 +2,6 @@
 #define STATEMENT_H
 
 #include "cdotc/AST/AstNode.h"
-#include "cdotc/AST/ContinuationPoint.h"
 #include "cdotc/AST/SourceType.h"
 #include "cdotc/Basic/DeclarationName.h"
 #include "cdotc/Lex/Token.h"

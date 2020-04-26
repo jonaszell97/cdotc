@@ -6,6 +6,7 @@
 #include "cdotc/AST/Expression.h"
 #include "cdotc/AST/Statement.h"
 #include "cdotc/Lex/SourceLocation.h"
+#include "cdotc/Sema/Scope/Scope.h"
 #include "cdotc/Support/LLVM.h"
 
 #include <llvm/Bitcode/BitstreamReader.h>

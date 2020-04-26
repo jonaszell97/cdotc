@@ -573,7 +573,7 @@ il::GlobalVariable* ILGenPass::GeneratePTable(RecordDecl* R, ProtocolDecl* P)
 
       // Make sure the implementation is instantiated.
       MethodImpl
-          = cast<MethodDecl>(SP.maybeInstantiateMemberFunction(MethodImpl, P));
+          = cast<MethodDecl>(SP.maybeInstantiateMemberFunction(MethodImpl, P, true));
 
       auto* ILFn = createProtocolRequirementImplStub(M, MethodImpl);
       ILFn->setPtableOffset(Offset);

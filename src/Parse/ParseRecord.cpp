@@ -3,7 +3,7 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Lex/Lexer.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Support/Casting.h"

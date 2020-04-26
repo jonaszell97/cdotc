@@ -239,6 +239,9 @@ public:
    explicit TemplateArgList(ast::SemaPass& S, RawArgList templateArguments = {},
                             SourceLocation loc = {});
 
+   TemplateArgList(ast::SemaPass &S, FinalTemplateArgumentList &FinalList,
+                   SourceLocation loc = {});
+
    ~TemplateArgList();
 
    TemplateArgList(TemplateArgList const&) = delete;

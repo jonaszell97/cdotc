@@ -5,7 +5,7 @@
 #include "cdotc/Driver/Compiler.h"
 #include "cdotc/IL/Context.h"
 #include "cdotc/IL/Module.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Serialization/ModuleFile.h"

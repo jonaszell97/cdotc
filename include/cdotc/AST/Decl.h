@@ -2,7 +2,6 @@
 #define CDOT_NAMEDDECL_H
 
 #include "cdotc/AST/ASTVector.h"
-#include "cdotc/AST/ContinuationPoint.h"
 #include "cdotc/AST/DeclBase.h"
 #include "cdotc/AST/SourceType.h"
 #include "cdotc/Basic/Precedence.h"

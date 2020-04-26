@@ -98,11 +98,11 @@ struct CandidateSet {
 
       union {
          uintptr_t ConversionPenalty = 0;
-         uintptr_t Data1; // additional info dependent on the failure reason
+         uintptr_t Data3; // additional info dependent on the failure reason
       };
 
+      uintptr_t Data1 = 0; // additional info dependent on the failure reason
       uintptr_t Data2 = 0; // additional info dependent on the failure reason
-      uintptr_t Data3 = 0; // additional info dependent on the failure reason
 
       bool isValid() const { return FR == None; }
       operator bool() const { return isValid(); }

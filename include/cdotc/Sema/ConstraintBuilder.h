@@ -69,6 +69,9 @@ public:
 
       /// The matching candidate of the call.
       CandidateSet::Candidate* BestCand = nullptr;
+
+      /// The return type of the call.
+      QualType ReturnType;
    };
 
    /// Utility function to create a new constraint.
@@ -152,7 +155,8 @@ public:
                               llvm::raw_ostream* LogStream = nullptr);
 
    /// Register a required template parameter for the expression.
-   void registerTemplateParam(ast::TemplateParamDecl* Param);
+   void registerTemplateParam(ast::TemplateParamDecl* Param,
+                              ast::Expression *Anchor = nullptr);
 
    /// Give a hint to the constraint system that a template parameter can be
    /// defaulted to a particular value.

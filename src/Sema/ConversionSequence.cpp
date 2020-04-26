@@ -108,7 +108,7 @@ ConversionSequence::ConversionSequence(const ConversionSequenceBuilder& Builder,
    auto Steps = Builder.getSteps();
    NumSteps = (unsigned)Steps.size();
 
-   if (finalType) {
+   if (finalType && Steps.back().getKind() != CastKind::ConversionOp) {
       Steps.back().setResultType(finalType);
    }
 

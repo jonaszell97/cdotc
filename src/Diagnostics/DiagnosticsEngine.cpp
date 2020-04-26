@@ -1,4 +1,4 @@
-#include "cdotc/Message/DiagnosticsEngine.h"
+#include "cdotc/Diagnostics/DiagnosticsEngine.h"
 
 using namespace cdot;
 using namespace cdot::diag;

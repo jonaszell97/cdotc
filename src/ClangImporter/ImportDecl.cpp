@@ -50,7 +50,7 @@ DeclarationName ImporterImpl::getName(const clang::DeclarationName& Name)
    case clang::DeclarationName::CXXConstructorName:
       return Tbl.getConstructorName(getType(Name.getCXXNameType()));
    case clang::DeclarationName::CXXDestructorName:
-      return Tbl.getConstructorName(getType(Name.getCXXNameType()));
+      return Tbl.getDestructorName(getType(Name.getCXXNameType()));
    default:
       return DeclarationName();
    }
@@ -60,7 +60,6 @@ static AccessSpecifier getAccess(clang::AccessSpecifier AS)
 {
    switch (AS) {
    case clang::AccessSpecifier::AS_none:
-      return AccessSpecifier::Public;
    case clang::AccessSpecifier::AS_public:
       return AccessSpecifier::Public;
    case clang::AccessSpecifier::AS_private:

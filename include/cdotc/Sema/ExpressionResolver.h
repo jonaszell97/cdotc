@@ -1,7 +1,7 @@
 #ifndef CDOT_EXPRESSIONRESOLVER_H
 #define CDOT_EXPRESSIONRESOLVER_H
 
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include <llvm/ADT/SmallVector.h>
 
 namespace cdot {

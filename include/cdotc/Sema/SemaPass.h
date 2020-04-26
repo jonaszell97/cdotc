@@ -15,7 +15,7 @@
 #include "cdotc/Basic/Precedence.h"
 #include "cdotc/CTFE/StaticEvaluator.h"
 #include "cdotc/Driver/Compiler.h"
-#include "cdotc/Message/DiagnosticsEngine.h"
+#include "cdotc/Diagnostics/DiagnosticsEngine.h"
 #include "cdotc/Sema/ActionResult.h"
 #include "cdotc/Sema/BuiltinCandidateBuilder.h"
 #include "cdotc/Sema/CandidateSet.h"
@@ -86,10 +86,6 @@ public:
    int signaturesCompatible(CallableDecl* C1, CallableDecl* C2);
 
    ILGenPass& getILGen() { return *ILGen.get(); }
-
-   Statement* getParent(Statement* Child) const;
-   void updateParent(Statement* Child, Statement* Parent) const;
-   void createParentMap(Statement* Stmt) const;
 
    void diagnoseRedeclaration(DeclContext& Ctx,
                               DeclContext::AddDeclResultKind ResKind,
@@ -486,6 +482,9 @@ public:
    QualType CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
                                                  QualType Outer,
                                                  QualType Original);
+
+   QualType ResolveNestedAssociatedType(QualType AT,
+                                        QualType Self);
 
    template<class T, class... Args> T* makeStmt(Args&&... args)
    {

@@ -6,7 +6,7 @@
 #include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/IL/Constants.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
 
@@ -255,7 +255,7 @@ public:
          HasRuntimeParam(false), HadError(false),
          FullyInferred(templateArgs.empty()), PartiallyInferred(false)
    {
-      doInitialFill();
+      insertEmptyParams();
 
       if (!templateArgs.empty()) {
          resolveWithParameters(templateArgs);
@@ -273,7 +273,23 @@ public:
    {
    }
 
-   void doInitialFill()
+   TemplateArgListImpl(SemaPass &S,
+                       FinalTemplateArgumentList &FinalList,
+                       SourceLocation loc)
+      : SP(S), ListLoc(loc), StillDependent(FinalList.isStillDependent()),
+        HasRuntimeParam(false), HadError(false), FullyInferred(false),
+         PartiallyInferred(false)
+   {
+      ResolvedArgs.reserve(FinalList.size());
+
+      for (auto &TA : FinalList) {
+         ResolvedArgs.emplace_back(TA.clone());
+      }
+
+      Template = cast<NamedDecl>(ResolvedArgs.front().Param->getDeclContext());
+   }
+
+   void insertEmptyParams()
    {
       auto Params = getParameters();
       ResolvedArgs.resize(Params.size());
@@ -376,10 +392,6 @@ public:
    {
       if (SP.QC.PrepareDeclInterface(P))
          return;
-
-      if (Ty.toDiagString()=="Self (aka Array<T>)") {
-          NO_OP;
-      }
 
       bool IsCovariant;
       if (SP.QC.IsCovariant(IsCovariant, Ty, P->getCovariance()) || IsCovariant)
@@ -1368,6 +1380,14 @@ TemplateArgList::TemplateArgList(SemaPass& S, RawArgList templateArguments,
                                  SourceLocation loc)
     : pImpl(new TemplateArgListImpl(S, templateArguments, loc))
 {
+}
+
+TemplateArgList::TemplateArgList(SemaPass &S,
+                                 FinalTemplateArgumentList &FinalList,
+                                 SourceLocation loc)
+   : pImpl(new TemplateArgListImpl(S, FinalList, loc))
+{
+
 }
 
 TemplateArgList::~TemplateArgList() { delete pImpl; }

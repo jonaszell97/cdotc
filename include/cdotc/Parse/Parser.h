@@ -2,14 +2,13 @@
 #define CDOT_PARSER_H
 
 #include "cdotc/AST/ASTContext.h"
-#include "cdotc/AST/Attribute.h"
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/Expression.h"
 #include "cdotc/AST/Statement.h"
 #include "cdotc/AST/StmtOrDecl.h"
 #include "cdotc/Basic/Precedence.h"
 #include "cdotc/Lex/Token.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Sema/ActionResult.h"
 
 #include <llvm/ADT/PointerUnion.h>

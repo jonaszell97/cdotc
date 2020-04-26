@@ -48,11 +48,11 @@ public:
          visitChildren(T);
    }
 
+   bool visitType(Type *) { return true; }
+
 #define CDOT_TYPE(Name, Parent)                                                \
    bool visit##Name(Name* T) { return DISPATCH(Parent); }
 #include "cdotc/AST/Types.def"
-
-   bool visitType(Type*) { return true; }
 
 private:
    void visitChildren(Type* T)
@@ -72,65 +72,65 @@ private:
 
    void visitPointerTypeChildren(PointerType* T)
    {
-      return visit(T->getPointeeType());
+      static_cast<SubClass*>(this)->visit(T->getPointeeType());
    }
 
    void visitMutablePointerTypeChildren(MutablePointerType* T)
    {
-      return visit(T->getPointeeType());
+      static_cast<SubClass*>(this)->visit(T->getPointeeType());
    }
 
    void visitReferenceTypeChildren(ReferenceType* T)
    {
-      return visit(T->getReferencedType());
+      static_cast<SubClass*>(this)->visit(T->getReferencedType());
    }
 
    void visitMutableReferenceTypeChildren(MutableReferenceType* T)
    {
-      return visit(T->getReferencedType());
+      static_cast<SubClass*>(this)->visit(T->getReferencedType());
    }
 
    void visitMetaTypeChildren(cdot::MetaType* T)
    {
-      return visit(T->getUnderlyingType());
+      static_cast<SubClass*>(this)->visit(T->getUnderlyingType());
    }
 
    void visitArrayTypeChildren(ArrayType* T)
    {
-      return visit(T->getElementType());
+      static_cast<SubClass*>(this)->visit(T->getElementType());
    }
 
    void visitDependentSizeArrayTypeChildren(DependentSizeArrayType* T)
    {
-      return visit(T->getElementType());
+      static_cast<SubClass*>(this)->visit(T->getElementType());
    }
 
    void visitInferredSizeArrayTypeChildren(InferredSizeArrayType* T)
    {
-      return visit(T->getElementType());
+      static_cast<SubClass*>(this)->visit(T->getElementType());
    }
 
    void visitTupleTypeChildren(TupleType* T)
    {
       for (QualType Cont : T->getContainedTypes()) {
-         visit(Cont);
+         static_cast<SubClass*>(this)->visit(Cont);
       }
    }
 
    void visitExistentialTypeChildren(ExistentialType* T)
    {
       for (QualType Cont : T->getExistentials()) {
-         visit(Cont);
+         static_cast<SubClass*>(this)->visit(Cont);
       }
    }
 
    void visitFunctionTypeChildren(FunctionType* T)
    {
       for (QualType Cont : T->getParamTypes()) {
-         visit(Cont);
+         static_cast<SubClass*>(this)->visit(Cont);
       }
 
-      return visit(T->getReturnType());
+      static_cast<SubClass*>(this)->visit(T->getReturnType());
    }
 
    void visitLambdaTypeChildren(LambdaType* T)
@@ -151,7 +151,7 @@ private:
          return true;
       }
 
-      visit(Arg.getNonCanonicalType());
+      static_cast<SubClass*>(this)->visit(Arg.getNonCanonicalType());
       return true;
    }
 
@@ -183,7 +183,7 @@ private:
 
    void visitTemplateParamTypeChildren(TemplateParamType* T)
    {
-      return visit(T->getCovariance());
+      static_cast<SubClass*>(this)->visit(T->getCovariance());
    }
 
    void visitNestedNameSpecifier(NestedNameSpecifier* Name)
@@ -193,7 +193,7 @@ private:
 
       switch (Name->getKind()) {
       case NestedNameSpecifier::Type:
-         visit(Name->getType());
+         static_cast<SubClass*>(this)->visit(Name->getType());
          break;
       case NestedNameSpecifier::Identifier:
       case NestedNameSpecifier::Namespace:
@@ -219,16 +219,16 @@ private:
    void visitAssociatedTypeChildren(AssociatedType* T)
    {
       if (auto Outer = T->getOuterAT()) {
-         visit(Outer);
+         static_cast<SubClass*>(this)->visit(Outer);
       }
    }
 
    void visitTypedefTypeChildren(TypedefType* T)
    {
-      return visit(T->getAliasedType());
+      static_cast<SubClass*>(this)->visit(T->getAliasedType());
    }
 
-   void visitBoxTypeChildren(BoxType* T) { return visit(T->getBoxedType()); }
+   void visitBoxTypeChildren(BoxType* T) { static_cast<SubClass*>(this)->visit(T->getBoxedType()); }
 };
 
 template<class SubClass> class TypeComparer {
@@ -597,7 +597,7 @@ protected:
 
    bool visitTypedefType(TypedefType* LHS, QualType RHS)
    {
-      return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
+      return visit(LHS->getCanonicalType(), RHS);
    }
 
    bool visitBoxType(BoxType* LHS, QualType RHS)
@@ -605,6 +605,46 @@ protected:
       return compare(LHS->getCanonicalType(), RHS->getCanonicalType());
    }
 };
+
+template<class CallbackFn, class... TypeClasses>
+class SpecificTypeVisitor
+    : public RecursiveTypeVisitor<SpecificTypeVisitor<CallbackFn, TypeClasses...>> {
+   CallbackFn fn;
+
+   template<class T> void tryVisit(QualType Ty)
+   {
+      if (auto* specificNode = support::dyn_cast<T>(Ty)) {
+         this->fn(specificNode);
+      }
+   }
+
+public:
+   explicit SpecificTypeVisitor(CallbackFn&& fn) : fn(std::move(fn)) {}
+
+   bool visit(QualType Ty)
+   {
+      (tryVisit<TypeClasses>(Ty), ...);
+      RecursiveTypeVisitor<
+          SpecificTypeVisitor<CallbackFn, TypeClasses...>>::visit(Ty);
+
+      return true;
+   }
+
+   bool visit(Type *Ty)
+   {
+      (tryVisit<TypeClasses>(Ty), ...);
+      RecursiveTypeVisitor<
+         SpecificTypeVisitor<CallbackFn, TypeClasses...>>::visit(Ty);
+
+      return true;
+   }
+};
+
+template<class... TypeClasses, class CallbackFn>
+void visitSpecificType(CallbackFn&& fn, QualType Ty)
+{
+   SpecificTypeVisitor<CallbackFn, TypeClasses...>(std::move(fn)).visit(Ty);
+}
 
 } // namespace cdot
 

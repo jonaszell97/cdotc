@@ -1637,8 +1637,7 @@ QueryResult CheckTypeEquivalenceQuery::run()
 
 namespace {
 
-struct AssociatedTypeFinder
-    : public RecursiveTypeVisitor<AssociatedTypeFinder> {
+struct AssociatedTypeFinder : public RecursiveTypeVisitor<AssociatedTypeFinder> {
    explicit AssociatedTypeFinder() {}
 
    bool FoundAssociatedType = false;

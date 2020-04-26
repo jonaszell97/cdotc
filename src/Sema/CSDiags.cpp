@@ -167,8 +167,10 @@ diagnoseCovarianceFailure(ConstraintSystem& Sys, CovarianceConstraint* C,
          }
 
          auto* otherLoc = cs->getLocator();
-         auto otherElements = otherLoc->getPathElements();
+         if (!otherLoc)
+            continue;
 
+         auto otherElements = otherLoc->getPathElements();
          if (otherElements.empty()
              || otherElements.back().getKind()
                     != ConstraintLocator::ParameterType) {
@@ -614,6 +616,11 @@ static bool diagnoseFailureImpl(ConstraintSystem& Sys,
                                 ConstraintSystem::SolutionBindings& Bindings,
                                 OverloadCandidate* Cand = nullptr)
 {
+   auto* FailedConstraint = Sys.FailedConstraint;
+   if (FailedConstraint && diagnoseFailureImpl(Sys, FailedConstraint, Bindings, Cand)) {
+      return true;
+   }
+
    // Check if there was incomplete contextual information for a constraint.
    if (checkIncompleteInformation(Sys, Cand)) {
       return true;
@@ -622,12 +629,7 @@ static bool diagnoseFailureImpl(ConstraintSystem& Sys,
       return true;
    }
 
-   auto* FailedConstraint = Sys.FailedConstraint;
-   if (!FailedConstraint) {
-      return false;
-   }
-
-   return diagnoseFailureImpl(Sys, FailedConstraint, Bindings, Cand);
+   return false;
 }
 
 bool ConstraintSystem::diagnoseFailure(SolutionBindings& Bindings)
@@ -693,10 +695,63 @@ bool diagnoseAmbiguousOverloadChoice(ConstraintSystem& Sys,
    return false;
 }
 
+bool diagnoseAmbiguousInferredTemplateParam(ConstraintSystem& Sys,
+                                            const ConstraintSystem::Solution& S1,
+                                            const ConstraintSystem::Solution& S2)
+{
+   for (auto *TypeVar : Sys.getTypeVariables()) {
+      if (!Sys.representsTemplateParam(TypeVar)) {
+         continue;
+      }
+
+      auto it1 = S1.AssignmentMap.find(TypeVar);
+      auto it2 = S2.AssignmentMap.find(TypeVar);
+
+      assert(it1 != S1.AssignmentMap.end() && it2 != S2.AssignmentMap.end());
+
+      CanType T1 = it1->getSecond()->getCanonicalType();
+      CanType T2 = it2->getSecond()->getCanonicalType();
+
+      if (T1 == T2) {
+         continue;
+      }
+
+      // Get the covariance conversion constraint.
+      auto* Conv = Sys.getFirstConstraint<CovarianceConstraint>(TypeVar);
+      if (!Conv) {
+         return false;
+      }
+
+      auto* Loc = Conv->getLocator();
+      if (!Loc || Loc->getPathElements().empty()
+          || Loc->getPathElements().front().getKind()
+             != ConstraintLocator::TemplateParam) {
+         return false;
+      }
+
+      auto* Param = Loc->getPathElements().back().getTemplateParamDecl();
+      Sys.QC.Sema->diagnose(
+          err_generic_error,
+          "conflicting inferred types for template parameter "
+              + Param->getDeclName().getIdentifierInfo()->getIdentifier()
+              + " ('" + T1->toDiagString() + "' and '" + T2->toDiagString() + "')",
+          Loc->getAnchor() ? Loc->getAnchor()->getSourceLoc() : SourceLocation());
+
+      return true;
+   }
+
+   return false;
+}
+
 bool ConstraintSystem::diagnoseAmbiguity(const Solution& S1, const Solution& S2)
 {
    // Try to find an ambiguous overload choice.
    if (diagnoseAmbiguousOverloadChoice(*this, S1, S2)) {
+      return true;
+   }
+
+   // Try to find an ambiguous inferred template parameter.
+   if (diagnoseAmbiguousInferredTemplateParam(*this, S1, S2)) {
       return true;
    }
 

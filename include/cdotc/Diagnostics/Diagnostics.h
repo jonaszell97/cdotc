@@ -78,7 +78,7 @@ struct FakeSourceLocation {
 
 enum MessageKind : unsigned {
 #define CDOT_MSG(Name, Str) Name,
-#include "cdotc/Message/def/Diagnostics.def"
+#include "cdotc/Diagnostics/def/Diagnostics.def"
 };
 
 inline bool isWarning(MessageKind msg)

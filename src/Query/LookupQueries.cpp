@@ -1317,6 +1317,34 @@ QueryResult MultiLevelLookupQuery::run()
    return finish(move(Result));
 }
 
+static DeclarationName AdaptName(DeclarationNameTable &Tbl,
+                                 DeclarationName Name,
+                                 QualType CurrentExt,
+                                 ExistentialType *Ext) {
+   switch (Name.getKind()) {
+   case DeclarationName::ConstructorName:
+   case DeclarationName::BaseConstructorName: {
+      QualType T = Name.getConstructorType();
+      if (T == Ext) {
+         return Tbl.getConstructorName(
+             CurrentExt, Name.getKind() == DeclarationName::ConstructorName);
+      }
+
+      return Name;
+   }
+   case DeclarationName::DestructorName: {
+      QualType T = Name.getDestructorType();
+      if (T == Ext) {
+         return Tbl.getDestructorName(CurrentExt);
+      }
+
+      return Name;
+   }
+   default:
+      return Name;
+   }
+}
+
 QueryResult MultiLevelTypeLookupQuery::run()
 {
    MultiLevelLookupResult Result;
@@ -1334,8 +1362,9 @@ QueryResult MultiLevelTypeLookupQuery::run()
    }
    else if (auto* Ext = T->asExistentialType()) {
       for (QualType P : Ext->getExistentials()) {
+         auto AdaptedName = AdaptName(QC.Context.getDeclNameTable(), Name, P, Ext);
          const MultiLevelLookupResult* Lookup;
-         if (auto Err = QC.MultiLevelLookup(Lookup, P->getRecord(), Name, Opts))
+         if (auto Err = QC.MultiLevelLookup(Lookup, P->getRecord(), AdaptedName, Opts))
             return Query::finish(Err);
 
          if (!Lookup->empty()) {
@@ -1556,8 +1585,9 @@ QueryResult FindEquivalentDeclQuery::run()
       return finish(nullptr);
    }
 
+   auto AllDecls = MultiLevelLookupResult(*LookupRes);
    if (auto* P = dyn_cast<PropDecl>(Decl)) {
-      for (auto* Impl : LookupRes->allDecls()) {
+      for (auto* Impl : AllDecls.allDecls()) {
          auto* PropImpl = dyn_cast<PropDecl>(Impl);
          if (!PropImpl)
             continue;
@@ -1589,7 +1619,7 @@ QueryResult FindEquivalentDeclQuery::run()
    }
 
    if (auto* F = dyn_cast<FieldDecl>(Decl)) {
-      for (auto* Impl : LookupRes->allDecls()) {
+      for (auto* Impl : AllDecls.allDecls()) {
          auto* FieldImpl = dyn_cast<FieldDecl>(Impl);
          if (!FieldImpl)
             continue;
@@ -1618,7 +1648,7 @@ QueryResult FindEquivalentDeclQuery::run()
    }
 
    if (auto* Sub = dyn_cast<SubscriptDecl>(Decl)) {
-      for (auto* Impl : LookupRes->allDecls()) {
+      for (auto* Impl : AllDecls.allDecls()) {
          auto* SubImpl = dyn_cast<SubscriptDecl>(Impl);
          if (!SubImpl)
             continue;
@@ -1672,7 +1702,7 @@ QueryResult FindEquivalentDeclQuery::run()
    }
 
    if (auto* C = dyn_cast<CallableDecl>(Decl)) {
-      for (auto* Impl : LookupRes->allDecls()) {
+      for (auto* Impl : AllDecls.allDecls()) {
          if (C->getKind() != Impl->getKind())
             continue;
 

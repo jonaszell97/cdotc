@@ -466,8 +466,9 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile,
       auto* S = support::dyn_cast<SubscriptDecl>(this);
       C = S->getGetterMethod();
 
-      if (!C)
+      if (!C) {
          C = S->getSetterMethod();
+      }
    }
 
    if (C && includeSignatures) {

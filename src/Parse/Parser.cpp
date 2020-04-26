@@ -7,7 +7,7 @@
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Basic/Variant.h"
 #include "cdotc/Lex/Lexer.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/ModuleManager.h"
 #include "cdotc/Sema/Builtin.h"
 #include "cdotc/Sema/SemaPass.h"
@@ -1354,12 +1354,15 @@ ParseResult Parser::parseIdentifierExpr(bool parsingType, bool parseSubExpr,
       Ident = currentTok().getIdentifierInfo();
    }
 
-   if (Ident == Ident___nullptr)
+   if (Ident == Ident___nullptr) {
       return BuiltinIdentExpr::Create(Context, BeginLoc,
                                       BuiltinIdentifier::NULLPTR);
-   if (Ident == Ident___builtin_void)
+   }
+
+   if (Ident == Ident___builtin_void) {
       return BuiltinIdentExpr::Create(Context, BeginLoc,
                                       BuiltinIdentifier::__builtin_void);
+   }
 
    Expression* IdentExpr;
    if (Ident == Ident_Self) {
@@ -2023,8 +2026,23 @@ ParseResult Parser::parseUnaryExpr()
       SourceLocation IdentLoc = currentTok().getSourceLoc();
       DeclarationName Ident = currentTok().getIdentifierInfo();
 
-      Expression* IdentExpr
-          = new (Context) IdentifierRefExpr(IdentLoc, nullptr, Ident);
+      Expression *IdentExpr;
+      if (Ident == Ident___nullptr) {
+         IdentExpr = BuiltinIdentExpr::Create(
+             Context, IdentLoc, BuiltinIdentifier::NULLPTR);
+      }
+      else if (Ident == Ident___builtin_void) {
+         IdentExpr =  BuiltinIdentExpr::Create(
+             Context, IdentLoc, BuiltinIdentifier::__builtin_void);
+      }
+      else if (Ident == Ident_Self) {
+         IdentExpr = SelfExpr::Create(
+             Context, currentTok().getSourceLoc(), true);
+      }
+      else {
+         IdentExpr = new (Context)
+             IdentifierRefExpr(IdentLoc, nullptr, Ident);
+      }
 
       // If a template argument list follows, parse that first.
       if (lookahead(false, true).is(tok::smaller)) {
@@ -3409,7 +3427,7 @@ void Parser::parseFuncArgs(SourceLocation& varargLoc,
          ArgName = Context.getDeclNameTable().getNormalIdentifier(*II);
       }
 
-      auto argDecl = FuncArgDecl::Create(Context, OwnershipLoc, NameLoc,
+      auto argDecl = FuncArgDecl::Create(Context, OwnershipLoc, ColonLoc,
                                          ArgName, ArgLabel, Conv, argType,
                                          defaultVal, templateArgExpansion,
                                          /*cstyleVararg=*/false);
