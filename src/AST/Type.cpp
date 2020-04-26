@@ -4,7 +4,7 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/TypeVisitor.h"
 #include "cdotc/IL/Constant.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/StringSwitch.h"
 
@@ -934,15 +934,9 @@ public:
 
    void visitTemplateParamType(const TemplateParamType* Ty)
    {
-//      auto Cov = cast<TemplateParamType>(Ty)->getCovariance();
-      OS << Ty->getTemplateParamTypeName(); // << ": ";
-
-//      if (!Cov->isUnknownAnyType()) {
-//         visit(Cov);
-//      }
-//      else {
-//         OS << "?";
-//      }
+      OS << cast<NamedDecl>(Ty->getParam()->getDeclContext())->getFullName(false)
+         << '.'
+         << Ty->getTemplateParamTypeName();
    }
 
    void visitTypedefType(const TypedefType* Ty)
@@ -1012,8 +1006,8 @@ public:
          case ArgumentConvention::ImmutableRef:
             OS << "ref ";
             break;
-         default:
-            llvm_unreachable("bad argument convention");
+         case ArgumentConvention::Default:
+            break;
          }
 
          visit(arg);

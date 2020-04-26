@@ -1392,7 +1392,6 @@ bool MemberRefExpr::needsMemberRefExpr(Decl::DeclKind K)
    case Decl::PropDeclID:
    case Decl::SubscriptDeclID:
    case Decl::FieldDeclID:
-   case Decl::EnumCaseDeclID:
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:

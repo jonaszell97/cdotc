@@ -124,19 +124,35 @@ public:
       return true;
    }
 
-   std::pair<llvm::SmallVector<T, 8>, bool> constructOrderedList()
+   std::pair<llvm::SmallVector<T, 8>, bool>
+   constructOrderedList(bool nonDestructive = false)
    {
       std::pair<llvm::SmallVector<T, 8>, bool> res;
-      res.second = getEvaluationOrder(res.first);
+      res.second = nonDestructive
+          ? getEvaluationOrderNonDestructive(res.first)
+          : getEvaluationOrder(res.first);
 
       return res;
    }
 
+   bool constructOrderedList(llvm::SmallVectorImpl<T> &Order,
+                             bool nonDestructive = false)
+   {
+      return nonDestructive
+         ? getEvaluationOrderNonDestructive(Order)
+         : getEvaluationOrder(Order);
+   }
+
    std::pair<T, T> getOffendingPair()
    {
-      for (auto& vert : Vertices)
-         if (!vert->getOutgoing().empty())
+      auto valid = constructOrderedList(false);
+      assert(!valid.second && "order is valid");
+
+      for (auto& vert : Vertices) {
+         if (!vert->getOutgoing().empty()) {
             return {vert->getPtr(), (*vert->getOutgoing().begin())->getPtr()};
+         }
+      }
 
       llvm_unreachable("order is valid!");
    }
@@ -175,6 +191,7 @@ public:
    }
 
    bool empty() const { return Vertices.empty(); }
+   size_t size() const { return Vertices.size(); }
 
 #ifndef NDEBUG
    template<class PrintFn> void print(const PrintFn& Fn,
@@ -194,7 +211,7 @@ public:
 #endif
 
 private:
-   bool getEvaluationOrder(llvm::SmallVector<T, 8>& Order)
+   bool getEvaluationOrder(llvm::SmallVectorImpl<T> &Order)
    {
       llvm::SmallSetVector<Vertex*, 4> VerticesWithoutIncomingEdges;
       for (auto& vert : Vertices)
@@ -214,6 +231,44 @@ private:
 
             if (out->getIncoming().empty())
                VerticesWithoutIncomingEdges.insert(out);
+         }
+
+         ++cnt;
+      }
+
+      return cnt == Vertices.size();
+   }
+
+   bool getEvaluationOrderNonDestructive(llvm::SmallVectorImpl<T> &Order)
+   {
+      llvm::DenseMap<Vertex*, llvm::SetVector<Vertex*>> Outgoing;
+      llvm::DenseMap<Vertex*, llvm::SetVector<Vertex*>> Incoming;
+
+      llvm::SmallSetVector<Vertex*, 4> VerticesWithoutIncomingEdges;
+      for (auto& vert : Vertices) {
+         if (vert->getIncoming().empty()) {
+            VerticesWithoutIncomingEdges.insert(vert);
+         }
+
+         Outgoing[vert] = vert->getOutgoing();
+         Incoming[vert] = vert->getIncoming();
+      }
+
+      size_t cnt = 0;
+      while (!VerticesWithoutIncomingEdges.empty()) {
+         auto vert = *VerticesWithoutIncomingEdges.begin();
+         VerticesWithoutIncomingEdges.remove(vert);
+
+         Order.push_back(vert->getPtr());
+
+         while (!Outgoing[vert].empty()) {
+            auto out = *Outgoing[vert].begin();
+            Outgoing[vert].remove(out);
+            Incoming[out].remove(vert);
+
+            if (Incoming[out].empty()) {
+               VerticesWithoutIncomingEdges.insert(out);
+            }
          }
 
          ++cnt;

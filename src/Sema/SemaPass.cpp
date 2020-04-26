@@ -6,7 +6,7 @@
 #include "cdotc/IL/Constants.h"
 #include "cdotc/IL/GlobalVariable.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
@@ -188,21 +188,6 @@ SemaPass::DeclScopeRAII::DeclScopeRAII(SemaPass& SP, DeclContext* Ctx)
    SP.DeclCtx = Ctx;
    SP.clearState();
    SP.typeSubstitutions.clear();
-}
-
-Statement* SemaPass::getParent(Statement* Child) const
-{
-   return getContext().getParentMap().getParent(Child);
-}
-
-void SemaPass::updateParent(Statement* Child, Statement* Parent) const
-{
-   getContext().getParentMap().updateParent(Child, Parent);
-}
-
-void SemaPass::createParentMap(Statement* Stmt) const
-{
-   getContext().getParentMap().updateParentMap(Stmt);
 }
 
 TemplateInstantiator& SemaPass::getInstantiator() const
@@ -869,7 +854,7 @@ static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
             return true;
          }
       }
-      if (Sema.getInstantiator().isShallowInstantiation(RT->getRecord())) {
+      if (RT->getRecord()->isInstantiation()) {
          if (Sema.UncheckedConformanceExists(
                  RT->getRecord()->getSpecializedTemplate(), Proto)) {
             return true;
@@ -951,11 +936,11 @@ Expression* SemaPass::implicitCastIfNecessary(
     SourceLocation DiagLoc, SourceRange DiagRange, bool* hadError)
 {
    auto originTy = Expr->getExprType();
-   if (originTy->isDependentType() || destTy->isDependentType())
+   if (originTy->isDependentType() || destTy->isDependentType()) {
       return Expr;
+   }
 
    auto ConvSeq = getConversionSequence(originTy, destTy);
-
    if (ConvSeq.isDependent()) {
       Expr->setIsTypeDependent(true);
       return Expr;
@@ -1005,7 +990,9 @@ Expression* SemaPass::implicitCastIfNecessary(
       }
    }
 
-   auto* Seq = ConversionSequence::Create(Context, ConvSeq, destTy);
+   auto* Seq = ConversionSequence::Create(
+       Context, ConvSeq, ConvSeq.getSteps().back().getResultType());
+
    auto Cast = ImplicitCastExpr::Create(Context, Expr, Seq);
    auto Res = visitExpr(Cast);
    (void)Res;
@@ -1027,7 +1014,6 @@ Expression* SemaPass::forceCast(Expression* Expr, QualType destTy)
 
    auto* Seq = ConversionSequence::Create(Context, ConvSeq);
    auto Cast = ImplicitCastExpr::Create(Context, Expr, Seq);
-   updateParent(Expr, Cast);
 
    auto Res = visitExpr(Cast);
    (void)Res;
@@ -1047,7 +1033,6 @@ Expression* SemaPass::castToRValue(Expression* Expr)
 
    auto* Seq = ConversionSequence::Create(Context, ConvSeq);
    auto Cast = ImplicitCastExpr::Create(Context, Expr, Seq);
-   updateParent(Expr, Cast);
 
    auto Res = visitExpr(Cast);
    (void)Res;
@@ -1675,87 +1660,72 @@ StmtResult SemaPass::visitForStmt(ForStmt* Stmt)
    return Stmt;
 }
 
+static CallExpr *FindFunction(SemaPass &SP, DeclarationName Name,
+                              Expression *SelfExpr, StmtOrDecl DepStmt)
+{
+   auto *Ident = new(SP.Context) IdentifierRefExpr(SelfExpr->getSourceRange(), SelfExpr, Name);
+   auto *GetIteratorCall = AnonymousCallExpr::Create(
+       SP.Context, SelfExpr->getSourceRange(), Ident,
+       {}, {});
+
+   auto GetIteratorResult = SP.typecheckExpr(GetIteratorCall, SourceType(), DepStmt);
+   if (!GetIteratorResult) {
+      return nullptr;
+   }
+
+   return cast<CallExpr>(GetIteratorResult.get());
+}
+
 static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
 {
    auto RangeResult
        = SP.typecheckExpr(Stmt->getRangeExpr(), SourceType(), Stmt);
+
    if (!RangeResult)
       return TypeError();
 
-   QualType RangeTy = RangeResult.get()->getExprType();
-   if (RangeTy->isUnknownAnyType()) {
-      Stmt->setIsTypeDependent(true);
-      return TypeError();
-   }
-
    Stmt->setRangeExpr(RangeResult.get());
 
-   auto* II = &SP.getContext().getIdentifiers().get("getIterator");
-   auto GetIteratorResult
-       = SP.lookupFunction(II, Stmt->getRangeExpr(), {}, {}, {}, Stmt);
+   // Find the 'getIterator' function.
+   auto *GetIteratorExpr = FindFunction(
+       SP,  &SP.getContext().getIdentifiers().get("getIterator"),
+       Stmt->getRangeExpr(), Stmt);
 
-   if (GetIteratorResult.isDependent()) {
-      Stmt->setIsTypeDependent(true);
-      return TypeError();
-   }
-
-   if (!GetIteratorResult)
-      return TypeError();
-
-   auto GetIteratorFn = GetIteratorResult.getBestMatch().getFunc();
+   auto GetIteratorFn = GetIteratorExpr->getFunc();
    assert(GetIteratorFn && "Iterable conformance not correctly checked");
 
-   if (isa<MethodDecl>(GetIteratorFn)
-       && GetIteratorFn->getRecord()->isProtocol()) {
-      Stmt->setIsTypeDependent(true);
-      return TypeError();
-   }
-
-   auto RangeExpr = GetIteratorResult.ResolvedArgs.front();
+   auto RangeExpr = GetIteratorExpr->getArgs().front();
    Stmt->setRangeExpr(RangeExpr);
-
-   if (auto M = dyn_cast<MethodDecl>(GetIteratorFn))
-      SP.maybeInstantiateMemberFunction(M, Stmt);
-
    Stmt->setGetIteratorFn(GetIteratorFn);
 
-   II = &SP.getContext().getIdentifiers().get("next");
-   auto Iterator = GetIteratorFn->getReturnType();
+   auto Iterator = GetIteratorExpr->getExprType();
 
-   // the 'next' function is allowed to be mutating, so fake up a mutable
-   // reference to the iterator
+   // The 'next' function is allowed to be mutating, so fake up a mutable
+   // reference to the iterator.
    auto ItExpr = BuiltinExpr::CreateTemp(
        SP.getContext().getMutableReferenceType(Iterator));
 
    Expression* ItExprPtr = &ItExpr;
-   auto NextRes = SP.lookupFunction(II, ItExprPtr, {}, {}, {}, Stmt);
+   auto *NextCallExpr = FindFunction(
+       SP, &SP.getContext().getIdentifiers().get("next"),
+       ItExprPtr, Stmt);
 
-   if (NextRes.isDependent()) {
-      Stmt->setIsTypeDependent(true);
+   if (!NextCallExpr) {
       return TypeError();
    }
 
-   if (!NextRes) {
-      return TypeError();
-   }
-
-   auto NextFn = NextRes.getBestMatch().getFunc();
-   if (auto M = dyn_cast<MethodDecl>(NextFn))
-      SP.maybeInstantiateMemberFunction(M, Stmt);
-
+   auto NextFn = NextCallExpr->getFunc();
    Stmt->setNextFn(NextFn);
 
-   auto OptionType = NextFn->getReturnType();
+   auto OptionType = NextCallExpr->getExprType();
    auto Option = OptionType->getRecord();
 
    bool valid = false;
-   if (Option->isInstantiation()) {
-      if (Option->getSpecializedTemplate() == SP.getOptionDecl())
-         valid = true;
+   if (Option->isInstantiation() && Option->getSpecializedTemplate() == SP.getOptionDecl()) {
+      valid = true;
    }
    else if (Option == SP.getOptionDecl()) {
-      Stmt->setIsTypeDependent(true);
-      return QualType(SP.getContext().getUnknownAnyTy());
+      valid = true;
    }
 
    if (!valid) {
@@ -1765,7 +1735,47 @@ static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
       return TypeError();
    }
 
-   return Option->getTemplateArgs().front().getType();
+   QualType ResultType;
+   if (auto *AT = Iterator->asAssociatedType()) {
+      const MultiLevelLookupResult *ElementLookup;
+      if (SP.QC.MultiLevelTypeLookup(ElementLookup,
+             AT->getDecl()->getCovariance(),
+             &SP.Context.getIdentifiers().get("Element"))) {
+         return TypeError();
+      }
+
+      assert(!ElementLookup->empty() && "IteratorProtocol not correctly implemented!");
+
+      ResultType = SP.Context.getAssociatedType(
+          cast<AssociatedTypeDecl>(ElementLookup->front().front()),
+          Iterator);
+   }
+   else if (auto *P = Iterator->asTemplateParamType()) {
+      const MultiLevelLookupResult *ElementLookup;
+      if (SP.QC.MultiLevelTypeLookup(ElementLookup,
+                                     P->getParam()->getCovariance(),
+                                     &SP.Context.getIdentifiers().get("Element"))) {
+         return TypeError();
+      }
+
+      assert(!ElementLookup->empty() && "IteratorProtocol not correctly implemented!");
+
+      ResultType = SP.Context.getAssociatedType(
+          cast<AssociatedTypeDecl>(ElementLookup->front().front()),
+          Iterator);
+   }
+   else {
+      NamedDecl *Element;
+      if (SP.QC.LookupSingle(Element, Iterator->getRecord(),
+                             &SP.Context.getIdentifiers().get("Element"))) {
+         return TypeError();
+      }
+
+      assert(Element && "IteratorProtocol not correctly implemented!");
+      ResultType = cast<AliasDecl>(Element)->getType()->removeMetaType();
+   }
+
+   return SP.ApplyCapabilities(ResultType);
 }
 
 StmtResult SemaPass::visitForInStmt(ForInStmt* Stmt)
@@ -2237,7 +2247,7 @@ static ExprResult LookupInitializableByDecl(
       for (auto ET : Ext->getExistentials()) {
          bool Conforms = Sema.ConformsTo(ET, InitializableByDecl);
          if (Conforms) {
-            ConformingRec = RT->getRecord();
+            ConformingRec = ET->getRecord();
             break;
          }
       }
@@ -3261,13 +3271,9 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt* Stmt)
             if (auto* I = dyn_cast<IntegerLiteral>(Expr)) {
                IntegralSwitch &= I->getExprType()->isIntegerType();
             }
-            else if (auto* declRef = dyn_cast<MemberRefExpr>(Expr)) {
-               Case = dyn_cast<EnumCaseDecl>(declRef->getMemberDecl());
+            else if (auto* declRef = dyn_cast<DeclRefExpr>(Expr)) {
+               Case = dyn_cast<EnumCaseDecl>(declRef->getDecl());
                IntegralSwitch &= (Case != nullptr);
-            }
-            else if (auto* EC = dyn_cast<EnumCaseExpr>(Expr)) {
-               IntegralSwitch &= EC->getArgs().empty();
-               Case = EC->getCase();
             }
             else {
                IntegralSwitch = false;
@@ -3313,7 +3319,7 @@ StmtResult SemaPass::visitCaseStmt(CaseStmt* Stmt, MatchStmt* Match)
    auto pattern = Stmt->getPattern();
    pattern->setContextualType(matchType);
 
-   visitPatternExpr(Match, pattern, matchExpr);
+   Stmt->setPattern(visitPatternExpr(Match, pattern, matchExpr));
    Stmt->copyStatusFlags(pattern);
 
    return Stmt;
@@ -3376,11 +3382,11 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 
    // Convert enum case expressions to a CasePattern.
    CasePattern* casePattern = nullptr;
-   if (auto* memberRef = dyn_cast<MemberRefExpr>(resultExpr)) {
-      if (auto* EC = dyn_cast<EnumCaseDecl>(memberRef->getMemberDecl())) {
+   if (auto* memberRef = dyn_cast<DeclRefExpr>(resultExpr)) {
+      if (auto* EC = dyn_cast<EnumCaseDecl>(memberRef->getDecl())) {
          casePattern = CasePattern::Create(
              Context, Expr->getSourceRange(), CasePattern::K_EnumOrStruct,
-             memberRef->getParentExpr(),
+             BuiltinExpr::Create(Context, Context.getMetaType(EC->getRecord()->getType())),
              EC->getDeclName().getIdentifierInfo(), {});
       }
    }
@@ -3391,8 +3397,8 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 
          casePattern = CasePattern::Create(
              Context, Expr->getSourceRange(), CasePattern::K_EnumOrStruct,
-             memberRef->getParentExpr(),
-             EC->getDeclName().getIdentifierInfo(), resultVec);
+             Call->getParentExpr(), EC->getDeclName().getIdentifierInfo(),
+             resultVec);
       }
    }
 
@@ -3857,7 +3863,7 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
 
    // Check that the returned value is compatible with the declared return type.
    if (auto retVal = Stmt->getReturnValue()) {
-       auto result = typecheckExpr(retVal, declaredReturnType, Stmt);
+      auto result = typecheckExpr(retVal, declaredReturnType, Stmt);
       if (!result) {
          return Stmt;
       }
@@ -4786,10 +4792,10 @@ ExprResult SemaPass::visitVariadicExpansionExpr(VariadicExpansionExpr* Expr)
    }
 
    expandedExpr = rebuiltExpr.get();
-   Expr->setExprType(Context.getEmptyTupleType());
+   Expr->setExprType(expandedExpr->getExprType());
 
    // Find all referenced variadic parameters.
-   SmallVector<std::pair<NamedDecl*, NamedDecl*>, 2> foundVariadicDecls;
+   SmallVector<std::pair<NamedDecl*, std::pair<Expression*, NamedDecl*>>, 2> foundVariadicDecls;
 
    visitSpecificStatement<DeclRefExpr, MemberRefExpr>(
        [&](Expression* expr) {
@@ -4805,7 +4811,8 @@ ExprResult SemaPass::visitVariadicExpansionExpr(VariadicExpansionExpr* Expr)
           }
 
           cast<DeclRefExpr>(expr)->setDecl(elementDecl);
-          foundVariadicDecls.emplace_back(parameterPack, elementDecl);
+          foundVariadicDecls.emplace_back(parameterPack,
+                                          std::make_pair(expr, elementDecl));
        },
        expandedExpr);
 
@@ -4820,14 +4827,14 @@ ExprResult SemaPass::visitVariadicExpansionExpr(VariadicExpansionExpr* Expr)
    VariadicExpansionExpr* currentExpr = Expr;
    for (int i = 0; i < foundVariadicDecls.size(); ++i) {
       currentExpr->setParameterPack(foundVariadicDecls[i].first);
-      currentExpr->setElementDecl(foundVariadicDecls[i].second);
+      currentExpr->setElementDecl(foundVariadicDecls[i].second.second);
 
       if (i > 0) {
          currentExpr = VariadicExpansionExpr::Create(
              Context, Expr->getEllipsisLoc(), currentExpr);
 
          currentExpr->setSemanticallyChecked(true);
-         currentExpr->setExprType(Context.getEmptyTupleType());
+         currentExpr->setExprType(foundVariadicDecls[i].second.first->getExprType());
       }
    }
 

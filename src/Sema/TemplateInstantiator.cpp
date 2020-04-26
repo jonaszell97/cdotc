@@ -5,7 +5,7 @@
 #include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/IL/Constants.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
@@ -469,14 +469,9 @@ public:
       return Context.getRecordType(Inst);
    }
 
-   const TemplateArgument* hasTemplateArg(DeclarationName Name)
-   {
-      return templateArgs.getNamedArg(Name);
-   }
-
    const TemplateArgument* hasTemplateArg(TemplateParamDecl* P)
    {
-      return templateArgs.getNamedArg(P->getDeclName());
+      return templateArgs.getArgForParam(P);
    }
 
    struct SubstContextRAII {
@@ -3401,96 +3396,6 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
    return Inst;
 }
 
-static bool InstantiateAssociatedTypeImpls(QueryContext &QC,
-                                           TemplateInstantiator &Instantiator,
-                                           RecordDecl *Template,
-                                           RecordDecl *Inst)
-{
-   ArrayRef<AssociatedTypeDecl*> NeededATs;
-   if (QC.GetNeededAssociatedTypes(NeededATs, Template)) {
-      return true;
-   }
-
-   for (auto *AT : NeededATs) {
-      auto *Impl = QC.Context.getProtocolImpl(Template, AT);
-      assert(Impl && "associated type not implemented!");
-
-      if (!Instantiator.InstantiateTemplateMember(Impl, Inst)) {
-         return true;
-      }
-   }
-
-   return false;
-}
-
-static bool InstantiateConformances(QueryContext &QC,
-                                    RecordDecl *Template,
-                                    RecordDecl *Inst)
-{
-   QualType Self = QC.Context.getRecordType(Inst);
-
-   auto &ConfTable = QC.Context.getConformanceTable();
-   for (auto *Conf : ConfTable.getAllConformances(Template)) {
-      if (Conf->isConditional()) {
-         auto *CS = Conf->getConstraints();
-
-         bool include = true;
-         for (auto *C : *CS) {
-            if (QC.IsConstraintSatisfied(include, C, Self, Inst)) {
-               return true;
-            }
-
-            if (!include) {
-               break;
-            }
-         }
-
-         if (!include) {
-            continue;
-         }
-      }
-
-      ConfTable.addConformance(QC.Context, ConformanceKind::Explicit, Inst,
-                               Conf->getProto(), Conf->getDeclarationCtx(),
-                               nullptr, Conf->getDepth());
-   }
-
-   return false;
-}
-
-static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
-{
-   string result = "[";
-
-   ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypes;
-   QC.GetNeededAssociatedTypes(NeededAssociatedTypes, Rec);
-
-   auto extensions = Rec->getExtensions();
-
-   int i = 0;
-   for (auto *AT : NeededAssociatedTypes) {
-      if (i++ != 0)
-         result += ", ";
-
-      result += AT->getDeclName().getIdentifierInfo()->getIdentifier();
-      result += " = ";
-
-      AliasDecl *Impl;
-      QC.GetAssociatedTypeImpl(Impl, Rec, AT->getDeclName(), extensions);
-      if (!Impl) {
-         assert(Rec->isInvalid());
-         result += "???";
-         continue;
-      }
-
-      QC.PrepareDeclInterface(Impl);
-      result += Impl->getType()->removeMetaType()->toDiagString();
-   }
-
-   result += "]";
-   return result;
-}
-
 bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
 {
    bool wasShallow = ShallowInstantiations.remove(Inst);
@@ -3583,34 +3488,14 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
       }
    }
 
-   if (wasShallow) {
-      // Instantiate associated types.
-      if (InstantiateAssociatedTypeImpls(QC, *this, Template, Inst)) {
-         return true;
-      }
-
-      // Instantiate conformances.
-      if (InstantiateConformances(QC, Template, Inst)) {
-         return true;
-      }
-
-      LOG(AssociatedTypeImpls, Inst->getFullName(), " ", PrintAssociatedTypes(QC, Inst));
-
-      // Check conformances.
-      if (QC.CheckConformances(QC.Context.getRecordType(Inst))) {
-         return true;
-      }
-
-      LOG(ProtocolConformances, Inst->getFullName(), " ✅");
-   }
-   else {
+   if (!wasShallow) {
       if (QC.Sema->PrepareNameLookup(Inst)) {
          return true;
       }
+   }
 
-      if (QC.TypecheckDecl(Inst)) {
-         return true;
-      }
+   if (QC.TypecheckDecl(Inst)) {
+      return true;
    }
 
    QC.Sema->updateLookupLevel(Inst, LookupLevel::Complete);

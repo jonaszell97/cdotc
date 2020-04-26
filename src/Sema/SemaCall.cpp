@@ -2,7 +2,7 @@
 
 #include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
 #include "cdotc/Sema/OverloadResolver.h"
@@ -378,7 +378,7 @@ void SemaPass::maybeInstantiate(CandidateSet::Candidate& Cand,
       MethodDecl* Inst = Instantiator->InstantiateMethod(
          cast<MethodDecl>(Cand.getFunc()), FinalList, Caller->getSourceLoc());
 
-      if (QC.PrepareDeclInterface(Inst)) {
+      if (!Inst || QC.PrepareDeclInterface(Inst)) {
          return;
       }
 
@@ -410,7 +410,18 @@ SemaPass::maybeInstantiateMemberFunction(CallableDecl* Fn, StmtOrDecl Caller,
       FnInfo->loadBody(Template);
    }
 
-   Instantiator->InstantiateFunctionBody(Fn);
+   if (NeedImmediateInstantiation) {
+      size_t prevSize = QueuedInstantiations.size();
+      Instantiator->InstantiateFunctionBody(Fn);
+
+      for (size_t i = prevSize; i < QueuedInstantiations.size(); ++i) {
+         Instantiator->InstantiateFunctionBody(QueuedInstantiations[i]);
+      }
+   }
+   else {
+      QueuedInstantiations.insert(Fn);
+   }
+
    return Fn;
 }
 
@@ -544,35 +555,37 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
       return Call;
    }
 
-   QualType ExprType;
-   if (auto* F = dyn_cast<FunctionDecl>(C)) {
-      ExprType = F->getReturnType();
-   }
-   else if (auto* Case = dyn_cast<EnumCaseDecl>(C)) {
-      ExprType = Context.getRecordType(Case->getRecord());
-   }
-   else {
-      auto M = cast<MethodDecl>(C);
-      if (M->isCompleteInitializer()) {
-         ExprType = Context.getRecordType(M->getRecord());
+   if (!Call->getExprType()) {
+      QualType ExprType;
+      if (auto* F = dyn_cast<FunctionDecl>(C)) {
+         ExprType = F->getReturnType();
       }
-      else if (M->isStatic()) {
-         ExprType = M->getReturnType();
+      else if (auto* Case = dyn_cast<EnumCaseDecl>(C)) {
+         ExprType = Context.getRecordType(Case->getRecord());
       }
       else {
-         ExprType = M->getReturnType();
+         auto M = cast<MethodDecl>(C);
+         if (M->isCompleteInitializer()) {
+            ExprType = Context.getRecordType(M->getRecord());
+         }
+         else if (M->isStatic()) {
+            ExprType = M->getReturnType();
+         }
+         else {
+            ExprType = M->getReturnType();
+         }
       }
-   }
 
-   if (C->isTemplate()) {
-      if (QC.SubstTemplateParamTypes(ExprType, ExprType,
-                                     *Call->getTemplateArgs(),
-                                     Call->getSourceRange())) {
-         Call->setIsInvalid(true);
+      if (C->isTemplate()) {
+         if (QC.SubstTemplateParamTypes(ExprType, ExprType,
+                                        *Call->getTemplateArgs(),
+                                        Call->getSourceRange())) {
+            Call->setIsInvalid(true);
+         }
       }
-   }
 
-   Call->setExprType(ExprType);
+      Call->setExprType(ExprType);
+   }
 
    unsigned i = 0;
    MutableArrayRef<FuncArgDecl*> params = C->getArgs();

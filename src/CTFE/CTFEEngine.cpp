@@ -12,7 +12,7 @@
 #include "cdotc/IL/Module.h"
 #include "cdotc/IL/Passes/VerifierPass.h"
 #include "cdotc/ILGen/ILGenPass.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Sema/Builtin.h"
 #include "cdotc/Sema/SemaPass.h"

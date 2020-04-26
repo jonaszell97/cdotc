@@ -74,11 +74,11 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         src/AST/AstNode.cpp include/cdotc/AST/AstNode.h src/AST/Statement.cpp include/cdotc/AST/Statement.h
         src/AST/Expression.cpp include/cdotc/AST/Expression.h src/Sema/SemaPass.cpp include/cdotc/Sema/SemaPass.h
         src/AST/Type.cpp include/cdotc/AST/ASTVector.h src/ClangImporter/ImportExpr.cpp
-        include/cdotc/AST/Type.h include/cdotc/AST/Attribute.h src/AST/Attribute.cpp
+        include/cdotc/AST/Type.h
         include/cdotc/Sema/Builtin.h src/Driver/Compiler.cpp include/cdotc/Driver/Compiler.h src/Sema/SemaDecl.cpp
-        src/Message/Diagnostics.cpp include/cdotc/Message/Diagnostics.h
-        include/cdotc/Message/def/DiagnosticParser.h include/cdotc/AST/AstDeclarations.h src/Parse/ParseRecord.cpp
-        src/ILGen/DebugInfo.cpp include/cdotc/ILGen/DebugInfo.h include/cdotc/Basic/FileUtils.h src/Basic/FileUtils.cpp
+        src/Diagnostics/Diagnostics.cpp include/cdotc/Diagnostics/Diagnostics.h
+        include/cdotc/Diagnostics/def/DiagnosticParser.h include/cdotc/AST/AstDeclarations.h src/Parse/ParseRecord.cpp
+        include/cdotc/Basic/FileUtils.h src/Basic/FileUtils.cpp
         src/Basic/FileManager.cpp include/cdotc/Basic/FileManager.h src/Sema/SemaClass.cpp src/Sema/SemaMemberExpr.cpp
         src/Sema/SemaCall.cpp src/Sema/SemaOperator.cpp src/Sema/SemaTemplate.cpp src/Sema/OverloadResolver.cpp
         include/cdotc/Sema/OverloadResolver.h include/cdotc/Lex/SourceLocation.h src/IL/Value.cpp include/cdotc/IL/Value.h
@@ -94,7 +94,7 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         include/cdotc/IL/ValueSymbolTable.h include/cdotc/IL/SymbolTableList.h src/Sema/ExpressionResolver.cpp
         include/cdotc/Sema/ExpressionResolver.h include/cdotc/Basic/CastKind.h src/Basic/CastKind.cpp src/Module/ModuleManager.cpp
         include/cdotc/Module/ModuleManager.h src/Module/Module.cpp src/Module/Module.cpp include/cdotc/Module/Module.h
-        include/cdotc/Support/WriterBase.h include/cdotc/Lex/Persist.h src/Sema/TemplateInstantiator.cpp
+        include/cdotc/Support/WriterBase.h src/Sema/TemplateInstantiator.cpp
         include/cdotc/Sema/TemplateInstantiator.h src/IRGen/IRGen.cpp include/cdotc/IRGen/IRGen.h src/IRGen/IRGenModule.cpp
         include/cdotc/Basic/Precedence.h src/IRGen/DIGen.cpp include/cdotc/Basic/DependencyGraph.h
         src/Sema/ConformanceChecker.cpp src/CTFE/CTFEEngine.cpp include/cdotc/CTFE/CTFEEngine.h include/cdotc/CTFE/Value.h
@@ -102,19 +102,19 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         include/cdotc/AST/PrettyPrinter.h src/Basic/Mangle.cpp include/cdotc/Basic/Mangle.h include/cdotc/Support/LLVM.h src/AST/ASTContext.cpp
         include/cdotc/AST/ASTContext.h include/cdotc/AST/Decl.h include/cdotc/Support/ConditionalIterator.h src/AST/Decl.cpp
         src/Sema/Scope/Scope.cpp include/cdotc/Sema/Scope/Scope.h src/Basic/IdentifierInfo.cpp include/cdotc/Basic/IdentifierInfo.h
-        include/cdotc/Lex/TokenKinds.h include/cdotc/Lex/Preprocessor.h src/Lex/Preprocessor.cpp src/Basic/Precedence.cpp
-        src/AST/ParentMap.cpp include/cdotc/AST/ParentMap.h include/cdotc/AST/ASTVisitor.h
+        include/cdotc/Lex/TokenKinds.h src/Basic/Precedence.cpp
+        include/cdotc/AST/ASTVisitor.h
         src/CTFE/StaticEvaluator.cpp include/cdotc/CTFE/StaticEvaluator.h src/AST/ASTDumper.cpp include/cdotc/AST/ASTDumper.h src/Support/LiteralParser.cpp
         include/cdotc/Support/LiteralParser.h include/cdotc/Sema/CandidateSet.h src/Sema/CandidateSet.cpp src/Sema/BuiltinCandidateBuilder.cpp
         include/cdotc/Sema/BuiltinCandidateBuilder.h include/cdotc/Sema/ActionResult.h src/Sema/ConversionSequence.cpp
         include/cdotc/Sema/ConversionSequence.h src/Sema/SemaCast.cpp src/IL/Passes/DefinitiveInitializationPass.cpp
         include/cdotc/IL/Passes/DefinitiveInitializationPass.h include/cdotc/IL/Utils/BlockIterator.h
-        src/Sema/SemaCTFE.cpp src/Message/DiagnosticsEngine.cpp include/cdotc/Message/DiagnosticsEngine.h src/Basic/TargetInfo.cpp
+        src/Sema/SemaCTFE.cpp src/Diagnostics/DiagnosticsEngine.cpp include/cdotc/Diagnostics/DiagnosticsEngine.h src/Basic/TargetInfo.cpp
         include/cdotc/Basic/TargetInfo.h src/Parse/ParseAttr.cpp src/AST/Attr.cpp include/cdotc/AST/Attr.h src/Sema/SemaAttr.cpp
         include/cdotc/AST/SourceType.h src/Basic/DeclarationName.cpp include/cdotc/Basic/DeclarationName.h include/cdotc/AST/TypeVisitor.h
         include/cdotc/Support/Optional.h src/Sema/SemaReflect.cpp include/cdotc/AST/DeclDenseMapInfo.h src/IL/Instructions.cpp
         include/cdotc/IL/Instructions.h include/cdotc/AST/TypeBuilder.h include/cdotc/AST/StmtOrDecl.h src/AST/StmtOrDecl.cpp
-        src/AST/ConformanceTable.cpp include/cdotc/AST/ConformanceTable.h include/cdotc/AST/ContinuationPoint.h src/Parse/ParseMacro.cpp
+        src/AST/ConformanceTable.cpp include/cdotc/AST/ConformanceTable.h src/Parse/ParseMacro.cpp
         src/ILGen/Cleanup.cpp include/cdotc/ILGen/Cleanup.h src/Basic/DiverseStack.cpp include/cdotc/Basic/DiverseStack.h
         include/cdotc/IL/Passes/DataflowProblem.h src/IL/Passes/BorrowCheckPass.cpp include/cdotc/IL/Passes/BorrowCheckPass.h
         src/IL/Analysis/Dominance.cpp include/cdotc/IL/Analysis/Dominance.h include/cdotc/IL/CFG.h src/Sema/SemaBuiltin.cpp
@@ -141,13 +141,13 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         src/ClangImporter/ImportType.cpp src/ClangImporter/ImportDecl.cpp include/cdotc/Support/SaveAndRestore.h
         src/Basic/NestedNameSpecifier.cpp include/cdotc/Basic/NestedNameSpecifier.h include/cdotc/IL/Utils/InstructionCloner.h
         src/ILGen/ILGenSpecialize.cpp src/Tools/IRDebug/IRDebugAnnotatePass.cpp include/cdotc/Tools/IRDebug/IRDebugAnnotatePass.h
-        src/Sema/NameBinding.cpp include/cdotc/Sema/NameBinding.h src/Query/Query.cpp include/cdotc/Query/Query.h src/Query/QueryContext.cpp
+        src/Query/Query.cpp include/cdotc/Query/Query.h src/Query/QueryContext.cpp
         include/cdotc/Query/QueryContext.h src/Query/TypeQueries.cpp src/Query/BuiltinQueries.cpp src/Query/LookupQueries.cpp
         src/Query/DriverQueries.cpp src/Query/SemaQueries.cpp src/Query/UtilQueries.cpp src/Query/CTFEQueries.cpp include/cdotc/Support/Config.h
         src/Query/ILGenQueries.cpp src/Query/InstantiationQueries.cpp src/Parse/ParseModule.cpp src/Sema/ConstraintSystem.cpp
         include/cdotc/Sema/ConstraintSystem.h src/Sema/ConstraintBuilder.cpp include/cdotc/Sema/ConstraintBuilder.h
         src/Sema/ConstraintGraph.cpp include/cdotc/Sema/ConstraintGraph.h src/Sema/ConstraintStep.cpp include/cdotc/Sema/ConstraintStep.h
-        src/Sema/CSDiags.cpp src/Sema/CSApply.cpp src/Sema/OverloadResolverNew.cpp)
+        src/Sema/CSDiags.cpp src/Sema/CSApply.cpp src/Sema/OverloadResolver.cpp)
 
 set(CDOTC_TBLGENS_SOURCE_FILES
         src/Tools/TableGenBackends/BuiltinOperatorBackend.cpp

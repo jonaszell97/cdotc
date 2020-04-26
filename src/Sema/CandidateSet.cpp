@@ -211,8 +211,8 @@ static SourceLocation getArgumentLoc(CandidateSet::Candidate& Cand,
                                      llvm::ArrayRef<ast::Expression*> args)
 {
    unsigned idx = Cand.Data1;
-   if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
-      ++idx;
+//   if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isNonStaticMethod())
+//      ++idx;
 
    if (!Cand.isAnonymousCandidate()) {
       auto ArgDecls = Cand.getFunc()->getArgs();
@@ -675,32 +675,21 @@ void CandidateSet::diagnoseFailedCandidates(
    std::vector<Expression*> templateArgs = constTemplateArgs.vec();
 
    // Resolve all arguments ambiguous types.
-   bool issuedDiag = false;
    for (auto*& arg : args) {
       if (!arg->getExprType()) {
          auto result = SP.typecheckExpr(arg);
-         if (!result) {
-            issuedDiag = true;
-            continue;
+         if (result) {
+            arg = result.get();
          }
-
-         arg = result.get();
       }
    }
    for (auto*& arg : templateArgs) {
       if (!arg->getExprType()) {
          auto result = SP.typecheckExpr(arg);
-         if (!result) {
-            issuedDiag = true;
-            continue;
+         if (result) {
+            arg = result.get();
          }
-
-         arg = result.get();
       }
-   }
-
-   if (issuedDiag) {
-      return;
    }
 
    DeclarationName FuncName;
@@ -802,6 +791,8 @@ void CandidateSet::diagnoseAmbiguousCandidates(SemaPass& SP, Statement* Caller)
                      makeFakeSourceLoc(*this, FuncName, Cand));
       }
       else {
+         SP.diagnose(Caller, note_generic_note, Cand.getFunc()->getFullName(),
+             Cand.getSourceLoc());
          SP.diagnose(Caller, note_candidate_here, Cand.getSourceLoc());
       }
    }

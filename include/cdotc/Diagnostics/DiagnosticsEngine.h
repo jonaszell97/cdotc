@@ -1,7 +1,7 @@
 #ifndef CDOT_DIAGNOSTICSENGINE_H
 #define CDOT_DIAGNOSTICSENGINE_H
 
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 
 #include <vector>
 

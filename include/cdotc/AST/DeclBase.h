@@ -519,9 +519,14 @@ public:
    NamedDecl* getSpecializedTemplate() const;
    SourceLocation getInstantiatedFrom() const;
 
-   std::string getFullName(bool includeSignatures = false) const
+   std::string getFullName(bool includeSignatures) const
    {
-      return getJoinedName('.', includeSignatures);
+      return getJoinedName('.', false, includeSignatures);
+   }
+
+   std::string getFullName() const
+   {
+      return getJoinedName('.', false, true);
    }
 
    std::string getJoinedName(char join, bool includeFile = false,

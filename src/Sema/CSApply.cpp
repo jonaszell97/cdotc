@@ -53,6 +53,11 @@ public:
       return StmtBuilder::visitExpr(Expr);
    }
 
+   ExprResult visitLambdaExpr(LambdaExpr *Expr)
+   {
+      return Expr;
+   }
+
    ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* Expr)
    {
       NamedDecl* Decl;
@@ -84,6 +89,16 @@ public:
    }
 
    ExprResult visitAnonymousCallExpr(AnonymousCallExpr* Expr);
+
+   ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr* Expr)
+   {
+      assert(Expr->getContextualType() && "invalid builtin ident");
+
+      Expr->setExprType(Expr->getContextualType());
+      Expr->setSemanticallyChecked(true);
+
+      return Expr;
+   }
 };
 
 } // anonymous namespace
@@ -96,9 +111,12 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
    // This can happen on calls with a leading period. We resolved the
    // overload first, now we can resolve the call.
    if (CallIt == UnresolvedCalls.end()) {
-      if (isa<IdentifierRefExpr>(Expr->getParentExpr())
-          && cast<IdentifierRefExpr>(Expr->getParentExpr())->hasLeadingDot()) {
-         auto ParentRes = visitExpr(Expr->getParentExpr());
+      if (Expr->getExprType()) {
+         return Expr;
+      }
+
+      if (auto *PE = Expr->getParentExpr()) {
+         auto ParentRes = visitExpr(PE);
          if (!ParentRes) {
             return ExprError();
          }
@@ -115,8 +133,24 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
    if (!Cand.isAnonymousCandidate()) {
       auto* Fn = Cand.getFunc();
       if (Fn->isInitializerOfTemplate()) {
-         Expr->setExprType(Sys.QC.Context.getRecordType(Fn->getRecord()));
+         if (Fn->isCompleteInitializer()) {
+            Expr->setExprType(Sys.QC.Context.getRecordType(Fn->getRecord()));
+         }
+         else {
+            Expr->setExprType(Fn->getReturnType());
+         }
+
          return Expr;
+      }
+
+      if (auto *EC = dyn_cast<EnumCaseDecl>(Fn)) {
+         if (Data.CandSet.ResolvedArgs.empty()) {
+            auto* Result = DeclRefExpr::Create(Sys.QC.Context, EC,
+                                               Expr->getSourceRange());
+
+            Result->setExprType(Data.ReturnType);
+            return Result;
+         }
       }
 
       auto* callExpr = Sys.QC.Sema->CreateCall(Fn, Data.CandSet.ResolvedArgs,
@@ -141,6 +175,7 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
          }
       }
 
+      callExpr->setExprType(Data.ReturnType);
       return callExpr;
    }
 

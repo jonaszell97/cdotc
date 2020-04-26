@@ -3214,7 +3214,7 @@ QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclCon
       IsConstraintSatisfiedQueries.InsertNode(_Q, InsertPos);
    }
 #ifndef NDEBUG
-   if (shouldReset()) _Q->Stat = Query::Idle;
+   if (shouldReset()||true) _Q->Stat = Query::Idle;
 #endif
    switch (_Q->status()) {
    case Query::Running:

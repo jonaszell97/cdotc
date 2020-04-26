@@ -9,7 +9,7 @@
 #include "cdotc/IL/Module.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/IRGen/IRGen.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Module/ModuleManager.h"
 #include "cdotc/Query/QueryContext.h"

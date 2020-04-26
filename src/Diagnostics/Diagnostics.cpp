@@ -1,11 +1,11 @@
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 
 #include "cdotc/Basic/FileManager.h"
 #include "cdotc/Basic/FileUtils.h"
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Lex/Lexer.h"
 #include "cdotc/Lex/Token.h"
-#include "cdotc/Message/DiagnosticsEngine.h"
+#include "cdotc/Diagnostics/DiagnosticsEngine.h"
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/Format.h"
 
@@ -38,7 +38,7 @@ static llvm::StringRef getMessage(MessageKind msg)
 #define CDOT_MSG(Name, Msg)                                                    \
    case Name:                                                                  \
       return #Msg;
-#include "cdotc/Message/def/Diagnostics.def"
+#include "cdotc/Diagnostics/def/Diagnostics.def"
    }
 
    llvm_unreachable("bad msg kind");
@@ -403,7 +403,7 @@ static SeverityLevel getSeverity(MessageKind msg)
 #define CDOT_ERROR(Name, Msg, IsFatal)                                         \
    case Name:                                                                  \
       return IsFatal ? SeverityLevel::Fatal : SeverityLevel::Error;
-#include "cdotc/Message/def/Diagnostics.def"
+#include "cdotc/Diagnostics/def/Diagnostics.def"
    }
 }
 

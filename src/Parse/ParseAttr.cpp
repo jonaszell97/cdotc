@@ -249,14 +249,14 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr*>& Attrs,
          Kind = StringSwitch<AttrKind>(Ident)
 #define CDOT_DECL_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #include "cdotc/AST/Attributes.def"
-                    .Default(AttrKind::_notAttr);
+                    .Default(AttrKind::_invalidAttr);
 
          break;
       case AttrClass::Stmt:
          Kind = StringSwitch<AttrKind>(Ident)
 #define CDOT_STMT_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #include "cdotc/AST/Attributes.def"
-                    .Default(AttrKind::_notAttr);
+                    .Default(AttrKind::_invalidAttr);
 
          break;
       case AttrClass::Expr:
@@ -265,19 +265,19 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr*>& Attrs,
 #define CDOT_EXPR_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #define CDOT_TYPE_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #include "cdotc/AST/Attributes.def"
-                    .Default(AttrKind::_notAttr);
+                    .Default(AttrKind::_invalidAttr);
 
          break;
       case AttrClass::Type:
          Kind = StringSwitch<AttrKind>(Ident)
 #define CDOT_TYPE_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #include "cdotc/AST/Attributes.def"
-                    .Default(AttrKind::_notAttr);
+                    .Default(AttrKind::_invalidAttr);
 
          break;
       }
 
-      if (Kind == AttrKind::_notAttr) {
+      if (Kind == AttrKind::_invalidAttr) {
          SP.diagnose(err_attr_does_not_exist, Ident, AttrLoc);
 
          if (lookahead().is(tok::open_paren)) {

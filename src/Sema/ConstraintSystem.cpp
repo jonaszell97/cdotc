@@ -117,8 +117,8 @@ TypeBindingConstraint::TypeBindingConstraint(TypeVariable Var, QualType Type,
                                              Locator Loc)
     : RelationalConstraint(TypeBindingID, Var, Type, Loc)
 {
-   assert(!Type->containsTypeVariable()
-          && "binding should not contain type variable!");
+//   assert(!Type->containsTypeVariable()
+//          && "binding should not contain type variable!");
 }
 
 TypeBindingConstraint* TypeBindingConstraint::Create(ConstraintSystem& Sys,
@@ -604,7 +604,7 @@ void ConstraintSystem::registerConstraint(Constraint* Cons)
    CG.addConstraint(Cons);
 
    QualType RHSType = Cons->getRHSType();
-   if (!RHSType || RHSType->containsTypeVariable()) {
+   if (!RHSType) {
       return;
    }
 
@@ -762,6 +762,28 @@ public:
       return SP.Context.getFunctionType(visit(T->getReturnType()), ParamTypes,
                                         T->getParamInfo(), T->getRawFlags(),
                                         T->isLambdaType());
+   }
+};
+
+class FinalTypeVariableSubstVisitor : public TypeBuilder<FinalTypeVariableSubstVisitor> {
+   /// Reference to the solution.
+   const ConstraintSystem::Solution &S;
+
+public:
+   FinalTypeVariableSubstVisitor(SemaPass &Sema,
+                                 const ConstraintSystem::Solution &S)
+       : TypeBuilder(Sema, {}), S(S)
+   {
+   }
+
+   QualType visitTypeVariableType(TypeVariableType* T)
+   {
+      auto It = S.AssignmentMap.find(T);
+      if (It != S.AssignmentMap.end()) {
+         return It->getSecond();
+      }
+
+      return T;
    }
 };
 
@@ -1300,11 +1322,23 @@ public:
    {
    }
 
+   bool compareImpl(QualType LHS, QualType RHS)
+   {
+      if (LHS->isTypeVariableType() || RHS->isTypeVariableType())
+         return true;
+
+      return LHS == RHS;
+   }
+
    bool visitTypeVariableType(TypeVariableType* LHS, QualType RHS)
    {
+      if (LHS == RHS) {
+         return true;
+      }
+
       if (isa<ImplicitConversionConstraint>(C)) {
-         Sys.newConstraint<ImplicitConversionConstraint>(LHS, RHS,
-                                                         C->getLocator());
+         Sys.newConstraint<ImplicitConversionConstraint>(
+             LHS, RHS, C->getLocator());
       }
       else if (!Sys.isOverloadChoice(LHS)) {
          auto& CG = Sys.getConstraintGraph();
@@ -1345,6 +1379,51 @@ public:
       }
 
       return true;
+   }
+
+   bool compatible(const FunctionType::ParamInfo &LHS,
+                   const FunctionType::ParamInfo &RHS)
+   {
+      if (LHS.getLabel() != RHS.getLabel())
+         return false;
+
+      switch (LHS.getConvention()) {
+      case ArgumentConvention::Default:
+         return true;
+      default:
+         return (int)RHS.getConvention() <= (int)LHS.getConvention()
+            || RHS.getConvention() == ArgumentConvention::Default;
+      }
+   }
+
+   bool visitFunctionType(FunctionType* LHS, QualType RHS)
+   {
+      auto* Fun = RHS->asFunctionType();
+      if (!Fun || Fun->getNumParams() != LHS->getNumParams()) {
+         return false;
+      }
+
+      if (LHS->getRawFlags() != Fun->getRawFlags()) {
+         return false;
+      }
+
+      auto LHSParams = LHS->getParamTypes();
+      auto RHSParams = Fun->getParamTypes();
+
+      auto LHSParamInfo = LHS->getParamInfo();
+      auto RHSParamInfo = Fun->getParamInfo();
+
+      unsigned Arity = LHS->getNumParams();
+      for (unsigned i = 0; i < Arity; ++i) {
+         if (!compatible(LHSParamInfo[i], RHSParamInfo[i])) {
+            return false;
+         }
+         if (!visit(LHSParams[i], RHSParams[i])) {
+            return false;
+         }
+      }
+
+      return visit(LHS->getReturnType(), Fun->getReturnType());
    }
 
    bool visitPointerType(PointerType* LHS, QualType RHS)
@@ -1414,14 +1493,22 @@ bool ConstraintSystem::simplify(
          return !isSatisfied(C);
       }
 
+      bool isEquality = C->getKind() == Constraint::TypeEqualityID;
       QualType Concrete;
       QualType Inconcrete;
 
-      if (!LHS->containsTypeVariable()) {
-         Concrete = LHS;
-         Inconcrete = RHS;
+      // Only equality constraints are associative.
+      if (isEquality) {
+         if (hasConcreteBinding(TypeVar) || !LHS->containsTypeVariable()) {
+            Concrete = LHS;
+            Inconcrete = RHS;
+         }
+         else if (!RHS->containsTypeVariable()) {
+            Concrete = RHS;
+            Inconcrete = LHS;
+         }
       }
-      else if (!RHS->containsTypeVariable()) {
+      else {
          Concrete = RHS;
          Inconcrete = LHS;
       }
@@ -1431,21 +1518,29 @@ bool ConstraintSystem::simplify(
          return false;
       }
 
-      // Implicit conversion constraints are only transitive for tuple types.
+      // Implicit conversion constraints are only transitive for tuple types or
+      // function types.
       bool strict = !isa<ImplicitConversionConstraint>(C);
-      if ((isa<ImplicitConversionConstraint>(C) && !Concrete->isTupleType()
-           && !Concrete->isFunctionType())) {
+      if (Concrete == Inconcrete || (isa<ImplicitConversionConstraint>(C)
+          && !Concrete->isTupleType()
+          && !Concrete->isFunctionType())) {
          return false;
       }
 
-      // Otherwise, we can make simplify based on the structure of the type,
+      // Otherwise, we can simplify based on the structure of the type,
       // e.g. for the constraint
       //    `T0 == (T1, T2)`
       // we can form new equality constraints for T1 and T2 if T0 is known
       // and of tuple type. If the structure doesn't match, we know that the
       // solution is invalid.
-      return !TypeEquivalenceBuilder(*this, C, Worklist, strict)
-                  .visit(Inconcrete, Concrete);
+      TypeEquivalenceBuilder Builder(*this, C, Worklist, strict);
+      bool error = !Builder.visit(Inconcrete, Concrete);
+
+      if (isEquality && Concrete->containsTypeVariable()) {
+         error |= !Builder.visit(Concrete, Inconcrete);
+      }
+
+      return error;
    }
    case Constraint::FunctionReturnTypeID: {
       QualType LHS = getConcreteType(C->getConstrainedType());
@@ -1661,8 +1756,11 @@ bool ConstraintSystem::appendCurrentSolution(
    Solution& S = Solutions.back();
    S.Score = CurrentScore;
 
+   TypeVariableSubstVisitor Visitor(*QC.Sema, *this, CG, {});
    for (auto* TypeVar : TypeVars) {
       QualType T = CG.getBinding(TypeVar);
+      T = Visitor.visit(T);
+
       if (!T || T->containsTypeVariable()) {
          // Not a viable solution.
          Solutions.pop_back();
@@ -1784,6 +1882,49 @@ ConstraintSystem::compareSolutions(const Solution& S1, const Solution& S2)
    return RelativeScore == 0
               ? EqualSolution
               : (RelativeScore < 0 ? BetterSolution : WorseSolution);
+}
+
+uint64_t ConstraintSystem::calculateConversionPenalty(const Solution &S)
+{
+   FinalTypeVariableSubstVisitor Visitor(*QC.Sema, S);
+
+   uint64_t penalty = 0;
+   for (auto *TypeVar : TypeVariables) {
+      auto it = S.AssignmentMap.find(TypeVar);
+      assert(it != S.AssignmentMap.end());
+
+      QualType ConcreteTy = it->getSecond();
+      auto Constraints = CG.getOrAddNode(TypeVar)->getConstraints();
+
+      for (auto *C : Constraints) {
+         if (C->getConstrainedType() != TypeVar) {
+            continue;
+         }
+         if (!isa<ImplicitConversionConstraint>(C)) {
+            continue;
+         }
+
+         auto *Loc = C->getLocator();
+         if (!Loc || Loc->getPathElements().empty()
+         || Loc->getPathElements().back().getKind() != ConstraintLocator::ParameterType) {
+            continue;
+         }
+
+         auto *ArgDecl = Loc->getPathElements().back().getParamDecl();
+
+         QualType RHSTy = Visitor.visit(C->getRHSType());
+         IsValidParameterValueQuery::result_type result;
+         if (QC.IsValidParameterValue(result, ConcreteTy, RHSTy,
+                                      ArgDecl->isSelf())) {
+            continue;
+         }
+
+         assert(result.isValid);
+         penalty += result.conversionPenalty;
+      }
+   }
+
+   return penalty;
 }
 
 void ConstraintSystem::dumpSolution(const Solution& S)

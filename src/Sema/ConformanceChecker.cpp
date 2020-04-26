@@ -2,7 +2,7 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/TypeBuilder.h"
 #include "cdotc/AST/TypeVisitor.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Parse/Parser.h"
 #include "cdotc/Query/QueryContext.h"
@@ -1695,6 +1695,10 @@ struct DependencyNode : public llvm::FoldingSetNode {
          break;
       }
       }
+
+      if (Done) {
+         OS << " (✔️)";
+      }
    }
 
    std::string to_string() const
@@ -1973,6 +1977,10 @@ class cdot::ConformanceResolver {
    /// Set of implemented associated types.
    llvm::DenseMap<std::pair<RecordDecl*, IdentifierInfo*>, AliasDecl*> ImplementedATs;
 
+   /// Number of incoming constraints per dependency node at the time of
+   /// constructing the resolution order.
+   llvm::DenseMap<DependencyNode*, int> NumDependencies;
+
    bool PrepareMacros(DeclContext *DC);
    bool PrepareStaticDecls(DeclContext *DC);
    bool PrepareImports(DeclContext *DC);
@@ -1983,7 +1991,14 @@ class cdot::ConformanceResolver {
    bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf,
                          DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
 
-   bool ResolveDependencyNode(DependencyNode *Node, bool &error);
+   bool ResolveDependencyNode(DependencyNode *Node,
+                              bool &error, bool &shouldReset);
+
+   bool HasNewDependencies(DependencyNode *Node)
+   {
+      auto &Vert = Dependencies.getOrAddVertex(Node);
+      return Vert.getIncoming().size() > NumDependencies[Node];
+   }
 
    friend class SemaPass;
 
@@ -2283,26 +2298,27 @@ public:
 
       QualType Current = T;
       while (Current) {
-         Types.push_back(Current);
-
+         QualType Outer;
          if (auto *AT = Current->asAssociatedType()) {
-            Current = AT->getOuterAT();
+            if (AT->getDecl()->isSelf()) {
+               break;
+            }
+
+            Outer = AT->getOuterAT();
          }
-         else {
-            break;
-         }
+
+         Types.push_back(Current);
+         Current = Outer;
       }
 
       auto *CurNode = &Node;
       for (int i = Types.size() - 1; i >= 0; --i) {
          QualType Ty = Types[i];
          if (auto *AT = Ty->asAssociatedType()) {
-            if (AT->getDecl()->isSelf()) {
-               continue;
-            }
+            assert (!AT->getDecl()->isSelf());
 
             ConformanceResolver::DependencyVertex *DepNode;
-            if (i == Types.size() - 2) {
+            if (i == Types.size() - 1) {
                DepNode = &Resolver.GetDependencyNode(
                    DependencyNode::ConcreteTypeOfAssociatedType, DC,
                    AT->getDecl());
@@ -2310,7 +2326,7 @@ public:
             else {
                DepNode = &Resolver.GetDependencyNode(
                    DependencyNode::NestedAssociatedType, DC,
-                   Types[i + 1].getAsOpaquePtr());
+                   Ty.getAsOpaquePtr());
             }
 
             if (CurNode != DepNode) {
@@ -2798,8 +2814,8 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
 
    // Instantiations are handled separately.
    if (Rec->isInstantiation()) {
-      if (QC.Sema->getInstantiator().isShallowInstantiation(Rec)) {
-         return BuildWorklistForShallowInstantiation(Rec);
+      if (BuildWorklistForShallowInstantiation(Rec)) {
+         return true;
       }
 
       return FindDependencies(
@@ -2869,20 +2885,64 @@ static bool AddConstraintDependencies(
       return false;
    }
 
-   ArrayRef<AssociatedTypeDecl*> ReferencedATs;
-   if (QC.GetReferencedAssociatedTypes(ReferencedATs, CS)) {
-      return true;
-   }
-
-   for (auto *AT : ReferencedATs) {
-      if (AT == Exclude) {
+   SmallVector<ConformanceResolver::DependencyVertex*, 2> Nodes;
+   for (auto *C : *CS) {
+      auto *AT = C->getConstrainedType()->asAssociatedType();
+      if (!AT || AT->getDecl() == Exclude) {
          continue;
       }
 
-      auto &ATNode = Resolver.GetDependencyNode(
-          DependencyNode::ConcreteTypeOfAssociatedType, R, AT);
+      QualType Outer = AT->getOuterAT();
+      if (!Outer) {
+         continue;
+      }
 
-      CSNode.addIncoming(&ATNode);
+      bool include = true;
+      auto *OuterAT = Outer->asAssociatedType();
+
+      while (OuterAT) {
+         if (OuterAT->getDecl() == Exclude) {
+            include = false;
+            break;
+         }
+
+         if (OuterAT->getDecl()->isSelf()) {
+            break;
+         }
+
+         OuterAT = OuterAT->getOuterAT()->asAssociatedType();
+      }
+
+      if (!include) {
+         continue;
+      }
+
+      Nodes.push_back(&CSNode);
+
+      while ((OuterAT = Outer->asAssociatedType())) {
+         if (OuterAT->getDecl()->isSelf()) {
+            auto &ATNode = Resolver.GetDependencyNode(
+                DependencyNode::ConcreteTypeOfAssociatedType, R, AT->getDecl());
+
+            Nodes.push_back(&ATNode);
+            break;
+         }
+         else {
+            auto &NestedATNode = Resolver.GetDependencyNode(
+                DependencyNode::NestedAssociatedType, R, AT);
+
+            Nodes.push_back(&NestedATNode);
+         }
+
+         AT = OuterAT;
+         Outer = OuterAT->getOuterAT();
+      }
+
+      for (int i = 0; i < Nodes.size() - 1; ++i) {
+         Nodes[i]->addIncoming(Nodes[i + 1]);
+      }
+
+      Nodes.clear();
    }
 
    return false;
@@ -2902,7 +2962,19 @@ ConformanceResolver::AddConformanceDependency(DependencyVertex &Node,
       return false;
    }
 
-   auto &baseConf = *Cache[BaseConformances[R]];
+   for (auto *AT : P->getDecls<AssociatedTypeDecl>()) {
+      if (AT->isSelf()) {
+         continue;
+      }
+
+      auto& ATNode = GetDependencyNode(
+          DependencyNode::ConcreteTypeOfAssociatedType, R, AT);
+
+      ConfNode.addIncoming(&ATNode);
+   }
+
+   auto &baseConf = *Cache[BaseConformances[
+       R->isInstantiation() ? R->getSpecializedTemplate() : R]];
 
    bool found = false;
    bool error = false;
@@ -2914,11 +2986,11 @@ ConformanceResolver::AddConformanceDependency(DependencyVertex &Node,
 
       found = true;
 
-      if (!conf.constraints || conf.constraints->empty()) {
+      if (!conf.combinedConstraints || conf.combinedConstraints->empty()) {
          return true;
       }
 
-      if (AddConstraintDependencies(QC, *this, ConfNode, conf.constraints, R)) {
+      if (AddConstraintDependencies(QC, *this, ConfNode, conf.combinedConstraints, R)) {
          error = true;
          return false;
       }
@@ -3083,7 +3155,7 @@ bool ConformanceResolver::FindDependencies(RecordDecl *R,
 {
    SmallSetVector<AssociatedTypeDecl*, 2> MissingATs;
    SmallPtrSet<IdentifierInfo*, 4> NeededATNames;
-   SmallVector<std::pair<QualType, DependencyVertex*>, 4> TypesToCheck;
+   SmallSetVector<std::pair<QualType, DependencyVertex*>, 4> TypesToCheck;
 
    bool error = false;
    baseConf.ForEach([&](UncheckedConformance &conf) {
@@ -3134,11 +3206,11 @@ bool ConformanceResolver::FindDependencies(RecordDecl *R,
             }
 
             if (auto *ATImpl = dyn_cast<AssociatedTypeDecl>(Impl)) {
-               TypesToCheck.emplace_back(ATImpl->getDefaultType(), &ATNode);
+               TypesToCheck.insert(std::make_pair(ATImpl->getDefaultType(), &ATNode));
             }
             else {
-               TypesToCheck.emplace_back(
-                   cast<AliasDecl>(Impl)->getType(), &ATNode);
+               TypesToCheck.insert(std::make_pair(
+                   cast<AliasDecl>(Impl)->getType(), &ATNode));
             }
 
             if (CS && !CS->empty()) {
@@ -3195,9 +3267,15 @@ bool ConformanceResolver::BuildWorklistForShallowInstantiation(RecordDecl *Inst)
 }
 
 bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
-                                                bool &error)
+                                                bool &error,
+                                                bool &shouldReset)
 {
    if (Node->Done) {
+      return false;
+   }
+
+   if (HasNewDependencies(Node)) {
+      shouldReset = true;
       return false;
    }
 
@@ -3211,24 +3289,23 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
             return true;
          }
       }
-      else {
-         PendingRecordDecls.insert(Rec);
-         LOG(AssociatedTypeImpls, Rec->getFullName(), " ", PrintAssociatedTypes(QC, Rec));
 
-         if (PrepareImplicitDecls(Rec)) {
-            error = true;
-            Rec->setIsInvalid(true);
+      PendingRecordDecls.insert(Rec);
+      LOG(AssociatedTypeImpls, Rec->getFullName(), " ", PrintAssociatedTypes(QC, Rec));
 
-            return false;
-         }
+      if (PrepareImplicitDecls(Rec)) {
+         error = true;
+         Rec->setIsInvalid(true);
 
-         QualType T = QC.Context.getRecordType(Rec);
-         if (QC.CheckConformances(T)) {
-            error = true;
-            Rec->setIsInvalid(true);
+         return false;
+      }
 
-            return false;
-         }
+      QualType T = QC.Context.getRecordType(Rec);
+      if (QC.CheckConformances(T)) {
+         error = true;
+         Rec->setIsInvalid(true);
+
+         return false;
       }
 
       CompletedRecordDecls.insert(Rec);
@@ -3386,7 +3463,20 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
 
       break;
    }
-   case DependencyNode::NestedAssociatedType:
+   case DependencyNode::NestedAssociatedType: {
+      QualType Resolved = QC.Sema->ResolveNestedAssociatedType(
+          Node->getType()->asAssociatedType()->getOuterAT(),
+          QC.Context.getRecordType(cast<RecordDecl>(Node->Decl)));
+
+      auto &DepNode = GetDependencyNode(
+          DependencyNode::ConcreteTypeOfAssociatedType, Resolved->getRecord(),
+          Node->getType()->asAssociatedType()->getDecl());
+
+      Dependencies.getOrAddVertex(Node).addIncoming(&DepNode);
+      shouldReset = true;
+
+      break;
+   }
    case DependencyNode::ExtensionApplicability:
    case DependencyNode::ConformancesOfRecord:
    case DependencyNode::ConstraintsSatisfied:
@@ -3400,7 +3490,10 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
 
 bool ConformanceResolver::ResolveDependencyGraph()
 {
-   auto dag = Dependencies.constructOrderedList();
+   llvm::SmallVector<DependencyNode*, 8> DependencyOrder;
+   int CurrentNodeIdx = 0;
+
+   auto valid = Dependencies.constructOrderedList(DependencyOrder, true);
 
 BEGIN_LOG(ConformanceDependencies)
    std::string str = "\n### CONSTRAINTS\n";
@@ -3410,46 +3503,57 @@ BEGIN_LOG(ConformanceDependencies)
      return Node->to_string();
    }, OS);
 
-   if (!dag.second) {
+   if (!valid) {
       auto offending = Dependencies.getOffendingPair();
-      OS << "CONFLICT ";
+      OS << "\nCONFLICT ";
       offending.first->print(OS);
-      llvm::outs() << " <-> ";
+      OS << " <-> ";
       offending.second->print(OS);
       OS << "\n";
-   }
-   else {
-      OS << "\n### RESOLUTION ORDER\n";
-
-      int i = 1;
-      for (auto *Node : dag.first) {
-         OS << i++ << " ";
-         Node->print(OS);
-         OS << "\n";
-      }
    }
 
    LOG(ConformanceDependencies, OS.str());
 END_LOG
 
-   assert(dag.second && "loop in conformance dependency graph!");
-   Dependencies.clear();
+   assert(valid && "loop in conformance dependency graph!");
+
+   for (auto *Vert : Dependencies.getVertices()) {
+      NumDependencies[Vert->getPtr()] = Vert->getIncoming().size();
+   }
 
    bool error = false;
-   int i = 0;
-   (void)i;
+   bool shouldReset = false;
 
-   for (auto *Node : dag.first) {
-      LOG(ConformanceDependencies, "Resolving item ", ++i, " / ",
-          dag.first.size(), " (", Node->to_string(), ")");
+   for (CurrentNodeIdx = 0; CurrentNodeIdx < DependencyOrder.size(); ++CurrentNodeIdx) {
+      auto *Node = DependencyOrder[CurrentNodeIdx];
+      if (Node->Done) {
+         continue;
+      }
 
-      if (ResolveDependencyNode(Node, error)) {
+      LOG(ConformanceDependencies, "Resolving item ", CurrentNodeIdx + 1, " / ",
+          DependencyOrder.size(), " (", Node->to_string(), ")");
+
+      if (ResolveDependencyNode(Node, error, shouldReset)) {
          return true;
+      }
+
+      if (shouldReset) {
+         shouldReset = false;
+         CurrentNodeIdx = -1;
+
+         DependencyOrder.clear();
+
+         valid = Dependencies.constructOrderedList(DependencyOrder, true);
+         assert(valid && "loop in conformance dependency graph!");
+
+         for (auto *Vert : Dependencies.getVertices()) {
+            NumDependencies[Vert->getPtr()] = Vert->getIncoming().size();
+         }
       }
    }
 
    // Resolve new instantiations that were introduced.
-   if (!Dependencies.empty()) {
+   if (CurrentNodeIdx < Dependencies.size()) {
       return error || ResolveDependencyGraph();
    }
 
@@ -3472,6 +3576,9 @@ END_LOG
       LOG(ProtocolConformances, Rec->getFullName(), " ✅");
    }
 
+   Dependencies.clear();
+   NumDependencies.clear();
+
    return error;
 }
 
@@ -3493,7 +3600,7 @@ bool SemaPass::PrepareNameLookup(DeclContext *DC)
 bool SemaPass::FindDependencies(RecordDecl *Inst)
 {
    auto &Resolver = getConformanceResolver();
-   return Resolver.BuildWorklistForShallowInstantiation(Inst);
+   return Resolver.BuildWorklist(Inst);
 }
 
 bool SemaPass::UncheckedConformanceExists(RecordDecl *R, ProtocolDecl *P)

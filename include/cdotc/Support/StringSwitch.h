@@ -9,6 +9,7 @@
 
 namespace cdot {
 
+/// Taken from llvm/Support/StringSwitch.h
 /// A switch()-like statement whose cases are string literals.
 ///
 /// The StringSwitch class is a simple form of a switch() statement that

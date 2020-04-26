@@ -7,13 +7,12 @@
 #include "cdotc/IL/Constants.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Lex/Lexer.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Module/ModuleManager.h"
 #include "cdotc/Parse/Parser.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
-#include "cdotc/Sema/NameBinding.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Sema/Template.h"
 #include "cdotc/Sema/TemplateInstantiator.h"
@@ -1339,10 +1338,12 @@ ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr* Expr)
    auto RetTyResult = visitSourceType(Expr, Expr->getReturnType());
    QualType RetTy = RetTyResult ? RetTyResult.get() : ErrorTy;
 
-   if (Expr->isThin())
+   if (Expr->isThin()) {
       Expr->setExprType(Context.getFunctionType(RetTy, ArgTys, ParamInfo));
-   else
+   }
+   else {
       Expr->setExprType(Context.getLambdaType(RetTy, ArgTys, ParamInfo));
+   }
 
    Expr->setExprType(Context.getMetaType(Expr->getExprType()));
    return visitTypeExpr(Expr);

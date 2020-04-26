@@ -3,7 +3,7 @@
 #include "cdotc/AST/ASTContext.h"
 #include "cdotc/AST/Decl.h"
 #include "cdotc/Basic/NestedNameSpecifier.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Sema/Template.h"
 
@@ -575,10 +575,12 @@ DeclarationName
 DeclarationNameTable::getConstructorName(CanType ConstructedType,
                                          bool IsCompleteCtor)
 {
-   assert(!ConstructedType || ConstructedType->isRecordType());
+   assert(!ConstructedType || ConstructedType->isRecordType()
+          || ConstructedType->isExistentialType());
 
-   if (IsCompleteCtor)
+   if (IsCompleteCtor) {
       return DeclarationName(ConstructedType, DeclarationName::ConstructorName);
+   }
 
    return getSpecialName(DeclarationName::BaseConstructorName,
                          (uintptr_t)ConstructedType.getAsOpaquePtr());
@@ -586,7 +588,9 @@ DeclarationNameTable::getConstructorName(CanType ConstructedType,
 
 DeclarationName DeclarationNameTable::getDestructorName(CanType DestructedType)
 {
-   assert(!DestructedType || DestructedType->isRecordType());
+   assert(!DestructedType || DestructedType->isRecordType()
+          || DestructedType->isExistentialType());
+
    return DeclarationName(DestructedType, DeclarationName::DestructorName);
 }
 

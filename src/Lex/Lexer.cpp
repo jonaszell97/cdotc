@@ -2,8 +2,7 @@
 #include "cdotc/Lex/Lexer.h"
 
 #include "cdotc/Basic/IdentifierInfo.h"
-#include "cdotc/Lex/Preprocessor.h"
-#include "cdotc/Message/DiagnosticsEngine.h"
+#include "cdotc/Diagnostics/DiagnosticsEngine.h"
 
 #include <cassert>
 #include <llvm/Support/MemoryBuffer.h>

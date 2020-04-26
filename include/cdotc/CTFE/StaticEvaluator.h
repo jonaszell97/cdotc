@@ -1,7 +1,7 @@
 #ifndef CDOT_STATICEVALUATOR_H
 #define CDOT_STATICEVALUATOR_H
 
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>

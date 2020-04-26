@@ -35,7 +35,9 @@ public:
    bool TypeDependent = false;
    bool EncounteredError = false;
 
-   explicit ExprRebuilder(SemaPass& Sema) : Sema(Sema) {}
+   explicit ExprRebuilder(SemaPass& Sema)
+      : Sema(Sema)
+   {}
 
    ExprResult visitExprSequence(ExprSequence* Expr)
    {
@@ -63,6 +65,11 @@ public:
    ExprResult visitMixinExpr(MixinExpr* Expr)
    {
       return Sema.visitMixinExpr(Expr);
+   }
+
+   ExprResult visitSubscriptExpr(SubscriptExpr *Expr)
+   {
+      return Sema.visitSubscriptExpr(Expr);
    }
 
    ExprResult visitLambdaExpr(LambdaExpr* Expr)
@@ -110,9 +117,7 @@ public:
    ExprResult visitIdentifierRefExpr(IdentifierRefExpr* Expr,
                                      TemplateArgListExpr* ArgExpr = nullptr)
    {
-      if (Expr->hasLeadingDot()
-          || Expr->getDeclName().getKind()
-                 == DeclarationName::ClosureArgumentName) {
+      if (Expr->hasLeadingDot()) {
          return Expr;
       }
       if (Expr->isSemanticallyChecked()) {
@@ -164,7 +169,9 @@ public:
       }
 
       auto* PE = E->getParentExpr();
-      if (auto* Call = dyn_cast<AnonymousCallExpr>(PE)) {
+      auto* Call = dyn_cast<AnonymousCallExpr>(PE);
+
+      if (Call) {
          PE = Call->getParentExpr();
       }
 
@@ -177,6 +184,11 @@ public:
          }
 
          TypeDependent |= Res.get()->isTypeDependent();
+         if (Call) {
+            Call->setParentExpr(Res.get());
+            return visitExpr(Call);
+         }
+
          return Res;
       }
       default:
@@ -365,7 +377,8 @@ ConstraintBuilder::generateArgumentConstraints(Expression*& E,
    return Result;
 }
 
-void ConstraintBuilder::registerTemplateParam(TemplateParamDecl* Param)
+void ConstraintBuilder::registerTemplateParam(TemplateParamDecl* Param,
+                                              ast::Expression *Anchor)
 {
    if (!Param->isTypeName() || Bindings.ParamBindings.count(Param) != 0) {
       return;
@@ -381,9 +394,15 @@ void ConstraintBuilder::registerTemplateParam(TemplateParamDecl* Param)
 
    // Add an implicit conversion constraint for the covariance.
    if (!Param->getCovariance()->isErrorType()) {
-      auto* Loc = makeLocator(nullptr, PathElement::templateParam(Param));
+      auto* Loc = makeLocator(Anchor, PathElement::templateParam(Param));
       Sys.newConstraint<CovarianceConstraint>(ParamType, Param->getCovariance(),
                                               Param->isVariadic(), Loc);
+   }
+
+   // Add a defaultable constraint if there is a default value.
+   if (auto *DefaultVal = Param->getDefaultValue()) {
+      Sys.newConstraint<DefaultableConstraint>(
+          ParamType, DefaultVal->getExprType()->removeMetaType(), nullptr);
    }
 
    // Remember this binding.
@@ -484,7 +503,7 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
          auto *Var = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
          Sys.newConstraint<TypeBindingConstraint>(Var, T, nullptr);
          Sys.newConstraint<ImplicitConversionConstraint>(
-            Var, NeededTy, makeLocator(
+            Var, NeededTy, Locator ? Locator : makeLocator(
                Expr, PathElement::contextualType(RequiredType.getSourceRange())));
 
          T = Var;
@@ -623,6 +642,24 @@ TypeVariableType* ConstraintBuilder::getTypeVar(Expression* E, bool force,
 QualType ConstraintBuilder::visitAttributedExpr(AttributedExpr* Expr,
                                                 SourceType T)
 {
+   auto E = Expr->getExpr();
+   for (auto& A : Expr->getAttributes()) {
+      switch (A->getKind()) {
+#define CDOT_EXPR_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      Sema.check##Name##Attr(E, cast<Name##Attr>(A));                          \
+      break;
+#define CDOT_TYPE_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      Sema.check##Name##Attr(E, cast<Name##Attr>(A));                          \
+      break;
+#include "cdotc/AST/Attributes.def"
+
+      default:
+         llvm_unreachable("bad expr attr");
+      }
+   }
+
    return visitExpr(Expr->getExpr());
 }
 
@@ -953,9 +990,10 @@ public:
 
 QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
 {
-   TypeVariable FunctionTy = Sys.newTypeVariable();
-
    SmallVector<QualType, 2> ParamTypes;
+   ParamTypes.reserve(Expr->getArgs().size());
+
+   SmallVector<FunctionType::ParamInfo, 2> ParamInfo;
    ParamTypes.reserve(Expr->getArgs().size());
 
    llvm::DenseMap<unsigned, TypeVariableType*> ClosureParams;
@@ -963,6 +1001,11 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
 
    unsigned i = 0;
    bool FoundParamWithoutType = false;
+
+   FunctionType *ReqType = nullptr;
+   if (T && T->isFunctionType()) {
+      ReqType = T->asFunctionType();
+   }
 
    for (auto* Arg : Expr->getArgs()) {
       auto TypeRes = Sema.visitSourceType(Expr, Arg->getType());
@@ -972,10 +1015,18 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
          TypeVariable ParamTypeVar = Sys.newTypeVariable();
          ParamTypes.push_back(ParamTypeVar);
 
+         if (ReqType && ReqType->getNumParams() > i) {
+            ParamInfo.emplace_back(ReqType->getParamInfo()[i]);
+         }
+         else {
+            ParamInfo.emplace_back(ArgumentConvention::Default);
+         }
+
          ClosureParams[i] = ParamTypeVar;
       }
       else {
          ParamTypes.push_back(TypeRes.get());
+         ParamInfo.emplace_back(Arg->getConvention(), Arg->getLabel());
       }
 
       ++i;
@@ -987,7 +1038,7 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
    if (!FoundParamWithoutType) {
       if (!Sema.visitExpr(Expr)) {
          EncounteredError = true;
-         return FunctionTy;
+         return Sys.newTypeVariable();
       }
 
       ReturnType = Expr->getReturnType();
@@ -1008,6 +1059,9 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
       if (Visitor.FoundBadReturnStmt) {
          EncounteredError = true;
       }
+
+      Sys.newConstraint<DefaultableConstraint>(
+          RetTyVar, Sema.Context.getEmptyTupleType(), nullptr);
    }
    else {
       Sys.setPreferredBinding(RetTyVar, ReturnType);
@@ -1015,8 +1069,17 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
 
    // Equate the type of the whole expression with a tuple type containing
    // the element types.
-   QualType ExprType = Sema.Context.getLambdaType(RetTyVar, ParamTypes);
-   Sys.newConstraint<TypeBindingConstraint>(FunctionTy, ExprType, nullptr);
+   QualType ExprType = Sema.Context.getLambdaType(RetTyVar, ParamTypes, ParamInfo);
+
+   TypeVariable FunctionTy;
+   if (false&&ExprType->containsTypeVariable()) {
+      FunctionTy = Sys.newTypeVariable();
+      Sys.newConstraint<TypeEqualityConstraint>(FunctionTy, ExprType, nullptr);
+   }
+   else {
+      FunctionTy = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+      Sys.newConstraint<TypeBindingConstraint>(FunctionTy, ExprType, nullptr);
+   }
 
    return FunctionTy;
 }
@@ -1219,9 +1282,22 @@ QualType ConstraintBuilder::visitBuiltinIdentExpr(BuiltinIdentExpr* Expr,
       // The pointer type.
       TypeVariable PointerType = Sys.newTypeVariable();
 
+      QualType RHSType;
+      if (GeneratingArgConstraints && T) {
+         Sys.newConstraint<ImplicitConversionConstraint>(
+             PointerType, T, makeLocator(Expr));
+
+         if (T->isMutablePointerType()) {
+            RHSType = Sema.Context.getMutablePointerType(Pointee);
+         }
+      }
+
+      if (!RHSType) {
+         RHSType = Sema.Context.getPointerType(Pointee);
+      }
+
       // The pointer type must be a raw pointer pointing to the pointee type.
-      Sys.newConstraint<TypeEqualityConstraint>(
-          PointerType, Sema.Context.getPointerType(Pointee), nullptr);
+      Sys.newConstraint<TypeEqualityConstraint>(PointerType, RHSType, nullptr);
 
       return PointerType;
    }
@@ -1303,36 +1379,51 @@ QualType ConstraintBuilder::visitCallExpr(CallExpr* Expr, SourceType T)
 }
 
 static bool addCandidateDecl(CandidateSet& CandSet, SemaPass& Sema,
-                             NamedDecl* ND, Expression *Expr)
+                             NamedDecl* ND, Expression *Expr,
+                             TemplateArgListExpr *TemplateArgs)
 {
-   if (auto* C = dyn_cast<CallableDecl>(ND)) {
-      CandSet.addCandidate(C, 0);
+   if (auto* CD = dyn_cast<CallableDecl>(ND)) {
+      auto *Cand = CandSet.addCandidate(CD, 0);
+      if (Cand && CD->isTemplate() && TemplateArgs) {
+         TemplateArgList ArgList(Sema, CD, TemplateArgs, Expr->getSourceLoc());
+         assert(ArgList.isStillDependent());
+
+         Cand->InnerTemplateArgs = move(ArgList);
+      }
+
       return false;
    }
-
-//   QualType T;
-//   if (auto* P = dyn_cast<TemplateParamDecl>(ND)) {
-//      T = Sema.Context.getMetaType(P->getCovariance());
-//   }
-//   else {
-//      T = Sema.getTypeForDecl(ND);
-//   }
 
    QualType T = Expr->getExprType();
    if (!T) {
       return false;
    }
 
-   // Anonymous call.
+   // Anonymous call
    if (auto* FnTy = T->asFunctionType()) {
       CandSet.addCandidate(ND);
       return false;
    }
 
-   // Constructor call.
+   // Initializer call
    if (auto* Meta = T->asMetaType()) {
-      if (Meta->getUnderlyingType()->isRecordType()) {
-         QualType RT = Sema.Context.getRecordType(Meta->getUnderlyingType()->getRecord());
+      QualType initializedType = Meta->getUnderlyingType();
+
+      if (auto *Param = initializedType->asTemplateParamType()) {
+         initializedType = Param->getCovariance();
+      }
+
+      SmallVector<QualType, 1> Types;
+      if (initializedType->isRecordType()) {
+         Types.push_back(initializedType);
+      }
+      else if (auto *Ext = initializedType->asExistentialType()) {
+         for (QualType ET : Ext->getExistentials())
+            Types.push_back(ET);
+      }
+
+      for (QualType Ty : Types) {
+         QualType RT = Sema.Context.getRecordType(Ty->getRecord());
          DeclarationName Name
              = Sema.Context.getDeclNameTable().getConstructorName(RT);
 
@@ -1371,6 +1462,19 @@ static bool addCandidateType(CandidateSet& CandSet, SemaPass& Sema,
          return false;
       }
 
+      FinalTemplateArgumentList *TemplateArgs = nullptr;
+      if (auto *DepRec = initializedType->asDependentRecordType()) {
+         QualType realTy = Sema.Context.getRecordType(
+             initializedType->getRecord());
+
+         // Don't use the standard template parameters that are given to
+         // unspecified template types.
+         if (realTy != initializedType) {
+            TemplateArgs = &DepRec->getTemplateArgs();
+            initializedType = realTy;
+         }
+      }
+
       auto* R = initializedType->getRecord();
       auto initName = Sema.Context.getDeclNameTable().getConstructorName(
           initializedType, true);
@@ -1381,7 +1485,10 @@ static bool addCandidateType(CandidateSet& CandSet, SemaPass& Sema,
       }
 
       for (auto* initDecl : LookupRes->allDecls()) {
-         CandSet.addCandidate(cast<InitDecl>(initDecl));
+         auto *Cand = CandSet.addCandidate(cast<InitDecl>(initDecl));
+         if (Cand) {
+            Cand->OuterTemplateArgs = TemplateArgs;
+         }
       }
 
       return false;
@@ -1397,9 +1504,10 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
                                           SmallVectorImpl<NamedDecl*>& Decls)
 {
    Expression* ParentExpr = Call->getParentExpr()->ignoreParens();
+   auto* TemplateArgs = dyn_cast<TemplateArgListExpr>(ParentExpr);
 
    IdentifierRefExpr* Ident;
-   if (auto* TemplateArgs = dyn_cast<TemplateArgListExpr>(ParentExpr)) {
+   if (TemplateArgs) {
       Ident = dyn_cast<IdentifierRefExpr>(TemplateArgs->getParentExpr());
    }
    else {
@@ -1466,13 +1574,13 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
 
    CandidateSet& CandSet = Data.CandSet;
 
-   if (auto* TemplateArgs = dyn_cast<TemplateArgListExpr>(ParentExpr)) {
+   if (TemplateArgs) {
       ParentExpr = TemplateArgs->getParentExpr();
    }
 
    if (auto* DeclRef = dyn_cast<DeclRefExpr>(ParentExpr)) {
       auto* ND = DeclRef->getDecl();
-      if (addCandidateDecl(CandSet, Sema, ND, DeclRef)) {
+      if (addCandidateDecl(CandSet, Sema, ND, DeclRef, TemplateArgs)) {
          Call->setIsInvalid(true);
       }
 
@@ -1481,7 +1589,7 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
    }
    else if (auto* MemRef = dyn_cast<MemberRefExpr>(ParentExpr)) {
       auto* ND = MemRef->getMemberDecl();
-      if (addCandidateDecl(CandSet, Sema, ND, MemRef)) {
+      if (addCandidateDecl(CandSet, Sema, ND, MemRef, TemplateArgs)) {
          Call->setIsInvalid(true);
       }
 
@@ -1490,7 +1598,7 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
    }
    else if (auto* Ovl = dyn_cast<OverloadedDeclRefExpr>(ParentExpr)) {
       for (auto* ND : Ovl->getOverloads()) {
-         if (addCandidateDecl(CandSet, Sema, ND, Ovl)) {
+         if (addCandidateDecl(CandSet, Sema, ND, Ovl, TemplateArgs)) {
             Call->setIsInvalid(true);
          }
 
@@ -1586,12 +1694,52 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
    }
 
    QualType ReturnType;
-   if (Cand->isAnonymousCandidate()
-       || !Cand->getFunc()->isCompleteInitializer()) {
+   if (Cand->isAnonymousCandidate()) {
       ReturnType = Cand->getFunctionType()->getReturnType();
    }
+   else if (!Cand->getFunc()->isCompleteInitializer()) {
+      ReturnType = Cand->getFunctionType()->getReturnType();
+
+      if (auto *M = dyn_cast<MethodDecl>(Cand->getFunc())) {
+         if (M->isProtocolRequirement() || M->isProtocolDefaultImpl()) {
+            if (auto *AT = ReturnType->asAssociatedType()) {
+               CanType ParentType = CandSet.ResolvedArgs.front()->getExprType();
+               ParentType = ParentType->removeMetaType();
+
+               if (AT->getDecl()->isSelf()) {
+                  ReturnType = ParentType;
+               }
+               else if (ParentType->isTemplateParamType() || ParentType->isAssociatedType()) {
+                  ReturnType = Sema.Context.getAssociatedType(AT->getDecl(), ParentType);
+               }
+            }
+         }
+      }
+   }
    else {
-      ReturnType = Sema.Context.getRecordType(Cand->getFunc()->getRecord());
+      auto *fn = cast<InitDecl>(Cand->getFunc());
+
+      // e.g.`<T: FixedWidthInteger> T(3)`
+      // This calls an initializer on BinaryInteger, but should return a value
+      // of type T.
+      if (isa<ProtocolDecl>(fn->getRecord())) {
+         if (auto *PE = Call->getParentExpr()) {
+            QualType ParentType = PE->ignoreParens()->getExprType()->removeMetaType();
+            if (ParentType->isAssociatedType() || ParentType->isTemplateParamType()) {
+               ReturnType = ParentType;
+            }
+         }
+      }
+
+      if (!ReturnType) {
+         if (fn->getRecord()->isTemplate() && Cand->OuterTemplateArgs) {
+            ReturnType = Sema.Context.getDependentRecordType(
+                fn->getRecord(), Cand->OuterTemplateArgs);
+         }
+         else {
+            ReturnType = Sema.Context.getRecordType(fn->getRecord());
+         }
+      }
    }
 
    if (!Cand->isAnonymousCandidate() && Cand->getFunc()->isTemplate()) {
@@ -1603,6 +1751,8 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
    }
 
    Data.BestCand = Cand;
+   Data.ReturnType = ReturnType;
+
    return ReturnType;
 }
 

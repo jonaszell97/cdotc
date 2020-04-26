@@ -1,6 +1,7 @@
 #include "cdotc/Query/Query.h"
 
 #include "cdotc/AST/Decl.h"
+#include "cdotc/AST/TypeVisitor.h"
 #include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/Module.h"
@@ -859,9 +860,9 @@ QueryResult VerifyConstraintsQuery::run()
    return finish(CS);
 }
 
-QueryResult GetConstrainedTypeQuery::run()
+QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT, QualType Self)
 {
-   QualType currentType = C->getConstrainedType();
+   QualType currentType = InnerAT;
    SmallVector<NamedDecl*, 2> decls;
 
    while (currentType) {
@@ -894,14 +895,14 @@ QueryResult GetConstrainedTypeQuery::run()
       }
 
       const MultiLevelLookupResult* result;
-      if (auto Err = QC.MultiLevelTypeLookup(result, currentLookupType,
-                                             declToFind->getDeclName())) {
-         return Query::finish(Err);
+      if (QC.MultiLevelTypeLookup(result, currentLookupType,
+                                  declToFind->getDeclName())) {
+         return QualType();
       }
 
       auto* impl = result->front().front();
-      if (auto Err = QC.PrepareDeclInterface(impl)) {
-         return Query::finish(Err);
+      if (QC.PrepareDeclInterface(impl)) {
+         return QualType();
       }
 
       QualType nextType;
@@ -913,19 +914,29 @@ QueryResult GetConstrainedTypeQuery::run()
       }
 
       if (auto *DR = currentLookupType->asDependentRecordType()) {
-         if (auto Err = QC.SubstTemplateParamTypes(nextType, nextType, DR->getTemplateArgs(), SourceRange())) {
-            return Query::finish(Err);
+         if (QC.SubstTemplateParamTypes(nextType, nextType, DR->getTemplateArgs(), SourceRange())) {
+            return QualType();
          }
 
-         if (auto Err = QC.SubstAssociatedTypes(nextType, nextType, currentLookupType, SourceRange())) {
-            return Query::finish(Err);
+         if (QC.SubstAssociatedTypes(nextType, nextType, currentLookupType, SourceRange())) {
+            return QualType();
          }
       }
 
       currentLookupType = nextType;
    }
 
-   return finish(currentLookupType);
+   return currentLookupType;
+}
+
+QueryResult GetConstrainedTypeQuery::run()
+{
+   auto Ty = QC.Sema->ResolveNestedAssociatedType(C->getConstrainedType(), Self);
+   if (!Ty) {
+      return fail();
+   }
+
+   return finish(Ty);
 }
 
 QueryResult IsConstraintSatisfiedQuery::run()
@@ -1570,8 +1581,6 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
          SelfTy = Context.getTypedefType(AT);
       }
 
-      SelfTy = QC.Sema->ApplyCapabilities(SelfTy, D->getDeclContext());
-
       ArgumentConvention Conv;
       if (M->isStatic() && !M->isBaseInitializer()) {
          SelfTy = Context.getMetaType(SelfTy);
@@ -1601,9 +1610,9 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
    // Allow variadic parameter reference in argument type.
    auto* typeExpr = D->getType().getTypeExpr();
    if (typeExpr) {
-      if (auto* ident = dyn_cast<IdentifierRefExpr>(typeExpr->ignoreParens())) {
-         ident->setAllowVariadicRef(true);
-      }
+      visitSpecificStatement<IdentifierRefExpr>([](Expression *E) {
+         cast<IdentifierRefExpr>(E)->setAllowVariadicRef(true);
+      },  typeExpr);
    }
 
    auto TypeRes = QC.Sema->visitSourceType(D, D->getType());
@@ -1627,30 +1636,38 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
    }
 
    // Check if this argument is variadic.
-   if (auto* paramType = DeclaredArgType->asTemplateParamType()) {
-      if (paramType->getParam()->isVariadic()) {
-         QualType argType = DeclaredArgType.getResolvedType();
-         bool isReallyVariadic = true;
-
-         if (auto* td = dyn_cast<TypedefType>(argType)) {
-            if (td->getTypedef()->isVariadicForDecl()) {
-               isReallyVariadic = false;
-            }
-         }
-
-         D->setVariadic(isReallyVariadic);
-      }
+   if (DeclaredArgType->containsTemplateParamType()) {
+      visitSpecificType<TemplateParamType>([&](TemplateParamType *Param) {
+        if (Param->isVariadic()) {
+           D->setVariadic(true);
+        }
+      }, DeclaredArgType);
    }
+
+//   if (auto* paramType = DeclaredArgType->asTemplateParamType()) {
+//      if (paramType->getParam()->isVariadic()) {
+//         QualType argType = DeclaredArgType.getResolvedType();
+//         bool isReallyVariadic = true;
+//
+//         if (auto* td = dyn_cast<TypedefType>(argType)) {
+//            if (td->getTypedef()->isVariadicForDecl()) {
+//               isReallyVariadic = false;
+//            }
+//         }
+//
+//         D->setVariadic(isReallyVariadic);
+//      }
+//   }
 
    QC.Sema->checkIfTypeUsableAsDecl(DeclaredArgType, D);
 
    if (D->getConvention() == ArgumentConvention::Default) {
       auto Fn = cast<CallableDecl>(D->getDeclContext());
-      // initializer arguments are owned by default
+      // Initializer arguments are owned by default
       if (isa<InitDecl>(Fn) || isa<EnumCaseDecl>(Fn)) {
          D->setConvention(ArgumentConvention::Owned);
       }
-      // otherwise an immutable borrow is the default
+      // Otherwise an immutable borrow is the default.
       else {
          D->setConvention(ArgumentConvention::Borrowed);
       }
@@ -2146,13 +2163,16 @@ QueryResult PrepareAliasInterfaceQuery::run()
 {
    SemaPass::DeclScopeRAII DSR(sema(), D);
 
-   auto TypeRes = QC.Sema->visitSourceType(D->getType(), true);
-   if (!TypeRes) {
-      return finish(DoneWithError);
-   }
+   if (!D->getType().isResolved()) {
+      auto TypeRes = QC.Sema->visitSourceType(D->getType(), true);
+      if (!TypeRes) {
+         return finish(DoneWithError);
+      }
 
-   if (TypeRes.get()->isMetaType()) {
-      TypeRes = TypeRes.get()->removeMetaType();
+      if (TypeRes.get()->isMetaType()) {
+         TypeRes = TypeRes.get()->removeMetaType();
+         D->setType(TypeRes.get());
+      }
    }
 
    if (!D->getAliasExpr()) {
@@ -2173,7 +2193,7 @@ QueryResult PrepareAliasInterfaceQuery::run()
    }
 
    // If the type is inferred, we need to typecheck the expression already.
-   if (!TypeRes.get()->isAutoType() || !D->getAliasExpr()) {
+   if (!D->getType()->isAutoType() || !D->getAliasExpr()) {
       return finish();
    }
 

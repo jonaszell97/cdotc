@@ -13,10 +13,12 @@ StdLib/
 src/AST/Attr.inc
 src/AST/Attributes.def
 
-src/Message/def/backup
-src/Message/def/Diagnostics.def
-src/Message/def/parsed
-src/Message/def/raw
+src/Diagnostics/def/backup
+src/Diagnostics/def/Diagnostics.def
+src/Diagnostics/def/parsed
+src/Diagnostics/def/raw
 
 src/Query/Queries.def
 src/Query/Queries.inc
+
+src/Tools/TableGenScripts

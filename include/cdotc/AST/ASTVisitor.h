@@ -1,5 +1,5 @@
-#ifndef CDOT_NULLASTVISITOR_H
-#define CDOT_NULLASTVISITOR_H
+#ifndef CDOT_ASTVISITOR_H
+#define CDOT_ASTVISITOR_H
 
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/Expression.h"
@@ -1824,4 +1824,4 @@ protected:
 } // namespace ast
 } // namespace cdot
 
-#endif // CDOT_NULLASTVISITOR_H
+#endif // CDOT_ASTVISITOR_H

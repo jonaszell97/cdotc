@@ -442,7 +442,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       PE = ParentRes.get();
       Ident->setParentExpr(PE);
 
-      ParentType = PE->getExprType()->removeReference();
+      ParentType = PE->getExprType();
 
       QualType NoSugar = ParentType->removeReference()->getDesugaredType();
       if (NoSugar->isUnknownAnyType()) {
@@ -534,8 +534,8 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
    const MultiLevelLookupResult* LookupResult = nullptr;
    if (ParentType) {
       if (QC.MultiLevelTypeLookup(LookupResult,
-                                  ParentTypeNoRef->getDesugaredType(), DeclName,
-                                  Opts)) {
+                                  ParentTypeNoRef->getDesugaredType(),
+                                  DeclName, Opts)) {
          return ExprError();
       }
    }
@@ -857,10 +857,6 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       break;
    }
    case Decl::FieldDeclID: {
-      if (FoundDecl->isStatic()) {
-         break;
-      }
-
       auto* field = cast<FieldDecl>(FoundDecl);
       if (field->isVariadic() && !Ident->allowVariadicRef()) {
          diagnose(Ident, err_generic_error,
@@ -881,7 +877,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       IsMemberRef = true;
       break;
    case Decl::EnumCaseDeclID:
-      IsMemberRef = true;
+      IsMemberRef = false;
       break;
    case Decl::AliasDeclID: {
       auto* Alias = cast<AliasDecl>(FoundDecl);
@@ -1048,6 +1044,10 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr* Expr)
 
       break;
    }
+   case Decl::EnumCaseDeclID: {
+      ResultType = Context.getRecordType(ND->getRecord());
+      break;
+   }
    case Decl::FunctionDeclID:
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
@@ -1127,10 +1127,6 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr* Expr)
 
       break;
    }
-   case Decl::EnumCaseDeclID: {
-      ResultType = Context.getRecordType(ND->getRecord());
-      break;
-   }
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID: {
@@ -1169,14 +1165,16 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr* Expr)
    }
 
    if (auto* AT = ResultType->asAssociatedType()) {
-      ResultType = Context.getAssociatedType(
-          AT->getDecl(), PE->getExprType()->removeReference());
+      QualType Outer = PE->getExprType()->removeReference();
+      if (Outer->containsAssociatedType() || Outer->containsTemplateParamType()) {
+         ResultType = Context.getAssociatedType(AT->getDecl(), Outer);
+      }
+      else {
+         ResultType = CreateConcreteTypeFromAssociatedType(AT, Outer, ResultType);
+      }
    }
 
    Expr->setExprType(ResultType);
-   //   CheckReturnedSelfType(PE->ignoreParensAndImplicitCasts()->getExprType(),
-   //                         Expr);
-
    return Expr;
 }
 
@@ -1450,8 +1448,9 @@ SemaPass::checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
 
    TemplateArgList ArgList(*this, CD, TemplateArgs, E->getSourceLoc());
    if (ArgList.isStillDependent()) {
-      E->setIsTypeDependent(true);
-      return nullptr;
+      E->setNeedsInstantiation(true);
+      // FIXME dependent function reference
+      return CD;
    }
 
    auto CompRes = ArgList.checkCompatibility();
@@ -1820,7 +1819,7 @@ QualType SemaPass::HandlePropAccess(Expression* Expr, PropDecl* P)
          maybeInstantiateMemberFunction(P->getSetterMethod(), Expr);
       }
 
-      // this path should only be taken when resolving an expression sequence
+      // This path should only be taken when resolving an expression sequence
       // so this type is only used to get the correct `=` overloads; the
       // actual type of the resolved expression will be `Void`
       ResultTy = Context.getMutableReferenceType(P->getType());
@@ -1850,8 +1849,8 @@ QualType SemaPass::HandlePropAccess(Expression* Expr, PropDecl* P)
       }
    }
 
-   // if the expression that we're accessing the property on is constant,
-   // error if we're trying to use a setter
+   // If the expression that we're accessing the property on is constant,
+   // issue an error if we're trying to use a setter.
    bool ParentIsConst
        = !Expr->getParentExpr()->getExprType()->isMutableReferenceType();
 
@@ -2053,7 +2052,19 @@ ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr* Expr)
                                              ident, Expr->getIndices(), {});
 
       call->setIsLHSOfAssignment(Expr->isLHSOfAssignment());
-      return typecheckExpr(call, Expr->getContextualType(), Expr, false);
+      auto result = typecheckExpr(call, Expr->getContextualType(), Expr, false);
+
+      if (!result) {
+         return ExprError();
+      }
+
+      Expression *CallExpr = result.get();
+      if (Expr->isLHSOfAssignment() && !CallExpr->getExprType()->isMutableReferenceType()) {
+         CallExpr->setExprType(Context.getMutableReferenceType(
+             CallExpr->getExprType()));
+      }
+
+      return CallExpr;
    }
 
    for (auto& Idx : Expr->getIndices()) {

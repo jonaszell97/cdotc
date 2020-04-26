@@ -5,7 +5,7 @@ namespace cdot {
 namespace builtin {
 
 enum Builtin : unsigned {
-   NoBuiltin,
+   InvalidBuiltin,
 
    allocStack,
    addressOf,
@@ -40,7 +40,7 @@ enum Builtin : unsigned {
 };
 
 enum BuiltinAlias : unsigned {
-   NoAlias = _lastBuiltin,
+   InvalidAlias = _lastBuiltin,
    TokenType,
    CVoid,
    RawPointer,

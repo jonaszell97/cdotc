@@ -3593,11 +3593,13 @@ il::Value* ILGenPass::visitDeclRefExpr(DeclRefExpr* Expr)
 
       return V;
    }
+   case Decl::EnumCaseDeclID:
+      return Builder.CreateEnumInit(cast<EnumDecl>(ND->getRecord()),
+                                    cast<EnumCaseDecl>(ND), {});
    case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:
    case Decl::PropDeclID:
-   case Decl::EnumCaseDeclID:
       llvm_unreachable("should be a MemberRefExpr!");
    default:
       return getValueForDecl(Expr->getDecl());
@@ -3676,9 +3678,6 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr* Expr)
 
       return V;
    }
-   case Decl::EnumCaseDeclID:
-      return Builder.CreateEnumInit(cast<EnumDecl>(ND->getRecord()),
-                                    cast<EnumCaseDecl>(ND), {});
    default:
       llvm_unreachable("bad member reference kind!");
    }

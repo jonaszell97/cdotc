@@ -46,6 +46,14 @@ QueryResult CreateILModuleQuery::run()
       return fail();
    }
 
+   // Instantiate queued function bodies.
+   bool error = false;
+   auto &Instantiator = QC.Sema->getInstantiator();
+   for (size_t i = 0; i < QC.Sema->QueuedInstantiations.size(); ++i) {
+      auto *Fn = QC.Sema->QueuedInstantiations[i];
+      error |= Instantiator.InstantiateFunctionBody(Fn);
+   }
+
    auto* ILMod = Mod->getILModule();
    auto& ILGen = QC.Sema->getILGen();
    ILGen.Builder.SetModule(ILMod);
@@ -324,14 +332,6 @@ QueryResult GenerateILFunctionBodyQuery::run()
    if (C->shouldBeSpecialized()) {
       ILGen.SpecializeFunction(C->getBodyTemplate(), C);
       return finish();
-   }
-
-   // Check if we still need to instantiate the body of this function.
-   if (QC.Sema->QueuedInstantiations.remove(C)) {
-//      if (auto Err = QC.InstantiateMethodBody(C)) {
-//         return Query::finish(Err);
-//      }
-      //FIXME needed?
    }
 
    if (C->isInvalid()) {

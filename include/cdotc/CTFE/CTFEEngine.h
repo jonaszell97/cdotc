@@ -2,7 +2,7 @@
 #define CDOT_CTFEENGINE_H
 
 #include "cdotc/Basic/Variant.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallPtrSet.h>
 

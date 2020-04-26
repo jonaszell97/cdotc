@@ -22,32 +22,6 @@ class EnumCaseDecl;
 class FuncArgDecl;
 class Statement;
 
-class OverloadResolver {
-public:
-   OverloadResolver(SemaPass& SP, DeclarationName FuncName, Expression* SelfArg,
-                    ArrayRef<Expression*> givenArgs,
-                    ArrayRef<Expression*> givenTemplateArgs,
-                    ArrayRef<IdentifierInfo*> givenLabels,
-                    Statement* Caller = nullptr);
-
-   using ConvSeqVec = SmallVectorImpl<ConversionSequenceBuilder>;
-   using ArgVec = SmallVectorImpl<StmtOrDecl>;
-
-   void resolve(CandidateSet& CandSet);
-   void resolve(CandidateSet& CandSet, CandidateSet::Candidate& Cand,
-                llvm::ArrayRef<Expression*> givenArgs, ConvSeqVec& Conversions,
-                ArgVec& ArgExprs);
-
-protected:
-   SemaPass& SP;
-   DeclarationName FuncName;
-   Expression* SelfArg;
-   ArrayRef<Expression*> givenArgs;
-   ArrayRef<Expression*> givenTemplateArgs;
-   ArrayRef<IdentifierInfo*> givenLabels;
-   Statement* Caller;
-};
-
 } // namespace ast
 
 namespace sema {

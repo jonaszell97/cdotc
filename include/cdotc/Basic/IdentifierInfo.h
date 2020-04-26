@@ -86,9 +86,6 @@ public:
    unsigned size() const { return IdentMap.size(); }
 
    void addKeywords();
-   void addTblGenKeywords();
-   void addModuleKeywords();
-   void addILKeywords();
 
 private:
    MapTy IdentMap;

@@ -2,7 +2,7 @@
 
 #include "cdotc/AST/ASTContext.h"
 #include "cdotc/AST/Decl.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 
 #include <llvm/Support/raw_ostream.h>

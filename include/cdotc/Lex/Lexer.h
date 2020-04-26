@@ -2,7 +2,7 @@
 #define LEXER_H
 
 #include "cdotc/Lex/Token.h"
-#include "cdotc/Message/Diagnostics.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringMap.h>

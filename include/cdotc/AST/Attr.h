@@ -18,7 +18,7 @@ class StaticExpr;
 } // namespace ast
 
 enum class AttrKind : unsigned char {
-   _notAttr,
+   _invalidAttr,
 
 #define CDOT_ATTR(Name, Spelling) Name,
 #define CDOT_ABSTRACT_ATTR(Name) Name,

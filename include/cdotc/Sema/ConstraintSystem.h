@@ -1134,6 +1134,9 @@ public:
    bool appendCurrentSolution(SmallVectorImpl<Solution>& Solutions,
                               ArrayRef<TypeVariableType*> TypeVars);
 
+   /// Calculate the conversion penalty for a solution.
+   uint64_t calculateConversionPenalty(const Solution &S);
+
    /// Diagnose the constraint system failure.
    bool diagnoseFailure(SolutionBindings& Bindings);
 
