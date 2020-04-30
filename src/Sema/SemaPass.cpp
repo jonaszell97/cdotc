@@ -2352,7 +2352,7 @@ ExprResult SemaPass::visitIntegerLiteral(IntegerLiteral* Expr)
       if (auto CtxTy = Expr->getContextualType()) {
          CanType Ty = CtxTy->getCanonicalType();
          if (Ty->isIntegerType()) {
-            Expr->setType(Ty);
+            Expr->setExprType(Ty);
 
             if (Ty->isUnsigned()) {
                Expr->setValue(
@@ -2367,7 +2367,6 @@ ExprResult SemaPass::visitIntegerLiteral(IntegerLiteral* Expr)
                                 false));
             }
 
-            Expr->setExprType(Expr->getType());
             return Expr;
          }
          else if ((Ty->isPointerType() || Ty->isThinFunctionTy())
@@ -2384,8 +2383,42 @@ ExprResult SemaPass::visitIntegerLiteral(IntegerLiteral* Expr)
                 getIdentifier("IntegerType"));
 
             if (Res) {
+               if (Res.get() == Expr && Expr->getExprType()->isRecordType()) {
+                  CanType IntTy = cast<StructDecl>(Expr->getExprType()->getRecord())
+                      ->getFields().front()->getType();
+
+                  if (IntTy->isFPType()) {
+                     llvm::APFloat F(IntTy->isFloatTy()
+                        ? llvm::APFloat::IEEEsingle()
+                        : llvm::APFloat::IEEEdouble());
+
+                     F.convertFromAPInt(Expr->getValue(),
+                                        Expr->getValue().isSigned(),
+                                        llvm::APFloat::rmNearestTiesToEven);
+
+                     auto *Lit = FPLiteral::Create(
+                         Context, Expr->getSourceRange(),
+                         Ty, move(F));
+
+                     Lit->setExprType(Ty);
+                     Lit->setSemanticallyChecked(true);
+
+                     return Lit;
+                  }
+
+                  if (IntTy->isUnsigned()) {
+                     Expr->setValue(Context, llvm::APSInt(
+                         Expr->getValue().zextOrTrunc(IntTy->getBitwidth()), true));
+                  }
+                  else {
+                     Expr->setValue(Context, llvm::APSInt(
+                         Expr->getValue().sextOrTrunc(IntTy->getBitwidth()), false));
+                  }
+               }
+
                return Res;
             }
+
             if (Expr->isInvalid()) {
                return ExprError();
             }
@@ -2411,7 +2444,6 @@ ExprResult SemaPass::visitIntegerLiteral(IntegerLiteral* Expr)
       return ExprError();
    }
 
-   // FIXME verify
    QualType T
        = DefaultIntegerType->getType()->asMetaType()->getUnderlyingType();
 

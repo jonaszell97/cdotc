@@ -356,7 +356,8 @@ public:
                         StringRef name = "");
 
    Instruction* CreateAddrOf(Value* target, StringRef name = "");
-   Instruction* CreatePtrToLvalue(Value* target, StringRef name = "");
+   Instruction* CreatePtrToLvalue(Value* target, bool forceMutable = false,
+                                  StringRef name = "");
 
    StructInitInst* CreateStructInit(ast::StructDecl* InitializedType,
                                     Method* Init, llvm::ArrayRef<Value*> args,

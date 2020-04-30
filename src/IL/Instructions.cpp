@@ -184,7 +184,7 @@ EnumRawValueInst::EnumRawValueInst(Value* Val, bool LoadVal, BasicBlock* parent)
    assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
 
    auto& ASTCtx = getASTCtx();
-   type = ValueType(Val->getCtx(), ASTCtx.getIntTy());
+   type = ValueType(Val->getCtx(), cast<EnumDecl>(rec)->getRawType());
 
    if (!LoadVal) {
       type = ASTCtx.getMutableReferenceType(type);

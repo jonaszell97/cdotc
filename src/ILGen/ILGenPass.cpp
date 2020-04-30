@@ -50,8 +50,8 @@ ILGenPass::ILGenPass(il::Context& Ctx, SemaPass& SP)
    UWordZero = Builder.GetConstantInt(Context.getUIntTy(), 0);
    UWordOne = Builder.GetConstantInt(Context.getUIntTy(), 1);
 
-   DeinitializerTy = Context.getFunctionType(VoidTy, {MutableRawPtrTy});
-   CopyFnTy = Context.getFunctionType(VoidTy, {MutableRawPtrTy, RawPtrTy});
+   DeinitializerTy = Context.getFunctionType(VoidTy, {RawPtrTy});
+   CopyFnTy = Context.getFunctionType(VoidTy, {RawPtrTy, RawPtrTy});
 
    SelfII = &SP.getContext().getIdentifiers().get("self");
    ;
@@ -1356,8 +1356,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       EmitCoroutinePrelude(CD, *func);
    }
 
-   il::Value* GenericEnv = nullptr;
-
    auto arg_it = func->getEntryBlock()->arg_begin();
    auto arg_end = func->getEntryBlock()->arg_end();
 
@@ -1383,7 +1381,7 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
             auto* SomeCase = cast<EnumDecl>(SelfVal->getType()->getRecord())
                                  ->hasCase(SomeII);
 
-            auto CaseValRef = Builder.CreateEnumRawValue(SelfVal, false);
+            auto CaseValRef = GetEnumRawValueAsInteger(SelfVal, false, false);
             Builder.CreateStore(
                 Builder.GetConstantInt(
                     CaseValRef->getType()->getReferencedType(), 1),
@@ -2266,7 +2264,7 @@ static void doRetainOrRelease(bool IsRetain, ILGenPass& ILGen,
          return;
 
       if (auto E = dyn_cast<EnumDecl>(R)) {
-         auto CaseVal = Builder.CreateEnumRawValue(V);
+         auto CaseVal = ILGen.GetEnumRawValueAsInteger(V);
          auto Switch = Builder.CreateSwitch(CaseVal, ILGen.makeUnreachableBB());
 
          auto MergeBB = Builder.CreateBasicBlock("enum.retain_release.merge");
@@ -2369,6 +2367,49 @@ il::Instruction* ILGenPass::CreateStore(il::Value* src, il::Value* dst,
       return Builder.CreateInit(src, dst);
 
    return Builder.CreateAssign(src, dst);
+}
+
+il::Value* ILGenPass::GetEnumRawValueAsInteger(il::Value* EnumVal,
+                                               bool CastToInt64,
+                                               bool load)
+{
+   auto *rawValue = Builder.CreateEnumRawValue(EnumVal);
+   QualType rawType = rawValue->getType();
+
+   il::Value *result;
+   if (rawType->isIntegerType()) {
+      result = rawValue;
+   }
+   else {
+      assert(rawType->isRecordType() && "invalid raw value type!");
+
+      auto* R = rawType->getRecord();
+      if (R->hasAttribute<_BuiltinAttr>()) {
+         result = Builder.CreateStructGEP(rawValue, 0);
+
+         if (!load) {
+            assert(!CastToInt64);
+            return result;
+         }
+
+         result = Builder.CreateLoad(result);
+      }
+      else {
+         auto *Hashable = SP.getHashableDecl();
+         auto *hashValue = Hashable->getDecls<PropDecl>().begin()->getGetterMethod();
+         auto *hashValueImpl = cast<MethodDecl>(Context.getProtocolImpl(R, hashValue));
+
+         result = CreateCall(hashValueImpl, rawValue);
+      }
+   }
+
+   assert(load && "can't get an lvalue of a hash value!");
+
+   if (CastToInt64 && !result->getType()->isInt64Ty(false)) {
+      result = Convert(result, Context.getInt64Ty(), true);
+   }
+
+   return result;
 }
 
 namespace {
@@ -4498,7 +4539,7 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr* node)
    }
    case Builtin::atomic_store: {
       auto* Val = args[0];
-      auto* Dst = Builder.CreatePtrToLvalue(args[1]);
+      auto* Dst = Builder.CreatePtrToLvalue(args[1], true);
       auto* Order = args[2];
 
       auto* MergeBB = Builder.CreateBasicBlock("atomic.store.merge");
@@ -4888,7 +4929,7 @@ void ILGenPass::visitForInStmt(ForInStmt* Stmt)
    }
 
    auto Next = CreateCall(Stmt->getNextFn(), {ItVal}, Stmt->getRangeExpr());
-   auto OptVal = Builder.CreateEnumRawValue(Next);
+   auto OptVal = GetEnumRawValueAsInteger(Next);
    BodyBB->addBlockArg(Next->getType());
 
    auto IsZero = Builder.CreateIsZero(OptVal);
@@ -5275,7 +5316,7 @@ void ILGenPass::HandleIntegralSwitch(MatchStmt* node)
 
    auto SwitchVal = visit(node->getSwitchValue());
    if (!SwitchVal->getType()->isIntegerType()) {
-      SwitchVal = Builder.CreateEnumRawValue(SwitchVal);
+      SwitchVal = GetEnumRawValueAsInteger(SwitchVal);
    }
 
    il::BasicBlock* DefaultBB = nullptr;
@@ -5393,11 +5434,6 @@ il::Value* ILGenPass::visitExpressionPattern(ExpressionPattern* node,
       Eq = CreateEqualityComp(MatchVal, Expr);
    }
 
-   if (!Eq->getType()->isInt1Ty()) {
-      Eq = Builder.CreateStructGEP(Eq, 0);
-      Eq = Builder.CreateLoad(Eq);
-   }
-
    return Builder.CreateCondBr(Eq, MatchBB, NoMatchBB, MatchArgs, NoMatchArgs);
 }
 
@@ -5412,7 +5448,7 @@ static void visitEnumPattern(ILGenPass& ILGen, CasePattern* node,
    ILBuilder& Builder = ILGen.Builder;
 
    // Check if the raw values are equal.
-   auto* GivenRawVal = Builder.CreateEnumRawValue(MatchVal);
+   auto* GivenRawVal = ILGen.GetEnumRawValueAsInteger(MatchVal);
    auto* NeededRawVal = Case->getILValue();
 
    il::BasicBlock* LastCmpBB = Builder.CreateBasicBlock("case.pattern.cmp");
@@ -5858,26 +5894,28 @@ il::Value* ILGenPass::visitArrayLiteral(ArrayLiteral* Arr)
 
 il::Value* ILGenPass::visitIntegerLiteral(IntegerLiteral* Expr)
 {
-   Constant* Val = Builder.GetConstantInt(Expr->getType(), Expr->getValue());
-
    if (auto* R = Expr->getExprType()->asRecordType()) {
-      return Builder.GetConstantStruct(cast<StructDecl>(R->getRecord()), Val);
+      auto *S = cast<StructDecl>(R->getRecord());
+      return Builder.GetConstantStruct(
+          S, Builder.GetConstantInt(
+              S->getFields().front()->getType(), Expr->getValue()));
    }
 
    assert(Expr->getExprType()->isIntegerType());
-   return Val;
+   return Builder.GetConstantInt(Expr->getExprType(), Expr->getValue());
 }
 
 il::Value* ILGenPass::visitFPLiteral(FPLiteral* Expr)
 {
-   Constant* Val = Builder.GetConstantFP(Expr->getType(), Expr->getValue());
-
    if (auto* R = Expr->getExprType()->asRecordType()) {
-      return Builder.GetConstantStruct(cast<StructDecl>(R->getRecord()), Val);
+      auto *S = cast<StructDecl>(R->getRecord());
+      return Builder.GetConstantStruct(
+          S, Builder.GetConstantFP(
+              S->getFields().front()->getType(), Expr->getValue()));
    }
 
    assert(Expr->getExprType()->isFPType());
-   return Val;
+   return Builder.GetConstantFP(Expr->getType(), Expr->getValue());;
 }
 
 il::Value* ILGenPass::visitBoolLiteral(BoolLiteral* Expr)
@@ -5908,13 +5946,16 @@ il::Value* ILGenPass::visitCharLiteral(CharLiteral* Expr)
    }
 
    assert(R->getDeclName().isStr("Character"));
+   auto *Character = cast<StructDecl>(R);
 
-   // FIXME this is a code point.
    // Build a character constant.
-   auto* Val = Builder.GetConstantInt(SP.getContext().getUInt32Ty(),
-                                      (uint64_t)Expr->getWide());
+   auto* IntVal = Builder.GetConstantInt(SP.getContext().getUInt32Ty(),
+                                         (uint64_t)Expr->getWide());
 
-   return Builder.GetConstantStruct(cast<StructDecl>(R), Val);
+   auto *Val = Builder.GetConstantStruct(
+       cast<StructDecl>(Character->getFields().front()->getRecord()), IntVal);
+
+   return Builder.GetConstantStruct(Character, Val);
 }
 
 il::Value* ILGenPass::visitNoneLiteral(NoneLiteral* node)
@@ -6598,7 +6639,18 @@ il::Value* ILGenPass::visitIfExpr(IfExpr* node)
    return Val;
 }
 
-il::Value* ILGenPass::CreateEqualityComp(il::Value* lhs, il::Value* rhs)
+static il::Value *CastValueToBool(ILGenPass &ILGen, il::Value *V)
+{
+   if (V->getType()->isIntegerType()) {
+      assert(V->getType()->isInt1Ty());
+      return V;
+   }
+
+   return ILGen.Builder.CreateLoad(ILGen.Builder.CreateStructGEP(V, 0));
+}
+
+il::Value* ILGenPass::CreateEqualityComp(il::Value* lhs, il::Value* rhs,
+                                         bool CastToBool)
 {
    auto lhsTy = lhs->getType();
    auto rhsTy = rhs->getType();
@@ -6610,8 +6662,8 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value* lhs, il::Value* rhs)
 
    if (lhsTy->isRawEnum()) {
       if (!SP.IsMoveOnlyType(lhsTy)) {
-         return CreateEqualityComp(Builder.CreateEnumRawValue(lhs),
-                                   Builder.CreateEnumRawValue(rhs));
+         return CreateEqualityComp(GetEnumRawValueAsInteger(lhs),
+                                   GetEnumRawValueAsInteger(rhs));
       }
    }
 
@@ -6652,14 +6704,19 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value* lhs, il::Value* rhs)
    }
 
    if (lhsTy->isRecordType()) {
-      MethodDecl* CopyDecl;
-      if (SP.QC.GetImplicitConformance(CopyDecl, lhsTy->getRecord(),
+      MethodDecl* EquatableDecl;
+      if (SP.QC.GetImplicitConformance(EquatableDecl, lhsTy->getRecord(),
                                        ImplicitConformanceKind::Equatable)) {
          return Builder.GetTrue();
       }
 
-      if (CopyDecl) {
-         return CreateCall(CopyDecl, {lhs, rhs});
+      if (EquatableDecl) {
+         auto *result = CreateCall(EquatableDecl, {lhs, rhs});
+         if (CastToBool) {
+            return CastValueToBool(*this, result);
+         }
+
+         return result;
       }
    }
 
@@ -6702,7 +6759,7 @@ il::Value* ILGenPass::CreateTupleComp(il::Value* lhs, il::Value* rhs)
 
       auto val1 = Builder.CreateTupleExtract(lhs, i);
       auto val2 = Builder.CreateTupleExtract(rhs, i);
-      auto eq = CreateEqualityComp(val1, val2);
+      auto eq = CreateEqualityComp(val1, val2, true);
 
       Builder.CreateCondBr(eq, EqBB, CompBlocks[i + 1]);
       ++i;
@@ -6726,14 +6783,17 @@ il::Value* ILGenPass::CreateEnumComp(il::Value* lhs, il::Value* rhs)
    auto EnumTy = cast<EnumDecl>(lhs->getType()->getRecord());
 
    if (EnumTy->getMaxAssociatedValues() == 0) {
-      auto rawVal1 = Builder.CreateEnumRawValue(lhs);
-      auto rawVal2 = Builder.CreateEnumRawValue(rhs);
+      auto rawVal1 = GetEnumRawValueAsInteger(lhs);
+      auto rawVal2 = GetEnumRawValueAsInteger(rhs);
 
       return Builder.CreateCompEQ(rawVal1, rawVal2);
    }
 
+   auto rawVal1 = GetEnumRawValueAsInteger(lhs);
+   auto rawVal2 = GetEnumRawValueAsInteger(rhs);
+
    auto SwitchBB = Builder.CreateBasicBlock("enumcmp.switch");
-   SwitchBB->addBlockArg(EnumTy->getRawType(), "case_val");
+   SwitchBB->addBlockArg(rawVal1->getType(), "case_val");
 
    auto EqBB = Builder.CreateBasicBlock("enumcmp.eq");
    auto NeqBB = Builder.CreateBasicBlock("enumcmp.neq");
@@ -6751,9 +6811,6 @@ il::Value* ILGenPass::CreateEnumComp(il::Value* lhs, il::Value* rhs)
       CaseBlocks.push_back(
           Builder.CreateBasicBlock(("enumcmp.case." + C->getName()).str()));
    }
-
-   auto rawVal1 = Builder.CreateEnumRawValue(lhs);
-   auto rawVal2 = Builder.CreateEnumRawValue(rhs);
 
    auto caseIsEq = Builder.CreateCompEQ(rawVal1, rawVal2);
    Builder.CreateCondBr(caseIsEq, SwitchBB, NeqBB, {rawVal1});
@@ -6798,7 +6855,8 @@ il::Value* ILGenPass::CreateEnumComp(il::Value* lhs, il::Value* rhs)
          auto val1 = Builder.CreateEnumExtract(lhs, C->getIdentifierInfo(), j);
          auto val2 = Builder.CreateEnumExtract(rhs, C->getIdentifierInfo(), j);
          auto eq = CreateEqualityComp(Builder.CreateLoad(val1),
-                                      Builder.CreateLoad(val2));
+                                      Builder.CreateLoad(val2),
+                                      true);
 
          Builder.CreateCondBr(eq, CompBlocks[j + 1], NeqBB);
 

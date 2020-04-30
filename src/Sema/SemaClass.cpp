@@ -343,14 +343,14 @@ QueryResult ResolveRawTypeQuery::run()
          CaseValTy = res.get();
       }
       else if (res.get()->isRecordType()) {
-         ProtocolDecl* Eq;
-         if (QC.GetBuiltinProtocol(Eq, GetBuiltinProtocolQuery::Equatable))
+         ProtocolDecl* Hashable;
+         if (QC.GetBuiltinProtocol(Hashable, GetBuiltinProtocolQuery::Hashable))
             llvm_unreachable("no 'Equatable' declaration!");
 
-         bool Conforms = QC.Sema->ConformsTo(res.get(), Eq);
+         bool Conforms = QC.Sema->ConformsTo(res.get(), Hashable);
          if (!Conforms) {
             QC.Sema->diagnose(err_generic_error,
-                              "enum raw type must conform to 'Equatable', "
+                              "enum raw type must conform to 'Hashable', "
                                   + res.get()->toString() + " given",
                               E->getSourceLoc());
          }
@@ -360,7 +360,7 @@ QueryResult ResolveRawTypeQuery::run()
       }
       else {
          QC.Sema->diagnose(err_generic_error,
-                           "enum raw type must conform to 'Equatable'"
+                           "enum raw type must conform to 'Hashable'"
                                + res.get()->toString() + " given",
                            E->getSourceLoc());
       }
@@ -1514,8 +1514,6 @@ QueryResult CheckBuiltinConformancesQuery::run()
             NeedsRetainOrRelease |= FieldNeedsRetain;
             AllCopyable &= FieldCopyable;
             AllImplicitlyCopyable &= FieldImplicitlyCopyable;
-
-            // FIXME into-query
             TrivialLayout &= TI.isTriviallyCopyable(ArgTy);
          }
       }
@@ -1527,8 +1525,7 @@ QueryResult CheckBuiltinConformancesQuery::run()
          }
 
          if (Eq) {
-            QC.AddSingleConformance(R->getType(), Eq,
-                                    ConformanceKind::Explicit);
+            QC.AddSingleConformance(R->getType(), Eq, ConformanceKind::Explicit);
             QC.CheckSingleConformance(R->getType(), Eq);
          }
       }
@@ -1543,8 +1540,7 @@ QueryResult CheckBuiltinConformancesQuery::run()
          if (!QC.Context.getConformanceTable().conformsTo(E, RawRep)) {
             addRawRepresentableConformance(*QC.Sema, E);
 
-            QC.AddSingleConformance(R->getType(), RawRep,
-                                    ConformanceKind::Explicit);
+            QC.AddSingleConformance(R->getType(), RawRep, ConformanceKind::Explicit);
             QC.CheckSingleConformance(R->getType(), RawRep);
          }
       }

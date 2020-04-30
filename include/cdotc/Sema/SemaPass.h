@@ -1428,16 +1428,13 @@ public:
                           llvm::ArrayRef<Expression*> templateArgs);
 
    CallableDecl* checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
-                                        ArrayRef<Expression*> templateArgs,
-                                        bool diagnoseTemplateErrors);
+                                        ArrayRef<Expression*> templateArgs);
 
    RecordDecl *checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
-                                    ArrayRef<Expression*> templateArgs,
-                                    bool diagnoseTemplateErrors);
+                                    ArrayRef<Expression*> templateArgs);
 
    AliasDecl* checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
-                                  ArrayRef<Expression*> templateArgs,
-                                  bool diagnoseTemplateErrors);
+                                  ArrayRef<Expression*> templateArgs);
 
    struct AliasResult {
       explicit AliasResult(AliasDecl* Alias)

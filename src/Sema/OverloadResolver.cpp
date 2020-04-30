@@ -890,7 +890,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
             E = LE;
          }
       }
-      else {
+      else if (!requiredType || !requiredType->isReferenceType()) {
          E = SP.castToRValue(E);
       }
 
@@ -1154,9 +1154,9 @@ static bool resolveCandidate(
       break;
    case ConstraintSystem::Failure:
       Sys.solve(Solutions, true);
-      if (!Sys.diagnoseCandidateFailure(Cand, Cand.Builder->Bindings)) {
-         // FIXME we need to still put some error here to prevent Sema
-         //  from just moving on...
+      Sys.diagnoseCandidateFailure(Cand, Cand.Builder->Bindings);
+
+      if (Cand.FR == CandidateSet::None) {
          Cand.setIsInvalid();
       }
 
@@ -1320,9 +1320,9 @@ static bool resolveAnonymousCandidate(
       break;
    case ConstraintSystem::Failure:
       Sys.solve(Solutions, true);
-      if (!Sys.diagnoseCandidateFailure(Cand, Cand.Builder->Bindings)) {
-         // FIXME we need to still put some error here to prevent Sema
-         //  from just moving on...
+      Sys.diagnoseCandidateFailure(Cand, Cand.Builder->Bindings);
+
+      if (Cand.FR == CandidateSet::None) {
          Cand.setIsInvalid();
       }
 

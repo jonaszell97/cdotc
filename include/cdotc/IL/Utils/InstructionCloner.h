@@ -188,7 +188,7 @@ public:
 
    il::Value* visitPtrToLvalueInst(const PtrToLvalueInst& I)
    {
-      return Builder.CreatePtrToLvalue(visit(I.getOperand(0)), I.getName());
+      return Builder.CreatePtrToLvalue(visit(I.getOperand(0)), false, I.getName());
    }
 
    il::Value* visitCaptureExtractInst(const CaptureExtractInst& I)
