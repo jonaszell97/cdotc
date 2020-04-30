@@ -250,7 +250,7 @@ void ILGenPass::AppendDefaultDeinitializer(Method* M)
       }
       else if (auto E = dyn_cast<EnumDecl>(R)) {
          auto MergeBB = Builder.CreateBasicBlock("merge");
-         auto RawVal = Builder.CreateEnumRawValue(Self);
+         auto RawVal = GetEnumRawValueAsInteger(Self);
          auto Switch = Builder.CreateSwitch(RawVal, makeUnreachableBB());
 
          for (auto C : E->getCases()) {
@@ -1072,7 +1072,7 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl* M, RecordDecl* R)
          return;
       }
 
-      auto CaseVal = Builder.CreateEnumRawValue(Self);
+      auto CaseVal = GetEnumRawValueAsInteger(Self);
       auto Switch = Builder.CreateSwitch(CaseVal, makeUnreachableBB());
 
       auto MergeBB = Builder.CreateBasicBlock("enum.cpy.merge");
@@ -1165,7 +1165,7 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl* M,
       Builder.CreateRet(Str);
    }
    else if (auto EnumTy = dyn_cast<EnumDecl>(R)) {
-      auto RawVal = Builder.CreateEnumRawValue(Self);
+      auto RawVal = GetEnumRawValueAsInteger(Self);
       auto Separator = getString(", ");
       (void)Separator;
 
@@ -1265,7 +1265,10 @@ void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl* R)
       auto Self = fun->getEntryBlock()->getBlockArg(0);
       fun->setSelf(Self);
 
-      auto Val = fun->getEntryBlock()->getBlockArg(1);
+      il::Value *Val = fun->getEntryBlock()->getBlockArg(1);
+      if (!Val->getType()->isIntegerType()) {
+         Val = Builder.CreateLoad(Builder.CreateStructGEP(Val, 0));
+      }
 
       auto* failureBB = Builder.CreateBasicBlock("init.failure");
       auto* sw = Builder.CreateSwitch(Val, failureBB);
@@ -1444,6 +1447,18 @@ il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
    return GV;
 }
 
+static Constant *CreateStruct(ILBuilder &Builder, Constant *Val, QualType T)
+{
+   auto *S = cast<StructDecl>(T->getRecord());
+
+   auto FieldTy = S->getFields().front()->getType();
+   if (FieldTy->isPointerType()) {
+      Val = ConstantExpr::getBitCast(Val, FieldTy);
+   }
+
+   return Builder.GetConstantStruct(S, Val);
+}
+
 QueryResult CreateILRecordTypeInfoQuery::run()
 {
    auto& ILGen = sema().getILGen();
@@ -1516,28 +1531,31 @@ QueryResult CreateILRecordTypeInfoQuery::run()
    // Protocol conformances.
    auto conformances = ILGen.CreateProtocolConformances(R);
 
-   RecordDecl* IntDecl;
-   QC.GetBuiltinRecord(IntDecl, GetBuiltinRecordQuery::Int64);
-
    // Type size.
-   auto size = Builder.GetConstantStruct(
-       cast<StructDecl>(IntDecl),
-       Builder.GetConstantInt(ILGen.WordTy, TI.getSizeOfType(T)));
+   auto size = Builder.GetConstantInt(ILGen.WordTy, TI.getSizeOfType(T));
 
    // Type alignment.
-   auto alignment = Builder.GetConstantStruct(
-       cast<StructDecl>(IntDecl),
-       Builder.GetConstantInt(ILGen.WordTy, TI.getAlignOfType(T)));
+   auto alignment = Builder.GetConstantInt(ILGen.WordTy, TI.getAlignOfType(T));
 
    // Type stride.
-   auto stride = Builder.GetConstantStruct(
-       cast<StructDecl>(IntDecl),
-       Builder.GetConstantInt(ILGen.WordTy, TI.getAllocSizeOfType(T)));
+   auto stride = Builder.GetConstantInt(ILGen.WordTy, TI.getAllocSizeOfType(T));
 
-   return finish(Builder.GetConstantStruct(cast<StructDecl>(TypeInfoDecl),
-                                           {baseClass, vtable, deinit, name,
-                                            valueWitnessTable, conformances,
-                                            size, alignment, stride}));
+   auto *TypeInfo = cast<StructDecl>(TypeInfoDecl);
+   ArrayRef<FieldDecl*> Fields = TypeInfo->getFields();
+
+   return finish(Builder.GetConstantStruct(
+       TypeInfo,
+       {
+          CreateStruct(Builder, baseClass,         Fields[0]->getType()),
+          CreateStruct(Builder, vtable,            Fields[1]->getType()),
+          deinit,
+          CreateStruct(Builder, name,              Fields[3]->getType()),
+          CreateStruct(Builder, valueWitnessTable, Fields[4]->getType()),
+          CreateStruct(Builder, conformances,      Fields[5]->getType()),
+          CreateStruct(Builder, size,              Fields[6]->getType()),
+          CreateStruct(Builder, alignment,         Fields[7]->getType()),
+          CreateStruct(Builder, stride,            Fields[8]->getType()),
+       }));
 }
 
 QueryResult CreateILBasicTypeInfoQuery::run()
@@ -1595,28 +1613,31 @@ QueryResult CreateILBasicTypeInfoQuery::run()
    auto conformances = Builder.GetConstantNull(
        Context.getPointerType(Context.getRecordType(ProtocolConformanceDecl)));
 
-   RecordDecl* IntDecl;
-   QC.GetBuiltinRecord(IntDecl, GetBuiltinRecordQuery::Int64);
-
    // Type size.
-   auto size = Builder.GetConstantStruct(
-       cast<StructDecl>(IntDecl),
-       Builder.GetConstantInt(ILGen.WordTy, TI.getSizeOfType(T)));
+   auto size = Builder.GetConstantInt(ILGen.WordTy, TI.getSizeOfType(T));
 
    // Type alignment.
-   auto alignment = Builder.GetConstantStruct(
-       cast<StructDecl>(IntDecl),
-       Builder.GetConstantInt(ILGen.WordTy, TI.getAlignOfType(T)));
+   auto alignment = Builder.GetConstantInt(ILGen.WordTy, TI.getAlignOfType(T));
 
    // Type stride.
-   auto stride = Builder.GetConstantStruct(
-       cast<StructDecl>(IntDecl),
-       Builder.GetConstantInt(ILGen.WordTy, TI.getAllocSizeOfType(T)));
+   auto stride = Builder.GetConstantInt(ILGen.WordTy, TI.getAllocSizeOfType(T));
 
-   return finish(Builder.GetConstantStruct(cast<StructDecl>(TypeInfoDecl),
-                                           {baseClass, vtable, deinit, name,
-                                            valueWitnessTable, conformances,
-                                            size, alignment, stride}));
+   auto *TypeInfo = cast<StructDecl>(TypeInfoDecl);
+   ArrayRef<FieldDecl*> Fields = TypeInfo->getFields();
+
+   return finish(Builder.GetConstantStruct(
+       TypeInfo,
+       {
+           CreateStruct(Builder, baseClass,         Fields[0]->getType()),
+           CreateStruct(Builder, vtable,            Fields[1]->getType()),
+           deinit,
+           CreateStruct(Builder, name,              Fields[3]->getType()),
+           CreateStruct(Builder, valueWitnessTable, Fields[4]->getType()),
+           CreateStruct(Builder, conformances,      Fields[5]->getType()),
+           CreateStruct(Builder, size,              Fields[6]->getType()),
+           CreateStruct(Builder, alignment,         Fields[7]->getType()),
+           CreateStruct(Builder, stride,            Fields[8]->getType()),
+       }));
 }
 
 il::Constant* ILGenPass::CreateValueWitnessTable(RecordDecl* R)
@@ -1727,6 +1748,13 @@ il::ConstantStruct* ILGenPass::CreateProtocolConformance(RecordDecl* R,
       VTable = Builder.GetConstantNull(Int8PtrTy->getPointerTo(Context));
    }
 
-   return Builder.GetConstantStruct(SP.getProtocolConformanceDecl(),
-                                    {ConstantExpr::getAddrOf(TI), VTable});
+   auto *ProtoConf = cast<StructDecl>(SP.getProtocolConformanceDecl());
+   ArrayRef<FieldDecl*> Fields = ProtoConf->getFields();
+
+   return Builder.GetConstantStruct(
+       ProtoConf,
+       {
+          CreateStruct(Builder, ConstantExpr::getAddrOf(TI), Fields[0]->getType()),
+          CreateStruct(Builder, VTable,                      Fields[1]->getType()),
+       });
 }

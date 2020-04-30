@@ -552,6 +552,7 @@ int CompilerInstance::compile()
    }
 
 #ifndef NDEBUG
+   _timer_.~Timer();
    displayPhaseDurations(llvm::errs());
 #endif
 

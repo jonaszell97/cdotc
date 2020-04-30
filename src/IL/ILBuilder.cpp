@@ -1212,12 +1212,13 @@ Instruction* ILBuilder::CreateAddrOf(Value* target, llvm::StringRef name)
    return inst;
 }
 
-Instruction* ILBuilder::CreatePtrToLvalue(Value* target, StringRef name)
+Instruction* ILBuilder::CreatePtrToLvalue(Value* target, bool forceMutable,
+                                          StringRef name)
 {
    QualType PtrTy = target->getType();
    QualType RetTy;
 
-   if (PtrTy->isMutablePointerType()) {
+   if (PtrTy->isMutablePointerType() || forceMutable) {
       RetTy = ASTCtx.getMutableReferenceType(PtrTy->getPointeeType());
    }
    else {

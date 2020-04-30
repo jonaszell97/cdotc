@@ -83,7 +83,7 @@ IRGen::IRGen(CompilerInstance& CI, llvm::LLVMContext& Ctx, bool emitDebugInfo)
    DeinitializerTy = llvm::FunctionType::get(VoidTy, {Int8PtrTy}, false);
 
    EmptyTupleTy = llvm::StructType::get(Ctx, {});
-   EmptyTuple = llvm::UndefValue::get(EmptyTupleTy->getPointerTo());
+   EmptyTuple = llvm::UndefValue::get(EmptyTupleTy);
 
    llvm::Type* errorContainedTypes[] = {
        Int8PtrTy, // typeinfo ptr
@@ -2095,6 +2095,16 @@ llvm::Value* IRGen::visitAssignInst(const AssignInst&)
 
 static unsigned short getMemCpyAlign(QualType Ty) { return 1; }
 
+static llvm::AtomicOrdering getAtomicOrdering(MemoryOrder Order)
+{
+   switch (Order) {
+   case MemoryOrder::Consume:
+      return llvm::AtomicOrdering::Acquire;
+   default:
+      return (llvm::AtomicOrdering)Order;
+   }
+}
+
 llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
 {
    auto Dst = getLlvmValue(I.getDst());
@@ -2151,7 +2161,7 @@ llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
    Store->setAlignment(alignment);
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
-      Store->setAtomic((llvm::AtomicOrdering)I.getMemoryOrder());
+      Store->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
    }
 
    return Store;
@@ -2213,7 +2223,7 @@ llvm::Value* IRGen::visitInitInst(const InitInst& I)
    Store->setAlignment(alignment);
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
-      Store->setAtomic((llvm::AtomicOrdering)I.getMemoryOrder());
+      Store->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
    }
 
    return Store;
@@ -2332,18 +2342,6 @@ llvm::Value* IRGen::visitGEPInst(GEPInst const& I)
    return Builder.CreateInBoundsGEP(val, getLlvmValue(I.getIndex()));
 }
 
-llvm::Value* IRGen::visitCaptureExtractInst(const CaptureExtractInst& I)
-{
-   auto F = Builder.GetInsertBlock()->getParent();
-   auto env = F->arg_begin();
-
-   auto idx = I.getIdx()->getU32();
-   auto Val = Builder.CreateStructGEP(env->getType()->getPointerElementType(),
-                                      env, idx);
-
-   return Builder.CreateLoad(Val);
-}
-
 llvm::Value* IRGen::visitFieldRefInst(FieldRefInst const& I)
 {
    return AccessField(I.getAccessedType(), I.getOperand(0), I.getFieldName());
@@ -2390,18 +2388,16 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst& I)
 
 llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
 {
+   if (I.getName()=="2") {
+       NO_OP;
+   }
    auto E = getLlvmValue(I.getValue());
-   if (E->getType()->isIntegerTy()) {
+   if (I.getValue()->getType()->isRawEnum()) {
       return E;
    }
 
-   if (E->getType()->isStructTy()) {
-      return Builder.CreateExtractValue(E, 0);
-   }
-
-   // Ignore a previous load of the value.
-   if (auto* ld = dyn_cast<llvm::LoadInst>(E)) {
-      E = ld->getOperand(0);
+   if (E->getType()->isIntegerTy()) {
+      return E;
    }
 
    auto Val
@@ -2409,50 +2405,19 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
 
    if (!I.getType()->isReferenceType()) {
       // Handle builtin integer raw types
-      auto *Ld = Builder.CreateLoad(Val);
-      if (Ld->getType()->isStructTy()) {
-         return Builder.CreateExtractValue(Ld, 0);
-      }
-
-      return Ld;
+      return Builder.CreateLoad(Val);
    }
 
    return Val;
 }
 
-bool shouldReallyLoad(SemaPass& Sema, const LoadInst& I)
+bool shouldReallyLoad(SemaPass& Sema, const Instruction& I)
 {
    if (Sema.NeedsStructReturn(I.getType())) {
       return false;
    }
 
    return true;
-   //
-   //   auto *singleUser = I.getSingleUser();
-   //   if (!singleUser) {
-   //      return true;
-   //   }
-   //
-   //   if (isa<FieldRefInst>(singleUser)) {
-   //      return false;
-   //   }
-   //   if (auto *GEP = dyn_cast<GEPInst>(singleUser)) {
-   //      return !GEP->getVal()->getType()->isRecordType();
-   //   }
-   //
-   //   if (auto *call = dyn_cast<IntrinsicCallInst>(singleUser)) {
-   //      switch (call->getCalledIntrinsic()) {
-   //      case Intrinsic::memcpy:
-   //      case Intrinsic::memset:
-   //      case Intrinsic::memcmp:
-   //      case Intrinsic::typeinfo_cmp:
-   //         return false;
-   //      default:
-   //         return true;
-   //      }
-   //   }
-   //
-   //   return true;
 }
 
 llvm::Value* IRGen::visitLoadInst(LoadInst const& I)
@@ -2475,10 +2440,29 @@ llvm::Value* IRGen::visitLoadInst(LoadInst const& I)
    Ld->setAlignment(alignment);
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
-      Ld->setAtomic((llvm::AtomicOrdering)I.getMemoryOrder());
+      Ld->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
    }
 
    return Ld;
+}
+
+llvm::Value* IRGen::visitCaptureExtractInst(const CaptureExtractInst& I)
+{
+   auto F = Builder.GetInsertBlock()->getParent();
+   auto env = F->arg_begin();
+
+   auto idx = I.getIdx()->getU32();
+   auto Val = Builder.CreateStructGEP(env->getType()->getPointerElementType(),
+                                      env, idx);
+
+   auto *BC = Builder.CreateBitCast(
+       Val, getStorageType(I.getType())->getPointerTo());
+
+   if (shouldReallyLoad(Sema, I)) {
+      return Builder.CreateLoad(BC);
+   }
+
+   return BC;
 }
 
 llvm::Value* IRGen::visitAddrOfInst(AddrOfInst const& I)
@@ -3038,8 +3022,8 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       auto* NewVal = getLlvmValue(I.getArgs()[2]);
       auto Success = static_cast<llvm::AtomicOrdering>(
           cast<ConstantInt>(I.getArgs()[3])->getU32());
-      auto Failure = static_cast<llvm::AtomicOrdering>(
-          cast<ConstantInt>(I.getArgs()[4])->getU32());
+      auto Failure = getAtomicOrdering(
+          (MemoryOrder)cast<ConstantInt>(I.getArgs()[4])->getU32());
 
       return Builder.CreateAtomicCmpXchg(Ptr, Cmp, NewVal, Success, Failure);
    }
@@ -3056,8 +3040,8 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       auto Op = static_cast<llvm::AtomicRMWInst::BinOp>(OpVal->getU32());
       auto* Ptr = getLlvmValue(I.getArgs()[1]);
       auto* Val = getLlvmValue(I.getArgs()[2]);
-      auto Order = static_cast<llvm::AtomicOrdering>(
-          cast<ConstantInt>(I.getArgs()[3])->getU32());
+      auto Order = getAtomicOrdering(
+          (MemoryOrder)cast<ConstantInt>(I.getArgs()[3])->getU32());
 
       return Builder.CreateAtomicRMW(Op, Ptr, Val, Order);
    }
@@ -3355,10 +3339,7 @@ llvm::FunctionType* IRGen::getLambdaType(FunctionType* FTy)
    }
 
    for (const auto& arg : FTy->getParamTypes()) {
-      auto argTy = getStorageType(arg);
-      if (argTy->isStructTy())
-         argTy = argTy->getPointerTo();
-
+      auto argTy = getParameterType(arg);
       ArgTypes.push_back(argTy);
    }
 
@@ -3523,8 +3504,16 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl* EnumTy, ast::EnumCaseDecl* Case,
 {
    if (EnumTy->getMaxAssociatedValues() == 0) {
       auto rawTy = getStorageType(EnumTy->getRawType());
-      return llvm::ConstantInt::get(
-          rawTy, cast<ConstantInt>(Case->getILValue())->getZExtValue());
+      if (rawTy->isIntegerTy()) {
+         return llvm::ConstantInt::get(
+             rawTy, cast<ConstantInt>(Case->getILValue())->getZExtValue());
+      }
+
+      auto *intTy = rawTy->getContainedType(0);
+      auto *intVal = llvm::ConstantInt::get(
+          intTy, cast<ConstantInt>(Case->getILValue())->getZExtValue());
+
+      return llvm::ConstantStruct::get(cast<llvm::StructType>(rawTy), intVal);
    }
 
    auto LlvmTy = getStructTy(EnumTy);
@@ -3538,6 +3527,15 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl* EnumTy, ast::EnumCaseDecl* Case,
    }
 
    auto CaseVal = getLlvmValue(Case->getILValue());
+   auto rawTy = getStorageType(EnumTy->getRawType());
+
+   if (!rawTy->isIntegerTy()) {
+      auto *intTy = rawTy->getContainedType(0);
+      auto *intVal = llvm::ConstantInt::get(
+          intTy, cast<ConstantInt>(Case->getILValue())->getZExtValue());
+
+      CaseVal = llvm::ConstantStruct::get(cast<llvm::StructType>(rawTy), intVal);
+   }
 
    auto gep = Builder.CreateStructGEP(LlvmTy, alloca, 0);
    Builder.CreateStore(CaseVal, gep);
@@ -3590,8 +3588,9 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl* EnumTy, ast::EnumCaseDecl* Case,
 llvm::Value* IRGen::visitEnumInitInst(EnumInitInst const& I)
 {
    llvm::SmallVector<llvm::Value*, 4> CaseVals;
-   for (auto& Arg : I.getArgs())
+   for (auto& Arg : I.getArgs()) {
       CaseVals.push_back(getLlvmValue(Arg));
+   }
 
    return InitEnum(I.getEnumTy(), I.getCase(), CaseVals, I.canUseSRetValue());
 }

@@ -128,6 +128,7 @@ void ModuleWriterImpl::WriteName(DeclarationName name, ValPrefix prefix)
 void ModuleWriterImpl::WriteQualType(QualType ty)
 {
    assert(!ty->isAutoType());
+   ty = ty->getCanonicalType()->getDesugaredType();
 
    if (auto* Gen = dyn_cast<TemplateParamType>(ty)) {
       out << (char)ValPrefix::Type << "<" << Gen->getParam()->getDeclName()

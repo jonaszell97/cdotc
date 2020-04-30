@@ -451,8 +451,11 @@ public:
 
    il::Function* getGlobalInitFn();
 
-   il::Value* CreateEqualityComp(il::Value* lhs, il::Value* rhs);
+   il::Value* CreateEqualityComp(il::Value* lhs, il::Value* rhs,
+                                 bool CastToBool = true);
+
    il::Value* CreateTupleComp(il::Value* lhs, il::Value* rhs);
+
    il::Value* CreateEnumComp(il::Value* lhs, il::Value* rhs);
 
    void AppendDefaultDeinitializer(il::Method* M);
@@ -514,6 +517,10 @@ public:
 
    il::Instruction* CreateStore(il::Value* src, il::Value* dst,
                                 bool IsInitialization = false);
+
+   il::Value *GetEnumRawValueAsInteger(il::Value *EnumVal,
+                                       bool castToInt64 = false,
+                                       bool load = true);
 
    const TargetInfo& getTargetInfo() const;
 

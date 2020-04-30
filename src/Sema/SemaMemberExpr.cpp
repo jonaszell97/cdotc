@@ -178,8 +178,12 @@ template<class ExprTy> void MakeDeref(SemaPass& SP, QualType ty, ExprTy* Expr)
    if (ty->isMutablePointerType()) {
       RefTy = SP.getContext().getMutableReferenceType(ty->getPointeeType());
    }
-   else {
+   else if (ty->isPointerType()) {
       RefTy = SP.getContext().getReferenceType(ty->getPointeeType());
+   }
+   else {
+      Expr->setIsInvalid(true);
+      return;
    }
 
    auto ParentExpr = SP.castToRValue(Expr->getParentExpr());
@@ -604,7 +608,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
          }
 
          auto* Inst = checkFunctionReference(Ident, cast<CallableDecl>(ND),
-                                             TemplateArgs, false);
+                                             TemplateArgs);
 
          if (!Inst) {
             continue;
@@ -622,13 +626,13 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
 
          auto* subscriptDecl = cast<SubscriptDecl>(ND);
          if (auto* getter = subscriptDecl->getGetterMethod()) {
-            auto* Inst = checkFunctionReference(Ident, getter, TemplateArgs, false);
+            auto* Inst = checkFunctionReference(Ident, getter, TemplateArgs);
             if (Inst) {
                Overloads.insert(Inst);
             }
          }
          if (auto* setter = subscriptDecl->getSetterMethod()) {
-            auto* Inst = checkFunctionReference(Ident, setter, TemplateArgs, false);
+            auto* Inst = checkFunctionReference(Ident, setter, TemplateArgs);
             if (Inst) {
                Overloads.insert(Inst);
             }
@@ -643,7 +647,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
          }
 
          auto* Inst = checkAliasReference(
-            Ident, cast<AliasDecl>(ND), TemplateArgs, false);
+            Ident, cast<AliasDecl>(ND), TemplateArgs);
 
          if (!Inst) {
             if (Ident->needsInstantiation() && Ident->getExprType()) {
@@ -663,7 +667,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       case Decl::ClassDeclID:
       case Decl::ProtocolDeclID: {
          auto* Inst = checkRecordReference(
-            Ident, cast<RecordDecl>(ND), TemplateArgs, false);
+            Ident, cast<RecordDecl>(ND), TemplateArgs);
 
          if (!Inst) {
             if (Ident->needsInstantiation() && Ident->getExprType()) {
@@ -708,17 +712,23 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       if (Ident->shouldIssueDiag()) {
          auto diagnosed = false;
          for (auto *ND : CheckedDecls) {
-            if (auto *R = dyn_cast<RecordDecl>(ND)) {
+            if (ND->isTemplate()) {
+               TemplateArgList ArgList(*this, ND, TemplateArgs,
+                                       Ident->getSourceLoc());
+
+               auto CompRes = ArgList.checkCompatibility();
+               if (CompRes) {
+                  continue;
+               }
+
                diagnosed = true;
-               checkRecordReference(Ident, R, TemplateArgs, true);
+               diagnoseTemplateArgErrors(ND, Ident, ArgList, TemplateArgs,
+                                         CompRes);
             }
-            else if (auto *A = dyn_cast<AliasDecl>(ND)) {
+            else if (!TemplateArgs.empty()) {
                diagnosed = true;
-               checkAliasReference(Ident, A, TemplateArgs, true);
-            }
-            else if (auto *C = dyn_cast<CallableDecl>(ND)) {
-               diagnosed = true;
-               checkFunctionReference(Ident, C, TemplateArgs, true);
+               diagnose(err_not_a_template, ND, ND->getDeclName(),
+                        Ident->getSourceRange());
             }
          }
 
@@ -1462,10 +1472,8 @@ public:
 
 CallableDecl*
 SemaPass::checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
-                                 ArrayRef<Expression*> TemplateArgs,
-                                 bool diagnoseTemplateErrors)
+                                 ArrayRef<Expression*> TemplateArgs)
 {
-
    if (!CD->isTemplate()) {
       if (!TemplateArgs.empty()) {
          return nullptr;
@@ -1485,10 +1493,6 @@ SemaPass::checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
          return CD;
       }
 
-      if (diagnoseTemplateErrors) {
-         diagnoseTemplateArgErrors(CD, E, ArgList, TemplateArgs, CompRes);
-      }
-
       return nullptr;
    }
 
@@ -1502,8 +1506,7 @@ SemaPass::checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
 }
 
 RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
-                                           ArrayRef<Expression*> TemplateArgs,
-                                           bool diagnoseTemplateErrors)
+                                           ArrayRef<Expression*> TemplateArgs)
 {
    if (!R->isTemplate()) {
       if (!TemplateArgs.empty()) {
@@ -1536,10 +1539,6 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
          return R;
       }
 
-      if (diagnoseTemplateErrors) {
-         diagnoseTemplateArgErrors(R, E, ArgList, TemplateArgs, CompRes);
-      }
-
       return nullptr;
    }
 
@@ -1553,8 +1552,7 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
 }
 
 AliasDecl* SemaPass::checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
-                                         ArrayRef<Expression*> TemplateArgs,
-                                         bool diagnoseTemplateErrors)
+                                         ArrayRef<Expression*> TemplateArgs)
 {
    if (!Alias->isTemplate()) {
       if (!TemplateArgs.empty()) {
@@ -1583,10 +1581,6 @@ AliasDecl* SemaPass::checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
    if (!CompRes) {
       if (E->allowIncompleteTemplateArgs() && TemplateArgs.empty()) {
          return Alias;
-      }
-
-      if (diagnoseTemplateErrors) {
-         diagnoseTemplateArgErrors(Alias, E, ArgList, TemplateArgs, CompRes);
       }
 
       return nullptr;
