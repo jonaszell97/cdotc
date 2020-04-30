@@ -282,7 +282,7 @@ static void addDefaultInvocationArgs(CompilerInstance& CI,
 
 void ImporterImpl::Initialize()
 {
-   support::Timer Timer(CI, "Clang Importer Initialization");
+   START_TIMER("Clang Importer Initialization");
 
    auto clangPathOrError = llvm::sys::findProgramByName("clang");
    if (clangPathOrError.getError()) {
@@ -327,7 +327,7 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
                                 SourceLocation ImportLoc, bool IsCXX,
                                 bool Optional)
 {
-   support::Timer Timer(CI, "Clang Importer");
+   START_TIMER("Clang Importer");
    clang::PreprocessorOptions& ppOpts = Invocation->getPreprocessorOpts();
 
    static_cast<ClangDiagnosticConsumer*>(ClangDiags->getClient())

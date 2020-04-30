@@ -712,13 +712,28 @@ protected:
       return true;
    }
 
-   bool visitMacroExpansionExpr(MacroExpansionExpr*) { return true; }
+   bool visitMemberRefExpr(MemberRefExpr* Expr)
+   {
+      static_cast<SubClass*>(this)->visitStmt(Expr->getParentExpr());
+      return true;
+   }
+
+   bool visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* Expr)
+   {
+      static_cast<SubClass*>(this)->visitStmt(Expr->getParentExpr());
+      return true;
+   }
+
+   bool visitMacroExpansionExpr(MacroExpansionExpr* Expr)
+   {
+      static_cast<SubClass*>(this)->visitStmt(Expr->getParentExpr());
+      return true;
+   }
+
    bool visitMacroVariableExpr(MacroVariableExpr*) { return true; }
    bool visitMacroExpansionStmt(MacroExpansionStmt*) { return true; }
 
    bool visitDeclRefExpr(DeclRefExpr*) { return true; }
-   bool visitMemberRefExpr(MemberRefExpr*) { return true; }
-   bool visitOverloadedDeclRefExpr(OverloadedDeclRefExpr*) { return true; }
 };
 
 template<class CallbackFn, class... StmtClass>
@@ -757,7 +772,7 @@ protected:
    void visitType(const SourceType& T)
    {
       if (auto* E = T.getTypeExpr()) {
-         if (auto Result = visitExpr(E)) {
+         if (auto Result = static_cast<SubClass*>(this)->visitExpr(E)) {
             T.setTypeExpr(Result.get());
          }
       }
@@ -766,7 +781,7 @@ protected:
    StmtResult visitCompoundStmt(CompoundStmt* Stmt)
    {
       for (auto& S : Stmt->getStatements()) {
-         auto Result = visitStmt(S);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(S);
          if (Result) {
             S = Result.get();
          }
@@ -782,7 +797,7 @@ protected:
    StmtResult visitReturnStmt(ReturnStmt* Stmt)
    {
       if (auto RetVal = Stmt->getReturnValue()) {
-         auto Result = visitExpr(RetVal);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(RetVal);
          if (Result) {
             Stmt->setReturnValue(Result.get());
          }
@@ -794,7 +809,7 @@ protected:
    StmtResult visitDiscardAssignStmt(DiscardAssignStmt* Stmt)
    {
       if (auto Val = Stmt->getRHS()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setRHS(Result.get());
          }
@@ -806,14 +821,14 @@ protected:
    StmtResult visitCaseStmt(CaseStmt* Stmt)
    {
       if (auto Val = Stmt->getPattern()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setPattern(support::cast<PatternExpr>(Result.get()));
          }
       }
 
       if (auto Val = Stmt->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setBody(Result.get());
          }
@@ -825,28 +840,28 @@ protected:
    StmtResult visitForStmt(ForStmt* Stmt)
    {
       if (auto Val = Stmt->getInitialization()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setInitialization(Result.get());
          }
       }
 
       if (auto Val = Stmt->getTermination()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setTermination(Result.get());
          }
       }
 
       if (auto Val = Stmt->getIncrement()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setIncrement(Result.get());
          }
       }
 
       if (auto Val = Stmt->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setBody(Result.get());
          }
@@ -860,7 +875,7 @@ protected:
       switch (C.K) {
       case IfCondition::Expression:
          if (auto Val = C.ExprData.Expr) {
-            auto Result = visitExpr(Val);
+            auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
             if (Result) {
                C.ExprData.Expr = Result.get();
             }
@@ -871,13 +886,13 @@ protected:
          break;
       case IfCondition::Pattern:
          if (auto Val = C.PatternData.Pattern) {
-            auto Result = visitExpr(Val);
+            auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
             if (Result) {
                C.PatternData.Pattern = support::cast<PatternExpr>(Result.get());
             }
          }
          if (auto Val = C.PatternData.Expr) {
-            auto Result = visitExpr(Val);
+            auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
             if (Result) {
                C.PatternData.Expr = Result.get();
             }
@@ -894,14 +909,14 @@ protected:
       }
 
       if (auto Val = Stmt->getIfBranch()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setIfBranch(Result.get());
          }
       }
 
       if (auto Val = Stmt->getElseBranch()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setElseBranch(Result.get());
          }
@@ -917,7 +932,7 @@ protected:
       }
 
       if (auto Val = Stmt->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setBody(Result.get());
          }
@@ -929,14 +944,14 @@ protected:
    StmtResult visitForInStmt(ForInStmt* Stmt)
    {
       if (auto Val = Stmt->getRangeExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setRangeExpr(Result.get());
          }
       }
 
       if (auto Val = Stmt->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setBody(Result.get());
          }
@@ -948,14 +963,14 @@ protected:
    StmtResult visitMatchStmt(MatchStmt* Stmt)
    {
       if (auto Val = Stmt->getSwitchValue()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setSwitchValue(Result.get());
          }
       }
 
       for (auto& C : Stmt->getCases()) {
-         auto Result = visitStmt(C);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(C);
          if (Result) {
             C = support::cast<CaseStmt>(Result.get());
          }
@@ -967,20 +982,20 @@ protected:
    StmtResult visitDoStmt(DoStmt* Stmt)
    {
       if (auto Val = Stmt->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setBody(Result.get());
          }
       }
 
       for (auto& CB : Stmt->getCatchBlocks()) {
-         auto Result = visitStmt(CB.Body);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(CB.Body);
          if (Result) {
             CB.Body = Result.get();
          }
 
          if (auto& Cond = CB.Condition) {
-            auto Result = visitExpr(Cond);
+            auto Result = static_cast<SubClass*>(this)->visitExpr(Cond);
             if (Result) {
                Cond = Result.get();
             }
@@ -997,21 +1012,21 @@ protected:
    StmtResult visitStaticIfStmt(StaticIfStmt* Stmt)
    {
       if (auto Val = Stmt->getCondition()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setCondition(support::cast<StaticExpr>(Result.get()));
          }
       }
 
       if (auto Val = Stmt->getIfBranch()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setIfBranch(Result.get());
          }
       }
 
       if (auto Val = Stmt->getElseBranch()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setElseBranch(Result.get());
          }
@@ -1023,14 +1038,14 @@ protected:
    StmtResult visitStaticForStmt(StaticForStmt* Stmt)
    {
       if (auto Val = Stmt->getRange()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setRange(support::cast<StaticExpr>(Result.get()));
          }
       }
 
       if (auto Val = Stmt->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setBody(Result.get());
          }
@@ -1042,7 +1057,7 @@ protected:
    StmtResult visitMixinStmt(MixinStmt* Stmt)
    {
       if (auto Val = Stmt->getMixinExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setMixinExpr(Result.get());
          }
@@ -1058,7 +1073,7 @@ protected:
    StmtResult visitAttributedStmt(AttributedStmt* Stmt)
    {
       if (auto Val = Stmt->getStatement()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Stmt->setStatement(Result.get());
          }
@@ -1070,7 +1085,7 @@ protected:
    StmtResult visitThrowStmt(ThrowStmt* Stmt)
    {
       if (auto Val = Stmt->getThrownVal()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Stmt->setThrownVal(Result.get());
          }
@@ -1082,7 +1097,7 @@ protected:
    ExprResult visitTryExpr(TryExpr* Expr)
    {
       if (auto Val = Expr->getExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setExpr(Result.get());
          }
@@ -1094,7 +1109,7 @@ protected:
    ExprResult visitAwaitExpr(AwaitExpr* Expr)
    {
       if (auto Val = Expr->getExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setExpr(Result.get());
          }
@@ -1106,7 +1121,7 @@ protected:
    ExprResult visitParenExpr(ParenExpr* Expr)
    {
       if (auto Val = Expr->getParenthesizedExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParenthesizedExpr(Result.get());
          }
@@ -1125,7 +1140,7 @@ protected:
    ExprResult visitStringInterpolation(StringInterpolation* Stmt)
    {
       for (auto& Val : Stmt->getSegments()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1137,7 +1152,7 @@ protected:
    ExprResult visitLambdaExpr(LambdaExpr* Expr)
    {
       if (auto Val = Expr->getBody()) {
-         auto Result = visitStmt(Val);
+         auto Result = static_cast<SubClass*>(this)->visitStmt(Val);
          if (Result) {
             Expr->setBody(Result.get());
          }
@@ -1154,14 +1169,14 @@ protected:
    ExprResult visitDictionaryLiteral(DictionaryLiteral* Expr)
    {
       for (auto& Val : Expr->getValues()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
       }
 
       for (auto& Val : Expr->getKeys()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1173,7 +1188,7 @@ protected:
    ExprResult visitArrayLiteral(ArrayLiteral* Expr)
    {
       for (auto& Val : Expr->getValues()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1185,7 +1200,7 @@ protected:
    ExprResult visitTupleLiteral(TupleLiteral* Expr)
    {
       for (auto& Val : Expr->getElements()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1197,7 +1212,7 @@ protected:
    ExprResult visitIdentifierRefExpr(IdentifierRefExpr* Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
          }
@@ -1213,7 +1228,7 @@ protected:
    ExprResult visitTupleMemberExpr(TupleMemberExpr* Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
          }
@@ -1225,14 +1240,14 @@ protected:
    ExprResult visitCallExpr(CallExpr* Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
          }
       }
 
       for (auto& Val : Expr->getArgs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1244,14 +1259,14 @@ protected:
    ExprResult visitAnonymousCallExpr(AnonymousCallExpr* Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
          }
       }
 
       for (auto& Val : Expr->getArgs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1263,7 +1278,7 @@ protected:
    ExprResult visitEnumCaseExpr(EnumCaseExpr* Expr)
    {
       for (auto& Val : Expr->getArgs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1275,14 +1290,14 @@ protected:
    ExprResult visitSubscriptExpr(SubscriptExpr* Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
          }
       }
 
       for (auto& Val : Expr->getIndices()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1294,14 +1309,14 @@ protected:
    ExprResult visitTemplateArgListExpr(TemplateArgListExpr* Expr)
    {
       if (auto Val = Expr->getParentExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
          }
       }
 
       for (auto& Val : Expr->getExprs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Val = Result.get();
          }
@@ -1315,7 +1330,7 @@ protected:
    ExprResult visitExpressionPattern(ExpressionPattern* Expr)
    {
       if (auto Val = Expr->getExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setExpr(Result.get());
          }
@@ -1343,7 +1358,7 @@ protected:
    {
       for (auto& Frag : Expr->getFragments()) {
          if (Frag.isExpression()) {
-            auto Result = visitExpr(Frag.getExpr());
+            auto Result = static_cast<SubClass*>(this)->visitExpr(Frag.getExpr());
             if (Result) {
                Frag.setExpr(Result.get());
             }
@@ -1356,7 +1371,7 @@ protected:
    ExprResult visitUnaryOperator(UnaryOperator* Expr)
    {
       if (auto Val = Expr->getTarget()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setTarget(Result.get());
          }
@@ -1368,14 +1383,14 @@ protected:
    ExprResult visitBinaryOperator(BinaryOperator* Expr)
    {
       if (auto Val = Expr->getLhs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setLhs(Result.get());
          }
       }
 
       if (auto Val = Expr->getRhs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setRhs(Result.get());
          }
@@ -1387,14 +1402,14 @@ protected:
    ExprResult visitAssignExpr(AssignExpr* Expr)
    {
       if (auto Val = Expr->getLhs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setLhs(Result.get());
          }
       }
 
       if (auto Val = Expr->getRhs()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setRhs(Result.get());
          }
@@ -1406,14 +1421,14 @@ protected:
    ExprResult visitTypePredicateExpr(TypePredicateExpr* Expr)
    {
       if (auto Val = Expr->getLHS()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setLHS(Result.get());
          }
       }
 
       if (auto Val = Expr->getRHS()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setRHS(support::cast<ConstraintExpr>(Result.get()));
          }
@@ -1425,7 +1440,7 @@ protected:
    ExprResult visitCastExpr(CastExpr* Expr)
    {
       if (auto Val = Expr->getTarget()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setTarget(Result.get());
          }
@@ -1438,7 +1453,7 @@ protected:
    ExprResult visitAddrOfExpr(AddrOfExpr* Expr)
    {
       if (auto Val = Expr->getTarget()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setTarget(Result.get());
          }
@@ -1450,7 +1465,7 @@ protected:
    ExprResult visitImplicitCastExpr(ImplicitCastExpr* Expr)
    {
       if (auto Val = Expr->getTarget()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setTarget(Result.get());
          }
@@ -1465,14 +1480,14 @@ protected:
       visitIfCondition(C);
 
       if (auto Val = Expr->getTrueVal()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setTrueVal(Result.get());
          }
       }
 
       if (auto Val = Expr->getFalseVal()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setFalseVal(Result.get());
          }
@@ -1484,7 +1499,7 @@ protected:
    ExprResult visitStaticExpr(StaticExpr* Expr)
    {
       if (auto Val = Expr->getExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setExpr(Result.get());
          }
@@ -1503,13 +1518,13 @@ protected:
             visitType(arg.getType());
             break;
          case TraitsArgument::Stmt:
-            if (auto Result = visitStmt(arg.getStmt())) {
+            if (auto Result = static_cast<SubClass*>(this)->visitStmt(arg.getStmt())) {
                arg.setStmt(Result.get());
             }
 
             break;
          case TraitsArgument::Expr:
-            if (auto Result = visitExpr(arg.getExpr())) {
+            if (auto Result = static_cast<SubClass*>(this)->visitExpr(arg.getExpr())) {
                arg.setExpr(Result.get());
             }
 
@@ -1525,7 +1540,7 @@ protected:
    ExprResult visitMixinExpr(MixinExpr* Expr)
    {
       if (auto Val = Expr->getMixinExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setMixinExpr(Result.get());
          }
@@ -1537,7 +1552,7 @@ protected:
    ExprResult visitVariadicExpansionExpr(VariadicExpansionExpr* Expr)
    {
       if (auto Val = Expr->getExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setExpr(Result.get());
          }
@@ -1549,7 +1564,7 @@ protected:
    ExprResult visitAttributedExpr(AttributedExpr* Expr)
    {
       if (auto Val = Expr->getExpr()) {
-         auto Result = visitExpr(Val);
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setExpr(Result.get());
          }

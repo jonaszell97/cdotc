@@ -16,6 +16,7 @@
 #include "cdotc/Support/Various.h"
 
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/FileSystem.h>
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -328,7 +329,39 @@ QueryResult CreateLLVMModuleQuery::run()
       return fail();
    }
 
-   IRGen->visitModule(*ILMod);
+   {
+      START_TIMER("Generating IR");
+      IRGen->visitModule(*ILMod);
+   }
+
+   auto &options = QC.CI.getOptions();
+   if (options.emitIR()) {
+      finish(ILMod->getLLVMModule());
+
+      SmallString<128> Dir;
+      if (!options.EmitIRPath.empty()) {
+         Dir = options.EmitIRPath;
+      }
+      else {
+         Dir = "./IR/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += Mod->getName()->getIdentifier();
+      Dir += ".ll";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
+
+      if (EC) {
+         QC.Sema->diagnose(err_generic_error, EC.message());
+      }
+      else {
+         QC.EmitIR(OS);
+      }
+   }
+
    return finish(ILMod->getLLVMModule());
 }
 

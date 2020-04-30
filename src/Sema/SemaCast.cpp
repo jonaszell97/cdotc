@@ -282,6 +282,102 @@ static void FromMeta(SemaPass& SP, CanType from, CanType to,
    return Seq.addStep(CastKind::MetaTypeCast, to, CastStrength::Implicit);
 }
 
+static void FromTemplateParam(SemaPass& SP, TemplateParamType *from,
+                              CanType to, ConversionSequenceBuilder& Seq)
+{
+   if (from == to) {
+      Seq.addStep(CastKind::NoOp, from);
+      return;
+   }
+
+   QualType Cov = from->getParam()->getCovariance();
+   if (auto *R = to->asRecordType()) {
+      if (Cov == R) {
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+
+      if (R->isProtocol() && SP.ConformsTo(Cov, cast<ProtocolDecl>(R->getRecord()))) {
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+   }
+
+   if (auto *Ext = to->asExistentialType()) {
+      bool AllConform = true;
+      for (QualType ProtoTy : Ext->getExistentials()) {
+         auto *R = ProtoTy->getRecord();
+         if (!R->isProtocol() || !SP.ConformsTo(Cov, cast<ProtocolDecl>(R))) {
+            AllConform = false;
+            break;
+         }
+      }
+
+      if (AllConform) {
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+   }
+
+   Seq.invalidate();
+}
+
+static void FromAssociatedType(SemaPass& SP, AssociatedType *from,
+                               CanType to, ConversionSequenceBuilder& Seq)
+{
+   if (from == to) {
+      Seq.addStep(CastKind::NoOp, from);
+      return;
+   }
+
+   QualType Cov = from->getDecl()->getCovariance();
+   if (auto *R = to->asRecordType()) {
+      if (Cov == R) {
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+
+      if (R->isProtocol() && SP.ConformsTo(Cov, cast<ProtocolDecl>(R->getRecord()))) {
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+   }
+
+   if (auto *Ext = to->asExistentialType()) {
+      bool AllConform = true;
+      for (QualType ProtoTy : Ext->getExistentials()) {
+         auto *R = ProtoTy->getRecord();
+         if (!R->isProtocol() || !SP.ConformsTo(Cov, cast<ProtocolDecl>(R))) {
+            AllConform = false;
+            break;
+         }
+      }
+
+      if (AllConform) {
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+   }
+
+   if (from->getDecl()->isSelf()) {
+      if (auto* ToAT = to->asAssociatedType()) {
+         if (!ToAT->getDecl()->isSelf()) {
+            return Seq.invalidate();
+         }
+
+         QualType ToCovar = ToAT->getDecl()->getCovariance();
+         if (!SP.ConformsTo(from->getDecl()->getCovariance(), ToCovar)) {
+            return Seq.invalidate();
+         }
+
+         Seq.addStep(CastKind::NoOp, from);
+         return;
+      }
+   }
+
+   Seq.invalidate();
+}
+
 static void FromExistential(SemaPass& SP, CanType from, CanType to,
                             ConversionSequenceBuilder& Seq);
 
@@ -305,8 +401,24 @@ static void FromReference(SemaPass& SP, CanType from, CanType to,
       return Seq.invalidate();
    }
 
-   QualType FromTy = from->removeReference()->getDesugaredType();
-   QualType ToTy = to->removeReference()->getDesugaredType();
+   QualType FromTy = from->removeReference();
+   QualType ToTy = to->removeReference();
+
+   if (auto *AT = FromTy->asAssociatedType()) {
+      FromAssociatedType(SP, AT, ToTy, Seq);
+      if (Seq.isValid()) {
+         return;
+      }
+   }
+   else if (auto *P = FromTy->asTemplateParamType()) {
+      FromTemplateParam(SP, P, ToTy, Seq);
+      if (Seq.isValid()) {
+         return;
+      }
+   }
+
+   FromTy = FromTy->getDesugaredType();
+   ToTy = ToTy->getDesugaredType();
 
    if (FromTy == ToTy) {
       return Seq.addStep(CastKind::NoOp, to);
@@ -510,6 +622,12 @@ static void FromArray(SemaPass& SP, ArrayType* from, CanType to,
       }
    }
 
+   if (to->isInferredSizeArrayType()
+   && to->uncheckedAsArrayType()->getElementType() == from->getElementType()) {
+      Seq.addStep(CastKind::NoOp, to);
+      return;
+   }
+
    return Seq.invalidate();
 }
 
@@ -642,86 +760,6 @@ static bool lookupImplicitInitializer(SemaPass& SP, CanType from, CanType to,
    }
 
    return false;
-}
-
-static void FromTemplateParam(SemaPass& SP, TemplateParamType *from,
-                              CanType to, ConversionSequenceBuilder& Seq)
-{
-   if (from == to) {
-      Seq.addStep(CastKind::NoOp, from);
-      return;
-   }
-
-   QualType Cov = from->getParam()->getCovariance();
-   if (auto *R = to->asRecordType()) {
-      if (Cov == R) {
-         Seq.addStep(CastKind::NoOp, from);
-         return;
-      }
-
-      if (R->isProtocol() && SP.ConformsTo(Cov, cast<ProtocolDecl>(R->getRecord()))) {
-         Seq.addStep(CastKind::NoOp, from);
-         return;
-      }
-   }
-
-   if (auto *Ext = to->asExistentialType()) {
-      bool AllConform = true;
-      for (QualType ProtoTy : Ext->getExistentials()) {
-         auto *R = ProtoTy->getRecord();
-         if (!R->isProtocol() || !SP.ConformsTo(Cov, cast<ProtocolDecl>(R))) {
-            AllConform = false;
-            break;
-         }
-      }
-
-      if (AllConform) {
-         Seq.addStep(CastKind::NoOp, from);
-         return;
-      }
-   }
-
-   Seq.invalidate();
-}
-
-static void FromAssociatedType(SemaPass& SP, AssociatedType *from,
-                               CanType to, ConversionSequenceBuilder& Seq)
-{
-   if (from == to) {
-      Seq.addStep(CastKind::NoOp, from);
-      return;
-   }
-
-   QualType Cov = from->getDecl()->getCovariance();
-   if (auto *R = to->asRecordType()) {
-      if (Cov == R) {
-         Seq.addStep(CastKind::NoOp, from);
-         return;
-      }
-
-      if (R->isProtocol() && SP.ConformsTo(Cov, cast<ProtocolDecl>(R->getRecord()))) {
-         Seq.addStep(CastKind::NoOp, from);
-         return;
-      }
-   }
-
-   if (auto *Ext = to->asExistentialType()) {
-      bool AllConform = true;
-      for (QualType ProtoTy : Ext->getExistentials()) {
-         auto *R = ProtoTy->getRecord();
-         if (!R->isProtocol() || !SP.ConformsTo(Cov, cast<ProtocolDecl>(R))) {
-            AllConform = false;
-            break;
-         }
-      }
-
-      if (AllConform) {
-         Seq.addStep(CastKind::NoOp, from);
-         return;
-      }
-   }
-
-   Seq.invalidate();
 }
 
 static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,

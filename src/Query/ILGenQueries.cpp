@@ -1,11 +1,15 @@
 #include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/FileUtils.h"
 #include "cdotc/IL/Constants.h"
-#include "cdotc/IL/ILBuilder.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Sema/TemplateInstantiator.h"
+#include "cdotc/Support/Timer.h"
+
+#include <llvm/ADT/SmallString.h>
+#include <llvm/Support/FileSystem.h>
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -48,10 +52,14 @@ QueryResult CreateILModuleQuery::run()
 
    // Instantiate queued function bodies.
    bool error = false;
-   auto &Instantiator = QC.Sema->getInstantiator();
-   for (size_t i = 0; i < QC.Sema->QueuedInstantiations.size(); ++i) {
-      auto *Fn = QC.Sema->QueuedInstantiations[i];
-      error |= Instantiator.InstantiateFunctionBody(Fn);
+   {
+      START_TIMER("Instantiating Function Bodies");
+
+      auto& Instantiator = QC.Sema->getInstantiator();
+      for (size_t i = 0; i < QC.Sema->QueuedInstantiations.size(); ++i) {
+         auto* Fn = QC.Sema->QueuedInstantiations[i];
+         error |= Instantiator.InstantiateFunctionBody(Fn);
+      }
    }
 
    auto* ILMod = Mod->getILModule();
@@ -59,13 +67,44 @@ QueryResult CreateILModuleQuery::run()
    ILGen.Builder.SetModule(ILMod);
 
    // Generate IL for the source files.
-   if (auto Err = QC.GenerateILForContext(Mod->getDecl())) {
-      return Query::finish(Err);
+   {
+      START_TIMER("Generating IL");
+      if (auto Err = QC.GenerateILForContext(Mod->getDecl())) {
+         return Query::finish(Err);
+      }
    }
 
    // Bail out now if we encountered any errors.
    if (QC.Sema->encounteredError()) {
       return fail();
+   }
+
+   auto &options = QC.CI.getOptions();
+   if (options.emitIL()) {
+      finish(ILMod);
+
+      SmallString<128> Dir;
+      if (!options.EmitILPath.empty()) {
+         Dir = options.EmitILPath;
+      }
+      else {
+         Dir = "./IL/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += Mod->getName()->getIdentifier();
+      Dir += ".cdotil";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
+
+      if (EC) {
+         QC.Sema->diagnose(err_generic_error, EC.message());
+      }
+      else {
+         QC.EmitIL(OS);
+      }
    }
 
    return finish(ILMod);
@@ -326,6 +365,11 @@ QueryResult GenerateILFunctionBodyQuery::run()
    }
    if (C->isInvalid()) {
       return fail();
+   }
+
+   // Lambdas are declared at their use site.
+   if (C->isLambda()) {
+      return finish();
    }
 
    auto& ILGen = QC.Sema->getILGen();

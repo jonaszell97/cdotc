@@ -417,6 +417,8 @@ def err_protocol_cannot_be_used_as_type : Error<"protocol '$0' with associated t
 def err_incorrect_protocol_impl : Error<"${ 0 | decl_kind } $1 does not correctly implement protocol $2">
 def note_incorrect_protocol_impl_prop : Note<"required ${ 0 | select(subscript, property) } ${ 0 | if('$1' ) }${ 2 | select(is missing, requires a getter, requires a setter, requires a getter and a setter) }">
 
+def note_incorrect_protocol_impl_must_be_static : Note<"candidate is not static">
+def note_incorrect_protocol_impl_must_not_be_static : Note<"candidate is static">
 def note_incorrect_protocol_impl_missing : Note<"required ${ 0 | decl_kind } '$1' is missing">
 def note_incorrect_protocol_impl_method_num_args : Note<"candidate has incorrect number of arguments, expected ${ 0 | select(at least, at most) } $1, $2 given">
 def note_incorrect_protocol_impl_method_signature : Note<"candidate has incomaptible signature ('$0' expected for ${ 1 | ordinal } argument, found '$2')">

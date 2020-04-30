@@ -17,146 +17,22 @@ using namespace cdot::support;
 
 QueryResult ResolveMacrosQuery::run()
 {
-   QueryResult::ResultKind K = QueryResult::Success;
-   for (auto* Macro : DC->getDecls<MacroExpansionDecl>()) {
-      Decl* Result;
-      if (auto Err = QC.ExpandMacroDecl(Result, Macro)) {
-         QueryResult::update(K, Err.K);
-      }
-   }
-
-   return finish(QueryResult(K));
+   llvm_unreachable("remove this!");
 }
 
 QueryResult ResolveStaticDeclarationsQuery::run()
 {
-   QueryResult::ResultKind K = QueryResult::Success;
-   for (auto* Decl : DC->getDecls()) {
-      switch (Decl->getKind()) {
-      case Decl::StaticIfDeclID: {
-         auto* If = cast<StaticIfDecl>(Decl);
-         ast::Decl* Result;
-
-         if (auto Err = QC.ResolveStaticIf(Result, If)) {
-            QueryResult::update(K, Err.K);
-         }
-
-         break;
-      }
-      case Decl::StaticForDeclID: {
-         auto* For = cast<StaticForDecl>(Decl);
-         ast::Decl* Result;
-
-         if (auto Err = QC.ResolveStaticFor(Result, For)) {
-            QueryResult::update(K, Err.K);
-         }
-
-         break;
-      }
-      default:
-         break;
-      }
-   }
-
-   return finish(QueryResult(K));
+   llvm_unreachable("remove this!");
 }
 
 QueryResult ResolveWildcardDeclarationsQuery::run()
 {
-   QueryResult::ResultKind K = QueryResult::Success;
-   for (auto* Decl : DC->getDecls()) {
-      switch (Decl->getKind()) {
-      case Decl::ImportDeclID: {
-         auto* I = cast<ImportDecl>(Decl);
-         if (auto Err = QC.ResolveImport(I)) {
-            QueryResult::update(K, Err.K);
-         }
-
-         break;
-      }
-      case Decl::UsingDeclID: {
-         auto* U = cast<UsingDecl>(Decl);
-         if (auto Err = QC.ResolveUsing(U)) {
-            QueryResult::update(K, Err.K);
-         }
-
-         break;
-      }
-      default:
-         break;
-      }
-   }
-
-   return finish(QueryResult(K));
+   llvm_unreachable("remove this!");
 }
 
 QueryResult ResolveMetaDeclarationsQuery::run()
 {
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, DC);
-
-   // Still nothing, expand static if / for declarations.
-   for (auto* Decl : DC->getDecls()) {
-      switch (Decl->getKind()) {
-      case Decl::MacroExpansionDeclID: {
-         ast::Decl* Result;
-         if (QC.ExpandMacroDecl(Result, cast<MacroExpansionDecl>(Decl))) {
-            continue;
-         }
-
-         break;
-      }
-      case Decl::ImportDeclID: {
-         auto* I = cast<ImportDecl>(Decl);
-         if (QC.ResolveImport(I)) {
-            continue;
-         }
-
-         break;
-      }
-      case Decl::UsingDeclID: {
-         auto* U = cast<UsingDecl>(Decl);
-         if (QC.ResolveUsing(U)) {
-            continue;
-         }
-
-         break;
-      }
-      case Decl::StaticIfDeclID: {
-         auto* If = cast<StaticIfDecl>(Decl);
-         ast::Decl* Result;
-
-         if (QC.ResolveStaticIf(Result, If)) {
-            continue;
-         }
-
-         break;
-      }
-      case Decl::StaticForDeclID: {
-         auto* For = cast<StaticForDecl>(Decl);
-         ast::Decl* Result;
-
-         if (QC.ResolveStaticFor(Result, For)) {
-            continue;
-         }
-
-         break;
-      }
-      default:
-         break;
-      }
-
-      // Make sure all transparent inner contexts are prepared.
-      auto* InnerDC = dyn_cast<DeclContext>(Decl);
-      if (!InnerDC || !InnerDC->isTransparent()) {
-         continue;
-      }
-
-      if (auto Err = QC.ResolveMetaDeclarations(InnerDC)) {
-         return Query::finish(Err);
-      }
-   }
-
-   return finish();
+   llvm_unreachable("remove this!");
 }
 
 static void updateSpecialNames(SemaPass& Sema, QualType T, ExtensionDecl* Ext)
@@ -708,12 +584,6 @@ QueryResult GetAssociatedTypeImplQuery::run()
    }
 
    for (auto* Ext : Extensions) {
-      if (Constraints) {
-         if (!QC.IsSupersetOf(Constraints, QC.Sema->getDeclConstraints(Ext))) {
-            continue;
-         }
-      }
-
       Impl = Ext->lookupSingle<AliasDecl>(Name);
       if (Impl) {
          return finish(Impl);
@@ -1135,9 +1005,15 @@ static bool MultiLevelLookupImpl(DeclContext& CtxRef, DeclarationName Name,
       }
    }
 
+   DeclContext *FoundAltDC = nullptr;
+
    while (Ctx) {
       if (serial::ModuleFile* ModFile = Ctx->getModFile()) {
          ModFile->PerformExternalLookup(*Ctx, Name);
+      }
+
+      if (auto *AltDC = Data.SP.LookupContextMap[Ctx]) {
+         FoundAltDC = AltDC;
       }
 
       if (auto* Mod = dyn_cast<ModuleDecl>(Ctx)) {
@@ -1222,6 +1098,10 @@ static bool MultiLevelLookupImpl(DeclContext& CtxRef, DeclarationName Name,
       }
 
       Ctx = Ctx->getParentCtx();
+   }
+
+   if (Data.Result.empty() && FoundAltDC) {
+      return MultiLevelLookupImpl(*FoundAltDC, Name, Data);
    }
 
    return false;
@@ -1471,7 +1351,7 @@ QueryResult DirectLookupQuery::run()
 
 QueryResult RestrictedLookupQuery::run()
 {
-   assert(false && "yeet this");
+   llvm_unreachable("yeet this");
 }
 
 QueryResult NestedNameLookupQuery::run()

@@ -30,7 +30,7 @@ private:
    ast::SemaPass& Sema;
 
    /// Map from closure parameters to assigned type variables.
-   llvm::DenseMap<unsigned, TypeVariableType*>* ClosureParams = nullptr;
+   llvm::DenseMap<unsigned, QualType>* ClosureParams = nullptr;
 
    /// Map from expressions to assigned type variables.
    llvm::DenseMap<ast::Expression*, TypeVariableType*> typeVarMap;
@@ -123,7 +123,7 @@ public:
                        ArrayRef<ConstraintLocator::PathElement> Elements = {});
 
    /// Get the type variable for a closure parameter, if it exists.
-   TypeVariableType* getClosureParam(DeclarationName Name);
+   QualType getClosureParam(DeclarationName Name);
 
    /// The result of constraint generation.
    enum ResultKind {
@@ -167,8 +167,12 @@ public:
                       MutableArrayRef<ast::Expression*> Exprs);
 
    /// Prepare an expression for typechecking by expanding macros etc.
-   ExprResult rebuildExpression(ast::Expression* E);
-   static ExprResult rebuildExpression(ast::SemaPass& Sema, ast::Expression* E);
+   std::pair<ExprResult, bool> rebuildExpression(ast::Expression* E,
+                                                 ast::Expression *baseExpr = nullptr);
+
+   static std::pair<ExprResult, bool> rebuildExpression(ast::SemaPass& Sema,
+                                                        ast::Expression* E,
+                                                        ast::Expression *baseExpr = nullptr);
 
    /// Generate constraints for an expression.
    [[nodiscard]] GenerationResult generateConstraints(

@@ -105,8 +105,8 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         include/cdotc/Lex/TokenKinds.h src/Basic/Precedence.cpp
         include/cdotc/AST/ASTVisitor.h
         src/CTFE/StaticEvaluator.cpp include/cdotc/CTFE/StaticEvaluator.h src/AST/ASTDumper.cpp include/cdotc/AST/ASTDumper.h src/Support/LiteralParser.cpp
-        include/cdotc/Support/LiteralParser.h include/cdotc/Sema/CandidateSet.h src/Sema/CandidateSet.cpp src/Sema/BuiltinCandidateBuilder.cpp
-        include/cdotc/Sema/BuiltinCandidateBuilder.h include/cdotc/Sema/ActionResult.h src/Sema/ConversionSequence.cpp
+        include/cdotc/Support/LiteralParser.h include/cdotc/Sema/CandidateSet.h src/Sema/CandidateSet.cpp
+        include/cdotc/Sema/ActionResult.h src/Sema/ConversionSequence.cpp
         include/cdotc/Sema/ConversionSequence.h src/Sema/SemaCast.cpp src/IL/Passes/DefinitiveInitializationPass.cpp
         include/cdotc/IL/Passes/DefinitiveInitializationPass.h include/cdotc/IL/Utils/BlockIterator.h
         src/Sema/SemaCTFE.cpp src/Diagnostics/DiagnosticsEngine.cpp include/cdotc/Diagnostics/DiagnosticsEngine.h src/Basic/TargetInfo.cpp

@@ -40,11 +40,11 @@ public:
 
    void print(raw_ostream& OS) const override
    {
-      OS << "while generating IL for function '" << F.getName() << "'";
+      OS << "while generating IR for function '" << F.getUnmangledName() << "'";
 
       if (!F.isDeclared()) {
-         F.dump();
-         OS << " (dumped function contents)";
+         OS << " (dumped function contents)\n";
+         F.print(OS);
       }
 
       OS << "\n";
@@ -2395,6 +2395,10 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
       return E;
    }
 
+   if (E->getType()->isStructTy()) {
+      return Builder.CreateExtractValue(E, 0);
+   }
+
    // Ignore a previous load of the value.
    if (auto* ld = dyn_cast<llvm::LoadInst>(E)) {
       E = ld->getOperand(0);
@@ -2404,7 +2408,13 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
        = Builder.CreateStructGEP(E->getType()->getPointerElementType(), E, 0);
 
    if (!I.getType()->isReferenceType()) {
-      return Builder.CreateLoad(Val);
+      // Handle builtin integer raw types
+      auto *Ld = Builder.CreateLoad(Val);
+      if (Ld->getType()->isStructTy()) {
+         return Builder.CreateExtractValue(Ld, 0);
+      }
+
+      return Ld;
    }
 
    return Val;

@@ -178,13 +178,14 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
    else if (II == BuiltinIdents[builtin::CVoid]) {
       ResultExpr = new (Context)
           IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
-                            Context.getMetaType(Context.getTypedefType(Alias)));
+                            Context.getMetaType(Context.getVoidType()));
    }
    else if (II == BuiltinIdents[builtin::RawPointer]
             && !Alias->isInstantiation()) {
       ResultExpr = new (Context)
-          IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
-                            Context.getMetaType(Context.getTypedefType(Alias)));
+          IdentifierRefExpr(
+              Expr->getSourceRange(), IdentifierKind::MetaType,
+              Context.getMetaType(Context.getPointerType(Context.getVoidType())));
    }
    else if (II == BuiltinIdents[builtin::RawPointer]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
@@ -197,7 +198,8 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
 
       ResultExpr = new (Context)
           IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
-                            Context.getMetaType(Context.getTypedefType(Alias)));
+                            Context.getMetaType(Context.getPointerType(
+                                Alias->getTemplateArgs().front().getType())));
    }
 #define CDOT_BUILTIN_TYPE(NAME)                                                \
    else if (II == BuiltinIdents[builtin::NAME])                                \

@@ -206,7 +206,7 @@ LoadCacheJob::LoadCacheJob(CompilerInstance& CI)
 
 void LoadCacheJob::run()
 {
-   support::Timer Timer(CI, "Load Cache File");
+   START_TIMER("Load Cache File");
    CI.getIncMgr()->finalizeCacheFiles();
 }
 
@@ -218,7 +218,7 @@ ILGenJob::ILGenJob(cdot::CompilerInstance& CI) : Job(ILGenJobID, nullptr, CI) {}
 
 void ILGenJob::run()
 {
-   support::Timer Timer(CI, "IL Generation");
+   START_TIMER("IL Generation");
    llvm_unreachable("Hmmm");
 }
 
@@ -229,7 +229,7 @@ ILVerifyJob::ILVerifyJob(cdot::CompilerInstance& CI)
 
 void ILVerifyJob::run()
 {
-   support::Timer Timer(CI, "IL Verification");
+   START_TIMER("IL Verification");
 
    auto* Mod = CI.getCompilationModule();
    auto& ILGen = CI.getILGen();
@@ -264,7 +264,7 @@ ILCanonicalizeJob::ILCanonicalizeJob(cdot::CompilerInstance& CI)
 
 void ILCanonicalizeJob::run()
 {
-   support::Timer Timer(CI, "IL Canonicalization");
+   START_TIMER("IL Canonicalization");
 
    auto* Mod = CI.getCompilationModule();
    auto& ILGen = CI.getILGen();
@@ -283,7 +283,7 @@ ILOptimizeJob::ILOptimizeJob(cdot::CompilerInstance& CI)
 
 void ILOptimizeJob::run()
 {
-   support::Timer Timer(CI, "IL Optimization");
+   START_TIMER("IL Optimization");
 
    auto* Mod = CI.getCompilationModule();
 
@@ -301,7 +301,7 @@ IRGenJob::IRGenJob(il::Module& M, CompilerInstance& CI)
 
 void IRGenJob::run()
 {
-   support::Timer Timer(CI, "IR Generation");
+   START_TIMER("IR Generation");
    CI.createIRGen();
    CI.getIRGen()->visitModule(M);
 }
@@ -314,7 +314,7 @@ EmitAssemblyJob::EmitAssemblyJob(StringRef OutFile, Job* PreviousJob,
 
 void EmitAssemblyJob::run()
 {
-   support::Timer Timer(CI, "ASM Emission");
+   START_TIMER("ASM Emission");
    auto* Mod = PreviousJob->getLLVMModule();
 
    if (OutFile.empty()) {
@@ -341,7 +341,7 @@ EmitObjectJob::EmitObjectJob(StringRef OutFile, Job* PreviousJob,
 
 void EmitObjectJob::run()
 {
-   support::Timer Timer(CI, "Object File Emission");
+   START_TIMER("Object File Emission");
    auto* Mod = PreviousJob->getLLVMModule();
 
    if (OutFile.empty()) {
@@ -368,7 +368,7 @@ EmitStaticLibraryJob::EmitStaticLibraryJob(StringRef OutFile, Job* PreviousJob,
 
 void EmitStaticLibraryJob::run()
 {
-   support::Timer Timer(CI, "Static Library Emission");
+   START_TIMER("Static Library Emission");
    auto* Mod = PreviousJob->getLLVMModule();
    CI.getIRGen()->emitStaticLibrary(OutFile, Mod);
 }
@@ -382,7 +382,7 @@ EmitDynamicLibraryJob::EmitDynamicLibraryJob(StringRef OutFile,
 
 void EmitDynamicLibraryJob::run()
 {
-   support::Timer Timer(CI, "Dynamic Library Emission");
+   START_TIMER("Dynamic Library Emission");
    llvm_unreachable("not implemented!");
 }
 
@@ -394,7 +394,7 @@ EmitExecutableJob::EmitExecutableJob(StringRef OutFile, Job* PreviousJob,
 
 void EmitExecutableJob::run()
 {
-   support::Timer Timer(CI, "Executable Emission");
+   START_TIMER("Executable Emission");
    CI.getIRGen()->emitExecutable(OutFile, PreviousJob->getLLVMModule());
 }
 
@@ -405,7 +405,7 @@ EmitModuleJob::EmitModuleJob(Module& Mod, CompilerInstance& CI)
 
 void EmitModuleJob::run()
 {
-   support::Timer Timer(CI, "Module Emission");
+   START_TIMER("Module Emission");
    CI.getModuleMgr().EmitModule(&Mod);
 }
 
@@ -416,7 +416,7 @@ EmitILJob::EmitILJob(il::Module& M, StringRef OutFile, CompilerInstance& CI)
 
 void EmitILJob::run()
 {
-   support::Timer Timer(CI, "IL Dump");
+   START_TIMER("IL Dump");
    if (OutFile.empty()) {
       return M.dump();
    }
@@ -440,7 +440,7 @@ EmitIRJob::EmitIRJob(Job* PreviousJob, StringRef OutFile, CompilerInstance& CI)
 
 void EmitIRJob::run()
 {
-   support::Timer Timer(CI, "IR Dump");
+   START_TIMER("IR Dump");
 
    auto* Mod = PreviousJob->getLLVMModule();
    llvm::AssemblyAnnotationWriter ASW;
@@ -470,7 +470,7 @@ LinkJob::LinkJob(ArrayRef<cdot::Job*> Inputs, StringRef OutFile,
 
 void LinkJob::run()
 {
-   support::Timer Timer(CI, "Linking");
+   START_TIMER("Linking");
 
    auto ldPathOrError = llvm::sys::findProgramByName("ld");
    if (ldPathOrError.getError()) {
@@ -499,7 +499,7 @@ LinkIRJob::LinkIRJob(ArrayRef<cdot::Job*> Inputs, CompilerInstance& CI)
 
 void LinkIRJob::run()
 {
-   support::Timer Timer(CI, "IR Linking");
+   START_TIMER("IR Linking");
 
    llvm::Module* JoinedModule = new llvm::Module("main", CI.getLLVMCtx());
    llvm::Linker ModuleLinker(*JoinedModule);
@@ -542,7 +542,7 @@ UnittestJob::UnittestJob(Job* PreviousJob, CompilerInstance& CI)
 
 void UnittestJob::run()
 {
-   support::Timer Timer(CI, "Unittests");
+   START_TIMER("Unittests");
 
    // Create the main function.
    auto* UnittestFn = CI.getSema().getILGen().CreateUnittestFun();
@@ -574,7 +574,7 @@ CacheJob::CacheJob(cdot::CompilerInstance& CI) : Job(CacheJobID, nullptr, CI) {}
 
 void CacheJob::run()
 {
-   support::Timer Timer(CI, "Cache File Emission");
+   START_TIMER("Cache File Emission");
 
    auto Mgr = CI.getIncMgr();
    assert(Mgr && "incremental compilation is disabled!");

@@ -280,54 +280,6 @@ void SemaPass::checkProtocolExtension(ExtensionDecl* Ext, ProtocolDecl* P)
    }
 }
 
-LLVM_ATTRIBUTE_UNUSED
-static void diagnoseCircularDependency(SemaPass& SP,
-                                       DependencyGraph<NamedDecl*>& Dep)
-{
-   auto pair = Dep.getOffendingPair();
-
-   // this pair should contain one RecordDecl and either a FieldDecl or an
-   // EnumCaseDecl
-   RecordDecl* R = nullptr;
-   NamedDecl* FieldOrCase = nullptr;
-
-   if (isa<RecordDecl>(pair.first)) {
-      R = cast<RecordDecl>(pair.first);
-   }
-   else if (isa<EnumCaseDecl>(pair.first)) {
-      FieldOrCase = cast<EnumCaseDecl>(pair.first);
-   }
-   else {
-      FieldOrCase = cast<FieldDecl>(pair.first);
-   }
-
-   if (isa<RecordDecl>(pair.second)) {
-      R = cast<RecordDecl>(pair.second);
-   }
-   else if (isa<EnumCaseDecl>(pair.second)) {
-      FieldOrCase = cast<EnumCaseDecl>(pair.second);
-   }
-   else {
-      FieldOrCase = cast<FieldDecl>(pair.second);
-   }
-
-   assert(R && FieldOrCase && "bad dependency pair!");
-
-   SP.diagnose(R, err_circular_data_members, R->getDeclName(),
-               FieldOrCase->getRecord()->getDeclName(), R->getSourceLoc());
-
-   SP.diagnose(note_other_field_here, FieldOrCase->getSourceLoc());
-}
-
-LLVM_ATTRIBUTE_UNUSED
-static void diagnoseCircularConformance(SemaPass& SP,
-                                        DependencyGraph<ProtocolDecl*>& Dep)
-{
-   auto Pair = Dep.getOffendingPair();
-   SP.diagnose(Pair.first, err_circular_conformance, Pair.first->getSourceLoc(),
-               Pair.first->getDeclName(), Pair.second->getDeclName());
-}
-
 NamedDecl* SemaPass::getCurrentDecl() const
 {
    for (auto ctx = DeclCtx; ctx; ctx = ctx->getParentCtx())
@@ -528,7 +480,6 @@ void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
       ActOnSubscriptDecl(DC, cast<SubscriptDecl>(D));
       break;
    case Decl::AssociatedTypeDeclID:
-      cast<ProtocolDecl>(DC)->setHasAssociatedTypeConstraint(true);
       addDeclToContext(*DC, cast<NamedDecl>(D));
       checkDefaultAccessibility(cast<NamedDecl>(D));
 
@@ -605,6 +556,81 @@ void SemaPass::ActOnProtoDecl(DeclContext* DC, ProtocolDecl* P)
       }
 
       P->setIsAny(P->getModule()->getModule() == M);
+   }
+
+   if (P->hasAssociatedTypeConstraint()) {
+      return;
+   }
+
+   SmallVector<Expression*, 4> ExprsToCheck;
+   for (auto *D : P->getDecls()) {
+      if (auto *AT = dyn_cast<AssociatedTypeDecl>(D)) {
+         P->setHasAssociatedTypeConstraint(true);
+         break;
+      }
+
+      if (auto *M = dyn_cast<MethodDecl>(D)) {
+         ExprsToCheck.push_back(M->getReturnType().getTypeExpr());
+         for (auto *Arg : M->getArgs()) {
+            ExprsToCheck.push_back(Arg->getType().getTypeExpr());
+         }
+      }
+      else if (auto *Prop = dyn_cast<PropDecl>(D)) {
+         ExprsToCheck.push_back(Prop->getType().getTypeExpr());
+      }
+      else if (auto *Sub = dyn_cast<SubscriptDecl>(D)) {
+         ExprsToCheck.push_back(Sub->getType().getTypeExpr());
+         if (auto *Getter = Sub->getGetterMethod()) {
+            for (auto* Arg : Getter->getArgs()) {
+               ExprsToCheck.push_back(Arg->getType().getTypeExpr());
+            }
+         }
+         else {
+            for (auto* Arg : Sub->getSetterMethod()->getArgs()) {
+               ExprsToCheck.push_back(Arg->getType().getTypeExpr());
+            }
+         }
+      }
+   }
+
+   for (auto *Expr : ExprsToCheck) {
+      if (!Expr) {
+         continue;
+      }
+
+      visitSpecificStatement<IdentifierRefExpr, SelfExpr>([&](Expression *E) {
+        while (auto *PE = E->getParentExpr()) {
+           E = PE;
+        }
+
+        if (auto *Self = dyn_cast<SelfExpr>(E)) {
+           if (Self->isUppercase()) {
+              P->setHasAssociatedTypeConstraint(true);
+              return false;
+           }
+        }
+
+        auto *Ident = dyn_cast<IdentifierRefExpr>(E);
+        if (!Ident) {
+           return true;
+        }
+
+        if (Ident->getDeclName().isStr("Self")) {
+           P->setHasAssociatedTypeConstraint(true);
+           return false;
+        }
+
+        if (P->lookupSingle<AssociatedTypeDecl>(Ident->getDeclName())) {
+           P->setHasAssociatedTypeConstraint(true);
+           return false;
+        }
+
+        return true;
+      }, Expr);
+
+      if (P->hasAssociatedTypeConstraint()) {
+         break;
+      }
    }
 }
 
@@ -1257,6 +1283,15 @@ TypeResult SemaPass::visitSourceType(Statement* S, const SourceType& Ty,
    return Result;
 }
 
+static bool IsTypeExpr(Expression *E)
+{
+   if (isa<TypeExpr>(E))
+      return true;
+
+   return isa<IdentifierRefExpr>(E)
+       && cast<IdentifierRefExpr>(E)->getKind() == IdentifierKind::TypeOf;
+}
+
 TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
 {
    if (!Ty.getTypeExpr() || Ty.isResolved()) {
@@ -1276,7 +1311,7 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
    QualType ResTy = Result.get()->getExprType();
    Ty.setTypeExpr(Result.get());
 
-   if (WantMeta && !ResTy->isMetaType() && isa<TypeExpr>(Ty.getTypeExpr())) {
+   if (WantMeta && IsTypeExpr(Ty.getTypeExpr())) {
       ResTy = Context.getMetaType(ResTy);
    }
    else if (!WantMeta && ResTy->isMetaType()) {
@@ -1314,7 +1349,11 @@ ExprResult SemaPass::visitTupleTypeExpr(TupleTypeExpr* Expr)
 
 ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr* Expr)
 {
+   auto givenParamInfo = Expr->getParamInfo();
    llvm::SmallVector<QualType, 4> ArgTys;
+   SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
+
+   int i = 0;
    for (auto& Ty : Expr->getArgTypes()) {
       auto Res = visitSourceType(Expr, Ty);
       if (Res) {
@@ -1323,16 +1362,26 @@ ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr* Expr)
       else {
          ArgTys.push_back(ErrorTy);
       }
-   }
 
-   SmallVector<FunctionType::ParamInfo, 4> ParamInfo;
-   for (auto& I : Expr->getParamInfo()) {
-      if (I.getConvention() == ArgumentConvention::Default) {
-         ParamInfo.push_back(ArgumentConvention::Borrowed);
+      switch (givenParamInfo[i].getConvention()) {
+      case ArgumentConvention::ImmutableRef:
+         ArgTys.back() = Context.getReferenceType(ArgTys.back());
+         ParamInfo.emplace_back(givenParamInfo[i]);
+         break;
+      case ArgumentConvention::MutableRef:
+         ArgTys.back() = Context.getMutableReferenceType(ArgTys.back());
+         ParamInfo.emplace_back(givenParamInfo[i]);
+         break;
+      case ArgumentConvention::Default:
+         ParamInfo.emplace_back(ArgumentConvention::Borrowed,
+                                givenParamInfo[i].getLabel());
+         break;
+      default:
+         ParamInfo.emplace_back(givenParamInfo[i]);
+         break;
       }
-      else {
-         ParamInfo.push_back(I);
-      }
+
+      ++i;
    }
 
    auto RetTyResult = visitSourceType(Expr, Expr->getReturnType());
@@ -1564,8 +1613,8 @@ QualType SemaPass::getOptionOf(QualType Ty, StmtOrDecl DependentStmt)
    TemplateArgument Arg(Opt->getTemplateParams().front(), Ty,
                         DependentStmt.getSourceLoc());
 
-   auto TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
-   if (Ty->isDependentType()) {
+   auto *TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
+   if (TemplateArgs->isStillDependent()) {
       return Context.getDependentRecordType(Opt, TemplateArgs);
    }
    else {
@@ -2463,7 +2512,7 @@ InitDecl* SemaPass::getStringInit()
       }
 
       StringInit = cast_or_null<InitDecl>(
-          getBuiltinDecl("String.init(rawBytes:size:"));
+          getBuiltinDecl("String.init(staticString:size:)"));
    }
 
    return StringInit;

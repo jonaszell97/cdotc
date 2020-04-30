@@ -1,10 +1,13 @@
 #include "cdotc/Diagnostics/Diagnostics.h"
 
+#include "cdotc/AST/Expression.h"
+#include "cdotc/AST/Type.h"
 #include "cdotc/Basic/FileManager.h"
 #include "cdotc/Basic/FileUtils.h"
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Lex/Lexer.h"
 #include "cdotc/Lex/Token.h"
+#include "cdotc/Module/Module.h"
 #include "cdotc/Diagnostics/DiagnosticsEngine.h"
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/Format.h"
@@ -15,13 +18,6 @@
 
 #include <cassert>
 #include <cstdlib>
-#include <sstream>
-
-#ifndef CDOT_SMALL_VARIANT
-#include "cdotc/AST/Expression.h"
-#include "cdotc/AST/Type.h"
-#include "cdotc/Module/Module.h"
-#endif
 
 using namespace cdot::lex;
 using namespace cdot::ast;
@@ -156,14 +152,13 @@ void DiagnosticBuilder::appendArgumentString(unsigned idx, std::string& str)
    case DiagnosticsEngine::ak_integer:
       str += std::to_string(Engine.OtherArgs[idx]);
       break;
-#ifndef CDOT_SMALL_VARIANT
    case DiagnosticsEngine::ak_qualtype:
       str += QualType::getFromOpaquePtr((void*)Engine.OtherArgs[idx])
                  .toString();
       break;
    case DiagnosticsEngine::ak_named_decl:
-      llvm_unreachable("TODO");
-#endif
+      str += reinterpret_cast<NamedDecl*>(Engine.OtherArgs[idx])->getFullName();
+      break;
    default:
       llvm_unreachable("unhandled argument kind");
    }
@@ -510,7 +505,15 @@ void DiagnosticBuilder::finalize()
 
    // show file name, line number and column
    auto lineAndCol = Engine.FileMgr->getLineAndCol(loc, Buf);
-   out << " (" << fs::getFileNameAndExtension(File.FileName) << ":"
+   string fileNameAndExtension;
+
+#ifndef NDEBUG
+   fileNameAndExtension = File.FileName;
+#else
+   fileNameAndExtension = fs::getFileNameAndExtension(File.FileName);
+#endif
+
+   out << " (" << fileNameAndExtension << ":"
        << lineAndCol.line << ":" << lineAndCol.col << ")\n";
 
    unsigned errLineNo = lineAndCol.line;

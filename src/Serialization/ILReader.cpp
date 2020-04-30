@@ -621,7 +621,7 @@ ILReader::readFunctionEntryBlock(unsigned ID,
    ILRecordReader Record(*this);
 
    unsigned Code = Cursor.ReadCode();
-   auto Kind = Record.readRecord(Cursor, Code);
+   auto Kind = Record.readRecord(Cursor, Code); (void)Kind;
    assert(Kind == Value::BasicBlockID && "not a basic block");
 
    auto RawBits = Record.readInt();

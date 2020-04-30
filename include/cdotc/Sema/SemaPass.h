@@ -10,14 +10,12 @@
 #include "cdotc/AST/Statement.h"
 #include "cdotc/AST/StmtOrDecl.h"
 #include "cdotc/Basic/CastKind.h"
-#include "cdotc/Basic/DependencyGraph.h"
 #include "cdotc/Basic/Mangle.h"
 #include "cdotc/Basic/Precedence.h"
 #include "cdotc/CTFE/StaticEvaluator.h"
 #include "cdotc/Driver/Compiler.h"
 #include "cdotc/Diagnostics/DiagnosticsEngine.h"
 #include "cdotc/Sema/ActionResult.h"
-#include "cdotc/Sema/BuiltinCandidateBuilder.h"
 #include "cdotc/Sema/CandidateSet.h"
 #include "cdotc/Sema/ConversionSequence.h"
 #include "cdotc/Sema/Lookup.h"
@@ -788,7 +786,22 @@ public:
 
    size_t getNumGlobals() const { return numGlobals; }
 
-   QualType ApplyCapabilities(QualType T, DeclContext* DeclCtx = nullptr);
+   void registerAssociatedTypeImpl(RecordDecl *R, AssociatedTypeDecl *AT,
+                                   AliasDecl *Impl);
+
+   void registerAssociatedTypeImpl(RecordDecl *R, AliasDecl *Impl);
+
+   AliasDecl *getAssociatedTypeImpl(RecordDecl *R, DeclarationName Name);
+
+   template<std::size_t StrLen>
+   AliasDecl *getAssociatedTypeImpl(RecordDecl *R, const char (&Str)[StrLen])
+   {
+      return getAssociatedTypeImpl(R, getIdentifier(Str));
+   }
+
+   QualType ApplyCapabilities(QualType T, DeclContext* DeclCtx = nullptr,
+                              bool force = false);
+
    ConstraintSet* getDeclConstraints(NamedDecl* ND);
 
    ArrayRef<Conformance*> getAllConformances(RecordDecl* R);
@@ -834,6 +847,10 @@ private:
    /// Set of method declarations that fulfill protocol requirements.
    llvm::SmallVector<MethodDecl*, 4> ProtocolImplementations;
 
+   /// Map of associated type implementations.
+   llvm::DenseMap<RecordDecl*, llvm::DenseMap<DeclarationName, AliasDecl*>>
+      AssociatedTypeDeclMap;
+
    /// True iff runtime generics are enabled. Will be set by the
    /// CompilerInstance.
    bool RuntimeGenerics = false;
@@ -848,9 +865,6 @@ private:
 
    /// Static expression evaluator instance.
    StaticEvaluator Evaluator;
-
-   /// Candidate builder instance.
-   BuiltinCandidateBuilder CandBuilder;
 
    /// Instantiator instance.
    std::unique_ptr<TemplateInstantiator> Instantiator;
@@ -1044,8 +1058,8 @@ private:
    llvm::DenseMap<NamedDecl*, NamedDecl*> InstScopeMap;
 
 public:
-   /// Set of incomplete instantiations.
-   std::vector<RecordDecl*> incompleteRecordInstantiations;
+   /// Map from instantiated decl contexts to their template for lookup.
+   llvm::DenseMap<DeclContext*, DeclContext*> LookupContextMap;
 
    /// The unknown any type, here for convenience.
    QualType UnknownAnyTy;
@@ -1167,6 +1181,7 @@ public:
    bool NeedsStructReturn(QualType Ty);
    bool ShouldPassByValue(QualType Ty);
 
+   bool ConformsTo(CanType T, CanType Existential);
    bool ConformsTo(CanType T, ProtocolDecl* Proto,
                    bool AllowConditional = false);
 
@@ -1413,7 +1428,8 @@ public:
                           llvm::ArrayRef<Expression*> templateArgs);
 
    CallableDecl* checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
-                                        ArrayRef<Expression*> templateArgs);
+                                        ArrayRef<Expression*> templateArgs,
+                                        bool diagnoseTemplateErrors);
 
    RecordDecl *checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
                                     ArrayRef<Expression*> templateArgs,

@@ -123,12 +123,7 @@ public:
                               sema::FinalTemplateArgumentList* TemplateArgs,
                               NamedDecl *Inst);
 
-   const llvm::SetVector<RecordDecl*> &getShallowInstantiations() const
-   {
-      return ShallowInstantiations;
-   }
-
-   void completeShallowInstantiations();
+   bool completeShallowInstantiations();
    bool completeShallowInstantiation(RecordDecl *Inst);
 
    bool isShallowInstantiation(RecordDecl *Inst) const

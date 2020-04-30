@@ -54,6 +54,7 @@ bool ConformanceTable::registerConformance(ast::ASTContext& C, RecordDecl* Rec,
    return SingleOrMultiple.get<ConformanceSet*>()->insert(P).second;
 }
 
+#ifndef NDEBUG
 static StringRef conformanceKindToString(ConformanceKind K)
 {
    switch (K) {
@@ -69,6 +70,7 @@ static StringRef conformanceKindToString(ConformanceKind K)
       return "conditional";
    }
 }
+#endif
 
 void ConformanceTable::insertConformance(RecordDecl* Rec, Conformance* Conf)
 {

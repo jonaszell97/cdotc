@@ -995,17 +995,7 @@ bool ConstraintSystem::isSatisfied(CovarianceConstraint* C)
          continue;
       }
 
-      auto ConvSeq = QC.Sema->getConversionSequence(Ty, RHS);
-      if (!ConvSeq.isValid()) {
-         //         if (ConvSeq.isDependent()) {
-         //            TypeDependent = true;
-         //            continue;
-         //         }
-
-         return false;
-      }
-
-      if (!ConvSeq.isImplicit()) {
+      if (!QC.Sema->ConformsTo(Ty, RHS)) {
          return false;
       }
    }
@@ -1187,6 +1177,10 @@ bool ConstraintSystem::isSatisfied(LiteralConstraint* C)
       if (LHS->isPointerType() && LHS->getPointeeType()->isInt8Ty()) {
          return true;
       }
+      if (LHS->isArrayType()
+      && LHS->uncheckedAsArrayType()->getElementType()->isInt8Ty()) {
+         return true;
+      }
 
       return isExpressibleBy(*QC.Sema, LHS,
                              SemaPass::InitializableByKind::String,
@@ -1348,6 +1342,8 @@ public:
             if (binding != RHS) {
                return false;
             }
+
+            return true;
          }
          else {
             Sys.bindTypeVariable(LHS, RHS);
@@ -1360,7 +1356,7 @@ public:
                return false;
             }
          }
-         else {
+         else if (!madeChanges) {
             Sys.newConstraint<TypeBindingConstraint>(LHS, RHS, C->getLocator());
             madeChanges = true;
          }
@@ -1655,6 +1651,8 @@ ConstraintSystem::ResultKind
 ConstraintSystem::solve(SmallVectorImpl<Solution>& Solutions,
                         bool StopAfterFirstFailure)
 {
+   START_TIMER("Constraint Solving");
+
    // Enter a first solver scope.
    auto* OuterScope = new (*this) SolverScope(*this);
    this->StopAfterFirstFailure = StopAfterFirstFailure;
@@ -1911,6 +1909,9 @@ uint64_t ConstraintSystem::calculateConversionPenalty(const Solution &S)
          }
 
          auto *ArgDecl = Loc->getPathElements().back().getParamDecl();
+         if (ArgDecl->isVariadic()) {
+            continue;
+         }
 
          QualType RHSTy = Visitor.visit(C->getRHSType());
          IsValidParameterValueQuery::result_type result;

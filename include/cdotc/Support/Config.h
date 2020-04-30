@@ -36,9 +36,9 @@
 #define NO_OP __asm nop
 #define BREAKPOINT __asm int 3
 #endif
-#elif
-#define NO_OP static_assert(false, "NO_OP used in production build!");
-#define BREAKPOINT static_assert(false, "BREAKPOINT used in production build!");
+#else
+#  define NO_OP static_assert(false, "NO_OP used in production build!")
+#  define BREAKPOINT static_assert(false, "BREAKPOINT used in production build!")
 #endif
 
 #define ASSERT_NOEXCEPT_MOVE_CONSTRUCTIBLE(TYPE)                               \

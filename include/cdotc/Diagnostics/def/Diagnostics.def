@@ -396,6 +396,8 @@
    CDOT_NOTE(note_overload_generic_params, "previous template argument list declared here")
    CDOT_NOTE(note_duplicate_method, "previous declaration here")
    CDOT_NOTE(note_incorrect_protocol_impl_prop, "required ${ 0 | select(subscript, property) } ${ 0 | if('$1' ) }${ 2 | select(is missing, requires a getter, requires a setter, requires a getter and a setter) }")
+   CDOT_NOTE(note_incorrect_protocol_impl_must_be_static, "candidate is not static")
+   CDOT_NOTE(note_incorrect_protocol_impl_must_not_be_static, "candidate is static")
    CDOT_NOTE(note_incorrect_protocol_impl_missing, "required ${ 0 | decl_kind } '$1' is missing")
    CDOT_NOTE(note_incorrect_protocol_impl_method_num_args, "candidate has incorrect number of arguments, expected ${ 0 | select(at least, at most) } $1, $2 given")
    CDOT_NOTE(note_incorrect_protocol_impl_method_signature, "candidate has incomaptible signature ('$0' expected for ${ 1 | ordinal } argument, found '$2')")

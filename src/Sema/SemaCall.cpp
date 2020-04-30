@@ -594,18 +594,22 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
    for (Expression*& argVal : Call->getArgs()) {
       QualType neededType;
       bool cstyleVararg = false;
+      bool isVariadic = false;
 
-      if (i < params.size()) {
-         neededType = params[i]->getType();
-      }
-      else if (C->isCstyleVararg()) {
-         cstyleVararg = true;
+      if (i < params.size() || !C->isCstyleVararg()) {
+         auto *param = i < params.size() ? params[i] : params.back();
+         neededType = param->getType();
+         isVariadic = param->isVariadic();
+
+         if (param->hasAttribute<AutoClosureAttr>()) {
+            neededType = Context.getLambdaType(neededType, {}, {});
+         }
       }
       else {
-         neededType = params.back()->getType();
+         cstyleVararg = true;
       }
 
-      if (isTemplate && Call->getTemplateArgs()) {
+      if (isTemplate && Call->getTemplateArgs() && !isVariadic) {
          if (QC.SubstTemplateParamTypes(neededType, neededType,
                                         *Call->getTemplateArgs(),
                                          Call->getSourceRange())) {

@@ -19,6 +19,7 @@ template<> NeedsRetainOrReleaseQuery *QueryContext::getQuery<NeedsRetainOrReleas
 template<> NeedsDeinitilizationQuery *QueryContext::getQuery<NeedsDeinitilizationQuery>(CanType T);
 template<> NeedsStructReturnQuery *QueryContext::getQuery<NeedsStructReturnQuery>(CanType T);
 template<> PassByValueQuery *QueryContext::getQuery<PassByValueQuery>(CanType T);
+template<> ContainsProtocolWithAssociatedTypesQuery *QueryContext::getQuery<ContainsProtocolWithAssociatedTypesQuery>(CanType T);
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T);
 template<> SubstAssociatedTypesQuery *QueryContext::getQuery<SubstAssociatedTypesQuery>(QualType T, QualType Self);
 template<> SubstTemplateParamTypesQuery *QueryContext::getQuery<SubstTemplateParamTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs);

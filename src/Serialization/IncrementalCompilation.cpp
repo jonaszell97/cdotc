@@ -52,10 +52,12 @@ IncrementalCompilationManager::IncrementalCompilationManager(
 
 IncrementalCompilationManager::~IncrementalCompilationManager()
 {
+#ifndef NDEBUG
    FileDependency.print(
        [&](unsigned ID) { return IDFileMap[ID]->getValue().FileName; });
 
    llvm::outs() << "\n\n";
+#endif
 }
 
 static bool startsWithCacheFileMagic(llvm::BitstreamCursor& Stream)
@@ -303,7 +305,7 @@ void IncrementalCompilationManager::CheckIfRecompilationNeeded()
 
       auto& Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
       for (auto* Dependency : Vert.getOutgoing()) {
-         Worklist.insert(&IDFileMap[Dependency->getPtr()]->getValue());
+         Worklist.insert(&IDFileMap[Dependency->getVal()]->getValue());
       }
 
       while (!Worklist.empty()) {
@@ -317,7 +319,7 @@ void IncrementalCompilationManager::CheckIfRecompilationNeeded()
 
          auto& OtherVert = ReadFileDependency.getOrAddVertex(OtherFI.FileID);
          for (auto* Dependency : OtherVert.getOutgoing()) {
-            Worklist.insert(&IDFileMap[Dependency->getPtr()]->getValue());
+            Worklist.insert(&IDFileMap[Dependency->getVal()]->getValue());
          }
       }
    }
@@ -375,14 +377,14 @@ void IncrementalCompilationManager::WriteDependencies(
    for (auto& Node : FileDependency.getVertices()) {
       ++NumNodes;
 
-      Vec.push_back(Node->getPtr());
+      Vec.push_back(Node->getVal());
 
       auto Idx = Vec.size();
       Vec.emplace_back(); // number of outgoing edges, fill in later
 
       unsigned NumDeps = 0;
       for (auto* Edge : Node->getOutgoing()) {
-         Vec.push_back(Edge->getPtr());
+         Vec.push_back(Edge->getVal());
          ++NumDeps;
       }
 
@@ -605,7 +607,7 @@ bool IncrementalCompilationManager::fileNeedsRecompilation(fs::OpenFile& File)
 
       for (auto* Incoming : ReadVert.getIncoming()) {
          OtherVert.addIncoming(
-             &FileDependency.getOrAddVertex(Incoming->getPtr()));
+             &FileDependency.getOrAddVertex(Incoming->getVal()));
       }
    }
 
@@ -650,7 +652,7 @@ bool IncrementalCompilationManager::fileNeedsRecompilationImpl(StringRef File,
    auto& Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
    for (auto* Dep : Vert.getIncoming()) {
       if (fileNeedsRecompilation(
-              IDFileMap[Dep->getPtr()]->getValue().FileName)) {
+              IDFileMap[Dep->getVal()]->getValue().FileName)) {
          FI.NeedsRecompilation = true;
          break;
       }

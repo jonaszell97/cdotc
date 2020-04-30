@@ -23,29 +23,38 @@ static bool checkImplicitLabel(IdentifierInfo* NeededLabel,
       return true;
    }
 
+   E = E->ignoreParensAndImplicitCasts();
+
    // Trailing closures don't need labels.
-   // FIXME actually check for trailing closures
-   if (isa<LambdaExpr>(E)) {
-      return true;
+   if (auto *LE = dyn_cast<LambdaExpr>(E)) {
+      return LE->isTrailingClosure();
    }
 
-   if (auto* declRef
-       = dyn_cast<DeclRefExpr>(E->ignoreParensAndImplicitCasts())) {
+   if (auto* declRef = dyn_cast<DeclRefExpr>(E)) {
       auto Name = declRef->getDecl()->getDeclName();
-      if (Name.isSimpleIdentifier()
-          && Name.getIdentifierInfo() == NeededLabel) {
+      if (Name.isSimpleIdentifier() && Name.getIdentifierInfo() == NeededLabel) {
          return true;
       }
    }
-   //   if (auto *Ident =
-   //   dyn_cast<IdentifierRefExpr>(E->ignoreParensAndImplicitCasts())) {
-   //      if ((!Ident->getParentExpr()
-   //           ||
-   //           isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
-   //          && Ident->getIdentInfo() == NeededLabel) {
-   //         return true;
-   //      }
-   //   }
+
+   if (auto* memberRef = dyn_cast<MemberRefExpr>(E)) {
+      if (!isa<SelfExpr>(memberRef->getParentExpr())) {
+         return false;
+      }
+
+      auto Name = memberRef->getMemberDecl()->getDeclName();
+      if (Name.isSimpleIdentifier() && Name.getIdentifierInfo() == NeededLabel) {
+         return true;
+      }
+   }
+
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(E)) {
+      if ((!Ident->getParentExpr()
+           || isa<SelfExpr>(Ident->getParentExpr()->ignoreParensAndImplicitCasts()))
+          && Ident->getIdentInfo() == NeededLabel) {
+         return true;
+      }
+   }
 
    return false;
 }
@@ -440,7 +449,8 @@ static bool createParamConstraints(
     unsigned i, std::vector<StmtOrDecl>& ArgExprs,
     TemplateParamSet& VariadicParams, MultiLevelTemplateArgList& templateArgs,
     ConstraintBuilder& Builder, SemaPass& Sema, Statement* Caller,
-    ConstraintBuilder* outerBuilder)
+    ConstraintBuilder* outerBuilder, unsigned &currentConversionPenalty,
+    unsigned bestConversionPenalty)
 {
    auto* CD = Cand.getFunc();
 
@@ -640,10 +650,7 @@ static bool createParamConstraints(
    }
    else {
       assert(ArgValues.size() == 1);
-
       auto* ArgVal = ArgValues.front();
-      auto* Loc
-          = Builder.makeLocator(ArgVal, PathElement::parameterType(ArgDecl));
 
       QualType NeededTy = ArgDecl->getType();
       if (Cand.getFunc()->isTemplate()) {
@@ -651,8 +658,34 @@ static bool createParamConstraints(
              NeededTy, NeededTy, templateArgs, ArgVal->getSourceRange());
       }
 
+      if (ArgVal->isSemanticallyChecked() && !NeededTy->containsTemplateParamType()) {
+         IsValidParameterValueQuery::result_type result;
+         if (Sema.QC.IsValidParameterValue(result, ArgVal->getExprType(),
+                                           NeededTy, ArgDecl->isSelf())) {
+            return true;
+         }
+
+         if (!result.isValid) {
+            Cand.setHasIncompatibleArgument(i, ArgVal->getExprType(), NeededTy);
+            return true;
+         }
+
+         currentConversionPenalty += result.conversionPenalty;
+         if (currentConversionPenalty > bestConversionPenalty) {
+            Cand.ConversionPenalty = -1;
+            return true;
+         }
+
+         ArgExprs.emplace_back(ArgVal);
+         return false;
+      }
+
+      auto* Loc = Builder.makeLocator(ArgVal,
+                                      PathElement::parameterType(ArgDecl));
+
       auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc,
                                                         outerBuilder);
+
       switch (Result.Kind) {
       case ConstraintBuilder::Success:
          break;
@@ -665,23 +698,6 @@ static bool createParamConstraints(
       case ConstraintBuilder::Dependent:
          Cand.setIsDependent();
          return false;
-      }
-
-      if (!Result.Type->containsTypeVariable()) {
-         llvm_unreachable("can this happen??");
-//         IsValidParameterValueQuery::result_type result;
-//         if (Sema.QC.IsValidParameterValue(result, Result.Type, NeededTy,
-//                                           ArgDecl->isSelf())) {
-//            Cand.setIsInvalid();
-//            return true;
-//         }
-//
-//         if (!result.isValid) {
-//            Cand.setHasIncompatibleArgument(i, Result.Type, NeededTy);
-//            return true;
-//         }
-//
-//         Cand.ConversionPenalty += result.conversionPenalty;
       }
 
       ArgExprs.emplace_back(ArgVal);
@@ -738,14 +754,15 @@ class CaptureMarker : public RecursiveASTVisitor<CaptureMarker> {
 public:
    CaptureMarker(ASTContext& C, LambdaExpr* LE) : C(C), LE(LE) {}
 
-   bool visitIdentifierRefExpr(IdentifierRefExpr* Expr)
+   bool visitDeclRefExpr(DeclRefExpr *Expr)
    {
-      switch (Expr->getKind()) {
-      case IdentifierKind::LocalVar:
-      case IdentifierKind::FunctionArg: {
-         Expr->getVarDecl()->setCaptured(true);
-         Expr->setCaptureIndex(LE->addCapture(C, Expr->getVarDecl()));
-         Expr->setIsCapture(true);
+      auto *ND = Expr->getDecl();
+      switch (ND->getKind()) {
+      case Decl::LocalVarDeclID:
+      case Decl::FuncArgDeclID: {
+         auto *VD = cast<VarDecl>(ND);
+         VD->setCaptured(true);
+         Expr->setCaptureIndex(LE->addCapture(C, VD));
 
          break;
       }
@@ -806,7 +823,10 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
          requiredType = ParamTys[i];
       }
 
-      if (isTemplate) {
+      if (isTemplate && ArgDecl->isVariadic()) {
+         requiredType = QualType();
+      }
+      else if (isTemplate) {
          if (SP.QC.SubstTemplateParamTypesNonFinal(requiredType, requiredType,
                                                    Cand.InnerTemplateArgs,
                                                    Caller->getSourceRange())) {
@@ -834,7 +854,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
       E = Result.get();
 
       // Convert to the parameter type and apply automatic promotion.
-      if (i < ParamTys.size()) {
+      if (i < ParamTys.size() && requiredType) {
          E = SP.implicitCastIfNecessary(E, requiredType);
       }
       else if (cstyleVararg) {
@@ -861,7 +881,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
          if (ArgDecl->hasAttribute<AutoClosureAttr>()) {
             auto LE = LambdaExpr::Create(
                 SP.getContext(), E->getSourceRange(), E->getSourceLoc(),
-                SourceType(SP.getContext().getAutoType()), {},
+                E->getExprType(), {},
                 ReturnStmt::Create(SP.getContext(), E->getSourceLoc(), E));
 
             (void)SP.visitExpr(E, LE);
@@ -895,6 +915,11 @@ static bool replaceDefaultValues(SemaPass& SP, CandidateSet& CandSet,
          // Get the instantiated default value.
          auto* Inst = Cand.getFunc()->lookupSingle<FuncArgDecl>(
              cast<FuncArgDecl>(Decl)->getDeclName());
+
+         if (SP.QC.TypecheckDecl(Decl)) {
+            CandSet.InvalidCand = true;
+            continue;
+         }
 
          if (Inst != Decl) {
             if (SP.QC.TypecheckDecl(Inst)) {
@@ -1015,7 +1040,10 @@ static bool resolveCandidate(
    TemplateArgList outerTemplateArgs;
 
    if (Cand.getFunc()->isTemplate()) {
-      Cand.InnerTemplateArgs = TemplateArgList(Sema, Cand.getFunc());
+      if (Cand.InnerTemplateArgs.empty()) {
+         Cand.InnerTemplateArgs = TemplateArgList(Sema, Cand.getFunc());
+      }
+
       templateArgList.addOuterList(Cand.InnerTemplateArgs);
    }
 
@@ -1080,19 +1108,16 @@ static bool resolveCandidate(
       }
    }
 
-   // Check dependent return types.
-   if (RequiredType && DependentReturnType) {
-      if (!RequiredType->containsTemplateParamType() || !isFunctionArgument) {
-         templateArgList.inferFromType(RequiredType, ReturnType);
-         Cand.Builder->addTemplateParamBinding(ReturnType, RequiredType);
-      }
-   }
+   unsigned paramConversionPenalty = 0;
+   unsigned bestConversionPenalty = BestCandidate
+       ? BestCandidate->ConversionPenalty : -1;
 
    unsigned i = 0;
    for (auto* ArgDecl : Cand.getFunc()->getArgs()) {
       if (createParamConstraints(Sys, DeclArgMap, Cand, ArgDecl, NumGivenArgs,
                                  i++, ArgExprs, VariadicParams, templateArgList,
-                                 *Cand.Builder, Sema, Caller, outerBuilder)) {
+                                 *Cand.Builder, Sema, Caller, outerBuilder,
+                                 paramConversionPenalty, bestConversionPenalty)) {
          Valid = false;
          break;
       }
@@ -1101,6 +1126,15 @@ static bool resolveCandidate(
    if (!Valid) {
       CandSet.InvalidCand |= Cand.FR == CandidateSet::IsInvalid;
       return false;
+   }
+
+   // Check dependent return types.
+   if (RequiredType && DependentReturnType) {
+      if (!RequiredType->containsTemplateParamType() || !isFunctionArgument) {
+         // Only use the return type for inference if it doesn't appear in the
+         // parameter types.
+         Cand.Builder->addTemplateParamBinding(ReturnType, RequiredType);
+      }
    }
 
    // Add C-Style varargs.
@@ -1144,7 +1178,8 @@ static bool resolveCandidate(
    }
 
    // Apply template parameter bindings.
-   if (Cand.getFunc()->isTemplate() || isTemplateInitializer) {
+   bool isTemplate = Cand.getFunc()->isTemplate();
+   if (isTemplate || isTemplateInitializer) {
       bindTemplateParams(Sema, Cand, Solutions, templateArgList);
    }
 
@@ -1180,7 +1215,9 @@ static bool resolveCandidate(
 
    /// Calculate the conversion penalty.
    uint64_t convPenalty = Sys.calculateConversionPenalty(S);
+   S.Score += paramConversionPenalty;
    S.Score += convPenalty;
+   S.Score += (int)isTemplate;
 
    if (isBetterCandidate(BestCandidate, Cand, BestSolution, S)) {
       CandSet.BestConversionPenalty = S.Score;
@@ -1380,18 +1417,30 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
    ArgsWithSelf.push_back(SelfArg);
    ArgsWithSelf.append(UnorderedArgs.begin(), UnorderedArgs.end());
 
+   auto *baseExpr = dyn_cast<Expression>(Caller);
    for (auto*& argValue : ArgsWithSelf) {
       if (argValue == nullptr) {
          continue;
       }
 
-      auto rebuiltExpr = ConstraintBuilder::rebuildExpression(Sema, argValue);
-      if (!rebuiltExpr) {
+      auto rebuiltExpr = ConstraintBuilder::rebuildExpression(Sema, argValue, baseExpr);
+      if (!rebuiltExpr.first) {
          argValue->setIsInvalid(true);
          argValue->setExprType(Sema.ErrorTy);
       }
       else {
-         argValue = rebuiltExpr.get();
+         argValue = rebuiltExpr.first.get();
+      }
+
+      if (!rebuiltExpr.second) {
+         auto Result = Sema.visitExpr(argValue);
+         if (!Result) {
+            argValue->setIsInvalid(true);
+            argValue->setExprType(Sema.ErrorTy);
+         }
+         else {
+            argValue = Result.get();
+         }
       }
    }
 

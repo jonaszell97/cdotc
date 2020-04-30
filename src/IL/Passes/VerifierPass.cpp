@@ -111,6 +111,15 @@ void VerifierPass::run()
       F->setInvalid(true);
 
    F->setVerified(true);
+
+   if (!IsValid) {
+      std::error_code EC;
+      llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error"
+                              ".cdotil",
+                              EC, llvm::sys::fs::F_Append);
+
+      F->print(fd);
+   }
 }
 
 void VerifierPass::visitBasicBlock(BasicBlock const& B)

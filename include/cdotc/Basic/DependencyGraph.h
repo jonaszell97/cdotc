@@ -13,70 +13,89 @@ namespace cdot {
 template<class T> class DependencyGraph {
 public:
    struct Vertex {
-      explicit Vertex(T&& Ptr) : Ptr(std::move(Ptr)) {}
+      explicit Vertex(T Ptr) : Val(Ptr) {}
 
       Vertex(Vertex const&) = delete;
       Vertex& operator=(Vertex const&) = delete;
 
-      Vertex(Vertex&& vert) noexcept
-          : Ptr(std::move(vert.Ptr)), Incoming(std::move(vert.Incoming)),
-            Outgoing(std::move(vert.Outgoing))
-      {
-      }
+      Vertex(Vertex&& vert) = delete;
+      Vertex& operator=(Vertex &&) = delete;
 
       void addOutgoing(Vertex* vert)
       {
-         Outgoing.insert(vert);
-         vert->Incoming.insert(this);
+         outgoing().insert(vert);
+         vert->incoming().insert(this);
       }
 
       void removeOutgoing(Vertex* vert)
       {
-         Outgoing.remove(vert);
-         vert->Incoming.remove(this);
+         Outgoing->remove(vert);
+         vert->Incoming->remove(this);
       }
 
       void addIncoming(Vertex* vert)
       {
-         Incoming.insert(vert);
-         vert->Outgoing.insert(this);
+         incoming().insert(vert);
+         vert->outgoing().insert(this);
       }
 
       void removeIncoming(Vertex* vert)
       {
-         Incoming.remove(vert);
-         vert->Outgoing.remove(this);
+         Incoming->remove(vert);
+         vert->Outgoing->remove(this);
       }
 
       void reset()
       {
-         for (auto* Out : Outgoing) {
-            Out->Incoming.remove(this);
+         for (auto* Out : getOutgoing()) {
+            Out->Incoming->remove(this);
          }
-         for (auto* In : Incoming) {
-            In->Outgoing.remove(this);
+         for (auto* In : getIncoming()) {
+            In->Outgoing->remove(this);
          }
 
-         Outgoing.clear();
-         Incoming.clear();
+         if (Outgoing) {
+            Outgoing->clear();
+         }
+         if (Incoming) {
+            Incoming->clear();
+         }
       }
 
-      const T& getPtr() { return Ptr; }
+      T getVal() const { return Val; }
 
-      const llvm::SetVector<Vertex*>& getOutgoing() const
+      llvm::ArrayRef<Vertex*> getOutgoing() const
       {
-         return Outgoing;
+         return Outgoing ? Outgoing->getArrayRef() : llvm::ArrayRef<Vertex*>();
       }
 
-      const llvm::SetVector<Vertex*>& getIncoming() const
+      llvm::ArrayRef<Vertex*> getIncoming() const
       {
-         return Incoming;
+         return Incoming ? Incoming->getArrayRef() : llvm::ArrayRef<Vertex*>();
       }
 
    private:
-      T Ptr;
-      llvm::SetVector<Vertex*> Incoming;
-      llvm::SetVector<Vertex*> Outgoing;
+      llvm::SetVector<Vertex*> &incoming()
+      {
+         if (Incoming == nullptr) {
+            Incoming = std::make_unique<llvm::SetVector<Vertex*>>();
+         }
+
+         return *Incoming;
+      }
+
+      llvm::SetVector<Vertex*> &outgoing()
+      {
+         if (Outgoing == nullptr) {
+            Outgoing = std::make_unique<llvm::SetVector<Vertex*>>();
+         }
+
+         return *Outgoing;
+      }
+
+      T Val;
+      std::unique_ptr<llvm::SetVector<Vertex*>> Incoming;
+      std::unique_ptr<llvm::SetVector<Vertex*>> Outgoing;
    };
 
    DependencyGraph() = default;
@@ -102,14 +121,16 @@ public:
 
    Vertex& getOrAddVertex(T ptr)
    {
-      accessed = true;
+      auto it = VertexMap.find(ptr);
+      if (it != VertexMap.end()) {
+         return *it->getSecond();
+      }
 
-      for (auto& V : Vertices)
-         if (V->getPtr() == ptr)
-            return *V;
+      auto *result = new Vertex(std::move(ptr));
+      Vertices.push_back(result);
+      VertexMap[ptr] = result;
 
-      Vertices.push_back(new Vertex(std::move(ptr)));
-      return *Vertices.back();
+      return *result;
    }
 
    template<class Actor> bool actOnGraphInOrder(Actor const& act)
@@ -122,6 +143,26 @@ public:
          act(vert);
 
       return true;
+   }
+
+   template<class Decide>
+   void remove_if(const Decide &Fn)
+   {
+      auto begin = std::partition(Vertices.begin(), Vertices.end(), [Fn](Vertex *V) {
+         return !Fn(V->getVal());
+      });
+
+      auto end = Vertices.end();
+      for (auto it = begin; it != end; ++it) {
+         Vertex *V = *it;
+         assert(Fn(V->getVal()) && "what?");
+
+         V->reset();
+         VertexMap.erase(V->getVal());
+         delete V;
+      }
+
+      Vertices.erase(begin, end);
    }
 
    std::pair<llvm::SmallVector<T, 8>, bool>
@@ -150,48 +191,24 @@ public:
 
       for (auto& vert : Vertices) {
          if (!vert->getOutgoing().empty()) {
-            return {vert->getPtr(), (*vert->getOutgoing().begin())->getPtr()};
+            return {vert->getVal(), (*vert->getOutgoing().begin())->getVal()};
          }
       }
 
       llvm_unreachable("order is valid!");
    }
 
-   const llvm::SmallVector<Vertex*, 8>& getVertices() const { return Vertices; }
-
-   void erase(const T& t)
-   {
-      auto it = Vertices.begin();
-      auto end_it = Vertices.end();
-
-      for (; it != end_it; ++it) {
-         Vertex*& V = *it;
-         if (V->getPtr() == t) {
-            while (!V->getOutgoing().empty()) {
-               Vertex* Out = *V->getOutgoing().begin();
-               Out->removeIncoming(V);
-            }
-            while (!V->getIncoming().empty()) {
-               Vertex* In = *V->getIncoming().begin();
-               In->removeOutgoing(V);
-            }
-
-            Vertices.erase(it);
-            delete V;
-
-            break;
-         }
-      }
-   }
+   llvm::ArrayRef<Vertex*> getVertices() const { return Vertices; }
 
    void clear()
    {
       destroyVerts();
       Vertices.clear();
+      VertexMap.clear();
    }
 
-   bool empty() const { return Vertices.empty(); }
-   size_t size() const { return Vertices.size(); }
+   [[nodiscard]] bool empty() const { return Vertices.empty(); }
+   [[nodiscard]] size_t size() const { return Vertices.size(); }
 
 #ifndef NDEBUG
    template<class PrintFn> void print(const PrintFn& Fn,
@@ -202,9 +219,9 @@ public:
          if (i++ != 0)
             OS << "\n\n";
 
-         OS << Fn(Vert->getPtr());
+         OS << Fn(Vert->getVal());
          for (auto Out : Vert->getIncoming()) {
-            OS << "\n    depends on " << Fn(Out->getPtr());
+            OS << "\n    depends on " << Fn(Out->getVal());
          }
       }
    }
@@ -223,7 +240,7 @@ private:
          auto vert = *VerticesWithoutIncomingEdges.begin();
          VerticesWithoutIncomingEdges.remove(vert);
 
-         Order.push_back(vert->getPtr());
+         Order.push_back(vert->getVal());
 
          while (!vert->getOutgoing().empty()) {
             auto out = *vert->getOutgoing().begin();
@@ -246,12 +263,18 @@ private:
 
       llvm::SmallSetVector<Vertex*, 4> VerticesWithoutIncomingEdges;
       for (auto& vert : Vertices) {
-         if (vert->getIncoming().empty()) {
+         auto in = vert->getIncoming();
+         if (in.empty()) {
             VerticesWithoutIncomingEdges.insert(vert);
          }
+         else {
+            Incoming[vert] = llvm::SetVector<Vertex*>(in.begin(), in.end());
+         }
 
-         Outgoing[vert] = vert->getOutgoing();
-         Incoming[vert] = vert->getIncoming();
+         auto out = vert->getOutgoing();
+         if (!out.empty()) {
+            Outgoing[vert] = llvm::SetVector<Vertex*>(out.begin(), out.end());
+         }
       }
 
       size_t cnt = 0;
@@ -259,7 +282,7 @@ private:
          auto vert = *VerticesWithoutIncomingEdges.begin();
          VerticesWithoutIncomingEdges.remove(vert);
 
-         Order.push_back(vert->getPtr());
+         Order.push_back(vert->getVal());
 
          while (!Outgoing[vert].empty()) {
             auto out = *Outgoing[vert].begin();
@@ -279,12 +302,13 @@ private:
 
    void destroyVerts()
    {
-      for (const auto& vert : Vertices)
+      for (const auto& vert : Vertices) {
          delete vert;
+      }
    }
 
    llvm::SmallVector<Vertex*, 8> Vertices;
-   bool accessed = false;
+   llvm::DenseMap<T, Vertex*> VertexMap;
 };
 
 } // namespace cdot

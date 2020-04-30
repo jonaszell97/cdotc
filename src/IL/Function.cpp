@@ -55,8 +55,6 @@ Function::Function(const Function& other, Module& M)
 
 Function::~Function() {}
 
-llvm::StringRef Function::getUnmangledName() const { return getName(); }
-
 bool Function::isLambda() const { return isa<Lambda>(this); }
 
 BasicBlock const* Function::getEntryBlock() const

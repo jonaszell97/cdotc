@@ -591,6 +591,12 @@ static void diagnoseAnonymousCandidate(SemaPass& SP, CandidateSet& CandSet,
    switch (Cand.FR) {
    default:
       llvm_unreachable("should not happen on anonymous call");
+   case CandidateSet::IsInvalid:
+   case CandidateSet::IsDependent:
+      // diagnostics were already emitted for the invalid decl; we don't
+      // know whether this candidate would have been valid had the
+      // declaration not contained errors
+      break;
    case CandidateSet::TooFewArguments:
       SP.diagnose(Caller, err_too_few_args_for_call,
                   Cand.getFunctionType()->getParamTypes().size(), args.size(),

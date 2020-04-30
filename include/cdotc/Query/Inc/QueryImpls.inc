@@ -29,6 +29,7 @@ bool Query::isPure() const
    case NeedsDeinitilizationQueryID: return false;
    case NeedsStructReturnQueryID: return false;
    case PassByValueQueryID: return false;
+   case ContainsProtocolWithAssociatedTypesQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
    case IsValidParameterValueQueryID: return false;
@@ -229,6 +230,7 @@ bool Query::canBeCached() const
    case NeedsDeinitilizationQueryID: return true;
    case NeedsStructReturnQueryID: return true;
    case PassByValueQueryID: return true;
+   case ContainsProtocolWithAssociatedTypesQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
    case IsValidParameterValueQueryID: return true;
@@ -429,6 +431,7 @@ bool Query::canBeSerialized() const
    case NeedsDeinitilizationQueryID: return false;
    case NeedsStructReturnQueryID: return false;
    case PassByValueQueryID: return false;
+   case ContainsProtocolWithAssociatedTypesQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
    case IsValidParameterValueQueryID: return false;
@@ -629,6 +632,7 @@ bool Query::canBeDependent() const
    case NeedsDeinitilizationQueryID: return true;
    case NeedsStructReturnQueryID: return true;
    case PassByValueQueryID: return true;
+   case ContainsProtocolWithAssociatedTypesQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
    case IsValidParameterValueQueryID: return true;
@@ -1943,6 +1947,56 @@ void PassByValueQuery::Profile(llvm::FoldingSetNodeID &ID) const
 }
 
 void PassByValueQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T)
+{
+   T.Profile(ID);
+}
+
+ContainsProtocolWithAssociatedTypesQuery::ContainsProtocolWithAssociatedTypesQuery(QueryContext &QC, CanType T) : Query(ContainsProtocolWithAssociatedTypesQueryID, QC), T(T) {
+
+}
+
+bool ContainsProtocolWithAssociatedTypesQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string ContainsProtocolWithAssociatedTypesQuery::description() const
+{
+   std::string s;
+   s += "checking ";
+   s += "ContainsProtocolWithAssociatedTypes";
+   s += " on ";
+   s += T.toDiagString();
+   return s;
+}
+
+std::string ContainsProtocolWithAssociatedTypesQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[ContainsProtocolWithAssociatedTypes]"
+;   OS << " T = ";
+OS << T;
+;
+
+   return OS.str();
+}
+
+QueryResult ContainsProtocolWithAssociatedTypesQuery::finish(bool Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+void ContainsProtocolWithAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, T);
+}
+
+void ContainsProtocolWithAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T)
 {
    T.Profile(ID);
 }

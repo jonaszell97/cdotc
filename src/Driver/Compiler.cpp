@@ -191,6 +191,10 @@ CompilerInstance::CompilerInstance(CompilerOptions&& options)
       Sema(std::make_unique<SemaPass>(*this))
 {
    QC->Sema = Sema.get();
+
+#ifndef NDEBUG
+   support::Timer::CI = this;
+#endif
 }
 
 CompilerInstance::CompilerInstance(int argc, char** argv)
@@ -203,6 +207,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       ILCtx(std::make_unique<il::Context>(*this)),
       Sema(std::make_unique<SemaPass>(*this))
 {
+#ifndef NDEBUG
+   support::Timer::CI = this;
+#endif
+
    QC->Sema = Sema.get();
    cl::ParseCommandLineOptions(argc, argv);
 
@@ -351,6 +359,8 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       if (!EmitIL.empty() && EmitIL.getValue().back() != fs::PathSeperator) {
          EmitIL.getValue() += fs::PathSeperator;
       }
+
+      options.EmitILPath = EmitIL.getValue();
    }
    if (EmitIR != "-") {
       options.setFlag(CompilerOptions::F_EmitIR, true);
@@ -358,6 +368,8 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       if (!EmitIR.empty() && EmitIR.getValue().back() != fs::PathSeperator) {
          EmitIR.getValue() += fs::PathSeperator;
       }
+
+      options.EmitIRPath = EmitIR.getValue();
    }
    if (ClearCaches) {
       serial::IncrementalCompilationManager::clearCaches();
@@ -461,6 +473,23 @@ public:
    }
 };
 
+#ifndef NDEBUG
+
+class TimerStackTraceEntry : public llvm::PrettyStackTraceEntry {
+   /// Reference to the compiler instance.
+   CompilerInstance& CI;
+
+public:
+   TimerStackTraceEntry(CompilerInstance& CI) : CI(CI) {}
+
+   void print(llvm::raw_ostream& OS) const override
+   {
+      CI.displayPhaseDurations(OS);
+   }
+};
+
+#endif
+
 } // anonymous namespace
 
 int CompilerInstance::compile()
@@ -470,10 +499,14 @@ int CompilerInstance::compile()
       return 1;
    }
 
-   support::Timer Timer(*this, "Compilation", PrintPhases);
    llvm::CrashRecoveryContextCleanupRegistrar<SemaPass> CleanupSema(Sema.get());
-
    QueryStackTraceEntry StackTrace(*this);
+
+#ifndef NDEBUG
+   TimerStackTraceEntry TimerStackTrace(*this);
+   START_TIMER("Other");
+#endif
+
    switch (options.output()) {
    case OutputKind::Module:
       if (QC->CompileModule()) {
@@ -518,59 +551,9 @@ int CompilerInstance::compile()
       llvm_unreachable("unhandled output kind");
    }
 
-   if (options.emitIL()) {
-      SmallString<128> Dir;
-      if (!EmitIL.empty()) {
-         Dir = EmitIL;
-      }
-      else {
-         Dir = "./IL/";
-      }
-
-      fs::createDirectories(Dir);
-
-      Dir += getCompilationModule()->getName()->getIdentifier();
-      Dir += ".cdotil";
-
-      std::error_code EC;
-      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
-
-      if (EC) {
-         Sema->diagnose(err_generic_error, EC.message());
-         return 1;
-      }
-
-      if (QC->EmitIL(OS)) {
-         return 1;
-      }
-   }
-
-   if (options.emitIR()) {
-      SmallString<128> Dir;
-      if (!EmitIR.empty()) {
-         Dir = EmitIR;
-      }
-      else {
-         Dir = "./IR/";
-      }
-
-      fs::createDirectories(Dir);
-
-      Dir += getCompilationModule()->getName()->getIdentifier();
-      Dir += ".ll";
-
-      std::error_code EC;
-      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
-
-      if (EC) {
-         Sema->diagnose(err_generic_error, EC.message());
-         return 1;
-      }
-
-      if (QC->EmitIR(OS)) {
-         return 1;
-      }
-   }
+#ifndef NDEBUG
+   displayPhaseDurations(llvm::errs());
+#endif
 
    return 0;
 }
@@ -592,7 +575,7 @@ int CompilerInstance::setupJobs()
    addJob<PrintUsedMemoryJob>(Jobs.back());
 
    {
-      support::Timer Timer(*this, "Parsing");
+      START_TIMER("Parsing");
       if (auto EC = runJobs())
          return EC;
    }
@@ -768,11 +751,6 @@ void CompilerInstance::reportBackendFailure(llvm::StringRef msg)
 {
    Sema->diagnose(err_llvm_backend, msg);
    Sema->issueDiagnostics();
-}
-
-void CompilerInstance::displayPhaseDurations(llvm::raw_ostream& OS) const
-{
-   OS << TimerStr;
 }
 
 } // namespace cdot

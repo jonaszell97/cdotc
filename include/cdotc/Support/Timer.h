@@ -1,27 +1,42 @@
 #ifndef CDOT_TIMER_H
 #define CDOT_TIMER_H
 
-#include "cdotc/Driver/Compiler.h"
+#ifndef NDEBUG
+
 #include "cdotc/Support/LLVM.h"
+#include "cdotc/Support/Log.h"
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/raw_ostream.h>
 
 namespace cdot {
+
+class CompilerInstance;
+
 namespace support {
 
 struct Timer {
-   Timer(CompilerInstance& CI, StringRef PhaseName, bool Enable = true);
+   Timer(StringRef PhaseName, bool Enable = true);
    ~Timer();
 
+   friend CompilerInstance;
+
 private:
+   static CompilerInstance *CI;
+   static Timer *ActiveTimer;
+
    std::string PhaseName;
-   CompilerInstance& CI;
    long long StartTime;
    bool Enable;
+   Timer *PrevTimer;
 };
 
 } // namespace support
 } // namespace cdot
 
+#  define START_TIMER(NAME) support::Timer _timer_(NAME, HAS_LOG(Timers))
+
+#else
+#  define START_TIMER(NAME)
+#endif // NDEBUG
 #endif // CDOT_TIMER_H

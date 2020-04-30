@@ -1158,8 +1158,7 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
          QualType SelfType
              = SP.Context.getMutableReferenceType(M->getSelfType());
 
-         Self
-             = Builder.CreateArgument(SelfType, ArgumentConvention::MutableRef);
+         Self = Builder.CreateArgument(SelfType, ArgumentConvention::MutableRef);
          args.push_back(Self);
 
          Self->setSelf(true);
@@ -1173,8 +1172,9 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
       }
       else {
          QualType argType = arg->getType();
-         if (argType->isEmptyTupleType())
+         if (argType->isEmptyTupleType()) {
             continue;
+         }
 
          if (arg->hasAttribute<AutoClosureAttr>()) {
             argType = SP.getContext().getLambdaType(argType, {});
@@ -1232,6 +1232,10 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
    func->setStructReturn(SP.NeedsStructReturn(func->getReturnType()));
    func->setAsync(C->isAsync());
 
+#ifndef NDEBUG
+   func->setUnmangledName(C->getFullName());
+#endif
+
    addDeclValuePair(C, func);
    return func;
 }
@@ -1246,7 +1250,8 @@ public:
 
    void print(llvm::raw_ostream& OS) const override
    {
-      OS << "while generating IL for function '" << F->getName() << "'\n";
+      OS << "while generating IL for function '"
+         << F->getUnmangledName() << "'\n";
    }
 };
 
@@ -1391,7 +1396,7 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
                auto Call = Builder.CreateCall(
                    getFunc(cast<StructDecl>(CD->getRecord())
                                ->getDefaultInitializer()),
-                   {Builder.CreateLoad(SelfVal)});
+                   SelfVal);
 
                Call->setSynthesized(true);
             }
@@ -3441,6 +3446,19 @@ il::Value* ILGenPass::visitIdentifierRefExpr(IdentifierRefExpr* Expr)
 
       break;
    }
+   case IdentifierKind::BuiltinArraySize: {
+      auto numElts = Expr->getParentExpr()->getExprType()->removeReference()
+          ->asArrayType()->getNumElements();
+
+      Constant* Val = Builder.GetConstantInt(
+          Context.getInt64Ty(),
+          numElts);
+
+      V = Builder.GetConstantStruct(
+          cast<StructDecl>(Expr->getExprType()->getRecord()), Val);
+
+      break;
+   }
    case IdentifierKind::Type:
    case IdentifierKind::TypeOf:
       V = GetOrCreateTypeInfo(Expr->getMetaType()->getUnderlyingType());
@@ -3522,8 +3540,7 @@ il::Value* ILGenPass::visitDeclRefExpr(DeclRefExpr* Expr)
 {
    NamedDecl* ND = Expr->getDecl();
    switch (ND->getKind()) {
-   case Decl::GlobalVarDeclID:
-   case Decl::FieldDeclID: {
+   case Decl::GlobalVarDeclID: {
       auto* Var = cast<VarDecl>(ND);
 
       // check if the global variable has already been initialized
@@ -3614,6 +3631,42 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr* Expr)
    switch (ND->getKind()) {
    case Decl::FieldDeclID: {
       auto* F = cast<FieldDecl>(ND);
+      if (F->isStatic()) {
+         auto* Var = cast<VarDecl>(ND);
+
+         // check if the global variable has already been initialized
+         // FIXME make this atomic
+         il::GlobalVariable* GV;
+         if (SP.QC.GetILGlobal(GV, Var)) {
+            llvm_unreachable("creating global failed?");
+         }
+
+         if (GV->getParent() != Builder.getModule()) {
+            GV = GV->getDeclarationIn(Builder.getModule());
+         }
+
+         if (inCTFE()) {
+            registerReferencedGlobal(Var, GV, Expr);
+         }
+
+         if (GV->isLazilyInitialized()) {
+            auto flag = Builder.CreateLoad(GV->getInitializedFlag());
+            auto InitBB = Builder.CreateBasicBlock("glob.init");
+            auto MergeBB = Builder.CreateBasicBlock("glob.init.merge");
+
+            Builder.CreateCondBr(flag, MergeBB, InitBB);
+
+            Builder.SetInsertPoint(InitBB);
+            Builder.CreateCall(GV->getInitFn(), {});
+            Builder.CreateStore(Builder.GetTrue(), GV->getInitializedFlag());
+
+            Builder.CreateBr(MergeBB);
+            Builder.SetInsertPoint(MergeBB);
+         }
+
+         return GV;
+      }
+
       if (ParentVal->isLvalue()) {
          auto* ld = Builder.CreateLoad(ParentVal);
          ParentVal = ld;
@@ -3905,28 +3958,17 @@ il::Value* ILGenPass::visitSubscriptExpr(SubscriptExpr* node)
    assert(Self && "subscript without parent expression");
    Builder.SetDebugLoc(node->getSourceLoc());
 
-   //   auto LValue = LookThroughLoad(Self);
-   //   if (LValue->isLvalue()) {
-   //      SourceLocation EndLoc = node->getSourceRange().getEnd();
-   //      auto Inst = Builder.CreateBeginBorrow(LValue,
-   //                                            node->getSourceLoc(), EndLoc,
-   //                                            node->isLHSOfAssignment());
-   //
-   //      Cleanups.pushCleanup<BorrowCleanup>(Inst, EndLoc);
-   //   }
-
-   Builder.SetDebugLoc(node->getIndices().front()->getSourceLoc());
-
    auto idx = visit(node->getIndices().front());
-   Value* Res = nullptr;
-
-   if (Self->getType()->isPointerType() || Self->getType()->isArrayType()) {
-      Res = Builder.CreateGEP(Self, idx,
-                              !node->getExprType()->isMutableReferenceType());
+   if (!idx->getType()->isIntegerType()) {
+      idx = Builder.CreateLoad(Builder.CreateStructGEP(idx, 0, true));
    }
 
-   assert(Res);
-   return Res;
+   assert(Self->getType()->isPointerType() || Self->getType()->isArrayType());
+   Builder.SetDebugLoc(node->getIndices().front()->getSourceLoc());
+
+   return Builder.CreateGEP(
+       Self, idx,
+       !node->getExprType()->isMutableReferenceType());
 }
 
 il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
@@ -5853,9 +5895,8 @@ il::Value* ILGenPass::visitBoolLiteral(BoolLiteral* Expr)
 il::Value* ILGenPass::visitCharLiteral(CharLiteral* Expr)
 {
    QualType T = Expr->getExprType();
-   if (Expr->getType()->isIntegerType()) {
-      return Builder.GetConstantInt(Expr->getType(),
-                                    (uint64_t)Expr->getNarrow());
+   if (T->isIntegerType()) {
+      return Builder.GetConstantInt(T, (uint64_t)Expr->getNarrow());
    }
 
    auto* R = T->getRecord();
