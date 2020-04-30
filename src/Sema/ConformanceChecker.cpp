@@ -2,6 +2,7 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/TypeBuilder.h"
 #include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Basic/DependencyGraph.h"
 #include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Parse/Parser.h"
@@ -11,6 +12,7 @@
 #include "cdotc/Serialization/ModuleFile.h"
 #include "cdotc/Support/Log.h"
 #include "cdotc/Support/SaveAndRestore.h"
+#include "cdotc/Support/Timer.h"
 
 #include <llvm/ADT/SetVector.h>
 
@@ -368,10 +370,6 @@ void ConformanceCheckerImpl::checkConformance()
       }
    }
 
-   if (Rec->isTemplate()) {
-      return;
-   }
-
    for (auto *ND : ExtensionDecls) {
       NamedDecl *Equiv;
       if (Sema.QC.FindEquivalentDecl(Equiv, ND, Rec, SelfTy)) {
@@ -629,7 +627,7 @@ MethodDecl* ConformanceCheckerImpl::checkIfImplicitConformance(
       }
    }
    else if (Proto == Sema.getStringRepresentableDecl()) {
-      auto Str = Sema.getStringDecl();
+      auto *Str = Sema.getStringDecl(); (void)Str;
       assert(Str && "StringRepresentable without String decl?");
 
       DeclarationName DN = Sema.getContext().getIdentifiers().get("toString");
@@ -727,6 +725,8 @@ issueDiagnostics(SemaPass& SP,
          SP.diagnose(Cand.Msg, Cand.Data1, Cand.SR);
          break;
       case diag::note_incorrect_protocol_impl_fallible:
+      case diag::note_incorrect_protocol_impl_must_be_static:
+      case diag::note_incorrect_protocol_impl_must_not_be_static:
          SP.diagnose(Cand.Msg, Cand.SR);
          break;
       case diag::note_incorrect_protocol_impl_method_num_args:
@@ -971,11 +971,33 @@ NamedDecl* ConformanceCheckerImpl::checkPropImpl(RecordDecl *Rec,
       return nullptr;
    }
 
+   if (Prop->isStatic() && !FoundProp->isStatic()) {
+      genericError(Rec, Proto);
+      Sema.diagnose(note_incorrect_protocol_impl_missing, Prop, "prop",
+                    Prop->getSourceLoc());
+      Sema.diagnose(note_incorrect_protocol_impl_must_be_static,
+                    FoundProp->getSourceLoc());
+
+      return nullptr;
+   }
+
+   if (!Prop->isStatic() && FoundProp->isStatic()) {
+      genericError(Rec, Proto);
+      Sema.diagnose(note_incorrect_protocol_impl_missing, Prop, "prop",
+                    Prop->getSourceLoc());
+      Sema.diagnose(note_incorrect_protocol_impl_must_not_be_static,
+                    FoundProp->getSourceLoc());
+
+      return nullptr;
+   }
+
    auto GivenTy = FoundProp->getType().getResolvedType();
 
    SourceType NeededTy = Prop->getType();
    if (!checkTypeCompatibility(GivenTy, NeededTy, FoundProp, Proto)) {
       genericError(Rec, Proto);
+      Sema.diagnose(note_incorrect_protocol_impl_missing, Prop, "prop",
+                    Prop->getSourceLoc());
       Sema.diagnose(note_incorrect_protocol_impl_prop_type, 1 /*property*/,
                     Prop->getDeclName(), NeededTy, GivenTy,
                     Prop->getSourceLoc());
@@ -985,6 +1007,8 @@ NamedDecl* ConformanceCheckerImpl::checkPropImpl(RecordDecl *Rec,
 
    if (Prop->hasGetter() && !FoundProp->hasGetter()) {
       genericError(Rec, Proto);
+      Sema.diagnose(note_incorrect_protocol_impl_missing, Prop, "prop",
+                    Prop->getSourceLoc());
       Sema.diagnose(note_incorrect_protocol_impl_prop, 1 /*property*/,
                     Prop->getDeclName(), 1 /*requires getter*/,
                     Prop->getSourceLoc());
@@ -994,6 +1018,8 @@ NamedDecl* ConformanceCheckerImpl::checkPropImpl(RecordDecl *Rec,
 
    if (Prop->hasSetter() && !FoundProp->hasSetter()) {
       genericError(Rec, Proto);
+      Sema.diagnose(note_incorrect_protocol_impl_missing, Prop, "prop",
+                    Prop->getSourceLoc());
       Sema.diagnose(note_incorrect_protocol_impl_prop, 1 /*property*/,
                     Prop->getDeclName(), 2 /*requires setter*/,
                     Prop->getSourceLoc());
@@ -1022,6 +1048,21 @@ NamedDecl* ConformanceCheckerImpl::checkSubscriptImpl(RecordDecl *Rec,
 
       if (Sema.QC.PrepareDeclInterface(FoundSub)) {
          return nullptr;
+      }
+
+      if (FoundSub->isStatic() && !S->isStatic()) {
+         auto& Cand = Candidates.emplace_back();
+         Cand.Msg = note_incorrect_protocol_impl_must_not_be_static;
+         Cand.SR = FoundSub->getSourceLoc();
+
+         continue;
+      }
+      if (!FoundSub->isStatic() && S->isStatic()) {
+         auto& Cand = Candidates.emplace_back();
+         Cand.Msg = note_incorrect_protocol_impl_must_be_static;
+         Cand.SR = FoundSub->getSourceLoc();
+
+         continue;
       }
 
       auto GivenTy = FoundSub->getType().getResolvedType();
@@ -1218,18 +1259,18 @@ NamedDecl* ConformanceCheckerImpl::checkMethodImpl(RecordDecl *Rec,
          Cand.SR = Impl->getSourceLoc();
          continue;
       }
-      if (!Impl->isStatic() && Method->isStatic()) {
-         auto& Cand = Candidates.emplace_back();
-         Cand.Msg = diag::note_incorrect_protocol_impl_attr;
-         Cand.Data1 = 4;
-         Cand.SR = Impl->getSourceLoc();
-         continue;
-      }
       if (Impl->isStatic() && !Method->isStatic()) {
          auto& Cand = Candidates.emplace_back();
-         Cand.Msg = diag::note_incorrect_protocol_impl_attr;
-         Cand.Data1 = 5;
+         Cand.Msg = note_incorrect_protocol_impl_must_not_be_static;
          Cand.SR = Impl->getSourceLoc();
+
+         continue;
+      }
+      if (!Impl->isStatic() && Method->isStatic()) {
+         auto& Cand = Candidates.emplace_back();
+         Cand.Msg = note_incorrect_protocol_impl_must_not_be_static;
+         Cand.SR = Impl->getSourceLoc();
+
          continue;
       }
 
@@ -1470,6 +1511,8 @@ QueryResult DeclareSelfAliasQuery::run()
       Self = AliasDecl::Create(QC.Sema->Context, R->getSourceLoc(),
                                AccessSpecifier::Public, SelfII, Ty, rawTypeExpr,
                                {});
+
+      QC.Sema->registerAssociatedTypeImpl(R, cast<AliasDecl>(Self));
    }
 
    Self->setSynthesized(true);
@@ -1554,12 +1597,7 @@ QueryResult ReferencedAssociatedTypesReadyQuery::run()
    ResultKind RK = Ready;
    for (AssociatedTypeDecl* AT : referencedATs) {
       // Check if the associated type is already visible.
-      AliasDecl* ATImpl;
-      if (QC.GetAssociatedTypeImpl(ATImpl, Rec, AT->getDeclName(),
-                                   Extensions)) {
-         return fail();
-      }
-
+      AliasDecl* ATImpl = QC.Sema->getAssociatedTypeImpl(Rec, AT->getDeclName());
       if (!ATImpl) {
          return finish(NotReady);
       }
@@ -1754,11 +1792,9 @@ struct UncheckedConformance {
    /// Reference to the outer conformance.
    UncheckedConformance *outer;
 
-#ifndef NDEBUG
    /// \brief This conditional conformance only exists for displaying it in the
    /// hierarchy, but should otherwise be ignored.
    bool exclude = false;
-#endif
 
    /// \brief Memberwise C'tor.
    explicit UncheckedConformance(ASTContext& C, ProtocolDecl* proto = nullptr,
@@ -1785,9 +1821,7 @@ struct UncheckedConformance {
                                    outerHashVal);
 
       if (outer) {
-#ifndef NDEBUG
          exclude |= outer->exclude;
-#endif
          if (constraints) {
             combinedConstraints = ConstraintSet::Combine(
                 C, constraints, outer->combinedConstraints);
@@ -2371,14 +2405,13 @@ bool SemaPass::IsBeingResolved(RecordDecl *R)
    return getConformanceResolver().IsBeingResolved(R);
 }
 
+#ifndef NDEBUG
 static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
 {
    string result = "[";
 
    ArrayRef<AssociatedTypeDecl*> NeededAssociatedTypes;
    QC.GetNeededAssociatedTypes(NeededAssociatedTypes, Rec);
-
-   auto extensions = Rec->getExtensions();
 
    int i = 0;
    for (auto *AT : NeededAssociatedTypes) {
@@ -2388,8 +2421,7 @@ static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
       result += AT->getDeclName().getIdentifierInfo()->getIdentifier();
       result += " = ";
 
-      AliasDecl *Impl;
-      QC.GetAssociatedTypeImpl(Impl, Rec, AT->getDeclName(), extensions);
+      AliasDecl *Impl = QC.Sema->getAssociatedTypeImpl(Rec, AT->getDeclName());
       if (!Impl) {
          assert(Rec->isInvalid());
          result += "???";
@@ -2403,6 +2435,7 @@ static string PrintAssociatedTypes(QueryContext &QC, RecordDecl *Rec)
    result += "]";
    return result;
 }
+#endif
 
 bool ConformanceResolver::registerDeclaredConformances(
     CanType Self, CanType protoTy,
@@ -2508,6 +2541,11 @@ bool ConformanceResolver::registerConformance(
                                 Self->getRecord(), proto, newConf.introducedBy,
                                 nullptr, newConf.depth);
       }
+
+      auto *SelfProto = cast<ProtocolDecl>(Self->getRecord());
+      SelfProto->setHasAssociatedTypeConstraint(
+          SelfProto->hasAssociatedTypeConstraint()
+          || proto->hasAssociatedTypeConstraint());
    }
 
    auto& newConfRef = outer.innerConformances->emplace_back(std::move(newConf));
@@ -2822,11 +2860,6 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
           Rec, *Cache[BaseConformances[Rec->getSpecializedTemplate()]]);
    }
 
-   // Make sure 'Self' and template parameters are ready.
-   if (QC.DeclareSelfAlias(Rec) || QC.PrepareTemplateParameters(Rec)) {
-      return true;
-   }
-
    // Add implicit conformance to Any.
    if (auto* Any = QC.Sema->getAnyDecl()) {
       if (Rec != Any) {
@@ -2858,6 +2891,11 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
 
    // Gather all (conditional) conformances.
    if (registerConformances(Self, Rec, testSet, directConformances, baseConf)) {
+      return true;
+   }
+
+   // Make sure 'Self' and template parameters are ready.
+   if (QC.DeclareSelfAlias(Rec) || QC.PrepareTemplateParameters(Rec)) {
       return true;
    }
 
@@ -3320,6 +3358,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
 
       if (it != ImplementedATs.end()) {
          QC.Context.addProtocolImpl(R, AT, it->getSecond());
+         QC.Sema->registerAssociatedTypeImpl(R, AT, it->getSecond());
          return false;
       }
 
@@ -3392,6 +3431,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
 
          foundImpl->setImplOfProtocolRequirement(true);
          QC.Context.addProtocolImpl(R, AT, foundImpl);
+         QC.Sema->registerAssociatedTypeImpl(R, AT, foundImpl);
 
          ImplementedATs[key] = foundImpl;
       }
@@ -3473,7 +3513,10 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
           Node->getType()->asAssociatedType()->getDecl());
 
       Dependencies.getOrAddVertex(Node).addIncoming(&DepNode);
-      shouldReset = true;
+
+      if (!DepNode.getIncoming().empty()) {
+         shouldReset = true;
+      }
 
       break;
    }
@@ -3495,6 +3538,7 @@ bool ConformanceResolver::ResolveDependencyGraph()
 
    auto valid = Dependencies.constructOrderedList(DependencyOrder, true);
 
+#ifndef NDEBUG
 BEGIN_LOG(ConformanceDependencies)
    std::string str = "\n### CONSTRAINTS\n";
    llvm::raw_string_ostream OS(str);
@@ -3514,11 +3558,12 @@ BEGIN_LOG(ConformanceDependencies)
 
    LOG(ConformanceDependencies, OS.str());
 END_LOG
+#endif
 
    assert(valid && "loop in conformance dependency graph!");
 
    for (auto *Vert : Dependencies.getVertices()) {
-      NumDependencies[Vert->getPtr()] = Vert->getIncoming().size();
+      NumDependencies[Vert->getVal()] = Vert->getIncoming().size();
    }
 
    bool error = false;
@@ -3543,11 +3588,16 @@ END_LOG
 
          DependencyOrder.clear();
 
+         // Remove nodes that are already complete.
+//         Dependencies.remove_if([](DependencyNode *V) {
+//           return V->Done;
+//         });
+
          valid = Dependencies.constructOrderedList(DependencyOrder, true);
          assert(valid && "loop in conformance dependency graph!");
 
          for (auto *Vert : Dependencies.getVertices()) {
-            NumDependencies[Vert->getPtr()] = Vert->getIncoming().size();
+            NumDependencies[Vert->getVal()] = Vert->getIncoming().size();
          }
       }
    }
@@ -3584,6 +3634,8 @@ END_LOG
 
 bool SemaPass::PrepareNameLookup(DeclContext *DC)
 {
+   START_TIMER("Preparing Name Lookup");
+
    auto &Resolver = getConformanceResolver();
    auto SAR = support::saveAndRestore(Instantiator->InstantiateShallowly, true);
 
@@ -3611,15 +3663,32 @@ bool SemaPass::UncheckedConformanceExists(RecordDecl *R, ProtocolDecl *P)
    return Resolver.PotentialConformances.count(key) != 0;
 }
 
+void SemaPass::registerAssociatedTypeImpl(RecordDecl *R,
+                                          AssociatedTypeDecl *AT,
+                                          AliasDecl *Impl) {
+   auto &ExistingImpl = AssociatedTypeDeclMap[R][AT->getDeclName()];
+   assert((!ExistingImpl || ExistingImpl == Impl) && "duplicate associated type impl");
+
+   ExistingImpl = Impl;
+}
+
+void SemaPass::registerAssociatedTypeImpl(RecordDecl *R, AliasDecl *Impl)
+{
+   auto &ExistingImpl = AssociatedTypeDeclMap[R][Impl->getDeclName()];
+   assert((!ExistingImpl || ExistingImpl == Impl) && "duplicate associated type impl");
+
+   ExistingImpl = Impl;
+}
+
+AliasDecl* SemaPass::getAssociatedTypeImpl(RecordDecl *R, DeclarationName Name)
+{
+   return AssociatedTypeDeclMap[R][Name];
+}
+
 QueryResult CheckConformancesQuery::run()
 {
    ConformanceCheckerImpl Checker(*QC.Sema, T->getRecord());
    Checker.checkConformance();
-
-   if (ExtensionDecls) {
-      ExtensionDecls->insert(ExtensionDecls->end(),
-         Checker.ExtensionDecls.begin(), Checker.ExtensionDecls.end());
-   }
 
    return finish(Checker.IssuedError ? Aborted : Done);
 }
@@ -3927,6 +3996,37 @@ QueryResult ConformsToQuery::run()
       if (covariance->isExistentialType()
           && covariance->asExistentialType()->contains(T)) {
          return finish(true);
+      }
+   }
+
+   // Check builtin type conformances.
+   if (auto *Builtin = T->asBuiltinType()) {
+      if (P->getDeclName().isStr("_BuiltinPrimitiveIntegerType")) {
+         switch (Builtin->getKind()) {
+#define CDOT_BUILTIN_INT(NAME, BW, SIGNED) case Type::NAME: return finish(true);
+#include "cdotc/Basic/BuiltinTypes.def"
+         default:
+            return finish(false);
+         }
+      }
+
+      if (P->getDeclName().isStr("_BuiltinPrimitiveFloatingPointType")) {
+         switch (Builtin->getKind()) {
+#define CDOT_BUILTIN_FP(NAME, BW) case Type::NAME: return finish(true);
+#include "cdotc/Basic/BuiltinTypes.def"
+         default:
+            return finish(false);
+         }
+      }
+
+      if (P->getDeclName().isStr("_BuiltinPrimitiveType")) {
+         switch (Builtin->getKind()) {
+#define CDOT_BUILTIN_INT(NAME, BW, SIGNED) case Type::NAME: return finish(true);
+#define CDOT_BUILTIN_FP(NAME, BW) case Type::NAME: return finish(true);
+#include "cdotc/Basic/BuiltinTypes.def"
+         default:
+            return finish(false);
+         }
       }
    }
 

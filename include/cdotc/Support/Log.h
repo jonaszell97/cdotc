@@ -62,6 +62,9 @@ enum LogKind : uint64_t {
    /// \brief Log conformance resolution dependency graphs.
    ConformanceDependencies = 0x1000,
 
+   /// \brief Log comilation phase timers.
+   Timers = 0x2000,
+
    /// \brief Log variable declarations,
    Variables = LocalVariables | GlobalVariables,
 
@@ -88,9 +91,11 @@ void log_impl(llvm::raw_ostream& OS, const T& t, const Ts&... ts)
 } // namespace cdot
 
 #ifndef NDEBUG
+#  define HAS_LOG(KIND) ((::cdot::support::log::detail::ActiveLogs()           \
+        & ::cdot::support::log::KIND) != 0)
+
 #  define LOG(KIND, ...)                                                       \
-   if ((::cdot::support::log::detail::ActiveLogs()                             \
-        & ::cdot::support::log::KIND) != 0)                                    \
+   if (HAS_LOG(KIND))                                                          \
    ::cdot::support::log::detail::log_impl(                                     \
        llvm::errs(), "LOG(" #KIND "): ", __VA_ARGS__, "\n")
 
@@ -100,6 +105,7 @@ void log_impl(llvm::raw_ostream& OS, const T& t, const Ts&... ts)
 
 #  define END_LOG }
 #else
+#  define HAS_LOG(KIND)
 #  define LOG(KIND, ...)
 #  define BEGIN_LOG(KIND)
 #  define END_LOG

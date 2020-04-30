@@ -153,7 +153,7 @@ SemaPass::SemaPass(CompilerInstance& compilationUnit)
       Diags(DiagConsumer.get(), &compilationUnit.getFileMgr()),
       QC(compilationUnit.getQueryContext()),
       Context(compilationUnit.getContext()), mangle(*this),
-      Evaluator(*this), CandBuilder(*this),
+      Evaluator(*this),
       Instantiator(std::make_unique<TemplateInstantiator>(*this)),
       ConfResolver(nullptr),
       ILGen(std::make_unique<ILGenPass>(compilationUnit.getILCtx(), *this)),
@@ -162,7 +162,10 @@ SemaPass::SemaPass(CompilerInstance& compilationUnit)
 {
 }
 
-SemaPass::~SemaPass() { issueDiagnostics(); }
+SemaPass::~SemaPass()
+{
+   issueDiagnostics();
+}
 
 SemaPass::DeclContextRAII::DeclContextRAII(SemaPass& SP, DeclContext* Ctx)
     : SP(SP), Prev(SP.DeclCtx)
@@ -367,18 +370,32 @@ ExprResult SemaPass::typecheckExpr(Expression* Expr, SourceType RequiredType,
       RequiredType = SourceType();
    }
 
-   ConstraintBuilder Builder(QC, Expr->getSourceRange());
-   auto& Sys = Builder.Sys;
+   START_TIMER("Typechecking");
 
-   auto rebuiltExpr = Builder.rebuildExpression(Expr);
-   if (!rebuiltExpr) {
+   auto rebuiltExpr = ConstraintBuilder::rebuildExpression(*this, Expr);
+   if (!rebuiltExpr.first) {
       Expr->setIsInvalid(true);
       Expr->setExprType(ErrorTy);
 
       return ExprError();
    }
 
-   Expr = rebuiltExpr.get();
+   Expr = rebuiltExpr.first.get();
+
+   if (!rebuiltExpr.second) {
+      QualType contextualTy = RequiredType
+          ? RequiredType.getResolvedType() : QualType();
+
+      auto Result = visitExpr(Expr, Expr, contextualTy);
+      if (Result && contextualTy && isHardRequirement) {
+         return forceCast(Result.get(), contextualTy);
+      }
+
+      return Result;
+   }
+
+   ConstraintBuilder Builder(QC, Expr->getSourceRange());
+   auto& Sys = Builder.Sys;
 
    // Generate the constraints.
    auto GenResult = Builder.generateConstraints(Expr, RequiredType, nullptr,
@@ -877,6 +894,31 @@ static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
    return result;
 }
 
+bool SemaPass::ConformsTo(CanType T, CanType Existential)
+{
+   if (auto *R = Existential->asRecordType()) {
+      if (auto *P = dyn_cast<ProtocolDecl>(R->getRecord())) {
+         return ConformsTo(T, P);
+      }
+   }
+
+   if (auto *Ext = Existential->asExistentialType()) {
+      bool AllConform = true;
+      for (QualType E : Ext->getExistentials()) {
+         if (auto* P = dyn_cast<ProtocolDecl>(E->getRecord())) {
+            if (!ConformsTo(T, P)) {
+               AllConform = false;
+               break;
+            }
+         }
+      }
+
+      return AllConform;
+   }
+
+   return false;
+}
+
 bool SemaPass::ConformsTo(CanType T, ProtocolDecl *Proto, bool AllowConditional)
 {
    // Check if we are in an extension that adds additional conformances.
@@ -1195,21 +1237,21 @@ StmtResult SemaPass::visitDeclStmt(DeclStmt* Stmt)
 void SemaPass::checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl)
 {
    // Use 'isa' here to avoid getting the canonical type.
-   //   if (isa<RecordType>(*Ty.getResolvedType())) {
-   //      auto *Proto = dyn_cast<ProtocolDecl>(Ty->getRecord());
-   //      if (Proto && Proto->hasAssociatedTypeConstraint()) {
-   //         SourceRange SR;
-   //         if (auto E = Ty.getTypeExpr()) {
-   //            SR = E->getSourceRange();
-   //         }
-   //         else {
-   //            SR = DependentDecl.getSourceLoc();
-   //         }
-   //
-   //         diagnose(DependentDecl, err_protocol_cannot_be_used_as_type,
-   //                  Proto->getDeclName(), SR);
-   //      }
-   //   }
+   if (isa<RecordType>(*Ty.getResolvedType())) {
+      auto *Proto = dyn_cast<ProtocolDecl>(Ty->getRecord());
+      if (Proto && Proto->hasAssociatedTypeConstraint()) {
+         SourceRange SR;
+         if (auto E = Ty.getTypeExpr()) {
+            SR = E->getSourceRange();
+         }
+         else {
+            SR = DependentDecl.getSourceLoc();
+         }
+
+         diagnose(DependentDecl, err_protocol_cannot_be_used_as_type,
+                  Proto->getDeclName(), SR);
+      }
+   }
 }
 
 void SemaPass::checkDeclaredVsGivenType(Decl* DependentDecl, Expression*& val,
@@ -1307,7 +1349,12 @@ bool SemaPass::visitVarDecl(VarDecl* Decl)
       return false;
    }
 
-   Decl->getType().setResolvedType(typeResult.get());
+   if (typeResult.get()->isMetaType()) {
+      Decl->getType().setResolvedType(typeResult.get()->removeMetaType());
+   }
+   else {
+      Decl->getType().setResolvedType(typeResult.get());
+   }
 
    auto& declaredType = Decl->getType();
    if (declaredType->isAutoType() && !Decl->getValue()) {
@@ -2267,10 +2314,7 @@ static ExprResult LookupInitializableByDecl(
 
    // Get the associated type.
    if (AssocTypeName) {
-      AliasDecl* AT;
-      if (Sema.QC.GetAssociatedTypeImpl(AT, ConformingRec, AssocTypeName, {})) {
-         return ExprError();
-      }
+      AliasDecl* AT = Sema.getAssociatedTypeImpl(ConformingRec, AssocTypeName);
       if (!AT || Sema.QC.PrepareDeclInterface(AT)) {
          E->setIsInvalid(true);
          return ExprError();
@@ -2279,11 +2323,9 @@ static ExprResult LookupInitializableByDecl(
       AssocType = AT->getAliasedType();
    }
 
-   E->setExprType(Ty);
-   E->setSemanticallyChecked(true);
-
    auto* InitDecl
        = LookupInitializableByDecl(Sema, ConformingRec, AssocType, E);
+
    if (!InitDecl) {
       E->setIsInvalid(true);
       return ExprError();
@@ -2294,6 +2336,9 @@ static ExprResult LookupInitializableByDecl(
          E->setIsInvalid(true);
          return ExprError();
       }
+
+      E->setExprType(Ty);
+      E->setSemanticallyChecked(true);
 
       return E;
    }

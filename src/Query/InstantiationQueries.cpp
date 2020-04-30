@@ -78,6 +78,14 @@ static MethodDecl* InstantiateMethodDefaultImpl(QueryContext& QC,
    Inst->setFunctionFlags(Impl->getFunctionFlags());
    Inst->setInstantiatedFromProtocolDefaultImpl(true);
 
+   QC.Sema->LookupContextMap[Inst] = Impl;
+
+   if (Impl->isProtocolDefaultImpl()
+   && !Inst->isTemplate() && !Self->getRecord()->isTemplate()
+   && !cast<ProtocolDecl>(Impl->getRecord())->hasAssociatedTypeConstraint()) {
+      QC.Sema->QueuedInstantiations.insert(Inst);
+   }
+
    return Inst;
 }
 

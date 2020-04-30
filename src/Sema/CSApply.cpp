@@ -79,7 +79,7 @@ public:
       }
 
       if (auto* PE = Expr->getParentExpr()) {
-         if (MemberRefExpr::needsMemberRefExpr(Decl->getKind())) {
+         if (MemberRefExpr::needsMemberRefExpr(Decl)) {
             return MemberRefExpr::Create(Sys.QC.Context, PE, Decl,
                                          Expr->getSourceRange());
          }
@@ -134,7 +134,8 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
       auto* Fn = Cand.getFunc();
       if (Fn->isInitializerOfTemplate()) {
          if (Fn->isCompleteInitializer()) {
-            Expr->setExprType(Sys.QC.Context.getRecordType(Fn->getRecord()));
+            assert(Expr->getContextualType() && "unresolved call type");
+            Expr->setExprType(Expr->getContextualType());
          }
          else {
             Expr->setExprType(Fn->getReturnType());

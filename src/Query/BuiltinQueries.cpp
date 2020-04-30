@@ -772,6 +772,7 @@ QueryResult GetBuiltinProtocolQuery::run()
              SourceType(SelfTy), {QC.Sema->MakeSelfArg(Loc)}, {}, nullptr,
              false);
 
+         P->setHasAssociatedTypeConstraint(true);
          QC.Sema->ActOnDecl(P, copy);
          return finish(P);
       }
@@ -781,6 +782,7 @@ QueryResult GetBuiltinProtocolQuery::run()
              = ProtocolDecl::Create(QC.Context, AccessSpecifier::Private, Loc,
                                     Idents.get("ImplicitlyCopyable"), {}, {});
 
+         P->setHasAssociatedTypeConstraint(true);
          QC.Sema->ActOnDecl(NS, P);
          return finish(P);
       }
@@ -832,6 +834,7 @@ QueryResult GetBuiltinProtocolQuery::run()
          // Make sure the 'Self' type exists.
          QC.Sema->ActOnDecl(NS, P);
          QC.DeclareSelfAlias(P);
+         P->setHasAssociatedTypeConstraint(true);
 
          auto* SelfTy = QC.Context.getAssociatedType(
              P->getAssociatedType(Idents.get("Self")));
@@ -933,6 +936,7 @@ QueryResult GetBuiltinProtocolQuery::run()
              = ProtocolDecl::Create(QC.Context, AccessSpecifier::Private, Loc,
                                     Idents.get("RawRepresentable"), {}, {});
 
+         P->setHasAssociatedTypeConstraint(true);
          QC.DeclareSelfAlias(P);
 
          // associatedType RawType

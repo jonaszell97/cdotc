@@ -1,5 +1,7 @@
 #include "cdotc/Basic/Variant.h"
 
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Type.h"
 #include "cdotc/Lex/Token.h"
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/Format.h"
@@ -7,21 +9,9 @@
 #include <llvm/ADT/FoldingSet.h>
 #include <llvm/Support/raw_ostream.h>
 
-#ifndef CDOT_SMALL_VARIANT
-#include "cdotc/AST/Decl.h"
-#include "cdotc/AST/Type.h"
-using namespace cdot::ast;
-#else
-namespace cdot {
-class QualType {
-public:
-   std::string toString() { llvm_unreachable(""); }
-};
-} // namespace cdot
-#endif
-
 using std::string;
 
+using namespace cdot::ast;
 using namespace cdot::support;
 using namespace cdot::lex;
 

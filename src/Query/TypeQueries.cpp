@@ -76,6 +76,23 @@ QueryResult IsEquatableQuery::run()
    return finish(Result, S);
 }
 
+QueryResult ContainsProtocolWithAssociatedTypesQuery::run()
+{
+   bool result = false;
+   visitSpecificType<RecordType>([&](RecordType *R) {
+      if (auto *Proto = dyn_cast<ProtocolDecl>(R->getRecord())) {
+         if (Proto->hasAssociatedTypeConstraint()) {
+            result = true;
+            return false;
+         }
+      }
+
+      return true;
+   }, T);
+
+   return finish(result);
+}
+
 QueryResult IsMoveOnlyQuery::run()
 {
    CanType T = this->T->getDesugaredType();
@@ -996,12 +1013,11 @@ public:
             DC = OuterImpl->getRecord();
          }
       }
-      else {
-         if (!Self) {
-            return T;
-         }
-
+      else if (Self && Self->isRecordType()) {
          DC = Self->getRecord();
+      }
+      else {
+         return T;
       }
 
       QualType LookupTy = this->SP.Context.getRecordType(DC);
@@ -1035,11 +1051,7 @@ public:
          extensions = QC.Context.getExtensions(LookupTy);
       }
 
-      AliasDecl* Impl;
-      if (QC.GetAssociatedTypeImpl(Impl, DC, Name, extensions, CS)) {
-         return T;
-      }
-
+      AliasDecl* Impl = QC.Sema->getAssociatedTypeImpl(DC, Name);
       if (!Impl) {
          if (auto* Proto = dyn_cast<ProtocolDecl>(DC)) {
             AssociatedTypeDecl* Impl;
@@ -1764,40 +1776,42 @@ QueryResult CheckTypeCapabilitiesQuery::run()
    return finish(std::move(Capabilities));
 }
 
+namespace {
+
+class CapabilitiesTypeComparer : public TypeComparer<CapabilitiesTypeComparer> {
+public:
+   bool visitAssociatedType(AssociatedType *AT, QualType RHS) {
+      auto *RHSAT = RHS->asAssociatedType();
+      if (!RHSAT) {
+         return false;
+      }
+
+      if (AT->getDecl()->isSelf()) {
+         return RHSAT->getDecl()->isSelf();
+      }
+
+      if (QualType Outer = AT->getOuterAT()) {
+         if (!RHSAT->getOuterAT() || !visit(Outer, RHSAT->getOuterAT())) {
+            return false;
+         }
+      }
+
+      return AT->getDecl()->getDeclName() == RHSAT->getDecl()->getDeclName();
+   }
+};
+
+} // anonymous namespace
+
 static void applyCapabilities(QueryContext& QC,
                               ArrayRef<TypeCapability> Capabilities,
                               ExistentialTypeBuilder& Builder,
                               QualType Stripped, QualType& NewTy)
 {
+   CapabilitiesTypeComparer Comparer;
    for (auto& C : Capabilities) {
-      bool Applies = false;
       QualType ConstrainedTy = C.getConstrainedType();
 
-      switch (C.getKind()) {
-      case TypeCapability::Concept:
-      case TypeCapability::Class:
-      case TypeCapability::Struct:
-      case TypeCapability::Enum:
-      case TypeCapability::Conformance:
-      case TypeCapability::NonConformance:
-      case TypeCapability::SubClass:
-      case TypeCapability::NotSubClass:
-         Applies = Stripped == ConstrainedTy;
-         break;
-      case TypeCapability::Inequality:
-         // The relationship is commutative.
-         Applies |= Stripped != ConstrainedTy;
-         Applies |= Stripped != C.getType();
-
-         break;
-      case TypeCapability::Equality:
-         // The relationship is commutative.
-         Applies |= Stripped == ConstrainedTy;
-         Applies |= Stripped == C.getType();
-
-         break;
-      }
-
+      bool Applies = Comparer.visit(Stripped, ConstrainedTy);
       if (!Applies) {
          continue;
       }
@@ -1834,192 +1848,6 @@ static void applyCapabilities(QueryContext& QC,
       }
    }
 }
-
-//static QualType CreateConcreteTypeFromAssociatedType(QueryContext &QC,
-//                                                     AssociatedType *AT,
-//                                                     QualType Outer)
-//{
-//   SmallVector<QualType, 2> Existentials;
-//   if (auto *R = Outer->asRecordType()) {
-//      if (auto *Proto = dyn_cast<ProtocolDecl>(R->getRecord())) {
-//         auto* ATDecl = Proto->lookupSingle<AssociatedTypeDecl>(AT->getDecl()->getDeclName());
-//         if (!ATDecl || QC.PrepareDeclInterface(ATDecl)) {
-//            return QC.Sema->ErrorTy;
-//         }
-//
-//         // Get the constraints defined directly on the associated type.
-//         ArrayRef<TypeCapability> Capabilities;
-//         if (auto Err = QC.CheckTypeCapabilities(Capabilities, ATDecl)) {
-//            return QC.Sema->ErrorTy;
-//         }
-//
-//         QualType NewTy;
-//         bool done;
-//
-//         applyCapabilities(QC, Capabilities, Builder,
-//            QC.Context.getAssociatedType(ATDecl), NewTy, done);
-//
-//         if (NewTy) {
-//            return NewTy;
-//         }
-//
-//         return QC.Context.getExistentialType(Existentials);
-//      }
-//
-//      auto *Impl = QC.Context.getProtocolImpl(R->getRecord(), AT->getDecl());
-//      QualType Result = cast<AliasDecl>(Impl)->getType()->removeMetaType();
-//
-//      if (R->isDependentRecordType()) {
-//         if (QC.SubstTemplateParamTypes(Result, Result, R->getTemplateArgs(), {})) {
-//            return QC.Sema->ErrorTy;
-//         }
-//      }
-//
-//      return Result;
-//   }
-//
-//   if (auto *Ext = Outer->asExistentialType()) {
-//      for (QualType T : Ext->getExistentials()) {
-//         QualType NewTy = CreateConcreteTypeFromAssociatedType(QC, AT, T);
-//         if (!NewTy->isErrorType()) {
-//            Existentials.push_back(NewTy);
-//         }
-//      }
-//   }
-//
-//   return QC.Context.getExistentialType(Existentials);
-//}
-//
-//static QualType Finalize(QueryContext &QC, QualType T, QualType NewTy)
-//{
-//   switch (T->getTypeID()) {
-//   case Type::ReferenceTypeID:
-//      return QC.Context.getReferenceType(NewTy);
-//   case Type::MutableReferenceTypeID:
-//      return QC.Context.getMutableReferenceType(NewTy);
-//   case Type::PointerTypeID:
-//      return QC.Context.getPointerType(NewTy);
-//   case Type::MutablePointerTypeID:
-//      return QC.Context.getMutablePointerType(NewTy);
-//   case Type::MetaTypeID:
-//      return QC.Context.getMetaType(NewTy);
-//   case Type::BuiltinTypeID:
-//      if (NewTy->isErrorType())
-//         return T;
-//
-//      LLVM_FALLTHROUGH;
-//   default:
-//      return NewTy;
-//   }
-//}
-
-//QueryResult ApplyCapabilitesQuery::run()
-//{
-////   QualType Stripped;
-////   switch (T->getTypeID()) {
-////   case Type::ReferenceTypeID:
-////   case Type::MutableReferenceTypeID:
-////      Stripped = cast<ReferenceType>(T)->getReferencedType();
-////      break;
-////   case Type::PointerTypeID:
-////   case Type::MutablePointerTypeID:
-////      Stripped = cast<PointerType>(T)->getPointeeType();
-////      break;
-////   case Type::MetaTypeID:
-////      Stripped = cast<MetaType>(T)->getUnderlyingType();
-////      break;
-////   default:
-////      Stripped = T;
-////      break;
-////   }
-////
-////   // Check if the current context adds additional conformances to this type.
-////   SmallVector<QualType, 2> Existentials;
-////
-////   QualType NewTy;
-////   if (auto* AT = Stripped->asAssociatedType()) {
-////      if (QualType Outer = AT->getOuterAT()) {
-////         if (QC.ApplyCapabilites(Outer, Outer, DC)) {
-////            return fail();
-////         }
-////
-////         if (!Outer->containsAssociatedType() && !Outer->containsTemplateParamType()) {
-////            return finish(Finalize(QC, T,
-////               CreateConcreteTypeFromAssociatedType(QC, AT, Outer)));
-////         }
-////
-////         Stripped = QC.Context.getAssociatedType(AT->getDecl(), Outer);
-////         NewTy = Stripped;
-////      }
-////   }
-////
-////   bool done = false;
-////   QualType Covariance;
-////   if (auto* AT = Stripped->asAssociatedType()) {
-////      auto* ATDecl = AT->getDecl();
-////      if (QC.PrepareDeclInterface(ATDecl)) {
-////         return finish(T);
-////      }
-////
-////      Covariance = ATDecl->getCovariance();
-////
-////      // Get the constraints defined directly on the associated type.
-////      ArrayRef<TypeCapability> Capabilities;
-////      if (auto Err = QC.CheckTypeCapabilities(Capabilities, ATDecl)) {
-////         return Query::finish(Err);
-////      }
-////
-////      applyCapabilities(QC, Capabilities, Existentials, Stripped, NewTy, done);
-////   }
-////   else if (auto* GT = Stripped->asTemplateParamType()) {
-////      auto* Param = GT->getParam();
-////      if (QC.PrepareDeclInterface(Param)) {
-////         return finish(T);
-////      }
-////
-////      Covariance = Param->getCovariance();
-////   }
-////   else {
-////      return finish(T);
-////   }
-////
-////   if (Covariance->isUnknownAnyType()) {
-////      return finish(T);
-////   }
-////
-////   // Check if the current context adds additional conformances to this type.
-////   Existentials.push_back(Covariance);
-////
-////   auto* DC = this->DC;
-////   while (DC && !done) {
-////      if (auto* ND = dyn_cast<NamedDecl>(DC)) {
-////         ArrayRef<TypeCapability> Capabilities;
-////         if (QC.CheckTypeCapabilities(Capabilities, ND)) {
-////            DC = DC->getParentCtx();
-////            continue;
-////         }
-////
-////         applyCapabilities(QC, Capabilities, Existentials, Stripped, NewTy,
-////                           done);
-////      }
-////
-////      DC = DC->getParentCtx();
-////   }
-////
-////   if (!NewTy) {
-////      if (Existentials.empty()) {
-////         NewTy = QC.Context.getRecordType(QC.Sema->getAnyDecl());
-////      }
-////      else if (Existentials.size() == 1) {
-////         return finish(T);
-////      }
-////      else {
-////         NewTy = QC.Context.getExistentialType(Existentials);
-////      }
-////   }
-////
-////   return finish(Finalize(QC, T, NewTy));
-//}
 
 namespace {
 
@@ -2136,9 +1964,9 @@ public:
 
 } // anonymous namespace
 
-QualType SemaPass::ApplyCapabilities(QualType T, DeclContext* DeclCtx)
+QualType SemaPass::ApplyCapabilities(QualType T, DeclContext* DeclCtx, bool force)
 {
-   if (Bits.DontApplyCapabilities || !T) {
+   if ((Bits.DontApplyCapabilities && !force) || !T) {
       return T;
    }
 

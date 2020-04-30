@@ -4,6 +4,7 @@
 #include "cdotc/Basic/FileManager.h"
 #include "cdotc/Lex/SourceLocation.h"
 #include "cdotc/Support/LLVM.h"
+#include "cdotc/Support/Timer.h"
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringSet.h>
@@ -130,6 +131,8 @@ public:
    OptimizationLevel optimizationLevel = OptimizationLevel::O2;
    unsigned maxMacroRecursionDepth = 256;
    unsigned MaxInstantiationDepth = 0;
+   llvm::StringRef EmitILPath;
+   llvm::StringRef EmitIRPath;
 
    llvm::StringRef getCommandLineArguments() const
    {
@@ -269,8 +272,6 @@ public:
       return SourceModuleMap[SourceID];
    }
 
-   void displayPhaseDurations(llvm::raw_ostream& OS) const;
-
    friend struct support::Timer;
 
 private:
@@ -322,12 +323,6 @@ private:
    /// Manager for incremental compilation
    std::unique_ptr<serial::IncrementalCompilationManager> IncMgr;
 
-   /// Number of currently active timers.
-   unsigned NumTimers = 0;
-
-   /// String representation of phase durations.
-   std::string TimerStr;
-
    /// The base module for this compilation.
    Module* CompilationModule = nullptr;
 
@@ -339,6 +334,15 @@ private:
       Jobs.push_back(new JobTy(std::forward<Args&&>(args)..., *this));
       return static_cast<JobTy*>(Jobs.back());
    }
+
+#ifndef NDEBUG
+   /// The total elapsed time for each timer category.
+   llvm::StringMap<int64_t> Timers;
+
+public:
+   /// Emit the timer durations.
+   void displayPhaseDurations(llvm::raw_ostream& OS) const;
+#endif
 };
 
 } // namespace cdot

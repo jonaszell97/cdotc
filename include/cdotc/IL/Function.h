@@ -37,8 +37,6 @@ public:
 
    ~Function();
 
-   llvm::StringRef getUnmangledName() const;
-
    Module* getParent() const { return parent; }
    void setParent(Module* p) { parent = p; }
 
@@ -126,8 +124,11 @@ protected:
    serial::LazyILFunctionInfo* LazyFnInfo = nullptr;
 
    Function(const Function& other, Module& M);
-
    Function(TypeID id, FunctionType* Ty, llvm::StringRef name, Module* parent);
+
+#ifndef NDEBUG
+   std::string UnmangledName;
+#endif
 
 public:
    static inline bool classof(Value const* T)
@@ -142,6 +143,13 @@ public:
          return false;
       }
    }
+
+#ifndef NDEBUG
+   llvm::StringRef getUnmangledName() const { return UnmangledName; }
+   void setUnmangledName(std::string &&name) { UnmangledName = move(name); }
+#else
+   llvm::StringRef getUnmangledName() const { return name; }
+#endif
 };
 
 class Lambda : public Function {

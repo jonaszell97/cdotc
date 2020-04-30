@@ -1071,7 +1071,7 @@ Token Lexer::lexNumericLiteral()
             if (FoundExponent) {
                break;
             }
-            if (*CurPtr++ == '-') {
+            if (*(++CurPtr) == '-') {
                ++CurPtr;
             }
 

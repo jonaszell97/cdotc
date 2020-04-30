@@ -8,11 +8,11 @@
 #include <llvm/Support/raw_ostream.h>
 
 #ifndef NDEBUG
-#define LOG_ERR(...) log(indent_t{Indent * 3, false}, __VA_ARGS__);
-#define LOG(...) log(indent_t{Indent * 3, true}, __VA_ARGS__);
+#define CS_LOG_ERR(...) log(indent_t{Indent * 3, false}, __VA_ARGS__);
+#define CS_LOG(...) log(indent_t{Indent * 3, true}, __VA_ARGS__);
 #else
-#define LOG_ERR(...)
-#define LOG(...)
+#define CS_LOG_ERR(...)
+#define CS_LOG(...)
 #endif
 
 using namespace cdot;
@@ -290,7 +290,7 @@ void FindSolutionStep::execute(bool PrevFailed)
 
    // Begin a new solver scope.
    Scope = nullptr;
-   Scope = std::make_unique<ConstraintSystem::SolverScope>(Sys);
+//   Scope = std::make_unique<ConstraintSystem::SolverScope>(Sys);
 
    // Create a guessing constraint for each type variable that has possible
    // bindings.
@@ -337,13 +337,13 @@ void FindSolutionStep::execute(bool PrevFailed)
    if (!FoundPotentialBindings) {
       if (FoundUnassigned) {
          Scope = nullptr;
-         LOG_ERR("incomplete solution\n");
+         CS_LOG_ERR("incomplete solution\n");
          return done(/*IsFailure=*/Solutions.empty());
       }
 
       // Found a new solution.
       Sys.appendCurrentSolution(Solutions, TypeVariables);
-      LOG_ERR("partial solution found (", Sys.getCurrentScore(), ")\n");
+      CS_LOG_ERR("partial solution found (", Sys.getCurrentScore(), ")\n");
 
       Scope = nullptr;
    }
@@ -377,6 +377,11 @@ static void addBinding(ConstraintSystem& Sys, TypeVariableType* TypeVar,
 
    // Prefer binding to non-reference types.
    if (T->isReferenceType()) {
+      Score += 1;
+   }
+
+   auto *Lit = Sys.getFirstConstraint<LiteralConstraint>(TypeVar);
+   if (Lit && (!T->isRecordType() || !T->getRecord()->hasAttribute<_BuiltinAttr>())) {
       Score += 1;
    }
 
@@ -660,12 +665,12 @@ void BindTypeVariableStep::resume(bool PrevFailed)
    Sys.bindTypeVariable(TypeVar, Binding.Type);
    Sys.increaseScore(Binding.Score);
 
-   LOG("assigned ", QualType(TypeVar), " = ", Binding.Type, " (+",
+   CS_LOG("assigned ", QualType(TypeVar), " = ", Binding.Type, " (+",
        Binding.Score, ")\n");
 
    // If this solution's score is already worse than the best one, stop.
    if (Sys.getCurrentScore() > Sys.getBestScore()) {
-      LOG_ERR("current score is worse than best score, backtracking...\n");
+      CS_LOG_ERR("current score is worse than best score, backtracking...\n");
 
       Scope = nullptr;
       return suspend();
@@ -675,11 +680,11 @@ void BindTypeVariableStep::resume(bool PrevFailed)
    // binding.
    if (auto* FailedConstraint = Sys.simplifyConstraints(TypeVar)) {
       if (Sys.stopAfterFirstFailure()) {
-         LOG_ERR("failed constraint: ", *FailedConstraint, ", stopping...\n");
+         CS_LOG_ERR("failed constraint: ", *FailedConstraint, ", stopping...\n");
          return done(/*IsFailure=*/true);
       }
 
-      LOG_ERR("failed constraint: ", *FailedConstraint, ", backtracking...\n");
+      CS_LOG_ERR("failed constraint: ", *FailedConstraint, ", backtracking...\n");
 
       Scope = nullptr;
       return suspend();
@@ -756,12 +761,12 @@ void DisjunctionChoiceStep::resume(bool PrevFailed)
    Sys.bindTypeVariable(TypeVar, Binding.Type, Binding.OverloadIndex);
    Sys.increaseScore(Binding.Score);
 
-   LOG("assigned ", QualType(TypeVar), " = ", Binding.Type, " (+",
-       Binding.Score, ") (overload #", Binding.OverloadIndex, ")\n");
+   CS_LOG("assigned ", QualType(TypeVar), " = ", Binding.Type, " (+",
+          Binding.Score, ") (overload #", Binding.OverloadIndex, ")\n");
 
    // If this solution's score is already worse than the best one, stop.
    if (Sys.getCurrentScore() > Sys.getBestScore()) {
-      LOG_ERR("current score is worse than best score, backtracking...\n");
+      CS_LOG_ERR("current score is worse than best score, backtracking...\n");
 
       Scope = nullptr;
       return suspend();
@@ -771,11 +776,11 @@ void DisjunctionChoiceStep::resume(bool PrevFailed)
    // binding.
    if (auto* FailedConstraint = Sys.simplifyConstraints(TypeVar)) {
       if (Sys.stopAfterFirstFailure()) {
-         LOG_ERR("failed constraint: ", *FailedConstraint, ", stopping...\n");
+         CS_LOG_ERR("failed constraint: ", *FailedConstraint, ", stopping...\n");
          return done(/*IsFailure=*/true);
       }
 
-      LOG_ERR("failed constraint: ", *FailedConstraint, ", backtracking...\n");
+      CS_LOG_ERR("failed constraint: ", *FailedConstraint, ", backtracking...\n");
 
       Scope = nullptr;
       return suspend();

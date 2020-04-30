@@ -442,6 +442,10 @@ static bool diagnoseEqualityFailure(ConstraintSystem& Sys,
                                     TypeEqualityConstraint* EC,
                                     OverloadCandidate* Cand)
 {
+   if (Cand) {
+      return false;
+   }
+
    TypeEquivalenceChecker checker(Sys, EC);
 
    QualType LHS = Sys.getConcreteType(EC->getConstrainedType());

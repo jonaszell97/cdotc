@@ -19,13 +19,33 @@ using namespace cdot::ast;
 namespace cdot {
 namespace sema {
 
-TemplateArgument::TemplateArgument(TemplateParamDecl* Param, QualType type,
+static bool isDependentType(TemplateParamDecl *Param, QualType type)
+{
+   if (!type) {
+      return false;
+   }
+
+   if (type->isDependentType() || type->containsAssociatedType()
+       || type->containsTypeVariable()
+       || type->containsTemplateParamType()) {
+      return true;
+   }
+
+   auto &QC = Param->getASTCtx().CI.getQueryContext();
+
+   bool Result;
+   if (QC.ContainsProtocolWithAssociatedTypes(Result, type)) {
+      return false;
+   }
+
+   return Result;
+}
+
+TemplateArgument::TemplateArgument(TemplateParamDecl* Param,
+                                   QualType type,
                                    SourceLocation loc) noexcept
     : IsType(true), IsVariadic(false), IsNull(false),
-      Dependent(type->isDependentType() || type->containsAssociatedType()
-                || type->containsTypeVariable()
-                || type->containsTemplateParamType()
-                || type->containsProtocolWithAssociatedTypes()),
+      Dependent(isDependentType(Param, type)),
       Frozen(false), Runtime(false),
       ManuallySpecifiedVariadicArgs(0), Param(Param),
       Type(type->getCanonicalType()), Loc(loc)

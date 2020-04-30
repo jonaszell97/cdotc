@@ -538,6 +538,7 @@ il::Method* ILGenPass::createProtocolRequirementImplStub(MethodDecl* Req,
 
 il::GlobalVariable* ILGenPass::GeneratePTable(RecordDecl* R, ProtocolDecl* P)
 {
+   assert(!P->hasAssociatedTypeConstraint());
    SmallVector<il::Constant*, 8> Impls;
 
    unsigned i = 0;
@@ -626,8 +627,9 @@ il::GlobalVariable* ILGenPass::GetVTable(ClassDecl* C)
 
 il::GlobalVariable* ILGenPass::GetOrCreatePTable(RecordDecl* R, ProtocolDecl* P)
 {
-   if (isa<ProtocolDecl>(R))
+   if (isa<ProtocolDecl>(R) || P->hasAssociatedTypeConstraint()) {
       return nullptr;
+   }
 
    auto It1 = PTableMap.find(R);
    if (It1 != PTableMap.end()) {
@@ -987,7 +989,8 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl* M, RecordDecl* R)
          Builder.CreateCondBr(eq, EqBB, CompBlocks[i + 1]);
       }
 
-      auto MergeBB = Builder.CreateBasicBlock("tuplecmp.merge");
+      auto MergeBB = Builder.CreateBasicBlock("structcmp.merge");
+      MergeBB->addBlockArg(Context.getBoolTy());
 
       Builder.SetInsertPoint(EqBB, true);
       Builder.CreateBr(MergeBB, {Builder.GetTrue()});
@@ -1267,9 +1270,16 @@ void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl* R)
       auto* failureBB = Builder.CreateBasicBlock("init.failure");
       auto* sw = Builder.CreateSwitch(Val, failureBB);
 
+      QualType RawType = R->getRawType();
+      if (RawType->isRecordType()) {
+         RawType = cast<StructDecl>(RawType->getRecord())
+             ->getFields().front()->getType();
+      }
+
       for (auto* Case : R->getCases()) {
          auto* rawVal
-             = Builder.GetConstantInt(R->getRawType(), Case->getRawValue());
+             = Builder.GetConstantInt(RawType, Case->getRawValue());
+
          if (!Case->getArgs().empty()) {
             sw->addCase(rawVal, failureBB);
             continue;
@@ -1302,8 +1312,10 @@ void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl* R)
              Context.getUInt64Ty(),
              Context.getTargetInfo().getAllocSizeOfType(Self->getType()));
 
-         auto* SelfVal
-             = Builder.CreateLoad(cast<il::Method>(getCurrentFn())->getSelf());
+         auto* SelfVal = cast<il::Method>(getCurrentFn())->getSelf();
+         if (SelfVal->getType()->isReferenceType()) {
+            SelfVal = Builder.CreateLoad(SelfVal);
+         }
 
          Builder.CreateDealloc(SelfVal, SelfVal->getType()->isClass());
          Builder.CreateIntrinsicCall(Intrinsic::memset, {Self, ZeroVal, Size});
@@ -1707,8 +1719,13 @@ il::ConstantStruct* ILGenPass::CreateProtocolConformance(RecordDecl* R,
        Context.getExistentialType(QualType(Context.getRecordType(P))));
 
    // VTable.
-   auto* VTable = ConstantExpr::getBitCast(GetOrCreatePTable(R, P),
-                                           Int8PtrTy->getPointerTo(Context));
+   Constant *VTable;
+   if (auto *VT = GetOrCreatePTable(R, P)) {
+      VTable = ConstantExpr::getBitCast(VT, Int8PtrTy->getPointerTo(Context));
+   }
+   else {
+      VTable = Builder.GetConstantNull(Int8PtrTy->getPointerTo(Context));
+   }
 
    return Builder.GetConstantStruct(SP.getProtocolConformanceDecl(),
                                     {ConstantExpr::getAddrOf(TI), VTable});

@@ -1413,6 +1413,8 @@ public:
    SourceLocation getSourceLoc() const { return Parens.getStart(); }
    SourceLocation getArrowLoc() const { return ArrowLoc; }
 
+   bool isTrailingClosure() const { return !ArrowLoc; }
+
    unsigned getNumArgs() const { return NumArgs; }
 
    const SourceType& getReturnType() const { return returnType; }
@@ -1610,6 +1612,7 @@ enum class IdentifierKind {
    UnionAccess,
    Type,
    TypeOf,
+   BuiltinArraySize,
    StaticField,
    Field,
    EnumRawValue,
@@ -1851,6 +1854,9 @@ class DeclRefExpr : public Expression {
    /// The source range of the expression the reference comes from.
    SourceRange SR;
 
+   /// The (optional) template parameters.
+   TemplateArgListExpr *TemplateArgs = nullptr;
+
    /// The index of the capture, if any.
    unsigned CaptureIdx : 28;
 
@@ -1875,6 +1881,16 @@ public:
 
    bool allowModuleRef() const { return AllowModuleRef; }
    void setAllowModuleRef(bool B) { AllowModuleRef = B; }
+
+   TemplateArgListExpr *getTemplateArgs() const
+   {
+      return TemplateArgs;
+   }
+
+   void setTemplateArgs(TemplateArgListExpr *TemplateArgs)
+   {
+      this->TemplateArgs = TemplateArgs;
+   }
 
    bool isCapture() const;
 };
@@ -1915,7 +1931,7 @@ public:
    bool isCalled() const { return called; }
    void setCalled(bool b) { called = b; }
 
-   static bool needsMemberRefExpr(Decl::DeclKind K);
+   static bool needsMemberRefExpr(NamedDecl *ND);
 };
 
 class OverloadedDeclRefExpr final
@@ -1934,6 +1950,9 @@ class OverloadedDeclRefExpr final
 
    /// The expression the member is accessed on.
    Expression* ParentExpr = nullptr;
+
+   /// The (optional) template parameters.
+   TemplateArgListExpr *TemplateArgs = nullptr;
 
 public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
@@ -1961,6 +1980,16 @@ public:
    MutableArrayRef<NamedDecl*> getOverloads()
    {
       return {getTrailingObjects<NamedDecl*>(), NumOverloads};
+   }
+
+   TemplateArgListExpr *getTemplateArgs() const
+   {
+      return TemplateArgs;
+   }
+
+   void setTemplateArgs(TemplateArgListExpr *TemplateArgs)
+   {
+      this->TemplateArgs = TemplateArgs;
    }
 
    Expression* getParentExpr() const { return ParentExpr; }

@@ -90,17 +90,15 @@ public:
 protected:
    /// Reference to the constraint system.
    ConstraintSystem& Sys;
-#
+
    /// Reference to a vector of solutions.
    SmallVectorImpl<ConstraintSystem::Solution>& Solutions;
 
    /// Reference to the allDecls of steps to take.
    SmallVectorImpl<SolverStep*>& NextSteps;
 
-#ifndef NDEBUG
    /// Indent to use for logging.
    unsigned Indent = 0;
-#endif
 
    /// The current status of this step.
    SolverStepState State;

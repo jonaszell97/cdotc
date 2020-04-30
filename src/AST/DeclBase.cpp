@@ -271,10 +271,6 @@ void Decl::copyStatusFlags(Decl* D)
 
 void Decl::setIsInvalid(bool error)
 {
-   if (error) {
-       NO_OP;
-   }
-
    setDeclFlag(DF_IsInvalid, error);
 }
 

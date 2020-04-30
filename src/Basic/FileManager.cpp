@@ -258,6 +258,10 @@ SourceLocation FileManager::getAliasLoc(SourceID sourceId)
 
 std::string FileManager::getSourceLocationAsString(SourceLocation Loc)
 {
+   if (!Loc) {
+      return "<unknown source loc>";
+   }
+
    std::string str;
    {
       llvm::raw_string_ostream OS(str);

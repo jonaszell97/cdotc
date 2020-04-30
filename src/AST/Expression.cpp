@@ -1346,7 +1346,7 @@ DeclRefExpr::DeclRefExpr(NamedDecl* Decl, SourceRange SR)
     : Expression(DeclRefExprID), Decl(Decl), SR(SR), CaptureIdx(-1),
       AllowModuleRef(false)
 {
-   assert((!MemberRefExpr::needsMemberRefExpr(Decl->getKind())
+   assert((!MemberRefExpr::needsMemberRefExpr(Decl)
            || isa<AssociatedTypeDecl>(Decl))
           && "should be a MemberRefExpr!");
 }
@@ -1369,8 +1369,7 @@ MemberRefExpr::MemberRefExpr(Expression* ParentExpr, NamedDecl* MemberDecl,
     : Expression(MemberRefExprID), ParentExpr(ParentExpr),
       MemberDecl(MemberDecl), SR(SR)
 {
-   assert(needsMemberRefExpr(MemberDecl->getKind())
-          && "should be a DeclRefExpr!");
+   assert(needsMemberRefExpr(MemberDecl) && "should be a DeclRefExpr!");
 }
 
 MemberRefExpr::MemberRefExpr(EmptyShell Empty)
@@ -1385,9 +1384,9 @@ MemberRefExpr* MemberRefExpr::Create(ASTContext& C, Expression* ParentExpr,
    return new (C) MemberRefExpr(ParentExpr, MemberDecl, SR);
 }
 
-bool MemberRefExpr::needsMemberRefExpr(Decl::DeclKind K)
+bool MemberRefExpr::needsMemberRefExpr(NamedDecl *ND)
 {
-   switch (K) {
+   switch (ND->getKind()) {
    case Decl::AssociatedTypeDeclID:
    case Decl::PropDeclID:
    case Decl::SubscriptDeclID:
@@ -1396,6 +1395,8 @@ bool MemberRefExpr::needsMemberRefExpr(Decl::DeclKind K)
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:
       return true;
+   case Decl::FunctionDeclID:
+      return cast<FunctionDecl>(ND)->isOperator();
    default:
       return false;
    }

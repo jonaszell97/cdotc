@@ -931,13 +931,6 @@ QueryResult PreparePropInterfaceQuery::run()
 
    Decl->setType(res.get());
 
-   if (Decl->isProtocolRequirement() && !Decl->isProtocolDefaultImpl()) {
-      QualType Type = Decl->getType();
-      if (QC.Sema->ContainsAssociatedTypeConstraint(Type)) {
-         cast<ProtocolDecl>(R)->setHasAssociatedTypeConstraint(true);
-      }
-   }
-
    if (auto* Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
       Getter->setProperty(true);
@@ -1039,13 +1032,6 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
    auto res = QC.Sema->visitSourceType(Decl, Decl->getType());
    if (!res)
       return fail();
-
-   if (Decl->isProtocolRequirement() && !Decl->isProtocolDefaultImpl()) {
-      QualType Type = Decl->getType();
-      if (QC.Sema->ContainsAssociatedTypeConstraint(Type)) {
-         cast<ProtocolDecl>(R)->setHasAssociatedTypeConstraint(true);
-      }
-   }
 
    if (auto* Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
@@ -1395,6 +1381,8 @@ static void addRawRepresentableConformance(SemaPass& Sema, EnumDecl* E)
    auto* RawType = AliasDecl::Create(Sema.Context, Loc, AccessSpecifier::Public,
                                      Sema.getIdentifier("RawType"), MetaTy,
                                      rawTypeExpr, {});
+
+   Sema.registerAssociatedTypeImpl(E, RawType);
 
    // init? (rawValue: RawType)
    auto* ArgName = Sema.getIdentifier("rawValue");

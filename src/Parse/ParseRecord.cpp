@@ -861,7 +861,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             Args.push_back(NewValArg);
 
             Info.SetterMethod = MethodDecl::Create(
-                Context, AS, SetLoc, DN, SourceType(Context.getVoidType()),
+                Context, AS, SetLoc, DN, SourceType(Context.getEmptyTupleType()),
                 Args, {}, nullptr, IsStatic);
 
             Info.SetterMethod->setSynthesized(true);

@@ -30,13 +30,21 @@ class ExprRebuilder : public StmtBuilder<ExprRebuilder> {
    /// Reference to the Sema instance.
    SemaPass& Sema;
 
+   /// The base expression we're rebuilding.
+   Expression *BaseExpr;
+
 public:
    /// Set to true iff this expression is type dependent.
    bool TypeDependent = false;
+
+   /// Set to true iff an error was encountered during rebuilding.
    bool EncounteredError = false;
 
-   explicit ExprRebuilder(SemaPass& Sema)
-      : Sema(Sema)
+   /// Set to true if the expression needs full constraint based typechecking.
+   bool NeedsFullTypechecking = false;
+
+   explicit ExprRebuilder(SemaPass& Sema, Expression *BaseExpr)
+      : Sema(Sema), BaseExpr(BaseExpr)
    {}
 
    ExprResult visitExprSequence(ExprSequence* Expr)
@@ -67,14 +75,91 @@ public:
       return Sema.visitMixinExpr(Expr);
    }
 
-   ExprResult visitSubscriptExpr(SubscriptExpr *Expr)
+   ExprResult visitSubscriptExpr(SubscriptExpr *Sub)
    {
-      return Sema.visitSubscriptExpr(Expr);
+      auto ParentExpr = Sub->getParentExpr();
+      auto ParentResult = Sema.visitExpr(Sub, ParentExpr);
+      if (!ParentResult) {
+         Sub->setIsInvalid(true);
+         Sub->setExprType(Sema.ErrorTy);
+         EncounteredError = true;
+
+         return ExprError();
+      }
+
+      ParentExpr = ParentResult.get();
+      Sub->setParentExpr(ParentExpr);
+
+      QualType ParentTy = ParentExpr->getExprType();
+      QualType SubscriptedTy = ParentTy->removeReference()->getDesugaredType();
+
+      if (SubscriptedTy->isRecordType() || SubscriptedTy->isExistentialType()) {
+         auto &Context = Sema.Context;
+         auto DeclName = Context.getDeclNameTable().getSubscriptName(
+             DeclarationName::SubscriptKind::Getter);
+
+         auto* ident = new (Context) IdentifierRefExpr(Sub->getSourceRange(),
+                                                       ParentExpr, DeclName);
+
+         return visitExpr(AnonymousCallExpr::Create(
+             Context, Sub->getSourceRange(), ident, Sub->getIndices(), {}));
+      }
+
+      return Sema.visitSubscriptExpr(Sub);
+   }
+
+   ExprResult visitAssignExpr(AssignExpr *Expr)
+   {
+      auto *Sub = dyn_cast<SubscriptExpr>(Expr->getLhs());
+      if (!Sub) {
+         return StmtBuilder::visitAssignExpr(Expr);
+      }
+
+      auto ParentExpr = Sub->getParentExpr();
+      auto ParentResult = Sema.visitExpr(Sub, ParentExpr);
+      if (!ParentResult) {
+         Sub->setIsInvalid(true);
+         Sub->setExprType(Sema.ErrorTy);
+         EncounteredError = true;
+
+         return ExprError();
+      }
+
+      ParentExpr = ParentResult.get();
+      Sub->setParentExpr(ParentExpr);
+
+      QualType ParentTy = ParentExpr->getExprType();
+      QualType SubscriptedTy = ParentTy->removeReference()->getDesugaredType();
+
+      if (SubscriptedTy->isRecordType() || SubscriptedTy->isExistentialType()) {
+         auto &Context = Sema.Context;
+         auto DeclName = Context.getDeclNameTable().getSubscriptName(
+             DeclarationName::SubscriptKind::Setter);
+
+         auto* ident = new (Context) IdentifierRefExpr(Sub->getSourceRange(),
+                                                       ParentExpr, DeclName);
+
+         SmallVector<Expression*, 2> Args(Sub->getIndices().begin(),
+                                          Sub->getIndices().end());
+
+         Args.push_back(Expr->getRhs());
+
+         return visitExpr(AnonymousCallExpr::Create(
+             Context, Sub->getSourceRange(), ident, Args, {}));
+      }
+
+      return StmtBuilder::visitAssignExpr(Expr);
    }
 
    ExprResult visitLambdaExpr(LambdaExpr* Expr)
    {
-      // Don't rebuild these for now.
+      for (auto *arg : Expr->getArgs()) {
+         if (!arg->getType().getTypeExpr()) {
+            NeedsFullTypechecking = true;
+            break;
+         }
+      }
+
       return Expr;
    }
 
@@ -95,6 +180,8 @@ public:
 
    ExprResult visitAnonymousCallExpr(AnonymousCallExpr* Expr)
    {
+      NeedsFullTypechecking = true;
+
       if (auto Val = Expr->getParentExpr()) {
          if (!isa<IdentifierRefExpr>(Val)) {
             auto Result = visitExpr(Val);
@@ -117,10 +204,11 @@ public:
    ExprResult visitIdentifierRefExpr(IdentifierRefExpr* Expr,
                                      TemplateArgListExpr* ArgExpr = nullptr)
    {
-      if (Expr->hasLeadingDot()) {
+      if (Expr->isSemanticallyChecked()) {
          return Expr;
       }
-      if (Expr->isSemanticallyChecked()) {
+      if (Expr->hasLeadingDot()) {
+         NeedsFullTypechecking = true;
          return Expr;
       }
 
@@ -152,7 +240,7 @@ public:
          Expr->setSemanticallyChecked(false);
       }
 
-      return ExprRes;
+      return visitExpr(ExprRes);
    }
 
    ExprResult visitTemplateArgListExpr(TemplateArgListExpr* E)
@@ -194,6 +282,72 @@ public:
       default:
          llvm_unreachable("bad template arg list expression");
       }
+   }
+
+   ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr)
+   {
+      NeedsFullTypechecking = true;
+      return Expr;
+   }
+
+   ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitIntegerLiteral(IntegerLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitFPLiteral(FPLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitStringLiteral(StringLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitCharLiteral(CharLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitBoolLiteral(BoolLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitNoneLiteral(NoneLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return Expr;
+   }
+
+   ExprResult visitArrayLiteral(ArrayLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return StmtBuilder::visitArrayLiteral(Expr);
+   }
+
+   ExprResult visitDictionaryLiteral(DictionaryLiteral *Expr)
+   {
+      NeedsFullTypechecking = Expr != BaseExpr;
+      return StmtBuilder::visitDictionaryLiteral(Expr);
+   }
+
+   ExprResult visitCastExpr(CastExpr *Expr)
+   {
+      NeedsFullTypechecking = true;
+      return StmtBuilder::visitCastExpr(Expr);
    }
 };
 
@@ -286,11 +440,17 @@ class TypeParamBinder : public TypeComparer<TypeParamBinder> {
    /// The outer constraint builder.
    ConstraintBuilder* outerBuilder;
 
+   /// Whether or not we should only create a defaultable constraint if no
+   /// other one exists.
+   bool onlyNewDefaultableConstraints;
+
 public:
    TypeParamBinder(ConstraintSystem& Sys,
                    ConstraintSystem::SolutionBindings& Bindings,
-                   ConstraintLocator* Loc, ConstraintBuilder* outerBuilder)
-       : Sys(Sys), Bindings(Bindings), Loc(Loc), outerBuilder(outerBuilder)
+                   ConstraintLocator* Loc, ConstraintBuilder* outerBuilder,
+                   bool onlyNewDefaultableConstraints = false)
+       : Sys(Sys), Bindings(Bindings), Loc(Loc), outerBuilder(outerBuilder),
+         onlyNewDefaultableConstraints(onlyNewDefaultableConstraints)
    {
    }
 
@@ -314,8 +474,11 @@ public:
       // the generic type to prevent the covariance from always being chosen.
       auto it = Bindings.ParamBindings.find(GT->getParam());
       if (it != Bindings.ParamBindings.end()) {
-         Sys.newConstraint<DefaultableConstraint>(it->getSecond(), binding,
-                                                  Loc);
+         if (!onlyNewDefaultableConstraints
+         || !Sys.getFirstConstraint<DefaultableConstraint>(it->getSecond())) {
+            Sys.newConstraint<DefaultableConstraint>(it->getSecond(), binding,
+                                                     Loc);
+         }
       }
 
       return true;
@@ -324,23 +487,29 @@ public:
 
 } // anonymous namespace
 
-ExprResult ConstraintBuilder::rebuildExpression(ast::SemaPass& Sema,
-                                                Expression* E)
+std::pair<ExprResult, bool>
+ConstraintBuilder::rebuildExpression(ast::SemaPass& Sema, Expression* E,
+                                     ast::Expression *baseExpr)
 {
-   ExprRebuilder ExprBuilder(Sema);
+   if (!baseExpr)
+      baseExpr = E;
+
+   ExprRebuilder ExprBuilder(Sema, baseExpr);
 
    auto Result = ExprBuilder.visitExpr(E);
    if (!Result || ExprBuilder.EncounteredError) {
       E->setIsInvalid(true);
-      return ExprError();
+      return std::make_pair(ExprError(), false);
    }
 
-   return Result;
+   return std::make_pair(Result, ExprBuilder.NeedsFullTypechecking);
 }
 
-ExprResult ConstraintBuilder::rebuildExpression(Expression* E)
+std::pair<ExprResult, bool>
+ ConstraintBuilder::rebuildExpression(Expression* E,
+                                      ast::Expression *baseExpr)
 {
-   return rebuildExpression(Sema, E);
+   return rebuildExpression(Sema, E, baseExpr);
 }
 
 ConstraintBuilder::GenerationResult
@@ -412,7 +581,7 @@ void ConstraintBuilder::registerTemplateParam(TemplateParamDecl* Param,
 void ConstraintBuilder::addTemplateParamBinding(QualType Param,
                                                 QualType Binding)
 {
-   TypeParamBinder Binder(Sys, Bindings, nullptr, outerBuilder);
+   TypeParamBinder Binder(Sys, Bindings, nullptr, outerBuilder, true);
    Binder.visit(Param->removeReference(), Binding->removeReference());
 }
 
@@ -433,15 +602,15 @@ Locator ConstraintBuilder::makeLocator(Expression* E,
    return L;
 }
 
-TypeVariableType* ConstraintBuilder::getClosureParam(DeclarationName Name)
+QualType ConstraintBuilder::getClosureParam(DeclarationName Name)
 {
    if (!ClosureParams) {
-      return nullptr;
+      return QualType();
    }
 
    auto It = ClosureParams->find(Name.getClosureArgumentIdx());
    if (It == ClosureParams->end()) {
-      return nullptr;
+      return QualType();
    }
 
    return It->getSecond();
@@ -450,7 +619,7 @@ TypeVariableType* ConstraintBuilder::getClosureParam(DeclarationName Name)
 QualType ConstraintBuilder::getRValue(Expression *Expr, SourceType RequiredType,
                                       ConstraintLocator *Locator,
                                       bool isHardRequirement) {
-   auto Result = visitExpr(Expr, RequiredType, Locator, isHardRequirement);
+   auto Result = visitExpr(Expr, RequiredType, Locator, false);
    if (!Result) {
       return Result;
    }
@@ -578,11 +747,12 @@ case Expression::NAME##ID:                                                  \
 
       if (auto DirectBinding = Sys.getConstrainedBinding(Var)) {
          TypeParamBinder Binder(Sys, Bindings, Locator, outerBuilder);
-         Binder.visit(RequiredType, DirectBinding);
+         Binder.visit(RequiredType->getCanonicalType(),
+                      DirectBinding->getCanonicalType());
       }
       else {
          TypeParamBinder Binder(Sys, Bindings, Locator, outerBuilder);
-         Binder.visit(RequiredType, T);
+         Binder.visit(RequiredType->getCanonicalType(), T->getCanonicalType());
       }
    }
    else {
@@ -614,6 +784,7 @@ TypeVariableType* ConstraintBuilder::getTypeVar(Expression* E, bool force,
       return nullptr;
    }
    if (auto* typeVar = resultType->asTypeVariableType()) {
+      Bindings.ExprBindings.try_emplace(E, typeVar);
       return typeVar;
    }
 
@@ -788,6 +959,11 @@ QualType ConstraintBuilder::visitParenExpr(ParenExpr* Expr, SourceType T)
 QualType ConstraintBuilder::visitIntegerLiteral(IntegerLiteral* Expr,
                                                 SourceType T)
 {
+   // Allow 0 to represent a nullptr.
+   if (T && T->isPointerType() && Expr->getValue().isNullValue()) {
+      return T;
+   }
+
    TypeVariable Var
        = Sys.newTypeVariable(ConstraintSystem::HasLiteralConstraint);
    auto* Loc
@@ -996,7 +1172,7 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
    SmallVector<FunctionType::ParamInfo, 2> ParamInfo;
    ParamTypes.reserve(Expr->getArgs().size());
 
-   llvm::DenseMap<unsigned, TypeVariableType*> ClosureParams;
+   llvm::DenseMap<unsigned, QualType> ClosureParams;
    auto SAR = support::saveAndRestore(this->ClosureParams, &ClosureParams);
 
    unsigned i = 0;
@@ -1012,9 +1188,7 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
       if (!TypeRes || TypeRes.get()->isAutoType()) {
          FoundParamWithoutType = true;
 
-         TypeVariable ParamTypeVar = Sys.newTypeVariable();
-         ParamTypes.push_back(ParamTypeVar);
-
+         QualType ParamTypeVar = Sys.newTypeVariable();
          if (ReqType && ReqType->getNumParams() > i) {
             ParamInfo.emplace_back(ReqType->getParamInfo()[i]);
          }
@@ -1022,6 +1196,18 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
             ParamInfo.emplace_back(ArgumentConvention::Default);
          }
 
+         switch (ParamInfo.back().getConvention()) {
+         case ArgumentConvention::ImmutableRef:
+            ParamTypeVar = Sema.Context.getReferenceType(ParamTypeVar);
+            break;
+         case ArgumentConvention::MutableRef:
+            ParamTypeVar = Sema.Context.getMutableReferenceType(ParamTypeVar);
+            break;
+         default:
+            break;
+         }
+
+         ParamTypes.push_back(ParamTypeVar);
          ClosureParams[i] = ParamTypeVar;
       }
       else {
@@ -1094,6 +1280,11 @@ QualType ConstraintBuilder::visitTupleLiteral(TupleLiteral* Expr, SourceType T)
       ContextualElementTypes = Tup->getContainedTypes();
    }
 
+   ArrayRef<QualType> ContextualTypes;
+   if (T.isResolved() && T->isTupleType()) {
+      ContextualTypes = T->uncheckedAsTupleType()->getContainedTypes();
+   }
+
    SmallVector<QualType, 2> ElementTypes;
    ElementTypes.reserve(Arity);
 
@@ -1103,8 +1294,11 @@ QualType ConstraintBuilder::visitTupleLiteral(TupleLiteral* Expr, SourceType T)
       if (i < ContextualElementTypes.size()) {
          ContextualElementType = ContextualElementTypes[i];
       }
+      else if (i < ContextualTypes.size()) {
+         ContextualElementType = ContextualTypes[i];
+      }
 
-      QualType ValueTypeVar = visitExpr(Val, ContextualElementType);
+      QualType ValueTypeVar = getRValue(Val, ContextualElementType);
       ElementTypes.push_back(ValueTypeVar);
 
       ++i;
@@ -1199,7 +1393,7 @@ QualType ConstraintBuilder::visitIdentifierRefExpr(IdentifierRefExpr* Expr,
    }
 
    if (Expr->getDeclName().getKind() == DeclarationName::ClosureArgumentName) {
-      auto* TypeVar = getClosureParam(Expr->getDeclName());
+      auto TypeVar = getClosureParam(Expr->getDeclName());
       if (TypeVar) {
          return TypeVar;
       }
@@ -1385,7 +1579,7 @@ static bool addCandidateDecl(CandidateSet& CandSet, SemaPass& Sema,
    if (auto* CD = dyn_cast<CallableDecl>(ND)) {
       auto *Cand = CandSet.addCandidate(CD, 0);
       if (Cand && CD->isTemplate() && TemplateArgs) {
-         TemplateArgList ArgList(Sema, CD, TemplateArgs, Expr->getSourceLoc());
+         TemplateArgList ArgList(Sema, CD, TemplateArgs->getExprs(), Expr->getSourceLoc());
          assert(ArgList.isStillDependent());
 
          Cand->InnerTemplateArgs = move(ArgList);
@@ -1411,6 +1605,9 @@ static bool addCandidateDecl(CandidateSet& CandSet, SemaPass& Sema,
 
       if (auto *Param = initializedType->asTemplateParamType()) {
          initializedType = Param->getCovariance();
+      }
+      if (auto *AT = initializedType->asAssociatedType()) {
+         initializedType = AT->getDecl()->getCovariance();
       }
 
       SmallVector<QualType, 1> Types;
@@ -1556,8 +1753,6 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
       }
    }
 
-   SelfVal = ParentExpr->getParentExpr();
-
    ParentExpr = ParentResult.get();
    Call->setParentExpr(ParentExpr);
 
@@ -1579,6 +1774,11 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
    }
 
    if (auto* DeclRef = dyn_cast<DeclRefExpr>(ParentExpr)) {
+      if (auto *TAExpr = DeclRef->getTemplateArgs()) {
+         assert(!TemplateArgs && "duplicate template args!");
+         TemplateArgs = TAExpr;
+      }
+
       auto* ND = DeclRef->getDecl();
       if (addCandidateDecl(CandSet, Sema, ND, DeclRef, TemplateArgs)) {
          Call->setIsInvalid(true);
@@ -1595,8 +1795,14 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
 
       Decls.push_back(ND);
       Name = ND->getDeclName();
+      SelfVal = MemRef->getParentExpr();
    }
    else if (auto* Ovl = dyn_cast<OverloadedDeclRefExpr>(ParentExpr)) {
+      if (auto *TAExpr = Ovl->getTemplateArgs()) {
+         assert(!TemplateArgs && "duplicate template args!");
+         TemplateArgs = TAExpr;
+      }
+
       for (auto* ND : Ovl->getOverloads()) {
          if (addCandidateDecl(CandSet, Sema, ND, Ovl, TemplateArgs)) {
             Call->setIsInvalid(true);
@@ -1608,9 +1814,11 @@ bool ConstraintBuilder::buildCandidateSet(AnonymousCallExpr* Call, SourceType T,
       assert(!Decls.empty() && "should have been diagnosed before!");
       Name = Decls.front()->getDeclName();
       overloadExpr = Ovl;
+      SelfVal = Ovl->getParentExpr();
    }
    else {
       TypeDependent |= ParentExpr->isDependent();
+      SelfVal = ParentExpr->getParentExpr();
 
       if (addCandidateType(CandSet, Sema, ParentType, ParentExpr)) {
          Call->setIsInvalid(true);
@@ -1714,6 +1922,15 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
                }
             }
          }
+         else if (M->isTemplateOrInTemplate()
+         && SelfVal->getExprType()->removeReference()->hasTemplateArgs()) {
+            if (Sema.QC.SubstTemplateParamTypes(
+                   ReturnType, ReturnType,
+                   SelfVal->getExprType()->removeReference()->getTemplateArgs(),
+                   Call->getSourceRange())) {
+               EncounteredError = true;
+            }
+         }
       }
    }
    else {
@@ -1739,6 +1956,10 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
          else {
             ReturnType = Sema.Context.getRecordType(fn->getRecord());
          }
+      }
+
+      if (fn->isFallible()) {
+         ReturnType = Sema.getOptionOf(ReturnType, Call);
       }
    }
 
@@ -1934,7 +2155,7 @@ QualType ConstraintBuilder::visitCastExpr(CastExpr* Cast, SourceType T)
           Cast->getTargetType().getSourceRange(Cast->getSourceRange()));
    }
 
-   auto resultType = visitExpr(Cast->getTarget());
+   auto resultType = visitExpr(Cast->getTarget(), to->removeMetaType(), nullptr, false);
    (void)resultType;
 
    return to->removeMetaType();

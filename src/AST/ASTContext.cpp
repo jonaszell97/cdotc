@@ -827,9 +827,6 @@ ASTContext::getTemplateArgType(TemplateParamDecl* Param) const
 AssociatedType* ASTContext::getAssociatedType(AssociatedTypeDecl* AT,
                                               QualType OuterAT) const
 {
-   if (OuterAT&&OuterAT->isExistentialType()) {
-       NO_OP;
-   }
    if (!OuterAT && !AT->isSelf()) {
       CI.getQueryContext().DeclareSelfAlias(AT->getRecord());
       auto* SelfDecl = AT->getRecord()->lookupSingle<AssociatedTypeDecl>(

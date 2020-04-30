@@ -751,6 +751,36 @@ public:
 
 };
 
+class ContainsProtocolWithAssociatedTypesQuery: public Query {
+public:
+   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
+   static bool classofKind(Kind K) { return K == Kind::ContainsProtocolWithAssociatedTypesQueryID; }
+
+   using result_type = bool;
+
+   std::string description() const;
+   std::string summary() const;
+
+   bool get() const;
+
+   friend class Query; // for run().
+   friend class QueryContext; // for C'tor.
+
+private:
+   QueryResult run();
+
+   ContainsProtocolWithAssociatedTypesQuery(QueryContext &QC, CanType T);
+
+   QueryResult finish(bool Result, Status St = Done);
+
+   CanType T;
+   llvm::Optional<bool> Result;
+public:
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+   static void Profile(llvm::FoldingSetNodeID &ID, CanType T);
+
+};
+
 class ContainsAssociatedTypeConstraintQuery: public Query {
 public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }

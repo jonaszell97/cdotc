@@ -3738,8 +3738,9 @@ ParseResult Parser::parseTrailingClosure(bool ParseSubExpr)
    for (unsigned i = 0; i < Scope.NumArgs; ++i) {
       auto ArgName = DNT.getClosureArgumentName(i);
       auto ArgLoc = Scope.ArgLocs[i];
-      if (!ArgLoc)
+      if (!ArgLoc) {
          ArgLoc = Loc;
+      }
 
       auto FuncArg = FuncArgDecl::Create(Context, ArgLoc, ArgLoc, ArgName,
                                          nullptr, ArgumentConvention::Default,
@@ -3750,7 +3751,7 @@ ParseResult Parser::parseTrailingClosure(bool ParseSubExpr)
    }
 
    auto Expr
-       = LambdaExpr::Create(Context, SourceRange(Loc), Loc,
+       = LambdaExpr::Create(Context, SourceRange(Loc), {},
                             SourceType(Context.getAutoType()), Args, Block);
 
    auto* II = &Context.getIdentifiers().get("__anonymous_lambda");

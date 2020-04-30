@@ -765,6 +765,9 @@ void ItaniumLikeMangler::mangleType(const BuiltinType* T)
    case BuiltinType::f128:
       OS << 'g';
       break;
+   case BuiltinType::Error:
+      OS << "ERROR";
+      break;
    default:
       llvm_unreachable("bad builtin type kind!");
    }

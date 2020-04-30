@@ -346,6 +346,7 @@ def NeedsRetainOrRelease : TypeMetaQuery
 def NeedsDeinitilization : TypeMetaQuery
 def NeedsStructReturn : TypeMetaQuery
 def PassByValue : TypeMetaQuery
+def ContainsProtocolWithAssociatedTypes : TypeMetaQuery
 def ContainsAssociatedTypeConstraint : TypeMetaQuery
 
 def IsImplicitlyConvertible : Query<"IsImplicitlyConvertibleQuery::ResultType"> {

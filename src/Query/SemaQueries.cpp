@@ -718,10 +718,6 @@ QueryResult VerifyConstraintQuery::run()
       }
 
       if (auto* AT = Result->dyn_cast<AssociatedTypeDecl>()) {
-//         QualType Self = QC.Context.getRecordType(AT->getRecord());
-//         if (QC.ResolveAssociatedTypes(Self)) {
-//            return fail();
-//         }
          if (QC.PrepareDeclInterface(AT)) {
             return fail();
          }
@@ -1644,21 +1640,6 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
       }, DeclaredArgType);
    }
 
-//   if (auto* paramType = DeclaredArgType->asTemplateParamType()) {
-//      if (paramType->getParam()->isVariadic()) {
-//         QualType argType = DeclaredArgType.getResolvedType();
-//         bool isReallyVariadic = true;
-//
-//         if (auto* td = dyn_cast<TypedefType>(argType)) {
-//            if (td->getTypedef()->isVariadicForDecl()) {
-//               isReallyVariadic = false;
-//            }
-//         }
-//
-//         D->setVariadic(isReallyVariadic);
-//      }
-//   }
-
    QC.Sema->checkIfTypeUsableAsDecl(DeclaredArgType, D);
 
    if (D->getConvention() == ArgumentConvention::Default) {
@@ -1673,22 +1654,17 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
       }
    }
 
-   auto* fn = cast<CallableDecl>(D->getDeclContext());
-   if (!fn->isInstantiation()
-   && !fn->instantiatedFromProtocolDefaultImpl()
-   && !D->isImportedFromModule()) {
-      switch (D->getConvention()) {
-      case ArgumentConvention::ImmutableRef:
-         DeclaredArgType.setResolvedType(
-             QC.Sema->Context.getReferenceType(DeclaredArgType));
-         break;
-      case ArgumentConvention::MutableRef:
-         DeclaredArgType.setResolvedType(
-             QC.Sema->Context.getMutableReferenceType(DeclaredArgType));
-         break;
-      default:
-         break;
-      }
+   switch (D->getConvention()) {
+   case ArgumentConvention::ImmutableRef:
+      DeclaredArgType.setResolvedType(
+          QC.Sema->Context.getReferenceType(DeclaredArgType->removeReference()));
+      break;
+   case ArgumentConvention::MutableRef:
+      DeclaredArgType.setResolvedType(
+          QC.Sema->Context.getMutableReferenceType(DeclaredArgType->removeReference()));
+      break;
+   default:
+      break;
    }
 
    return finish();
@@ -1777,6 +1753,12 @@ QueryResult PrepareTemplateParamInterfaceQuery::run()
 
 QueryResult TypecheckFuncArgQuery::run()
 {
+   auto *Fn = dyn_cast<CallableDecl>(D->getDeclContext());
+   if (Fn->isTemplateOrInTemplate()
+       || isa<ProtocolDecl>(Fn->getDeclContext()->lookThroughExtension())) {
+      return finish();
+   }
+
    const SourceType& DeclaredArgType = D->getType();
    if (Expression* DefaultVal = D->getDefaultVal()) {
       SemaPass::DefaultArgumentValueRAII defaultArgumentValueRAII(sema());
@@ -1946,15 +1928,6 @@ QueryResult PrepareCallableInterfaceQuery::run()
          return fail();
       }
 
-      if (!ArgDecl->isSelf() && D->isProtocolRequirement()
-          && !D->isProtocolDefaultImpl()) {
-         QualType Type = ArgDecl->getType();
-         if (QC.Sema->ContainsAssociatedTypeConstraint(Type)) {
-            cast<ProtocolDecl>(D->getRecord())
-                ->setHasAssociatedTypeConstraint(true);
-         }
-      }
-
       D->copyStatusFlags(ArgDecl);
    }
 
@@ -1977,13 +1950,6 @@ QueryResult PrepareCallableInterfaceQuery::run()
    }
 
    D->setIsNoReturn(NoReturn);
-
-   if (D->isProtocolRequirement() && !D->isProtocolDefaultImpl()) {
-      if (QC.Sema->ContainsAssociatedTypeConstraint(retTy)) {
-         cast<ProtocolDecl>(D->getRecord())
-             ->setHasAssociatedTypeConstraint(true);
-      }
-   }
 
    // Transform the return type into a Future<T>.
    //   while (D->isAsync()) {
@@ -2054,6 +2020,19 @@ QueryResult TypecheckCallableQuery::run()
 
    if (QC.TypeCheckDeclContext(D)) {
       return fail();
+   }
+
+   if (D->isTemplateOrInTemplate()
+   || isa<ProtocolDecl>(D->getDeclContext()->lookThroughExtension())) {
+      return finish();
+   }
+
+   for (FuncArgDecl* ArgDecl : D->getArgs()) {
+      if (QC.TypecheckDecl(ArgDecl)) {
+         return fail();
+      }
+
+      D->copyStatusFlags(ArgDecl);
    }
 
    SemaPass::DeclScopeRAII raii(sema(), D);
