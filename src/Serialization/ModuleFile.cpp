@@ -24,6 +24,10 @@ static void addDeclToContext(SemaPass& Sema, DeclContext& Ctx, Decl* D)
 {
    if (auto ND = support::cast_or_null<NamedDecl>(D)) {
       Sema.makeDeclAvailable(Ctx, ND, true);
+
+      if (auto *Ext = dyn_cast<ExtensionDecl>(&Ctx)) {
+         Sema.makeDeclAvailable(*Ext->getExtendedRecord(), ND, true);
+      }
    }
 }
 
@@ -36,18 +40,25 @@ void ModuleFile::PerformExternalLookup(DeclContext& Ctx, DeclarationName Name)
       return;
 
    auto* Tbl = reinterpret_cast<reader::HashTable*>(HashTablePtr);
-   if (!Tbl)
-      return;
+   if (Tbl) {
+      auto It = Tbl->find(Name);
 
-   auto It = Tbl->find(Name);
+      reader::ASTDeclContextNameLookupTrait Trait(Reader.ASTReader);
+      auto IDs = Trait.ReadData(Name, It.getDataPtr(), It.getDataLen());
 
-   reader::ASTDeclContextNameLookupTrait Trait(Reader.ASTReader);
-   auto IDs = Trait.ReadData(Name, It.getDataPtr(), It.getDataLen());
+      for (auto ID : IDs) {
+         auto ReadDecl = Reader.ASTReader.GetDecl(ID);
+         if (ReadDecl) {
+            LoadedDecl(Ctx, ReadDecl);
+         }
+      }
+   }
 
-   for (auto ID : IDs) {
-      auto ReadDecl = Reader.ASTReader.GetDecl(ID);
-      if (ReadDecl) {
-         LoadedDecl(Ctx, ReadDecl);
+   if (auto *R = dyn_cast<RecordDecl>(&Ctx)) {
+      for (auto *Ext : R->getExtensions()) {
+         if (auto *MF = Ext->getModFile()) {
+            MF->PerformExternalLookup(*Ext, Name);
+         }
       }
    }
 }

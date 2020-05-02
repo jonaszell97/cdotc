@@ -703,7 +703,7 @@ void ILGenPass::visitFieldDecl(FieldDecl* node)
       DefaultVal = node->getValue();
    }
 
-   auto SAR = support::saveAndRestore(this->CurrentSpecializationScope, Scope);
+   auto SAR = support::saveAndRestore(this->CurrentSpecializationScope, &Scope);
 
    auto glob = cast<il::GlobalVariable>(DeclMap[node]);
    DefineLazyGlobal(glob, DefaultVal);
@@ -1449,6 +1449,11 @@ il::GlobalVariable* ILGenPass::GetOrCreateTypeInfo(QualType ty)
 
 static Constant *CreateStruct(ILBuilder &Builder, Constant *Val, QualType T)
 {
+   // This can happen for modules that do not include std.core
+   if (!T->isRecordType()) {
+      return Val;
+   }
+
    auto *S = cast<StructDecl>(T->getRecord());
 
    auto FieldTy = S->getFields().front()->getType();

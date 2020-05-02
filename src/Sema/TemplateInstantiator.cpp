@@ -2,7 +2,6 @@
 
 #include "cdotc/AST/ASTContext.h"
 #include "cdotc/AST/TypeBuilder.h"
-#include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/IL/Constants.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Diagnostics/Diagnostics.h"
@@ -1355,7 +1354,6 @@ ExtensionDecl* InstantiatorImpl::visitExtensionDecl(ExtensionDecl* Ext,
       }
    }
 
-   Context.registerInstantiation(Ext, Inst);
    return Inst;
 }
 
@@ -3352,9 +3350,11 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
       SP.getMangler().manglePrefix(Template, *TemplateArgs, OS);
    }
 
-   if (auto Inst = lookupExternalInstantiation<RecordDecl>(MangledName, SP)) {
-      Inst->setImportedInstantiation(true);
-      return Inst;
+   if (Template->isExternal()) {
+      if (auto Inst = lookupExternalInstantiation<RecordDecl>(MangledName, SP)) {
+         Inst->setImportedInstantiation(true);
+         return Inst;
+      }
    }
 
    unsigned Depth = ::getInstantiationDepth(Template, TemplateArgs);
@@ -3383,6 +3383,7 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
    else {
       // Declaration was visible under the new name.
       OuterInst->removeVisibleDecl(Template, Inst->getDeclName());
+      OuterInst->removeVisibleDecl(Template, Template->getDeclName());
       QC.Sema->ActOnDecl(OuterInst, Inst);
    }
 
@@ -3473,6 +3474,10 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
    auto *ProtocolImpls = QC.Context.getProtocolImpls(Template);
    if (ProtocolImpls != nullptr) {
       for (auto [req, impl] : *ProtocolImpls) {
+         if (isa<AssociatedTypeDecl>(req)) {
+            continue;
+         }
+
          QC.Context.addProtocolImpl(Inst, req, impl);
       }
    }
@@ -3554,6 +3559,18 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
       }
    }
 
+   // Instantiate the deinitializer.
+   if (auto *Deinit = Template->getDeinitializer()) {
+      if (Deinit->getBody() != nullptr) {
+         auto *DeinitInst = QC.Sema->maybeInstantiateTemplateMember(
+             Inst, Deinit);
+
+         if (DeinitInst) {
+            QC.Sema->maybeInstantiateMemberFunction(DeinitInst, Inst);
+         }
+      }
+   }
+
    if (QC.TypecheckDecl(Inst)) {
       return true;
    }
@@ -3602,11 +3619,13 @@ TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
       }
 
       Inst->removeVisibleDecl(TemplateMember, Result->getDeclName());
+      Inst->removeVisibleDecl(TemplateMember, TemplateMember->getDeclName());
       QC.Sema->ActOnDecl(Inst, Result);
 
       return Result;
    }
 
+   sema::FinalTemplateArgumentList *OrigTemplateArgs = TemplateArgs;
    if (!TemplateArgs) {
       TemplateArgs = &Inst->getTemplateArgs();
    }
@@ -3647,15 +3666,17 @@ TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
 
       // Declaration was visible under the new name.
       Inst->removeVisibleDecl(TemplateMember, MemberInst->getDeclName());
+      Inst->removeVisibleDecl(TemplateMember, TemplateMember->getDeclName());
       QC.Sema->ActOnDecl(Inst, MemberInst);
    }
 
-   MemberInstMap[key][TemplateArgs] = MemberInst;
+   MemberInstMap[key][OrigTemplateArgs] = MemberInst;
 
    if (TemplateMember->isImplOfProtocolRequirement()) {
       MemberInst->setImplOfProtocolRequirement(true);
       QC.Context.updateProtocolImpl(Inst, TemplateMember, MemberInst);
    }
+
    if (TemplateMember->instantiatedFromProtocolDefaultImpl()) {
       MemberInst->setInstantiatedFromProtocolDefaultImpl(true);
    }

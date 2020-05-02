@@ -198,6 +198,21 @@ public:
 
       return Strength == CastStrength::Implicit;
    }
+
+   template<class ...ConvKinds>
+   bool all(ConvKinds&&... convKinds) const
+   {
+      for (auto &step : getSteps()) {
+         bool found = false;
+         found |= step.getKind() == CastKind::NoOp;
+         ((found |= (step.getKind() == convKinds)), ...);
+
+         if (!found)
+            return false;
+      }
+
+      return true;
+   }
 };
 
 } // namespace cdot

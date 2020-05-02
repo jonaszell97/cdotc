@@ -1628,6 +1628,34 @@ QualType SemaPass::getOptionOf(QualType Ty, StmtOrDecl DependentStmt)
    }
 }
 
+QualType SemaPass::getAtomicOf(QualType Ty)
+{
+   assert(Ty->isRecordType() && Ty->getRecord()->hasAttribute<_BuiltinAttr>());
+
+   RecordDecl *AtomicDecl;
+   if (QC.GetBuiltinRecord(AtomicDecl, GetBuiltinRecordQuery::Atomic)) {
+      return QualType();
+   }
+
+   DeclScopeRAII DSR(*this, AtomicDecl);
+   TemplateArgument Arg(AtomicDecl->getTemplateParams().front(), Ty,
+                        SourceLocation());
+
+   auto *TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
+   if (TemplateArgs->isStillDependent()) {
+      return Context.getDependentRecordType(AtomicDecl, TemplateArgs);
+   }
+   else {
+      auto Inst
+          = InstantiateRecord(SourceLocation(), AtomicDecl, TemplateArgs);
+
+      if (Inst)
+         return Context.getRecordType(Inst);
+
+      return Context.getRecordType(AtomicDecl);
+   }
+}
+
 StmtResult SemaPass::declareDebugStmt(DebugStmt* Stmt)
 {
    if (!Stmt->isUnreachable()) {
@@ -2124,6 +2152,26 @@ StructDecl* SemaPass::getStringDecl()
 {
    RecordDecl* S;
    if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::String)) {
+      return nullptr;
+   }
+
+   return cast_or_null<StructDecl>(S);
+}
+
+StructDecl* SemaPass::getStringBufferDecl()
+{
+   RecordDecl* S;
+   if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::StringBuffer)) {
+      return nullptr;
+   }
+
+   return cast_or_null<StructDecl>(S);
+}
+
+StructDecl* SemaPass::getStringStorageDecl()
+{
+   RecordDecl* S;
+   if (QC.GetBuiltinRecord(S, GetBuiltinRecordQuery::StringStorage)) {
       return nullptr;
    }
 

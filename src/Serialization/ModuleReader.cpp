@@ -1075,6 +1075,13 @@ Module* ModuleReader::ReadModule()
 
          break;
       }
+      case CONFORMANCE_BLOCK_ID: {
+         auto Res = ASTReader.ReadConformanceBlock(Stream);
+         if (Res != Success)
+            return nullptr;
+
+         break;
+      }
       case IL_MODULE_BLOCK_ID: {
          ILReader.Stream = Stream;
          if (Stream.SkipBlock()) {
@@ -1086,13 +1093,6 @@ Module* ModuleReader::ReadModule()
       }
       case OFFSET_BLOCK_ID: {
          auto Res = ReadOffsetsBlock(Stream);
-         if (Res != Success)
-            return nullptr;
-
-         break;
-      }
-      case CONFORMANCE_BLOCK_ID: {
-         auto Res = ASTReader.ReadConformanceBlock(Stream);
          if (Res != Success)
             return nullptr;
 

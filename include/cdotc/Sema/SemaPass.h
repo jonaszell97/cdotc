@@ -829,6 +829,9 @@ public:
    ASTContext& Context;
 
 private:
+   using AssociatedTypeImplMapType = llvm::DenseMap<
+       RecordDecl*, llvm::DenseMap<DeclarationName, AliasDecl*>>;
+
    /// Compilation stage.
    Stage stage = Stage::Parsing;
 
@@ -848,8 +851,7 @@ private:
    llvm::SmallVector<MethodDecl*, 4> ProtocolImplementations;
 
    /// Map of associated type implementations.
-   llvm::DenseMap<RecordDecl*, llvm::DenseMap<DeclarationName, AliasDecl*>>
-      AssociatedTypeDeclMap;
+   AssociatedTypeImplMapType AssociatedTypeDeclMap;
 
    /// True iff runtime generics are enabled. Will be set by the
    /// CompilerInstance.
@@ -1084,6 +1086,8 @@ public:
    StructDecl* getArrayViewDecl();
    ClassDecl* getDictionaryDecl();
    StructDecl* getStringDecl();
+   StructDecl* getStringBufferDecl();
+   StructDecl* getStringStorageDecl();
    StructDecl* getStringViewDecl();
    EnumDecl* getOptionDecl();
    StructDecl* getBoxDecl();
@@ -1156,6 +1160,7 @@ public:
    bool isInStdModule(Decl* D);
 
    QualType getOptionOf(QualType Ty, StmtOrDecl DependentStmt);
+   QualType getAtomicOf(QualType Ty);
 
    ExprResult visit(Expression* Expr, bool);
    StmtResult visit(Statement* node, bool);

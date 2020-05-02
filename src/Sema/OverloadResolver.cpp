@@ -709,8 +709,30 @@ static bool createParamConstraints(
 static bool createAnonymousParamConstraints(
     ConstraintSystem& Sys, CandidateSet::Candidate& Cand, unsigned i,
     CanType NeededTy, ArgumentConvention Conv, Expression* ArgVal,
-    ConstraintBuilder& Builder, SemaPass& Sema, Statement* Caller)
+    ConstraintBuilder& Builder, SemaPass& Sema, Statement* Caller,
+    unsigned &currentConversionPenalty, unsigned bestConversionPenalty)
 {
+   if (ArgVal->isSemanticallyChecked()) {
+      IsValidParameterValueQuery::result_type result;
+      if (Sema.QC.IsValidParameterValue(result, ArgVal->getExprType(),
+                                        NeededTy, false)) {
+         return true;
+      }
+
+      if (!result.isValid) {
+         Cand.setHasIncompatibleArgument(i, ArgVal->getExprType(), NeededTy);
+         return true;
+      }
+
+      currentConversionPenalty += result.conversionPenalty;
+      if (currentConversionPenalty > bestConversionPenalty) {
+         Cand.ConversionPenalty = -1;
+         return true;
+      }
+
+      return false;
+   }
+
    auto* Loc = Builder.makeLocator(ArgVal, {});
    auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc);
    switch (Result.Kind) {
@@ -725,21 +747,6 @@ static bool createAnonymousParamConstraints(
    case ConstraintBuilder::Dependent:
       Cand.setIsDependent();
       return false;
-   }
-
-   if (!Result.Type->containsTypeVariable()) {
-      IsImplicitlyConvertibleQuery::result_type result;
-      if (Sema.QC.IsImplicitlyConvertible(result, Result.Type, NeededTy)) {
-         Cand.setIsInvalid();
-         return true;
-      }
-
-      if (!result.implicitlyConvertible) {
-         Cand.setHasIncompatibleArgument(i, Result.Type, NeededTy);
-         return true;
-      }
-
-      Cand.ConversionPenalty += result.conversionPenalty;
    }
 
    return false;
@@ -879,15 +886,34 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
          // Handle @autoclosure
          if (ArgDecl->hasAttribute<AutoClosureAttr>()) {
-            auto LE = LambdaExpr::Create(
-                SP.getContext(), E->getSourceRange(), E->getSourceLoc(),
-                E->getExprType(), {},
-                ReturnStmt::Create(SP.getContext(), E->getSourceLoc(), E));
+            bool isBuiltinShortCircuitingOp = false;
 
-            (void)SP.visitExpr(E, LE);
-            CaptureMarker(SP.getContext(), LE).visit(E);
+            // Special case - builtin || and && operators
+            if (auto *BA = Cand.getFunc()->getAttribute<_BuiltinAttr>()) {
+               isBuiltinShortCircuitingOp = BA->getBuiltinName().startswith("Bool.infix");
+            }
 
-            E = LE;
+            if (!isBuiltinShortCircuitingOp) {
+               auto LE = LambdaExpr::Create(
+                   SP.getContext(), E->getSourceRange(), E->getSourceLoc(),
+                   E->getExprType(), {},
+                   ReturnStmt::Create(SP.getContext(), E->getSourceLoc(), E));
+
+               (void)SP.visitExpr(E, LE);
+               CaptureMarker(SP.getContext(), LE).visit(E);
+
+               E = LE;
+            }
+            else {
+               // We still need the correct type for typechecking, ILGen will
+               // ignore this conversion expr.
+               auto *LamdbaTy = SP.Context.getLambdaType(ArgDecl->getType(), {});
+               auto Seq = ConversionSequence::Create(
+                   SP.Context, CastStrength::Implicit,
+                   ConversionStep(CastKind::NoOp, LamdbaTy));
+
+               E = ImplicitCastExpr::Create(SP.Context, E, Seq);
+            }
          }
       }
       else if (!requiredType || !requiredType->isReferenceType()) {
@@ -1065,10 +1091,9 @@ static bool resolveCandidate(
    // Check if the returned type is viable.
    QualType ReturnType = Cand.getFunctionType()->getReturnType();
    bool DependentReturnType = ReturnType->containsTemplateParamType();
-   bool InvalidReturnType = false;
 
    if (RequiredType && !DependentReturnType) {
-      InvalidReturnType = checkReturnType(Sema, Cand, RequiredType);
+      Cand.ValidReturnType = !checkReturnType(Sema, Cand, RequiredType);
    }
 
    // Check if the parameter amounts and labels match up.
@@ -1199,10 +1224,10 @@ static bool resolveCandidate(
 
    // Check the return type again in case it was dependent.
    if (RequiredType && DependentReturnType && !isFunctionArgument) {
-      InvalidReturnType |= checkReturnType(Sema, Cand, RequiredType);
+      Cand.ValidReturnType |= !checkReturnType(Sema, Cand, RequiredType);
    }
 
-   if (InvalidReturnType && BestSolution) {
+   if (!Cand.ValidReturnType && BestSolution) {
       return false;
    }
 
@@ -1295,12 +1320,18 @@ static bool resolveAnonymousCandidate(
    bool Valid = true;
    TemplateParamSet VariadicParams;
 
+   unsigned paramConversionPenalty = 0;
+   unsigned bestConversionPenalty = BestCandidate
+       ? BestCandidate->ConversionPenalty : -1;
+
    unsigned i = 0;
    for (auto& ParamTy : Params) {
       auto* ArgVal = cast<Expression>(ArgExprs[i].getStatement());
       if (createAnonymousParamConstraints(Sys, Cand, i, ParamTy,
                                           ParamInfo[i].getConvention(), ArgVal,
-                                          *Cand.Builder, Sema, Caller)) {
+                                          *Cand.Builder, Sema, Caller,
+                                          paramConversionPenalty,
+                                          bestConversionPenalty)) {
          Valid = false;
          break;
       }
@@ -1444,6 +1475,7 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
       }
    }
 
+   bool foundTemplate = false;
    unsigned bestMatchIdx = 0;
    unsigned i = 0;
 
@@ -1455,6 +1487,9 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
                  BestMatchArgExprs, FoundAmbiguity, Caller)) {
             bestMatchIdx = i;
          }
+      }
+      else if (Cand.getFunc()->isTemplate()) {
+         foundTemplate = true;
       }
       else {
          auto* Fn = Cand.getFunc();
@@ -1473,6 +1508,33 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
       }
 
       ++i;
+   }
+
+   // Non-template functions are always preferred over templates.
+   if ((!BestSolution || !BestCandidate->ValidReturnType) && foundTemplate) {
+      i = 0;
+      for (auto& Cand : CandSet.Candidates) {
+         if (Cand.isAnonymousCandidate() || !Cand.getFunc()->isTemplate()) {
+            ++i;
+            continue;
+         }
+
+         auto* Fn = Cand.getFunc();
+         ArrayRef<Expression*> ArgValues = ArgsWithSelf;
+         if (!shouldUseSelfArgument(Fn, SelfArg, UnorderedArgs)) {
+            ArgValues = ArgValues.drop_front(1);
+         }
+
+         if (resolveCandidate(Sema, ArgExprs, Solutions, CandSet, Cand,
+                              RequiredType, ArgValues, Labels, NumGivenArgs + 1,
+                              BestSolution, BestCandidate, BestMatchArgExprs,
+                              FoundAmbiguity, Caller, isFunctionArgument,
+                              outerBuilder)) {
+            bestMatchIdx = i;
+         }
+
+         ++i;
+      }
    }
 
    if (!BestSolution) {

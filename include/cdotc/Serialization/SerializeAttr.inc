@@ -35,6 +35,8 @@ void ASTAttrWriter::visitVersionDeclAttr(VersionDeclAttr *A) {
 void ASTAttrWriter::visitVersionStmtAttr(VersionStmtAttr *A) {
    Record.push_back((uint64_t)A->getVersion());
 }
+void ASTAttrWriter::visitExternallyInitializedAttr(ExternallyInitializedAttr *A) {
+}
 void ASTAttrWriter::visit_BuiltinAttr(_BuiltinAttr *A) {
    Record.AddIdentifierRef(&Idents.get(A->getBuiltinName()));
 }
@@ -95,6 +97,9 @@ VersionDeclAttr *ASTAttrReader::readVersionDeclAttr(SourceRange SR) {
 VersionStmtAttr *ASTAttrReader::readVersionStmtAttr(SourceRange SR) {
    auto version = Record.readEnum<VersionStmtAttr::VersionKind>();
    return new(C) VersionStmtAttr(std::move(version), SR);
+}
+ExternallyInitializedAttr *ASTAttrReader::readExternallyInitializedAttr(SourceRange SR) {
+   return new(C) ExternallyInitializedAttr(SR);
 }
 _BuiltinAttr *ASTAttrReader::read_BuiltinAttr(SourceRange SR) {
    auto builtinName = Record.getIdentifierInfo()->getIdentifier();

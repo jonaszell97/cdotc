@@ -237,19 +237,17 @@ static void addModuleLib(IRGen& IRG, cdot::Module* Mod,
    if (!Visited.insert(BaseMod).second)
       return;
 
-   if (!Mod->getILModule()->hasExternallyVisibleSymbols()
-       || Mod->declarationsOnly())
-      return;
+   if (!Mod->declarationsOnly()) {
+      auto StaticLibBlob = BaseMod->getDecl()->getModFile()->getLibraryBlob();
+      if (StaticLibBlob.empty()) {
+         std::string lib = "-lcdot";
+         lib += BaseMod->getName()->getIdentifier();
 
-   auto StaticLibBlob = BaseMod->getDecl()->getModFile()->getLibraryBlob();
-   if (StaticLibBlob.empty()) {
-      std::string lib = "-lcdot";
-      lib += BaseMod->getName()->getIdentifier();
-
-      args.emplace_back(move(lib));
-   }
-   else {
-      args.emplace_back(IRG.createLinkedModuleTmpFile(StaticLibBlob));
+         args.emplace_back(move(lib));
+      }
+      else {
+         args.emplace_back(IRG.createLinkedModuleTmpFile(StaticLibBlob));
+      }
    }
 
    for (auto* Imp : Mod->getImports())
@@ -481,14 +479,19 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
       llvm::report_fatal_error("'clang' executable could not be found");
    }
 
+   if (fs::fileExists(OutFile)) {
+      fs::deleteFile(OutFile);
+   }
+
    std::vector<std::string> args{
        clangPathOrError.get(), "-shared", "-undefined",
        "dynamic_lookup",       "-o",      OutFile.str(),
        TmpFilePath.str(),
    };
 
-   for (auto& file : CI.getOptions().getLinkerInput())
+   for (auto& file : CI.getOptions().getLinkerInput()) {
       args.push_back(file);
+   }
 
    int result = fs::executeCommand(args[0], args);
    switch (result) {

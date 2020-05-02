@@ -1045,7 +1045,7 @@ Expression* SemaPass::implicitCastIfNecessary(
 
 Expression* SemaPass::forceCast(Expression* Expr, QualType destTy)
 {
-   if (Expr->getExprType() == destTy)
+   if (Expr->getExprType() == destTy || destTy->isErrorType())
       return Expr;
 
    auto ConvSeq = getConversionSequence(Expr->getExprType(), destTy);
@@ -2231,7 +2231,7 @@ static InitDecl* LookupInitializableByDecl(SemaPass& Sema, RecordDecl* R,
       canonicalTy = Ty->getCanonicalType()->getDesugaredType();
    }
 
-   for (auto* D : Decls->allDecls()) {
+   for (auto* D : Decls->allDeclsStable()) {
       auto* Init = cast<InitDecl>(D);
       if (Sema.QC.PrepareDeclInterface(Init)) {
          E->setIsInvalid(true);
@@ -2248,10 +2248,7 @@ static InitDecl* LookupInitializableByDecl(SemaPass& Sema, RecordDecl* R,
       if (Init->getArgs().size() != 1) {
          continue;
       }
-      if (Init->getArgs()
-              .front()
-              ->getType()
-              ->getCanonicalType()
+      if (Init->getArgs().front()->getType()->getCanonicalType()
               ->getDesugaredType()
           == canonicalTy) {
          return Init;
@@ -2315,7 +2312,9 @@ static ExprResult LookupInitializableByDecl(
    // Get the associated type.
    if (AssocTypeName) {
       AliasDecl* AT = Sema.getAssociatedTypeImpl(ConformingRec, AssocTypeName);
-      if (!AT || Sema.QC.PrepareDeclInterface(AT)) {
+      assert(AT && "bad protocol impl");
+
+      if (Sema.QC.PrepareDeclInterface(AT)) {
          E->setIsInvalid(true);
          return ExprError();
       }
@@ -3945,11 +3944,12 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
          return Stmt;
       }
 
-      Stmt->setReturnValue(result.get());
+      retVal = result.get();
+      Stmt->setReturnValue(retVal);
 
       bool MaybeInvalidRefReturn = false;
 
-      auto retType = result.get()->getExprType();
+      auto retType = retVal->getExprType();
       if (!declaredReturnType->isAutoType()) {
          if (retType->isReferenceType()) {
             if (retType->getReferencedType() == declaredReturnType
@@ -3959,7 +3959,7 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
          }
 
          Stmt->setReturnValue(implicitCastIfNecessary(
-             result.get(), declaredReturnType, false, diag::err_type_mismatch,
+             retVal, declaredReturnType, false, diag::err_type_mismatch,
              Stmt->getReturnValue()->getSourceLoc(),
              Stmt->getReturnValue()->getSourceRange()));
 
@@ -3973,27 +3973,31 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
          fn->getReturnType().setResolvedType(retType);
       }
 
-      // check NRVO candidate
-      if (NeedsStructReturn(declaredReturnType)) {
-         if (auto Ident = dyn_cast<IdentifierRefExpr>(retVal)) {
-            if (Ident->getKind() == IdentifierKind::LocalVar
-                && !Ident->getLocalVar()->isConst()) {
-               auto Decl = Ident->getLocalVar();
-               bool valid = true;
+      // Check NRVO candidate
+      if (true || NeedsStructReturn(declaredReturnType)) {
+         Expression *noConv = retVal;
+         if (auto *Conv = dyn_cast<ImplicitCastExpr>(noConv)) {
+            if (Conv->getConvSeq().all(CastKind::LValueToRValue)) {
+               noConv = Conv->getTarget();
+            }
+         }
 
+         if (auto DeclRef = dyn_cast<DeclRefExpr>(noConv)) {
+            if (auto *LV = dyn_cast<LocalVarDecl>(DeclRef->getDecl())) {
+               bool valid = true;
                if (auto PrevDecl = fn->getNRVOCandidate()) {
-                  if (PrevDecl != Decl) {
+                  if (PrevDecl != LV) {
                      valid = false;
                   }
                }
 
                if (valid) {
-                  Stmt->setNRVOCand(Decl);
-                  Decl->setIsNRVOCandidate(true);
-                  fn->setNRVOCandidate(Decl);
+                  Stmt->setNRVOCand(LV);
+                  LV->setIsNRVOCandidate(true);
+                  fn->setNRVOCandidate(LV);
                }
                else {
-                  Stmt->setNRVOCand(Ident->getLocalVar());
+                  Stmt->setNRVOCand(LV);
                }
 
                MaybeInvalidRefReturn = false;

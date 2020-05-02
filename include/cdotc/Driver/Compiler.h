@@ -102,6 +102,7 @@ struct CompilerOptions {
       F_StaticModuleLib = F_PrintStats << 1,
       F_NoDebugIL = F_StaticModuleLib << 1,
       F_RunUnitTests = F_NoDebugIL << 1,
+      F_SyntaxOnly = F_RunUnitTests << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -178,6 +179,7 @@ public:
    bool emitStaticModuleLib() const { return flagIsSet(F_StaticModuleLib); }
    bool noDebugIL() const { return flagIsSet(F_NoDebugIL); }
    bool runUnitTests() const { return flagIsSet(F_RunUnitTests); }
+   bool syntaxOnly() const { return flagIsSet(F_SyntaxOnly); }
 
    /// Experimental feature checks.
    bool runtimeGenerics() const

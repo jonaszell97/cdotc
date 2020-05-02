@@ -156,6 +156,9 @@ public:
    /// Write the instantiation table to the module file.
    void WriteInstantiationTable();
 
+   /// Add the decls referenced in the conformance table.
+   void AddConformanceTableDecls();
+
    /// Write a declaration to the module file.
    void WriteDecl(ast::ASTContext& Context, ast::Decl* D);
 

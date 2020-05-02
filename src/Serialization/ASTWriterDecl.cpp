@@ -1,5 +1,4 @@
 #include "cdotc/AST/ASTVisitor.h"
-#include "cdotc/Driver/Compiler.h"
 #include "cdotc/IL/Module.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/Module.h"
@@ -340,9 +339,11 @@ void ASTDeclWriter::visitAssociatedTypeDecl(AssociatedTypeDecl* D)
 
    Record.AddSourceLocation(D->getSourceLoc());
    Record.AddTypeRef(D->getDefaultType());
-   Record.AddTypeRef(D->getCovariance());
-   Record.AddDeclRef(D->getProto());
    Record.push_back(D->isSelf());
+
+   if (!D->isSelf()) {
+      Record.AddTypeRef(D->getCovariance());
+   }
 
    Record.AddDeclRef(D->getProtocolDefaultImpl());
 

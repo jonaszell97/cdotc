@@ -156,8 +156,9 @@ int cdot_main(int argc, char* argv[])
                                      static_cast<void*>(&compilationUnit));
 
    auto Result = compilationUnit.compile();
-   llvm::remove_fatal_error_handler();
+   compilationUnit.displayPhaseDurations(llvm::errs());
 
+   llvm::remove_fatal_error_handler();
    return Result;
 }
 

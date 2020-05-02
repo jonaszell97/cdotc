@@ -135,6 +135,9 @@ private:
    /// The number of statements written to the AST file.
    unsigned NumStatements = 0;
 
+   /// The number of instantiations written to the AST file.
+   unsigned NumInstantiations = 0;
+
    /// Number of OperatorDecls and PrecedenceGroupDecls written.
    unsigned NumOpPGDecls = 0;
 

@@ -19,22 +19,26 @@ namespace cdot {
 CandidateSet::Candidate::Candidate() = default;
 
 CandidateSet::Candidate::Candidate(CallableDecl* Func, unsigned Distance)
-    : CandDecl(Func), FR(None), IsAnonymousCand(false), Distance(Distance)
+    : CandDecl(Func), FR(None), IsAnonymousCand(false), ValidReturnType(true),
+    Distance(Distance)
 {
 }
 
 CandidateSet::Candidate::Candidate(AliasDecl* Alias, unsigned Distance)
-    : CandDecl(Alias), FR(None), IsAnonymousCand(false), Distance(Distance)
+    : CandDecl(Alias), FR(None), IsAnonymousCand(false), ValidReturnType(true),
+    Distance(Distance)
 {
 }
 
 CandidateSet::Candidate::Candidate(Expression* FnExpr)
-    : CandDecl(FnExpr), FR(None), IsAnonymousCand(true), Distance(0)
+    : CandDecl(FnExpr), FR(None), IsAnonymousCand(true), ValidReturnType(true),
+    Distance(0)
 {
 }
 
 CandidateSet::Candidate::Candidate(NamedDecl* FnDecl)
-    : CandDecl(FnDecl), FR(None), IsAnonymousCand(true), Distance(0)
+    : CandDecl(FnDecl), FR(None), IsAnonymousCand(true), ValidReturnType(true),
+    Distance(0)
 {
 }
 

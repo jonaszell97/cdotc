@@ -45,6 +45,8 @@ public:
    void visit(Statement* node);
    void visit(Decl* D);
 
+   bool FinishILGen();
+
    bool prepareFunctionForCtfe(CallableDecl* C, StmtOrDecl Caller,
                                bool NeedsCompileTimeAttr = true);
    ctfe::CTFEResult evaluateStaticExpr(Expression* expr);
@@ -232,6 +234,7 @@ public:
 
    void initStringInfo();
    il::Constant* MakeStdString(llvm::StringRef Str);
+   il::Constant* MakeAtomic(il::Constant *Val);
 
    struct ModuleRAII {
       ModuleRAII(ILGenPass& ILGen, CallableDecl* C);
@@ -608,8 +611,8 @@ private:
    std::unordered_map<NamedDecl*, il::Value*> DeclMap;
    std::unordered_map<il::Value*, NamedDecl*> ReverseDeclMap;
 
-   std::unordered_map<VarDecl*, il::Value*> LocalDeclMap;
-   std::unordered_map<il::Value*, VarDecl*> ReverseLocalDeclMap;
+   std::unordered_map<VarDecl*, il::Value*> *LocalDeclMap = nullptr;
+   std::unordered_map<il::Value*, VarDecl*> *ReverseLocalDeclMap = nullptr;
 
    std::stack<CompoundStmt*> CompoundStmtStack;
 
@@ -660,7 +663,7 @@ private:
       llvm::DenseMap<NamedDecl*, NamedDecl*> Specializations;
    };
 
-   SpecializationScope CurrentSpecializationScope;
+   SpecializationScope *CurrentSpecializationScope = nullptr;
 
    /// Generic environment of the current record or function.
    il::Value* GenericEnv = nullptr;
@@ -677,7 +680,7 @@ public:
 
    void CreateEndCleanupBlocks(CoroutineInfo& Info);
 
-   bool isSpecializing() const { return CurrentSpecializationScope.Inst; }
+   bool isSpecializing() const { return CurrentSpecializationScope; }
    const sema::TemplateArgument* getSubstitution(TemplateParamDecl* P);
    QualType getSubstitution(QualType Ty);
 
@@ -791,6 +794,11 @@ public:
    {
       assert(LastCleanupScope && "no cleanup scope!");
       return LastCleanupScope->ignoreValue(Tmp);
+   }
+
+   bool eraseAllCleanups(il::Value* Val)
+   {
+      return Cleanups.ignoreValue(Val);
    }
 
    void pushDefaultCleanup(il::Value* Val)

@@ -99,6 +99,7 @@ public:
    void visitDeinitDecl(DeinitDecl* D);
    void visitEnumCaseDecl(EnumCaseDecl* D);
 
+   void visitAssociatedTypeDecl(AssociatedTypeDecl* D);
    void visitPropDecl(PropDecl* D);
    void visitSubscriptDecl(SubscriptDecl* D);
 
@@ -169,7 +170,9 @@ void ASTDeclReader::visitNamedDecl(NamedDecl* ND)
 
    auto NumDeclConstraints = Record.readInt();
    if (NumDeclConstraints > 0) {
-      std::vector<DeclConstraint*> declConstraints((NumDeclConstraints));
+      std::vector<DeclConstraint*> declConstraints;
+      declConstraints.reserve(NumDeclConstraints);
+
       while (NumDeclConstraints--) {
          declConstraints.push_back(ReadDeclConstraint());
       }
@@ -304,10 +307,14 @@ void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl* D)
 
    D->setSourceLoc(ReadSourceLocation());
    D->setDefaultType(Record.readSourceType());
-
-   D->setCovariance(Record.readSourceType());
-   D->setProto(Record.readDeclAs<ProtocolDecl>());
    D->setSelf(Record.readBool());
+
+   if (!D->isSelf()) {
+      D->setCovariance(Record.readSourceType());
+   }
+   else {
+      Reader.addDeclUpdate(D, 0);
+   }
 
    D->setProtocolDefaultImpl(Record.readDeclAs<AssociatedTypeDecl>());
 
@@ -315,6 +322,12 @@ void ASTDeclReader::visitAssociatedTypeDecl(AssociatedTypeDecl* D)
    while (CovSize--) {
       Reader.getContext().addCovariance(D, Record.readDeclAs<RecordDecl>());
    }
+}
+
+void ASTDeclUpdateVisitor::visitAssociatedTypeDecl(AssociatedTypeDecl* D)
+{
+   D->setCovariance(SourceType(
+       Reader.getContext().getRecordType(D->getProto())));
 }
 
 void ASTDeclReader::visitPropDecl(PropDecl* D)

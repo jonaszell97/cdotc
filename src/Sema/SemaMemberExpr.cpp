@@ -785,11 +785,11 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
 
          switch (ND->getKind()) {
          case Decl::AssociatedTypeDeclID: {
-            IsMemberRef = Ident->getParentExpr() != nullptr;
+            IsMemberRef |= Ident->getParentExpr() != nullptr;
             break;
          }
          case Decl::FunctionDeclID:
-            IsMemberRef = cast<FunctionDecl>(ND)->isOperator();
+            IsMemberRef |= cast<FunctionDecl>(ND)->isOperator();
             break;
          case Decl::FieldDeclID:
             if (ND->isStatic()) {
@@ -1054,9 +1054,6 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr* Expr)
       if (isa<GlobalVarDecl>(ND)) {
          if (QC.PrepareDeclInterface(Var)) {
             return ExprError();
-         }
-         if (QC.CheckAccessibility(DeclCtx, Var, Expr->getSourceLoc())) {
-            Expr->setIsInvalid(true);
          }
       }
       else if (auto* localVar = dyn_cast<LocalVarDecl>(ND)) {
@@ -1565,6 +1562,11 @@ AliasDecl* SemaPass::checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
    TemplateArgList ArgList(*this, Alias, TemplateArgs, E->getSourceLoc());
    if (ArgList.isStillDependent()) {
       E->setNeedsInstantiation(true);
+
+      if (QC.PrepareDeclInterface(Alias)) {
+         E->setIsInvalid(true);
+         return nullptr;
+      }
 
       if (Alias->getType()->isMetaType()) {
          E->setExprType(Context.getMetaType(Context.getDependentTypedefType(
@@ -2519,8 +2521,6 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
    }
    }
 
-   llvm::outs() << "<ATTENTION>" << (int)AccessSpec << " " << ND->getFullName()
-                << "\n";
    diagnose(note_access_spec_here, /*implicitly*/ !ND->getAccessRange(),
             (int)AccessSpec, ND->getAccessRange(), ND->getSourceLoc());
 }

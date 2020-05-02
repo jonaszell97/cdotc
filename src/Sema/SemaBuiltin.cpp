@@ -50,6 +50,7 @@ void SemaPass::initBuiltinIdents()
    BuiltinIdents[builtin::TokenType] = &Idents.get("TokenType");
    BuiltinIdents[builtin::CVoid] = &Idents.get("CVoid");
    BuiltinIdents[builtin::RawPointer] = &Idents.get("RawPointer");
+   BuiltinIdents[builtin::MutableRawPointer] = &Idents.get("MutableRawPointer");
    BuiltinIdents[builtin::Int1] = &Idents.get("i1");
    BuiltinIdents[builtin::Int8] = &Idents.get("i8");
    BuiltinIdents[builtin::UInt8] = &Idents.get("u8");
@@ -180,14 +181,24 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
           IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
                             Context.getMetaType(Context.getVoidType()));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer]
+   else if ((II == BuiltinIdents[builtin::RawPointer]
+   || II == BuiltinIdents[builtin::MutableRawPointer])
             && !Alias->isInstantiation()) {
+      QualType PtrTy;
+      if (II == BuiltinIdents[builtin::MutableRawPointer]) {
+         PtrTy = Context.getMutablePointerType(Context.getVoidType());
+      }
+      else {
+         PtrTy = Context.getPointerType(Context.getVoidType());
+      }
+
       ResultExpr = new (Context)
           IdentifierRefExpr(
               Expr->getSourceRange(), IdentifierKind::MetaType,
-              Context.getMetaType(Context.getPointerType(Context.getVoidType())));
+              Context.getMetaType(PtrTy));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer]) {
+   else if (II == BuiltinIdents[builtin::RawPointer]
+   || II == BuiltinIdents[builtin::MutableRawPointer]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
           || !Alias->getTemplateArgs().front().isType()) {
          diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
@@ -196,10 +207,17 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
          return ExprError();
       }
 
+      QualType PtrTy;
+      if (II == BuiltinIdents[builtin::MutableRawPointer]) {
+         PtrTy = Context.getMutablePointerType(Alias->getTemplateArgs().front().getType());
+      }
+      else {
+         PtrTy = Context.getPointerType(Alias->getTemplateArgs().front().getType());
+      }
+
       ResultExpr = new (Context)
           IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
-                            Context.getMetaType(Context.getPointerType(
-                                Alias->getTemplateArgs().front().getType())));
+                            Context.getMetaType(PtrTy));
    }
 #define CDOT_BUILTIN_TYPE(NAME)                                                \
    else if (II == BuiltinIdents[builtin::NAME])                                \
@@ -272,16 +290,35 @@ void SemaPass::SetBuiltinAliasType(AliasDecl* A)
    else if (II == BuiltinIdents[builtin::CVoid]) {
       A->setType(SourceType(Context.getMetaType(Context.getVoidType())));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer] && !A->isInstantiation()
-            && !A->isTemplate()) {
-      A->setType(SourceType(
-          Context.getMetaType(Context.getVoidType()->getPointerTo(Context))));
+   else if ((II == BuiltinIdents[builtin::RawPointer]
+   || II == BuiltinIdents[builtin::MutableRawPointer])
+   && !A->isInstantiation() && !A->isTemplate()) {
+      QualType PtrTy;
+      if (II == BuiltinIdents[builtin::MutableRawPointer]) {
+         PtrTy = Context.getMutablePointerType(Context.getVoidType());
+      }
+      else {
+         PtrTy = Context.getPointerType(Context.getVoidType());
+      }
+
+      A->setType(SourceType(Context.getMetaType(PtrTy)));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer] && A->isTemplate()) {
+   else if ((II == BuiltinIdents[builtin::RawPointer]
+   || II == BuiltinIdents[builtin::MutableRawPointer])
+   && A->isTemplate()) {
       QualType Ty = Context.getTemplateArgType(A->getTemplateParams().front());
-      A->setType(SourceType(Context.getMetaType(Ty->getPointerTo(Context))));
+      QualType PtrTy;
+      if (II == BuiltinIdents[builtin::MutableRawPointer]) {
+         PtrTy = Context.getMutablePointerType(Ty);
+      }
+      else {
+         PtrTy = Context.getPointerType(Ty);
+      }
+
+      A->setType(SourceType(Context.getMetaType(PtrTy)));
    }
-   else if (II == BuiltinIdents[builtin::RawPointer]) {
+   else if (II == BuiltinIdents[builtin::RawPointer]
+   || II == BuiltinIdents[builtin::MutableRawPointer]) {
       if (!A->isInstantiation() || A->getTemplateArgs().size() != 1
           || !A->getTemplateArgs().front().isType()) {
          diagnose(err_compiler_ns_bad_def, A->getDeclName(),
@@ -291,7 +328,15 @@ void SemaPass::SetBuiltinAliasType(AliasDecl* A)
       }
 
       QualType Ty = A->getTemplateArgs().front().getType();
-      A->setType(SourceType(Context.getMetaType(Ty->getPointerTo(Context))));
+      QualType PtrTy;
+      if (II == BuiltinIdents[builtin::MutableRawPointer]) {
+         PtrTy = Context.getMutablePointerType(Ty);
+      }
+      else {
+         PtrTy = Context.getPointerType(Ty);
+      }
+
+      A->setType(SourceType(Context.getMetaType(PtrTy)));
    }
 #define CDOT_BUILTIN_TYPE(NAME)                                                \
    else if (II == BuiltinIdents[builtin::NAME])                                \

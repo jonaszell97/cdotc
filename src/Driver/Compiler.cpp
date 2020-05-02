@@ -353,6 +353,9 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    if (RunUnitTests) {
       options.setFlag(CompilerOptions::F_RunUnitTests, true);
    }
+   if (SyntaxOnly) {
+      options.setFlag(CompilerOptions::F_SyntaxOnly, true);
+   }
    if (EmitIL != "-") {
       options.setFlag(CompilerOptions::F_EmitIL, true);
 
@@ -550,11 +553,6 @@ int CompilerInstance::compile()
    default:
       llvm_unreachable("unhandled output kind");
    }
-
-#ifndef NDEBUG
-   _timer_.~Timer();
-   displayPhaseDurations(llvm::errs());
-#endif
 
    return 0;
 }

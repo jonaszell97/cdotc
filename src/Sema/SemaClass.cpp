@@ -1346,20 +1346,6 @@ static void checkCopyableConformances(SemaPass& SP, RecordDecl* S,
          SP.QC.CheckSingleConformance(Context.getRecordType(S), Copyable);
       }
    }
-
-   // If all types are implicitly copyable, synthesize an ImplicitlyCopyable
-   // conformance.
-   if (!AllImplicitlyCopyable) {
-      return;
-   }
-   if (auto* ImpCopyable = SP.getImplicitlyCopyableDecl()) {
-      auto NewConformance
-          = ConfTable.addExplicitConformance(Context, S, ImpCopyable);
-
-      if (NewConformance) {
-         SP.addDependency(S, ImpCopyable);
-      }
-   }
 }
 
 static void addRawRepresentableConformance(SemaPass& Sema, EnumDecl* E)

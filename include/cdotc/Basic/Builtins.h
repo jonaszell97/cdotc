@@ -44,6 +44,7 @@ enum BuiltinAlias : unsigned {
    TokenType,
    CVoid,
    RawPointer,
+   MutableRawPointer,
    Int1,
    Int8,
    UInt8,

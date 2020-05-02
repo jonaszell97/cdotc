@@ -131,6 +131,9 @@ public:
       return ShallowInstantiations.count(Inst) != 0;
    }
 
+   const llvm::DenseMap<std::pair<NamedDecl*, uintptr_t>, NamedDecl*> &
+   getAllInstantiations() const { return InstMap; }
+
    bool InstantiateShallowly = false;
 
 private:

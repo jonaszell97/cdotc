@@ -1223,7 +1223,7 @@ AssociatedTypeDecl* RecordDecl::getAssociatedType(DeclarationName name,
 {
    auto AT = dyn_cast_or_null<AssociatedTypeDecl>(lookupSingle(name));
    if (AT) {
-      if (!AT->getProto() || AT->getProto() == P)
+      if (!AT->getProto() || !P || AT->getProto() == P)
          return AT;
    }
 
@@ -1752,6 +1752,11 @@ AssociatedTypeDecl::AssociatedTypeDecl(EmptyShell)
 AssociatedTypeDecl* AssociatedTypeDecl::CreateEmpty(ASTContext& C)
 {
    return new (C) AssociatedTypeDecl(EmptyShell());
+}
+
+ProtocolDecl *AssociatedTypeDecl::getProto() const
+{
+   return support::cast<ProtocolDecl>(getDeclContext());
 }
 
 PropDecl::PropDecl(AccessSpecifier access, SourceRange Loc,

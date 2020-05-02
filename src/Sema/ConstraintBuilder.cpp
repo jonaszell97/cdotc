@@ -1552,7 +1552,15 @@ QualType ConstraintBuilder::visitSuperExpr(SuperExpr* Expr, SourceType T)
 QualType ConstraintBuilder::visitTupleMemberExpr(TupleMemberExpr* Expr,
                                                  SourceType T)
 {
-   auto Result = Sema.visitExpr(Expr);
+   auto Result = Sema.typecheckExpr(Expr->getParentExpr());
+   if (!Result) {
+      EncounteredError = true;
+      return Sys.newTypeVariable();
+   }
+
+   Expr->setParentExpr(Result.get());
+   Result = Sema.visitExpr(Expr);
+
    if (!Result) {
       EncounteredError = true;
       return Sys.newTypeVariable();

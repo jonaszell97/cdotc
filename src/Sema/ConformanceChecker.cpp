@@ -890,20 +890,20 @@ void ConformanceCheckerImpl::addProtocolImpl(RecordDecl* R, NamedDecl* Req,
 
    if (auto* Prop = dyn_cast<PropDecl>(Req)) {
       auto* FoundProp = cast<PropDecl>(Impl);
-      if (auto* M = FoundProp->getGetterMethod()) {
-         Sema.Context.addProtocolImpl(Rec, Prop->getGetterMethod(), M);
+      if (auto* M = Prop->getGetterMethod()) {
+         Sema.Context.addProtocolImpl(Rec, M, FoundProp->getGetterMethod());
       }
-      if (auto* M = FoundProp->getSetterMethod()) {
-         Sema.Context.addProtocolImpl(Rec, Prop->getSetterMethod(), M);
+      if (auto* M = Prop->getSetterMethod()) {
+         Sema.Context.addProtocolImpl(Rec, M, FoundProp->getSetterMethod());
       }
    }
    else if (auto* S = dyn_cast<SubscriptDecl>(Req)) {
       auto* FoundSub = cast<SubscriptDecl>(Impl);
-      if (auto* M = FoundSub->getGetterMethod()) {
-         Sema.Context.addProtocolImpl(Rec, S->getGetterMethod(), M);
+      if (auto* M = S->getGetterMethod()) {
+         Sema.Context.addProtocolImpl(Rec, M, FoundSub->getGetterMethod());
       }
-      if (auto* M = FoundSub->getSetterMethod()) {
-         Sema.Context.addProtocolImpl(Rec, S->getSetterMethod(), M);
+      if (auto* M = S->getSetterMethod()) {
+         Sema.Context.addProtocolImpl(Rec, M, FoundSub->getSetterMethod());
       }
    }
 }
@@ -2034,6 +2034,8 @@ class cdot::ConformanceResolver {
       return Vert.getIncoming().size() > NumDependencies[Node];
    }
 
+   bool CreateUncheckedConformanceForImportedDecl(RecordDecl *R);
+
    friend class SemaPass;
 
 public:
@@ -2089,6 +2091,10 @@ public:
 
    bool IsBeingResolved(RecordDecl *R)
    {
+      if (R->isExternal()) {
+         return false;
+      }
+
       return CompletedRecordDecls.count(R) == 0;
    }
 
@@ -2856,8 +2862,14 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
          return true;
       }
 
-      return FindDependencies(
-          Rec, *Cache[BaseConformances[Rec->getSpecializedTemplate()]]);
+      auto *Template = Rec->getSpecializedTemplate();
+      if (Template->isExternal()) {
+         if (CreateUncheckedConformanceForImportedDecl(Template)) {
+            return true;
+         }
+      }
+
+      return FindDependencies(Rec, *Cache[BaseConformances[Template]]);
    }
 
    // Add implicit conformance to Any.
@@ -2901,6 +2913,31 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
 
    LOG(ConformanceHierarchy, Rec->getDeclName(), ": \n", baseConf.indented());
    QC.Sema->updateLookupLevel(Rec, LookupLevel::Conformances);
+
+   return false;
+}
+
+bool
+ConformanceResolver::CreateUncheckedConformanceForImportedDecl(RecordDecl* Rec)
+{
+   if (BaseConformances.find(Rec) != BaseConformances.end()) {
+      return false;
+   }
+
+   // Use an empty conditional conformance object to simplify the recursive
+   // algorithm.
+   UncheckedConformance &baseConf = CreateCondConformance();
+   baseConf.initializerInnerConformances();
+   BaseConformances[Rec] = Cache.size() - 1;
+
+   auto AllConformances = QC.Context.getConformanceTable().getAllConformances(Rec);
+   for (auto *C : AllConformances) {
+      UncheckedConformance &innerConf = CreateCondConformance(
+          C->getProto(), C->getConstraints(), C->getDeclarationCtx(),
+          &baseConf);
+
+      baseConf.innerConformances->emplace_back(move(innerConf));
+   }
 
    return false;
 }
@@ -3286,9 +3323,12 @@ bool ConformanceResolver::BuildWorklistForShallowInstantiation(RecordDecl *Inst)
 {
    auto *Template = Inst->getSpecializedTemplate();
    auto &CompleteNode = GetDependencyNode(DependencyNode::Complete, Inst);
-   auto &TemplateNode = GetDependencyNode(DependencyNode::Complete, Template);
 
-   CompleteNode.addIncoming(&TemplateNode);
+   if (IsBeingResolved(Template)) {
+      auto& TemplateNode
+          = GetDependencyNode(DependencyNode::Complete, Template);
+      CompleteNode.addIncoming(&TemplateNode);
+   }
 
    for (auto *Ext : Template->getExtensions()) {
       auto *CS = QC.Context.getExtConstraints(Ext);
