@@ -119,6 +119,7 @@ public:
    }
 
    bool ignoreValue(CleanupsDepth depth, il::Value* Val);
+   bool ignoreValue(il::Value* Val);
 
    void emitAllWithoutPopping()
    {

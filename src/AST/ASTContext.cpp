@@ -204,6 +204,7 @@ ASTContext::getProtocolDefaultImpls(const ProtocolDecl* P)
 void ASTContext::addProtocolImpl(const RecordDecl* R, const NamedDecl* Req,
                                  NamedDecl* Impl)
 {
+   assert(R && Req && Impl && "invalid protocol impl");
    ProtocolImplMap[R][Req] = Impl;
 
    LOG(ProtocolImpls, "implementation of '", Req->getFullName(), "' for '",

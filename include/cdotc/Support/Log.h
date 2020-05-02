@@ -65,6 +65,9 @@ enum LogKind : uint64_t {
    /// \brief Log comilation phase timers.
    Timers = 0x2000,
 
+   /// \brief Log total allocated memory.
+   AllocatedMemory = 0x4000,
+
    /// \brief Log variable declarations,
    Variables = LocalVariables | GlobalVariables,
 

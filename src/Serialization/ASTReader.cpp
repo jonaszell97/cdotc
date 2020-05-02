@@ -297,8 +297,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       auto* AD = ReadDeclAs<AssociatedTypeDecl>(Record, Idx);
       auto OuterAT = readType(Record, Idx);
 
-      return Context.getAssociatedType(
-          AD, cast_or_null<AssociatedType>(OuterAT.getBuiltinTy()));
+      return Context.getAssociatedType(AD, OuterAT);
    }
    case Type::BoxTypeID: {
       if (Record.size() != 1) {
@@ -465,7 +464,8 @@ QualType ASTReader::readTypeRecord(unsigned ID)
 
       auto* RD = ReadDeclAs<AliasDecl>(Record, Idx);
       auto Ty = Context.getTypedefType(RD);
-      Ty->setCanonicalType(RD->getType()->asMetaType()->getUnderlyingType());
+//      Ty->setCanonicalType(RD->getType()->asMetaType()->getUnderlyingType()
+//         ->getCanonicalType());
 
       return Ty;
    }
@@ -575,6 +575,7 @@ ConformanceLookupTrait::ReadData(const internal_key_type& key,
    assert(Offset < Reader.ConformanceData.size() && "offset out of bounds!");
    auto* data = Reader.ConformanceData.data() + Offset;
 
+   auto& Sema = Reader.Reader.getCompilerInstance().getSema();
    auto& Ctx = Reader.Reader.getCompilerInstance().getContext();
    auto& ConfTable = Ctx.getConformanceTable();
 
@@ -594,6 +595,18 @@ ConformanceLookupTrait::ReadData(const internal_key_type& key,
       }
 
       ConfTable.addConformance(Ctx, Kind, R, Proto, DC, CS, Depth);
+   }
+
+   auto NumImpls = endian::readNext<uint32_t, little, unaligned>(data);
+   for (unsigned i = 0; i < NumImpls; ++i) {
+      auto *Req = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
+      auto *Impl = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
+
+      Ctx.addProtocolImpl(R, cast<NamedDecl>(Req), cast<NamedDecl>(Impl));
+
+      if (auto *AT = dyn_cast<AssociatedTypeDecl>(Req)) {
+         Sema.registerAssociatedTypeImpl(R, AT, cast<AliasDecl>(Impl));
+      }
    }
 }
 

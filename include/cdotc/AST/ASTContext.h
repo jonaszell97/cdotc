@@ -72,6 +72,9 @@ public:
    using ExtensionVec = SmallVector<ExtensionDecl*, 0>;
    using CovarianceVec = SmallVector<RecordDecl*, 0>;
 
+   using ProtocolImplMapType = llvm::DenseMap<
+      const RecordDecl*, llvm::MapVector<const NamedDecl*, NamedDecl*>>;
+
    friend sema::FinalTemplateArgumentList;
 
    CompilerInstance& CI;
@@ -106,9 +109,7 @@ private:
        llvm::DenseMap<const NamedDecl*, std::vector<NamedDecl*>>>
        ProtocolDefaultImplMap;
 
-   mutable llvm::DenseMap<const RecordDecl*,
-                          llvm::MapVector<const NamedDecl*, NamedDecl*>>
-       ProtocolImplMap;
+   mutable ProtocolImplMapType ProtocolImplMap;
 
    mutable llvm::DenseMap<const IdentifierInfo*, PrecedenceGroupDecl*>
        InfixOperators;
@@ -227,6 +228,8 @@ public:
    void updateProtocolImpl(const RecordDecl* R, NamedDecl *OldImpl, NamedDecl* NewImpl);
 
    NamedDecl* getProtocolImpl(const RecordDecl* R, const NamedDecl* Req);
+
+   const ProtocolImplMapType &getAllProtocolImpls() const { return ProtocolImplMap; }
 
    const llvm::MapVector<const NamedDecl*, NamedDecl*>*
    getProtocolImpls(const RecordDecl* R);

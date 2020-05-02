@@ -65,6 +65,9 @@ QueryResult GetBuiltinModuleQuery::run()
    case Async:
       Idents[1] = sema().getIdentifier("async");
       break;
+   case Atomic:
+      Idents[1] = sema().getIdentifier("atomic");
+      break;
    case Test:
       Idents[1] = sema().getIdentifier("test");
       break;
@@ -230,6 +233,12 @@ static StringRef getBuiltinRecordName(GetBuiltinRecordQuery::RecordKind kind)
       return "Dictionary";
    case GetBuiltinRecordQuery::String:
       return "String";
+   case GetBuiltinRecordQuery::StringStorage:
+      return "StringStorage";
+   case GetBuiltinRecordQuery::StringBuffer:
+      return "StringBuffer";
+   case GetBuiltinRecordQuery::Atomic:
+      return "Atomic";
    case GetBuiltinRecordQuery::Option:
       return "Option";
    default:
@@ -610,10 +619,19 @@ QueryResult GetBuiltinRecordQuery::run()
       PRELUDE_RECORD(Array)
       PRELUDE_RECORD(Dictionary)
       PRELUDE_RECORD(String)
+      PRELUDE_RECORD(StringStorage)
+      PRELUDE_RECORD(StringBuffer)
       PRELUDE_RECORD(Option)
 
 #undef PRELUDE_RECORD
 
+   case Atomic:
+      if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Atomic)) {
+         return fail();
+      }
+
+      II = sema().getIdentifier("Atomic");
+      break;
    case Box:
       if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Runtime)) {
          return fail();

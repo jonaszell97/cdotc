@@ -103,10 +103,10 @@ IRGen::IRGen(CompilerInstance& CI, llvm::LLVMContext& Ctx, bool emitDebugInfo)
    BoxTy = llvm::StructType::create(Ctx, boxContainedTypes, "cdot.Box");
 
    llvm::Type* lambdaContainedTypes[] = {
-       Int8PtrTy,            // function ptr
-       WordTy,               // strong refcount
-       BoxTy->getPointerTo() // first environment value
-                             // (trailing objects follow)
+       Int8PtrTy,              // function ptr
+       WordTy->getPointerTo(), // atomic strong refcount
+       BoxTy->getPointerTo()   // first environment value
+                               // (trailing objects follow)
    };
 
    LambdaTy
@@ -2350,6 +2350,10 @@ llvm::Value* IRGen::visitFieldRefInst(FieldRefInst const& I)
 llvm::Value* IRGen::visitTupleExtractInst(TupleExtractInst const& I)
 {
    auto tup = getLlvmValue(I.getOperand(0));
+   if (auto *Ld = dyn_cast<llvm::LoadInst>(tup)) {
+      tup = Ld->getOperand(0);
+   }
+
    if (tup->getType()->isStructTy()) {
       auto* Val = Builder.CreateExtractValue(tup, I.getIdx()->getU32());
       auto* Alloc = Builder.CreateAlloca(Val->getType());
@@ -2388,9 +2392,6 @@ llvm::Value* IRGen::visitEnumExtractInst(const EnumExtractInst& I)
 
 llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
 {
-   if (I.getName()=="2") {
-       NO_OP;
-   }
    auto E = getLlvmValue(I.getValue());
    if (I.getValue()->getType()->isRawEnum()) {
       return E;
@@ -3472,8 +3473,11 @@ llvm::Value* IRGen::visitLambdaInitInst(LambdaInitInst const& I)
    auto funPtr = Builder.CreateStructGEP(LambdaTy, alloca, 0);
    Builder.CreateStore(toInt8Ptr(fun), funPtr);
 
+   auto *refc = new llvm::GlobalVariable(*M, WordTy, false,
+       llvm::GlobalVariable::ExternalLinkage, wordSizedInt(1));
+
    auto refcPtr = Builder.CreateStructGEP(LambdaTy, alloca, 1);
-   Builder.CreateStore(wordSizedInt(1llu), refcPtr);
+   Builder.CreateStore(refc, refcPtr);
 
    return alloca;
 }

@@ -171,8 +171,6 @@ void SemaPass::checkThinAttr(Expression* E, ThinAttr* A)
 void SemaPass::check_BuiltinAttr(Decl* D, _BuiltinAttr* A)
 {
    auto ND = cast<NamedDecl>(D);
-   ND->setAccess(AccessSpecifier::Public);
-
    if (A->getBuiltinName().empty()) {
       BuiltinDecls[ND->getDeclName()] = ND;
    }

@@ -154,6 +154,8 @@ public:
 void CleanupStack::emitCleanups(CleanupsDepth depth, bool popCleanups,
                                 bool doEmitCleanups)
 {
+   START_TIMER("IL Cleanups");
+
    auto begin = stack.stable_begin();
    while (begin != depth) {
       auto iter = stack.find(begin);
@@ -188,6 +190,11 @@ void CleanupStack::endScope(CleanupsDepth depth, bool doEmitCleanups)
    }
 
    emitCleanups(depth, true, doEmitCleanups);
+}
+
+bool CleanupStack::ignoreValue(il::Value *Val)
+{
+   return ignoreValue(stack.stable_end(), Val);
 }
 
 bool CleanupStack::ignoreValue(CleanupsDepth depth, il::Value* Val)

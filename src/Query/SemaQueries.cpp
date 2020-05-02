@@ -1554,7 +1554,6 @@ QueryResult TypecheckGlobalVarQuery::run()
       D->getType().setResolvedType(D->getValue()->getExprType());
    }
 
-   QC.Sema->getILGen().DeclareGlobalVariable(D);
    return finish();
 }
 
@@ -1843,7 +1842,8 @@ QueryResult PrepareCallableInterfaceQuery::run()
 
    // Verify that a template provides a body.
    if (D->isTemplate() && !D->getBody() && !D->getBodyTemplate()
-       && !D->hasAttribute<_BuiltinAttr>() && !D->isProtocolRequirement()) {
+       && !D->hasAttribute<_BuiltinAttr>() && !D->isProtocolRequirement()
+       && !D->isExternal()) {
       QC.Sema->diagnose(D, err_generic_error, D->getSourceLoc(),
                         "template function cannot be declared");
    }

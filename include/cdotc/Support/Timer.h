@@ -34,7 +34,7 @@ private:
 } // namespace support
 } // namespace cdot
 
-#  define START_TIMER(NAME) support::Timer _timer_(NAME, HAS_LOG(Timers))
+#  define START_TIMER(NAME) support::Timer CONCAT(_timer_, __LINE__)(NAME, HAS_LOG(Timers))
 
 #else
 #  define START_TIMER(NAME)

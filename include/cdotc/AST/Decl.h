@@ -2087,13 +2087,13 @@ public:
    bool isSelf() const { return Self; }
    void setSelf(bool V) { Self = V; }
 
-   ProtocolDecl* getProto() const { return Proto; }
-   void setProto(ProtocolDecl* P) { Proto = P; }
+   ProtocolDecl* getProto() const;
 
    static bool classofKind(DeclKind kind)
    {
       return kind == AssociatedTypeDeclID;
    }
+
    static bool classof(Decl const* T) { return classofKind(T->getKind()); }
 
 private:
@@ -2105,7 +2105,6 @@ private:
    SourceLocation Loc;
    SourceType defaultValue;
    SourceType covariance;
-   ProtocolDecl* Proto = nullptr;
 
    bool Self;
 };

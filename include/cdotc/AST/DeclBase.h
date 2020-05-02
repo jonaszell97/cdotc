@@ -482,7 +482,8 @@ public:
    void setAccess(AccessSpecifier AS) { access = AS; }
 
    SourceLocation getAccessLoc() const { return AccessLoc; }
-   void setAccessLoc(SourceLocation Loc);
+   void setAccessLoc(SourceLocation Loc) { AccessLoc = Loc; }
+
    SourceRange getAccessRange() const;
 
    llvm::StringRef getName() const
@@ -654,6 +655,16 @@ public:
          }
 
          return *this;
+      }
+
+      IteratorBase::difference_type operator-(const iterator &RHS) const
+      {
+         if (SingleElement) {
+            return SingleElement - RHS.SingleElement;
+         }
+         else {
+            return IteratorBase::operator-(RHS);
+         }
       }
    };
 

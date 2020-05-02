@@ -340,6 +340,25 @@ public:
    {}
 };
 
+class ExternallyInitializedAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::ExternallyInitialized; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   ExternallyInitializedAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit ExternallyInitializedAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::ExternallyInitialized, SR)
+   {}
+};
+
 class _BuiltinAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -410,24 +429,25 @@ public:
    Attr::VisitationPoint Attr::getVisitationPoint() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::Opaque:
+         case AttrKind::Align:
+      return AfterSema;
+   case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
    case AttrKind::Escaping:
    case AttrKind::Testable:
    case AttrKind::CompileTime:
    case AttrKind::NoDerive:
+   case AttrKind::ExternallyInitialized:
       return Never;
-   case AttrKind::Align:
-      return AfterSema;
+   case AttrKind::Inline:
+   case AttrKind::Implicit:
+      return AfterDeclaration;
    case AttrKind::Thin:
    case AttrKind::_Builtin:
    case AttrKind::_Semantics:
    case AttrKind::_Debug:
       return Immediate;
-   case AttrKind::Inline:
-   case AttrKind::Implicit:
-      return AfterDeclaration;
    case AttrKind::Extern:
    case AttrKind::Strong:
    case AttrKind::VersionDecl:
@@ -440,11 +460,13 @@ public:
    bool Attr::isInherited() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::_Builtin:
+         case AttrKind::_Debug:
       return false;
-   case AttrKind::VersionStmt:
+   case AttrKind::ExternallyInitialized:
       return false;
    case AttrKind::VersionDecl:
+      return false;
+   case AttrKind::_Builtin:
       return false;
    case AttrKind::Strong:
       return false;
@@ -454,26 +476,26 @@ public:
       return true;
    case AttrKind::Testable:
       return false;
-   case AttrKind::Align:
+   case AttrKind::Opaque:
       return false;
    case AttrKind::Escaping:
       return false;
-   case AttrKind::DiscardableResult:
-      return true;
-   case AttrKind::Thin:
+   case AttrKind::VersionStmt:
       return false;
-   case AttrKind::Implicit:
-      return false;
-   case AttrKind::AutoClosure:
-      return false;
-   case AttrKind::Inline:
-      return true;
-   case AttrKind::Opaque:
-      return false;
-   case AttrKind::_Debug:
+   case AttrKind::Align:
       return false;
    case AttrKind::_Semantics:
       return false;
+   case AttrKind::AutoClosure:
+      return false;
+   case AttrKind::DiscardableResult:
+      return true;
+   case AttrKind::Implicit:
+      return false;
+   case AttrKind::Thin:
+      return false;
+   case AttrKind::Inline:
+      return true;
    case AttrKind::Extern:
       return false;
 
@@ -703,6 +725,18 @@ VersionStmtAttr *VersionStmtAttr::clone(ast::ASTContext &Ctx) const {
 
 
 
+void ExternallyInitializedAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+ExternallyInitializedAttr *ExternallyInitializedAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) ExternallyInitializedAttr(SourceLoc);
+}
+
+
+
 void _BuiltinAttr::printPretty(llvm::raw_ostream &out) const {
 
    out << "@" << getSpelling();
@@ -753,6 +787,7 @@ void SemaPass::checkEscapingAttr(Decl*, EscapingAttr*) {}
 void SemaPass::checkTestableAttr(Decl*, TestableAttr*) {}
 void SemaPass::checkCompileTimeAttr(Decl*, CompileTimeAttr*) {}
 void SemaPass::checkNoDeriveAttr(Decl*, NoDeriveAttr*) {}
+void SemaPass::checkExternallyInitializedAttr(Decl*, ExternallyInitializedAttr*) {}
 
 #endif
 #undef CDOT_ATTR_SEMA

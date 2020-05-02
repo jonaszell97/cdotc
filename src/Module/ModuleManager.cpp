@@ -210,6 +210,10 @@ void ModuleManager::EmitModule(Module* Mod)
    OutFile += Mod->getName()->getIdentifier();
    OutFile += ".cdotm";
 
+   if (fs::fileExists(OutFile)) {
+      fs::deleteFile(OutFile);
+   }
+
    llvm::raw_fd_ostream OS(OutFile.str(), EC, llvm::sys::fs::F_RW);
    if (EC) {
       llvm::report_fatal_error(EC.message());
@@ -273,49 +277,16 @@ void ModuleManager::EmitModule(Module* Mod)
 
 void ModuleManager::ImportPrelude(Module* IntoMod)
 {
-   auto& Sema = CI.getSema();
-   class Module* Prelude = Sema.getPreludeModule();
+   auto &Sema = CI.getSema();
+   auto Loc = IntoMod->getSourceRange();
 
-   if (!Prelude) {
-      auto* StdII = &CI.getContext().getIdentifiers().get("std");
-
-      class Module* Std;
-      if (IntoMod->getName() == StdII) {
-         Std = IntoMod;
-      }
-      else if (MainModule && MainModule->getName() == StdII) {
-         Std = MainModule;
-      }
-      else {
-         Std = LookupModule(IntoMod->getSourceRange(),
-                            IntoMod->getSourceRange().getStart(), StdII);
-      }
-
-      if (!Std)
-         return;
-
-      auto* PreludeII = &CI.getContext().getIdentifiers().get("prelude");
-      Prelude = Std->getSubModule(PreludeII);
-
-      if (!Prelude) {
-         auto* PreludeDecl = ModuleDecl::Create(
-             CI.getContext(), Std->getSourceRange(), PreludeII);
-
-         Sema.addDeclToContext(*Std->getDecl(), PreludeDecl);
-         Prelude = Module::Create(CI.getContext(), PreludeII,
-                                  Std->getSourceRange(), Std);
-
-         Prelude->setDecl(PreludeDecl);
-         PreludeDecl->setModule(Prelude);
-      }
+   auto *core = LookupModule(Loc, Loc.getStart(), Sema.getIdentifier("core"));
+   if (!core) {
+      return;
    }
 
-   if (IntoMod == Prelude || IntoMod->importsModule(Prelude)
-       || IntoMod->getBaseModule() == Prelude->getBaseModule())
-      return;
-
-   IntoMod->getDecl()->addImportedModule(Prelude);
-   IntoMod->addImport(Prelude);
+   IntoMod->addImport(core);
+   IntoMod->getDecl()->addImportedModule(core);
 }
 
 void ModuleManager::ImportModule(ImportDecl* I)

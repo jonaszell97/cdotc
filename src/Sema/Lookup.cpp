@@ -83,3 +83,15 @@ ast::NamedDecl* MultiLevelLookupResult::uniqueDecl() const
    assert(unique() && "lookup result is not unique!");
    return front().front();
 }
+
+std::vector<ast::NamedDecl *> MultiLevelLookupResult::allDeclsStable() const
+{
+   std::vector<ast::NamedDecl *> result;
+   result.reserve(Vec.size());
+
+   for (auto *Decl : allDecls()) {
+      result.push_back(Decl);
+   }
+
+   return result;
+}

@@ -500,6 +500,7 @@ def GetBuiltinModule : Query<"Module*"> {
             Async,
             Test,
             Policy,
+            Atomic,
         };
 
     private:
@@ -595,7 +596,8 @@ def GetBuiltinRecord : Query<"ast::RecordDecl*"> {
 
             Array,
             Dictionary,
-            String,
+            Atomic,
+            String, StringBuffer, StringStorage,
             Option,
             Box,
             Promise,

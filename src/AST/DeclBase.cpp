@@ -511,8 +511,6 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile,
    return OS.str();
 }
 
-void NamedDecl::setAccessLoc(cdot::SourceLocation Loc) { AccessLoc = Loc; }
-
 SourceRange NamedDecl::getAccessRange() const
 {
    unsigned length = 0;

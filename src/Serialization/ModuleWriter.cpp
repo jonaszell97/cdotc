@@ -868,6 +868,7 @@ void ModuleWriter::printStatistics() const
                 << " Operators / Precedence Groups "
                    "written.\n";
    llvm::errs() << "   " << NumStatements << " statements written.\n";
+   llvm::errs() << "   " << NumInstantiations << " instantiations written.\n";
 
    llvm::errs() << "   " << ASTWriter.TypeOffsets.size() << " types written.\n";
    llvm::errs() << "   " << IdentifierOffsets.size()

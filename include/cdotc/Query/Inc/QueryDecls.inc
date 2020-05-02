@@ -1088,6 +1088,7 @@ class GetBuiltinModuleQuery: public Query {
             Async,
             Test,
             Policy,
+            Atomic,
         };
 
     private:
@@ -1238,7 +1239,8 @@ class GetBuiltinRecordQuery: public Query {
 
             Array,
             Dictionary,
-            String,
+            Atomic,
+            String, StringBuffer, StringStorage,
             Option,
             Box,
             Promise,

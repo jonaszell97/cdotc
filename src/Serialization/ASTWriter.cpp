@@ -7,6 +7,7 @@
 #include "cdotc/Lex/Token.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ASTCommon.h"
 #include "cdotc/Serialization/ILWriter.h"
 #include "cdotc/Serialization/IncrementalCompilation.h"
@@ -159,22 +160,16 @@ void ASTWriter::WriteInstantiationTable()
    auto& Idents = Ctx.getIdentifiers();
 
    llvm::OnDiskChainedHashTableGenerator<InstantiationTableLookupTrait> Gen;
-   for (auto& Inst : Ctx.RecordTemplateInstatiations) {
-      auto Pref = Mangle.getPrefix(&Inst);
-      auto* II = &Idents.get(Pref);
-      Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
-   }
+   for (auto& KeyValuePair : Sema.getInstantiator().getAllInstantiations()) {
+      auto *Inst = KeyValuePair.getSecond();
+      if (!Inst->isInstantiation())
+         continue;
 
-   for (auto& Inst : Ctx.FunctionTemplateInstatiations) {
-      auto Pref = Mangle.getPrefix(&Inst);
+      auto Pref = Mangle.getPrefix(cast<DeclContext>(Inst));
       auto* II = &Idents.get(Pref);
-      Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
-   }
+      Gen.insert(II->getIdentifier(), GetDeclRef(Inst));
 
-   for (auto& Inst : Ctx.AliasTemplateInstatiations) {
-      auto Pref = Mangle.getPrefix(&Inst);
-      auto* II = &Idents.get(Pref);
-      Gen.insert(II->getIdentifier(), GetDeclRef(&Inst));
+      ++Writer.NumInstantiations;
    }
 
    SmallString<256> TblData;
@@ -1209,11 +1204,24 @@ void ASTWriter::WriteConformanceData()
          auto Conformances = ConfTable.getAllConformances(R);
          Writer.write<uint32_t>(static_cast<uint32_t>(Conformances.size()));
 
-         for (auto Conf : Conformances) {
+         for (auto *Conf : Conformances) {
             Writer.write<uint8_t>(static_cast<uint8_t>(Conf->getKind()));
             Writer.write<uint32_t>(GetDeclRef(Conf->getProto()));
             Writer.write<uint32_t>(GetDeclRef(cast_or_null<NamedDecl>(Conf->getDeclarationCtx())));
             Writer.write<uint8_t>(Conf->getDepth());
+         }
+
+         auto *Impls = this->Writer.CI.getContext().getProtocolImpls(R);
+         if (Impls) {
+            Writer.write<uint32_t>(static_cast<uint32_t>(Impls->size()));
+
+            for (auto& Impl : *Impls) {
+               Writer.write<uint32_t>(GetDeclRef(Impl.first));
+               Writer.write<uint32_t>(GetDeclRef(Impl.second));
+            }
+         }
+         else {
+            Writer.write<uint32_t>(0);
          }
       }
    }
@@ -1244,6 +1252,16 @@ void ASTWriter::WriteConformanceTable()
 
    uint64_t Data[] = {CONFORMANCE_TABLE, Offset};
    Stream.EmitRecordWithBlob(ConformanceTableAbbrev, Data, bytes(LookupTable));
+}
+
+void ASTWriter::AddConformanceTableDecls()
+{
+   for (auto &Impls : Writer.CI.getContext().getAllProtocolImpls()) {
+      for (auto &Impl : Impls.getSecond()) {
+         (void) GetDeclRef(Impl.first);
+         (void) GetDeclRef(Impl.second);
+      }
+   }
 }
 
 void ASTWriter::WriteAST(ModuleDecl* M)
@@ -1286,6 +1304,9 @@ void ASTWriter::WriteAST(ModuleDecl* M)
 
    // Write the instantiation table
    WriteInstantiationTable();
+
+   /// Add the referenced declarations for the conformance table.
+   AddConformanceTableDecls();
 
    // Write OperatorDecls and PrecedenceGroupDecls, as these need to be
    // eagerly deserialized

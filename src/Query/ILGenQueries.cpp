@@ -62,6 +62,10 @@ QueryResult CreateILModuleQuery::run()
       }
    }
 
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish(nullptr);
+   }
+
    auto* ILMod = Mod->getILModule();
    auto& ILGen = QC.Sema->getILGen();
    ILGen.Builder.SetModule(ILMod);
@@ -76,6 +80,11 @@ QueryResult CreateILModuleQuery::run()
 
    // Bail out now if we encountered any errors.
    if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
+   // Complete IL generation.
+   if (ILGen.FinishILGen()) {
       return fail();
    }
 

@@ -147,7 +147,8 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         src/Query/ILGenQueries.cpp src/Query/InstantiationQueries.cpp src/Parse/ParseModule.cpp src/Sema/ConstraintSystem.cpp
         include/cdotc/Sema/ConstraintSystem.h src/Sema/ConstraintBuilder.cpp include/cdotc/Sema/ConstraintBuilder.h
         src/Sema/ConstraintGraph.cpp include/cdotc/Sema/ConstraintGraph.h src/Sema/ConstraintStep.cpp include/cdotc/Sema/ConstraintStep.h
-        src/Sema/CSDiags.cpp src/Sema/CSApply.cpp src/Sema/OverloadResolver.cpp)
+        src/Sema/CSDiags.cpp src/Sema/CSApply.cpp src/Sema/OverloadResolver.cpp
+        src/Support/Log.cpp include/cdotc/Support/Log.h src/Sema/SemaDebug.cpp src/Lex/SourceLocation.cpp)
 
 set(CDOTC_TBLGENS_SOURCE_FILES
         src/Tools/TableGenBackends/BuiltinOperatorBackend.cpp
@@ -159,9 +160,10 @@ set(CDOTC_TBLGENS_SOURCE_FILES
 set (RUNTIME_SUPPORT_SOURCE_FILES
         Runtime/RuntimeSupport.cpp)
 
-add_executable(cdotc src/Driver/main.cpp ${SOURCE_FILES} src/Support/Log.cpp include/cdotc/Support/Log.h src/Sema/SemaDebug.cpp src/Lex/SourceLocation.cpp)
+add_executable(cdotc src/Driver/main.cpp ${SOURCE_FILES})
 add_executable(cdotc_asan src/Driver/main.cpp ${SOURCE_FILES})
 add_executable(cdotc_ubsan src/Driver/main.cpp ${SOURCE_FILES})
+add_executable(cdotc_coverage src/Driver/main.cpp ${SOURCE_FILES})
 
 add_library(cdotc-tblgens SHARED ${CDOTC_TBLGENS_SOURCE_FILES})
 add_library(cdotrt SHARED ${RUNTIME_SUPPORT_SOURCE_FILES})
@@ -183,6 +185,9 @@ target_compile_options(cdotc_ubsan
         PUBLIC "-fsanitize=undefined"
         PUBLIC "-fno-omit-frame-pointer"
         PUBLIC "-fvisibility=hidden")
+target_compile_options(cdotc_coverage
+        PUBLIC "-fprofile-instr-generate"
+        PUBLIC "-fcoverage-mapping")
 
 target_compile_options(cdotc PUBLIC "-fvisibility=hidden")
 
@@ -197,3 +202,6 @@ target_link_libraries(cdotc_ubsan
         ${llvm_libs} ${clang_libs}
         -fsanitize=undefined
         -fno-omit-frame-pointer)
+
+target_link_libraries(cdotc_coverage ${llvm_libs} ${clang_libs}
+        "-fprofile-instr-generate" "-fcoverage-mapping")

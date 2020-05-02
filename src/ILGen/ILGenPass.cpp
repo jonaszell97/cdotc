@@ -246,6 +246,15 @@ bool ILGenPass::run()
    return SP.encounteredError();
 }
 
+bool ILGenPass::FinishILGen()
+{
+   VisitImportedInstantiations();
+   FinalizeGlobalInitFn();
+   FinalizeGlobalDeinitFn();
+
+   return SP.encounteredError();
+}
+
 void ILGenPass::VisitTemplateInstantiations()
 {
    auto& Ctx = SP.getContext();
@@ -280,8 +289,9 @@ void ILGenPass::VisitImportedInstantiations()
 
 void ILGenPass::VisitPotentiallyLazyGlobals()
 {
-   for (auto* G : PotentiallyLazyGlobals)
+   for (auto* G : PotentiallyLazyGlobals) {
       DefineLazyGlobal(cast<il::GlobalVariable>(DeclMap[G]), G->getValue());
+   }
 
    PotentiallyLazyGlobals.clear();
 }
@@ -330,6 +340,8 @@ void ILGenPass::FinalizeGlobalDeinitFn()
 
       Builder.CreateRetVoid();
    }
+
+   NonTrivialGlobals.clear();
 }
 
 il::Context& ILGenPass::getContext() { return Builder.getContext(); }
@@ -452,8 +464,8 @@ il::Value* ILGenPass::getMethod(il::Value* Self, MethodDecl* M)
 void ILGenPass::addDeclValuePair(NamedDecl* Decl, il::Value* Val)
 {
    if (isa<LocalVarDecl>(Decl) || isa<FuncArgDecl>(Decl)) {
-      LocalDeclMap[cast<VarDecl>(Decl)] = Val;
-      ReverseLocalDeclMap[Val] = cast<VarDecl>(Decl);
+      (*LocalDeclMap)[cast<VarDecl>(Decl)] = Val;
+      (*ReverseLocalDeclMap)[Val] = cast<VarDecl>(Decl);
    }
    else {
       DeclMap[Decl] = Val;
@@ -464,8 +476,12 @@ void ILGenPass::addDeclValuePair(NamedDecl* Decl, il::Value* Val)
 il::Value* ILGenPass::getValueForDecl(const NamedDecl* D)
 {
    if (isa<LocalVarDecl>(D) || isa<FuncArgDecl>(D)) {
-      auto It = LocalDeclMap.find(cast<VarDecl>(const_cast<NamedDecl*>(D)));
-      if (It == LocalDeclMap.end())
+      if (!LocalDeclMap) {
+         return nullptr;
+      }
+
+      auto It = LocalDeclMap->find(cast<VarDecl>(const_cast<NamedDecl*>(D)));
+      if (It == LocalDeclMap->end())
          return nullptr;
 
       return It->second;
@@ -483,8 +499,11 @@ NamedDecl* ILGenPass::getDeclForValue(il::Value* V)
 {
    auto It = ReverseDeclMap.find(V);
    if (It == ReverseDeclMap.end()) {
-      auto It2 = ReverseLocalDeclMap.find(V);
-      if (It2 == ReverseLocalDeclMap.end())
+      if (!ReverseLocalDeclMap)
+         return nullptr;
+
+      auto It2 = ReverseLocalDeclMap->find(V);
+      if (It2 == ReverseLocalDeclMap->end())
          return nullptr;
 
       return It2->second;
@@ -755,22 +774,34 @@ il::Function* ILGenPass::getBuiltin(llvm::StringRef name)
 
 il::GlobalVariable* ILGenPass::DeclareGlobalVariable(VarDecl* decl)
 {
-   ModuleRAII MR(*this, getModuleFor(decl));
+   auto *Mod = getModuleFor(decl);
+   ModuleRAII MR(*this, Mod);
 
    std::string MangledName;
-   llvm::raw_string_ostream OS(MangledName);
+   {
+      llvm::raw_string_ostream OS(MangledName);
+      SP.getMangler().mangle(decl, OS);
+   }
 
-   SP.getMangler().mangle(decl, OS);
+   if (auto *GV = Mod->getOwnGlobal(MangledName)) {
+      return GV;
+   }
 
-   auto G
-       = Builder.CreateGlobalVariable(decl->getType(), decl->isConst(), nullptr,
-                                      OS.str(), decl->getSourceLoc());
+   auto G = Builder.CreateGlobalVariable(decl->getType(), decl->isConst(), nullptr,
+                                         MangledName, decl->getSourceLoc());
 
-   if (SP.NeedsDeinitilization(decl->getType()) && !decl->isImportedFromClang())
-      NonTrivialGlobals.insert(G);
+   if (decl->hasAttribute<ExternallyInitializedAttr>()) {
+      G->setDeclared(false);
+   }
+   else {
+      if (SP.NeedsDeinitilization(decl->getType()) && !decl->isImportedFromClang()) {
+         NonTrivialGlobals.insert(G);
+      }
 
-   if (decl->getValue() && !isa<FieldDecl>(decl))
-      PotentiallyLazyGlobals.insert(decl);
+      if (decl->getValue() && !isa<FieldDecl>(decl)) {
+         PotentiallyLazyGlobals.insert(decl);
+      }
+   }
 
    DeclMap.emplace(decl, G);
    return G;
@@ -1129,7 +1160,6 @@ void ILGenPass::notifyFunctionCalledInTemplate(CallableDecl* C)
 il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
 {
    assert(!C->isTemplateOrInTemplate() && "trying to define template function");
-
    ModuleRAII MR(*this, getModuleFor(C));
 
    if (C->isExternal()) {
@@ -1139,6 +1169,8 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
    auto it = DeclMap.find(C);
    if (it != DeclMap.end())
       return cast<il::Function>(it->second);
+
+   START_TIMER("Declaring IL Function");
 
    il::Argument* Self = nullptr;
    SmallVector<il::Argument*, 4> args;
@@ -1167,10 +1199,7 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
    }
 
    for (const auto& arg : C->getArgs()) {
-      if (arg->isSelf() && C->isFallibleInit()) {
-         addDeclValuePair(arg, args.front());
-      }
-      else {
+      if (!arg->isSelf() || !C->isFallibleInit()) {
          QualType argType = arg->getType();
          if (argType->isEmptyTupleType()) {
             continue;
@@ -1185,7 +1214,6 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
          A->setSelf(arg->isSelf());
 
          args.push_back(A);
-         addDeclValuePair(arg, A);
       }
    }
 
@@ -1270,6 +1298,7 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       return;
    }
 
+   START_TIMER("Defining IL Function");
    assert(!CD->isInvalid());
 
    if (CD->isMain()) {
@@ -1307,10 +1336,35 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
          auto* Argc = getValueForDecl(SP.BuiltinDecls[ArgcII]);
          auto* Argv = getValueForDecl(SP.BuiltinDecls[ArgvII]);
 
-         Builder.CreateStore(MainFn->getEntryBlock()->getBlockArg(0),
-                             cast<GlobalVariable>(Argc)->getDeclarationIn(M));
-         Builder.CreateStore(MainFn->getEntryBlock()->getBlockArg(1),
-                             cast<GlobalVariable>(Argv)->getDeclarationIn(M));
+         // Store argc
+         auto *Arg0 = MainFn->getEntryBlock()->getBlockArg(0);
+         auto *Int = SP.getInt64Decl();
+         auto *Alloc = Builder.CreateAlloca(Int->getType());
+         auto *Ref = Builder.CreateStructGEP(Alloc, 0);
+
+         Builder.CreateStore(
+             Builder.CreateIntegerCast(
+                 CastKind::SignFlip,
+                 Builder.CreateIntegerCast(CastKind::Ext, Arg0,
+                                           Context.getUInt64Ty()),
+                                           Context.getInt64Ty()), Ref);
+
+         Builder.CreateStore(
+             Builder.CreateLoad(Alloc),
+             cast<GlobalVariable>(Argc)->getDeclarationIn(M));
+
+         // Store argv
+         auto *Arg1 = MainFn->getEntryBlock()->getBlockArg(1);
+         auto PtrTy = Argv->getType()->removeReference();
+         Alloc = Builder.CreateAlloca(PtrTy);
+         Ref = Builder.CreateStructGEP(Alloc, 0);
+
+         Builder.CreateStore(Builder.CreateBitCast(
+             CastKind::BitCast, Arg1, Ref->getType()->removeReference()), Ref);
+
+         Builder.CreateStore(
+             Builder.CreateLoad(Alloc),
+             cast<GlobalVariable>(Argv)->getDeclarationIn(M));
       }
 
       Builder.CreateCall(func, {});
@@ -1320,9 +1374,9 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    std::unordered_map<VarDecl*, il::Value*> LocalDeclMap;
    std::unordered_map<il::Value*, VarDecl*> ReverseLocalDeclMap;
 
-   auto SAR1 = support::saveAndRestore(this->LocalDeclMap, LocalDeclMap);
+   auto SAR1 = support::saveAndRestore(this->LocalDeclMap, &LocalDeclMap);
    auto SAR2 = support::saveAndRestore(this->ReverseLocalDeclMap,
-                                       ReverseLocalDeclMap);
+                                       &ReverseLocalDeclMap);
 
    ILGenFuncPrettyStackTrace PST(func);
    func->addDefinition();
@@ -1507,8 +1561,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       addDeclValuePair(Arg, ArgVal);
    }
 
-   //   auto SAR3 = support::saveAndRestore(this->GenericEnv, GenericEnv);
-
    if (auto* Body = CD->getBody()) {
       visit(Body);
    }
@@ -1557,6 +1609,7 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       Builder.CreateIntrinsicCall(Intrinsic::end_unsafe, {BeginUnsafe});
    }
 
+   START_TIMER("Running Mandatory Passes");
    getMandatoryPassManager().runPassesOnFunction(*func);
 }
 
@@ -1790,8 +1843,8 @@ CallableDecl* ILGenPass::MaybeSpecialize(CallableDecl* C, Expression* SelfArg)
    if (!isSpecializing())
       return C;
 
-   auto It = CurrentSpecializationScope.Specializations.find(C);
-   if (It != CurrentSpecializationScope.Specializations.end())
+   auto It = CurrentSpecializationScope->Specializations.find(C);
+   if (It != CurrentSpecializationScope->Specializations.end())
       return cast<CallableDecl>(It->getSecond());
 
    Expression* NoImplicitConv = nullptr;
@@ -1873,7 +1926,7 @@ CallableDecl* ILGenPass::MaybeSpecialize(CallableDecl* C, Expression* SelfArg)
       }
 
       auto* NewFn = SP.getEquivalentMethod(cast<MethodDecl>(C), RecInst);
-      CurrentSpecializationScope.Specializations[C] = NewFn;
+      CurrentSpecializationScope->Specializations[C] = NewFn;
 
       C = NewFn;
       break;
@@ -1917,7 +1970,7 @@ CallableDecl* ILGenPass::MaybeSpecialize(CallableDecl* C, Expression* SelfArg)
    Inst->setShouldBeSpecialized(true);
    LateSpecializations.insert(Inst);
 
-   CurrentSpecializationScope.Specializations[C] = Inst;
+   CurrentSpecializationScope->Specializations[C] = Inst;
    return Inst;
 }
 
@@ -1926,11 +1979,11 @@ NamedDecl* ILGenPass::MaybeSpecialize(NamedDecl* A)
    if (!isSpecializing())
       return A;
 
-   auto It = CurrentSpecializationScope.Specializations.find(A);
-   if (It != CurrentSpecializationScope.Specializations.end())
+   auto It = CurrentSpecializationScope->Specializations.find(A);
+   if (It != CurrentSpecializationScope->Specializations.end())
       return It->getSecond();
 
-   auto* Inst = CurrentSpecializationScope.Inst;
+   auto* Inst = CurrentSpecializationScope->Inst;
 
    const MultiLevelLookupResult* Lookup;
    if (SP.QC.MultiLevelLookup(Lookup, cast<DeclContext>(Inst),
@@ -1950,7 +2003,7 @@ NamedDecl* ILGenPass::MaybeSpecialize(NamedDecl* A)
    if (!Rep)
       return A;
 
-   CurrentSpecializationScope.Specializations[A] = Rep;
+   CurrentSpecializationScope->Specializations[A] = Rep;
    return Rep;
 }
 
@@ -2919,8 +2972,9 @@ il::Function* ILGenPass::CreateUnittestFun()
 void ILGenPass::DefineLazyGlobal(il::GlobalVariable* glob,
                                  Expression* defaultVal)
 {
-   if (glob->getInitFn() || glob->getInitializer())
+   if (glob->getInitFn() || glob->getInitializer()) {
       return;
+   }
 
    ModuleRAII MR(*this, glob->getParent());
 
@@ -3102,7 +3156,9 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
       }
 
       if (Decl->isNRVOCandidate() && isa<AllocaInst>(Alloca)) {
-         cast<AllocaInst>(Alloca)->setCanUseSRetValue();
+         if (SP.NeedsStructReturn(DeclTy)) {
+            cast<AllocaInst>(Alloca)->setCanUseSRetValue();
+         }
       }
       else {
          pushDefaultCleanup(Alloca);
@@ -3155,7 +3211,9 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
    }
 
    if (Decl->isNRVOCandidate() && isa<AllocaInst>(Alloca)) {
-      cast<AllocaInst>(Alloca)->setCanUseSRetValue();
+      if (SP.NeedsStructReturn(DeclTy)) {
+         cast<AllocaInst>(Alloca)->setCanUseSRetValue();
+      }
    }
    else {
       pushDefaultCleanup(Alloca);
@@ -3184,17 +3242,22 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
       cast<AllocaInst>(Alloca)->setCanElideCopy();
    }
 
-   if (Decl->isNRVOCandidate()) {
-      if (auto Init = dyn_cast<StructInitInst>(Val))
+   if (Decl->isNRVOCandidate() && getCurrentFn()->hasStructReturn()) {
+      if (auto Init = dyn_cast<StructInitInst>(Val)) {
          Init->setCanUseSRetValue();
-      else if (auto LI = dyn_cast<LambdaInitInst>(Val))
+      }
+      else if (auto LI = dyn_cast<LambdaInitInst>(Val)) {
          LI->setCanUseSRetValue();
-      else if (auto EI = dyn_cast<EnumInitInst>(Val))
+      }
+      else if (auto EI = dyn_cast<EnumInitInst>(Val)) {
          EI->setCanUseSRetValue();
-      else if (auto UI = dyn_cast<UnionInitInst>(Val))
+      }
+      else if (auto UI = dyn_cast<UnionInitInst>(Val)) {
          UI->setCanUseSRetValue();
-      else if (auto A = dyn_cast<AllocaInst>(Val))
+      }
+      else if (auto A = dyn_cast<AllocaInst>(Val)) {
          A->setCanUseSRetValue();
+      }
    }
 
    if (isa<AllocBoxInst>(Alloca)) {
@@ -4014,7 +4077,7 @@ il::Value* ILGenPass::visitSubscriptExpr(SubscriptExpr* node)
 
 il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
 {
-   Value* V;
+   Value* V = nullptr;
 
    if (Expr->getKind() == CallKind::Builtin) {
       V = HandleIntrinsic(Expr);
@@ -4036,67 +4099,31 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
    }
 
    CallableDecl* CalledFn = Expr->getFunc();
-   Expression* SelfArg = nullptr;
 
+   // Special case - builtin || and && operators
+   if (auto* BA = CalledFn->getAttribute<_BuiltinAttr>()) {
+      if (BA->getBuiltinName() == "Bool.infix &&") {
+         V = CreateLogicalAnd(visit(Expr->getArgs()[0]),
+             Expr->getArgs()[1]->ignoreParensAndImplicitCasts());
+      }
+      else if (BA->getBuiltinName() == "Bool.infix ||") {
+         V = CreateLogicalOr(visit(Expr->getArgs()[0]),
+             Expr->getArgs()[1]->ignoreParensAndImplicitCasts());
+      }
+
+      if (V) {
+         return V;
+      }
+   }
+
+   Expression* SelfArg = nullptr;
    if (isa<MethodDecl>(CalledFn) && !CalledFn->isCompleteInitializer()) {
       SelfArg = Expr->getArgs().front();
    }
 
-   CalledFn = MaybeSpecialize(CalledFn, SelfArg);
-
    ExprCleanupRAII CleanupScope(*this);
    CallKind CK = Expr->getKind();
    SmallVector<Value*, 4> args;
-
-   if (isSpecializing() && Expr->isSpecializationCandidate()) {
-      if (CalledFn->isCompleteInitializer()) {
-         auto* IE = dyn_cast<IdentifierRefExpr>(Expr->getParentExpr());
-         auto* Param = IE->getTemplateParam();
-         CK = CallKind::InitializerCall;
-
-         if (auto* Subst = getSubstitution(Param)) {
-            assert(Subst->isType() && !Subst->isVariadic());
-
-            auto* R = Subst->getType()->getRecord();
-            CalledFn = cast<CallableDecl>(Context.getProtocolImpl(R, CalledFn));
-         }
-      }
-      else if (isa<SelfExpr>(Expr->getArgs().front())
-               && isa<ProtocolDecl>(CalledFn->getRecord())) {
-      }
-      else {
-         auto* M = cast<MethodDecl>(CalledFn);
-         QualType SelfTy = Expr->getArgs().front()->getExprType();
-         QualType SubstTy = getSubstitution(SelfTy);
-
-         while (SelfTy != SubstTy) {
-            assert(SubstTy->isRecordType());
-
-            auto* R = SubstTy->getRecord();
-            const MultiLevelLookupResult* Decls;
-            if (SP.QC.MultiLevelLookup(Decls, R, CalledFn->getDeclName())) {
-               break;
-            }
-
-            for (auto* D : Decls->allDecls()) {
-               auto* Method = dyn_cast<MethodDecl>(D);
-               if (!Method)
-                  continue;
-
-               if (Method->getMethodID() != M->getMethodID())
-                  continue;
-
-               CalledFn = Method;
-               break;
-            }
-
-            CalledFn->setShouldBeSpecialized(true);
-            LateSpecializations.insert(CalledFn);
-
-            break;
-         }
-      }
-   }
 
    if (!registerCalledFunction(CalledFn, Expr)) {
       return Builder.GetUndefValue(Expr->getExprType());
@@ -4469,8 +4496,20 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr* node)
    }
    case Builtin::move:
       return Builder.CreateMove(args[0]);
-   case Builtin::consume:
-      return Builder.GetUndefValue(node->getExprType());
+   case Builtin::consume: {
+      auto *Val = args[0];
+      if (auto *Ld = dyn_cast<LoadInst>(Val)) {
+         Val = Ld->getTarget();
+      }
+
+      if (Val->getType()->isMutableReferenceType()) {
+         // Create a move to prevent the value from being used after this.
+         Builder.CreateMove(Val);
+      }
+
+      bool erased = eraseAllCleanups(Val);
+      return erased ? Builder.GetTrue() : Builder.GetFalse();
+   }
    case Builtin::copy:
       return CreateCopy(args[0]);
    case Builtin::retainValue:
@@ -5630,20 +5669,14 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
    if (Stmt->isFallibleInitReturn()) {
       ILBuilder::SynthesizedRAII SR(Builder);
 
-      auto OptVal = &Builder.GetInsertBlock()
-                         ->getParent()
-                         ->getEntryBlock()
-                         ->getArgs()
-                         .front();
+      auto OptVal = &Builder.GetInsertBlock()->getParent()->getEntryBlock()
+          ->getArgs().front();
 
       // push cleanups for every field of self. DefinitiveInitialization will
       // make sure only the ones that were actually initialized are cleaned up
-      auto S = dyn_cast<StructDecl>(OptVal->getType()
-                                        ->getRecord()
-                                        ->getTemplateArgs()
-                                        .front()
-                                        .getType()
-                                        ->getRecord());
+      auto S = dyn_cast<StructDecl>(OptVal->getType()->getRecord()
+                                          ->getTemplateArgs().front().getType()
+                                          ->getRecord());
 
       if (S) {
          auto SelfVal
@@ -5694,7 +5727,7 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
 
       ECR.pop();
 
-      // emit cleanups
+      // Emit cleanups
       Cleanups.emitAllWithoutPopping();
 
       EmitCoroutineReturn(Val);
@@ -5705,10 +5738,10 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
        = Stmt->getNRVOCand() && Stmt->getNRVOCand()->isNRVOCandidate();
 
    RetInst* Ret;
-   if (Stmt->getReturnValue()) {
+   if (auto *retVal = Stmt->getReturnValue()) {
       ExprCleanupRAII ECR(*this);
-      auto Val = visit(Stmt->getReturnValue());
 
+      auto Val = visit(retVal);
       if (Val) {
          bool CanEraseTmp = eraseTemporaryCleanup(Val);
          if (!CanEraseTmp && !NRVOCand) {
@@ -5718,7 +5751,7 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
 
       ECR.pop();
 
-      // emit cleanups
+      // Emit cleanups
       Cleanups.emitAllWithoutPopping();
 
       if (Val && !Val->getType()->isVoidType()) {
@@ -5729,7 +5762,7 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
       }
    }
    else {
-      // emit cleanups
+      // Emit cleanups
       Cleanups.emitAllWithoutPopping();
 
       if (Fn->getReturnType()->isEmptyTupleType()) {
@@ -5740,7 +5773,7 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
       }
    }
 
-   if (NRVOCand) {
+   if (NRVOCand && getCurrentFn()->hasStructReturn()) {
       Ret->setCanUseSRetValue();
    }
 }
@@ -5976,8 +6009,8 @@ void ILGenPass::initStringInfo()
       return;
 
    StrInfo.String = SP.getStringDecl();
-   StrInfo.StringBuffer = cast<StructDecl>(SP.getBuiltinDecl("StringBuffer"));
-   StrInfo.StringStorage = cast<StructDecl>(SP.getBuiltinDecl("StringStorage"));
+   StrInfo.StringBuffer = SP.getStringBufferDecl();
+   StrInfo.StringStorage = SP.getStringStorageDecl();
 
    auto Err = SP.QC.PrepareDeclInterface(StrInfo.String);
    assert(!Err && "invalid builtin declaration");
@@ -6078,9 +6111,10 @@ il::Constant* ILGenPass::MakeStdString(llvm::StringRef Str)
    auto* Capacity = Builder.GetConstantStruct(CapRec, CapInt);
 
    //   var atomicRefCount: Atomic<UInt32> = 0
-   StructDecl* RefcRec = cast<StructDecl>(Fields[4]->getType()->getRecord());
-   auto* RefcInt = Builder.GetConstantInt(Context.getUInt32Ty(), 0);
-   auto* Refcount = Builder.GetConstantStruct(RefcRec, RefcInt);
+   auto *RefcInit = Builder.GetConstantInt(Context.getUInt32Ty(), 0);
+   auto RefcIntTy = Fields[4]->getType()->getRecord()->getTemplateArgs().front().getType();
+   auto *RefcVal = Builder.GetConstantStruct(cast<StructDecl>(RefcIntTy->getRecord()), RefcInit);
+   auto *Refcount = MakeAtomic(RefcVal);
 
    auto* Buffer = Builder.GetConstantStruct(
        StrInfo.StringBuffer, {Owner, Chars, Size, Capacity, Refcount});
@@ -6095,6 +6129,16 @@ il::Constant* ILGenPass::MakeStdString(llvm::StringRef Str)
        StrInfo.StringStorage, Builder.GetConstantTuple({Left, Right}));
 
    return Builder.GetConstantStruct(StrInfo.String, StorageVal);
+}
+
+il::Constant* ILGenPass::MakeAtomic(il::Constant *Val)
+{
+   auto AtomicType = SP.getAtomicOf(Val->getType());
+   assert(AtomicType && "invalid atomic decl!");
+
+   auto *GV = Builder.CreateGlobalVariable(Val);
+   return Builder.GetConstantStruct(cast<StructDecl>(AtomicType->getRecord()),
+       ConstantExpr::getAddrOf(GV));
 }
 
 il::Value* ILGenPass::visitStringLiteral(StringLiteral* S)
@@ -6495,6 +6539,15 @@ il::Value* ILGenPass::DoPointerArith(op::OperatorKind op, il::Value* lhs,
 
 il::Value* ILGenPass::CreateLogicalAnd(il::Value* lhs, Expression* rhsNode)
 {
+   StructDecl *boolStruct = nullptr;
+   bool isBoolStruct = lhs->getType()->isRecordType();
+
+   if (isBoolStruct) {
+      boolStruct = cast<StructDecl>(lhs->getType()->getRecord());
+      eraseTemporaryCleanup(lhs);
+      lhs = Builder.CreateLoad(Builder.CreateStructGEP(lhs, 0));
+   }
+
    auto MergeBB = Builder.CreateBasicBlock("land.merge");
    MergeBB->addBlockArg(SP.getContext().getBoolTy(), "res");
 
@@ -6505,15 +6558,36 @@ il::Value* ILGenPass::CreateLogicalAnd(il::Value* lhs, Expression* rhsNode)
    Builder.SetDebugLoc(rhsNode->getSourceLoc());
 
    auto rhs = visit(rhsNode);
+   if (isBoolStruct) {
+      eraseTemporaryCleanup(rhs);
+      rhs = Builder.CreateLoad(Builder.CreateStructGEP(rhs, 0));
+   }
 
    Builder.CreateBr(MergeBB, {rhs});
    Builder.SetInsertPoint(MergeBB);
 
-   return MergeBB->getBlockArg(0);
+   Value *result = MergeBB->getBlockArg(0);
+   if (isBoolStruct) {
+      auto *alloc = Builder.CreateAlloca(boolStruct->getType());
+      auto *gep = Builder.CreateStructGEP(alloc, 0);
+      Builder.CreateStore(result, gep);
+      result = Builder.CreateLoad(alloc);
+   }
+
+   return result;
 }
 
 il::Value* ILGenPass::CreateLogicalOr(il::Value* lhs, Expression* rhsNode)
 {
+   StructDecl *boolStruct = nullptr;
+   bool isBoolStruct = lhs->getType()->isRecordType();
+
+   if (isBoolStruct) {
+      boolStruct = cast<StructDecl>(lhs->getType()->getRecord());
+      eraseTemporaryCleanup(lhs);
+      lhs = Builder.CreateLoad(Builder.CreateStructGEP(lhs, 0));
+   }
+
    auto MergeBB = Builder.CreateBasicBlock("lor.merge");
    MergeBB->addBlockArg(SP.getContext().getBoolTy(), "res");
 
@@ -6524,11 +6598,23 @@ il::Value* ILGenPass::CreateLogicalOr(il::Value* lhs, Expression* rhsNode)
    Builder.SetDebugLoc(rhsNode->getSourceLoc());
 
    auto rhs = visit(rhsNode);
+   if (isBoolStruct) {
+      eraseTemporaryCleanup(rhs);
+      rhs = Builder.CreateLoad(Builder.CreateStructGEP(rhs, 0));
+   }
 
    Builder.CreateBr(MergeBB, {rhs});
    Builder.SetInsertPoint(MergeBB);
 
-   return MergeBB->getBlockArg(0);
+   Value *result = MergeBB->getBlockArg(0);
+   if (isBoolStruct) {
+      auto *alloc = Builder.CreateAlloca(boolStruct->getType());
+      auto *gep = Builder.CreateStructGEP(alloc, 0);
+      Builder.CreateStore(result, gep);
+      result = Builder.CreateLoad(alloc);
+   }
+
+   return result;
 }
 
 il::Value* ILGenPass::visitAssignExpr(AssignExpr* Expr)

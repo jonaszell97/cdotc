@@ -89,8 +89,9 @@ struct CandidateSet {
       sema::TemplateArgList InnerTemplateArgs;
       sema::FinalTemplateArgumentList* OuterTemplateArgs = nullptr;
 
-      FailureReason FR : 7;
+      FailureReason FR : 6;
       bool IsAnonymousCand : 1;
+      bool ValidReturnType : 1;
       uint8_t Distance;
 
       // Mapping from arguments to their assigned type after typechecking.

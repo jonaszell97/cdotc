@@ -154,7 +154,7 @@ const TemplateArgument* ILGenPass::getSubstitution(TemplateParamDecl* P)
    if (!isSpecializing())
       return nullptr;
 
-   return CurrentSpecializationScope.GenericArguments.getArgForParam(P);
+   return CurrentSpecializationScope->GenericArguments.getArgForParam(P);
 }
 
 ILGenPass::SpecializationScope::SpecializationScope(
@@ -213,7 +213,7 @@ void ILGenPass::SpecializeFunction(CallableDecl* Template, CallableDecl* Inst)
    Args.reverse();
 
    SpecializationScope Scope(std::move(Args), Inst);
-   auto SAR = support::saveAndRestore(this->CurrentSpecializationScope, Scope);
+   auto SAR = support::saveAndRestore(this->CurrentSpecializationScope, &Scope);
 
    DefineFunction(Inst);
 }

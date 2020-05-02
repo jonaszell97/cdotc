@@ -1258,6 +1258,10 @@ QueryResult MultiLevelTypeLookupQuery::run()
 
 QueryResult DirectLookupQuery::run()
 {
+   if (serial::ModuleFile* ModFile = DC->getModFile()) {
+      ModFile->PerformExternalLookup(*DC, Name);
+   }
+
    MultiLevelLookupResult Result;
 
    auto DirectLookup = DC->lookup(Name);
@@ -1465,9 +1469,9 @@ QueryResult FindEquivalentDeclQuery::run()
       return finish(nullptr);
    }
 
-   auto AllDecls = MultiLevelLookupResult(*LookupRes);
+   auto AllDecls = LookupRes->allDeclsStable();
    if (auto* P = dyn_cast<PropDecl>(Decl)) {
-      for (auto* Impl : AllDecls.allDecls()) {
+      for (auto* Impl : AllDecls) {
          auto* PropImpl = dyn_cast<PropDecl>(Impl);
          if (!PropImpl)
             continue;
@@ -1499,7 +1503,7 @@ QueryResult FindEquivalentDeclQuery::run()
    }
 
    if (auto* F = dyn_cast<FieldDecl>(Decl)) {
-      for (auto* Impl : AllDecls.allDecls()) {
+      for (auto* Impl : AllDecls) {
          auto* FieldImpl = dyn_cast<FieldDecl>(Impl);
          if (!FieldImpl)
             continue;
@@ -1528,7 +1532,7 @@ QueryResult FindEquivalentDeclQuery::run()
    }
 
    if (auto* Sub = dyn_cast<SubscriptDecl>(Decl)) {
-      for (auto* Impl : AllDecls.allDecls()) {
+      for (auto* Impl : AllDecls) {
          auto* SubImpl = dyn_cast<SubscriptDecl>(Impl);
          if (!SubImpl)
             continue;
@@ -1582,7 +1586,7 @@ QueryResult FindEquivalentDeclQuery::run()
    }
 
    if (auto* C = dyn_cast<CallableDecl>(Decl)) {
-      for (auto* Impl : AllDecls.allDecls()) {
+      for (auto* Impl : AllDecls) {
          if (C->getKind() != Impl->getKind())
             continue;
 

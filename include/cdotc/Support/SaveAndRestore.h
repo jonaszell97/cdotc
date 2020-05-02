@@ -8,12 +8,18 @@ namespace support {
 
 template<class T> llvm::SaveAndRestore<T> saveAndRestore(T& X)
 {
+   static_assert(std::is_trivially_copyable<T>::value,
+                 "only use SaveAndRestore for trivial values!");
+
    return llvm::SaveAndRestore<T>(X);
 }
 
 template<class T>
 llvm::SaveAndRestore<T> saveAndRestore(T& X, const T& NewValue)
 {
+   static_assert(std::is_trivially_copyable<T>::value,
+                 "only use SaveAndRestore for trivial values!");
+
    return llvm::SaveAndRestore<T>(X, NewValue);
 }
 

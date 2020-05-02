@@ -46,6 +46,10 @@ QueryResult CompileModuleQuery::run()
       return fail();
    }
 
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish();
+   }
+
    // Emit the module.
    QC.CI.getModuleMgr().EmitModule(QC.CI.getCompilationModule());
    return finish();
@@ -78,13 +82,16 @@ QueryResult ParseModuleFileQuery::run()
    // If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
    auto& Opts = QC.CI.getOptions();
-   if (Opts.noPrelude() && !Opts.isStdLib()) {
+   if (Opts.noPrelude()) {
       auto* policy = QC.CI.getModuleMgr().LookupModule(
           Start, Start, QC.Sema->getIdentifier("policy"));
 
       if (policy && policy != Mod) {
          Mod->getDecl()->addImportedModule(policy);
       }
+   }
+   else {
+      QC.CI.getModuleMgr().ImportPrelude(Mod);
    }
 
    return finish(Mod);
@@ -185,13 +192,16 @@ QueryResult ParseMainSourceFileQuery::run()
    /// If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
    auto& Opts = QC.CI.getOptions();
-   if (Opts.noPrelude() && !Opts.isStdLib()) {
+   if (Opts.noPrelude()) {
       auto* policy = QC.CI.getModuleMgr().LookupModule(
           Start, Start, QC.Sema->getIdentifier("policy"));
 
       if (policy && policy != Mod) {
          Mod->getDecl()->addImportedModule(policy);
       }
+   }
+   else {
+      QC.CI.getModuleMgr().ImportPrelude(Mod);
    }
 
    SourceLocation End(File.BaseOffset + File.Buf->getBufferSize());
@@ -324,6 +334,10 @@ QueryResult CreateLLVMModuleQuery::run()
       return fail();
    }
 
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish(nullptr);
+   }
+
    il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
@@ -444,6 +458,10 @@ QueryResult CreateExecutableQuery::run()
       return fail();
    }
 
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish();
+   }
+
    il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
@@ -505,13 +523,11 @@ QueryResult EmitIRQuery::run()
 
 QueryResult PrintUsedMemoryQuery::run()
 {
-   llvm::errs() << "***\n";
-   llvm::errs() << "allocated "
-                << QC.CI.getContext().getAllocator().getBytesAllocated()
-                << " bytes in the ASTContext.\n";
-
-   llvm::errs() << "allocated " << QC.Allocator.getBytesAllocated()
-                << " bytes in the QueryContext.\n";
+   LOG(AllocatedMemory, "***\nallocated ",
+       QC.CI.getContext().getAllocator().getBytesAllocated(),
+       " bytes in the ASTContext.\n",
+       "allocated ", QC.Allocator.getBytesAllocated(),
+       " bytes in the QueryContext.\n");
 
    return finish();
 }

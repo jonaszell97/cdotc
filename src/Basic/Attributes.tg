@@ -147,6 +147,10 @@ def VersionStmt : StmtAttr<"version"> {
     Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]
 }
 
+def ExternallyInitialized : DeclAttr<"externallyInitialized", [GlobalVarDecl]> {
+    Visit = Never
+}
+
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
     Visit = Immediate

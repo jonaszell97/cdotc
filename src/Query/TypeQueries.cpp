@@ -588,7 +588,7 @@ QueryResult IsTriviallyCopyableQuery::run()
          }
 
          auto& Meta = QC.RecordMeta[T->getRecord()];
-         if (Meta.CopyFn) {
+         if (Meta.CopyFn && !Meta.CopyFn->isSynthesized()) {
             Result = false;
          }
          else if (T->getRecord()->isInvalid()) {
