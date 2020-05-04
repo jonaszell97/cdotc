@@ -1,7 +1,6 @@
 #include "cdotc/AST/Type.h"
 #include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/IL/Constants.h"
-#include "cdotc/IL/Function.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Query/QueryContext.h"
@@ -10,9 +9,7 @@
 #include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/IncrementalCompilation.h"
 
-#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
-#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::support;
 using namespace cdot::diag;
@@ -1839,27 +1836,24 @@ QualType SemaPass::HandleFieldAccess(Expression* Expr, FieldDecl* F)
    bool ParentIsConst = false;
    bool BeingInitialized = false;
 
+   auto *PE = Expr->getParentExpr();
+   QualType ParentType = PE->getExprType();
+
    if (!F->isStatic()) {
-      if (Expr->getParentExpr()->getExprType()->isPointerType()) {
-         ParentIsConst
-             = Expr->getParentExpr()->getExprType()->isNonMutablePointerType();
+      // Field access on class instances returns a mutable reference.
+      if (ParentType->isNonMutableReferenceType()) {
+         ParentIsConst = !ParentType->removeReference()->isClass();
       }
-      else {
-         ParentIsConst
-             = !Expr->getParentExpr()->getExprType()->isMutableReferenceType();
-      }
-
-      // field access in non mutating methods of a class returns a mutable
-      // reference
-      if (auto Self = dyn_cast<SelfExpr>(Expr->getParentExpr())) {
-         ParentIsConst &= !Self->getExprType()->removeReference()->isClass();
+      else if (!ParentType->isMutableReferenceType()) {
+         ParentIsConst = true;
       }
 
-      // if we're in this records initializer, return a mutable reference for
+      // If we're in this records initializer, return a mutable reference for
       // now. Later IL passes will ensure that each field is initialized
       // exactly once
       BeingInitialized = false;
-      InitDecl* Init = dyn_cast_or_null<InitDecl>(getCurrentFun());
+
+      auto* Init = dyn_cast_or_null<InitDecl>(getCurrentFun());
       if (Init) {
          BeingInitialized = Init->getRecord() == F->getRecord();
       }
@@ -1867,7 +1861,7 @@ QualType SemaPass::HandleFieldAccess(Expression* Expr, FieldDecl* F)
 
    ty = ReplaceAssociatedTypes(*this, ty, F, Expr->getParentExpr()->getExprType());
 
-   // if the expression that we're accessing the field on or the field itself
+   // If the expression that we're accessing the field on or the field itself
    // is constant, return a constant reference
    if ((F->isConst() && !BeingInitialized) || ParentIsConst) {
       return Context.getReferenceType(ty);
@@ -2306,7 +2300,7 @@ void SemaPass::diagnoseTemplateArgErrors(
     llvm::ArrayRef<Expression*> OriginalArgs, TemplateArgListResult& Cand)
 {
    diagnose(ErrorStmt, err_incompatible_template_args,
-            ErrorStmt->getSourceRange(), Template, Template->getName());
+            ErrorStmt->getSourceRange(), Template, Template->getDeclName());
 
    switch (Cand.ResultKind) {
    case sema::TemplateArgListResultKind::TLR_CouldNotInfer: {

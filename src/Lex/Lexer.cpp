@@ -263,7 +263,8 @@ Token Lexer::lexNextToken()
          return lexIdentifier(tok::dollar_ident);
       }
 
-      return tok::dollar;
+      kind = tok::dollar;
+      break;
    }
    // punctuators
    case ',':

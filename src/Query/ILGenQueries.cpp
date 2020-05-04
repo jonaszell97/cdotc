@@ -76,6 +76,22 @@ QueryResult CreateILModuleQuery::run()
       if (auto Err = QC.GenerateILForContext(Mod->getDecl())) {
          return Query::finish(Err);
       }
+
+      // Generate IL for instantiations of external templates.
+      bool encounteredError = false;
+      for (auto &Inst : QC.Sema->getInstantiator().getAllInstantiations()) {
+         if (Inst.getSecond()->isExternal() || !Inst.getFirst().first->isExternal()) {
+            continue;
+         }
+
+         if (QC.GenerateILForDecl(Inst.getSecond())) {
+            encounteredError = true;
+         }
+      }
+
+      if (encounteredError) {
+         return fail();
+      }
    }
 
    // Bail out now if we encountered any errors.
@@ -119,6 +135,89 @@ QueryResult CreateILModuleQuery::run()
    return finish(ILMod);
 }
 
+QueryResult GenerateILForDeclQuery::run()
+{
+   switch (D->getKind()) {
+   case Decl::FunctionDeclID:
+   case Decl::MethodDeclID:
+   case Decl::InitDeclID:
+   case Decl::DeinitDeclID: {
+      auto* Fn = cast<CallableDecl>(D);
+      if (Fn->isTemplate()) {
+         return finish();
+      }
+
+      if (QC.GenerateILFunctionBody(Fn)) {
+         return finish(Query::DoneWithError);
+      }
+
+      break;
+   }
+   case Decl::GlobalVarDeclID: {
+      auto* GV = cast<GlobalVarDecl>(D);
+      if (QC.GenerateLazyILGlobalDefinition(GV)) {
+         return finish(Query::DoneWithError);
+      }
+
+      break;
+   }
+   case Decl::FieldDeclID: {
+      auto* F = cast<FieldDecl>(D);
+      if (!F->isStatic()) {
+         return finish();
+      }
+
+      if (QC.GenerateLazyILGlobalDefinition(F)) {
+         return finish(Query::DoneWithError);
+      }
+
+      break;
+   }
+   case Decl::StructDeclID:
+   case Decl::ClassDeclID:
+   case Decl::EnumDeclID: {
+      auto* R = cast<RecordDecl>(D);
+      if (R->isTemplate()) {
+         return finish();
+      }
+
+      if (QC.GenerateRecordIL(R)) {
+         return finish(Query::DoneWithError);
+      }
+
+      break;
+   }
+   case Decl::ProtocolDeclID: {
+      auto* P = cast<ProtocolDecl>(D);
+      QC.Sema->getILGen().AssignProtocolMethodOffsets(P);
+
+      break;
+   }
+   case Decl::ExtensionDeclID: {
+      // Only visit protocol extensions if runtime generics are enabled.
+      auto* R = cast<ExtensionDecl>(D)->getExtendedRecord();
+      if (isa<ProtocolDecl>(R) && !QC.CI.getOptions().runtimeGenerics()) {
+         return finish();
+      }
+      if (R->isTemplateOrInTemplate()) {
+         return finish();
+      }
+
+      break;
+   }
+   default:
+      break;
+   }
+
+   if (auto* InnerDC = dyn_cast<DeclContext>(D)) {
+      if (QC.GenerateILForContext(InnerDC)) {
+         return fail();
+      }
+   }
+
+   return finish();
+}
+
 QueryResult GenerateILForContextQuery::run()
 {
    if (QC.TypeCheckDeclContext(DC)) {
@@ -129,92 +228,13 @@ QueryResult GenerateILForContextQuery::run()
       return fail();
    }
 
-   Status S = Done;
    for (auto* D : DC->getDecls()) {
-      switch (D->getKind()) {
-      case Decl::FunctionDeclID:
-      case Decl::MethodDeclID:
-      case Decl::InitDeclID:
-      case Decl::DeinitDeclID: {
-         auto* Fn = cast<CallableDecl>(D);
-         if (Fn->isTemplate()) {
-            continue;
-         }
-
-         if (QC.GenerateILFunctionBody(Fn)) {
-            S = DoneWithError;
-            continue;
-         }
-
-         break;
-      }
-      case Decl::GlobalVarDeclID: {
-         auto* GV = cast<GlobalVarDecl>(D);
-         if (QC.GenerateLazyILGlobalDefinition(GV)) {
-            S = DoneWithError;
-            continue;
-         }
-
-         break;
-      }
-      case Decl::FieldDeclID: {
-         auto* F = cast<FieldDecl>(D);
-         if (!F->isStatic()) {
-            continue;
-         }
-
-         if (QC.GenerateLazyILGlobalDefinition(F)) {
-            S = DoneWithError;
-            continue;
-         }
-
-         break;
-      }
-      case Decl::StructDeclID:
-      case Decl::ClassDeclID:
-      case Decl::EnumDeclID: {
-         auto* R = cast<RecordDecl>(D);
-         if (R->isTemplate()) {
-            continue;
-         }
-
-         if (QC.GenerateRecordIL(R)) {
-            S = DoneWithError;
-            continue;
-         }
-
-         break;
-      }
-      case Decl::ProtocolDeclID: {
-         auto* P = cast<ProtocolDecl>(D);
-         QC.Sema->getILGen().AssignProtocolMethodOffsets(P);
-
-         break;
-      }
-      case Decl::ExtensionDeclID: {
-         // Only visit protocol extensions if runtime generics are enabled.
-         auto* R = cast<ExtensionDecl>(D)->getExtendedRecord();
-         if (isa<ProtocolDecl>(R) && !QC.CI.getOptions().runtimeGenerics()) {
-            continue;
-         }
-         if (R->isTemplateOrInTemplate()) {
-            continue;
-         }
-
-         break;
-      }
-      default:
-         break;
-      }
-
-      if (auto* InnerDC = dyn_cast<DeclContext>(D)) {
-         if (QC.GenerateILForContext(InnerDC)) {
-            return fail();
-         }
+      if (auto Err = QC.GenerateILForDecl(D)) {
+         return Query::finish(Err);
       }
    }
 
-   return finish(S);
+   return finish();
 }
 
 QueryResult GenerateRecordILQuery::run()

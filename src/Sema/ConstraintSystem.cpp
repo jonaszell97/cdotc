@@ -1792,8 +1792,24 @@ T* getFirstConstraint(ConstraintSystem& Sys, TypeVariableType* TV)
    return nullptr;
 }
 
+static CanType GetConcreteType(SemaPass &Sema, CanType T,
+                               const ConstraintSystem::Solution &S)
+{
+   if (!T->containsTypeVariable())
+      return T;
+
+   return buildSpecificType<TypeVariableType>(Sema, [&](TypeVariableType *TV) {
+      auto it = S.AssignmentMap.find(TV);
+      assert(it != S.AssignmentMap.end());
+
+      return it->getSecond();
+   }, T);
+}
+
 static int isBetterBinding(ConstraintSystem& Sys, TypeVariableType* TV,
-                           CanType T1, CanType T2)
+                           CanType T1, CanType T2,
+                           const ConstraintSystem::Solution &S1,
+                           const ConstraintSystem::Solution &S2)
 {
    if (Sys.representsTemplateParam(TV)) {
       bool T1IsProto = T1->isProtocol();
@@ -1837,6 +1853,40 @@ static int isBetterBinding(ConstraintSystem& Sys, TypeVariableType* TV,
       return 0;
    }
 
+   if (auto *Conv = Sys.getFirstConstraint<ImplicitConversionConstraint>(TV)) {
+      int score = 0;
+
+      CanType RHS = GetConcreteType(*Sys.QC.Sema, Conv->getRHSType(), S1);
+      if (T1 == RHS) {
+         if (T2 != RHS) {
+            score += 1;
+         }
+      }
+      if (T2 == RHS) {
+         if (T1 != RHS) {
+            score -= 1;
+         }
+      }
+
+      CanType OtherRHS = GetConcreteType(*Sys.QC.Sema, Conv->getRHSType(), S2);
+      if (RHS != OtherRHS) {
+         if (T1 == OtherRHS) {
+            if (T2 != OtherRHS) {
+               score += 1;
+            }
+         }
+         if (T2 == OtherRHS) {
+            if (T1 != OtherRHS) {
+               score -= 1;
+            }
+         }
+      }
+
+      if (score != 0) {
+         return score;
+      }
+   }
+
    if (T1->isProtocol()) {
       return T2->isProtocol() ? 0 : 1;
    }
@@ -1869,7 +1919,7 @@ ConstraintSystem::compareSolutions(const Solution& S1, const Solution& S2)
 
       if (T1 != T2) {
          AllEqual = false;
-         RelativeScore += isBetterBinding(*this, TypeVar, T1, T2);
+         RelativeScore += isBetterBinding(*this, TypeVar, T1, T2, S1, S2);
       }
    }
 

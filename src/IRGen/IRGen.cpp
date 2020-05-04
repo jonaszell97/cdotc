@@ -104,13 +104,12 @@ IRGen::IRGen(CompilerInstance& CI, llvm::LLVMContext& Ctx, bool emitDebugInfo)
 
    llvm::Type* lambdaContainedTypes[] = {
        Int8PtrTy,              // function ptr
-       WordTy->getPointerTo(), // atomic strong refcount
+       WordTy,                 // atomic strong refcount
        BoxTy->getPointerTo()   // first environment value
                                // (trailing objects follow)
    };
 
-   LambdaTy
-       = llvm::StructType::create(Ctx, lambdaContainedTypes, "cdot.Lambda");
+   LambdaTy = llvm::StructType::create(Ctx, lambdaContainedTypes, "cdot.Lambda");
 
    WordZero = Builder.getInt64(0);
    WordOne = Builder.getInt64(1);
@@ -1480,10 +1479,12 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
    Builder.SetInsertPoint(AllocaBB, AllocaIt);
 
    llvm::AllocaInst* alloca;
-   if (allocatedSize > 1)
+   if (allocatedSize > 1) {
       alloca = Builder.CreateAlloca(AllocatedType, wordSizedInt(allocatedSize));
-   else
+   }
+   else {
       alloca = Builder.CreateAlloca(AllocatedType);
+   }
 
    alloca->setAlignment(alignment);
 
@@ -1520,6 +1521,15 @@ unsigned IRGen::getFieldOffset(StructDecl* S, const DeclarationName& FieldName)
    return offset;
 }
 
+bool shouldReallyLoad(SemaPass& Sema, const il::Value& I)
+{
+   if (Sema.NeedsStructReturn(I.getType())) {
+      return false;
+   }
+
+   return true;
+}
+
 QualType IRGen::getFieldType(ast::StructDecl* S,
                              const DeclarationName& FieldName)
 {
@@ -1536,7 +1546,9 @@ llvm::Value* IRGen::AccessField(ast::StructDecl* S, Value* Val,
 {
    // Ignore a previous load of the value.
    if (auto* ld = dyn_cast<LoadInst>(Val)) {
-      Val = ld->getTarget();
+      if (!Val->getType()->isClass()) {
+         Val = ld->getTarget();
+      }
    }
 
    auto offset = getFieldOffset(S, FieldName);
@@ -2298,7 +2310,9 @@ llvm::Value* IRGen::visitGEPInst(GEPInst const& I)
    if (I.getVal()->getType()->removeReference()->isRecordType()) {
       // Ignore a previous load of the value.
       if (auto* ld = dyn_cast<llvm::LoadInst>(val)) {
-         val = ld->getOperand(0);
+         if (!I.getVal()->getType()->isClass()) {
+            val = ld->getOperand(0);
+         }
       }
 
       auto R = I.getVal()->getType()->removeReference()->getRecord();
@@ -2412,14 +2426,7 @@ llvm::Value* IRGen::visitEnumRawValueInst(EnumRawValueInst const& I)
    return Val;
 }
 
-bool shouldReallyLoad(SemaPass& Sema, const Instruction& I)
-{
-   if (Sema.NeedsStructReturn(I.getType())) {
-      return false;
-   }
 
-   return true;
-}
 
 llvm::Value* IRGen::visitLoadInst(LoadInst const& I)
 {
@@ -3473,11 +3480,8 @@ llvm::Value* IRGen::visitLambdaInitInst(LambdaInitInst const& I)
    auto funPtr = Builder.CreateStructGEP(LambdaTy, alloca, 0);
    Builder.CreateStore(toInt8Ptr(fun), funPtr);
 
-   auto *refc = new llvm::GlobalVariable(*M, WordTy, false,
-       llvm::GlobalVariable::ExternalLinkage, wordSizedInt(1));
-
    auto refcPtr = Builder.CreateStructGEP(LambdaTy, alloca, 1);
-   Builder.CreateStore(refc, refcPtr);
+   Builder.CreateStore(wordSizedInt(1llu), refcPtr);
 
    return alloca;
 }

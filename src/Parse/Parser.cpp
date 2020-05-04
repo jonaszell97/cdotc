@@ -4977,6 +4977,9 @@ ParseResult Parser::parseTopLevelDecl()
                   advance();
                   advance();
                }
+               else {
+                  break;
+               }
             }
             else if (currentTok().is(tok::macro_name)) {
                return parseMacroExpansionDecl(Ident);

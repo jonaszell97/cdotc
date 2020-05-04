@@ -216,7 +216,8 @@ void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction& I,
    case llvm::Instruction::Invoke:
       CurLine += 3; // Header, normal dest., unwind dest.
       break;
-   case llvm::Instruction::Alloca: {
+   case llvm::Instruction::Alloca:
+   case llvm::Instruction::GetElementPtr: {
       std::string Name = I.getName();
       if (Name.empty()) {
          Name += "_";

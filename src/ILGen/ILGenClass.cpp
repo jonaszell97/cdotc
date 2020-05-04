@@ -1044,7 +1044,6 @@ void ILGenPass::DefineImplicitCopyableConformance(MethodDecl* M, RecordDecl* R)
 
    bool CanUseSRet = false;
    if (auto S = dyn_cast<StructDecl>(R)) {
-      // FIXME use memcpy for trivial structs
       QualType T = SP.Context.getRecordType(R);
       auto Alloc = Builder.CreateAlloca(T);
 

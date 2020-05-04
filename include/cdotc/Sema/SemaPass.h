@@ -481,8 +481,10 @@ public:
                                                  QualType Outer,
                                                  QualType Original);
 
-   QualType ResolveNestedAssociatedType(QualType AT,
-                                        QualType Self);
+   QualType ResolveNestedAssociatedType(QualType AT, CanType Self);
+   QualType ResolveNestedAssociatedType(
+       QualType AT, DeclContext *DC = nullptr, QualType Self = QualType(),
+       sema::FinalTemplateArgumentList *TemplateArgs = nullptr);
 
    template<class T, class... Args> T* makeStmt(Args&&... args)
    {

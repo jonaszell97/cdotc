@@ -2285,17 +2285,18 @@ public:
 private:
    QueryResult run();
 
-   IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+   IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs = nullptr);
 
    QueryResult finish(bool Result, Status St = Done);
 
    const ast::DeclConstraint* C;
-   QualType Self;
+   ast::NamedDecl* ConcreteDecl;
    ast::NamedDecl* OriginalDecl;
+   sema::FinalTemplateArgumentList* TemplateArgs;
    llvm::Optional<bool> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+   static void Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs);
 
 };
 
@@ -2317,17 +2318,18 @@ public:
 private:
    QueryResult run();
 
-   GetConstrainedTypeQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+   GetConstrainedTypeQuery(QueryContext &QC, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs = nullptr);
 
    QueryResult finish(QualType Result, Status St = Done);
 
    const ast::DeclConstraint* C;
-   QualType Self;
+   ast::NamedDecl* ConcreteDecl;
    ast::NamedDecl* OriginalDecl;
+   sema::FinalTemplateArgumentList* TemplateArgs;
    llvm::Optional<QualType> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+   static void Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs);
 
 };
 
@@ -5070,6 +5072,31 @@ private:
 
    ast::Decl* D;
    llvm::Optional<il::Module*> Result;
+public:
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+   static void Profile(llvm::FoldingSetNodeID &ID, ast::Decl* D);
+
+};
+
+class GenerateILForDeclQuery: public Query {
+public:
+   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
+   static bool classofKind(Kind K) { return K == Kind::GenerateILForDeclQueryID; }
+
+   using result_type = void;
+
+   std::string description() const;
+   std::string summary() const;
+
+   friend class Query; // for run().
+   friend class QueryContext; // for C'tor.
+
+private:
+   QueryResult run();
+
+   GenerateILForDeclQuery(QueryContext &QC, ast::Decl* D);
+
+   ast::Decl* D;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
    static void Profile(llvm::FoldingSetNodeID &ID, ast::Decl* D);

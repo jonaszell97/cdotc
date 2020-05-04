@@ -173,20 +173,6 @@ CandidateSet::Candidate& CandidateSet::addCandidate(NamedDecl* FnDecl)
    return Candidates.back();
 }
 
-static bool tryStringifyConstraint(llvm::SmallString<128>& Str,
-                                   Expression* Expr)
-{
-   llvm::raw_svector_ostream sstream(Str);
-   sstream << "'";
-
-   ast::PrettyPrinter PP(sstream);
-   PP.print(Expr);
-
-   sstream << "'";
-
-   return true;
-}
-
 static FakeSourceLocation makeFakeSourceLoc(CandidateSet& CandSet,
                                             DeclarationName funcName,
                                             CandidateSet::Candidate& Cand)
@@ -351,6 +337,13 @@ static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
           = QualType::getFromOpaquePtr(reinterpret_cast<void*>(Cand.Data2));
 
       SourceLocation loc = getArgumentLoc(Cand, args);
+      if (!neededTy) {
+         SP.diagnose(Caller, note_generic_note,
+             "mut ref argument must be explicitly marked with '&'", loc);
+
+         break;
+      }
+
       auto& TemplateArgs = Cand.InnerTemplateArgs;
       SP.QC.SubstTemplateParamTypesNonFinal(neededTy, neededTy, TemplateArgs,
                                             Caller->getSourceRange());
@@ -448,25 +441,29 @@ static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
       break;
    }
    case CandidateSet::FailedConstraint: {
-      llvm::SmallString<128> Str;
-      auto Constraint = reinterpret_cast<ast::Expression*>(Cand.Data1);
+      auto Constraint = reinterpret_cast<DeclConstraint*>(Cand.Data1);
+      auto Loc = SP.Context.getConstraintLoc(Cand.getFunc(), Constraint);
 
-      if (!tryStringifyConstraint(Str, Constraint)) {
-         Str = "failed constraint";
+      std::string str;
+      {
+         llvm::raw_string_ostream OS(str);
+         Constraint->print(OS);
       }
 
       auto& TemplateArgs = Cand.InnerTemplateArgs;
       if (TemplateArgs.isInferred()) {
-         SP.diagnose(Caller, note_cand_failed_constraint_inferred, Str.str(),
+         SP.diagnose(Caller, note_cand_failed_constraint_inferred, str,
                      TemplateArgs.toString('\0', '\0', true),
                      Cand.getSourceLoc());
       }
       else {
-         SP.diagnose(Caller, note_cand_failed_constraint, Str.str(),
+         SP.diagnose(Caller, note_cand_failed_constraint, str,
                      Cand.getSourceLoc());
       }
 
-      SP.diagnose(note_constraint_here, Constraint->getSourceRange());
+      if (Loc) {
+         SP.diagnose(note_constraint_here, Loc);
+      }
 
       break;
    }
@@ -857,25 +854,29 @@ void CandidateSet::diagnoseAlias(SemaPass& SP, DeclarationName AliasName,
       case IncompatibleReturnType:
          llvm_unreachable("should be impossible on alias candidate set!");
       case FailedConstraint: {
-         llvm::SmallString<128> Str;
-         auto Constraint = reinterpret_cast<ast::Expression*>(Cand.Data1);
+         auto Constraint = reinterpret_cast<DeclConstraint*>(Cand.Data1);
+         auto Loc = SP.Context.getConstraintLoc(Cand.getFunc(), Constraint);
 
-         if (!tryStringifyConstraint(Str, Constraint)) {
-            Str = "failed constraint";
+         std::string str;
+         {
+            llvm::raw_string_ostream OS(str);
+            Constraint->print(OS);
          }
 
          auto& TemplateArgs = Cand.InnerTemplateArgs;
          if (TemplateArgs.isInferred()) {
-            SP.diagnose(Caller, note_cand_failed_constraint_inferred, Str.str(),
+            SP.diagnose(Caller, note_cand_failed_constraint_inferred, str,
                         TemplateArgs.toString('\0', '\0', true),
                         Cand.getAlias()->getSourceLoc());
          }
          else {
-            SP.diagnose(Caller, note_cand_failed_constraint, Str.str(),
+            SP.diagnose(Caller, note_cand_failed_constraint, str,
                         Cand.getAlias()->getSourceLoc());
          }
 
-         SP.diagnose(note_constraint_here, Constraint->getSourceRange());
+         if (Loc) {
+            SP.diagnose(note_constraint_here, Loc);
+         }
 
          break;
       }

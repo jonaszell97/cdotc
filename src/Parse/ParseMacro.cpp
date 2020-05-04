@@ -1613,6 +1613,7 @@ ParseResult Parser::parseWithKind(SourceLocation Loc, ExpansionKind Kind, bool)
 
 class MacroExpander {
    SemaPass& SP;
+   fs::FileManager &FileMgr;
    MacroPattern* Pat;
    VariableMap& VarMap;
    Parser::ExpansionKind Kind;
@@ -1677,10 +1678,10 @@ public:
    MacroExpander(SemaPass& SP, MacroPattern* Pat, VariableMap& VarMap,
                  Parser::ExpansionKind Kind, SourceLocation ExpandedFrom,
                  MacroDecl* M)
-       : SP(SP), Pat(Pat), VarMap(VarMap), Kind(Kind), M(M),
+       : SP(SP), FileMgr(SP.getCompilationUnit().getFileMgr()),
+         Pat(Pat), VarMap(VarMap), Kind(Kind), M(M),
          ExpandedFrom(ExpandedFrom)
    {
-      auto& FileMgr = SP.getCompilationUnit().getFileMgr();
       BaseOffset = Pat->getSourceLoc().getOffset();
       ExpansionOffset
           = FileMgr
@@ -1823,7 +1824,9 @@ bool MacroExpander::expandInto(ExpansionFragment* Frag,
 
       // lex back into tokens
       auto Buf = llvm::MemoryBuffer::getMemBuffer(OS.str());
-      Lexer Lex(SP.getContext().getIdentifiers(), SP.getDiags(), Buf.get(), 0);
+      Lexer Lex(SP.getContext().getIdentifiers(), SP.getDiags(), Buf.get(),
+                FileMgr.getSourceId(Frag->getLoc()),
+                Frag->getLoc().getOffset());
 
       while (!Lex.currentTok().is(tok::eof)) {
          auto Tok = Lex.currentTok();
@@ -1854,7 +1857,7 @@ void MacroExpander::checkBuiltinMacros(SmallVectorImpl<Token>& Toks)
          }
       }
 
-      NewVec.emplace_back(Tok, makeSourceLoc(Tok.getSourceLoc()));
+      NewVec.emplace_back(Tok);
    }
 
    Toks.clear();
@@ -1946,12 +1949,8 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       SourceLocation EndLoc = Tokens.empty() ? Loc : Tokens.back().getEndLoc();
       SourceRange SR(Loc, EndLoc);
 
-      auto* S
-          = StringLiteral::Create(SP.Context, SR, string(Alloc, str.size()));
-
+      auto* S = StringLiteral::Create(SP.Context, SR, string(Alloc, str.size()));
       Vec.emplace_back(S, Loc);
-      //      Vec.emplace_back(Alloc, str.size(), tok::stringliteral,
-      //                       Tokens.front().getSourceLoc());
 
       return true;
    }

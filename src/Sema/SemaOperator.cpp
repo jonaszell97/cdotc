@@ -332,8 +332,20 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr* Expr)
                Expr->getSourceRange());
    }
 
-   assert(lhs->getExprType()->isMutableReferenceType()
-          && "assigning to non-reference");
+   if (!lhs->getExprType()->isMutableReferenceType()) {
+      if (!lhs->getExprType()->isReferenceType()) {
+         diagnose(Expr, err_assign_to_rvalue, lhs->getExprType(),
+                  Expr->getSourceRange());
+      }
+      else if (!lhs->getExprType()->isReferenceType()) {
+         diagnose(Expr, err_generic_error,
+                  "cannot assign to non-mutable reference",
+                  Expr->getSourceRange());
+      }
+
+      Expr->setExprType(Context.getVoidType());
+      return Expr;
+   }
 
    rhs = implicitCastIfNecessary(
        rhs, lhs->getExprType()->asReferenceType()->getReferencedType(), false,

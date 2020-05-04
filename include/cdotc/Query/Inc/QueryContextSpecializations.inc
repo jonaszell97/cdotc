@@ -57,8 +57,8 @@ template<> AddSingleConformanceQuery *QueryContext::getQuery<AddSingleConformanc
 template<> CheckProtocolExtensionApplicabilityQuery *QueryContext::getQuery<CheckProtocolExtensionApplicabilityQuery>(QualType T, ast::ExtensionDecl* Ext);
 template<> VerifyConstraintQuery *QueryContext::getQuery<VerifyConstraintQuery>(const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl);
 template<> VerifyConstraintsQuery *QueryContext::getQuery<VerifyConstraintsQuery>(ast::NamedDecl* ConstrainedDecl);
-template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
-template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs);
+template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs);
 template<> GetReferencedAssociatedTypesQuery *QueryContext::getQuery<GetReferencedAssociatedTypesQuery>(ast::ConstraintSet* CS);
 template<> GetNeededAssociatedTypesQuery *QueryContext::getQuery<GetNeededAssociatedTypesQuery>(ast::RecordDecl* R);
 template<> CheckConformancesQuery *QueryContext::getQuery<CheckConformancesQuery>(QualType T, std::vector<ast::NamedDecl*> * ExtensionDecls);
@@ -143,6 +143,7 @@ template<> ResolveMetaDeclarationsQuery *QueryContext::getQuery<ResolveMetaDecla
 template<> CheckTypeEquivalenceQuery *QueryContext::getQuery<CheckTypeEquivalenceQuery>(QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl, ast::DeclContext* DeclCtx);
 template<> CheckTemplateExtensionApplicabilityQuery *QueryContext::getQuery<CheckTemplateExtensionApplicabilityQuery>(ast::RecordDecl* Inst, ast::ExtensionDecl* Ext);
 template<> GetILModuleForDeclQuery *QueryContext::getQuery<GetILModuleForDeclQuery>(ast::Decl* D);
+template<> GenerateILForDeclQuery *QueryContext::getQuery<GenerateILForDeclQuery>(ast::Decl* D);
 template<> GenerateILForContextQuery *QueryContext::getQuery<GenerateILForContextQuery>(ast::DeclContext* DC);
 template<> GenerateRecordILQuery *QueryContext::getQuery<GenerateRecordILQuery>(ast::RecordDecl* R);
 template<> GetILGlobalQuery *QueryContext::getQuery<GetILGlobalQuery>(ast::VarDecl* GV);

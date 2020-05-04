@@ -3243,23 +3243,23 @@ QueryResult QueryContext::VerifyConstraints(ast::ConstraintSet* &Result, ast::Na
 
 }
 
-template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+template<> IsConstraintSatisfiedQuery *QueryContext::getQuery<IsConstraintSatisfiedQuery>(const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs)
 {
    llvm::FoldingSetNodeID ID;
-   IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl);
+   IsConstraintSatisfiedQuery::Profile(ID, C, ConcreteDecl, OriginalDecl, TemplateArgs);
    void *InsertPos;
    return IsConstraintSatisfiedQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs)
 
 {
    llvm::FoldingSetNodeID ID;
-   IsConstraintSatisfiedQuery::Profile(ID, C, Self, OriginalDecl);
+   IsConstraintSatisfiedQuery::Profile(ID, C, ConcreteDecl, OriginalDecl, TemplateArgs);
    void *InsertPos;
    auto *_Q = IsConstraintSatisfiedQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) IsConstraintSatisfiedQuery(*this, C, Self, OriginalDecl);
+      _Q = new(*this) IsConstraintSatisfiedQuery(*this, C, ConcreteDecl, OriginalDecl, TemplateArgs);
       IsConstraintSatisfiedQueries.InsertNode(_Q, InsertPos);
    }
 #ifndef NDEBUG
@@ -3292,23 +3292,23 @@ QueryResult QueryContext::IsConstraintSatisfied(bool &Result, const ast::DeclCon
 
 }
 
-template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+template<> GetConstrainedTypeQuery *QueryContext::getQuery<GetConstrainedTypeQuery>(const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs)
 {
    llvm::FoldingSetNodeID ID;
-   GetConstrainedTypeQuery::Profile(ID, C, Self, OriginalDecl);
+   GetConstrainedTypeQuery::Profile(ID, C, ConcreteDecl, OriginalDecl, TemplateArgs);
    void *InsertPos;
    return GetConstrainedTypeQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::GetConstrainedType(QualType &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+QueryResult QueryContext::GetConstrainedType(QualType &Result, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs)
 
 {
    llvm::FoldingSetNodeID ID;
-   GetConstrainedTypeQuery::Profile(ID, C, Self, OriginalDecl);
+   GetConstrainedTypeQuery::Profile(ID, C, ConcreteDecl, OriginalDecl, TemplateArgs);
    void *InsertPos;
    auto *_Q = GetConstrainedTypeQueries.FindNodeOrInsertPos(ID, InsertPos);
    if (!_Q) {
-      _Q = new(*this) GetConstrainedTypeQuery(*this, C, Self, OriginalDecl);
+      _Q = new(*this) GetConstrainedTypeQuery(*this, C, ConcreteDecl, OriginalDecl, TemplateArgs);
       GetConstrainedTypeQueries.InsertNode(_Q, InsertPos);
    }
 #ifndef NDEBUG
@@ -7852,6 +7852,55 @@ QueryResult QueryContext::GetILModuleForDecl(il::Module* &Result, ast::Decl* D)
    case Query::Done:
    case Query::DoneWithError:
       Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+template<> GenerateILForDeclQuery *QueryContext::getQuery<GenerateILForDeclQuery>(ast::Decl* D)
+{
+   auto It = GenerateILForDeclQueries.find(D);
+   if (It != GenerateILForDeclQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::GenerateILForDecl(ast::Decl* D)
+
+{
+   auto Key = D;
+   auto It = GenerateILForDeclQueries.find(Key);
+   GenerateILForDeclQuery *_Q;
+   if (It == GenerateILForDeclQueries.end()) {
+      _Q = new(*this) GenerateILForDeclQuery(*this, D);
+      GenerateILForDeclQueries[_Q->D] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      
       return QueryResult(QueryResult::Success);
    case Query::Aborted:
       return QueryResult(QueryResult::Error);

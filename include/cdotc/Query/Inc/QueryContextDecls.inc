@@ -71,8 +71,8 @@ public: QueryResult ReferencedAssociatedTypesReady(ReferencedAssociatedTypesRead
 public: QueryResult CheckProtocolExtensionApplicability(CheckProtocolExtensionApplicabilityQuery::ResultKind &Result, QualType T, ast::ExtensionDecl* Ext);
 public: QueryResult VerifyConstraint(ast::DeclConstraint* &Result, const ast::ParsedConstraint* C, ast::NamedDecl* ConstrainedDecl);
 public: QueryResult VerifyConstraints(ast::ConstraintSet* &Result, ast::NamedDecl* ConstrainedDecl);
-public: QueryResult IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
-public: QueryResult GetConstrainedType(QualType &Result, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl);
+public: QueryResult IsConstraintSatisfied(bool &Result, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs = nullptr);
+public: QueryResult GetConstrainedType(QualType &Result, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs = nullptr);
 public: bool IsSupersetOf(ast::ConstraintSet* C1, ast::ConstraintSet* C2);
 public: QueryResult GetReferencedAssociatedTypes(llvm::ArrayRef<ast::AssociatedTypeDecl*> &Result, ast::ConstraintSet* CS);
 public: QueryResult GetNeededAssociatedTypes(llvm::ArrayRef<ast::AssociatedTypeDecl*> &Result, ast::RecordDecl* R);
@@ -175,6 +175,7 @@ public: QueryResult GetAssociatedTypeDecl(ast::AssociatedTypeDecl* &Result, ast:
 public: QueryResult CheckTypeEquivalence(bool &Result, QualType LHS, QualType RHS, QualType Self, ast::DeclContext* LHSDecl = nullptr, ast::DeclContext* DeclCtx = nullptr);
 public: QueryResult CheckTemplateExtensionApplicability(bool &Result, ast::RecordDecl* Inst, ast::ExtensionDecl* Ext);
 public: QueryResult GetILModuleForDecl(il::Module* &Result, ast::Decl* D);
+public: QueryResult GenerateILForDecl(ast::Decl* D);
 public: QueryResult GenerateILForContext(ast::DeclContext* DC);
 private: QueryResult GenerateRecordIL(ast::RecordDecl* R);
 public: QueryResult GetILGlobal(il::GlobalVariable* &Result, ast::VarDecl* GV);
@@ -372,6 +373,7 @@ friend class GetAssociatedTypeDeclQuery;
 friend class CheckTypeEquivalenceQuery;
 friend class CheckTemplateExtensionApplicabilityQuery;
 friend class GetILModuleForDeclQuery;
+friend class GenerateILForDeclQuery;
 friend class GenerateILForContextQuery;
 friend class GenerateRecordILQuery;
 friend class GetILGlobalQuery;

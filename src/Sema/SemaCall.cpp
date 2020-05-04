@@ -344,11 +344,9 @@ void SemaPass::maybeInstantiate(CandidateSet::Candidate& Cand,
    // IL definition
    if (auto Info = F->getLazyFnInfo()) {
       // if the function is a template, we also need it's body
-      if (F->isUnboundedTemplate())
-         Info->loadBody(F);
+      Info->loadBody(F);
    }
 
-   // FIXME runtime-generics
    if (!F->isTemplate()) {
       if (auto M = dyn_cast<MethodDecl>(F)) {
          Cand.setCandDecl(maybeInstantiateMemberFunction(M, Caller));
@@ -359,6 +357,28 @@ void SemaPass::maybeInstantiate(CandidateSet::Candidate& Cand,
 
    auto& TAs = Cand.InnerTemplateArgs;
    auto* FinalList = FinalTemplateArgumentList::Create(Context, TAs);
+
+   if (auto *CS = Context.getExtConstraints(F)) {
+      if (!CS->empty()) {
+         DeclConstraint *FailedConstraint = nullptr;
+         for (auto *C : *CS) {
+            bool satisfied = true;
+            if (QC.IsConstraintSatisfied(satisfied, C, F, F, FinalList)) {
+               continue;
+            }
+
+            if (!satisfied) {
+               FailedConstraint = C;
+               break;
+            }
+         }
+
+         if (FailedConstraint) {
+            Cand.setHasFailedConstraint(FailedConstraint);
+            return;
+         }
+      }
+   }
 
    if (auto Fn = dyn_cast<FunctionDecl>(Cand.getFunc())) {
       FunctionDecl* Inst = Instantiator->InstantiateFunction(

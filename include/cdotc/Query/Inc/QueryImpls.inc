@@ -178,6 +178,7 @@ bool Query::isPure() const
    case CheckTypeEquivalenceQueryID: return false;
    case CheckTemplateExtensionApplicabilityQueryID: return false;
    case GetILModuleForDeclQueryID: return false;
+   case GenerateILForDeclQueryID: return false;
    case GenerateILForContextQueryID: return false;
    case GenerateRecordILQueryID: return false;
    case GetILGlobalQueryID: return false;
@@ -379,6 +380,7 @@ bool Query::canBeCached() const
    case CheckTypeEquivalenceQueryID: return true;
    case CheckTemplateExtensionApplicabilityQueryID: return true;
    case GetILModuleForDeclQueryID: return true;
+   case GenerateILForDeclQueryID: return true;
    case GenerateILForContextQueryID: return true;
    case GenerateRecordILQueryID: return true;
    case GetILGlobalQueryID: return true;
@@ -580,6 +582,7 @@ bool Query::canBeSerialized() const
    case CheckTypeEquivalenceQueryID: return false;
    case CheckTemplateExtensionApplicabilityQueryID: return false;
    case GetILModuleForDeclQueryID: return false;
+   case GenerateILForDeclQueryID: return false;
    case GenerateILForContextQueryID: return false;
    case GenerateRecordILQueryID: return false;
    case GetILGlobalQueryID: return false;
@@ -781,6 +784,7 @@ bool Query::canBeDependent() const
    case CheckTypeEquivalenceQueryID: return false;
    case CheckTemplateExtensionApplicabilityQueryID: return false;
    case GetILModuleForDeclQueryID: return false;
+   case GenerateILForDeclQueryID: return false;
    case GenerateILForContextQueryID: return false;
    case GenerateRecordILQueryID: return false;
    case GetILGlobalQueryID: return false;
@@ -4117,7 +4121,8 @@ void VerifyConstraintsQuery::Profile(llvm::FoldingSetNodeID &ID, ast::NamedDecl*
    ID.AddPointer(ConstrainedDecl);
 }
 
-IsConstraintSatisfiedQuery::IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl) : Query(IsConstraintSatisfiedQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl) {
+IsConstraintSatisfiedQuery::IsConstraintSatisfiedQuery(QueryContext &QC, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs) : Query(IsConstraintSatisfiedQueryID, QC), C(C), ConcreteDecl(ConcreteDecl), OriginalDecl(OriginalDecl), TemplateArgs(TemplateArgs) {
+assert(ConcreteDecl && "parameter 'ConcreteDecl' should not be null!");
 assert(OriginalDecl && "parameter 'OriginalDecl' should not be null!");
 
 }
@@ -4145,11 +4150,14 @@ std::string IsConstraintSatisfiedQuery::summary() const
 ;   OS << " C = ";
 OS << C;
    OS << ',';
-   OS << " Self = ";
-OS << "'" << Self << "'";
+   OS << " ConcreteDecl = ";
+OS << "'" << (ConcreteDecl ? ConcreteDecl->Decl::getNameAsString() : "<null>") << "'";
    OS << ',';
    OS << " OriginalDecl = ";
 OS << "'" << (OriginalDecl ? OriginalDecl->Decl::getNameAsString() : "<null>") << "'";
+   OS << ',';
+   OS << " TemplateArgs = ";
+if (TemplateArgs)   TemplateArgs->print(OS);else OS << "<null>";
 ;
 
    return OS.str();
@@ -4164,17 +4172,19 @@ QueryResult IsConstraintSatisfiedQuery::finish(bool Result, Status St)
 
 void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, C, Self, OriginalDecl);
+   Profile(ID, C, ConcreteDecl, OriginalDecl, TemplateArgs);
 }
 
-void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+void IsConstraintSatisfiedQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs)
 {
    ID.AddPointer(C);
-   ID.AddPointer(Self.getAsOpaquePtr());
+   ID.AddPointer(ConcreteDecl);
    ID.AddPointer(OriginalDecl);
+   ID.AddPointer(TemplateArgs);
 }
 
-GetConstrainedTypeQuery::GetConstrainedTypeQuery(QueryContext &QC, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl) : Query(GetConstrainedTypeQueryID, QC), C(C), Self(Self), OriginalDecl(OriginalDecl) {
+GetConstrainedTypeQuery::GetConstrainedTypeQuery(QueryContext &QC, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs) : Query(GetConstrainedTypeQueryID, QC), C(C), ConcreteDecl(ConcreteDecl), OriginalDecl(OriginalDecl), TemplateArgs(TemplateArgs) {
+assert(ConcreteDecl && "parameter 'ConcreteDecl' should not be null!");
 assert(OriginalDecl && "parameter 'OriginalDecl' should not be null!");
 
 }
@@ -4202,11 +4212,14 @@ std::string GetConstrainedTypeQuery::summary() const
 ;   OS << " C = ";
 OS << C;
    OS << ',';
-   OS << " Self = ";
-OS << "'" << Self << "'";
+   OS << " ConcreteDecl = ";
+OS << "'" << (ConcreteDecl ? ConcreteDecl->Decl::getNameAsString() : "<null>") << "'";
    OS << ',';
    OS << " OriginalDecl = ";
 OS << "'" << (OriginalDecl ? OriginalDecl->Decl::getNameAsString() : "<null>") << "'";
+   OS << ',';
+   OS << " TemplateArgs = ";
+if (TemplateArgs)   TemplateArgs->print(OS);else OS << "<null>";
 ;
 
    return OS.str();
@@ -4221,14 +4234,15 @@ QueryResult GetConstrainedTypeQuery::finish(QualType Result, Status St)
 
 void GetConstrainedTypeQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, C, Self, OriginalDecl);
+   Profile(ID, C, ConcreteDecl, OriginalDecl, TemplateArgs);
 }
 
-void GetConstrainedTypeQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, QualType Self, ast::NamedDecl* OriginalDecl)
+void GetConstrainedTypeQuery::Profile(llvm::FoldingSetNodeID &ID, const ast::DeclConstraint* C, ast::NamedDecl* ConcreteDecl, ast::NamedDecl* OriginalDecl, sema::FinalTemplateArgumentList* TemplateArgs)
 {
    ID.AddPointer(C);
-   ID.AddPointer(Self.getAsOpaquePtr());
+   ID.AddPointer(ConcreteDecl);
    ID.AddPointer(OriginalDecl);
+   ID.AddPointer(TemplateArgs);
 }
 
 IsSupersetOfQuery::IsSupersetOfQuery(QueryContext &QC, ast::ConstraintSet* C1, ast::ConstraintSet* C2) : Query(IsSupersetOfQueryID, QC), C1(C1), C2(C2) {
@@ -8489,6 +8503,42 @@ void GetILModuleForDeclQuery::Profile(llvm::FoldingSetNodeID &ID) const
 }
 
 void GetILModuleForDeclQuery::Profile(llvm::FoldingSetNodeID &ID, ast::Decl* D)
+{
+   ID.AddPointer(D);
+}
+
+GenerateILForDeclQuery::GenerateILForDeclQuery(QueryContext &QC, ast::Decl* D) : Query(GenerateILForDeclQueryID, QC), D(D) {
+assert(D && "parameter 'D' should not be null!");
+
+}
+
+std::string GenerateILForDeclQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "GenerateILForDecl";
+   return s;
+}
+
+std::string GenerateILForDeclQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[GenerateILForDecl]"
+;   OS << " D = ";
+OS << "'" << (D ? D->Decl::getNameAsString() : "<null>") << "'";
+;
+
+   return OS.str();
+}
+
+void GenerateILForDeclQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, D);
+}
+
+void GenerateILForDeclQuery::Profile(llvm::FoldingSetNodeID &ID, ast::Decl* D)
 {
    ID.AddPointer(D);
 }

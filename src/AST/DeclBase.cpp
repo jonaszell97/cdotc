@@ -794,6 +794,10 @@ DeclContext::AddDeclResultKind DeclContext::addDecl(DeclarationName Name,
 
 DeclContextLookupResult DeclContext::lookup(DeclarationName name)
 {
+   if (auto *MF = getModFile()) {
+      MF->PerformExternalLookup(*this, name);
+   }
+
    auto it = primaryCtx->namedDecls.find(name);
    if (it != primaryCtx->namedDecls.end())
       return it->getSecond().getAsLookupResult();

@@ -5,7 +5,9 @@
 #include "cdotc/IL/Module.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ASTReader.h"
 #include "cdotc/Serialization/ASTReaderInternals.h"
 #include "cdotc/Serialization/BitCodes.h"
@@ -191,16 +193,10 @@ void ASTDeclReader::visitNamedDecl(NamedDecl* ND)
 
       if (FoundInterestingAttr) {
          if (auto* A = ND->getAttribute<_BuiltinAttr>()) {
-            auto& BuiltinDecls = Reader.getSema().BuiltinDecls;
-            auto& Context = Reader.getContext();
-
-            if (A->getBuiltinName().empty()) {
-               BuiltinDecls[ND->getDeclName()] = ND;
-            }
-            else {
-               BuiltinDecls[Context.getIdentifiers().get(A->getBuiltinName())]
-                   = ND;
-            }
+            Reader.getSema().check_BuiltinAttr(ND, A);
+         }
+         if (auto *S = ND->getAttribute<_SemanticsAttr>()) {
+            Reader.getSema().check_SemanticsAttr(ND, S);
          }
       }
    }
@@ -1184,6 +1180,7 @@ void ASTReader::ReadAttributes(ASTRecordReader& Record,
       if (FoundInterestingAttr) {
          switch (NextAttr->getKind()) {
          case AttrKind::_Builtin:
+         case AttrKind::_Semantics:
             *FoundInterestingAttr = true;
             break;
          default:
@@ -1523,7 +1520,7 @@ Decl* ASTReader::ReadDeclRecord(unsigned ID)
 
    switch (D->getKind()) {
    case Decl::ImportDeclID:
-      llvm_unreachable("handle this!");
+      Sema.QC.ResolveImport(cast<ImportDecl>(D));
       break;
    case Decl::ExtensionDeclID:
       Sema.makeExtensionVisible(cast<ExtensionDecl>(D));
@@ -1594,11 +1591,11 @@ void ASTReader::finalizeUnfinishedDecls()
             continue;
 
          auto* C = cast<CallableDecl>(D);
-         if (!C->isInstantiation() || C->getNextInBucket())
+         if (!C->isInstantiation())
             continue;
 
-         auto& Ctx = Sema.getContext();
-         Ctx.FunctionTemplateInstatiations.InsertNode(C);
+         Sema.getInstantiator().registerInstantiation(
+             C->getSpecializedTemplate(), &C->getTemplateArgs(), C);
       }
       else if (auto* R = dyn_cast<RecordDecl>(D)) {
          auto& Context = Sema.getContext();
@@ -1635,15 +1632,15 @@ void ASTReader::finalizeUnfinishedDecls()
             }
          }
 
-         if (R->isInstantiation() && !R->getNextInBucket()) {
-            auto& Ctx = Sema.getContext();
-            Ctx.RecordTemplateInstatiations.InsertNode(R);
+         if (R->isInstantiation()) {
+            Sema.getInstantiator().registerInstantiation(
+                R->getSpecializedTemplate(), &R->getTemplateArgs(), R);
          }
       }
       else if (auto* A = dyn_cast<AliasDecl>(D)) {
-         if (A->isInstantiation() && !A->getNextInBucket()) {
-            auto& Ctx = Sema.getContext();
-            Ctx.AliasTemplateInstatiations.InsertNode(A);
+         if (A->isInstantiation()) {
+            Sema.getInstantiator().registerInstantiation(
+                A->getSpecializedTemplate(), &A->getTemplateArgs(), A);
          }
       }
 

@@ -206,6 +206,7 @@ public:
 
    il::Function* DeclareFunction(CallableDecl* C);
    il::GlobalVariable* DeclareGlobalVariable(VarDecl* decl);
+   il::Constant *DeclareAlias(AliasDecl *AD);
 
    bool VerifyFunction(il::Function* F);
    void CanonicalizeFunction(il::Function* F);

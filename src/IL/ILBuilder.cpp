@@ -93,6 +93,11 @@ void ILBuilder::SetDebugLoc(SourceLocation debugLoc)
 
 il::DebugLocInst* ILBuilder::CreateDebugLoc(SourceLocation Loc)
 {
+   if (auto Exp = FileMgr.getMacroExpansionLoc(Loc)) {
+      auto diff = Loc.getOffset() - Exp->BaseOffset;
+      Loc = SourceLocation(Exp->PatternLoc.getOffset() + diff);
+   }
+
    auto ID = FileMgr.getSourceId(Loc);
    auto LineAndCol = FileMgr.getLineAndCol(Loc);
 

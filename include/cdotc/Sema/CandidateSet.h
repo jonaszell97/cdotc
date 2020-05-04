@@ -17,6 +17,7 @@
 namespace cdot {
 namespace ast {
 class CallableDecl;
+class DeclConstraint;
 class TemplateParamDecl;
 class Statement;
 class Expression;
@@ -225,10 +226,10 @@ struct CandidateSet {
          Data2 = res.Data2;
       }
 
-      void setHasFailedConstraint(ast::Expression* Expr)
+      void setHasFailedConstraint(ast::DeclConstraint* DC)
       {
          FR = FailedConstraint;
-         Data1 = reinterpret_cast<uintptr_t>(Expr);
+         Data1 = reinterpret_cast<uintptr_t>(DC);
       }
 
       void setMutatingOnConstSelf() { FR = MutatingOnConstSelf; }

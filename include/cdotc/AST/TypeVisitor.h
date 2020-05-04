@@ -611,11 +611,24 @@ class SpecificTypeVisitor
     : public RecursiveTypeVisitor<SpecificTypeVisitor<CallbackFn, TypeClasses...>> {
    CallbackFn fn;
 
-   template<class T> void tryVisit(QualType Ty)
+   template<class T> bool tryVisit(QualType Ty)
    {
       if (auto* specificNode = support::dyn_cast<T>(Ty)) {
-         this->fn(specificNode);
+         return this->fn(specificNode);
       }
+
+      return true;
+   }
+
+   bool all() { return true; }
+
+   template <class ...Bools>
+   bool all(bool b, Bools... bools)
+   {
+      if (!b)
+         return false;
+
+      return all(bools...);
    }
 
 public:
@@ -623,7 +636,9 @@ public:
 
    bool visit(QualType Ty)
    {
-      (tryVisit<TypeClasses>(Ty), ...);
+      if (!all(tryVisit<TypeClasses>(Ty)...))
+         return false;
+
       RecursiveTypeVisitor<
           SpecificTypeVisitor<CallbackFn, TypeClasses...>>::visit(Ty);
 
@@ -632,7 +647,9 @@ public:
 
    bool visit(Type *Ty)
    {
-      (tryVisit<TypeClasses>(Ty), ...);
+      if (!all(tryVisit<TypeClasses>(Ty)...))
+         return false;
+
       RecursiveTypeVisitor<
          SpecificTypeVisitor<CallbackFn, TypeClasses...>>::visit(Ty);
 

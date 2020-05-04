@@ -346,6 +346,53 @@ public:
 
 #undef DISPATCH
 
+template<class CallbackFn, class... TypeClasses>
+class SpecificTypeBuilder
+    : public TypeBuilder<SpecificTypeBuilder<CallbackFn, TypeClasses...>> {
+   CallbackFn fn;
+
+   template<class T> QualType tryVisit(QualType Ty)
+   {
+      if (auto* specificNode = support::dyn_cast<T>(Ty)) {
+         return this->fn(specificNode);
+      }
+
+      return QualType();
+   }
+
+   QualType first() { return QualType(); }
+
+   template <class ...Types>
+   QualType first(QualType T, Types... types)
+   {
+      if (T)
+         return T;
+
+      return first(types...);
+   }
+
+   using Base = TypeBuilder<SpecificTypeBuilder<CallbackFn, TypeClasses...>>;
+
+public:
+   explicit SpecificTypeBuilder(ast::SemaPass &Sema, CallbackFn&& fn)
+      : Base(Sema, {}), fn(std::move(fn))
+   {}
+
+   QualType visit(QualType Ty)
+   {
+      if (QualType T = first(tryVisit<TypeClasses>(Ty)...))
+         return T;
+
+      return Base::visit(Ty);
+   }
+};
+
+template<class... TypeClasses, class CallbackFn>
+QualType buildSpecificType(ast::SemaPass &Sema, CallbackFn&& fn, QualType Ty)
+{
+   return SpecificTypeBuilder<CallbackFn, TypeClasses...>(Sema, std::move(fn)).visit(Ty);
+}
+
 } // namespace cdot
 
 #endif // CDOT_TYPEBUILDER_H

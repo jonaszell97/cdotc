@@ -675,6 +675,10 @@ private:   llvm::DenseMap<ast::Decl*, GetILModuleForDeclQuery*> GetILModuleForDe
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::DenseMap<ast::Decl*, GenerateILForDeclQuery*> GenerateILForDeclQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::DenseMap<ast::DeclContext*, GenerateILForContextQuery*> GenerateILForContextQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
