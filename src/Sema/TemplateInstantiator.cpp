@@ -3192,6 +3192,18 @@ void TemplateInstantiator::registerInstantiation(NamedDecl *Template,
                                                  FinalTemplateArgumentList *TemplateArgs,
                                                  NamedDecl *Inst)
 {
+   // FIXME
+   if (isa<InitDecl>(Inst) && cast<InitDecl>(Inst)->isCompleteInitializer()) {
+      if (!cast<InitDecl>(Template)->isCompleteInitializer()) {
+         Template = cast<InitDecl>(Template)->getCompleteInit();
+      }
+   }
+   if (isa<InitDecl>(Inst) && cast<InitDecl>(Inst)->isBaseInitializer()) {
+      if (!cast<InitDecl>(Template)->isBaseInitializer()) {
+         Template = cast<InitDecl>(Template)->getBaseInit();
+      }
+   }
+
    auto key = std::make_pair(Template, (uintptr_t)TemplateArgs);
    auto result = InstMap.try_emplace(key, Inst);
 
@@ -3339,18 +3351,18 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
       MF->LoadAllDecls(*Template);
    }
 
-   std::string MangledName;
-   {
-      // Mangling needs full function types to be resolved.
-      if (QC.PrepareDeclInterface(cast<NamedDecl>(Template->getDeclContext()))) {
-         return nullptr;
+   if (Template->isExternal()) {
+      std::string MangledName;
+      {
+         // Mangling needs full function types to be resolved.
+         if (QC.PrepareDeclInterface(cast<NamedDecl>(Template->getDeclContext()))) {
+            return nullptr;
+         }
+
+         llvm::raw_string_ostream OS(MangledName);
+         SP.getMangler().manglePrefix(Template, *TemplateArgs, OS);
       }
 
-      llvm::raw_string_ostream OS(MangledName);
-      SP.getMangler().manglePrefix(Template, *TemplateArgs, OS);
-   }
-
-   if (Template->isExternal()) {
       if (auto Inst = lookupExternalInstantiation<RecordDecl>(MangledName, SP)) {
          Inst->setImportedInstantiation(true);
          return Inst;
@@ -3671,6 +3683,7 @@ TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
    }
 
    MemberInstMap[key][OrigTemplateArgs] = MemberInst;
+   QC.Context.setConstraints(MemberInst, QC.Context.getExtConstraints(TemplateMember));
 
    if (TemplateMember->isImplOfProtocolRequirement()) {
       MemberInst->setImplOfProtocolRequirement(true);

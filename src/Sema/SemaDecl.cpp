@@ -1311,7 +1311,7 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
    QualType ResTy = Result.get()->getExprType();
    Ty.setTypeExpr(Result.get());
 
-   if (WantMeta && IsTypeExpr(Ty.getTypeExpr())) {
+   if (WantMeta && IsTypeExpr(Ty.getTypeExpr()) && !ResTy->isMetaType()) {
       ResTy = Context.getMetaType(ResTy);
    }
    else if (!WantMeta && ResTy->isMetaType()) {

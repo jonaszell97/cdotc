@@ -117,7 +117,10 @@ QueryResult DeclareImplicitDefaultInitQuery::run()
 
    Decl->setSynthesized(true);
    Decl->setDefaultInitializer(true);
-   Decl->setMutating(true);
+
+   if (!isa<ClassDecl>(S)) {
+      Decl->setMutating(true);
+   }
 
    if (S->isInstantiation()) {
       Decl->setMethodID(cast<StructDecl>(S->getSpecializedTemplate())
@@ -172,9 +175,10 @@ QueryResult DeclareMemberwiseInitQuery::run()
 
 QueryResult DeclareImplicitDefaultDeinitQuery::run()
 {
-   auto DDecl = DeinitDecl::Create(QC.Context, S->getSourceLoc(), nullptr, {});
-   QC.Sema->ActOnDecl(S, DDecl);
+   auto DDecl = DeinitDecl::Create(QC.Context, S->getSourceLoc(), nullptr,
+                                   QC.Sema->MakeSelfArg(S->getSourceLoc()));
 
+   QC.Sema->ActOnDecl(S, DDecl);
    DDecl->setSynthesized(true);
    DDecl->setReturnType(SourceType(QC.Context.getVoidType()));
 
@@ -756,7 +760,10 @@ QueryResult CreateBaseInitQuery::run()
    BaseD->setSynthesized(true);
    BaseD->setIsInstantiation(D->isInstantiation());
    BaseD->setInstantiationInfo(D->getInstantiationInfo());
-   BaseD->setMutating(true);
+
+   if (!isa<ClassDecl>(D->getRecord())) {
+      BaseD->setMutating(true);
+   }
 
    if (auto* init = dyn_cast_or_null<InitDecl>(D->getBodyTemplate())) {
       BaseD->setBodyTemplate(init->getBaseInit());
@@ -1410,30 +1417,25 @@ static void addRawRepresentableConformance(SemaPass& Sema, EnumDecl* E)
 
 QueryResult CheckBuiltinConformancesQuery::run()
 {
-   finish();
+   if (auto *C = dyn_cast<ClassDecl>(R)) {
+      auto& Meta = QC.RecordMeta[C];
+      Meta.IsTriviallyCopyable = false;
+      Meta.NeedsRetainOrRelease = true;
 
-   QC.DeclareSelfAlias(R);
+      return finish();
+   }
 
    bool TrivialLayout = true;
    bool AllCopyable = true;
    bool AllImplicitlyCopyable = true;
-   bool NeedsRetainOrRelease = isa<ClassDecl>(R);
+   bool NeedsRetainOrRelease = false;
 
    auto& Context = QC.Sema->Context;
    auto& TI = Context.getTargetInfo();
 
    if (auto S = dyn_cast<StructDecl>(R)) {
-      unsigned BaseClassFields = 0;
-      if (auto C = dyn_cast<ClassDecl>(R)) {
-         if (auto Parent = C->getParentClass()) {
-            BaseClassFields = Parent->getNumNonStaticFields();
-         }
-
-         TrivialLayout = false;
-      }
-
       ArrayRef<FieldDecl*> Fields = S->getStoredFields();
-      for (const auto& F : Fields.drop_front(BaseClassFields)) {
+      for (const auto& F : Fields) {
          if (QC.PrepareDeclInterface(F)) {
             continue;
          }
@@ -1443,7 +1445,6 @@ QueryResult CheckBuiltinConformancesQuery::run()
             continue;
          }
 
-         // FIXME into-query
          TrivialLayout &= TI.isTriviallyCopyable(FieldTy);
 
          bool FieldNeedsRetain, FieldCopyable, FieldImplicitlyCopyable;

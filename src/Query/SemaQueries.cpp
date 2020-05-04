@@ -511,7 +511,7 @@ QueryResult CheckProtocolExtensionApplicabilityQuery::run()
 
    bool AllSatisfied;
    for (auto* C : *Constraints) {
-      if (auto Err = QC.IsConstraintSatisfied(AllSatisfied, C, T, Ext)) {
+      if (auto Err = QC.IsConstraintSatisfied(AllSatisfied, C, T->getRecord(), Ext)) {
          if (Err.isDependent()) {
             LOG(ExtensionApplicability, "extension [", Ext->getFullSourceLoc(),
                 "] might apply to ", T.toDiagString(), " (dependent)");
@@ -835,9 +835,6 @@ QueryResult VerifyConstraintsQuery::run()
       return finish(QC.Context.EmptyConstraintSet);
    }
 
-   // FIXME circular-dep HACK this is needed to allow lookups during constraint verification.
-//   finish(QC.Context.EmptyConstraintSet);
-
    SmallVector<DeclConstraint*, 2> constraints;
    for (auto& PC : parsedConstraints) {
       DeclConstraint* DC;
@@ -856,8 +853,20 @@ QueryResult VerifyConstraintsQuery::run()
    return finish(CS);
 }
 
-QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT, QualType Self)
+QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT, CanType Self)
 {
+   return ResolveNestedAssociatedType(InnerAT, Self->getRecord());
+}
+
+QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT,
+                                               DeclContext *currentLookupCtx,
+                                               QualType currentLookupType,
+                                               FinalTemplateArgumentList *TemplateArgs)
+{
+   if (auto *R = dyn_cast_or_null<RecordDecl>(currentLookupCtx)) {
+      currentLookupType = R->getType();
+   }
+
    QualType currentType = InnerAT;
    SmallVector<NamedDecl*, 2> decls;
 
@@ -872,21 +881,27 @@ QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT, QualType Self)
       }
    }
 
-   QualType currentLookupType = Self;
    for (auto it = decls.rbegin(), end = decls.rend(); it != end; ++it) {
       NamedDecl* declToFind = *it;
 
       if (auto* param = dyn_cast<TemplateParamDecl>(declToFind)) {
-         assert(Self->isRecordType() && "protocol not correctly implemented!");
-         assert(Self->hasTemplateArgs()
-                && "protocol not correctly implemented!");
+         if (!TemplateArgs) {
+            if (currentLookupType) {
+               TemplateArgs = &currentLookupType->getTemplateArgs();
+            }
+            else {
+               TemplateArgs
+                   = &cast<NamedDecl>(currentLookupCtx)->getTemplateArgs();
+            }
+         }
 
-         auto& templateArgs = Self->getTemplateArgs();
-         auto* impl = templateArgs.getArgForParam(param);
+         auto* impl = TemplateArgs->getArgForParam(param);
          assert(impl && impl->isType()
                 && "protocol not correctly implemented!");
 
          currentLookupType = impl->getType();
+         currentLookupCtx = nullptr;
+
          continue;
       }
 
@@ -927,7 +942,10 @@ QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT, QualType Self)
 
 QueryResult GetConstrainedTypeQuery::run()
 {
-   auto Ty = QC.Sema->ResolveNestedAssociatedType(C->getConstrainedType(), Self);
+   auto Ty = QC.Sema->ResolveNestedAssociatedType(
+       C->getConstrainedType(), cast<DeclContext>(ConcreteDecl), QualType(),
+       TemplateArgs);
+
    if (!Ty) {
       return fail();
    }
@@ -938,13 +956,21 @@ QueryResult GetConstrainedTypeQuery::run()
 QueryResult IsConstraintSatisfiedQuery::run()
 {
    QualType ConstrainedType;
-   if (auto Err
-       = QC.GetConstrainedType(ConstrainedType, C, Self, OriginalDecl)) {
+   if (auto Err = QC.GetConstrainedType(ConstrainedType, C, ConcreteDecl,
+                                        OriginalDecl, TemplateArgs)) {
       return Query::finish(Err);
    }
 
-   auto* Rec = Self->getRecord();
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, Rec);
+   CanType Self;
+   if (auto *R = dyn_cast_or_null<RecordDecl>(ConcreteDecl)) {
+      Self = R->getType();
+   }
+   else if (auto *DC = dyn_cast<RecordDecl>(ConcreteDecl->getDeclContext()
+                                                        ->lookThroughExtension())) {
+      Self = DC->getType();
+   }
+
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, cast<DeclContext>(ConcreteDecl));
 
    CanType Canon = ConstrainedType->getCanonicalType();
    switch (C->getKind()) {
@@ -970,8 +996,8 @@ QueryResult IsConstraintSatisfiedQuery::run()
       }
 
       if (Inst->getAliasExpr()->getExprType() != QC.Context.getBoolTy()) {
-         QC.Sema->diagnose(Rec, err_concept_must_be_bool, Inst->getDeclName(),
-                           Inst->getSourceRange());
+         QC.Sema->diagnose(ConcreteDecl, err_concept_must_be_bool,
+                           Inst->getDeclName(), Inst->getSourceRange());
 
          return finish(true, DoneWithError);
       }
@@ -992,6 +1018,13 @@ QueryResult IsConstraintSatisfiedQuery::run()
          if (QC.SubstAssociatedTypes(
                  RHSType, RHSType, Self,
                  QC.Context.getConstraintLoc(OriginalDecl, C))) {
+            return finish(true, DoneWithError);
+         }
+      }
+      if (RHSType->containsTemplateParamType()) {
+         if (QC.SubstTemplateParamTypes(
+               RHSType, RHSType, Self->getTemplateArgs(),
+               QC.Context.getConstraintLoc(OriginalDecl, C))) {
             return finish(true, DoneWithError);
          }
       }
@@ -1636,6 +1669,8 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
         if (Param->isVariadic()) {
            D->setVariadic(true);
         }
+
+        return true;
       }, DeclaredArgType);
    }
 
@@ -1644,7 +1679,7 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
    if (D->getConvention() == ArgumentConvention::Default) {
       auto Fn = cast<CallableDecl>(D->getDeclContext());
       // Initializer arguments are owned by default
-      if (isa<InitDecl>(Fn) || isa<EnumCaseDecl>(Fn)) {
+      if (isa<EnumCaseDecl>(Fn)) {
          D->setConvention(ArgumentConvention::Owned);
       }
       // Otherwise an immutable borrow is the default.
@@ -1951,6 +1986,12 @@ QueryResult PrepareCallableInterfaceQuery::run()
 
    D->setIsNoReturn(NoReturn);
 
+   // Verify constraints.
+   ConstraintSet *CS;
+   if (auto Err = QC.VerifyConstraints(CS, D)) {
+      return Err;
+   }
+
    // Transform the return type into a Future<T>.
    //   while (D->isAsync()) {
    //      auto *AwaitableDecl = getAwaitableDecl();
@@ -2015,6 +2056,10 @@ QueryResult TypecheckCallableQuery::run()
    }
 
    if (D->isInvalid()) {
+      return fail();
+   }
+
+   if (!D->isExternal() && QC.Sema->PrepareNameLookup(D)) {
       return fail();
    }
 

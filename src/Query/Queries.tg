@@ -1122,11 +1122,14 @@ def IsConstraintSatisfied : BoolQuery {
         /// The constraint to verify.
         QueryParam<"C", "const ast::DeclConstraint*">,
 
-        /// The 'Self' declaration.
-        TypeParam<"Self">,
+        /// The concrete decl on which to check the constraints.
+        NamedDeclParam<"ConcreteDecl">,
 
         /// The original declaration the constraint was defined on.
-        NamedDeclParam<"OriginalDecl">
+        NamedDeclParam<"OriginalDecl">,
+
+        /// The template parameters to check.
+        TemplateArgsParam<"TemplateArgs", "nullptr">,
     ]
 
     canBeDependent = true
@@ -1138,11 +1141,14 @@ def GetConstrainedType : Query<"QualType"> {
         /// The constraint to verify.
         QueryParam<"C", "const ast::DeclConstraint*">,
 
-        /// The 'Self' declaration.
-        TypeParam<"Self">,
+        /// The concrete decl on which to check the constraints.
+        NamedDeclParam<"ConcreteDecl">,
 
         /// The original declaration the constraint was defined on.
         NamedDeclParam<"OriginalDecl">
+
+        /// The template parameters to check.
+        TemplateArgsParam<"TemplateArgs", "nullptr">,
     ]
 
     canBeDependent = true
@@ -1927,6 +1933,13 @@ def CheckTemplateExtensionApplicability : BoolQuery {
 
 /// Get the IL module that a declaration lives in.
 def GetILModuleForDecl : Query<"il::Module*"> {
+    parameters = [
+        DeclParam<"D">
+    ]
+}
+
+/// Generate the IL for a decl.
+def GenerateILForDecl : VoidQuery {
     parameters = [
         DeclParam<"D">
     ]

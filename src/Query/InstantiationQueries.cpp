@@ -78,6 +78,11 @@ static MethodDecl* InstantiateMethodDefaultImpl(QueryContext& QC,
    Inst->setFunctionFlags(Impl->getFunctionFlags());
    Inst->setInstantiatedFromProtocolDefaultImpl(true);
 
+   // Class methods are not mutating even if they were declared as such.
+   if (isa<ClassDecl>(Self->getRecord())) {
+      Inst->setMutating(false);
+   }
+
    QC.Sema->LookupContextMap[Inst] = Impl;
 
    if (Impl->isProtocolDefaultImpl()
@@ -200,6 +205,7 @@ TemplateInstantiator::InstantiateProtocolDefaultImpl(NamedDecl *Impl,
 
    InstMap[key] = Inst;
    QC.Context.setAttributes(Inst, Impl->getAttributes());
+   QC.Context.setConstraints(Inst, QC.Context.getExtConstraints(Impl));
 
    if (ActOnDecl) {
       QC.Sema->ActOnDecl(Self->getRecord(), Inst);
@@ -210,17 +216,13 @@ TemplateInstantiator::InstantiateProtocolDefaultImpl(NamedDecl *Impl,
 
 QueryResult CheckTemplateExtensionApplicabilityQuery::run()
 {
-   auto& Context = QC.CI.getContext();
-
    auto Constraints = QC.Sema->getDeclConstraints(Ext);
    if (Constraints->empty())
       return finish(true);
 
-   QualType Ty = Context.getRecordType(Inst);
-
    bool AllSatisfied;
    for (auto* C : *Constraints) {
-      if (QC.IsConstraintSatisfied(AllSatisfied, C, Ty, Ext)) {
+      if (QC.IsConstraintSatisfied(AllSatisfied, C, Inst, Ext)) {
          return fail();
       }
 

@@ -34,6 +34,10 @@ void SemaPass::updateLookupLevel(DeclContext *DC, LookupLevel newLevel)
 
 bool SemaPass::hasLookupLevel(DeclContext *DC, LookupLevel level) const
 {
+   if (isa<Decl>(DC) && cast<Decl>(DC)->isExternal()) {
+      return true;
+   }
+
    auto it = lookupLevels.find(DC);
    if (it == lookupLevels.end()) {
       return false;

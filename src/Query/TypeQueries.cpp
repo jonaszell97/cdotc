@@ -917,6 +917,10 @@ QueryResult GetTypeAlignmentQuery::run()
    }
    case Type::RecordTypeID:
    case Type::DependentRecordTypeID: {
+      if (isa<ClassDecl>(T->getRecord())) {
+         return finish(TI.getPointerAlignInBytes());
+      }
+
       unsigned Size;
       if (auto Err = QC.CalculateRecordSize(Size, T->getRecord())) {
          return Query::finish(Err);

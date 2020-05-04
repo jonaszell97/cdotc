@@ -25,13 +25,11 @@ void FinalizeFunctionPass::run()
 
    auto& Builder = ILGen.Builder;
    for (auto Assign : Assigns) {
-      ;
       Builder.SetInsertPoint(Assign->getIterator());
 
       auto Ld = Builder.CreateLoad(Assign->getDst());
       Ld->setSynthesized(true);
-
-      DefaultCleanup(Assign->getSrc()).Emit(ILGen);
+      DefaultCleanup(Ld).Emit(ILGen);
 
       if (!Assign->getDst()->getType()->isMutableReferenceType()) {
          ILGen.getSema().diagnose(diag::err_reassign_constant,

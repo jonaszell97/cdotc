@@ -455,32 +455,38 @@ static void FilterImpls(QueryContext &QC, RecordDecl *Rec,
    QualType Self = QC.Context.getRecordType(Rec);
    dependent = false;
 
-   // Now exclude those whose constraints aren't met.
+   // Exclude default impls whose constraints aren't met.
+   int maxConstraints = 0;
+   int applicableImpls = 0;
+
    for (auto &Impl : FoundDecls) {
       auto *DC = Impl->getLexicalContext();
       auto *Ext = dyn_cast<ExtensionDecl>(DC);
 
       if (!Ext) {
+         ++applicableImpls;
          continue;
       }
 
       auto *CS = QC.Sema->getDeclConstraints(Ext);
       if (CS->empty()) {
+         ++applicableImpls;
          continue;
       }
 
+      maxConstraints = std::max(maxConstraints, (int)CS->size());
       QualType NewSelf = QC.Sema->ApplyCapabilities(Self, Conf.introducedIn);
 
       bool include = true;
       for (auto *C : *CS) {
          bool Satisfied;
-         if (auto err = QC.IsConstraintSatisfied(Satisfied, C, Self, Rec)) {
+         if (auto err = QC.IsConstraintSatisfied(Satisfied, C, Rec, Rec)) {
             dependent |= err.isDependent();
             continue;
          }
 
          if (!Satisfied) {
-            if (auto err = QC.IsConstraintSatisfied(Satisfied, C, NewSelf, Rec)) {
+            if (auto err = QC.IsConstraintSatisfied(Satisfied, C, NewSelf->getRecord(), Rec)) {
                dependent |= err.isDependent();
                continue;
             }
@@ -495,6 +501,28 @@ static void FilterImpls(QueryContext &QC, RecordDecl *Rec,
 
       if (!include) {
          Impl = nullptr;
+      }
+      else {
+         ++applicableImpls;
+      }
+   }
+
+   // Prefer implementations with the maximal constraint set.
+   if (applicableImpls > 0 && maxConstraints > 0) {
+      for (auto &Impl : FoundDecls) {
+         auto* DC = Impl->getLexicalContext();
+         auto* Ext = dyn_cast<ExtensionDecl>(DC);
+
+         if (!Ext) {
+            Impl = nullptr;
+            continue;
+         }
+
+         auto* CS = QC.Sema->getDeclConstraints(Ext);
+         if (CS->size() < maxConstraints) {
+            Impl = nullptr;
+            continue;
+         }
       }
    }
 
@@ -2024,6 +2052,8 @@ class cdot::ConformanceResolver {
    bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf);
    bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf,
                          DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
+   bool FindLayoutDependencies(RecordDecl *R,
+                               DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
 
    bool ResolveDependencyNode(DependencyNode *Node,
                               bool &error, bool &shouldReset);
@@ -2074,15 +2104,18 @@ public:
          *isNew = true;
 
       auto *Node = new(QC.Context) DependencyNode(K, Decl, Data);
-      DependencyNodes.InsertNode(Node, InsertPos);
+      if (Decl->isExternal()) {
+         Node->Done = true;
+      }
 
+      DependencyNodes.InsertNode(Node, InsertPos);
       return Dependencies.getOrAddVertex(Node);
    }
 
    bool AddConformanceDependency(DependencyVertex &Node,
                                  RecordDecl *R, ProtocolDecl *P);
 
-   bool FindDeclContexts(DeclContext *DC);
+   bool FindDeclContexts(DeclContext *DC, bool includeFunctions);
    bool ResolveDependencyGraph();
 
    bool BuildWorklist();
@@ -2779,9 +2812,12 @@ bool ConformanceResolver::PrepareImplicitDecls(DeclContext *DC)
    return false;
 }
 
-bool ConformanceResolver::FindDeclContexts(DeclContext *DC)
+bool ConformanceResolver::FindDeclContexts(DeclContext *DC, bool includeFunctions)
 {
    if (!DoneSet.insert(DC).second) {
+      return false;
+   }
+   if (isa<Decl>(DC) && cast<Decl>(DC)->isExternal()) {
       return false;
    }
 
@@ -2809,7 +2845,11 @@ bool ConformanceResolver::FindDeclContexts(DeclContext *DC)
    }
 
    for (auto *InnerDC : DC->getDecls<DeclContext>()) {
-      if (FindDeclContexts(InnerDC)) {
+      if (isa<CallableDecl>(InnerDC) && !includeFunctions) {
+         continue;
+      }
+
+      if (FindDeclContexts(InnerDC, includeFunctions)) {
          return true;
       }
    }
@@ -3228,6 +3268,10 @@ bool ConformanceResolver::FindDependencies(RecordDecl *R,
                                            UncheckedConformance &baseConf,
                                            DependencyVertex &CompleteNode)
 {
+   if (R->isInstantiation()) {
+      LOG(ConformanceHierarchy, R->getDeclName(), ": \n", baseConf.indented());
+   }
+
    SmallSetVector<AssociatedTypeDecl*, 2> MissingATs;
    SmallPtrSet<IdentifierInfo*, 4> NeededATNames;
    SmallSetVector<std::pair<QualType, DependencyVertex*>, 4> TypesToCheck;
@@ -3316,6 +3360,64 @@ bool ConformanceResolver::FindDependencies(RecordDecl *R,
       error |= AddTypeDependencies(QC, *this, TyExpr, *Node, R, NeededATNames);
    }
 
+   if (!R->isShallowInstantiation()) {
+      return FindLayoutDependencies(R, CompleteNode);
+   }
+
+   return false;
+}
+
+bool ConformanceResolver::FindLayoutDependencies(
+    RecordDecl* R, DependencyGraph<DependencyNode*>::Vertex& CompleteNode)
+{
+   if (isa<ClassDecl>(R) || isa<ProtocolDecl>(R)) {
+      return false;
+   }
+
+   SmallSetVector<QualType, 4> TypesToCheck;
+   if (auto *S = dyn_cast<StructDecl>(R)) {
+      for (auto *F : S->getStoredFields()) {
+         if (QC.PrepareDeclInterface(F)) {
+            continue;
+         }
+
+         TypesToCheck.insert(F->getType().getResolvedType());
+      }
+   }
+   else if (auto *E = dyn_cast<EnumDecl>(R)) {
+      for (auto *EC : E->getCases()) {
+         if (EC->isIndirect() || QC.PrepareDeclInterface(EC)) {
+            continue;
+         }
+
+         for (auto *Val : EC->getArgs()) {
+            TypesToCheck.insert(Val->getType().getResolvedType());
+         }
+      }
+   }
+
+   for (auto &Ty : TypesToCheck) {
+      visitSpecificType<RecordType, FunctionType>([&](QualType T) {
+        if (T->isFunctionType()) {
+           // Function types do not store their contained types.
+           return false;
+        }
+        if (T->isProtocol()) {
+           return false;
+        }
+
+        auto &OtherNode = GetDependencyNode(
+            DependencyNode::Complete, T->getRecord());
+
+        if (OtherNode.getVal()->Done) {
+           return false;
+        }
+
+        CompleteNode.addIncoming(&OtherNode);
+        return false;
+      }, Ty);
+   }
+
    return false;
 }
 
@@ -3360,11 +3462,19 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
    switch (Node->Kind) {
    case DependencyNode::Complete: {
       auto *Rec = cast<RecordDecl>(Node->Decl);
+      assert(!isa<ProtocolDecl>(Rec));
 
       auto &Instantiator = QC.Sema->getInstantiator();
       if (Instantiator.isShallowInstantiation(Rec)) {
          if (Instantiator.completeShallowInstantiation(Rec)) {
             return true;
+         }
+         if (FindLayoutDependencies(Rec, Dependencies.getOrAddVertex(Node))) {
+            return true;
+         }
+         if (HasNewDependencies(Node)) {
+            shouldReset = true;
+            return false;
          }
       }
 
@@ -3412,7 +3522,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
          if (CS && !CS->empty()) {
             bool Satisfied;
             for (DeclConstraint *C : *CS) {
-               if (auto Err = QC.IsConstraintSatisfied(Satisfied, C, Self, Impl)) {
+               if (auto Err = QC.IsConstraintSatisfied(Satisfied, C, R, Impl)) {
                   if (!Err.isDependent()) {
                      return true;
                   }
@@ -3518,7 +3628,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
         if (conf.combinedConstraints && !conf.combinedConstraints->empty()) {
            for (auto* C : *conf.combinedConstraints) {
               if (auto Err = QC.IsConstraintSatisfied(
-                      Satisfied, C, Self, cast<NamedDecl>(conf.introducedBy))) {
+                      Satisfied, C, R, cast<NamedDecl>(conf.introducedBy))) {
                  assert(!Err.isDependent() && "can this happen?");
                  return true;
               }
@@ -3571,24 +3681,20 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
    return false;
 }
 
-bool ConformanceResolver::ResolveDependencyGraph()
-{
-   llvm::SmallVector<DependencyNode*, 8> DependencyOrder;
-   int CurrentNodeIdx = 0;
-
-   auto valid = Dependencies.constructOrderedList(DependencyOrder, true);
-
 #ifndef NDEBUG
-BEGIN_LOG(ConformanceDependencies)
+
+static void LogDependencyGraph(DependencyGraph<DependencyNode*> &Graph,
+                               bool valid)
+{
    std::string str = "\n### CONSTRAINTS\n";
    llvm::raw_string_ostream OS(str);
 
-   Dependencies.print([](DependencyNode *Node) {
+   Graph.print([](DependencyNode *Node) {
      return Node->to_string();
    }, OS);
 
    if (!valid) {
-      auto offending = Dependencies.getOffendingPair();
+      auto offending = Graph.getOffendingPair();
       OS << "\nCONFLICT ";
       offending.first->print(OS);
       OS << " <-> ";
@@ -3597,6 +3703,25 @@ BEGIN_LOG(ConformanceDependencies)
    }
 
    LOG(ConformanceDependencies, OS.str());
+}
+
+#endif
+
+bool ConformanceResolver::ResolveDependencyGraph()
+{
+   // Remove nodes that are already complete.
+   Dependencies.remove_if([](DependencyNode *V) {
+     return V->Done;
+   });
+
+   llvm::SmallVector<DependencyNode*, 8> DependencyOrder;
+   int CurrentNodeIdx = 0;
+
+   auto valid = Dependencies.constructOrderedList(DependencyOrder, true);
+
+#ifndef NDEBUG
+BEGIN_LOG(ConformanceDependencies)
+   LogDependencyGraph(Dependencies, valid);
 END_LOG
 #endif
 
@@ -3628,12 +3753,13 @@ END_LOG
 
          DependencyOrder.clear();
 
-         // Remove nodes that are already complete.
-//         Dependencies.remove_if([](DependencyNode *V) {
-//           return V->Done;
-//         });
-
          valid = Dependencies.constructOrderedList(DependencyOrder, true);
+#ifndef NDEBUG
+         BEGIN_LOG(ConformanceDependencies)
+            LogDependencyGraph(Dependencies, valid);
+         END_LOG
+#endif
+
          assert(valid && "loop in conformance dependency graph!");
 
          for (auto *Vert : Dependencies.getVertices()) {
@@ -3679,7 +3805,7 @@ bool SemaPass::PrepareNameLookup(DeclContext *DC)
    auto &Resolver = getConformanceResolver();
    auto SAR = support::saveAndRestore(Instantiator->InstantiateShallowly, true);
 
-   if (Resolver.FindDeclContexts(DC)) {
+   if (Resolver.FindDeclContexts(DC, isa<CallableDecl>(DC))) {
       return true;
    }
    if (Resolver.BuildWorklist()) {
@@ -3825,8 +3951,7 @@ QueryResult CheckAssociatedTypeConstraintsQuery::run()
          auto Constraints = QC.Sema->getDeclConstraints(AT);
          for (auto *C : *Constraints) {
             bool Satisfied;
-            if (QC.IsConstraintSatisfied(Satisfied, C, Self, Proto)
-                || Satisfied) {
+            if (QC.IsConstraintSatisfied(Satisfied, C, R, Proto) || Satisfied) {
                continue;
             }
 

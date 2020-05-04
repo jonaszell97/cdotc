@@ -478,8 +478,7 @@ void DiagnosticBuilder::finalize()
       return;
    }
 
-   const IdentifierInfo* MacroName = nullptr;
-   SourceLocation ExpandedFromLoc;
+   SmallVector<std::pair<const IdentifierInfo*, SourceLocation>, 1> MacroExpansions;
 
    SourceLocation loc = Engine.SourceRanges[0].getStart();
    while (auto AliasLoc = Engine.FileMgr->getAliasLoc(loc)) {
@@ -488,12 +487,21 @@ void DiagnosticBuilder::finalize()
    while (auto Import = Engine.FileMgr->getImportForLoc(loc)) {
       loc = Import;
    }
-   while (auto Exp = Engine.FileMgr->getMacroExpansionLoc(loc)) {
-      ExpandedFromLoc = Exp->ExpandedFrom;
-      MacroName = Exp->MacroName;
+
+   if (auto Exp = Engine.FileMgr->getMacroExpansionLoc(loc)) {
+      MacroExpansions.emplace_back(Exp->MacroName, Exp->ExpandedFrom);
 
       auto diff = loc.getOffset() - Exp->BaseOffset;
       loc = SourceLocation(Exp->PatternLoc.getOffset() + diff);
+
+      while (true) {
+         Exp = Engine.FileMgr->getMacroExpansionLoc(Exp->ExpandedFrom);
+         if (!Exp) {
+            break;
+         }
+
+         MacroExpansions.emplace_back(Exp->MacroName, Exp->ExpandedFrom);
+      }
    }
 
    size_t ID = Engine.FileMgr->getSourceId(loc);
@@ -573,12 +581,16 @@ void DiagnosticBuilder::finalize()
          if (End)
             End = SourceLocation(Start.getOffset() + Diff);
       }
-      while (auto Exp = Engine.FileMgr->getMacroExpansionLoc(Start)) {
+
+      unsigned BaseOffset = File.BaseOffset;
+      if (auto Exp = Engine.FileMgr->getMacroExpansionLoc(Start)) {
+         auto range = End.getOffset() - Start.getOffset();
          auto diff = Start.getOffset() - Exp->BaseOffset;
          Start = SourceLocation(Exp->PatternLoc.getOffset() + diff);
 
-         if (End)
-            End = SourceLocation(Start.getOffset() + Diff);
+         if (End) {
+            End = SourceLocation(Start.getOffset() + range);
+         }
       }
 
       assert(Engine.FileMgr->getSourceId(Start) == ID
@@ -586,7 +598,7 @@ void DiagnosticBuilder::finalize()
 
       // single source location, show caret
       if (!End || End == Start) {
-         unsigned offset = Start.getOffset() - File.BaseOffset;
+         unsigned offset = Start.getOffset() - BaseOffset;
          if (lineEndIndex <= offset || newlineIndex >= offset) {
             // source location is on a different line
             continue;
@@ -596,8 +608,8 @@ void DiagnosticBuilder::finalize()
          Markers[offsetOnLine] = '^';
       }
       else {
-         auto BeginOffset = Start.getOffset() - File.BaseOffset;
-         auto EndOffset = End.getOffset() - File.BaseOffset;
+         auto BeginOffset = Start.getOffset() - BaseOffset;
+         auto EndOffset = End.getOffset() - BaseOffset;
 
          unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
          unsigned EndOffsetOnLine
@@ -609,10 +621,8 @@ void DiagnosticBuilder::finalize()
          assert(EndOffsetOnLine >= BeginOffsetOnLine
                 && "invalid source range!");
 
-         while (1) {
+         while (--EndOffsetOnLine > BeginOffsetOnLine) {
             Markers[EndOffsetOnLine] = '~';
-            if (EndOffsetOnLine-- == BeginOffsetOnLine)
-               break;
          }
 
          // If there's only one location and it's a range, show a caret
@@ -633,9 +643,11 @@ void DiagnosticBuilder::finalize()
 
    Engine.finalizeDiag(out.str(), severity);
 
-   if ((int)severity >= (int)SeverityLevel::Error && ExpandedFromLoc) {
-      DiagnosticBuilder(Engine, diag::note_in_expansion)
-          << ExpandedFromLoc << MacroName->getIdentifier();
+   if ((int)severity >= (int)SeverityLevel::Error && !MacroExpansions.empty()) {
+      for (auto [Name, Loc] : MacroExpansions) {
+         DiagnosticBuilder(Engine, diag::note_in_expansion)
+             << Loc << Name->getIdentifier();
+      }
    }
 }
 

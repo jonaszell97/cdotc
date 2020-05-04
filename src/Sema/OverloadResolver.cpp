@@ -652,6 +652,14 @@ static bool createParamConstraints(
       assert(ArgValues.size() == 1);
       auto* ArgVal = ArgValues.front();
 
+      if (ArgDecl->getConvention() == ArgumentConvention::MutableRef
+      && !ArgDecl->isSelf() && !Cand.getFunc()->isOperator()) {
+         if (!isa<AddrOfExpr>(ArgVal->ignoreParensAndImplicitCasts())) {
+            Cand.setHasIncompatibleArgument(i, QualType(), QualType());
+            return true;
+         }
+      }
+
       QualType NeededTy = ArgDecl->getType();
       if (Cand.getFunc()->isTemplate()) {
          Sema.QC.SubstTemplateParamTypesNonFinal(
@@ -712,6 +720,14 @@ static bool createAnonymousParamConstraints(
     ConstraintBuilder& Builder, SemaPass& Sema, Statement* Caller,
     unsigned &currentConversionPenalty, unsigned bestConversionPenalty)
 {
+   if (Cand.getFunctionType()->getParamInfo()[i].getConvention()
+          == ArgumentConvention::MutableRef) {
+      if (!isa<AddrOfExpr>(ArgVal->ignoreParensAndImplicitCasts())) {
+         Cand.setHasIncompatibleArgument(i, QualType(), QualType());
+         return true;
+      }
+   }
+
    if (ArgVal->isSemanticallyChecked()) {
       IsValidParameterValueQuery::result_type result;
       if (Sema.QC.IsValidParameterValue(result, ArgVal->getExprType(),
@@ -805,6 +821,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 {
    bool isTemplate = false;
    ArrayRef<FuncArgDecl*> ArgDecls;
+
    if (!Cand.isAnonymousCandidate()) {
       if (Cand.getFunc()->isInvalid()) {
          CandSet.InvalidCand = true;
@@ -828,6 +845,17 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
       }
       if (i < ParamTys.size()) {
          requiredType = ParamTys[i];
+      }
+
+      ArgumentConvention Conv;
+      if (ArgDecl) {
+         Conv = ArgDecl->getConvention();
+      }
+      else if (Cand.isAnonymousCandidate()) {
+         Conv = Cand.getFunctionType()->getParamInfo()[i].getConvention();
+      }
+      else {
+         Conv = ArgumentConvention::Borrowed;
       }
 
       if (isTemplate && ArgDecl->isVariadic()) {
@@ -859,6 +887,30 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
       }
 
       E = Result.get();
+
+      if (!ArgDecl || !ArgDecl->isSelf()) {
+         switch (Conv) {
+         case ArgumentConvention::Owned: {
+            auto* noConv = E->ignoreParensAndImplicitCasts();
+            QualType T = noConv->getExprType();
+
+            // If the type is implicitly copyable, make a copy instead of moving.
+            if (!SP.IsImplicitlyCopyableType(T->removeReference())) {
+               // Mark this declaration as moved from
+               if (auto Ident = dyn_cast<DeclRefExpr>(noConv)) {
+                  auto ND = Ident->getDecl();
+                  if (auto VD = dyn_cast<VarDecl>(ND)) {
+                     VD->setMovedFrom(true);
+                  }
+               }
+            }
+
+            break;
+         }
+         default:
+            break;
+         }
+      }
 
       // Convert to the parameter type and apply automatic promotion.
       if (i < ParamTys.size() && requiredType) {
@@ -1221,6 +1273,11 @@ static bool resolveCandidate(
 
    // Now instantiate template functions or methods.
    Sema.maybeInstantiate(Cand, Caller);
+
+   // Return now if there was a failed constraint.
+   if (Cand.FR == CandidateSet::FailedConstraint) {
+      return false;
+   }
 
    // Check the return type again in case it was dependent.
    if (RequiredType && DependentReturnType && !isFunctionArgument) {

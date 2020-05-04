@@ -608,6 +608,12 @@ ConformanceLookupTrait::ReadData(const internal_key_type& key,
          Sema.registerAssociatedTypeImpl(R, AT, cast<AliasDecl>(Impl));
       }
    }
+
+   // Make sure 'Self' is deserialized.
+   if (!isa<ProtocolDecl>(R)) {
+      auto* Self = R->lookupSingle<AliasDecl>(&Ctx.getIdentifiers().get("Self"));
+      Sema.registerAssociatedTypeImpl(R, cast<AliasDecl>(Self));
+   }
 }
 
 ReadResult ASTReader::ReadConformanceTable(RecordDataImpl& Record,

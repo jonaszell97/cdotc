@@ -1222,12 +1222,19 @@ StmtResult SemaPass::visitDeclStmt(DeclStmt* Stmt)
       }
 
       break;
-   default:
+   default: {
+      if (auto *DC = dyn_cast<DeclContext>(Stmt->getDecl())) {
+         if (PrepareNameLookup(DC)) {
+            return StmtError();
+         }
+      }
+
       if (QC.TypecheckDecl(Stmt->getDecl())) {
          return StmtError();
       }
 
       break;
+   }
    }
 
    Stmt->copyStatusFlags(Decl);
@@ -1391,8 +1398,8 @@ bool SemaPass::visitVarDecl(VarDecl* Decl)
          }
          else {
             // Mark this declaration as moved from
-            if (auto Ident = dyn_cast<IdentifierRefExpr>(Val)) {
-               auto ND = Ident->getNamedDecl();
+            if (auto Ident = dyn_cast<DeclRefExpr>(Val)) {
+               auto ND = Ident->getDecl();
                if (auto VD = dyn_cast<VarDecl>(ND)) {
                   VD->setMovedFrom(true);
                }
@@ -1684,14 +1691,20 @@ StmtResult SemaPass::visitForStmt(ForStmt* Stmt)
    }
 
    if (auto Term = Stmt->getTermination()) {
-      auto condResult = typecheckExpr(Term, SourceType(), Stmt);
+      QualType BoolTy;
+      if (auto *Bool = getBoolDecl()) {
+         BoolTy = Bool->getType();
+      }
+      else {
+         BoolTy = Context.getBoolTy();
+      }
+
+      auto condResult = typecheckExpr(Term, BoolTy, Stmt);
       if (!condResult) {
          return StmtError();
       }
 
-      auto Cast
-          = implicitCastIfNecessary(condResult.get(), Context.getBoolTy());
-
+      auto Cast = implicitCastIfNecessary(condResult.get(), BoolTy);
       Stmt->setTermination(Cast);
    }
 
@@ -1708,12 +1721,13 @@ StmtResult SemaPass::visitForStmt(ForStmt* Stmt)
 }
 
 static CallExpr *FindFunction(SemaPass &SP, DeclarationName Name,
-                              Expression *SelfExpr, StmtOrDecl DepStmt)
+                              Expression *SelfExpr, ArrayRef<Expression*> Args,
+                              StmtOrDecl DepStmt)
 {
    auto *Ident = new(SP.Context) IdentifierRefExpr(SelfExpr->getSourceRange(), SelfExpr, Name);
    auto *GetIteratorCall = AnonymousCallExpr::Create(
        SP.Context, SelfExpr->getSourceRange(), Ident,
-       {}, {});
+       Args, {});
 
    auto GetIteratorResult = SP.typecheckExpr(GetIteratorCall, SourceType(), DepStmt);
    if (!GetIteratorResult) {
@@ -1736,7 +1750,7 @@ static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
    // Find the 'getIterator' function.
    auto *GetIteratorExpr = FindFunction(
        SP,  &SP.getContext().getIdentifiers().get("getIterator"),
-       Stmt->getRangeExpr(), Stmt);
+       Stmt->getRangeExpr(), {}, Stmt);
 
    auto GetIteratorFn = GetIteratorExpr->getFunc();
    assert(GetIteratorFn && "Iterable conformance not correctly checked");
@@ -1755,7 +1769,7 @@ static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
    Expression* ItExprPtr = &ItExpr;
    auto *NextCallExpr = FindFunction(
        SP, &SP.getContext().getIdentifiers().get("next"),
-       ItExprPtr, Stmt);
+       ItExprPtr, {}, Stmt);
 
    if (!NextCallExpr) {
       return TypeError();
@@ -2769,6 +2783,13 @@ ExprResult SemaPass::visitStringLiteral(StringLiteral* Expr)
 
 ExprResult SemaPass::visitStringInterpolation(StringInterpolation* Expr)
 {
+   auto Str = getStringDecl();
+   if (!Str) {
+      // already diagnosed since at least one of the interpolation
+      // expressions is guaranteed to be a string literal
+      return ExprError();
+   }
+
    DeclarationName DN = Context.getDeclNameTable().getNormalIdentifier(
        Context.getIdentifiers().get("toString"));
 
@@ -2781,6 +2802,11 @@ ExprResult SemaPass::visitStringInterpolation(StringInterpolation* Expr)
 
       if (S->isDependent())
          continue;
+
+      if (S->getExprType()->isRecordType()
+      && S->getExprType()->getRecord() == Str) {
+         continue;
+      }
 
       // interpolation often produces empty strings in between interpolated
       // segments
@@ -2806,21 +2832,10 @@ ExprResult SemaPass::visitStringInterpolation(StringInterpolation* Expr)
       S = CreateCall(fn, CandSet.ResolvedArgs, S->getSourceLoc());
    }
 
-   auto Str = getStringDecl();
-   if (!Str) {
-      // already diagnosed since at least one of the interpolation
-      // expressions is guaranteed to be a string literal
-      return ExprError();
-   }
-
    auto PlusEquals = getStringPlusEqualsString();
    if (!PlusEquals) {
       diagnose(Expr, err_builtin_decl_not_found, Expr->getSourceRange(),
                "infix +=(String, String)");
-   }
-
-   if (inCTFE()) {
-      ILGen->prepareFunctionForCtfe(PlusEquals, Expr);
    }
 
    Expr->setExprType(Context.getRecordType(Str));
@@ -3090,7 +3105,12 @@ void SemaPass::visitIfConditions(Statement* Stmt,
          }
 
          C.PatternData.Expr = ExprRes.get();
-         visitPatternExpr(Stmt, C.PatternData.Pattern, C.PatternData.Expr);
+         auto *PatExpr = visitPatternExpr(
+             Stmt, C.PatternData.Pattern, C.PatternData.Expr);
+
+         if (PatExpr) {
+            C.PatternData.Pattern = PatExpr;
+         }
 
          break;
       }
@@ -3487,50 +3507,40 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 
    auto* MatchII = &Context.getIdentifiers().get("~=");
    auto MatchName = Context.getDeclNameTable().getInfixOperatorName(*MatchII);
-   auto matchOp = lookupFunction(MatchName, MatchVal, {Expr->getExpr()}, {}, {},
-                                 Expr, true);
+   auto *MatchFnExpr = FindFunction(*this,  MatchName, MatchVal,
+                                    Expr->getExpr(), Expr);
 
-   if (matchOp) {
-      auto& Cand = matchOp.getBestMatch();
-      if (!Cand.isAnonymousCandidate()) {
-         QualType returnType = Cand.getFunc()->getReturnType();
-         if (!returnType->isInt1Ty()) {
-            RecordDecl* BoolDecl;
-            if (QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool)) {
-               return ExprError();
-            }
+   if (MatchFnExpr) {
+      auto *MatchFn = MatchFnExpr->getFunc();
+      QualType returnType = MatchFn->getReturnType();
 
-            if (!returnType->isRecordType()
-                || returnType->getRecord() != BoolDecl) {
-               diagnose(
-                   Expr, err_generic_error,
-                   "'~=' operator used in a match statement must return Bool",
-                   Expr->getSourceRange());
-            }
+      if (!returnType->isInt1Ty()) {
+         RecordDecl* BoolDecl;
+         if (QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool)) {
+            return ExprError();
          }
 
-         Expr->setComparisonOp(Cand.getFunc());
-
-         if (auto M = dyn_cast<MethodDecl>(Expr->getComparisonOp()))
-            maybeInstantiateMemberFunction(M, Expr);
-
-         if (inCTFE()) {
-            ILGen->prepareFunctionForCtfe(Expr->getComparisonOp(), Expr);
+         if (!returnType->isRecordType() || returnType->getRecord() != BoolDecl) {
+            diagnose(
+                Expr, err_generic_error,
+                "'~=' operator used in a match statement must return Bool",
+                Expr->getSourceRange());
          }
       }
 
-      return Expr;
-   }
+      Expr->setComparisonOp(MatchFn);
+      maybeInstantiateMemberFunction(MatchFn, Expr);
 
-   if (matchOp.isDependent() || MatchVal->isDependent()) {
-      Expr->setIsTypeDependent(true);
+      if (inCTFE()) {
+         ILGen->prepareFunctionForCtfe(Expr->getComparisonOp(), Expr);
+      }
+
       return Expr;
    }
 
    diagnose(Expr, err_invalid_match, Expr->getSourceRange(), matchType,
             caseVal);
 
-   matchOp.diagnose(*this, MatchVal, Expr->getExpr(), {}, Expr);
    return Expr;
 }
 
@@ -3949,9 +3959,16 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
 
       bool MaybeInvalidRefReturn = false;
 
-      auto retType = retVal->getExprType();
+      Expression *noConv = retVal;
+      if (auto *Conv = dyn_cast<ImplicitCastExpr>(noConv)) {
+         if (Conv->getConvSeq().all(CastKind::LValueToRValue)) {
+            noConv = Conv->getTarget();
+         }
+      }
+
+      auto retType = noConv->getExprType();
       if (!declaredReturnType->isAutoType()) {
-         if (retType->isReferenceType()) {
+         if (retType->isNonMutableReferenceType()) {
             if (retType->getReferencedType() == declaredReturnType
                 && !IsImplicitlyCopyableType(declaredReturnType)) {
                MaybeInvalidRefReturn = true;
@@ -3974,34 +3991,25 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
       }
 
       // Check NRVO candidate
-      if (true || NeedsStructReturn(declaredReturnType)) {
-         Expression *noConv = retVal;
-         if (auto *Conv = dyn_cast<ImplicitCastExpr>(noConv)) {
-            if (Conv->getConvSeq().all(CastKind::LValueToRValue)) {
-               noConv = Conv->getTarget();
+      if (auto DeclRef = dyn_cast<DeclRefExpr>(noConv)) {
+         if (auto *LV = dyn_cast<LocalVarDecl>(DeclRef->getDecl())) {
+            bool valid = true;
+            if (auto PrevDecl = fn->getNRVOCandidate()) {
+               if (PrevDecl != LV) {
+                  valid = false;
+               }
             }
-         }
 
-         if (auto DeclRef = dyn_cast<DeclRefExpr>(noConv)) {
-            if (auto *LV = dyn_cast<LocalVarDecl>(DeclRef->getDecl())) {
-               bool valid = true;
-               if (auto PrevDecl = fn->getNRVOCandidate()) {
-                  if (PrevDecl != LV) {
-                     valid = false;
-                  }
-               }
-
-               if (valid) {
-                  Stmt->setNRVOCand(LV);
-                  LV->setIsNRVOCandidate(true);
-                  fn->setNRVOCandidate(LV);
-               }
-               else {
-                  Stmt->setNRVOCand(LV);
-               }
-
-               MaybeInvalidRefReturn = false;
+            if (valid) {
+               Stmt->setNRVOCand(LV);
+               LV->setIsNRVOCandidate(true);
+               fn->setNRVOCandidate(LV);
             }
+            else {
+               Stmt->setNRVOCand(LV);
+            }
+
+            MaybeInvalidRefReturn = false;
          }
       }
 

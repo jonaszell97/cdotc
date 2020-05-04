@@ -734,6 +734,28 @@ static bool lookupImplicitInitializer(SemaPass& SP, CanType from, CanType to,
          auto* innerTemplateArgs
              = sema::FinalTemplateArgumentList::Create(SP.Context, InnerArgs);
 
+         if (auto *CS = SP.Context.getExtConstraints(I)) {
+            if (!CS->empty()) {
+               DeclConstraint *FailedConstraint = nullptr;
+               for (auto *C : *CS) {
+                  bool satisfied = true;
+                  if (SP.QC.IsConstraintSatisfied(satisfied, C, I, I,
+                                                  innerTemplateArgs)) {
+                     continue;
+                  }
+
+                  if (!satisfied) {
+                     FailedConstraint = C;
+                     break;
+                  }
+               }
+
+               if (FailedConstraint) {
+                  continue;
+               }
+            }
+         }
+
          MethodDecl* Inst = SP.getInstantiator().InstantiateMethod(
             I, innerTemplateArgs, I->getSourceLoc());
 

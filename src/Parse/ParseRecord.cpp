@@ -518,7 +518,6 @@ ParseResult Parser::parseConstrDecl()
 
    SourceLocation varargLoc;
    auto args = parseFuncArgs(varargLoc);
-
    auto Init
        = InitDecl::Create(Context, CurDeclAttrs.Access, Loc, args, move(params),
                           nullptr, DeclarationName(), IsFallible);
@@ -566,6 +565,8 @@ ParseResult Parser::parseDestrDecl()
       SP.diagnose(err_deinit_args, currentTok().getSourceLoc());
       args.clear();
    }
+
+   args.push_back(SP.MakeSelfArg(Loc));
 
    auto Deinit = DeinitDecl::Create(Context, Loc, nullptr, args);
    if (ParsingProtocol) {
@@ -767,6 +768,9 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             }
 
             AS = tokenToAccessSpec(next.getKind());
+            advance();
+            next = lookahead();
+
             break;
          case tok::semicolon:
             advance();

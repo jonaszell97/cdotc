@@ -65,16 +65,6 @@ public:
       return visitExpr(Result);
    }
 
-   ExprResult visitMacroExpansionExpr(MacroExpansionExpr* Expr)
-   {
-      return Sema.visitMacroExpansionExpr(Expr);
-   }
-
-   ExprResult visitMixinExpr(MixinExpr* Expr)
-   {
-      return Sema.visitMixinExpr(Expr);
-   }
-
    ExprResult visitSubscriptExpr(SubscriptExpr *Sub)
    {
       auto ParentExpr = Sub->getParentExpr();
@@ -105,7 +95,7 @@ public:
              Context, Sub->getSourceRange(), ident, Sub->getIndices(), {}));
       }
 
-      return Sema.visitSubscriptExpr(Sub);
+      return Sema.visitExpr(Sub);
    }
 
    ExprResult visitAssignExpr(AssignExpr *Expr)
@@ -183,11 +173,19 @@ public:
       NeedsFullTypechecking = true;
 
       if (auto Val = Expr->getParentExpr()) {
-         if (!isa<IdentifierRefExpr>(Val)) {
-            auto Result = visitExpr(Val);
-            if (Result) {
-               Expr->setParentExpr(Result.get());
-            }
+         ExprResult Result;
+         if (auto *Ident = dyn_cast<IdentifierRefExpr>(Val)) {
+            Ident->setAllowIncompleteTemplateArgs(true);
+            Ident->setCalled(true);
+
+            Result = visitIdentifierRefExpr(Ident);
+         }
+         else {
+            Result = visitExpr(Val);
+         }
+
+         if (Result) {
+            Expr->setParentExpr(Result.get());
          }
       }
 
@@ -282,6 +280,240 @@ public:
       default:
          llvm_unreachable("bad template arg list expression");
       }
+   }
+
+   ExprResult visitAttributedExpr(AttributedExpr* Expr)
+   {
+      auto E = Expr->getExpr();
+      for (auto& A : Expr->getAttributes()) {
+         switch (A->getKind()) {
+#define CDOT_EXPR_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      Sema.check##Name##Attr(E, cast<Name##Attr>(A));                          \
+      break;
+#define CDOT_TYPE_ATTR(Name, Spelling)                                         \
+   case AttrKind::Name:                                                        \
+      Sema.check##Name##Attr(E, cast<Name##Attr>(A));                          \
+      break;
+#include "cdotc/AST/Attributes.def"
+
+         default:
+            llvm_unreachable("bad expr attr");
+         }
+      }
+
+      return visitExpr(Expr->getExpr());
+   }
+
+   ExprResult visitTryExpr(TryExpr* Expr)
+   {
+      {
+         bool needsFullTypeChecking = false;
+         auto SAR = support::saveAndRestore(this->NeedsFullTypechecking,
+                                            needsFullTypeChecking);
+
+         auto Result = visitExpr(Expr->getExpr());
+         if (!Result) {
+            return ExprError();
+         }
+
+         Expr->setExpr(Result.get());
+
+         if (!NeedsFullTypechecking) {
+            return Sema.visitExpr(Expr);
+         }
+      }
+
+      NeedsFullTypechecking = true;
+      return Expr;
+   }
+
+   ExprResult visitAwaitExpr(AwaitExpr* Expr)
+   {
+      {
+         bool needsFullTypeChecking = false;
+         auto SAR = support::saveAndRestore(this->NeedsFullTypechecking,
+                                            needsFullTypeChecking);
+
+         auto Result = visitExpr(Expr->getExpr());
+         if (!Result) {
+            return ExprError();
+         }
+
+         Expr->setExpr(Result.get());
+
+         if (!NeedsFullTypechecking) {
+            return Sema.visitExpr(Expr);
+         }
+      }
+
+      NeedsFullTypechecking = true;
+      return Expr;
+   }
+
+   ExprResult visitMacroExpansionExpr(MacroExpansionExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitMixinExpr(MixinExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitSelfExpr(SelfExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitSuperExpr(SuperExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitCallExpr(CallExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitEnumCaseExpr(EnumCaseExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitBuiltinExpr(BuiltinExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitExpressionPattern(ExpressionPattern* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitCasePattern(CasePattern* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitIsPattern(IsPattern* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitUnaryOperator(UnaryOperator* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitBinaryOperator(BinaryOperator* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitDeclRefExpr(DeclRefExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitMemberRefExpr(MemberRefExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitFunctionTypeExpr(FunctionTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitTupleTypeExpr(TupleTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitArrayTypeExpr(ArrayTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitDeclTypeExpr(DeclTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitReferenceTypeExpr(ReferenceTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitPointerTypeExpr(PointerTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitOptionTypeExpr(OptionTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitExistentialTypeExpr(ExistentialTypeExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitStaticExpr(StaticExpr* Expr)
+   {
+      if (!Expr->getExpr()) {
+         return Sema.visitExpr(Expr);
+      }
+
+      {
+         bool needsFullTypeChecking = false;
+         auto SAR = support::saveAndRestore(this->NeedsFullTypechecking,
+                                            needsFullTypeChecking);
+
+         auto Result = visitExpr(Expr->getExpr());
+         if (!Result) {
+            return ExprError();
+         }
+
+         Expr->setExpr(Result.get());
+
+         if (!NeedsFullTypechecking) {
+            return Sema.visitExpr(Expr);
+         }
+      }
+
+      NeedsFullTypechecking = true;
+      return Expr;
+   }
+
+   ExprResult visitTraitsExpr(TraitsExpr* Expr)
+   {
+      return Sema.visitExpr(Expr);
+   }
+
+   ExprResult visitParenExpr(ParenExpr* Expr)
+   {
+      {
+         bool needsFullTypeChecking = false;
+         auto SAR = support::saveAndRestore(this->NeedsFullTypechecking,
+                                            needsFullTypeChecking);
+
+         auto Result = visitExpr(Expr->getParenthesizedExpr());
+         if (!Result) {
+            return ExprError();
+         }
+
+         Expr->setParenthesizedExpr(Result.get());
+
+         if (!NeedsFullTypechecking) {
+            return Sema.visitExpr(Expr);
+         }
+      }
+
+      NeedsFullTypechecking = true;
+      return Expr;
    }
 
    ExprResult visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *Expr)
@@ -619,6 +851,10 @@ QualType ConstraintBuilder::getClosureParam(DeclarationName Name)
 QualType ConstraintBuilder::getRValue(Expression *Expr, SourceType RequiredType,
                                       ConstraintLocator *Locator,
                                       bool isHardRequirement) {
+   if (QualType T = Expr->getExprType()) {
+      return T->removeReference();
+   }
+
    auto Result = visitExpr(Expr, RequiredType, Locator, false);
    if (!Result) {
       return Result;
@@ -720,6 +956,11 @@ case Expression::NAME##ID:                                                  \
    }
 
    if (!RequiredType || RequiredType->isAutoType()) {
+      return T;
+   }
+
+   if (!RequiredType->containsTemplateParamType()
+   && !shouldGenerateConversionConstraint) {
       return T;
    }
 
@@ -836,119 +1077,12 @@ QualType ConstraintBuilder::visitAttributedExpr(AttributedExpr* Expr,
 
 QualType ConstraintBuilder::visitTryExpr(TryExpr* Expr, SourceType T)
 {
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
+   return visitExpr(Expr->getExpr());
 }
 
 QualType ConstraintBuilder::visitAwaitExpr(AwaitExpr* Expr, SourceType T)
 {
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitFunctionTypeExpr(FunctionTypeExpr* Expr,
-                                                  SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitTupleTypeExpr(TupleTypeExpr* Expr,
-                                               SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitArrayTypeExpr(ArrayTypeExpr* Expr,
-                                               SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitDeclTypeExpr(DeclTypeExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitReferenceTypeExpr(ReferenceTypeExpr* Expr,
-                                                   SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitPointerTypeExpr(PointerTypeExpr* Expr,
-                                                 SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitOptionTypeExpr(OptionTypeExpr* Expr,
-                                                SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitExistentialTypeExpr(ExistentialTypeExpr* Expr,
-                                                     SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
+   return visitExpr(Expr->getExpr());
 }
 
 QualType ConstraintBuilder::visitParenExpr(ParenExpr* Expr, SourceType T)
@@ -1402,29 +1536,6 @@ QualType ConstraintBuilder::visitIdentifierRefExpr(IdentifierRefExpr* Expr,
    return nullptr;
 }
 
-QualType ConstraintBuilder::visitDeclRefExpr(DeclRefExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitMemberRefExpr(MemberRefExpr* Expr,
-                                               SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
 QualType
 ConstraintBuilder::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* Expr,
                                               SourceType T)
@@ -1527,28 +1638,6 @@ QualType ConstraintBuilder::visitBuiltinIdentExpr(BuiltinIdentExpr* Expr,
    return Result.get()->getExprType();
 }
 
-QualType ConstraintBuilder::visitSelfExpr(SelfExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitSuperExpr(SuperExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
 QualType ConstraintBuilder::visitTupleMemberExpr(TupleMemberExpr* Expr,
                                                  SourceType T)
 {
@@ -1561,17 +1650,6 @@ QualType ConstraintBuilder::visitTupleMemberExpr(TupleMemberExpr* Expr,
    Expr->setParentExpr(Result.get());
    Result = Sema.visitExpr(Expr);
 
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitCallExpr(CallExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
    if (!Result) {
       EncounteredError = true;
       return Sys.newTypeVariable();
@@ -1894,7 +1972,7 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
        !GeneratingArgConstraints, GeneratingArgConstraints, this);
 
    if (!Cand) {
-      if (GeneratingArgConstraints) {
+      if (GeneratingArgConstraints && !CandSet.InvalidCand) {
          InvalidArg = true;
       }
       else {
@@ -1985,103 +2063,19 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
    return ReturnType;
 }
 
-QualType ConstraintBuilder::visitEnumCaseExpr(EnumCaseExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitSubscriptExpr(SubscriptExpr* Expr,
-                                               SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitTemplateArgListExpr(TemplateArgListExpr* Expr,
-                                                     SourceType T)
-{
-   llvm_unreachable("should be treated specially");
-}
-
-QualType ConstraintBuilder::visitBuiltinExpr(BuiltinExpr* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitExpressionPattern(ExpressionPattern* Expr,
-                                                   SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitCasePattern(CasePattern* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitIsPattern(IsPattern* Expr, SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitUnaryOperator(UnaryOperator* Expr,
-                                               SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
-
-QualType ConstraintBuilder::visitBinaryOperator(BinaryOperator* Expr,
-                                                SourceType T)
-{
-   auto Result = Sema.visitExpr(Expr);
-   if (!Result) {
-      EncounteredError = true;
-      return Sys.newTypeVariable();
-   }
-
-   return Result.get()->getExprType();
-}
+//QualType ConstraintBuilder::visitAnonymousCallExprNew(AnonymousCallExpr* Expr,
+//                                                      SourceType RequiredType)
+//{
+//   // Constraint the parent type to have a member of the given name.
+//   auto ParentType = visitExpr(Expr->getParentExpr());
+//   auto *FuncTy = Sys.newTypeVariable();
+//
+//   Sys.newConstraint<MemberConstraint>(ParentType->asTypeVariableType(),
+//       cast<IdentifierRefExpr>(Expr->getParentExpr())->getDeclName(),
+//       FuncTy, makeLocator(Expr->getParentExpr()));
+//
+//   // Get the parameter type as a tuple.
+//}
 
 QualType ConstraintBuilder::visitAssignExpr(AssignExpr* Expr, SourceType T)
 {
@@ -2133,11 +2127,6 @@ QualType ConstraintBuilder::visitTypePredicateExpr(TypePredicateExpr* Expr,
    }
 
    return Expr->getExprType();
-}
-
-QualType ConstraintBuilder::visitExprSequence(ExprSequence* Expr, SourceType T)
-{
-   llvm_unreachable("should never appear here");
 }
 
 QualType ConstraintBuilder::visitCastExpr(CastExpr* Cast, SourceType T)
@@ -2256,29 +2245,6 @@ QualType ConstraintBuilder::visitStaticExpr(StaticExpr* Expr, SourceType T)
    return visitExpr(Expr->getExpr(), T);
 }
 
-QualType ConstraintBuilder::visitConstraintExpr(ConstraintExpr* Expr,
-                                                SourceType T)
-{
-   llvm_unreachable("should never be called");
-}
-
-QualType ConstraintBuilder::visitTraitsExpr(TraitsExpr* Expr, SourceType T)
-{
-   auto result = Sema.visitTraitsExpr(Expr);
-   if (!result) {
-      EncounteredError = true;
-      return QualType();
-   }
-
-   return Expr->getExprType();
-}
-
-QualType ConstraintBuilder::visitMixinExpr(MixinExpr* Expr, SourceType T)
-{
-   (void)visitExpr(Expr->getMixinExpr(), T);
-   return Sys.newTypeVariable();
-}
-
 QualType
 ConstraintBuilder::visitVariadicExpansionExpr(VariadicExpansionExpr* Expr,
                                               SourceType RequiredType)
@@ -2292,14 +2258,157 @@ ConstraintBuilder::visitVariadicExpansionExpr(VariadicExpansionExpr* Expr,
    return Expr->getExprType();
 }
 
-QualType ConstraintBuilder::visitMacroVariableExpr(MacroVariableExpr* Expr,
-                                                   SourceType T)
+QualType ConstraintBuilder::visitTraitsExpr(TraitsExpr*, SourceType)
 {
-   return nullptr;
+   llvm_unreachable("should have been replaced!");
 }
 
-QualType ConstraintBuilder::visitMacroExpansionExpr(MacroExpansionExpr* Expr,
-                                                    SourceType T)
+QualType ConstraintBuilder::visitMixinExpr(MixinExpr*, SourceType)
 {
-   return nullptr;
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitMacroVariableExpr(MacroVariableExpr*,
+                                                   SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitMacroExpansionExpr(MacroExpansionExpr*,
+                                                    SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitFunctionTypeExpr(FunctionTypeExpr*,
+                                                  SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitTupleTypeExpr(TupleTypeExpr*,
+                                               SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitArrayTypeExpr(ArrayTypeExpr*,
+                                               SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitDeclTypeExpr(DeclTypeExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitReferenceTypeExpr(ReferenceTypeExpr*,
+                                                   SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitPointerTypeExpr(PointerTypeExpr*,
+                                                 SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitOptionTypeExpr(OptionTypeExpr*,
+                                                SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitExistentialTypeExpr(ExistentialTypeExpr*,
+                                                     SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitConstraintExpr(ConstraintExpr*,
+                                                SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitTemplateArgListExpr(TemplateArgListExpr*,
+                                                     SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitExprSequence(ExprSequence*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitDeclRefExpr(DeclRefExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitMemberRefExpr(MemberRefExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitSelfExpr(SelfExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitSuperExpr(SuperExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitCallExpr(CallExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitEnumCaseExpr(EnumCaseExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitSubscriptExpr(SubscriptExpr*,
+                                               SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitBuiltinExpr(BuiltinExpr*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitExpressionPattern(ExpressionPattern*,
+                                                   SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitCasePattern(CasePattern*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitIsPattern(IsPattern*, SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitUnaryOperator(UnaryOperator*,
+                                               SourceType)
+{
+   llvm_unreachable("should have been replaced!");
+}
+
+QualType ConstraintBuilder::visitBinaryOperator(BinaryOperator*,
+                                                SourceType)
+{
+   llvm_unreachable("should have been replaced!");
 }

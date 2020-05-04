@@ -1258,10 +1258,6 @@ QueryResult MultiLevelTypeLookupQuery::run()
 
 QueryResult DirectLookupQuery::run()
 {
-   if (serial::ModuleFile* ModFile = DC->getModFile()) {
-      ModFile->PerformExternalLookup(*DC, Name);
-   }
-
    MultiLevelLookupResult Result;
 
    auto DirectLookup = DC->lookup(Name);

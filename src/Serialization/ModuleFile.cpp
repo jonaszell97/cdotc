@@ -25,9 +25,9 @@ static void addDeclToContext(SemaPass& Sema, DeclContext& Ctx, Decl* D)
    if (auto ND = support::cast_or_null<NamedDecl>(D)) {
       Sema.makeDeclAvailable(Ctx, ND, true);
 
-      if (auto *Ext = dyn_cast<ExtensionDecl>(&Ctx)) {
-         Sema.makeDeclAvailable(*Ext->getExtendedRecord(), ND, true);
-      }
+//      if (auto *Ext = dyn_cast<ExtensionDecl>(&Ctx)) {
+//         Sema.makeDeclAvailable(*Ext->getExtendedRecord(), ND, true);
+//      }
    }
 }
 
@@ -85,11 +85,16 @@ void ModuleFile::LoadedDecl(DeclContext& Ctx, Decl* ReadDecl, bool IgnoreInst)
    switch (ReadDecl->getKind()) {
    case Decl::OperatorDeclID:
    case Decl::PrecedenceGroupDeclID:
-   case Decl::FieldDeclID:
    case Decl::EnumCaseDeclID:
    case Decl::FuncArgDeclID:
    case Decl::TemplateParamDeclID:
       return;
+   case Decl::FieldDeclID:
+      if (!ReadDecl->isStatic()) {
+         return;
+      }
+
+      break;
    default:
       break;
    }
