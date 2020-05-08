@@ -144,6 +144,7 @@ class QueryClassEmitter {
       std::string_view CustomImplCode;
       std::string_view PersistentState;
       std::string_view RefreshCondition;
+      std::string_view OnRefresh;
    };
 
    enum ParamKind {
@@ -248,6 +249,9 @@ void QueryClassEmitter::Setup()
       Info.RefreshCondition
           = cast<CodeBlock>(Query->getFieldValue("refreshCondition"))
                 ->getCode();
+      Info.OnRefresh
+          = cast<CodeBlock>(Query->getFieldValue("onRefresh"))
+          ->getCode();
       Info.SimpleQuery
           = cast<IntegerLiteral>(Query->getFieldValue("simpleQuery"))->getVal()
             != 0;
@@ -719,9 +723,10 @@ void QueryClassEmitter::EmitImpl(Record* Query)
       OS << "void " << Info.ClassName << "::refresh()\n{\n";
       OS << R"__(
    if (Stat == Idle) return;
-   if ()__"
-         << Info.RefreshCondition << R"__() Stat = Idle;
-)__";
+   if ()__" << Info.RefreshCondition << R"__() {
+      Stat = Idle;
+      )__"  << Info.OnRefresh << R"__(
+   })__";
       OS << "\n}\n\n";
    }
 

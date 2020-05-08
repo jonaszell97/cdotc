@@ -145,6 +145,9 @@ class Query<let type: string> {
     /// A condition that indicates whether or not a query should be refreshed.
     let refreshCondition: code = {}
 
+    /// Code that is run when the query is refreshed.
+    let onRefresh: code = {}
+
     /// The trailing object types that this query inherits from.
     let trailingObjects: list<string> = []
 }
@@ -1610,16 +1613,20 @@ def LookupFirst : Query<"SingleLevelLookupResult"> {
     // Refresh when declarations are added or removed.
     customHeaderCode = {
     private:
-        /// Number of declarations in the context at the time of the lookup.
-        unsigned NumDeclsInContext = -1;
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
     }
 
     constructorCode = {
-        NumDeclsInContext = DC->getAllNamedDecls().size();
+        RevisionID = DC->getRevisionID();
     }
 
     refreshCondition = {
-        NumDeclsInContext != DC->getAllNamedDecls().size()
+        RevisionID < DC->getRevisionID()
+    }
+
+    onRefresh = {
+        RevisionID = DC->getRevisionID();
     }
 
     ignoreCircularDependency = true
@@ -1643,16 +1650,20 @@ def LookupSingle : Query<"ast::NamedDecl*"> {
     // Refresh when declarations are added or removed.
     customHeaderCode = {
     private:
-        /// Number of declarations in the context at the time of the lookup.
-        unsigned NumDeclsInContext = -1;
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
     }
 
     constructorCode = {
-        NumDeclsInContext = DC->getAllNamedDecls().size();
+        RevisionID = DC->getRevisionID();
     }
 
     refreshCondition = {
-        NumDeclsInContext != DC->getAllNamedDecls().size()
+        RevisionID < DC->getRevisionID()
+    }
+
+    onRefresh = {
+        RevisionID = DC->getRevisionID();
     }
 
     // Allow looking up a specific type of declaration only.
@@ -1695,22 +1706,23 @@ def MultiLevelLookup : Query<"MultiLevelLookupResult"> {
     description = "looking up '${Name.toString()}' in '${DC->getNameAsString()}'"
 
     // Refresh when declarations are added or removed.
-    // customHeaderCode = {
-    // private:
-    //     /// Number of declarations in the context at the time of the lookup.
-    //     unsigned NumDeclsInContext = -1;
-    // }
+    customHeaderCode = {
+    private:
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
+    }
 
-    // constructorCode = {
-    //     NumDeclsInContext = DC->getAllNamedDecls().size();
-    // }
+    constructorCode = {
+        RevisionID = DC->getRevisionID();
+    }
 
-    // refreshCondition = {
-    //     NumDeclsInContext != DC->getAllNamedDecls().size()
-    // }
+    refreshCondition = {
+        RevisionID < DC->getRevisionID()
+    }
 
-    canBeCached = false
-    ignoreCircularDependency = true
+    onRefresh = {
+        RevisionID = DC->getRevisionID();
+    }
 }
 
 /// Perform a multi-level lookup into a type.
@@ -1732,7 +1744,26 @@ def MultiLevelTypeLookup : Query<"MultiLevelLookupResult"> {
         return &Result.getValue();
     }
 
-    canBeCached = false
+    // Refresh when declarations are added or removed.
+    customHeaderCode = {
+    private:
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
+    }
+
+    constructorCode = {
+        if (auto *RT = T->removeMetaType()->asRecordType())
+            RevisionID = RT->getRecord()->getRevisionID();
+    }
+
+    refreshCondition = {
+        !T->removeMetaType()->isRecordType() || RevisionID < T->removeMetaType()->getRecord()->getRevisionID()
+    }
+
+    onRefresh = {
+        if (auto *RT = T->removeMetaType()->asRecordType())
+           RevisionID = RT->getRecord()->getRevisionID();
+    }
 }
 
 /// Perform a restricted lookup, i.e. one that does not look into extensions, conformances,
@@ -1790,19 +1821,21 @@ def DirectLookup : Query<"MultiLevelLookupResult"> {
     // Refresh when declarations are added or removed.
     customHeaderCode = {
     private:
-        /// Number of declarations in the context at the time of the lookup.
-        unsigned NumDeclsInContext = -1;
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
     }
 
     constructorCode = {
-        NumDeclsInContext = DC->getAllNamedDecls().size();
+        RevisionID = DC->getRevisionID();
     }
 
     refreshCondition = {
-        NumDeclsInContext != DC->getAllNamedDecls().size()
+        RevisionID < DC->getRevisionID()
     }
 
-    ignoreCircularDependency = true
+    onRefresh = {
+        RevisionID = DC->getRevisionID();
+    }
 }
 
 /// Perform a nested name lookup.

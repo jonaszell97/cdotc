@@ -138,6 +138,8 @@ template<> ResolveRawTypeQuery *QueryContext::getQuery<ResolveRawTypeQuery>(ast:
 template<> AssignInitNameQuery *QueryContext::getQuery<AssignInitNameQuery>(ast::InitDecl* Init);
 template<> LookupFirstQuery *QueryContext::getQuery<LookupFirstQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
 template<> LookupSingleQuery *QueryContext::getQuery<LookupSingleQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
+template<> MultiLevelLookupQuery *QueryContext::getQuery<MultiLevelLookupQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
+template<> MultiLevelTypeLookupQuery *QueryContext::getQuery<MultiLevelTypeLookupQuery>(CanType T, DeclarationName Name, LookupOpts Opts);
 template<> RestrictedLookupQuery *QueryContext::getQuery<RestrictedLookupQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
 template<> DirectLookupQuery *QueryContext::getQuery<DirectLookupQuery>(ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints);
 template<> ResolveMetaDeclarationsQuery *QueryContext::getQuery<ResolveMetaDeclarationsQuery>(ast::DeclContext* DC);

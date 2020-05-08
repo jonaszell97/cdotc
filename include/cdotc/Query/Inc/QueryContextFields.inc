@@ -636,7 +636,13 @@ private:   llvm::FoldingSet<LookupFirstQuery> LookupFirstQueries;
 /// that query.
 private:   llvm::FoldingSet<LookupSingleQuery> LookupSingleQueries;
 
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
+private:   llvm::FoldingSet<MultiLevelLookupQuery> MultiLevelLookupQueries;
 
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
+private:   llvm::FoldingSet<MultiLevelTypeLookupQuery> MultiLevelTypeLookupQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.

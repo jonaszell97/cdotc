@@ -4626,8 +4626,8 @@ public:
 class LookupFirstQuery: public Query, public llvm::FoldingSetNode {
 
     private:
-        /// Number of declarations in the context at the time of the lookup.
-        unsigned NumDeclsInContext = -1;
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
     public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
    static bool classofKind(Kind K) { return K == Kind::LookupFirstQueryID; }
@@ -4664,8 +4664,8 @@ public:
 class LookupSingleQuery: public Query, public llvm::FoldingSetNode {
 
     private:
-        /// Number of declarations in the context at the time of the lookup.
-        unsigned NumDeclsInContext = -1;
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
     public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
    static bool classofKind(Kind K) { return K == Kind::LookupSingleQueryID; }
@@ -4699,8 +4699,12 @@ public:
 
 };
 
-class MultiLevelLookupQuery: public Query {
-public:
+class MultiLevelLookupQuery: public Query, public llvm::FoldingSetNode {
+
+    private:
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
+    public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
    static bool classofKind(Kind K) { return K == Kind::MultiLevelLookupQueryID; }
 
@@ -4717,6 +4721,8 @@ public:
 private:
    QueryResult run();
 
+   void refresh();
+
    MultiLevelLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts = DefaultLookupOpts);
 
    QueryResult finish(MultiLevelLookupResult &&Result, Status St = Done);
@@ -4725,10 +4731,18 @@ private:
    DeclarationName Name;
    LookupOpts Opts;
    llvm::Optional<MultiLevelLookupResult> Result;
+public:
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+   static void Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts);
+
 };
 
-class MultiLevelTypeLookupQuery: public Query {
-public:
+class MultiLevelTypeLookupQuery: public Query, public llvm::FoldingSetNode {
+
+    private:
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
+    public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
    static bool classofKind(Kind K) { return K == Kind::MultiLevelTypeLookupQueryID; }
 
@@ -4745,6 +4759,8 @@ public:
 private:
    QueryResult run();
 
+   void refresh();
+
    MultiLevelTypeLookupQuery(QueryContext &QC, CanType T, DeclarationName Name, LookupOpts Opts = DefaultLookupOpts);
 
    QueryResult finish(MultiLevelLookupResult &&Result, Status St = Done);
@@ -4753,6 +4769,10 @@ private:
    DeclarationName Name;
    LookupOpts Opts;
    llvm::Optional<MultiLevelLookupResult> Result;
+public:
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+   static void Profile(llvm::FoldingSetNodeID &ID, CanType T, DeclarationName Name, LookupOpts Opts);
+
 };
 
 class RestrictedLookupQuery: public Query, public llvm::FoldingSetNode {
@@ -4790,8 +4810,8 @@ public:
 class DirectLookupQuery: public Query, public llvm::FoldingSetNode {
 
     private:
-        /// Number of declarations in the context at the time of the lookup.
-        unsigned NumDeclsInContext = -1;
+        /// Revision ID of the last lookup.
+        int32_t RevisionID = -1;
     public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }
    static bool classofKind(Kind K) { return K == Kind::DirectLookupQueryID; }

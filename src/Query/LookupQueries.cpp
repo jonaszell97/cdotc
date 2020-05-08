@@ -1249,7 +1249,7 @@ QueryResult MultiLevelTypeLookupQuery::run()
 
    if (auto* R = T->asRecordType()) {
       const MultiLevelLookupResult* Lookup;
-      if (auto Err = QC.MultiLevelLookup(Lookup, R->getRecord(), Name, Opts)) {
+      if (auto Err = QC.DirectLookup(Lookup, R->getRecord(), Name, true, Opts)) {
          return Query::finish(Err);
       }
 
@@ -1261,7 +1261,7 @@ QueryResult MultiLevelTypeLookupQuery::run()
       for (QualType P : Ext->getExistentials()) {
          auto AdaptedName = AdaptName(QC.Context.getDeclNameTable(), Name, P, Ext);
          const MultiLevelLookupResult* Lookup;
-         if (auto Err = QC.MultiLevelLookup(Lookup, P->getRecord(), AdaptedName, Opts))
+         if (auto Err = QC.DirectLookup(Lookup, P->getRecord(), AdaptedName, true, Opts))
             return Query::finish(Err);
 
          if (!Lookup->empty()) {

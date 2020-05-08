@@ -893,6 +893,8 @@ public:
    void dumpSourceLine();
    std::string getNameAsString() const;
 
+   int32_t getRevisionID() const { return revision; }
+
    static bool classofKind(Decl::DeclKind kind)
    {
       switch (kind) {
@@ -924,6 +926,12 @@ protected:
 
    DeclContext* primaryCtx = nullptr;
    DeclContext* parentCtx = nullptr;
+
+   /// This number is increased after every change to the visible decls in this
+   /// context (used to invalidate cached lookup results).
+   int32_t revision = 0;
+
+   void registerVisibleDeclChange() { ++revision; }
 
 public:
    struct ExternalStorage {

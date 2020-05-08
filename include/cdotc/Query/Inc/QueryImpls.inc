@@ -368,8 +368,8 @@ bool Query::canBeCached() const
    case CreateBaseInitQueryID: return true;
    case LookupFirstQueryID: return true;
    case LookupSingleQueryID: return true;
-   case MultiLevelLookupQueryID: return false;
-   case MultiLevelTypeLookupQueryID: return false;
+   case MultiLevelLookupQueryID: return true;
+   case MultiLevelTypeLookupQueryID: return true;
    case RestrictedLookupQueryID: return true;
    case DirectLookupQueryID: return true;
    case NestedNameLookupQueryID: return false;
@@ -2317,8 +2317,10 @@ void SubstAssociatedTypesQuery::refresh()
    if (Stat == Idle) return;
    if (
         Self && Self->isRecordType() && QC.Sema->IsBeingResolved(Self->getRecord())
-    ) Stat = Idle;
-
+    ) {
+      Stat = Idle;
+      
+   }
 }
 
 QualType SubstAssociatedTypesQuery::get() const
@@ -4613,8 +4615,10 @@ void ConformsToQuery::refresh()
    if (Stat == Idle) return;
    if (
         T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
-    ) Stat = Idle;
-
+    ) {
+      Stat = Idle;
+      
+   }
 }
 
 bool ConformsToQuery::get() const
@@ -4677,8 +4681,10 @@ void IsCovariantQuery::refresh()
    if (Stat == Idle) return;
    if (
         T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
-    ) Stat = Idle;
-
+    ) {
+      Stat = Idle;
+      
+   }
 }
 
 bool IsCovariantQuery::get() const
@@ -4739,8 +4745,10 @@ void IsContravariantQuery::refresh()
    if (Stat == Idle) return;
    if (
         T->isRecordType() && QC.Sema->IsBeingResolved(T->getRecord())
-    ) Stat = Idle;
-
+    ) {
+      Stat = Idle;
+      
+   }
 }
 
 bool IsContravariantQuery::get() const
@@ -7715,7 +7723,7 @@ void CreateBaseInitQuery::Profile(llvm::FoldingSetNodeID &ID, ast::InitDecl* D)
 LookupFirstQuery::LookupFirstQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts) : Query(LookupFirstQueryID, QC), DC(DC), Name(Name), Opts(Opts) {
 assert(DC && "parameter 'DC' should not be null!");
 
-        NumDeclsInContext = DC->getAllNamedDecls().size();
+        RevisionID = DC->getRevisionID();
     
 }
 
@@ -7724,9 +7732,13 @@ void LookupFirstQuery::refresh()
 
    if (Stat == Idle) return;
    if (
-        NumDeclsInContext != DC->getAllNamedDecls().size()
-    ) Stat = Idle;
-
+        RevisionID < DC->getRevisionID()
+    ) {
+      Stat = Idle;
+      
+        RevisionID = DC->getRevisionID();
+    
+   }
 }
 
 const SingleLevelLookupResult* LookupFirstQuery::get() const
@@ -7789,7 +7801,7 @@ void LookupFirstQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC,
 LookupSingleQuery::LookupSingleQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts) : Query(LookupSingleQueryID, QC), DC(DC), Name(Name), Opts(Opts) {
 assert(DC && "parameter 'DC' should not be null!");
 
-        NumDeclsInContext = DC->getAllNamedDecls().size();
+        RevisionID = DC->getRevisionID();
     
 }
 
@@ -7798,9 +7810,13 @@ void LookupSingleQuery::refresh()
 
    if (Stat == Idle) return;
    if (
-        NumDeclsInContext != DC->getAllNamedDecls().size()
-    ) Stat = Idle;
-
+        RevisionID < DC->getRevisionID()
+    ) {
+      Stat = Idle;
+      
+        RevisionID = DC->getRevisionID();
+    
+   }
 }
 
 ast::NamedDecl* LookupSingleQuery::get() const
@@ -7861,6 +7877,22 @@ void LookupSingleQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC
 MultiLevelLookupQuery::MultiLevelLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts) : Query(MultiLevelLookupQueryID, QC), DC(DC), Name(Name), Opts(Opts) {
 assert(DC && "parameter 'DC' should not be null!");
 
+        RevisionID = DC->getRevisionID();
+    
+}
+
+void MultiLevelLookupQuery::refresh()
+{
+
+   if (Stat == Idle) return;
+   if (
+        RevisionID < DC->getRevisionID()
+    ) {
+      Stat = Idle;
+      
+        RevisionID = DC->getRevisionID();
+    
+   }
 }
 
 const MultiLevelLookupResult* MultiLevelLookupQuery::get() const
@@ -7908,8 +7940,38 @@ QueryResult MultiLevelLookupQuery::finish(MultiLevelLookupResult &&Result, Statu
    return Query::finish(St);
 }
 
+void MultiLevelLookupQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, DC, Name, Opts);
+}
+
+void MultiLevelLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts)
+{
+   ID.AddPointer(DC);
+   ID.AddPointer(Name.getAsOpaquePtr());
+   ID.AddInteger((uint8_t)(Opts));
+}
+
 MultiLevelTypeLookupQuery::MultiLevelTypeLookupQuery(QueryContext &QC, CanType T, DeclarationName Name, LookupOpts Opts) : Query(MultiLevelTypeLookupQueryID, QC), T(T), Name(Name), Opts(Opts) {
 
+        if (auto *RT = T->removeMetaType()->asRecordType())
+            RevisionID = RT->getRecord()->getRevisionID();
+    
+}
+
+void MultiLevelTypeLookupQuery::refresh()
+{
+
+   if (Stat == Idle) return;
+   if (
+        !T->removeMetaType()->isRecordType() || RevisionID < T->removeMetaType()->getRecord()->getRevisionID()
+    ) {
+      Stat = Idle;
+      
+        if (auto *RT = T->removeMetaType()->asRecordType())
+           RevisionID = RT->getRecord()->getRevisionID();
+    
+   }
 }
 
 const MultiLevelLookupResult* MultiLevelTypeLookupQuery::get() const
@@ -7952,6 +8014,18 @@ QueryResult MultiLevelTypeLookupQuery::finish(MultiLevelLookupResult &&Result, S
    this->Result = std::move(Result);
 
    return Query::finish(St);
+}
+
+void MultiLevelTypeLookupQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, T, Name, Opts);
+}
+
+void MultiLevelTypeLookupQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T, DeclarationName Name, LookupOpts Opts)
+{
+   T.Profile(ID);
+   ID.AddPointer(Name.getAsOpaquePtr());
+   ID.AddInteger((uint8_t)(Opts));
 }
 
 RestrictedLookupQuery::RestrictedLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts) : Query(RestrictedLookupQueryID, QC), DC(DC), Name(Name), Opts(Opts) {
@@ -8016,7 +8090,7 @@ void RestrictedLookupQuery::Profile(llvm::FoldingSetNodeID &ID, ast::DeclContext
 DirectLookupQuery::DirectLookupQuery(QueryContext &QC, ast::DeclContext* DC, DeclarationName Name, bool LookInExtensions, LookupOpts Opts, ast::ConstraintSet* Constraints) : Query(DirectLookupQueryID, QC), DC(DC), Name(Name), LookInExtensions(LookInExtensions), Opts(Opts), Constraints(Constraints) {
 assert(DC && "parameter 'DC' should not be null!");
 
-        NumDeclsInContext = DC->getAllNamedDecls().size();
+        RevisionID = DC->getRevisionID();
     
 }
 
@@ -8025,9 +8099,13 @@ void DirectLookupQuery::refresh()
 
    if (Stat == Idle) return;
    if (
-        NumDeclsInContext != DC->getAllNamedDecls().size()
-    ) Stat = Idle;
-
+        RevisionID < DC->getRevisionID()
+    ) {
+      Stat = Idle;
+      
+        RevisionID = DC->getRevisionID();
+    
+   }
 }
 
 const MultiLevelLookupResult* DirectLookupQuery::get() const

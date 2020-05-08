@@ -608,12 +608,11 @@ void DiagnosticBuilder::finalize()
          Markers[offsetOnLine] = '^';
       }
       else {
-         auto BeginOffset = Start.getOffset() - BaseOffset;
-         auto EndOffset = End.getOffset() - BaseOffset;
+         unsigned BeginOffset = Start.getOffset() - BaseOffset;
+         unsigned EndOffset = End.getOffset() - BaseOffset;
 
-         unsigned BeginOffsetOnLine = BeginOffset - newlineIndex - 1;
-         unsigned EndOffsetOnLine
-             = std::min(EndOffset, lineEndIndex) - newlineIndex - 1;
+         int64_t BeginOffsetOnLine = (int64_t)BeginOffset - newlineIndex - 1;
+         int64_t EndOffsetOnLine = (int64_t)(std::min(EndOffset, lineEndIndex) - newlineIndex - 1);
 
          if (EndOffsetOnLine > lineEndIndex)
             continue;

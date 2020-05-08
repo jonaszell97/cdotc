@@ -1513,8 +1513,7 @@ public:
                                   ArrayRef<Expression*> templateArgs);
 
    // Checks whether the parent expression of the given expression refers to
-   // a namespace rather than a value and adjusts the expression appropriately
-   NestedNameSpecifierWithLoc* checkNamespaceRef(Expression* Expr);
+   // a namespace rather than a value and adjusts the expression appropriately.
    bool refersToNamespace(Expression* E);
 
    ExprResult checkNamespaceRef(MacroExpansionExpr* Expr);
@@ -1527,7 +1526,7 @@ private:
    QualType HandleFieldAccess(Expression* Expr, FieldDecl* F);
    QualType HandlePropAccess(Expression* Expr, PropDecl* P);
 
-   Expression* checkDeref(Expression* E, QualType T);
+   Expression* checkCustomDeref(Expression* E, QualType T);
 
 public:
    CallExpr* CreateCall(CallableDecl* C, ArrayRef<Expression*> Args,
