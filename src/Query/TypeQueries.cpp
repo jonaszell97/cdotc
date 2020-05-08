@@ -93,6 +93,21 @@ QueryResult ContainsProtocolWithAssociatedTypesQuery::run()
    return finish(result);
 }
 
+QueryResult ContainsTemplateQuery::run()
+{
+   bool result = false;
+   visitSpecificType<RecordType>([&](RecordType *R) {
+     if (R->getRecord()->isTemplateOrInTemplate()) {
+        result = true;
+        return false;
+     }
+
+     return true;
+   }, T);
+
+   return finish(result);
+}
+
 QueryResult IsMoveOnlyQuery::run()
 {
    CanType T = this->T->getDesugaredType();
@@ -579,6 +594,11 @@ QueryResult IsTriviallyCopyableQuery::run()
          return finish(true, Dependent);
       }
 
+      if (T->getRecord()->isExternal()) {
+         auto &Meta = QC.RecordMeta[T->getRecord()];
+         return finish(Meta.IsTriviallyCopyable);
+      }
+
       if (isa<ast::ClassDecl>(T->getRecord())) {
          Result = false;
       }
@@ -588,10 +608,7 @@ QueryResult IsTriviallyCopyableQuery::run()
          }
 
          auto& Meta = QC.RecordMeta[T->getRecord()];
-         if (Meta.CopyFn && !Meta.CopyFn->isSynthesized()) {
-            Result = false;
-         }
-         else if (T->getRecord()->isInvalid()) {
+         if (T->getRecord()->isInvalid()) {
             Result = true;
          }
          else {
@@ -1493,7 +1510,7 @@ public:
    QualType visitRecordType(RecordType* T)
    {
       auto R = T->getRecord();
-      if (R->isInstantiation()) {
+      if (R->isInstantiation() && !R->isNestedInstantiation()) {
          return this->visitRecordTypeCommon(T, R->getSpecializedTemplate(),
                                             R->getTemplateArgs());
       }

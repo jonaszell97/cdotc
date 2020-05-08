@@ -9,10 +9,11 @@
 
 namespace cdot {
 namespace ast {
-class Decl;
-class NamedDecl;
 class CallableDecl;
+class Decl;
 class DeclContext;
+class NamedDecl;
+class Statement;
 } // namespace ast
 
 namespace il {
@@ -68,8 +69,8 @@ class LazyFunctionInfo {
    /// Cursor to the body of the function.
    llvm::BitstreamCursor BodyCursor;
 
-   /// True if the body has already been read.
-   bool BodyRead = false;
+   /// Set once the body has been read.
+   ast::Statement *ReadBody = nullptr;
 
 public:
    LazyFunctionInfo(ModuleReader& Reader, llvm::BitstreamCursor BodyCursor);

@@ -1293,6 +1293,55 @@ QueryResult QueryContext::ContainsProtocolWithAssociatedTypes(bool &Result, CanT
 
 }
 
+template<> ContainsTemplateQuery *QueryContext::getQuery<ContainsTemplateQuery>(CanType T)
+{
+   auto It = ContainsTemplateQueries.find(T);
+   if (It != ContainsTemplateQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::ContainsTemplate(bool &Result, CanType T)
+
+{
+   auto Key = T;
+   auto It = ContainsTemplateQueries.find(Key);
+   ContainsTemplateQuery *_Q;
+   if (It == ContainsTemplateQueries.end()) {
+      _Q = new(*this) ContainsTemplateQuery(*this, T);
+      ContainsTemplateQueries[_Q->T] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T)
 {
    auto It = ContainsAssociatedTypeConstraintQueries.find(T);

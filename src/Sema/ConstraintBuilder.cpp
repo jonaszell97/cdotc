@@ -67,6 +67,11 @@ public:
 
    ExprResult visitSubscriptExpr(SubscriptExpr *Sub)
    {
+      if (Sub->getCallExpr()) {
+         NeedsFullTypechecking = true;
+         return Sub;
+      }
+
       auto ParentExpr = Sub->getParentExpr();
       auto ParentResult = Sema.visitExpr(Sub, ParentExpr);
       if (!ParentResult) {
@@ -91,8 +96,16 @@ public:
          auto* ident = new (Context) IdentifierRefExpr(Sub->getSourceRange(),
                                                        ParentExpr, DeclName);
 
-         return visitExpr(AnonymousCallExpr::Create(
-             Context, Sub->getSourceRange(), ident, Sub->getIndices(), {}));
+         auto *Call = AnonymousCallExpr::Create(
+             Context, Sub->getSourceRange(), ident, Sub->getIndices(), {});
+
+         auto Result = visitExpr(Call);
+         if (!Result) {
+            return ExprError();
+         }
+
+         Sub->setCallExpr(Result.get());
+         return Sub;
       }
 
       return Sema.visitExpr(Sub);
@@ -129,13 +142,12 @@ public:
          auto* ident = new (Context) IdentifierRefExpr(Sub->getSourceRange(),
                                                        ParentExpr, DeclName);
 
-         SmallVector<Expression*, 2> Args(Sub->getIndices().begin(),
-                                          Sub->getIndices().end());
+         auto Result = visitExpr(AnonymousCallExpr::Create(
+             Context, Sub->getSourceRange(), ident, Sub->getIndices(), {}));
 
-         Args.push_back(Expr->getRhs());
-
-         return visitExpr(AnonymousCallExpr::Create(
-             Context, Sub->getSourceRange(), ident, Args, {}));
+         if (Result) {
+            Sub->setCallExpr(Result.get());
+         }
       }
 
       return StmtBuilder::visitAssignExpr(Expr);
@@ -880,7 +892,8 @@ QualType ConstraintBuilder::getRValue(Expression *Expr, SourceType RequiredType,
 
 QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
                                       ConstraintLocator* Locator,
-                                      bool isHardRequirement)
+                                      bool isHardRequirement,
+                                      CastStrength allowedStrength)
 {
    auto It = Bindings.ExprBindings.find(Expr);
    if (It != Bindings.ExprBindings.end()) {
@@ -909,7 +922,8 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
          Sys.newConstraint<TypeBindingConstraint>(Var, T, nullptr);
          Sys.newConstraint<ImplicitConversionConstraint>(
             Var, NeededTy, Locator ? Locator : makeLocator(
-               Expr, PathElement::contextualType(RequiredType.getSourceRange())));
+               Expr, PathElement::contextualType(RequiredType.getSourceRange())),
+               allowedStrength);
 
          T = Var;
       }
@@ -921,14 +935,6 @@ QualType ConstraintBuilder::visitExpr(Expression* Expr, SourceType RequiredType,
    bool shouldGenerateConversionConstraint = isHardRequirement;
 
    if (RequiredType) {
-//      if (GeneratingArgConstraints) {
-//         TemplateParamRemover remover(Sema, {}, *this);
-//         remover.visit(RequiredType);
-//
-//         shouldGenerateConversionConstraint
-//             = remover.shouldGenerateConversionConstraint;
-//      }
-
       contextualType = RequiredType;
    }
 
@@ -1007,7 +1013,7 @@ case Expression::NAME##ID:                                                  \
 
    if (shouldGenerateConversionConstraint) {
       Sys.newConstraint<ImplicitConversionConstraint>(Var, DesugaredTy,
-                                                      Locator);
+                                                      Locator, allowedStrength);
    }
 
    if (!DesugaredTy->containsTypeVariable()) {
@@ -1461,15 +1467,15 @@ QualType ConstraintBuilder::visitArrayLiteral(ArrayLiteral* Expr, SourceType T)
    auto* Loc
        = makeLocator(Expr, PathElement::contextualType(T.getSourceRange()));
 
-   Sys.newConstraint<LiteralConstraint>(Var, LiteralConstraint::ArrayLiteral,
-                                        Loc);
-
    // Constrain each element to be convertible to a common type.
    TypeVariable ElementTy = Sys.newTypeVariable();
    for (auto* E : Expr->getValues()) {
       auto ElVar = visitExpr(E);
       newConstraint<ImplicitConversionConstraint>(ElVar, ElementTy, nullptr);
    }
+
+   Sys.newConstraint<LiteralConstraint>(Var, LiteralConstraint::ArrayLiteral,
+                                        Loc, ElementTy);
 
    return Var;
 }
@@ -1481,16 +1487,6 @@ QualType ConstraintBuilder::visitDictionaryLiteral(DictionaryLiteral* Expr,
    auto* Loc
        = makeLocator(Expr, PathElement::contextualType(T.getSourceRange()));
 
-   Sys.newConstraint<LiteralConstraint>(
-       Var, LiteralConstraint::DictionaryLiteral, Loc);
-
-   // Constrain each element type to be convertible to a common type.
-   TypeVariable ElementTy = Sys.newTypeVariable();
-   for (auto* E : Expr->getValues()) {
-      auto ElVar = visitExpr(E);
-      newConstraint<ImplicitConversionConstraint>(ElVar, ElementTy, nullptr);
-   }
-
    // Constrain each key type to be convertible to a common type.
    TypeVariable KeyTy = Sys.newTypeVariable();
    for (auto* E : Expr->getKeys()) {
@@ -1501,6 +1497,16 @@ QualType ConstraintBuilder::visitDictionaryLiteral(DictionaryLiteral* Expr,
    // Constrain the key type to be hashable.
    Sys.newConstraint<ConformanceConstraint>(KeyTy, Sema.getHashableDecl(),
                                             nullptr);
+
+   // Constrain each element type to be convertible to a common type.
+   TypeVariable ElementTy = Sys.newTypeVariable();
+   for (auto* E : Expr->getValues()) {
+      auto ElVar = visitExpr(E);
+      newConstraint<ImplicitConversionConstraint>(ElVar, ElementTy, nullptr);
+   }
+
+   Sys.newConstraint<LiteralConstraint>(
+       Var, LiteralConstraint::DictionaryLiteral, Loc, KeyTy, ElementTy);
 
    return Var;
 }
@@ -2152,8 +2158,8 @@ QualType ConstraintBuilder::visitCastExpr(CastExpr* Cast, SourceType T)
           Cast->getTargetType().getSourceRange(Cast->getSourceRange()));
    }
 
-   auto resultType = visitExpr(Cast->getTarget(), to->removeMetaType(), nullptr, false);
-   (void)resultType;
+   (void) visitExpr(Cast->getTarget(), to->removeMetaType(),
+                    nullptr, true, Cast->getStrength());
 
    return to->removeMetaType();
 }
@@ -2374,10 +2380,45 @@ QualType ConstraintBuilder::visitEnumCaseExpr(EnumCaseExpr*, SourceType)
    llvm_unreachable("should have been replaced!");
 }
 
-QualType ConstraintBuilder::visitSubscriptExpr(SubscriptExpr*,
-                                               SourceType)
+QualType ConstraintBuilder::visitSubscriptExpr(SubscriptExpr *Expr,
+                                               SourceType T)
 {
-   llvm_unreachable("should have been replaced!");
+   assert(Expr->getCallExpr() && "should have been replaced!");
+
+   if (auto *ResolvedCall = dyn_cast<CallExpr>(Expr->getCallExpr())) {
+      return visitExpr(ResolvedCall, T);
+   }
+
+   auto ResultType = visitExpr(Expr->getCallExpr());
+   if (!ResultType || ResultType->isErrorType()) {
+      return ResultType;
+   }
+
+   auto &Ovl = UnresolvedCalls[cast<AnonymousCallExpr>(Expr->getCallExpr())];
+   if (!Ovl.BestCand) {
+      return QualType();
+   }
+
+   auto *Fn = cast<MethodDecl>(Ovl.BestCand->getFunc());
+   SubscriptDecl *Sub = Sema.getSubscriptDecl(Fn);
+   Expr->setSubscriptDecl(Sub);
+
+   bool IsGet = Fn->getDeclName().getSubscriptKind()
+       == DeclarationName::SubscriptKind::Getter;
+
+   // Check read subscript getter.
+   if (Sub->isReadWrite() && IsGet) {
+      if (!Sub->hasSetter()) {
+         ResultType = ResultType->getTemplateArgs().front().getType();
+      }
+
+      ResultType = Sema.Context.getMutableReferenceType(ResultType);
+   }
+   else if (!IsGet) {
+      ResultType = Sema.Context.getMutableReferenceType(Sub->getType());
+   }
+
+   return ResultType;
 }
 
 QualType ConstraintBuilder::visitBuiltinExpr(BuiltinExpr*, SourceType)

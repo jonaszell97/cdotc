@@ -658,7 +658,8 @@ void ASTStmtReader::visitSubscriptExpr(SubscriptExpr* S)
    visitExpr(S);
 
    SmallVector<Expression*, 4> Args;
-   auto NumArgs = Record.readInt();
+   auto NumArgs =  Record.readInt();
+
    while (NumArgs--)
       Args.push_back(Record.readSubExpr());
 
@@ -666,6 +667,8 @@ void ASTStmtReader::visitSubscriptExpr(SubscriptExpr* S)
 
    S->setSquareRange(Record.readSourceRange());
    S->setParentExpr(Record.readSubExpr());
+   S->setCallExpr(Record.readSubExpr());
+   S->setSubscriptDecl(Record.readDeclAs<SubscriptDecl>());
 }
 
 void ASTStmtReader::visitTemplateArgListExpr(TemplateArgListExpr* S)
@@ -683,7 +686,11 @@ void ASTStmtReader::visitTemplateArgListExpr(TemplateArgListExpr* S)
    S->setParentExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitBuiltinExpr(BuiltinExpr* S) { visitExpr(S); }
+void ASTStmtReader::visitBuiltinExpr(BuiltinExpr* S)
+{
+   visitExpr(S);
+   S->setType(Record.readSourceType());
+}
 
 void ASTStmtReader::visitTupleMemberExpr(TupleMemberExpr* S)
 {

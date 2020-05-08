@@ -995,10 +995,16 @@ QueryResult IsConstraintSatisfiedQuery::run()
          return finish(true, DoneWithError);
       }
 
-      if (Inst->getAliasExpr()->getExprType() != QC.Context.getBoolTy()) {
+      if (Inst->getType() != QC.Context.getBoolTy()
+      && !(Inst->getType()->isRecordType()
+            && Inst->getType()->getRecord() == QC.Sema->getBoolDecl())) {
          QC.Sema->diagnose(ConcreteDecl, err_concept_must_be_bool,
                            Inst->getDeclName(), Inst->getSourceRange());
 
+         return finish(true, DoneWithError);
+      }
+
+      if (QC.Sema->visitExpr(Inst->getAliasExpr())) {
          return finish(true, DoneWithError);
       }
 
@@ -1876,7 +1882,7 @@ QueryResult PrepareCallableInterfaceQuery::run()
    }
 
    // Verify that a template provides a body.
-   if (D->isTemplate() && !D->getBody() && !D->getBodyTemplate()
+   if (D->isTemplate() && !D->willHaveDefinition()
        && !D->hasAttribute<_BuiltinAttr>() && !D->isProtocolRequirement()
        && !D->isExternal()) {
       QC.Sema->diagnose(D, err_generic_error, D->getSourceLoc(),
@@ -2193,10 +2199,8 @@ QueryResult PrepareAliasInterfaceQuery::run()
          return finish(DoneWithError);
       }
 
-      if (TypeRes.get()->isMetaType()) {
-         TypeRes = TypeRes.get()->removeMetaType();
-         D->setType(TypeRes.get());
-      }
+      TypeRes = TypeRes.get()->removeMetaType();
+      D->setType(TypeRes.get());
    }
 
    if (!D->getAliasExpr()) {
@@ -2217,7 +2221,7 @@ QueryResult PrepareAliasInterfaceQuery::run()
    }
 
    // If the type is inferred, we need to typecheck the expression already.
-   if (!D->getType()->isAutoType() || !D->getAliasExpr()) {
+   if (!D->getType()->isAutoType() || !D->getAliasExpr() || D->isTemplate()) {
       return finish();
    }
 
@@ -2244,6 +2248,11 @@ QueryResult PrepareAliasInterfaceQuery::run()
 
 QueryResult TypecheckAliasQuery::run()
 {
+   if (D->isTemplate() && !QC.Sema->isInBuiltinModule(D)
+   && !QC.Sema->isInReflectModule(D)) {
+      return finish();
+   }
+
    if (auto Err = QC.TypecheckConstraints(D)) {
       return Query::finish(Err);
    }

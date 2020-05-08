@@ -597,17 +597,25 @@ public:
 /// The constrained type variable must be implicitly convertible
 /// to another type.
 class ImplicitConversionConstraint : public RelationalConstraint {
-   ImplicitConversionConstraint(TypeVariable Var, QualType Type, Locator Loc);
+   ImplicitConversionConstraint(TypeVariable Var, QualType Type, Locator Loc,
+                                CastStrength allowedConversionStrength);
+
+   /// The maximum allowed conversion strength.
+   CastStrength allowedConversionStrength;
 
 public:
    static ImplicitConversionConstraint*
-   Create(ConstraintSystem& Sys, TypeVariable Var, QualType Type, Locator Loc);
+   Create(ConstraintSystem& Sys, TypeVariable Var, QualType Type, Locator Loc,
+          CastStrength allowedConversionStrength = CastStrength::Implicit);
 
    /// isa<>, cast<> dyn_cast<>
    static bool classof(const Constraint* C)
    {
       return C->getKind() == ImplicitConversionID;
    }
+
+   /// The maximum allowed conversion strength.
+   CastStrength getAllowedStrength() const { return allowedConversionStrength; }
 
    /// Print the constraint to a stream.
    void print(llvm::raw_ostream& OS) const;
@@ -649,14 +657,20 @@ public:
    };
 
 private:
-   LiteralConstraint(TypeVariable Var, LiteralKind LK, Locator Loc);
+   LiteralConstraint(TypeVariable Var, LiteralKind LK, Locator Loc,
+                     QualType T1, QualType T2);
 
    /// The literal kind.
    LiteralKind LK;
 
+   /// The associated type variables (for arrays and dictionaries).
+   std::pair<QualType, QualType> associatedTypes;
+
 public:
    static LiteralConstraint* Create(ConstraintSystem& Sys, TypeVariable Var,
-                                    LiteralKind LK, Locator Loc);
+                                    LiteralKind LK, Locator Loc,
+                                    QualType T1 = QualType(),
+                                    QualType T2 = QualType());
 
    /// isa<>, cast<> dyn_cast<>
    static bool classof(const Constraint* C)
@@ -668,10 +682,14 @@ public:
    void print(llvm::raw_ostream& OS) const;
 
    /// \return The default literal type for this constraint.
-   QualType getDefaultLiteralType(QueryContext& QC);
+   QualType getDefaultLiteralType(ConstraintSystem& Sys);
 
    /// \return the literal kind.
    LiteralKind getLiteralKind() const { return LK; }
+
+   /// \return The associated types of this literal constraint.
+   std::pair<QualType, QualType>
+       getAssociatedTypes() const { return associatedTypes; }
 };
 
 /// A disjunction of two or more constraints that is satisfied iff one of the

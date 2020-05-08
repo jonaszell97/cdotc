@@ -64,19 +64,19 @@ def __lldb_init_module(debugger, internal_dict):
     # debugger.HandleCommand('type synthetic add -w llvm '
     #                        '-l lldbDataFormatters.ExprSequenceSynthProvider '
     #                        '-x "^cdot::ast::ExprSequence$"')
-    # debugger.HandleCommand('type synthetic add -w llvm '
-    #                        '-l lldbDataFormatters.AnonymousCallExprSynthProvider '
-    #                        '-x "^cdot::ast::AnonymousCallExpr"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l lldbDataFormatters.AnonymousCallExprSynthProvider '
+                           '-x "^cdot::ast::AnonymousCallExpr"')
     # debugger.HandleCommand('type synthetic add -w llvm '
     #                        '-l lldbDataFormatters.CompoundStmtSynthProvider '
     #                        '-x "^cdot::ast::CompoundStmt$"')
     debugger.HandleCommand('type synthetic add -w llvm '
                            '-l lldbDataFormatters.DeclContextUnionSynthProvider '
                            '-x "^cdot::ast::Decl::DeclContextUnion$"')
-    # debugger.HandleCommand('type synthetic add -w llvm '
-    #                        '-l '
-    #                        'lldbDataFormatters.FinalTemplateArgumentListSynthProvider '
-    #                        '-x "^cdot::sema::FinalTemplateArgumentList"')
+    debugger.HandleCommand('type synthetic add -w llvm '
+                           '-l '
+                           'lldbDataFormatters.FinalTemplateArgumentListSynthProvider '
+                           '-x "^cdot::sema::FinalTemplateArgumentList"')
 
 # Pretty printer for llvm::SmallVector/llvm::SmallVectorImpl
 class SmallVectorSynthProvider:

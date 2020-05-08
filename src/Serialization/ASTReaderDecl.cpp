@@ -355,6 +355,7 @@ void ASTDeclReader::visitSubscriptDecl(SubscriptDecl* D)
 
    D->setLoc(ReadSourceRange());
    D->setType(Record.readSourceType());
+   D->setReadWrite(Record.readBool());
 
    unsigned GetterMethodID = Record.readDeclID();
    unsigned SetterMethodID = Record.readDeclID();
@@ -684,9 +685,6 @@ void ASTDeclReader::visitMacroDecl(MacroDecl* D)
 {
    visitNamedDecl(D);
 
-   if (D->getAccess() != AccessSpecifier::Public)
-      return;
-
    auto* Ptr = D->getTrailingObjects<MacroPattern*>();
    while (NumTrailingObjects--)
       *Ptr++ = ReadMacroPattern(Record, Reader.getContext());
@@ -880,21 +878,68 @@ void ASTDeclReader::visitRecordDecl(RecordDecl* D)
    D->setLastMethodID(Record.readInt());
    D->setType(Reader.getContext().getRecordType(D));
 
+   auto &Meta = Reader.getSema().QC.RecordMeta[D];
+   uint64_t rawFlags = Record.readInt();
+
+   Meta.Size = (uint32_t)rawFlags;
+   Meta.Alignment = (uint16_t)((rawFlags >> 32) & uint8_t(-1));
+
+   uint32_t flags = (uint32_t)((rawFlags >> 40) & uint32_t(-1));
+   Meta.ManualAlignment = (flags & 0x1) != 0;
+   Meta.Opaque = (flags & 0x2) != 0;
+   Meta.NeedsRetainOrRelease = (flags & 0x4) != 0;
+   Meta.IsBuiltinIntegerType = (flags & 0x8) != 0;
+   Meta.IsBuiltinFloatingPointType = (flags & 0x10) != 0;
+   Meta.IsBuiltinBoolType = (flags & 0x20) != 0;
+   Meta.IsTriviallyCopyable = (flags & 0x40) != 0;
+   Meta.IsImplicitlyEquatable = (flags & 0x80) != 0;
+   Meta.IsImplicitlyHashable = (flags & 0x100) != 0;
+   Meta.IsImplicitlyCopyable = (flags & 0x200) != 0;
+   Meta.IsImplicitlyStringRepresentable = (flags & 0x400) != 0;
+   Meta.IsImplicitlyRawRepresentable = (flags & 0x800) != 0;
+   bool HasOperatorEquals = (flags & 0x1000) != 0;
+   bool HasHashCode = (flags & 0x2000) != 0;
+   bool HasToString = (flags & 0x4000) != 0;
+   bool HasCopy = (flags & 0x8000) != 0;
+   bool HasGetRawValue = (flags & 0x10000) != 0;
+   bool HasFromRawValue = (flags & 0x20000) != 0;
+
+   Meta.Semantics = Record.getIdentifierInfo();
+
+   unsigned operatorEqualsID = HasOperatorEquals ? Record.readDeclID() : 0;
+   unsigned hashCodeID = HasHashCode ? Record.readDeclID() : 0;
+   unsigned toStringID = HasToString ? Record.readDeclID() : 0;
+   unsigned copyID = HasCopy ? Record.readDeclID() : 0;
+   unsigned getRawValueID = HasGetRawValue ? Record.readDeclID() : 0;
+   unsigned fromRawValueID = HasFromRawValue ? Record.readDeclID() : 0;
+
    unsigned DeinitID = Record.readDeclID();
    if (isa<StructDecl>(D)) {
       unsigned MemberwiseID = Record.readDeclID();
       unsigned DefaultID = Record.readDeclID();
 
-      Reader.addDeclUpdate(D, ThisDeclID, DeinitID, MemberwiseID, DefaultID);
+      Reader.addDeclUpdate(D, ThisDeclID, DeinitID,
+          operatorEqualsID, hashCodeID, toStringID, copyID, getRawValueID,
+          fromRawValueID, MemberwiseID, DefaultID);
    }
    else {
-      Reader.addDeclUpdate(D, ThisDeclID, DeinitID);
+      Reader.addDeclUpdate(D, ThisDeclID, DeinitID,
+                           operatorEqualsID, hashCodeID, toStringID,
+                           copyID, getRawValueID, fromRawValueID);
    }
 }
 
 void ASTDeclUpdateVisitor::visitRecordDecl(RecordDecl* D)
 {
    D->setDeinitializer(NextDecl<DeinitDecl>());
+
+   auto &Meta = Reader.getSema().QC.RecordMeta[D];
+   Meta.OperatorEquals = NextDecl<MethodDecl>();
+   Meta.HashCodeFn = NextDecl<MethodDecl>();
+   Meta.ToStringFn = NextDecl<MethodDecl>();
+   Meta.CopyFn = NextDecl<MethodDecl>();
+   Meta.GetRawValueFn = NextDecl<MethodDecl>();
+   Meta.FromRawValueInit = NextDecl<InitDecl>();
 }
 
 void ASTDeclReader::visitStructDecl(StructDecl* D)

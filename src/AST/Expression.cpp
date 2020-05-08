@@ -1722,7 +1722,8 @@ SourceRange AnonymousCallExpr::getSourceRange() const
 SubscriptExpr::SubscriptExpr(SourceRange SquareRange, Expression* ParentExpr,
                              llvm::ArrayRef<Expression*> indices)
     : Expression(SubscriptExprID), SquareRange(SquareRange),
-      ParentExpr(ParentExpr), NumIndices((unsigned)indices.size())
+      ParentExpr(ParentExpr), Subscript(nullptr), Call(nullptr),
+      NumIndices((unsigned)indices.size())
 {
    std::copy(indices.begin(), indices.end(), getTrailingObjects<Expression*>());
 }
@@ -1738,7 +1739,8 @@ SubscriptExpr* SubscriptExpr::Create(ASTContext& C, SourceRange SquareRange,
 }
 
 SubscriptExpr::SubscriptExpr(EmptyShell, unsigned N)
-    : Expression(SubscriptExprID), NumIndices(N)
+    : Expression(SubscriptExprID),
+      Subscript(nullptr), Call(nullptr), NumIndices(N)
 {
 }
 

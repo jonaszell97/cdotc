@@ -80,7 +80,9 @@ QueryResult CreateILModuleQuery::run()
       // Generate IL for instantiations of external templates.
       bool encounteredError = false;
       for (auto &Inst : QC.Sema->getInstantiator().getAllInstantiations()) {
-         if (Inst.getSecond()->isExternal() || !Inst.getFirst().first->isExternal()) {
+         if (Inst.getSecond()->isExternal()
+         || !Inst.getFirst().first->isExternal()
+         || Inst.getSecond()->isTemplateOrInTemplate()) {
             continue;
          }
 
@@ -328,18 +330,15 @@ QueryResult GenerateRecordILQuery::run()
 
    // Synthesize deinitializer.
    if (auto* Deinit = R->getDeinitializer()) {
-      if (Deinit->isSynthesized()) {
-         il::Function* F;
-         if (QC.GetILFunction(F, Deinit)) {
-            return fail();
-         }
-
-         ILGen.AppendDefaultDeinitializer(cast<il::Method>(F));
-
-#ifndef NDEBUG
-         ILGen.getMandatoryPassManager().runPassesOnFunction(*F);
-#endif
+      il::Function* F;
+      if (QC.GetILFunction(F, Deinit)) {
+         return fail();
       }
+      if (QC.GenerateILFunctionBody(Deinit)) {
+         return fail();
+      }
+
+      ILGen.AppendDefaultDeinitializer(cast<il::Method>(F));
    }
 
    // Synthesize derived conformances.

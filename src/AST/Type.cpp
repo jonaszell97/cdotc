@@ -36,6 +36,7 @@ bool TypeProperties::containsAssociatedType() const
 
 bool TypeProperties::containsTemplate() const
 {
+   llvm_unreachable("remove this!");
    return (Props & ContainsTemplate) != 0;
 }
 
@@ -46,6 +47,7 @@ bool TypeProperties::containsUnexpandedParameterPack() const
 
 bool TypeProperties::containsProtocolWithAssociatedTypes() const
 {
+   llvm_unreachable("remove this!");
    return (Props & ContainsProtocolWithAssociatedTypes) != 0;
 }
 
@@ -1153,16 +1155,6 @@ RecordType::RecordType(RecordDecl* record)
     : Type(TypeID::RecordTypeID, nullptr), Rec(record)
 {
    assert(!record->isTemplate() && "should be a DependentRecordType!");
-
-   if (auto *P = dyn_cast<ProtocolDecl>(record)) {
-      if (P->hasAssociatedTypeConstraint()) {
-         Bits.Props |= TypeProperties::ContainsProtocolWithAssociatedTypes;
-      }
-   }
-
-   if (record->isTemplateOrInTemplate()) {
-      Bits.Props |= TypeProperties::ContainsTemplate;
-   }
 }
 
 RecordType::RecordType(TypeID typeID, ast::RecordDecl* record, bool Dependent)

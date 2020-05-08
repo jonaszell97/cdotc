@@ -484,25 +484,14 @@ static bool createParamConstraints(
          return true;
       }
 
-      auto DefaultVal = ArgDecl->getDefaultVal();
-      if (DefaultVal->isMagicArgumentValue()) {
-         auto Alias = cast<IdentifierRefExpr>(DefaultVal)->getAlias();
-         auto Result
-             = Sema.HandleReflectionAlias(Alias, cast<Expression>(Caller));
-
-         if (Result) {
-            ArgExprs.emplace_back(Result.getValue());
-         }
-         else {
-            ArgExprs.emplace_back(DefaultVal);
-         }
-      }
-      else if (CD->isTemplate() || CD->isInitializerOfTemplate()
-               || CD->isCaseOfTemplatedEnum()) {
+      auto *DefaultVal = ArgDecl->getDefaultVal();
+      if (DefaultVal->isMagicArgumentValue()
+      || CD->isTemplate() || CD->isInitializerOfTemplate()
+      || CD->isCaseOfTemplatedEnum()) {
          ArgExprs.emplace_back(ArgDecl);
       }
       else {
-         ArgExprs.emplace_back(DefaultVal);
+         ArgExprs.emplace_back(ArgDecl->getDefaultVal());
       }
 
       return false;
@@ -510,9 +499,31 @@ static bool createParamConstraints(
 
    MutableArrayRef<Expression*> ArgValues = DeclArgMap[ArgDecl];
 
+   // Cstyle varargs.
+   if (ArgDecl == nullptr) {
+      for (auto *Val : ArgValues) {
+         auto Result = Builder.generateConstraints(Val, SourceType(), nullptr);
+         switch (Result.Kind) {
+         case ConstraintBuilder::Success:
+            break;
+         case ConstraintBuilder::InvalidArgument:
+            Cand.setHasIncompatibleArgument(i, Result.Type,
+                                            ArgDecl->getType());
+            return true;
+         case ConstraintBuilder::Failure:
+            Cand.setIsInvalid();
+            return true;
+         case ConstraintBuilder::Dependent:
+            Cand.setIsDependent();
+            return false;
+         }
+
+         ArgExprs.emplace_back(Val);
+      }
+   }
    // If the parameter type is a pack expansion, we can use the supplied
    // values directly.
-   if (ArgDecl->isVariadic()) {
+   else if (ArgDecl->isVariadic()) {
       auto* Param = ArgDecl->getType()->asTemplateParamType()->getParam();
       auto* Arg = templateArgs.getArgForParam(Param);
 
@@ -980,7 +991,8 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
 static bool replaceDefaultValues(SemaPass& SP, CandidateSet& CandSet,
                                  CandidateSet::Candidate& Cand,
-                                 std::vector<StmtOrDecl>& ArgExprs)
+                                 std::vector<StmtOrDecl>& ArgExprs,
+                                 Statement *Caller)
 {
    if (!Cand.isAnonymousCandidate() && Cand.getFunc()->isInvalid()) {
       CandSet.InvalidCand = true;
@@ -1009,7 +1021,18 @@ static bool replaceDefaultValues(SemaPass& SP, CandidateSet& CandSet,
             }
          }
 
-         SOD = Inst->getDefaultVal();
+         auto DefaultVal = Inst->getDefaultVal();
+         if (DefaultVal->isMagicArgumentValue()) {
+            auto Alias = cast<IdentifierRefExpr>(DefaultVal)->getAlias();
+            auto Result
+                = SP.HandleReflectionAlias(Alias, cast<Expression>(Caller));
+
+            assert(!isa<IdentifierRefExpr>(Result.getValue()));
+            SOD = Result.getValue();
+         }
+         else {
+            SOD = Inst->getDefaultVal();
+         }
       }
 
       CandSet.ResolvedArgs.push_back(cast<Expression>(SOD.getStatement()));
@@ -1200,6 +1223,18 @@ static bool resolveCandidate(
       }
    }
 
+   // Add C-Style varargs.
+   if (Cand.getFunc()->isCstyleVararg()) {
+      if (DeclArgMap.find(nullptr) != DeclArgMap.end()) {
+         if (createParamConstraints(Sys, DeclArgMap, Cand, nullptr, NumGivenArgs,
+                                    i++, ArgExprs, VariadicParams, templateArgList,
+                                    *Cand.Builder, Sema, Caller, outerBuilder,
+                                    paramConversionPenalty, bestConversionPenalty)) {
+            Valid = false;
+         }
+      }
+   }
+
    if (!Valid) {
       CandSet.InvalidCand |= Cand.FR == CandidateSet::IsInvalid;
       return false;
@@ -1211,16 +1246,6 @@ static bool resolveCandidate(
          // Only use the return type for inference if it doesn't appear in the
          // parameter types.
          Cand.Builder->addTemplateParamBinding(ReturnType, RequiredType);
-      }
-   }
-
-   // Add C-Style varargs.
-   if (Cand.getFunc()->isCstyleVararg()) {
-      auto It = DeclArgMap.find(nullptr);
-      if (It != DeclArgMap.end()) {
-         for (Expression* argValue : It->getSecond()) {
-            ArgExprs.emplace_back(argValue);
-         }
       }
    }
 
@@ -1568,7 +1593,8 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
    }
 
    // Non-template functions are always preferred over templates.
-   if ((!BestSolution || !BestCandidate->ValidReturnType) && foundTemplate) {
+   if ((!BestSolution || !BestCandidate->ValidReturnType || BestSolution.Score > 0)
+   && foundTemplate) {
       i = 0;
       for (auto& Cand : CandSet.Candidates) {
          if (Cand.isAnonymousCandidate() || !Cand.getFunc()->isTemplate()) {
@@ -1616,14 +1642,15 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
    }
 
    // Replace default argument values.
-   replaceDefaultValues(Sema, CandSet, *BestCandidate, BestMatchArgExprs);
+   replaceDefaultValues(Sema, CandSet, *BestCandidate, BestMatchArgExprs,
+                        Caller);
 
    // Apply the solution.
    BestCandidate->Builder->applySolution(BestSolution, CandSet.ResolvedArgs);
 
    // Apply implicit argument conversions.
    // Note: there can still be errors here if there were any template parameters
-   // to resolve.
+   // left to resolve.
    if (applyConversions(Sema, CandSet, *BestCandidate, BestMatchArgExprs,
                         Caller)) {
       return nullptr;

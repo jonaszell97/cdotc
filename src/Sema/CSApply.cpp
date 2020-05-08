@@ -99,6 +99,41 @@ public:
 
       return Expr;
    }
+
+   ExprResult visitSubscriptExpr(SubscriptExpr *Expr)
+   {
+      auto Result = StmtBuilder::visitSubscriptExpr(Expr);
+      assert(Result && "should never fail");
+
+      if (auto *Call = dyn_cast_or_null<CallExpr>(Expr->getCallExpr())) {
+         Result = visitExpr(Call);
+         if (!Result) {
+            return Result;
+         }
+
+         Call = cast<CallExpr>(Result.get());
+         Expr->setCallExpr(Call);
+
+         QualType ResultType = Call->getExprType();
+         auto *Sub = Expr->getSubscriptDecl();
+         assert(Sub && "subscript not found");
+
+         // Check read subscript getter.
+         if (Sub->isReadWrite() && Call->getFunc()->getDeclName().getSubscriptKind()
+                                   == DeclarationName::SubscriptKind::Getter) {
+            if (!Sub->hasSetter()) {
+               ResultType = ResultType->getTemplateArgs().front().getType();
+            }
+
+            ResultType = Sys.QC.Context.getMutableReferenceType(ResultType);
+         }
+
+         Expr->setExprType(ResultType);
+         Expr->setSemanticallyChecked(true);
+      }
+
+      return Expr;
+   }
 };
 
 } // anonymous namespace

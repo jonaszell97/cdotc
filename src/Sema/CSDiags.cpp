@@ -355,7 +355,7 @@ static bool diagnoseLiteralFailure(ConstraintSystem& Sys, LiteralConstraint* LC,
       }
 
       Sys.bindTypeVariable(LC->getConstrainedType(),
-                           LC->getDefaultLiteralType(Sys.QC), -1, true);
+                           LC->getDefaultLiteralType(Sys), -1, true);
 
       return diagnoseConversionFailure(Sys, Conv, Cand);
    }

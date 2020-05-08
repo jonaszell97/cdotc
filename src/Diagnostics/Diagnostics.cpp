@@ -621,8 +621,9 @@ void DiagnosticBuilder::finalize()
          assert(EndOffsetOnLine >= BeginOffsetOnLine
                 && "invalid source range!");
 
-         while (--EndOffsetOnLine > BeginOffsetOnLine) {
+         while (EndOffsetOnLine >= BeginOffsetOnLine) {
             Markers[EndOffsetOnLine] = '~';
+            --EndOffsetOnLine;
          }
 
          // If there's only one location and it's a range, show a caret

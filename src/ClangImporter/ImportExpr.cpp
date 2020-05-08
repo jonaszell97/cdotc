@@ -63,7 +63,10 @@ static Expression* expressionFromNumericConstantToken(ImporterImpl& I,
       // FIXME handle errors
       (void)Status;
 
-      return FPLiteral::Create(Ctx, SR, Ty, APF);
+      auto *Lit = FPLiteral::Create(Ctx, SR, Ty, APF);
+      Lit->setContextualType(Ty);
+
+      return Lit;
    }
 
    if (!Literal.isIntegerLiteral()) {
@@ -132,8 +135,11 @@ static Expression* expressionFromNumericConstantToken(ImporterImpl& I,
          ResultVal = ResultVal.trunc(Width);
    }
 
-   return IntegerLiteral::Create(Ctx, SR, Ty,
-                                 llvm::APSInt(ResultVal, Ty->isUnsigned()));
+   auto *Lit = IntegerLiteral::Create(
+       Ctx, SR, Ty, llvm::APSInt(ResultVal, Ty->isUnsigned()));
+
+   Lit->setContextualType(Ty);
+   return Lit;
 }
 
 static Expression* expressionFromCharToken(ImporterImpl& I,

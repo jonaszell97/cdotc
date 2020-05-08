@@ -5,6 +5,7 @@
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/ConstraintStep.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -344,36 +345,57 @@ void MemberConstraint::print(llvm::raw_ostream& OS) const
    OS << *ConstrainedType << "." << MemberName << " == " << MemberType;
 }
 
-ImplicitConversionConstraint::ImplicitConversionConstraint(TypeVariable Var,
-                                                           QualType Type,
-                                                           Locator Loc)
-    : RelationalConstraint(ImplicitConversionID, Var, Type, Loc)
+ImplicitConversionConstraint::ImplicitConversionConstraint(
+                           TypeVariable Var, QualType Type,
+                           Locator Loc, CastStrength allowedConversionStrength)
+    : RelationalConstraint(ImplicitConversionID, Var, Type, Loc),
+      allowedConversionStrength(allowedConversionStrength)
 {
 }
 
 ImplicitConversionConstraint*
 ImplicitConversionConstraint::Create(ConstraintSystem& Sys, TypeVariable Var,
-                                     QualType Type, Locator Loc)
+                                     QualType Type, Locator Loc,
+                                     CastStrength allowedConversionStrength)
 {
-   return new (Sys) ImplicitConversionConstraint(Var, Type, Loc);
+   return new (Sys) ImplicitConversionConstraint(Var, Type, Loc,
+                                                 allowedConversionStrength);
 }
 
 void ImplicitConversionConstraint::print(llvm::raw_ostream& OS) const
 {
-   OS << *ConstrainedType << " <c " << Type;
+   OS << *ConstrainedType << " <c";
+   switch (allowedConversionStrength) {
+   case CastStrength::Force:
+      OS << "!";
+      break;
+   case CastStrength::Fallible:
+      OS << "?";
+      break;
+   case CastStrength::Normal:
+      OS << "~";
+      break;
+   default:
+      break;
+   }
+
+   OS << " " << Type;
 }
 
 LiteralConstraint::LiteralConstraint(TypeVariable Var, LiteralKind LK,
-                                     Locator Loc)
+                                     Locator Loc, QualType T1, QualType T2)
     : Constraint(LiteralID, Var, Loc), LK(LK)
 {
+   associatedTypes.first = T1;
+   associatedTypes.second = T2;
 }
 
 LiteralConstraint* LiteralConstraint::Create(ConstraintSystem& Sys,
                                              TypeVariable Var, LiteralKind LK,
-                                             Locator Loc)
+                                             Locator Loc,
+                                             QualType T1, QualType T2)
 {
-   return new (Sys) LiteralConstraint(Var, LK, Loc);
+   return new (Sys) LiteralConstraint(Var, LK, Loc, T1, T2);
 }
 
 void LiteralConstraint::print(llvm::raw_ostream& OS) const
@@ -402,10 +424,11 @@ void LiteralConstraint::print(llvm::raw_ostream& OS) const
       OS << " string literal";
       break;
    case ArrayLiteral:
-      OS << "n array literal";
+      OS << "n array literal (T = " << associatedTypes.first << ")";
       break;
    case DictionaryLiteral:
-      OS << " dictionary literal";
+      OS << " dictionary literal (K = " << associatedTypes.first
+         << ", V = " << associatedTypes.second << ")";
       break;
    case NoneLiteral:
       OS << " none literal";
@@ -413,7 +436,7 @@ void LiteralConstraint::print(llvm::raw_ostream& OS) const
    }
 }
 
-QualType LiteralConstraint::getDefaultLiteralType(QueryContext& QC)
+QualType LiteralConstraint::getDefaultLiteralType(ConstraintSystem& Sys)
 {
    GetBuiltinAliasQuery::AliasKind RK;
    switch (LK) {
@@ -444,6 +467,8 @@ QualType LiteralConstraint::getDefaultLiteralType(QueryContext& QC)
       return QualType();
    }
 
+   auto &QC = Sys.QC;
+
    AliasDecl* DefaultAlias;
    if (QC.GetBuiltinAlias(DefaultAlias, RK, &QC.Sema->getDeclContext())
        || !DefaultAlias || QC.PrepareDeclInterface(DefaultAlias)) {
@@ -468,7 +493,75 @@ QualType LiteralConstraint::getDefaultLiteralType(QueryContext& QC)
       }
    }
 
-   return DefaultAlias->getType()->asMetaType()->getUnderlyingType();
+   switch (LK) {
+   default:
+      return DefaultAlias->getType()->asMetaType()->getUnderlyingType();
+   case LiteralConstraint::ArrayLiteral: {
+      QualType elementType = Sys.getConcreteType(associatedTypes.first);
+      if (elementType->containsTypeVariable()) {
+         return QualType();
+      }
+
+      TemplateArgList List(*QC.Sema, DefaultAlias);
+      List.insert(TemplateArgument(DefaultAlias->getTemplateParams().front(),
+                                   elementType));
+
+      if (!List.checkCompatibility() || List.isStillDependent()) {
+         return QualType();
+      }
+
+      auto *TemplateArgs = sema::FinalTemplateArgumentList::Create(
+          Sys.QC.Context, List);
+
+      auto *Inst = QC.Sema->getInstantiator().InstantiateAlias(
+          DefaultAlias, TemplateArgs,
+          Loc ? Loc->getAnchor()->getSourceLoc() : SourceLocation());
+
+      if (!Inst) {
+         return QualType();
+      }
+
+      if (QC.PrepareDeclInterface(Inst)) {
+         return QualType();
+      }
+
+      return Inst->getType()->removeMetaType();
+   }
+   case LiteralConstraint::DictionaryLiteral: {
+      QualType keyType = Sys.getConcreteType(associatedTypes.first);
+      QualType valueType = Sys.getConcreteType(associatedTypes.second);
+      if (keyType->containsTypeVariable() || valueType->containsTypeVariable()) {
+         return QualType();
+      }
+
+      TemplateArgList List(*QC.Sema, DefaultAlias);
+      List.insert(TemplateArgument(DefaultAlias->getTemplateParams().front(),
+                                   keyType));
+      List.insert(TemplateArgument(DefaultAlias->getTemplateParams()[1],
+                                   valueType));
+
+      if (!List.checkCompatibility() || List.isStillDependent()) {
+         return QualType();
+      }
+
+      auto *TemplateArgs = sema::FinalTemplateArgumentList::Create(
+          Sys.QC.Context, List);
+
+      auto *Inst = QC.Sema->getInstantiator().InstantiateAlias(
+          DefaultAlias, TemplateArgs,
+          Loc ? Loc->getAnchor()->getSourceLoc() : SourceLocation());
+
+      if (!Inst) {
+         return QualType();
+      }
+
+      if (QC.PrepareDeclInterface(Inst)) {
+         return QualType();
+      }
+
+      return Inst->getType()->removeMetaType();
+   }
+   }
 }
 
 DisjunctionConstraint::DisjunctionConstraint(ArrayRef<Constraint*> Constraints,
@@ -1065,15 +1158,24 @@ bool ConstraintSystem::isSatisfied(ImplicitConversionConstraint* C)
 
    auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS);
    if (!ConvSeq.isValid()) {
-      //      if (ConvSeq.isDependent()) {
-      //         TypeDependent = true;
-      //         return true;
-      //      }
-
       return false;
    }
 
-   return ConvSeq.isImplicit();
+   auto strength = ConvSeq.getStrength();
+   auto allowedStrength = C->getAllowedStrength();
+
+   if (strength == allowedStrength) {
+      return true;
+   }
+
+   switch (allowedStrength) {
+   default:
+      return false;
+   case CastStrength::Force:
+      return true;
+   case CastStrength::Normal:
+      return strength == CastStrength::Implicit;
+   }
 }
 
 static bool isExpressibleBy(SemaPass& Sema, CanType Ty,
@@ -1842,7 +1944,7 @@ static int isBetterBinding(ConstraintSystem& Sys, TypeVariableType* TV,
       auto* Lit = getFirstConstraint<LiteralConstraint>(Sys, TV);
       assert(Lit && "does not have a literal constraint!");
 
-      QualType DefaultTy = Lit->getDefaultLiteralType(Sys.QC);
+      QualType DefaultTy = Lit->getDefaultLiteralType(Sys);
       if (T1 != DefaultTy) {
          return T2 != DefaultTy ? 0 : 1;
       }

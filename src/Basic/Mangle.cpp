@@ -224,7 +224,7 @@ void ItaniumLikeMangler::mangleModuleName(const ModuleDecl* M)
    //   <module-name> ::= W <unscoped-name>+ E
    //                 ::= W <module-subst> <unscoped-name>* E
    OS << 'W';
-   mangleModuleNamePrefix(M->getFullName());
+   mangleModuleNamePrefix(M->getJoinedName('.', false, false, true));
    OS << 'E';
 }
 

@@ -63,22 +63,6 @@ void ModuleFile::PerformExternalLookup(DeclContext& Ctx, DeclarationName Name)
    }
 }
 
-static bool isInInstantiation(DeclContext& CtxRef, NamedDecl*& Inst)
-{
-   auto* Ctx = &CtxRef;
-   while (Ctx) {
-      auto* ND = dyn_cast<NamedDecl>(Ctx);
-      if (ND && ND->isInstantiation()) {
-         Inst = ND;
-         return true;
-      }
-
-      Ctx = Ctx->getParentCtx();
-   }
-
-   return false;
-}
-
 void ModuleFile::LoadedDecl(DeclContext& Ctx, Decl* ReadDecl, bool IgnoreInst)
 {
    // these decls are immediately made visible
@@ -105,35 +89,6 @@ void ModuleFile::LoadedDecl(DeclContext& Ctx, Decl* ReadDecl, bool IgnoreInst)
    }
 
    auto& Sema = Reader.CI.getSema();
-
-   // if this context is an instantiation, we need to instantiate the decl
-   // first
-   NamedDecl* Inst = nullptr;
-   if (!IgnoreInst && isInInstantiation(Ctx, Inst)) {
-      if (Inst->isImportedInstantiation()) {
-         addDeclToContext(Sema, Ctx, ReadDecl);
-         return;
-      }
-      if (ReadDecl->getDeclContext() == &Ctx) {
-         addDeclToContext(Sema, Ctx, ReadDecl);
-         return;
-      }
-      if (auto* M = dyn_cast<MethodDecl>(ReadDecl)) {
-         if (M->isSubscript() || M->isProperty())
-            return;
-      }
-
-      SemaPass::DeclScopeRAII DSR(Sema, &Ctx);
-      auto InstResult = Sema.getInstantiator().InstantiateDecl(
-          {}, ReadDecl, Inst->getTemplateArgs());
-
-      if (InstResult) {
-         Sema.QC.PrepareDeclInterface(InstResult.get());
-      }
-
-      return;
-   }
-
    addDeclToContext(Sema, Ctx, ReadDecl);
 }
 
@@ -207,11 +162,12 @@ LazyFunctionInfo::LazyFunctionInfo(ModuleReader& Reader,
 
 void LazyFunctionInfo::loadBody(CallableDecl* Fn)
 {
-   if (BodyRead)
-      return;
+   if (!ReadBody) {
+      ReadBody = Reader.ASTReader.ReadStmtFromStream(BodyCursor);
+   }
 
-   BodyRead = true;
-   Fn->setBody(Reader.ASTReader.ReadStmtFromStream(BodyCursor));
+   assert(this == Fn->getLazyFnInfo());
+   Fn->setBody(ReadBody);
 }
 
 LazyILFunctionInfo::LazyILFunctionInfo(

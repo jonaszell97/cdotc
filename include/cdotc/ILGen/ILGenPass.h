@@ -107,7 +107,7 @@ public:
 
    il::Value* visitParenExpr(ParenExpr* node);
 
-   il::Value* visitSubscriptExpr(SubscriptExpr* node);
+   il::Value* visitSubscriptExpr(SubscriptExpr* Expr);
    il::Value* visitCallExpr(CallExpr* Expr, il::Value* GenericArgs = nullptr);
    il::Value* visitAnonymousCallExpr(AnonymousCallExpr* Expr);
    il::Value* visitTupleMemberExpr(TupleMemberExpr* node);

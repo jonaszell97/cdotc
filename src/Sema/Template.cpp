@@ -38,6 +38,14 @@ static bool isDependentType(TemplateParamDecl *Param, QualType type)
       return false;
    }
 
+   if (Result) {
+      return true;
+   }
+
+   if (QC.ContainsTemplate(Result, type)) {
+      return false;
+   }
+
    return Result;
 }
 
@@ -495,17 +503,6 @@ public:
          return false;
       }
 
-      //      if (Template->isUnboundedTemplate()
-      //            && TA->getExprType()->containsRuntimeGenericParam()) {
-      //         SP.diagnose(TA, err_generic_error,
-      //                     "cannot use a runtime generic parameter as a "
-      //                     "compile-time template parameter",
-      //                     TA->getSourceRange());
-      //
-      //         SP.diagnose(note_template_parameter_here, P->getSourceLoc());
-      //         HadError = true;
-      //      }
-
       auto ty = res.get()->getExprType();
       if (isa<TypeExpr>(res.get()) || ty->isErrorType()) {
          if (!P->isTypeName()) {
@@ -517,7 +514,7 @@ public:
          checkCovariance(P, ty);
          checkDependentType(ty);
 
-         StillDependent |= ty->isDependentType();
+         StillDependent |= isDependentType(P, ty);
 
          Out = TemplateArgument(P, ty, TA->getSourceLoc());
       }
@@ -533,7 +530,7 @@ public:
          checkCovariance(P, RealTy);
          checkDependentType(RealTy);
 
-         StillDependent |= RealTy->isDependentType();
+         StillDependent |= isDependentType(P, RealTy);
 
          Out = TemplateArgument(P, RealTy, TA->getSourceLoc());
       }
@@ -780,7 +777,8 @@ private:
       assert(!Param->isVariadic() && "variadics cannot have a default value!");
 
       if (Param->isTypeName()) {
-         Arg = TemplateArgument(Param, Def->getExprType(), Def->getSourceLoc());
+         Arg = TemplateArgument(Param, Def->getExprType()->removeMetaType(),
+             Def->getSourceLoc());
       }
       else {
          auto SE = cast<StaticExpr>(Def);

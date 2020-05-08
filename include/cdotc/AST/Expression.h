@@ -2432,6 +2432,8 @@ class SubscriptExpr final : public Expression,
 
    SourceRange SquareRange;
    Expression* ParentExpr;
+   SubscriptDecl *Subscript;
+   Expression *Call;
    unsigned NumIndices;
 
 public:
@@ -2463,6 +2465,12 @@ public:
    }
 
    bool hasSingleIndex() const { return NumIndices == 1; }
+
+   SubscriptDecl *getSubscriptDecl() const { return Subscript; }
+   void setSubscriptDecl(SubscriptDecl *D) { Subscript = D; }
+
+   Expression *getCallExpr() const { return Call; }
+   void setCallExpr(Expression *Call) { this->Call = Call; }
 };
 
 class TemplateArgListExpr final

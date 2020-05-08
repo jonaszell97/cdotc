@@ -2162,13 +2162,15 @@ public:
 class SubscriptDecl final : public NamedDecl,
                             public DefaultImplementable<SubscriptDecl> {
    SubscriptDecl(AccessSpecifier access, SourceRange Loc, DeclarationName Name,
-                 SourceType type, MethodDecl* GetterMethod,
-                 MethodDecl* SetterMethod);
+                 SourceType type, bool isStatic, bool IsReadWrite,
+                 MethodDecl* GetterMethod, MethodDecl* SetterMethod);
 
    SubscriptDecl(EmptyShell);
 
    SourceRange Loc;
    SourceType type;
+
+   bool IsReadWrite;
 
    MethodDecl* getterMethod = nullptr;
    MethodDecl* setterMethod = nullptr;
@@ -2178,6 +2180,7 @@ class SubscriptDecl final : public NamedDecl,
 public:
    static SubscriptDecl* Create(ASTContext& C, AccessSpecifier access,
                                 SourceRange Loc, SourceType type,
+                                bool isStatic, bool IsReadWrite,
                                 MethodDecl* GetterMethod,
                                 MethodDecl* SetterMethod);
 
@@ -2192,6 +2195,9 @@ public:
 
    void setLoc(const SourceRange& Loc) { this->Loc = Loc; }
    void setType(const SourceType& type) { this->type = type; }
+
+   bool isReadWrite() const { return IsReadWrite; }
+   void setReadWrite(bool RW) { IsReadWrite = RW; }
 
    bool hasGetter() const { return getterMethod != nullptr; }
    bool hasSetter() const { return setterMethod != nullptr; }

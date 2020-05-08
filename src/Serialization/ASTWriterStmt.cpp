@@ -689,6 +689,8 @@ void ASTStmtWriter::visitSubscriptExpr(SubscriptExpr* S)
 
    Record.AddSourceRange(S->getSourceRange());
    Record.AddStmt(S->getParentExpr());
+   Record.AddStmt(S->getCallExpr());
+   Record.AddDeclRef(S->getSubscriptDecl());
 }
 
 void ASTStmtWriter::visitTemplateArgListExpr(TemplateArgListExpr* S)
@@ -705,7 +707,11 @@ void ASTStmtWriter::visitTemplateArgListExpr(TemplateArgListExpr* S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitBuiltinExpr(BuiltinExpr* S) { visitExpr(S); }
+void ASTStmtWriter::visitBuiltinExpr(BuiltinExpr* S)
+{
+   visitExpr(S);
+   Record.AddTypeRef(S->getType());
+}
 
 void ASTStmtWriter::visitTupleMemberExpr(TupleMemberExpr* S)
 {

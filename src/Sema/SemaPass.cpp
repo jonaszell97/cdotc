@@ -388,7 +388,7 @@ ExprResult SemaPass::typecheckExpr(Expression* Expr, SourceType RequiredType,
 
       auto Result = visitExpr(Expr, Expr, contextualTy);
       if (Result && contextualTy && isHardRequirement) {
-         return forceCast(Result.get(), contextualTy);
+         return implicitCastIfNecessary(Result.get(), contextualTy);
       }
 
       return Result;
@@ -633,7 +633,8 @@ bool SemaPass::warnOnUnusedResult(Expression* E) const
       case CallKind::NamedFunctionCall:
       case CallKind::StaticMethodCall:
       case CallKind::MethodCall:
-      case CallKind::InitializerCall: {
+      case CallKind::InitializerCall:
+      case CallKind::Builtin: {
          if (Call->isDotInit()) {
             return false;
          }
@@ -1388,7 +1389,7 @@ bool SemaPass::visitVarDecl(VarDecl* Decl)
 
       // Check if the copy for this value can be elided, this is the case if
       // we are passed a temporary of structure type as the initializer
-      if (!Val->isLValue() && NeedsStructReturn(givenType)) {
+      if (!Val->isLValue()) {
          Decl->setCanElideCopy(true);
       }
       else if (Val->isLValue() && !isa<AddrOfExpr>(Val->ignoreParens())) {
@@ -1945,6 +1946,9 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral* Expr)
       auto K = &DictRec->getTemplateArgs().front();
       auto V = &DictRec->getTemplateArgs()[1];
 
+      keyTy = K->getType();
+      valueTy = V->getType();
+
       for (auto& key : Expr->getKeys()) {
          key = getAsOrCast(Expr, key, keyTy).get();
       }
@@ -1952,9 +1956,6 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral* Expr)
       for (auto& val : Expr->getValues()) {
          val = getAsOrCast(Expr, val, valueTy).get();
       }
-
-      keyTy = K->getType();
-      valueTy = V->getType();
    }
    else {
    no_contextual:
@@ -2034,11 +2035,24 @@ ExprResult SemaPass::visitDictionaryLiteral(DictionaryLiteral* Expr)
       DN = Context.getDeclNameTable().getConstructorName(
           Context.getRecordType(DictInst));
 
-      auto Init = QC.LookupSingleAs<InitDecl>(DictInst, DN);
+      const MultiLevelLookupResult *lookupResult;
+      if (QC.DirectLookup(lookupResult, DictInst, DN) || lookupResult->empty()) {
+         Expr->setExprType(Context.getRecordType(DictInst));
+         Expr->setIsInvalid(true);
+         return Expr;
+      }
+
+      auto Init = cast<InitDecl>(lookupResult->front().front());
       maybeInstantiateMemberFunction(Init, Expr);
 
       auto* InsertII = &Context.getIdentifiers().get("insert");
-      auto InsertFn = QC.LookupSingleAs<MethodDecl>(DictInst, InsertII);
+      if (QC.DirectLookup(lookupResult, DictInst, InsertII) || lookupResult->empty()) {
+         Expr->setExprType(Context.getRecordType(DictInst));
+         Expr->setIsInvalid(true);
+         return Expr;
+      }
+
+      auto *InsertFn = cast<MethodDecl>(lookupResult->front().front());
       maybeInstantiateMemberFunction(InsertFn, Expr);
 
       Expr->setInitFn(Init);
@@ -4020,7 +4034,8 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
       }
    }
    else if (!declaredReturnType->isVoidType()
-            && !declaredReturnType->isEmptyTupleType()) {
+            && !declaredReturnType->isEmptyTupleType()
+            && !declaredReturnType->isAutoType()) {
       diagnose(Stmt, err_type_mismatch, Stmt->getSourceLoc(),
                Context.getVoidType(), declaredReturnType);
    }

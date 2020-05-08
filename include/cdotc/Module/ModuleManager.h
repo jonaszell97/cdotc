@@ -59,6 +59,11 @@ public:
    serial::ModuleWriter* getModuleWriter() const { return Writer; }
    SmallString<0>* getModuleBuffer() const { return Buffer; }
 
+   const llvm::DenseMap<IdentifierInfo*, Module*> &getLoadedModules()
+   {
+      return LoadedModules;
+   }
+
    ast::ModuleDecl* GetOrCreateModule(SourceRange Loc,
                                       ArrayRef<IdentifierInfo*> Name);
 

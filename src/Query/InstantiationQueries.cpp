@@ -162,7 +162,9 @@ TemplateInstantiator::InstantiateProtocolDefaultImpl(NamedDecl *Impl,
       }
 
       Inst = SubscriptDecl::Create(SP.Context, S->getAccess(),
-                                   S->getSourceRange(), T, Getter, Setter);
+                                   S->getSourceRange(), T,
+                                   S->isStatic(), S->isReadWrite(),
+                                   Getter, Setter);
    }
    else if (auto* alias = dyn_cast<AliasDecl>(Impl)) {
       QualType InstTy;

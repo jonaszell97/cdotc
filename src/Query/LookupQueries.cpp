@@ -59,6 +59,19 @@ static void updateSpecialNames(SemaPass& Sema, QualType T, ExtensionDecl* Ext)
    }
 }
 
+static void CheckTemplateExtension(QueryContext &QC, ExtensionDecl *Ext,
+                                   RecordDecl *Template)
+{
+   for (auto *D : Ext->getDecls()) {
+      if (isa<RecordDecl>(D)) {
+         QC.Sema->diagnose(err_generic_error,
+             "templates cannot contain nested types", D->getSourceLoc());
+         QC.Sema->diagnose(note_generic_note,
+             "template declared here", Template->getSourceLoc());
+      }
+   }
+}
+
 QueryResult FindExtensionsQuery::run()
 {
    using ResultKind = MatchExtensionTypeQuery::ResultKind;
@@ -91,6 +104,10 @@ QueryResult FindExtensionsQuery::run()
 
          LLVM_FALLTHROUGH;
       case ResultKind::Applies: {
+         if (T->isRecordType() && T->getRecord()->isTemplate()) {
+            CheckTemplateExtension(QC, Ext, T->getRecord());
+         }
+
          Context.addExtension(T, Ext);
          Ext->setName(QC.Context.getDeclNameTable().getExtensionName(T));
 

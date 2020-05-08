@@ -151,6 +151,10 @@ def ExternallyInitialized : DeclAttr<"externallyInitialized", [GlobalVarDecl]> {
     Visit = Never
 }
 
+def Instantiate : DeclAttr<"instantiate", [NamedDecl]> {
+    Visit = AfterSema
+}
+
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
     Visit = Immediate

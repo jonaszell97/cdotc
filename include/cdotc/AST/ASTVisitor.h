@@ -421,6 +421,9 @@ protected:
       if (auto E = Stmt->getParentExpr())
          static_cast<SubClass*>(this)->visitStmt(E);
 
+      if (auto E = Stmt->getCallExpr())
+         static_cast<SubClass*>(this)->visitStmt(E);
+
       for (auto& E : Stmt->getIndices())
          if (!static_cast<SubClass*>(this)->visitStmt(E))
             return true;
@@ -1293,6 +1296,13 @@ protected:
          auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
             Expr->setParentExpr(Result.get());
+         }
+      }
+
+      if (auto Val = Expr->getCallExpr()) {
+         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
+         if (Result) {
+            Expr->setCallExpr(Result.get());
          }
       }
 

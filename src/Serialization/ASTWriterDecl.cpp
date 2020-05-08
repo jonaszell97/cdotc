@@ -3,6 +3,7 @@
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Serialization/ASTReaderInternals.h"
 #include "cdotc/Serialization/ASTWriter.h"
@@ -375,6 +376,7 @@ void ASTDeclWriter::visitSubscriptDecl(SubscriptDecl* D)
 
    Record.AddSourceRange(D->getSourceRange());
    Record.AddTypeRef(D->getType());
+   Record.push_back(D->isReadWrite());
 
    Record.AddDeclRef(D->getGetterMethod());
    Record.AddDeclRef(D->getSetterMethod());
@@ -623,9 +625,6 @@ void ASTDeclWriter::visitMacroDecl(MacroDecl* D)
 {
    visitNamedDecl(D);
 
-   if (D->getAccess() != AccessSpecifier::Public)
-      return;
-
    auto Patterns = D->getPatterns();
    Record[0] = Patterns.size();
 
@@ -804,6 +803,57 @@ void ASTDeclWriter::visitRecordDecl(RecordDecl* D)
       Record.AddDeclRef(E);
 
    Record.push_back(D->getLastMethodID());
+
+   auto &Meta = this->Writer.getWriter().getCompilerInstance()
+                    .getQueryContext().RecordMeta[D];
+
+   uint64_t raw = 0;
+   raw |= (uint32_t)Meta.Size;
+   raw |= (uint64_t)(uint8_t)Meta.Alignment << 32u;
+
+   uint32_t flags = 0;
+   flags |= (uint32_t)(Meta.ManualAlignment);
+   flags |= (uint32_t)(Meta.Opaque) << 1u;
+   flags |= (uint32_t)(Meta.NeedsRetainOrRelease) << 2u;
+   flags |= (uint32_t)(Meta.IsBuiltinIntegerType) << 3u;
+   flags |= (uint32_t)(Meta.IsBuiltinFloatingPointType) << 4u;
+   flags |= (uint32_t)(Meta.IsBuiltinBoolType) << 5u;
+   flags |= (uint32_t)(Meta.IsTriviallyCopyable) << 6u;
+   flags |= (uint32_t)(Meta.IsImplicitlyEquatable) << 7u;
+   flags |= (uint32_t)(Meta.IsImplicitlyHashable) << 8u;
+   flags |= (uint32_t)(Meta.IsImplicitlyCopyable) << 9u;
+   flags |= (uint32_t)(Meta.IsImplicitlyStringRepresentable) << 10u;
+   flags |= (uint32_t)(Meta.IsImplicitlyRawRepresentable) << 11u;
+   flags |= (uint32_t)(Meta.OperatorEquals != nullptr) << 12u;
+   flags |= (uint32_t)(Meta.HashCodeFn != nullptr) << 13u;
+   flags |= (uint32_t)(Meta.ToStringFn != nullptr) << 14u;
+   flags |= (uint32_t)(Meta.CopyFn != nullptr) << 15u;
+   flags |= (uint32_t)(Meta.GetRawValueFn != nullptr) << 16u;
+   flags |= (uint32_t)(Meta.FromRawValueInit != nullptr) << 17u;
+
+   raw |= (uint64_t)flags << 40u;
+
+   Record.push_back(raw);
+   Record.AddIdentifierRef(Meta.Semantics);
+
+   if (Meta.OperatorEquals)
+      Record.AddDeclRef(Meta.OperatorEquals);
+
+   if (Meta.HashCodeFn)
+      Record.AddDeclRef(Meta.HashCodeFn);
+
+   if (Meta.ToStringFn)
+      Record.AddDeclRef(Meta.ToStringFn);
+
+   if (Meta.CopyFn)
+      Record.AddDeclRef(Meta.CopyFn);
+
+   if (Meta.GetRawValueFn)
+      Record.AddDeclRef(Meta.GetRawValueFn);
+
+   if (Meta.FromRawValueInit)
+      Record.AddDeclRef(Meta.FromRawValueInit);
+
    Record.AddDeclRef(D->getDeinitializer());
 
    if (auto S = dyn_cast<StructDecl>(D)) {

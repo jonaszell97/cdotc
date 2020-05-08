@@ -426,7 +426,7 @@ static void findBindings(ConstraintSystem& Sys, Constraint* C,
    case Constraint::LiteralID: {
       auto* Lit = cast<LiteralConstraint>(C);
 
-      QualType T = Lit->getDefaultLiteralType(Sys.QC);
+      QualType T = Lit->getDefaultLiteralType(Sys);
       if (T && FoundBindings.insert(T).second) {
          addBinding(Sys, TypeVar, T, Bindings, Score, OverloadIndex);
       }

@@ -272,17 +272,19 @@ static ExprResult checkAccessorAssignment(SemaPass& Sema, AssignExpr* Expr)
 static ExprResult checkSubscriptAssignment(SemaPass& Sema, AssignExpr* Expr)
 {
    // the subscript will have been transformed into a call
-   auto Call = dyn_cast<CallExpr>(Expr->getLhs());
-   if (!Call) {
+   auto SubExpr = dyn_cast<SubscriptExpr>(Expr->getLhs());
+   if (!SubExpr) {
       return ExprError();
    }
 
-   auto M = dyn_cast_or_null<MethodDecl>(Call->getFunc());
-   if (!M || !M->isSubscript()) {
+   auto *Call = cast_or_null<CallExpr>(SubExpr->getCallExpr());
+   if (!Call || (SubExpr->getSubscriptDecl()->isReadWrite()
+         && !SubExpr->getSubscriptDecl()->hasSetter())) {
       return ExprError();
    }
 
    // Replace the dummy default value.
+   assert(isa<BuiltinExpr>(Call->getArgs().back()));
    Call->getArgs().back() = Expr->getRhs();
    Call->setExprType(Sema.Context.getVoidType());
 
