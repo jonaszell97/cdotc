@@ -760,6 +760,7 @@ QueryResult CreateBaseInitQuery::run()
    BaseD->setSynthesized(true);
    BaseD->setIsInstantiation(D->isInstantiation());
    BaseD->setInstantiationInfo(D->getInstantiationInfo());
+   BaseD->setLazyFnInfo(D->getLazyFnInfo());
 
    if (!isa<ClassDecl>(D->getRecord())) {
       BaseD->setMutating(true);
@@ -901,6 +902,9 @@ QueryResult PrepareFieldInterfaceQuery::run()
 QueryResult TypecheckFieldQuery::run()
 {
    auto* F = D;
+   if (F->isTemplateOrInTemplate()) {
+      return finish();
+   }
 
    auto& fieldType = F->getType();
    if (auto defaultVal = F->getDefaultVal()) {
@@ -943,7 +947,7 @@ QueryResult PreparePropInterfaceQuery::run()
       Getter->setProperty(true);
       Getter->setReturnType(Decl->getType());
 
-      if (D->isReadWrite() && !Decl->getSetterMethod()) {
+      if (D->isReadWrite() && !D->getSetterMethod()) {
          auto* Ptr = QC.Sema->getUnsafeMutablePtrDecl();
          if (!Ptr) {
             QC.Sema->diagnose(err_no_builtin_decl,
@@ -974,9 +978,6 @@ QueryResult PreparePropInterfaceQuery::run()
          }
       }
 
-      Getter->setLexicalContext(Decl->getLexicalContext());
-      Getter->setLogicalContext(Decl->getDeclContext());
-
       if (auto Template = Decl->getPropTemplate()) {
          Getter->setBodyTemplate(Template->getGetterMethod());
       }
@@ -992,9 +993,6 @@ QueryResult PreparePropInterfaceQuery::run()
       Setter->setSynthesized(true);
       Setter->setProperty(true);
       Setter->getArgs()[1]->setType(Decl->getType());
-
-      Setter->setLexicalContext(Decl->getLexicalContext());
-      Setter->setLogicalContext(Decl->getDeclContext());
 
       if (isa<ClassDecl>(R)) {
          Setter->setMutating(false);
@@ -1043,10 +1041,44 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
    if (auto* Getter = Decl->getGetterMethod()) {
       Getter->setSynthesized(true);
       Getter->setSubscript(true);
-
       Getter->setReturnType(res.get());
-      Getter->setLexicalContext(Decl->getLexicalContext());
-      Getter->setLogicalContext(Decl->getDeclContext());
+
+      if (D->isReadWrite() && !D->getSetterMethod()) {
+         auto* Ptr = QC.Sema->getUnsafeMutablePtrDecl();
+         if (!Ptr) {
+            QC.Sema->diagnose(err_no_builtin_decl,
+                              BuiltinFeature::ReadWriteProperty,
+                              Getter->getSourceLoc());
+
+            return fail();
+         }
+
+         TemplateArgument TA(Ptr->getTemplateParams().front(), D->getType(),
+                             Getter->getSourceLoc());
+
+         auto* Args = FinalTemplateArgumentList::Create(QC.Context, TA);
+
+         if (!TA.isStillDependent()) {
+            RecordDecl* Inst = QC.Sema->getInstantiator().InstantiateRecord(
+                Ptr, Args, Getter->getSourceLoc());
+
+            if (!Inst) {
+               return fail();
+            }
+
+            Getter->setReturnType(SourceType(QC.Context.getRecordType(Inst)));
+         }
+         else {
+            Getter->setReturnType(
+                SourceType(QC.Context.getDependentRecordType(Ptr, Args)));
+         }
+
+         // Since the getter returns a mutable reference, make it available
+         // as a setter so it is visible for assign expressions.
+         (void) Decl->getDeclContext()->makeDeclAvailable(
+             QC.Context.getDeclNameTable()
+               .getSubscriptName(DeclarationName::SubscriptKind::Setter), Getter);
+      }
 
       if (auto Template = Decl->getTemplate())
          Getter->setBodyTemplate(Template->getGetterMethod());
@@ -1065,9 +1097,6 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
 
       Setter->setSynthesized(true);
       Setter->setSubscript(true);
-
-      Setter->setLexicalContext(Decl->getLexicalContext());
-      Setter->setLogicalContext(Decl->getDeclContext());
 
       if (isa<ClassDecl>(R)) {
          Setter->setMutating(false);
@@ -1417,6 +1446,10 @@ static void addRawRepresentableConformance(SemaPass& Sema, EnumDecl* E)
 
 QueryResult CheckBuiltinConformancesQuery::run()
 {
+   if (R->isExternal()) {
+      return finish();
+   }
+
    if (auto *C = dyn_cast<ClassDecl>(R)) {
       auto& Meta = QC.RecordMeta[C];
       Meta.IsTriviallyCopyable = false;
@@ -1545,6 +1578,10 @@ QueryResult CheckBuiltinConformancesQuery::run()
 
 QueryResult CalculateRecordSizeQuery::run()
 {
+   if (R->isExternal()) {
+      return finish(QC.RecordMeta[R].Size);
+   }
+
    if (QC.PrepareDeclInterface(R)) {
       return fail();
    }
@@ -1722,9 +1759,11 @@ QueryResult AddImplicitConformanceQuery::run()
          break;
       case ImplicitConformanceKind::Copyable:
          Meta.CopyFn = Impl;
+         Meta.IsTriviallyCopyable = false;
          break;
       }
 
+      QC.Sema->maybeInstantiateMemberFunction(Impl, R);
       return finish(Impl);
    }
 
@@ -1838,8 +1877,10 @@ QueryResult AddImplicitConformanceQuery::run()
 
 QueryResult GetImplicitConformanceQuery::run()
 {
-   if (auto Err = QC.CheckConformances(QC.Context.getRecordType(R))) {
-      return Query::finish(Err);
+   if (!R->isExternal()) {
+      if (auto Err = QC.CheckConformances(QC.Context.getRecordType(R))) {
+         return Query::finish(Err);
+      }
    }
 
    auto& Meta = QC.RecordMeta[R];

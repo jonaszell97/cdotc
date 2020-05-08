@@ -110,7 +110,8 @@ public:
    QualType visitExpr(ast::Expression* Expr,
                       ast::SourceType RequiredType = ast::SourceType(),
                       ConstraintLocator* Locator = nullptr,
-                      bool isHardRequirement = true);
+                      bool isHardRequirement = true,
+                      CastStrength allowedStrength = CastStrength::Implicit);
 
    /// Generate constraints for an expression.
    QualType getRValue(ast::Expression* Expr,

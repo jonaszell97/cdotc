@@ -22,6 +22,8 @@ CDOT_INTRINSIC(generic_argument_ref, "")
 CDOT_INTRINSIC(generic_type_value, "")
 
 CDOT_INTRINSIC(existential_ref, "")
+CDOT_INTRINSIC(copy_existential, "")
+CDOT_INTRINSIC(cast_existential, "")
 
 CDOT_INTRINSIC(unbox, "__unbox")
 

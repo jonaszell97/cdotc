@@ -26,7 +26,15 @@ static void FromInteger(SemaPass& SP, CanType from, CanType to,
                         ConversionSequenceBuilder& Seq)
 {
    if (to->isIntegerType()) {
-      if (from->isUnsigned() != to->isUnsigned()) {
+      if (from->isUnsigned() && !to->isUnsigned() && !from->isInt1Ty()) {
+         auto NextTy = SP.getContext().getIntegerTy(from->getBitwidth(),
+                                                    to->isUnsigned());
+
+         Seq.addStep(CastKind::SignFlip, NextTy, CastStrength::Normal);
+         from = NextTy;
+      }
+
+      if (!from->isUnsigned() && to->isUnsigned()) {
          auto NextTy = SP.getContext().getIntegerTy(from->getBitwidth(),
                                                     to->isUnsigned());
 

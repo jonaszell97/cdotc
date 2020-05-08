@@ -121,7 +121,7 @@ unsigned FileManager::getSourceId(SourceLocation loc)
    unsigned R = (unsigned)sourceIdOffsets.size() - 1;
    unsigned m;
 
-   if (needle > sourceIdOffsets.back())
+   if (needle >= sourceIdOffsets.back())
       return (unsigned)sourceIdOffsets.size() - 1;
 
    while (true) {
@@ -129,10 +129,12 @@ unsigned FileManager::getSourceId(SourceLocation loc)
       if (L > R || sourceIdOffsets[m] == needle)
          break;
 
-      if (sourceIdOffsets[m] < needle)
+      if (sourceIdOffsets[m] < needle) {
          L = m + 1;
-      else
+      }
+      else {
          R = m - 1;
+      }
    }
 
    return m + 1;

@@ -605,9 +605,13 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value*> args)
 {
    switch (id) {
    case Intrinsic::memcpy:
-      assert(args.size() == 3);
+      assert(args.size() == 4 || args.size() == 3);
       assert(isPointerLike(args[0]) && isPointerLike(args[1]));
       assert(args[2]->getType()->isIntegerType());
+
+      if (args.size() == 4)
+         assert(args[3]->getType()->isIntegerType());
+
       break;
    case Intrinsic::memset:
       assert(args.size() == 3);
@@ -733,6 +737,10 @@ void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value*> args)
       assert(args.size() == 2 && args.front()->getType()->isTokenType()
              && args[1]->getType()->isPointerType());
       break;
+   case Intrinsic::copy_existential:
+   case Intrinsic::cast_existential:
+      assert(args.size() == 1 && isPointerLike(args[0]));
+      break;
    }
 }
 
@@ -815,6 +823,9 @@ QualType getIntrinsicReturnType(ast::ASTContext& Ctx,
    case Intrinsic::coro_resume:
    case Intrinsic::coro_return:
       return Ctx.getVoidType();
+   case Intrinsic::copy_existential:
+   case Intrinsic::cast_existential:
+      return args.front()->getType();
    case Intrinsic::coro_alloc:
       return Ctx.getBoolTy();
    case Intrinsic::coro_free:

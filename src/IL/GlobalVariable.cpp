@@ -23,6 +23,9 @@ GlobalObject::GlobalObject(TypeID id, QualType ty, Module* module,
                            llvm::StringRef name)
     : Constant(id, ValueType(module->getContext(), ty)), parent(module)
 {
+   if (name=="_CIFNW4coreE5ArrayINW6policyE3AnyEE12CapacityMaskE") {
+      NO_OP;
+   }
    this->name = name;
    Linkage = 0;
    Visibility = 0;

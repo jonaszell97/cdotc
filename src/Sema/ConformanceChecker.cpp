@@ -26,6 +26,527 @@ using llvm::SmallSetVector;
 
 namespace {
 
+struct DependencyNode : public llvm::FoldingSetNode {
+   enum DependencyNodeKind : unsigned {
+      /// A base node needed as an origin to add dependencies to.
+      Complete,
+
+      /// We need to know all conformances of a record.
+      ConformancesOfRecord,
+
+      /// We need to know whether or not a record conforms to some other record.
+      SpecificConformance,
+
+      /// We need to know the concrete type of an associated type.
+      ConcreteTypeOfAssociatedType,
+
+      /// We need to know the concrete type of a nested associated type.
+      NestedAssociatedType,
+
+      /// We need to know whether or not an extension applies to a record.
+      ExtensionApplicability,
+
+      /// We need to know whether or not a constraint set is satisfied.
+      ConstraintsSatisfied,
+   };
+
+   /// The node kind.
+   DependencyNodeKind Kind;
+
+   /// The base declaration.
+   NamedDecl *Decl;
+
+   /// The potential other declaration.
+   void *Data;
+
+   /// Whether or not this node is completed.
+   bool Done;
+
+   DependencyNode(DependencyNodeKind K, NamedDecl *Decl,
+                  void *Data = nullptr)
+       : Kind(K), Decl(Decl), Data(Data), Done(false)
+   {}
+
+   NamedDecl *getOtherDecl() const
+   {
+      assert(Kind == SpecificConformance
+             || Kind == ConcreteTypeOfAssociatedType
+             || Kind == ExtensionApplicability);
+
+      return static_cast<NamedDecl*>(Data);
+   }
+
+   ExtensionDecl *getExtension() const
+   {
+      assert(Kind == ExtensionApplicability);
+      return static_cast<ExtensionDecl*>(Data);
+   }
+
+   ProtocolDecl *getProtocol() const
+   {
+      assert(Kind == SpecificConformance);
+      return static_cast<ProtocolDecl*>(Data);
+   }
+
+   ConstraintSet *getConstraints() const
+   {
+      assert(Kind == ConstraintsSatisfied);
+      return static_cast<ConstraintSet*>(Data);
+   }
+
+   QualType getType() const
+   {
+      assert(Kind == NestedAssociatedType);
+      return QualType::getFromOpaquePtr(Data);
+   }
+
+   static void Profile(llvm::FoldingSetNodeID &ID,
+                       DependencyNodeKind K,
+                       NamedDecl *Decl, void *Data)
+   {
+      ID.AddInteger(K);
+      ID.AddPointer(Decl);
+      ID.AddPointer(Data);
+   }
+
+   void Profile(llvm::FoldingSetNodeID &ID) const
+   {
+      Profile(ID, Kind, Decl, Data);
+   }
+
+#ifndef NDEBUG
+   void print(llvm::raw_ostream &OS) const
+   {
+      switch (Kind) {
+      case Complete:
+         OS << Decl->getFullName();
+         break;
+      case ConformancesOfRecord:
+         OS << "All conformances of " << Decl->getFullName();
+         break;
+      case SpecificConformance:
+         OS << "Conformance of " << Decl->getFullName()
+            << " to " << getProtocol()->getFullName();
+         break;
+      case ConcreteTypeOfAssociatedType:
+         OS << "Concrete type of associated type " << getOtherDecl()->getFullName()
+            << " For " << Decl->getFullName();
+         break;
+      case NestedAssociatedType:
+         OS << "Concrete type of nested associated type " << getType()->toDiagString()
+            << " For " << Decl->getFullName();
+         break;
+      case ExtensionApplicability:
+         OS << "Applicability of extension [" << getExtension()->getFullSourceLoc()
+            << "] for " << Decl->getFullName();
+         break;
+      case ConstraintsSatisfied: {
+         OS << "Constraint set [";
+         getConstraints()->print(OS);
+         OS << "] satisfied for " << Decl->getFullName();
+         break;
+      }
+      }
+
+      if (Done) {
+         OS << " (✔️)";
+      }
+   }
+
+   std::string to_string() const
+   {
+      std::string res;
+      {
+         llvm::raw_string_ostream OS(res);
+         print(OS);
+      }
+
+      return res;
+   }
+
+   void dump() const { print(llvm::errs()); }
+#endif
+};
+
+struct UncheckedConformance {
+   using ReadyKind = ReferencedAssociatedTypesReadyQuery::ResultKind;
+
+   /// \brief The protocol that this conformance introduces.
+   ProtocolDecl* proto;
+
+   /// \brief The constraints that were placed on the extension
+   /// that introduced this conformance.
+   ConstraintSet* constraints;
+
+   /// \brief The extension that introduced the conformance.
+   DeclContext* introducedBy;
+
+   /// \brief The (conditional) conformances that are introduced if this
+   /// conformance applies.
+   std::unique_ptr<std::vector<UncheckedConformance>> innerConformances;
+
+   /// \brief The combined constraint set of all outer conformances.
+   ConstraintSet* combinedConstraints;
+
+   /// \brief The unique hash value of this conditional conformance.
+   uintptr_t hashVal;
+
+   /// \brief Set to true once the associated types introduced by this
+   /// constraint are ready.
+   ReadyKind associatedTypeStatus;
+
+   /// \brief The 'depth' of the conformance, i.e. how many layers of
+   /// protocol conformances we had to go through to find it.
+   int depth;
+
+   /// \brief Set to true once this conformance and all of its children are
+   /// fully checked.
+   bool done;
+
+   /// Reference to the outer conformance.
+   UncheckedConformance *outer;
+
+   /// \brief This conditional conformance only exists for displaying it in the
+   /// hierarchy, but should otherwise be ignored.
+   bool exclude = false;
+
+   /// \brief Memberwise C'tor.
+   explicit UncheckedConformance(ASTContext& C, ProtocolDecl* proto = nullptr,
+                                 ConstraintSet* constraints = nullptr,
+                                 DeclContext* introducedBy = nullptr,
+                                 UncheckedConformance* outer = nullptr)
+       : proto(proto), constraints(constraints),
+         introducedBy(introducedBy ? introducedBy : (outer ? outer->introducedBy : nullptr)),
+         combinedConstraints(nullptr),
+         associatedTypeStatus(ReadyKind::NotReady),
+         depth(outer ? outer->depth + 1 : -1), done(false), outer(outer)
+   {
+      assert((!constraints || constraints->empty() || introducedBy)
+             && "constrained conformance must be introduced somewhere!");
+
+      uintptr_t outerHashVal = 0;
+      if (outer) {
+         outerHashVal = outer->hashVal;
+      }
+
+      // For uniquing purposes it doesn't matter which extension this
+      // conformance was introduced by.
+      hashVal = llvm::hash_combine((uintptr_t)proto, (uintptr_t)constraints,
+                                   outerHashVal);
+
+      if (outer) {
+         exclude |= outer->exclude;
+         if (constraints) {
+            combinedConstraints = ConstraintSet::Combine(
+                C, constraints, outer->combinedConstraints);
+         }
+         else {
+            combinedConstraints = outer->combinedConstraints;
+         }
+      }
+      else {
+         combinedConstraints = constraints;
+      }
+   }
+
+   /// \return The child conformance at index \param i.
+   UncheckedConformance& operator[](size_t i)
+   {
+      assert(innerConformances && innerConformances->size() > i
+             && "index out of bounds!");
+
+      return innerConformances->at(i);
+   }
+
+   /// \return The number of child conformances.
+   size_t size() const
+   {
+      return innerConformances ? innerConformances->size() : 0;
+   }
+
+   /// \brief Initialize the innerConformances pointer.
+   void initializerInnerConformances()
+   {
+      innerConformances
+          = std::make_unique<std::vector<UncheckedConformance>>();
+   }
+
+   /// \brief Find an associated type with a default value.
+   void FindWithDefault(DeclarationName DN, llvm::SmallDenseSet<AssociatedTypeDecl*, 2> &Defaults)
+   {
+      if (proto) {
+         for (auto *AT : proto->getDecls<AssociatedTypeDecl>()) {
+            if (AT->getDeclName() == DN && AT->getDefaultType()) {
+               Defaults.insert(AT);
+            }
+         }
+      }
+
+      if (innerConformances == nullptr) {
+         return;
+      }
+
+      for (auto &inner : *innerConformances) {
+         inner.FindWithDefault(DN, Defaults);
+      }
+   }
+
+   /// Recursively iterate through all conformances.
+   template<class Fn>
+   bool ForEach(const Fn &fn)
+   {
+      if (proto != nullptr) {
+         if (!fn(*this)) {
+            return false;
+         }
+      }
+
+      if (innerConformances == nullptr) {
+         return true;
+      }
+
+      for (auto &inner : *innerConformances) {
+         if (!inner.ForEach(fn)) {
+            return false;
+         }
+      }
+
+      return true;
+   }
+
+#ifndef NDEBUG
+   struct PrintHelper {
+      const UncheckedConformance& conf;
+      int indent;
+
+      void print(llvm::raw_ostream& OS) const { conf.print(OS, indent); }
+   };
+
+   PrintHelper indented(int indent = 3) const
+   {
+      return PrintHelper{*this, indent};
+   }
+
+   void dump() const { print(llvm::errs()); }
+
+   void print(llvm::raw_ostream& OS, int indent = 0) const
+   {
+      llvm::SmallPtrSet<uintptr_t, 4> visited;
+      print(visited, OS, indent);
+   }
+
+   void print(llvm::SmallPtrSetImpl<uintptr_t>& visited,
+              llvm::raw_ostream& OS, int indent = 0) const
+   {
+      int indentIncrease = 0;
+      if (proto && visited.insert(hashVal).second) {
+         indentIncrease = 3;
+         applyIndent(OS, indent);
+
+         if (exclude)
+            OS << "(";
+
+         OS << proto->getDeclName();
+         if (constraints && !constraints->empty()) {
+            OS << " (where ";
+            constraints->print(OS);
+            OS << ")";
+         }
+         if (introducedBy) {
+            OS << " [" << cast<NamedDecl>(introducedBy)->getFullSourceLoc() << "]";
+         }
+
+         if (exclude)
+            OS << ")";
+
+         OS << " [" << depth << "]";
+         OS << "\n";
+      }
+
+      if (innerConformances) {
+         for (auto& inner : *innerConformances) {
+            inner.print(visited, OS, indent + indentIncrease);
+         }
+      }
+   }
+
+private:
+   static void applyIndent(llvm::raw_ostream& OS, int indent)
+   {
+      for (int i = 0; i < indent; ++i)
+         OS << ' ';
+   }
+#endif
+};
+
+} // anonymous namespace
+
+class cdot::ConformanceResolver {
+   using AssociatedTypeImplMap = llvm::DenseMap<
+       RecordDecl*, llvm::DenseMap<
+           AssociatedTypeDecl*, llvm::SetVector<std::pair<NamedDecl*, ConstraintSet*>>>>;
+
+   /// Reference to the query context.
+   QueryContext &QC;
+
+   /// Reference to the conformance table.
+   ConformanceTable &ConfTbl;
+
+   /// Set of all encountered decl contexts.
+   std::vector<DeclContext*> DeclContexts;
+
+   /// The cache of conditional conformances.
+   std::vector<std::unique_ptr<UncheckedConformance>> Cache;
+
+   /// Map of current base conformances.
+   llvm::DenseMap<RecordDecl*, int> BaseConformances;
+
+   /// Set of records and protocols to which they might conform.
+   llvm::DenseSet<std::pair<RecordDecl*, ProtocolDecl*>> PotentialConformances;
+
+   /// The DeclContexts we have already added to the worklist.
+   llvm::DenseSet<DeclContext*> DoneSet;
+
+   /// The record decls that are fully resolved.
+   llvm::DenseSet<RecordDecl*> CompletedRecordDecls;
+
+   /// The record decls that need to have their conformances checked.
+   llvm::SetVector<RecordDecl*> PendingRecordDecls;
+
+   /// The resolution dependency graph.
+   DependencyGraph<DependencyNode*> Dependencies;
+
+   /// The nodes of the dependency graph.
+   llvm::FoldingSet<DependencyNode> DependencyNodes;
+
+   /// Possible associated type implementations for each record.
+   AssociatedTypeImplMap PossibleAssociatedTypeImpls;
+
+   /// Set of implemented associated types.
+   llvm::DenseMap<std::pair<RecordDecl*, IdentifierInfo*>, AliasDecl*> ImplementedATs;
+
+   /// Number of incoming constraints per dependency node at the time of
+   /// constructing the resolution order.
+   llvm::DenseMap<DependencyNode*, int> NumDependencies;
+
+   bool PrepareMacros(DeclContext *DC);
+   bool PrepareStaticDecls(DeclContext *DC);
+   bool PrepareImports(DeclContext *DC);
+   bool PrepareUsings(DeclContext *DC);
+   bool PrepareImplicitDecls(DeclContext *DC);
+
+   bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf);
+   bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf,
+                         DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
+   bool FindLayoutDependencies(RecordDecl *R,
+                               DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
+
+   bool ResolveDependencyNode(DependencyNode *Node,
+                              bool &error, bool &shouldReset);
+
+   bool HasNewDependencies(DependencyNode *Node)
+   {
+      auto &Vert = Dependencies.getOrAddVertex(Node);
+      return Vert.getIncoming().size() > NumDependencies[Node];
+   }
+
+   bool CreateUncheckedConformanceForImportedDecl(RecordDecl *R);
+
+   friend class SemaPass;
+
+public:
+   using DependencyVertex = DependencyGraph<DependencyNode*>::Vertex;
+
+   /// C'tor.
+   explicit ConformanceResolver(QueryContext &QC)
+       : QC(QC), ConfTbl(QC.Context.getConformanceTable())
+   {}
+
+   UncheckedConformance &CreateCondConformance(ProtocolDecl* proto = nullptr,
+                                               ConstraintSet* constraints = nullptr,
+                                               DeclContext* introducedBy = nullptr,
+                                               UncheckedConformance* outer = nullptr)
+   {
+      Cache.emplace_back(std::make_unique<UncheckedConformance>(
+          QC.Context, proto, constraints, introducedBy, outer));
+
+      return *Cache.back();
+   }
+
+   DependencyVertex&
+   GetDependencyNode(DependencyNode::DependencyNodeKind K,
+                     NamedDecl *Decl, void *Data = nullptr,
+                     bool *isNew = nullptr)
+   {
+      llvm::FoldingSetNodeID ID;
+      DependencyNode::Profile(ID, K, Decl, Data);
+
+      void *InsertPos;
+      if (auto *Ptr = DependencyNodes.FindNodeOrInsertPos(ID, InsertPos)) {
+         return Dependencies.getOrAddVertex(Ptr);
+      }
+
+      if (isNew)
+         *isNew = true;
+
+      auto *Node = new(QC.Context) DependencyNode(K, Decl, Data);
+      if (Decl->isExternal()) {
+         Node->Done = true;
+      }
+
+      DependencyNodes.InsertNode(Node, InsertPos);
+      return Dependencies.getOrAddVertex(Node);
+   }
+
+   bool AddConformanceDependency(DependencyVertex &Node,
+                                 RecordDecl *R, ProtocolDecl *P);
+
+   bool FindDeclContexts(DeclContext *DC, bool includeFunctions);
+   bool ResolveDependencyGraph();
+
+   bool BuildWorklist();
+   bool BuildWorklist(DeclContext *DC);
+   bool BuildWorklistForShallowInstantiation(RecordDecl *Inst);
+
+   bool IsBeingResolved(RecordDecl *R)
+   {
+      if (R->isExternal()) {
+         return false;
+      }
+
+      return CompletedRecordDecls.count(R) == 0;
+   }
+
+   bool registerImplicitConformances(RecordDecl *R);
+
+   bool registerConformance(CanType Self, ProtocolDecl* proto,
+                            ConstraintSet* constraints,
+                            SmallDenseSet<uintptr_t, 4>& testSet,
+                            SmallPtrSetImpl<ProtocolDecl*>& directConformances,
+                            DeclContext* introducedBy,
+                            UncheckedConformance& outer,
+                            bool isDirect = false);
+
+   bool registerDeclaredConformances(CanType Self, CanType protoTy,
+                                     MutableArrayRef<SourceType> conformanceTypes,
+                                     ConstraintSet* constraints,
+                                     SmallDenseSet<uintptr_t, 4>& testSet,
+                                     SmallPtrSetImpl<ProtocolDecl*>& directConformances,
+                                     DeclContext* introducedBy, UncheckedConformance& newConfRef);
+
+   bool
+   registerConformances(CanType Self, DeclContext* DC,
+                        SmallDenseSet<uintptr_t, 4>& testSet,
+                        SmallPtrSetImpl<ProtocolDecl*>& directConformances,
+                        UncheckedConformance& baseConf);
+
+
+   ConstraintSet* getDependentConstraints(ConstraintSet* CS, QualType Self);
+   bool isTemplateMember(NamedDecl* impl);
+};
+
+namespace {
+
 struct PendingConformanceCheck {
    ProtocolDecl* conformance;
    ConstraintSet* constraints;
@@ -296,6 +817,11 @@ void ConformanceCheckerImpl::checkConformance()
    // Check which builtin conformances apply.
    if (Sema.QC.CheckBuiltinConformances(Rec)) {
       return;
+   }
+
+   // Note the added builtin conformances for future instantiations.
+   if (Rec->isTemplateOrInTemplate()) {
+      Sema.getConformanceResolver().registerImplicitConformances(Rec);
    }
 
    auto Conformances
@@ -999,6 +1525,14 @@ NamedDecl* ConformanceCheckerImpl::checkPropImpl(RecordDecl *Rec,
       return nullptr;
    }
 
+   if (!Prop->isReadWrite() && FoundProp->isReadWrite()) {
+      genericError(Rec, Proto);
+      Sema.diagnose(err_generic_error, "expected property not to be read-write",
+                    Prop->getSourceLoc());
+
+      return nullptr;
+   }
+
    if (Prop->isStatic() && !FoundProp->isStatic()) {
       genericError(Rec, Proto);
       Sema.diagnose(note_incorrect_protocol_impl_missing, Prop, "prop",
@@ -1106,6 +1640,22 @@ NamedDecl* ConformanceCheckerImpl::checkSubscriptImpl(RecordDecl *Rec,
          Cand.SR = FoundSub->getSourceLoc();
 
          continue;
+      }
+
+      if (S->isReadWrite() && !FoundSub->isReadWrite()) {
+         auto& Cand = Candidates.emplace_back();
+         Cand.Msg = note_incorrect_protocol_impl_must_be_read_write;
+         Cand.SR = FoundSub->getSourceLoc();
+
+         return nullptr;
+      }
+
+      if (!S->isReadWrite() && FoundSub->isReadWrite()) {
+         auto& Cand = Candidates.emplace_back();
+         Cand.Msg = note_incorrect_protocol_impl_must_not_be_read_write;
+         Cand.SR = FoundSub->getSourceLoc();
+
+         return nullptr;
       }
 
       if (S->hasGetter() && !FoundSub->hasGetter()) {
@@ -1348,8 +1898,7 @@ NamedDecl* ConformanceCheckerImpl::checkMethodImpl(RecordDecl *Rec,
       return nullptr;
    }
 
-   if (Proto == Sema.getCopyableDecl()
-       && Method->getDeclName().isStr("copy")) {
+   if (Proto == Sema.getCopyableDecl() && Method->getDeclName().isStr("copy")) {
       Sema.QC.AddImplicitConformance(
          MethodImpl, Rec, ImplicitConformanceKind::Copyable, MethodImpl);
    }
@@ -1640,525 +2189,6 @@ QueryResult ReferencedAssociatedTypesReadyQuery::run()
 
 namespace {
 
-struct DependencyNode : public llvm::FoldingSetNode {
-   enum DependencyNodeKind : unsigned {
-      /// A base node needed as an origin to add dependencies to.
-      Complete,
-
-      /// We need to know all conformances of a record.
-      ConformancesOfRecord,
-
-      /// We need to know whether or not a record conforms to some other record.
-      SpecificConformance,
-
-      /// We need to know the concrete type of an associated type.
-      ConcreteTypeOfAssociatedType,
-
-      /// We need to know the concrete type of a nested associated type.
-      NestedAssociatedType,
-
-      /// We need to know whether or not an extension applies to a record.
-      ExtensionApplicability,
-
-      /// We need to know whether or not a constraint set is satisfied.
-      ConstraintsSatisfied,
-   };
-
-   /// The node kind.
-   DependencyNodeKind Kind;
-
-   /// The base declaration.
-   NamedDecl *Decl;
-
-   /// The potential other declaration.
-   void *Data;
-
-   /// Whether or not this node is completed.
-   bool Done;
-
-   DependencyNode(DependencyNodeKind K, NamedDecl *Decl,
-                  void *Data = nullptr)
-      : Kind(K), Decl(Decl), Data(Data), Done(false)
-   {}
-
-   NamedDecl *getOtherDecl() const
-   {
-      assert(Kind == SpecificConformance
-             || Kind == ConcreteTypeOfAssociatedType
-             || Kind == ExtensionApplicability);
-
-      return static_cast<NamedDecl*>(Data);
-   }
-
-   ExtensionDecl *getExtension() const
-   {
-      assert(Kind == ExtensionApplicability);
-      return static_cast<ExtensionDecl*>(Data);
-   }
-
-   ProtocolDecl *getProtocol() const
-   {
-      assert(Kind == SpecificConformance);
-      return static_cast<ProtocolDecl*>(Data);
-   }
-
-   ConstraintSet *getConstraints() const
-   {
-      assert(Kind == ConstraintsSatisfied);
-      return static_cast<ConstraintSet*>(Data);
-   }
-
-   QualType getType() const
-   {
-      assert(Kind == NestedAssociatedType);
-      return QualType::getFromOpaquePtr(Data);
-   }
-
-   static void Profile(llvm::FoldingSetNodeID &ID,
-                       DependencyNodeKind K,
-                       NamedDecl *Decl, void *Data)
-   {
-      ID.AddInteger(K);
-      ID.AddPointer(Decl);
-      ID.AddPointer(Data);
-   }
-
-   void Profile(llvm::FoldingSetNodeID &ID) const
-   {
-      Profile(ID, Kind, Decl, Data);
-   }
-
-#ifndef NDEBUG
-   void print(llvm::raw_ostream &OS) const
-   {
-      switch (Kind) {
-      case Complete:
-         OS << Decl->getFullName();
-         break;
-      case ConformancesOfRecord:
-         OS << "All conformances of " << Decl->getFullName();
-         break;
-      case SpecificConformance:
-         OS << "Conformance of " << Decl->getFullName()
-            << " to " << getProtocol()->getFullName();
-         break;
-      case ConcreteTypeOfAssociatedType:
-         OS << "Concrete type of associated type " << getOtherDecl()->getFullName()
-            << " For " << Decl->getFullName();
-         break;
-      case NestedAssociatedType:
-         OS << "Concrete type of nested associated type " << getType()->toDiagString()
-            << " For " << Decl->getFullName();
-         break;
-      case ExtensionApplicability:
-         OS << "Applicability of extension [" << getExtension()->getFullSourceLoc()
-            << "] for " << Decl->getFullName();
-         break;
-      case ConstraintsSatisfied: {
-         OS << "Constraint set [";
-         getConstraints()->print(OS);
-         OS << "] satisfied for " << Decl->getFullName();
-         break;
-      }
-      }
-
-      if (Done) {
-         OS << " (✔️)";
-      }
-   }
-
-   std::string to_string() const
-   {
-      std::string res;
-      {
-         llvm::raw_string_ostream OS(res);
-         print(OS);
-      }
-
-      return res;
-   }
-
-   void dump() const { print(llvm::errs()); }
-#endif
-};
-
-struct UncheckedConformance {
-   using ReadyKind = ReferencedAssociatedTypesReadyQuery::ResultKind;
-
-   /// \brief The protocol that this conformance introduces.
-   ProtocolDecl* proto;
-
-   /// \brief The constraints that were placed on the extension
-   /// that introduced this conformance.
-   ConstraintSet* constraints;
-
-   /// \brief The extension that introduced the conformance.
-   DeclContext* introducedBy;
-
-   /// \brief The (conditional) conformances that are introduced if this
-   /// conformance applies.
-   std::unique_ptr<std::vector<UncheckedConformance>> innerConformances;
-
-   /// \brief The combined constraint set of all outer conformances.
-   ConstraintSet* combinedConstraints;
-
-   /// \brief The unique hash value of this conditional conformance.
-   uintptr_t hashVal;
-
-   /// \brief Set to true once the associated types introduced by this
-   /// constraint are ready.
-   ReadyKind associatedTypeStatus;
-
-   /// \brief The 'depth' of the conformance, i.e. how many layers of
-   /// protocol conformances we had to go through to find it.
-   int depth;
-
-   /// \brief Set to true once this conformance and all of its children are
-   /// fully checked.
-   bool done;
-
-   /// Reference to the outer conformance.
-   UncheckedConformance *outer;
-
-   /// \brief This conditional conformance only exists for displaying it in the
-   /// hierarchy, but should otherwise be ignored.
-   bool exclude = false;
-
-   /// \brief Memberwise C'tor.
-   explicit UncheckedConformance(ASTContext& C, ProtocolDecl* proto = nullptr,
-                                   ConstraintSet* constraints = nullptr,
-                                   DeclContext* introducedBy = nullptr,
-                                 UncheckedConformance* outer = nullptr)
-       : proto(proto), constraints(constraints),
-         introducedBy(introducedBy ? introducedBy : (outer ? outer->introducedBy : nullptr)),
-         combinedConstraints(nullptr),
-         associatedTypeStatus(ReadyKind::NotReady),
-         depth(outer ? outer->depth + 1 : -1), done(false), outer(outer)
-   {
-      assert((!constraints || constraints->empty() || introducedBy)
-         && "constrained conformance must be introduced somewhere!");
-
-      uintptr_t outerHashVal = 0;
-      if (outer) {
-         outerHashVal = outer->hashVal;
-      }
-
-      // For uniquing purposes it doesn't matter which extension this
-      // conformance was introduced by.
-      hashVal = llvm::hash_combine((uintptr_t)proto, (uintptr_t)constraints,
-                                   outerHashVal);
-
-      if (outer) {
-         exclude |= outer->exclude;
-         if (constraints) {
-            combinedConstraints = ConstraintSet::Combine(
-                C, constraints, outer->combinedConstraints);
-         }
-         else {
-            combinedConstraints = outer->combinedConstraints;
-         }
-      }
-      else {
-         combinedConstraints = constraints;
-      }
-   }
-
-   /// \return The child conformance at index \param i.
-   UncheckedConformance& operator[](size_t i)
-   {
-      assert(innerConformances && innerConformances->size() > i
-             && "index out of bounds!");
-
-      return innerConformances->at(i);
-   }
-
-   /// \return The number of child conformances.
-   size_t size() const
-   {
-      return innerConformances ? innerConformances->size() : 0;
-   }
-
-   /// \brief Initialize the innerConformances pointer.
-   void initializerInnerConformances()
-   {
-      innerConformances
-          = std::make_unique<std::vector<UncheckedConformance>>();
-   }
-
-   /// \brief Find an associated type with a default value.
-   void FindWithDefault(DeclarationName DN, llvm::SmallDenseSet<AssociatedTypeDecl*, 2> &Defaults)
-   {
-      if (proto) {
-         for (auto *AT : proto->getDecls<AssociatedTypeDecl>()) {
-            if (AT->getDeclName() == DN && AT->getDefaultType()) {
-               Defaults.insert(AT);
-            }
-         }
-      }
-
-      if (innerConformances == nullptr) {
-         return;
-      }
-
-      for (auto &inner : *innerConformances) {
-         inner.FindWithDefault(DN, Defaults);
-      }
-   }
-
-   /// Recursively iterate through all conformances.
-   template<class Fn>
-   bool ForEach(const Fn &fn)
-   {
-      if (proto != nullptr) {
-         if (!fn(*this)) {
-            return false;
-         }
-      }
-
-      if (innerConformances == nullptr) {
-         return true;
-      }
-
-      for (auto &inner : *innerConformances) {
-         if (!inner.ForEach(fn)) {
-            return false;
-         }
-      }
-
-      return true;
-   }
-
-#ifndef NDEBUG
-   struct PrintHelper {
-      const UncheckedConformance& conf;
-      int indent;
-
-      void print(llvm::raw_ostream& OS) const { conf.print(OS, indent); }
-   };
-
-   PrintHelper indented(int indent = 3) const
-   {
-      return PrintHelper{*this, indent};
-   }
-
-   void dump() const { print(llvm::errs()); }
-
-   void print(llvm::raw_ostream& OS, int indent = 0) const
-   {
-      llvm::SmallPtrSet<uintptr_t, 4> visited;
-      print(visited, OS, indent);
-   }
-
-   void print(llvm::SmallPtrSetImpl<uintptr_t>& visited,
-              llvm::raw_ostream& OS, int indent = 0) const
-   {
-      int indentIncrease = 0;
-      if (proto && visited.insert(hashVal).second) {
-         indentIncrease = 3;
-         applyIndent(OS, indent);
-
-         if (exclude)
-            OS << "(";
-
-         OS << proto->getDeclName();
-         if (constraints && !constraints->empty()) {
-            OS << " (where ";
-            constraints->print(OS);
-            OS << ")";
-         }
-         if (introducedBy) {
-            OS << " [" << cast<NamedDecl>(introducedBy)->getFullSourceLoc() << "]";
-         }
-
-         if (exclude)
-            OS << ")";
-
-         OS << " [" << depth << "]";
-         OS << "\n";
-      }
-
-      if (innerConformances) {
-         for (auto& inner : *innerConformances) {
-            inner.print(visited, OS, indent + indentIncrease);
-         }
-      }
-   }
-
-private:
-   static void applyIndent(llvm::raw_ostream& OS, int indent)
-   {
-      for (int i = 0; i < indent; ++i)
-         OS << ' ';
-   }
-#endif
-};
-
-} // anonymous namespace
-
-class cdot::ConformanceResolver {
-   using AssociatedTypeImplMap = llvm::DenseMap<
-       RecordDecl*, llvm::DenseMap<
-           AssociatedTypeDecl*, llvm::SetVector<std::pair<NamedDecl*, ConstraintSet*>>>>;
-
-   /// Reference to the query context.
-   QueryContext &QC;
-
-   /// Reference to the conformance table.
-   ConformanceTable &ConfTbl;
-
-   /// Set of all encountered decl contexts.
-   std::vector<DeclContext*> DeclContexts;
-
-   /// The cache of conditional conformances.
-   std::vector<std::unique_ptr<UncheckedConformance>> Cache;
-
-   /// Map of current base conformances.
-   llvm::DenseMap<RecordDecl*, int> BaseConformances;
-
-   /// Set of records and protocols to which they might conform.
-   llvm::DenseSet<std::pair<RecordDecl*, ProtocolDecl*>> PotentialConformances;
-
-   /// The DeclContexts we have already added to the worklist.
-   llvm::DenseSet<DeclContext*> DoneSet;
-
-   /// The record decls that are fully resolved.
-   llvm::DenseSet<RecordDecl*> CompletedRecordDecls;
-
-   /// The record decls that need to have their conformances checked.
-   llvm::SetVector<RecordDecl*> PendingRecordDecls;
-
-   /// The resolution dependency graph.
-   DependencyGraph<DependencyNode*> Dependencies;
-
-   /// The nodes of the dependency graph.
-   llvm::FoldingSet<DependencyNode> DependencyNodes;
-
-   /// Possible associated type implementations for each record.
-   AssociatedTypeImplMap PossibleAssociatedTypeImpls;
-
-   /// Set of implemented associated types.
-   llvm::DenseMap<std::pair<RecordDecl*, IdentifierInfo*>, AliasDecl*> ImplementedATs;
-
-   /// Number of incoming constraints per dependency node at the time of
-   /// constructing the resolution order.
-   llvm::DenseMap<DependencyNode*, int> NumDependencies;
-
-   bool PrepareMacros(DeclContext *DC);
-   bool PrepareStaticDecls(DeclContext *DC);
-   bool PrepareImports(DeclContext *DC);
-   bool PrepareUsings(DeclContext *DC);
-   bool PrepareImplicitDecls(DeclContext *DC);
-
-   bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf);
-   bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf,
-                         DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
-   bool FindLayoutDependencies(RecordDecl *R,
-                               DependencyGraph<DependencyNode*>::Vertex &CompleteNode);
-
-   bool ResolveDependencyNode(DependencyNode *Node,
-                              bool &error, bool &shouldReset);
-
-   bool HasNewDependencies(DependencyNode *Node)
-   {
-      auto &Vert = Dependencies.getOrAddVertex(Node);
-      return Vert.getIncoming().size() > NumDependencies[Node];
-   }
-
-   bool CreateUncheckedConformanceForImportedDecl(RecordDecl *R);
-
-   friend class SemaPass;
-
-public:
-   using DependencyVertex = DependencyGraph<DependencyNode*>::Vertex;
-
-   /// C'tor.
-   explicit ConformanceResolver(QueryContext &QC)
-      : QC(QC), ConfTbl(QC.Context.getConformanceTable())
-   {}
-
-   UncheckedConformance &CreateCondConformance(ProtocolDecl* proto = nullptr,
-                                               ConstraintSet* constraints = nullptr,
-                                               DeclContext* introducedBy = nullptr,
-                                               UncheckedConformance* outer = nullptr)
-   {
-      Cache.emplace_back(std::make_unique<UncheckedConformance>(
-         QC.Context, proto, constraints, introducedBy, outer));
-
-      return *Cache.back();
-   }
-
-   DependencyVertex&
-   GetDependencyNode(DependencyNode::DependencyNodeKind K,
-                     NamedDecl *Decl, void *Data = nullptr,
-                     bool *isNew = nullptr)
-   {
-      llvm::FoldingSetNodeID ID;
-      DependencyNode::Profile(ID, K, Decl, Data);
-
-      void *InsertPos;
-      if (auto *Ptr = DependencyNodes.FindNodeOrInsertPos(ID, InsertPos)) {
-         return Dependencies.getOrAddVertex(Ptr);
-      }
-
-      if (isNew)
-         *isNew = true;
-
-      auto *Node = new(QC.Context) DependencyNode(K, Decl, Data);
-      if (Decl->isExternal()) {
-         Node->Done = true;
-      }
-
-      DependencyNodes.InsertNode(Node, InsertPos);
-      return Dependencies.getOrAddVertex(Node);
-   }
-
-   bool AddConformanceDependency(DependencyVertex &Node,
-                                 RecordDecl *R, ProtocolDecl *P);
-
-   bool FindDeclContexts(DeclContext *DC, bool includeFunctions);
-   bool ResolveDependencyGraph();
-
-   bool BuildWorklist();
-   bool BuildWorklist(DeclContext *DC);
-   bool BuildWorklistForShallowInstantiation(RecordDecl *Inst);
-
-   bool IsBeingResolved(RecordDecl *R)
-   {
-      if (R->isExternal()) {
-         return false;
-      }
-
-      return CompletedRecordDecls.count(R) == 0;
-   }
-
-   bool registerConformance(CanType Self, ProtocolDecl* proto,
-                            ConstraintSet* constraints,
-                            SmallDenseSet<uintptr_t, 4>& testSet,
-                            SmallPtrSetImpl<ProtocolDecl*>& directConformances,
-                            DeclContext* introducedBy,
-                            UncheckedConformance& outer,
-                            bool isDirect = false);
-
-   bool registerDeclaredConformances(CanType Self, CanType protoTy,
-                                     MutableArrayRef<SourceType> conformanceTypes,
-                                     ConstraintSet* constraints,
-                                     SmallDenseSet<uintptr_t, 4>& testSet,
-                                     SmallPtrSetImpl<ProtocolDecl*>& directConformances,
-                                     DeclContext* introducedBy, UncheckedConformance& newConfRef);
-
-   bool
-   registerConformances(CanType Self, DeclContext* DC,
-                        SmallDenseSet<uintptr_t, 4>& testSet,
-                        SmallPtrSetImpl<ProtocolDecl*>& directConformances,
-                             UncheckedConformance& baseConf);
-
-
-   ConstraintSet* getDependentConstraints(ConstraintSet* CS, QualType Self);
-   bool isTemplateMember(NamedDecl* impl);
-};
-
-namespace {
-
 class DependencyFinder : public RecursiveASTVisitor<DependencyFinder> {
    /// The query context.
    QueryContext &QC;
@@ -2442,6 +2472,52 @@ ConformanceResolver &SemaPass::getConformanceResolver()
 bool SemaPass::IsBeingResolved(RecordDecl *R)
 {
    return getConformanceResolver().IsBeingResolved(R);
+}
+
+bool ConformanceResolver::registerImplicitConformances(RecordDecl *R)
+{
+   assert(R->isTemplateOrInTemplate());
+
+   auto &baseConf = *Cache[BaseConformances[R]];
+   auto &Meta = QC.RecordMeta[R];
+
+   if (Meta.IsImplicitlyCopyable) {
+      ProtocolDecl *Proto = QC.Sema->getCopyableDecl();
+      UncheckedConformance &newConf = CreateCondConformance(
+          Proto, QC.Context.EmptyConstraintSet, R, &baseConf);
+
+      baseConf.innerConformances->emplace_back(move(newConf));
+   }
+   if (Meta.IsImplicitlyEquatable) {
+      ProtocolDecl *Proto = QC.Sema->getEquatableDecl();
+      UncheckedConformance &newConf = CreateCondConformance(
+          Proto, QC.Context.EmptyConstraintSet, R, &baseConf);
+
+      baseConf.innerConformances->emplace_back(move(newConf));
+   }
+   if (Meta.IsImplicitlyHashable) {
+      ProtocolDecl *Proto = QC.Sema->getHashableDecl();
+      UncheckedConformance &newConf = CreateCondConformance(
+          Proto, QC.Context.EmptyConstraintSet, R, &baseConf);
+
+      baseConf.innerConformances->emplace_back(move(newConf));
+   }
+   if (Meta.IsImplicitlyRawRepresentable) {
+      ProtocolDecl *Proto = QC.Sema->getRawRepresentableDecl();
+      UncheckedConformance &newConf = CreateCondConformance(
+          Proto, QC.Context.EmptyConstraintSet, R, &baseConf);
+
+      baseConf.innerConformances->emplace_back(move(newConf));
+   }
+   if (Meta.IsImplicitlyStringRepresentable) {
+      ProtocolDecl *Proto = QC.Sema->getStringRepresentableDecl();
+      UncheckedConformance &newConf = CreateCondConformance(
+          Proto, QC.Context.EmptyConstraintSet, R, &baseConf);
+
+      baseConf.innerConformances->emplace_back(move(newConf));
+   }
+
+   return false;
 }
 
 #ifndef NDEBUG
@@ -3397,9 +3473,11 @@ bool ConformanceResolver::FindLayoutDependencies(
    }
 
    for (auto &Ty : TypesToCheck) {
-      visitSpecificType<RecordType, FunctionType>([&](QualType T) {
-        if (T->isFunctionType()) {
-           // Function types do not store their contained types.
+      visitSpecificType<RecordType, FunctionType, PointerType, ReferenceType>(
+          [&](QualType T) {
+        // Functions, pointers and references do not actually store
+        // their contained types.
+        if (!T->isRecordType()) {
            return false;
         }
         if (T->isProtocol()) {
@@ -3853,6 +3931,10 @@ AliasDecl* SemaPass::getAssociatedTypeImpl(RecordDecl *R, DeclarationName Name)
 
 QueryResult CheckConformancesQuery::run()
 {
+   if (T->getRecord()->isExternal()) {
+      return finish();
+   }
+
    ConformanceCheckerImpl Checker(*QC.Sema, T->getRecord());
    Checker.checkConformance();
 

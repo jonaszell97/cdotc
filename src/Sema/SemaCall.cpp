@@ -384,7 +384,7 @@ void SemaPass::maybeInstantiate(CandidateSet::Candidate& Cand,
       FunctionDecl* Inst = Instantiator->InstantiateFunction(
          Fn, FinalList, Caller->getSourceLoc());
 
-      if (QC.PrepareDeclInterface(Inst)) {
+      if (!Inst || QC.PrepareDeclInterface(Inst)) {
          return;
       }
 

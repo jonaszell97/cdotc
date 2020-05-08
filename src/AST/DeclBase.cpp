@@ -209,6 +209,12 @@ ASTContext& Decl::getASTCtx() const
        .getContext();
 }
 
+bool Decl::isNestedInstantiation() const
+{
+   return isInstantiation()
+     && !support::cast<NamedDecl>(this)->getSpecializedTemplate()->isTemplate();
+}
+
 bool Decl::hasTrailingObjects() const
 {
    switch (getKind()) {
@@ -423,7 +429,8 @@ bool NamedDecl::isExported() const
 }
 
 std::string NamedDecl::getJoinedName(char join, bool includeFile,
-                                     bool includeSignatures) const
+                                     bool includeSignatures,
+                                     bool includeAllModules) const
 {
    std::string joinedName;
    llvm::raw_string_ostream OS(joinedName);
@@ -436,7 +443,7 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile,
          printCtx &= !fn->isMain();
       }
       else if (auto *Mod = support::dyn_cast<ModuleDecl>(Ctx)) {
-         printCtx &= Mod->getModule()->isImported();
+         printCtx &= includeAllModules || Mod->getModule()->isImported();
       }
 
       if (printCtx) {
@@ -568,6 +575,11 @@ bool NamedDecl::isRedeclarable() const
 
 bool NamedDecl::isTemplate() const { return !getTemplateParams().empty(); }
 
+bool NamedDecl::isNestedTemplate() const
+{
+   return !isTemplate() && isTemplateOrInTemplate();
+}
+
 bool NamedDecl::inDependentContext() const
 {
    if (isUnboundedTemplate())
@@ -593,13 +605,33 @@ bool NamedDecl::isTemplateOrInTemplate() const
          if (ND->isTemplate())
             return true;
 
-         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND))
-            if (Ext->getExtendedRecord()->isTemplateOrInTemplate())
+         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND)) {
+            if (Ext->getExtendedRecord()->isTemplateOrInTemplate()) {
                return true;
+            }
+         }
       }
    }
 
    return false;
+}
+
+NamedDecl* NamedDecl::getOuterTemplate() const
+{
+   for (auto Ctx = getDeclContext(); Ctx; Ctx = Ctx->getParentCtx()) {
+      if (auto ND = support::dyn_cast<NamedDecl>(Ctx)) {
+         if (ND->isTemplate())
+            return ND;
+
+         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND)) {
+            if (Ext->getExtendedRecord()->isTemplateOrInTemplate()) {
+               return Ext->getExtendedRecord();
+            }
+         }
+      }
+   }
+
+   return nullptr;
 }
 
 bool NamedDecl::isInUnboundedTemplate() const
@@ -612,9 +644,11 @@ bool NamedDecl::isInUnboundedTemplate() const
          if (ND->isUnboundedTemplate())
             return true;
 
-         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND))
-            if (Ext->getExtendedRecord()->isInUnboundedTemplate())
+         if (auto Ext = support::dyn_cast<ExtensionDecl>(ND)) {
+            if (Ext->getExtendedRecord()->isInUnboundedTemplate()) {
                return true;
+            }
+         }
       }
    }
 

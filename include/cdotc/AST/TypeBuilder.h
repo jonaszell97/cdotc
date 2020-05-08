@@ -184,7 +184,7 @@ public:
       if (Dependent)
          return Ctx.getDependentRecordType(R, FinalList);
 
-      auto* Template = R->isTemplate() ? R : R->getSpecializedTemplate();
+      auto* Template = R->isTemplateOrInTemplate() ? R : R->getSpecializedTemplate();
       auto Inst = SP.InstantiateRecord(SR.getStart(), Template, FinalList);
 
       if (Inst)

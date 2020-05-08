@@ -155,7 +155,11 @@ void IRGen::prepareModuleForEmission(llvm::Module* Module)
    runMandatoryPasses(Module);
 
    if (EmitIRDebugInfo != "-") {
-      if (EmitIRDebugInfo.empty()) {
+      if (CI.getOptions().emitDebugInfo()) {
+         CI.getSema().diagnose(warn_generic_warn,
+             "-debug-ir cannot be used in conjunction with -g");
+      }
+      else if (EmitIRDebugInfo.empty()) {
          auto TmpFileName = fs::getTmpFileName("ll");
          addIRDebugInfo(*Module, TmpFileName);
       }

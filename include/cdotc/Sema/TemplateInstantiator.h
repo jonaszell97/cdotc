@@ -77,7 +77,8 @@ public:
    NamedDecl *InstantiateTemplateMember(NamedDecl *TemplateMember,
                                         RecordDecl *Inst,
                                         sema::FinalTemplateArgumentList *TemplateArgs = nullptr,
-                                        SourceLocation POI = SourceLocation());
+                                        SourceLocation POI = SourceLocation(),
+                                        bool instantiateAccessorMethods = true);
 
    NamedDecl *InstantiateProtocolDefaultImpl(NamedDecl *Impl,
                                              QualType Self,

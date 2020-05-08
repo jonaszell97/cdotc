@@ -104,6 +104,8 @@ void VerifierPass::visitGlobalVariable(GlobalVariable const& G)
 
 void VerifierPass::run()
 {
+   IsValid = true;
+
    for (const auto& BB : F->getBasicBlocks())
       visitBasicBlock(BB);
 

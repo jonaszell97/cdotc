@@ -762,7 +762,15 @@ static sema::TemplateArgument makeCanonical(const sema::TemplateArgument& Arg)
 DependentRecordType* ASTContext::getDependentRecordType(
     RecordDecl* R, sema::FinalTemplateArgumentList* args, QualType Parent) const
 {
-   assert(R->isTemplate() && "not a template!");
+   if (R->isNestedTemplate()) {
+      auto *RealTemplate = cast<RecordDecl>(R->getOuterTemplate());
+      Parent = getDependentRecordType(RealTemplate, args);
+      args = sema::FinalTemplateArgumentList::Create(
+          const_cast<ASTContext&>(*this),
+          MutableArrayRef<sema::TemplateArgument>());
+   }
+
+   assert(R->isTemplateOrInTemplate() && "not a template!");
 
    llvm::FoldingSetNodeID ID;
    DependentRecordType::Profile(ID, R, args, Parent);

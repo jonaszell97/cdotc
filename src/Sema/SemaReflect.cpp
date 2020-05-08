@@ -23,6 +23,7 @@ enum ReflectionIdent {
    column,
    fileName,
    sourceLocation,
+   rawSourceLocation,
    function,
    mangledFunction,
    targetInfo,
@@ -31,6 +32,7 @@ enum ReflectionIdent {
    mirror,
 
    SourceLocation,
+   RawSourceLocation,
    TargetInfo,
    RI_AccessSpecifier,
    RI_Type,
@@ -75,6 +77,7 @@ void SemaPass::initReflectionIdents()
    ReflectionIdents[column] = &Idents.get("column");
    ReflectionIdents[fileName] = &Idents.get("fileName");
    ReflectionIdents[sourceLocation] = &Idents.get("sourceLocation");
+   ReflectionIdents[rawSourceLocation] = &Idents.get("rawSourceLocation");
    ReflectionIdents[function] = &Idents.get("function");
    ReflectionIdents[mangledFunction] = &Idents.get("mangledFunction");
    ReflectionIdents[targetInfo] = &Idents.get("targetInfo");
@@ -82,6 +85,7 @@ void SemaPass::initReflectionIdents()
    ReflectionIdents[RI_inCTFE] = &Idents.get("inCTFE");
 
    ReflectionIdents[SourceLocation] = &Idents.get("SourceLocation");
+   ReflectionIdents[RawSourceLocation] = &Idents.get("RawSourceLocation");
    ReflectionIdents[TargetInfo] = &Idents.get("TargetInfo");
 
    ReflectionIdents[RI_AccessSpecifier] = &Idents.get("AccessSpecifier");
@@ -1117,6 +1121,35 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl* Alias, Expression* Expr)
            Builder.GetConstantStruct(
                Int, Builder.GetConstantInt(Context.getIntTy(), LineAndCol.col)),
            ConstFileName});
+
+      ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SLDecl),
+                                      Expr->getSourceRange(), ConstLoc);
+   }
+   else if (II == ReflectionIdents[rawSourceLocation]) {
+      if (Bits.InDefaultArgumentValue) {
+         Expr->setIsMagicArgumentValue(true);
+      }
+
+      auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
+      auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
+
+      auto SLDecl = cast_or_null<StructDecl>(getReflectionDecl(RawSourceLocation));
+      if (!SLDecl) {
+         diagnose(Expr, err_reflection_decl_not_found, Expr->getSourceRange(),
+                  "RawSourceLocation");
+         return ExprError();
+      }
+
+      auto& Builder = ILGen->Builder;
+
+      il::Constant* ConstFileName = Builder.GetConstantString(FileName);
+      il::Constant* ConstLoc = Builder.GetConstantStruct(
+          SLDecl,
+          {
+              Builder.GetConstantInt(Context.getIntTy(), LineAndCol.line),
+              Builder.GetConstantInt(Context.getIntTy(), LineAndCol.col),
+              ConstFileName,
+          });
 
       ResultExpr = StaticExpr::Create(Context, Context.getRecordType(SLDecl),
                                       Expr->getSourceRange(), ConstLoc);

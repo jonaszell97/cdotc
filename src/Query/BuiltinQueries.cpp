@@ -29,15 +29,17 @@ QueryResult GetBuiltinModuleQuery::run()
       return finish(M);
    }
 
+   auto* StdII = sema().getIdentifier("core");
    if (Mod == Prelude) {
-      auto* II = QC.Sema->getIdentifier("core");
-      auto* M = ModuleMgr.LookupModule(Loc, Loc, II);
+      if (QC.CI.getOptions().noPrelude() && !QC.CI.getOptions().isStdLib()) {
+         return fail();
+      }
 
+      auto* M = ModuleMgr.LookupModule(Loc, Loc, StdII);
       return finish(M);
    }
 
-   auto* StdII = sema().getIdentifier("core");
-   if (QC.CI.getOptions().noPrelude() && !ModuleMgr.IsModuleLoaded(StdII)) {
+   if (QC.CI.getOptions().noPrelude() && !QC.CI.getOptions().isStdLib()) {
       return fail();
    }
 
@@ -530,6 +532,8 @@ QueryResult GetBuiltinRecordQuery::run()
 
          auto* Ref = MemberRefExpr::Create(QC.Context, Self,
                                            S->getMemberwiseInitializer(), Loc);
+
+         Ref->setCalled(true);
 
          auto* Call
              = AnonymousCallExpr::Create(QC.Context, Loc, Ref, Not, ValName);

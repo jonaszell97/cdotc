@@ -1379,6 +1379,9 @@ QueryResult GetILTypeInfoQuery::run()
    SourceLocation Loc;
 
    if (T->isRecordType()) {
+      if (T->getRecord()->getFullName()=="libc.assert.__NSConstantString_tag") {
+         NO_OP;
+      }
       if (QC.GetILModuleForDecl(Mod, T->getRecord())) {
          return fail();
       }

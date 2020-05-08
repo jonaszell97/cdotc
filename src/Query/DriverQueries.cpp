@@ -82,7 +82,7 @@ QueryResult ParseModuleFileQuery::run()
    // If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
    auto& Opts = QC.CI.getOptions();
-   if (Opts.noPrelude()) {
+   if (Opts.noPrelude() || Opts.isStdLib()) {
       auto* policy = QC.CI.getModuleMgr().LookupModule(
           Start, Start, QC.Sema->getIdentifier("policy"));
 

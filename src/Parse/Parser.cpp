@@ -1379,7 +1379,8 @@ ParseResult Parser::parseIdentifierExpr(bool parsingType, bool parseSubExpr,
    return maybeParseSubExpr(IdentExpr, parsingType);
 }
 
-ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType)
+ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType,
+                                      bool parsingStmt)
 {
    // pack expansions must immediately follow their operand without any
    // whitespace
@@ -1460,6 +1461,10 @@ ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType)
       if (currentTok().is(tok::macro_name)) {
          if (ParentExpr) {
             ParentExpr->setAllowNamespaceRef(true);
+         }
+
+         if (parsingStmt) {
+            return parseMacroExpansionStmt(ParentExpr);
          }
 
          return parseMacroExpansionExpr(ParentExpr);
@@ -1609,6 +1614,11 @@ ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType)
    // macro expansion
    if (Next.is(tok::macro_name)) {
       advance();
+
+      if (parsingStmt) {
+         return parseMacroExpansionStmt(ParentExpr);
+      }
+
       return parseMacroExpansionExpr(ParentExpr);
    }
 
@@ -1815,7 +1825,7 @@ string Parser::prepareStringLiteral(Token const& tok)
    return str.str();
 }
 
-ParseResult Parser::parseUnaryExpr()
+ParseResult Parser::parseUnaryExpr(bool parsingStmt)
 {
    ParseResult Expr;
 
@@ -2226,7 +2236,7 @@ ParseResult Parser::parseUnaryExpr()
    if (!Expr)
       return ParseError();
 
-   return maybeParseSubExpr(Expr.getExpr(), false);
+   return maybeParseSubExpr(Expr.getExpr(), false, parsingStmt);
 }
 
 bool Parser::modifierFollows(char c)
@@ -2741,7 +2751,7 @@ ParseResult Parser::parseExprSequence(int Flags)
             break;
          }
 
-         auto expr = parseUnaryExpr();
+         auto expr = parseUnaryExpr((Flags & F_ParsingStatement) != 0 && frags.empty());
          if (!expr) {
             break;
          }
@@ -2750,12 +2760,20 @@ ParseResult Parser::parseExprSequence(int Flags)
             whitespace |= SequenceElement::Right;
          }
 
-         if (auto Ident = getSimpleIdentifier(expr.getExpr())) {
+         auto *Stmt = expr.getStatement();
+         auto *E = dyn_cast<Expression>(Stmt);
+
+         if (!E) {
+            assert(frags.empty());
+            return Stmt;
+         }
+
+         if (auto Ident = getSimpleIdentifier(E)) {
             frags.emplace_back(Ident->getIdentInfo(), whitespace,
                                Ident->getSourceLoc());
          }
          else {
-            frags.emplace_back(expr.getExpr());
+            frags.emplace_back(E);
          }
 
          break;
@@ -5839,7 +5857,7 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
 
       LLVM_FALLTHROUGH;
    default:
-      stmt = parseExprSequence();
+      stmt = parseExprSequence(DefaultFlags | F_ParsingStatement);
       break;
    }
 

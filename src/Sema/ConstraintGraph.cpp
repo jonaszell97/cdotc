@@ -98,6 +98,17 @@ ArrayRef<TypeVariableType*> ConstraintGraph::getMentionedTypeVars(Constraint* C)
       Vec.push_back(C->getConstrainedType());
       Vec.push_back(Cond->getDisjunctionVar());
    }
+   else if (auto* Lit = support::dyn_cast<LiteralConstraint>(C)) {
+      auto associatedTypes = Lit->getAssociatedTypes();
+      if (auto *TV = support::dyn_cast_or_null<TypeVariableType>(associatedTypes.first)) {
+         Vec.push_back(TV);
+      }
+      if (auto *TV = support::dyn_cast_or_null<TypeVariableType>(associatedTypes.second)) {
+         Vec.push_back(TV);
+      }
+
+      Vec.push_back(C->getConstrainedType());
+   }
    else {
       Vec.push_back(C->getConstrainedType());
    }

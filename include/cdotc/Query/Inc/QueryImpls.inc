@@ -30,6 +30,7 @@ bool Query::isPure() const
    case NeedsStructReturnQueryID: return false;
    case PassByValueQueryID: return false;
    case ContainsProtocolWithAssociatedTypesQueryID: return false;
+   case ContainsTemplateQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
    case IsValidParameterValueQueryID: return false;
@@ -232,6 +233,7 @@ bool Query::canBeCached() const
    case NeedsStructReturnQueryID: return true;
    case PassByValueQueryID: return true;
    case ContainsProtocolWithAssociatedTypesQueryID: return true;
+   case ContainsTemplateQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
    case IsValidParameterValueQueryID: return true;
@@ -434,6 +436,7 @@ bool Query::canBeSerialized() const
    case NeedsStructReturnQueryID: return false;
    case PassByValueQueryID: return false;
    case ContainsProtocolWithAssociatedTypesQueryID: return false;
+   case ContainsTemplateQueryID: return false;
    case ContainsAssociatedTypeConstraintQueryID: return false;
    case IsImplicitlyConvertibleQueryID: return false;
    case IsValidParameterValueQueryID: return false;
@@ -636,6 +639,7 @@ bool Query::canBeDependent() const
    case NeedsStructReturnQueryID: return true;
    case PassByValueQueryID: return true;
    case ContainsProtocolWithAssociatedTypesQueryID: return true;
+   case ContainsTemplateQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
    case IsValidParameterValueQueryID: return true;
@@ -2001,6 +2005,56 @@ void ContainsProtocolWithAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &I
 }
 
 void ContainsProtocolWithAssociatedTypesQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T)
+{
+   T.Profile(ID);
+}
+
+ContainsTemplateQuery::ContainsTemplateQuery(QueryContext &QC, CanType T) : Query(ContainsTemplateQueryID, QC), T(T) {
+
+}
+
+bool ContainsTemplateQuery::get() const
+{
+   assert(ok() && "query has not successfully completed!");
+   return Result.getValue();
+}
+
+std::string ContainsTemplateQuery::description() const
+{
+   std::string s;
+   s += "checking ";
+   s += "ContainsTemplate";
+   s += " on ";
+   s += T.toDiagString();
+   return s;
+}
+
+std::string ContainsTemplateQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[ContainsTemplate]"
+;   OS << " T = ";
+OS << T;
+;
+
+   return OS.str();
+}
+
+QueryResult ContainsTemplateQuery::finish(bool Result, Status St)
+{
+   this->Result = Result;
+
+   return Query::finish(St);
+}
+
+void ContainsTemplateQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, T);
+}
+
+void ContainsTemplateQuery::Profile(llvm::FoldingSetNodeID &ID, CanType T)
 {
    T.Profile(ID);
 }

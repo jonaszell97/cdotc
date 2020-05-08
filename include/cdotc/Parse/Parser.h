@@ -273,6 +273,7 @@ public:
       F_AllowTry = 1 << 5,
       F_StopAtGreater = 1 << 6,
       F_StopAtEquals = 1 << 7,
+      F_ParsingStatement = 1 << 8,
    };
 
    static constexpr int DefaultFlags
@@ -739,13 +740,14 @@ private:
                                    SourceLocation BeginLoc = {});
 
    ParseResult maybeParseSubExpr(Expression* ParentExpr,
-                                 bool parsingType = false);
+                                 bool parsingType = false,
+                                 bool parsingStmt = false);
 
    ParseResult parseTemplateArgListExpr(Expression* ParentExpr,
                                         bool parsingType);
 
    string prepareStringLiteral(lex::Token const& tok);
-   ParseResult parseUnaryExpr();
+   ParseResult parseUnaryExpr(bool parsingStmt = false);
 
    void parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*>& Cases);
 

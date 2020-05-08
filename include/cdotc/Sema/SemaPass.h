@@ -1519,6 +1519,8 @@ public:
 
    void checkAccessibility(NamedDecl* ND, StmtOrDecl SOD);
 
+   SubscriptDecl *getSubscriptDecl(MethodDecl *AccessorFn);
+
 private:
    StmtOrDecl checkMacroCommon(StmtOrDecl SOD, DeclarationName MacroName,
                                DeclContext& Ctx, MacroDecl::Delimiter Delim,

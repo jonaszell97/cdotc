@@ -335,6 +335,14 @@ static ExprResult CheckBuiltinIdentifier(SemaPass &Sema,
                                          DeclarationName DeclName)
 {
    if (ParentType && DeclName.isStr("Type")) {
+      if (auto *Tup = dyn_cast<TupleLiteral>(Ident->getParentExpr())) {
+         if (Tup->getElements().empty()) {
+            // Since '()' is the spelling of both the value and the type,
+            // ().Type actually introduces two levels of meta type.
+            ParentType = Sema.Context.getMetaType(ParentType);
+         }
+      }
+
       Ident->setExprType(Sema.Context.getMetaType(ParentType));
       Ident->setKind(IdentifierKind::TypeOf);
 
@@ -439,6 +447,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
    // Set to true if we should also perform a normal lookup in the current
    // context if type lookup yields no results.
    bool doTypeAndNormalLookup = false;
+   bool parentTypeWasMetaType = false;
 
    auto* PE = Ident->getParentExpr();
    if (PE && !refersToNamespace(PE)) {
@@ -484,8 +493,9 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       //   - refer to a DeclContext if it's a record type
       //   - refer to a static type member otherwise
       if (auto* Meta = NoSugar->asMetaType()) {
+         parentTypeWasMetaType = true;
+
          auto Underlying = Meta->getUnderlyingType();
-//         ParentType = ApplyCapabilities(Underlying, nullptr, true);
          ParentType = Underlying;
          Ident->setStaticLookup(true);
       }
@@ -559,7 +569,10 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
    // nothing left to check, this identifier does not reference a declaration
    // in scope
    if (LookupResult->empty()) {
-      if (auto Result = CheckBuiltinIdentifier(*this, Ident, ParentTypeNoRef, DeclName)) {
+      if (auto Result = CheckBuiltinIdentifier(*this, Ident,
+            parentTypeWasMetaType
+                ? Context.getMetaType(ParentTypeNoRef) : ParentTypeNoRef,
+            DeclName)) {
          return Result;
       }
 
@@ -927,7 +940,12 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
    case Decl::AliasDeclID: {
       auto* Alias = cast<AliasDecl>(FoundDecl);
       if (isInReflectModule(Alias) && !Ident->allowIncompleteTemplateArgs()) {
-         return HandleReflectionAlias(Alias, Ident);
+         auto result = HandleReflectionAlias(Alias, Ident);
+         if (Ident->isMagicArgumentValue()) {
+            Ident->setAlias(Alias);
+         }
+
+         return result;
       }
       if (isInBuiltinModule(Alias) && !Ident->allowIncompleteTemplateArgs()) {
          return HandleBuiltinAlias(Alias, Ident);
@@ -1476,17 +1494,13 @@ SemaPass::checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
       return CD;
    }
 
-   if (TemplateArgs.empty()) {
+   if (E->allowIncompleteTemplateArgs() && TemplateArgs.empty()) {
       return CD;
    }
 
    TemplateArgList ArgList(*this, CD, TemplateArgs, E->getSourceLoc());
    auto CompRes = ArgList.checkCompatibility();
    if (!CompRes) {
-      if (E->allowIncompleteTemplateArgs() && TemplateArgs.empty()) {
-         return CD;
-      }
-
       return nullptr;
    }
 
@@ -1510,12 +1524,12 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
       return R;
    }
 
-   if (QC.PrepareTemplateParameters(R)) {
-      return nullptr;
+   if (E->allowIncompleteTemplateArgs() && TemplateArgs.empty()) {
+      return R;
    }
 
-   if (TemplateArgs.empty()) {
-      return R;
+   if (QC.PrepareTemplateParameters(R)) {
+      return nullptr;
    }
 
    for (auto* ArgExpr : TemplateArgs) {
@@ -1529,10 +1543,6 @@ RecordDecl* SemaPass::checkRecordReference(IdentifierRefExpr* E, RecordDecl* R,
 
    auto CompRes = ArgList.checkCompatibility();
    if (!CompRes) {
-      if (E->allowIncompleteTemplateArgs() && TemplateArgs.empty()) {
-         return R;
-      }
-
       return nullptr;
    }
 
@@ -1960,6 +1970,44 @@ QualType SemaPass::HandlePropAccess(Expression* Expr, PropDecl* P)
    return ResultTy;
 }
 
+SubscriptDecl* SemaPass::getSubscriptDecl(MethodDecl* AccessorFn)
+{
+   assert(AccessorFn->isSubscript());
+
+   auto *R = AccessorFn->getRecord();
+   SubscriptDecl *Sub = nullptr;
+   auto Name = Context.getDeclNameTable().getSubscriptName(
+       DeclarationName::SubscriptKind::General);
+
+   for (auto *PossibleImpl : R->lookup(Name)) {
+      auto *Impl = cast<SubscriptDecl>(PossibleImpl);
+      if (Impl->getGetterMethod() == AccessorFn
+      || Impl->getSetterMethod() == AccessorFn) {
+         Sub = Impl;
+         break;
+      }
+   }
+
+   if (!Sub) {
+      for (auto *Ext : R->getExtensions()) {
+         for (auto *PossibleImpl : Ext->lookup(Name)) {
+            auto *Impl = cast<SubscriptDecl>(PossibleImpl);
+            if (Impl->getGetterMethod() == AccessorFn
+            || Impl->getSetterMethod() == AccessorFn) {
+               Sub = Impl;
+               break;
+            }
+         }
+
+         if (Sub)
+            break;
+      }
+   }
+
+   assert(Sub && "stray subscript function!");
+   return Sub;
+}
+
 ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr* Expr)
 {
    auto ParentExpr = Expr->getParentExpr();
@@ -2113,6 +2161,8 @@ ExprResult SemaPass::visitEnumCaseExpr(EnumCaseExpr* Expr)
 
 ExprResult SemaPass::visitSubscriptExpr(SubscriptExpr* Expr)
 {
+   assert(!Expr->getCallExpr());
+
    auto ParentExpr = Expr->getParentExpr();
    auto ParentResult = visitExpr(Expr, ParentExpr);
    if (!ParentResult) {

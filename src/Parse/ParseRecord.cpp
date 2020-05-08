@@ -781,21 +781,36 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
          }
 
          bool NonMutating = false;
-         if (next.is(Ident_nonmutating)) {
-            NonMutating = true;
+         bool Mutating = false;
+         SourceLocation MutLoc;
+
+         if (next.oneOf(Ident_nonmutating, tok::kw_mutating)) {
+            if (next.is(Ident_nonmutating)) {
+               NonMutating = true;
+            }
+            else {
+               Mutating = true;
+            }
+
             advance();
+            MutLoc = currentTok().getSourceLoc();
 
             next = lookahead();
-
             if (!next.oneOf(Ident_get, Ident_read, Ident_set, Ident_write)) {
                SP.diagnose(
                    err_generic_error,
-                   "expected 'get', 'set' or 'read' after 'nonmutating'",
+                   "expected 'get', 'set' or 'read' after '" + next.toString() + "'",
                    next.getSourceLoc());
             }
          }
 
          if (next.oneOf(Ident_set, Ident_write)) {
+            if (Mutating) {
+               SP.diagnose(warn_generic_warn,
+                   "'mutating' is redundant on a setter",
+                   MutLoc);
+            }
+
             if (next.is(Ident_write)) {
                Info.IsReadWrite = true;
             }
@@ -885,6 +900,12 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             }
          }
          else if (next.oneOf(Ident_get, Ident_read)) {
+            if (NonMutating) {
+               SP.diagnose(warn_generic_warn,
+                           "'nonmutating' is redundant on a getter",
+                           MutLoc);
+            }
+
             if (next.is(Ident_read)) {
                Info.IsReadWrite = true;
             }
@@ -917,6 +938,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
                 Context, AS, GetLoc, DN, Type, Args, {}, nullptr, IsStatic);
 
             Info.GetterMethod->setSynthesized(true);
+            Info.GetterMethod->setMutating(Mutating);
 
             if (lexer->lookahead().is(tok::open_brace)) {
                if (ParsingProtocol) {
@@ -932,6 +954,12 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             }
          }
          else if (!SawGetOrSet) {
+            if (NonMutating) {
+               SP.diagnose(warn_generic_warn,
+                           "'nonmutating' is redundant on a getter",
+                           MutLoc);
+            }
+
             assert(!Info.GetterMethod
                    && "found getter but didn't "
                       "update SawGetOrSet!");
@@ -956,6 +984,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
                                                    Args, {}, nullptr, IsStatic);
 
             Info.GetterMethod->setSynthesized(true);
+            Info.GetterMethod->setMutating(Mutating);
 
             DeclContextRAII DCR(*this, Info.GetterMethod);
             EnterFunctionScope EF(*this);
@@ -1058,7 +1087,9 @@ ParseResult Parser::parseSubscriptDecl()
 
    SourceRange SR(BeginLoc, currentTok().getSourceLoc());
    auto SD = SubscriptDecl::Create(Context, CurDeclAttrs.Access, SR, typeref,
-                                   Info.GetterMethod, Info.SetterMethod);
+                                   CurDeclAttrs.StaticLoc.isValid(),
+                                   Info.IsReadWrite, Info.GetterMethod,
+                                   Info.SetterMethod);
 
    return ActOnDecl(SD);
 }

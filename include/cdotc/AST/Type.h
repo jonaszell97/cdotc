@@ -560,9 +560,11 @@ inline CanType Type::getCanonicalType() const { return CanType(CanonicalType); }
 
 inline CanType QualType::getCanonicalType() const
 {
+   if (!*this) {
+      return CanType();
+   }
+
    return (*this)->getCanonicalType();
-   //   return CanType(QualType(getBuiltinTy()->getCanonicalType(),
-   //   getQuals()));
 }
 
 inline QualType::operator CanType() const { return getCanonicalType(); }

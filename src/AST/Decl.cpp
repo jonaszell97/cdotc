@@ -1792,25 +1792,31 @@ PropDecl* PropDecl::CreateEmpty(ASTContext& C)
 
 SubscriptDecl::SubscriptDecl(AccessSpecifier access, SourceRange Loc,
                              DeclarationName Name, SourceType type,
+                             bool isStatic, bool IsReadWrite,
                              MethodDecl* GetterMethod, MethodDecl* SetterMethod)
     : NamedDecl(SubscriptDeclID, access, Name), Loc(Loc), type(type),
-      getterMethod(GetterMethod), setterMethod(SetterMethod)
+      IsReadWrite(IsReadWrite), getterMethod(GetterMethod),
+      setterMethod(SetterMethod)
 {
+   setDeclFlag(DF_Static, isStatic);
 }
 
 SubscriptDecl* SubscriptDecl::Create(ASTContext& C, AccessSpecifier access,
                                      SourceRange Loc, SourceType type,
+                                     bool isStatic, bool IsReadWrite,
                                      MethodDecl* GetterMethod,
                                      MethodDecl* SetterMethod)
 {
    return new (C) SubscriptDecl(access, Loc,
                                 C.getDeclNameTable().getSubscriptName(
                                     DeclarationName::SubscriptKind::General),
-                                type, GetterMethod, SetterMethod);
+                                type, isStatic, IsReadWrite,
+                                GetterMethod, SetterMethod);
 }
 
 SubscriptDecl::SubscriptDecl(EmptyShell)
-    : NamedDecl(SubscriptDeclID, AccessSpecifier::Default, DeclarationName())
+    : NamedDecl(SubscriptDeclID, AccessSpecifier::Default, DeclarationName()),
+      IsReadWrite(false)
 {
 }
 

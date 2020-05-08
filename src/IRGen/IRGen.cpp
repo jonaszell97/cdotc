@@ -873,6 +873,9 @@ llvm::Type* IRGen::getGlobalType(CanType Ty) { return getStorageType(Ty); }
 
 void IRGen::DeclareFunction(il::Function const* F)
 {
+   if (F->getName()=="_CNW4libc6assertE22__NSConstantString_tagD0ERS_L0") {
+      NO_OP;
+   }
    IRGenPrettyStackTraceEntry PSE(*F);
    auto funcTy = F->getType()->asFunctionType();
 
@@ -2307,14 +2310,15 @@ llvm::Value* IRGen::visitGEPInst(GEPInst const& I)
 {
    auto val = getLlvmValue(I.getVal());
 
-   if (I.getVal()->getType()->removeReference()->isRecordType()) {
-      // Ignore a previous load of the value.
-      if (auto* ld = dyn_cast<llvm::LoadInst>(val)) {
-         if (!I.getVal()->getType()->isClass()) {
-            val = ld->getOperand(0);
-         }
+   // Ignore a previous load of the value.
+   if (auto* ld = dyn_cast<llvm::LoadInst>(val)) {
+      if (!I.getVal()->getType()->isClass()
+      && !I.getVal()->getType()->isPointerType()) {
+         val = ld->getOperand(0);
       }
+   }
 
+   if (I.getVal()->getType()->removeReference()->isRecordType()) {
       auto R = I.getVal()->getType()->removeReference()->getRecord();
       assert(isa<ConstantInt>(I.getIndex()));
 
@@ -2334,12 +2338,7 @@ llvm::Value* IRGen::visitGEPInst(GEPInst const& I)
       return Builder.CreateStructGEP(getStructTy(R), val, idx);
    }
 
-   if (val->getType()->getPointerElementType()->isArrayTy()) {
-      // Ignore a previous load of the value.
-      if (auto* ld = dyn_cast<llvm::LoadInst>(val)) {
-         val = ld->getOperand(0);
-      }
-
+   if (I.getVal()->getType()->removeReference()->isArrayType()) {
       if (val->getType()->isArrayTy()) {
          auto* Val
              = Builder.CreateExtractElement(val, getLlvmValue(I.getIndex()));
@@ -2937,6 +2936,16 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       return Builder.CreateCall(getGetTemplateParamTypeValueFn(),
                                 getLlvmValue(I.getArgs()[0]));
    }
+   case Intrinsic::copy_existential: {
+      auto *OrigVal = getLlvmValue(I.getArgs()[0]);
+      auto* Val = toInt8Ptr(OrigVal);
+      auto *Result = Builder.CreateCall(getMallocFn(), wordSizedInt(
+          TI.getAllocSizeOfType(I.getArgs().front()->getType()
+          ->removeReference())));
+
+      Builder.CreateCall(getCopyExistentialFn(), {Val, Result});
+      return Builder.CreateBitCast(Result, OrigVal->getType());
+   }
    case Intrinsic::existential_ref: {
       auto* Val = getLlvmValue(I.getArgs()[0]);
       return Builder.CreateStructGEP(Val->getType()->getPointerElementType(),
@@ -3116,6 +3125,8 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
                                 });
    case Intrinsic::coro_return:
       return Builder.CreateRet(getLlvmValue(I.getArgs().front()));
+   default:
+      llvm_unreachable("unimplemented!");
    }
 }
 

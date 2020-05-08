@@ -343,6 +343,7 @@ public:
    }
 
    bool isInstantiation() const { return declFlagSet(DF_Instantiation); }
+   bool isNestedInstantiation() const;
    bool hasTrailingObjects() const;
 
    bool alreadyCheckedOrIsInvalid() const
@@ -506,9 +507,11 @@ public:
    ConstraintSet* getConstraints() const;
 
    bool isTemplate() const;
+   bool isNestedTemplate() const;
    bool inDependentContext() const;
    bool isTemplateOrInTemplate() const;
    bool isInUnboundedTemplate() const;
+   NamedDecl *getOuterTemplate() const;
 
    bool isShallowInstantiation() const;
 
@@ -531,7 +534,8 @@ public:
    }
 
    std::string getJoinedName(char join, bool includeFile = false,
-                             bool includeSignatures = false) const;
+                             bool includeSignatures = false,
+                             bool includeAllModules = false) const;
 
    void dumpName() const;
 

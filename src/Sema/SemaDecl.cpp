@@ -530,10 +530,19 @@ void SemaPass::ActOnRecordDecl(DeclContext* DC, RecordDecl* R)
       llvm_unreachable("bad record decl kind");
    }
 
+   if (auto *Outer = dyn_cast<NamedDecl>(DC)) {
+      if (Outer->isTemplate()) {
+         diagnose(err_generic_error, "templates cannot contain nested types",
+             R->getSourceLoc());
+         diagnose(note_generic_note, "template declared here",
+                  Outer->getSourceLoc());
+      }
+   }
+
    addDeclToContext(*DC, R);
    QC.DeclareSelfAlias(R);
 
-   // if this record is imported, no further work is required
+   // If this record is imported, no further work is required
    if (R->isExternal()) {
       return;
    }
@@ -1283,15 +1292,6 @@ TypeResult SemaPass::visitSourceType(Statement* S, const SourceType& Ty,
    return Result;
 }
 
-static bool IsTypeExpr(Expression *E)
-{
-   if (isa<TypeExpr>(E))
-      return true;
-
-   return isa<IdentifierRefExpr>(E)
-       && cast<IdentifierRefExpr>(E)->getKind() == IdentifierKind::TypeOf;
-}
-
 TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
 {
    if (!Ty.getTypeExpr() || Ty.isResolved()) {
@@ -1311,10 +1311,14 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
    QualType ResTy = Result.get()->getExprType();
    Ty.setTypeExpr(Result.get());
 
-   if (WantMeta && IsTypeExpr(Ty.getTypeExpr()) && !ResTy->isMetaType()) {
+   if (!ResTy->isMetaType()) {
+      diagnose(err_generic_error, "expression does not evaluate to a type",
+          Ty.getTypeExpr()->getSourceRange());
+
       ResTy = Context.getMetaType(ResTy);
    }
-   else if (!WantMeta && ResTy->isMetaType()) {
+
+   if (!WantMeta && ResTy->isMetaType()) {
       ResTy = cast<MetaType>(ResTy)->getUnderlyingType();
    }
 
@@ -1324,11 +1328,6 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
 
 ExprResult SemaPass::visitTypeExpr(TypeExpr* Expr)
 {
-   QualType ResTy = Expr->getExprType();
-   if (!Expr->isMeta() && ResTy->isMetaType()) {
-      Expr->setExprType(cast<cdot::MetaType>(ResTy)->getUnderlyingType());
-   }
-
    return Expr;
 }
 
@@ -1890,16 +1889,16 @@ Expression* SemaPass::resolveMacroExpansionExpr(MacroExpansionExpr* Expr)
    }
 
    DeclContext* Ctx = &getDeclContext();
-   if (auto* Ident = cast_or_null<IdentifierRefExpr>(Expr->getParentExpr())) {
-      if (Ident->getKind() == IdentifierKind::Namespace) {
-         Ctx = Ident->getNamespaceDecl();
+   if (auto* Ident = cast_or_null<DeclRefExpr>(Expr->getParentExpr())) {
+      Ctx = dyn_cast<DeclContext>(Ident->getDecl());
+      if (!Ctx) {
+         diagnose(err_generic_error, "invalid macro lookup context",
+             Ident->getSourceRange());
       }
-      else if (Ident->getKind() == IdentifierKind::Import) {
-         Ctx = Ident->getImport();
-      }
-      else if (Ident->getKind() == IdentifierKind::Module) {
-         Ctx = Ident->getModule();
-      }
+   }
+   else if (Expr->getParentExpr()) {
+      diagnose(err_generic_error, "invalid macro lookup context",
+               Ident->getSourceRange());
    }
 
    auto Result = checkMacroCommon(
@@ -1934,16 +1933,16 @@ StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt* Stmt)
       return StmtError();
 
    DeclContext* Ctx = &getDeclContext();
-   if (auto* Ident = cast_or_null<IdentifierRefExpr>(Stmt->getParentExpr())) {
-      if (Ident->getKind() == IdentifierKind::Namespace) {
-         Ctx = Ident->getNamespaceDecl();
+   if (auto* Ident = cast_or_null<DeclRefExpr>(Stmt->getParentExpr())) {
+      Ctx = dyn_cast<DeclContext>(Ident->getDecl());
+      if (!Ctx) {
+         diagnose(err_generic_error, "invalid macro lookup context",
+                  Ident->getSourceRange());
       }
-      else if (Ident->getKind() == IdentifierKind::Import) {
-         Ctx = Ident->getImport();
-      }
-      else if (Ident->getKind() == IdentifierKind::Module) {
-         Ctx = Ident->getModule();
-      }
+   }
+   else if (Stmt->getParentExpr()) {
+      diagnose(err_generic_error, "invalid macro lookup context",
+               Ident->getSourceRange());
    }
 
    auto Result = checkMacroCommon(
@@ -2512,6 +2511,9 @@ ProtocolDecl* SemaPass::getInitializableByDecl(InitializableByKind Kind)
       break;
    case InitializableByKind::Array:
       II = &Context.getIdentifiers().get("ExpressibleByArrayLiteral");
+      break;
+   case InitializableByKind::Dictionary:
+      II = &Context.getIdentifiers().get("ExpressibleByDictionaryLiteral");
       break;
    case InitializableByKind::None:
       II = &Context.getIdentifiers().get("ExpressibleByNoneLiteral");
