@@ -562,13 +562,6 @@ void PrettyPrinterImpl::visitAnonymousCallExpr(AnonymousCallExpr* expr)
    WriteList(expr->getArgs(), &PrettyPrinterImpl::visitExpr);
 }
 
-void PrettyPrinterImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
-{
-   out << "." << expr->getIdent();
-   if (!expr->getArgs().empty())
-      WriteList(expr->getArgs(), &PrettyPrinterImpl::visitExpr);
-}
-
 void PrettyPrinterImpl::visitSubscriptExpr(SubscriptExpr* expr)
 {
    WriteList(expr->getIndices(), &PrettyPrinterImpl::visitExpr, "[", ", ", "]");

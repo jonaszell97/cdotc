@@ -105,7 +105,7 @@ void ParseJob::run()
    auto& ModuleMgr = CI.getModuleMgr();
 
    Context.getIdentifiers().addKeywords();
-   Sema.setDeclContext(CI.getGlobalDeclCtx());
+//   Sema.setDeclContext(CI.getGlobalDeclCtx());
 
    auto File = CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {

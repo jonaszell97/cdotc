@@ -569,23 +569,6 @@ void ASTStmtReader::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* S)
    S->setParentExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitEnumCaseExpr(EnumCaseExpr* S)
-{
-   visitExpr(S);
-
-   S->setPeriodLoc(Record.readSourceLocation());
-   S->setIdent(Record.readDeclarationName());
-
-   auto& Args = S->getArgs();
-   auto NumArgs = Record.readInt();
-   Args.reserve(Record.getReader()->getContext(), NumArgs);
-
-   while (NumArgs--)
-      Args.push_back(Record.readSubExpr(), Record.getReader()->getContext());
-
-   S->setCase(Record.readDeclAs<EnumCaseDecl>());
-}
-
 void ASTStmtReader::visitCallExpr(CallExpr* S)
 {
    visitExpr(S);
@@ -1337,9 +1320,6 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor& Cursor)
          break;
       case Statement::IdentifierRefExprID:
          S = new (C) IdentifierRefExpr(Empty);
-         break;
-      case Statement::EnumCaseExprID:
-         S = new (C) EnumCaseExpr(Empty);
          break;
       case Statement::CallExprID:
          S = CallExpr::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);

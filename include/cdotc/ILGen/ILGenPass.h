@@ -111,7 +111,6 @@ public:
    il::Value* visitCallExpr(CallExpr* Expr, il::Value* GenericArgs = nullptr);
    il::Value* visitAnonymousCallExpr(AnonymousCallExpr* Expr);
    il::Value* visitTupleMemberExpr(TupleMemberExpr* node);
-   il::Value* visitEnumCaseExpr(EnumCaseExpr* node);
    il::Value* visitTemplateArgListExpr(TemplateArgListExpr* Expr);
 
    il::BasicBlock* visitIfConditions(ArrayRef<IfCondition> Conditions,

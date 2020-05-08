@@ -452,12 +452,6 @@ bool DumperImpl::visitAnonymousCallExpr(AnonymousCallExpr* expr)
    return true;
 }
 
-bool DumperImpl::visitEnumCaseExpr(EnumCaseExpr* expr)
-{
-   out << "[." << DeclarationName(expr->getIdentInfo()) << "]";
-   return true;
-}
-
 bool DumperImpl::visitSubscriptExpr(SubscriptExpr* expr) { return true; }
 
 bool DumperImpl::visitTemplateArgListExpr(TemplateArgListExpr* expr)

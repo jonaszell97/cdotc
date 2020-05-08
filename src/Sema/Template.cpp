@@ -1321,7 +1321,7 @@ bool TemplateArgListImpl::checkSingleCompatibility(TemplateArgument& TA,
       }
 
       //         if (P.covariance) {
-      //            if (!TA.getType()->implicitlyCastableTo(P.covariance)) {
+      //            if (!TA.getType()->implicitlyConvertibleTo(P.covariance)) {
       //               err(err_generic_error)
       //                  << "incompatible template argument " + P->getName()
       //                     + ": expected " + P.covariance->toString()

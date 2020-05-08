@@ -56,35 +56,20 @@ public:
 
 } // anonymous namespace
 
-Type* SemaPass::getBuiltinType(DeclarationName typeName)
-{
-   if (!typeName.isSimpleIdentifier())
-      return nullptr;
-
-   return StringSwitch<Type*>(typeName.getIdentifierInfo()->getIdentifier())
-#define CDOT_BUILTIN_INT(Name, BW, Unsigned)                                   \
-   .Case(#Name, Context.get##Name##Ty())
-#define CDOT_BUILTIN_FP(Name, Precision) .Case(#Name, Context.get##Name##Ty())
-#include "cdotc/Basic/BuiltinTypes.def"
-       .Case("isize", Context.getIntTy())
-       .Case("usize", Context.getUIntTy())
-       .Default(nullptr);
-}
-
 void SemaPass::makeExtensionVisible(ExtensionDecl* Ext)
 {
    // The visibility of extensions depends on their access specifier.
    DeclContext* VisibleCtx;
    switch (Ext->getAccess()) {
    case AccessSpecifier::Public:
-      VisibleCtx = getCompilationUnit().getCompilationModule()->getDecl();
+      VisibleCtx = getCompilerInstance().getCompilationModule()->getDecl();
       break;
    case AccessSpecifier::Private:
       VisibleCtx = Ext->getExtendedRecord();
       break;
    case AccessSpecifier::Internal: {
       auto* ExtMod = Ext->getModule()->getModule()->getBaseModule();
-      auto* ThisMod = getCompilationUnit().getCompilationModule();
+      auto* ThisMod = getCompilerInstance().getCompilationModule();
 
       if (ExtMod == ThisMod) {
          VisibleCtx = ThisMod->getDecl();
@@ -924,10 +909,6 @@ void SemaPass::checkDefaultAccessibility(NamedDecl* ND)
    }
 }
 
-void SemaPass::pushDeclContext(DeclContext* Ctx) { DeclCtx = Ctx; }
-
-void SemaPass::popDeclContext() { DeclCtx = DeclCtx->getParentCtx(); }
-
 LLVM_ATTRIBUTE_UNUSED
 static void checkMainSignature(SemaPass& SP, CallableDecl* F)
 {
@@ -1000,6 +981,37 @@ static bool checkCompileTimeEvaluable(SemaPass& SP, DeclContext* Ctx)
    return false;
 }
 
+static MethodDecl *InstantiateMethod(SemaPass &Sema, RecordDecl *R,
+                                     StringRef Name, StmtOrDecl D)
+{
+   DeclarationName DeclName = &Sema.Context.getIdentifiers().get(Name);
+   MethodDecl *M = Sema.QC.LookupSingleAs<MethodDecl>(R, DeclName);
+
+   assert(M && "method does not exist!");
+
+   auto *Inst = Sema.maybeInstantiateTemplateMember(R, M);
+   if (!Inst) {
+      return nullptr;
+   }
+
+   return cast_or_null<MethodDecl>(Sema.maybeInstantiateMemberFunction(Inst, D));
+}
+
+static MethodDecl *InstantiateProperty(SemaPass &Sema, RecordDecl *R,
+                                       StringRef Name, StmtOrDecl D)
+{
+   DeclarationName DeclName = &Sema.Context.getIdentifiers().get(Name);
+   PropDecl *P = Sema.QC.LookupSingleAs<PropDecl>(R, DeclName);
+   assert(P && "method does not exist!");
+
+   auto *Inst = Sema.maybeInstantiateTemplateMember(R, P->getGetterMethod());
+   if (!Inst) {
+      return nullptr;
+   }
+
+   return cast_or_null<MethodDecl>(Sema.maybeInstantiateMemberFunction(Inst, D));
+}
+
 void SemaPass::collectCoroutineInfo(QualType Ty, StmtOrDecl D)
 {
    auto It = CoroutineInfoMap.find(Ty);
@@ -1035,15 +1047,15 @@ void SemaPass::collectCoroutineInfo(QualType Ty, StmtOrDecl D)
    Info.AwaitableInit = InitFn;
    maybeInstantiateMemberFunction(InitFn, D);
 
-   Info.AwaitableGetAwaiter = InstantiateMethod(Awaitable, "getAwaiter", D);
-   Info.AwaitableResolve = InstantiateMethod(Awaitable, "resolve", D);
+   Info.AwaitableGetAwaiter = InstantiateMethod(*this, Awaitable, "getAwaiter", D);
+   Info.AwaitableResolve = InstantiateMethod(*this, Awaitable, "resolve", D);
 
    assert(Info.AwaiterType->isRecordType() && "non-record conforms to Awaiter");
    auto* Awaiter = Info.AwaiterType->getRecord();
 
-   Info.AwaitSuspend = InstantiateMethod(Awaiter, "awaitSuspend", D);
-   Info.AwaitResume = InstantiateMethod(Awaiter, "awaitResume", D);
-   Info.AwaitReady = InstantiateProperty(Awaiter, "ready", true, D);
+   Info.AwaitSuspend = InstantiateMethod(*this, Awaiter, "awaitSuspend", D);
+   Info.AwaitResume = InstantiateMethod(*this, Awaiter, "awaitResume", D);
+   Info.AwaitReady = InstantiateProperty(*this, Awaiter, "ready", D);
 }
 
 bool SemaPass::equivalent(TemplateParamDecl* p1, TemplateParamDecl* p2)
@@ -1655,16 +1667,6 @@ QualType SemaPass::getAtomicOf(QualType Ty)
    }
 }
 
-StmtResult SemaPass::declareDebugStmt(DebugStmt* Stmt)
-{
-   if (!Stmt->isUnreachable()) {
-      int i = 3;
-      (void)i;
-   }
-
-   return Stmt;
-}
-
 namespace {
 
 class MixinPrettyStackTrace : public llvm::PrettyStackTraceEntry {
@@ -2100,7 +2102,7 @@ bool SemaPass::isInStdModule(Decl* D)
 
 bool SemaPass::isInBuiltinModule(Decl* D)
 {
-   if (!getCompilationUnit().getModuleMgr().IsModuleLoaded(
+   if (!getCompilerInstance().getModuleMgr().IsModuleLoaded(
            getIdentifier("builtin"))) {
       return false;
    }
@@ -2275,7 +2277,7 @@ EnumDecl* SemaPass::getGenericArgumentValueDecl()
 
       // FIXME
       GenericArgumentValueDecl
-          = QC.LookupSingleAs<EnumDecl>(compilationUnit->getMainFn(), II);
+          = QC.LookupSingleAs<EnumDecl>(compilerInstance->getMainFn(), II);
    }
 
    return GenericArgumentValueDecl;
@@ -2294,7 +2296,7 @@ StructDecl* SemaPass::getGenericArgumentDecl()
 
       // FIXME
       GenericArgumentDecl
-          = QC.LookupSingleAs<StructDecl>(compilationUnit->getMainFn(), II);
+          = QC.LookupSingleAs<StructDecl>(compilerInstance->getMainFn(), II);
    }
 
    return GenericArgumentDecl;
@@ -2313,7 +2315,7 @@ StructDecl* SemaPass::getGenericEnvironmentDecl()
 
       // FIXME
       GenericEnvironmentDecl
-          = QC.LookupSingleAs<StructDecl>(compilationUnit->getMainFn(), II);
+          = QC.LookupSingleAs<StructDecl>(compilerInstance->getMainFn(), II);
    }
 
    return GenericEnvironmentDecl;
@@ -2527,7 +2529,7 @@ ProtocolDecl* SemaPass::getInitializableByDecl(InitializableByKind Kind)
 #ifndef NDEBUG
       // Allow these to be manually provided in debug mode.
       auto Decl = QC.LookupSingleAs<ProtocolDecl>(
-          getCompilationUnit().getCompilationModule()->getDecl(), II,
+          getCompilerInstance().getCompilationModule()->getDecl(), II,
           BuiltinOpts);
 
       InitializableBy[(unsigned)Kind] = Decl;
@@ -2593,11 +2595,11 @@ MethodDecl* SemaPass::getStringPlusEqualsString()
 NamespaceDecl* SemaPass::getPrivateNamespace()
 {
    if (!PrivateNamespace) {
-      auto Loc = getCompilationUnit().getMainFileLoc();
+      auto Loc = getCompilerInstance().getMainFileLoc();
       auto Name = Context.getDeclNameTable().getUniqueName();
 
       PrivateNamespace = NamespaceDecl::Create(Context, Loc, Loc, Name);
-      ActOnDecl(getCompilationUnit().getCompilationModule()->getDecl(),
+      ActOnDecl(getCompilerInstance().getCompilationModule()->getDecl(),
                 PrivateNamespace);
    }
 

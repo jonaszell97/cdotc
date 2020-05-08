@@ -35,7 +35,7 @@ Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
 
    advance();
 
-   auto& Mgr = SP.getCompilationUnit().getModuleMgr();
+   auto& Mgr = SP.getCompilerInstance().getModuleMgr();
    Module* Mod;
 
    if (ParentMod) {
@@ -46,7 +46,7 @@ Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
    }
 
    if (IsMainModule) {
-      SP.getCompilationUnit().setCompilationModule(Mod);
+      SP.getCompilerInstance().setCompilationModule(Mod);
    }
 
    while (true) {
@@ -251,7 +251,7 @@ Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
                   }
                }
 
-               auto* IM = SP.getCompilationUnit().getModuleMgr().GetModule(
+               auto* IM = SP.getCompilerInstance().getModuleMgr().GetModule(
                    moduleName);
 
                if (IM) {

@@ -1801,7 +1801,7 @@ QueryResult TypecheckFuncArgQuery::run()
 
    const SourceType& DeclaredArgType = D->getType();
    if (Expression* DefaultVal = D->getDefaultVal()) {
-      SemaPass::DefaultArgumentValueRAII defaultArgumentValueRAII(sema());
+      SemaPass::InDefaultArgumentValueRAII defaultArgumentValueRAII(*QC.Sema);
 
       auto Result = QC.Sema->typecheckExpr(DefaultVal, DeclaredArgType, D);
       if (Result) {
@@ -1942,7 +1942,10 @@ QueryResult PrepareCallableInterfaceQuery::run()
 
    auto& Context = QC.CI.getContext();
 
-   SemaPass::DeclScopeRAII declContextRAII(sema(), D);
+   SemaPass::DeclScopeRAII declContextRAII(*QC.Sema, D);
+   SemaPass::InStaticContextRAII StaticCtx(
+       *QC.Sema, D->isStatic() && !isa<InitDecl>(D));
+
    if (D->isOperator()) {
       auto OpName = D->getDeclName();
       if (OpName.getKind() == DeclarationName::InstantiationName)
@@ -2086,8 +2089,10 @@ QueryResult TypecheckCallableQuery::run()
       D->copyStatusFlags(ArgDecl);
    }
 
-   SemaPass::DeclScopeRAII raii(sema(), D);
-   SemaPass::ScopeGuard scope(sema(), D);
+   SemaPass::DeclScopeRAII raii(*QC.Sema, D);
+   SemaPass::ScopeGuard scope(*QC.Sema, D);
+   SemaPass::InStaticContextRAII StaticCtx(
+       *QC.Sema, D->isStatic() && !isa<InitDecl>(D));
 
    if (auto Body = D->getBody()) {
       auto res = QC.Sema->visitStmt(D, Body);

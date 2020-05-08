@@ -1470,7 +1470,7 @@ Decl* ASTReader::ReadDeclRecord(unsigned ID)
 
    // set a dummy lexical context to make sure calls to getASTCtx() don't
    // crash
-   D->setLexicalContext(&Sema.getCompilationUnit().getGlobalDeclCtx());
+   D->setLexicalContext(&Sema.getCompilerInstance().getGlobalDeclCtx());
    if (auto* Ctx = dyn_cast<DeclContext>(D)) {
       Ctx->setParentCtx(D->getLexicalContext());
    }

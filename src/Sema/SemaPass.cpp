@@ -11,6 +11,7 @@
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
 #include "cdotc/Sema/ConstraintBuilder.h"
+#include "cdotc/Sema/OverloadResolver.h"
 #include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/ModuleFile.h"
 #include "cdotc/Support/Casting.h"
@@ -148,7 +149,7 @@ SemaPass::IgnoreDiagsRAII::~IgnoreDiagsRAII()
 }
 
 SemaPass::SemaPass(CompilerInstance& compilationUnit)
-    : compilationUnit(&compilationUnit),
+    : compilerInstance(&compilationUnit),
       DiagConsumer(std::make_unique<SemaDiagConsumer>(*this)),
       Diags(DiagConsumer.get(), &compilationUnit.getFileMgr()),
       QC(compilationUnit.getQueryContext()),
@@ -1084,8 +1085,6 @@ Expression* SemaPass::castToRValue(Expression* Expr)
    return Cast;
 }
 
-void SemaPass::toRValue(Expression* Expr) { (void)castToRValue(Expr); }
-
 // DeclResult SemaPass::visitUnittestDecl(UnittestDecl *D)
 //{
 //   static int numUnitTests = 0;
@@ -1446,7 +1445,6 @@ DeclResult SemaPass::visitLocalVarDecl(LocalVarDecl* Decl)
 
 DeclResult SemaPass::visitGlobalVarDecl(GlobalVarDecl* Decl)
 {
-   EvaluatingRAII EVR(Decl);
    EnterGlobalVarScope GVS(*this, Decl);
 
    auto valid = visitVarDecl(Decl);
@@ -1630,7 +1628,7 @@ DeclResult SemaPass::doDestructure(DestructuringDecl* D,
          unsigned needed = S->getNumNonStaticFields();
          for (auto F : S->getFields()) {
             auto next = tup->getContainedType(needed);
-            if (!implicitlyCastableTo(F->getType(), next))
+            if (!implicitlyConvertibleTo(F->getType(), next))
                break;
          }
 
@@ -1659,7 +1657,8 @@ DeclResult SemaPass::doDestructure(DestructuringDecl* D,
    }
    else if (DestructuredTy->isTupleType()) {
       if (tup) {
-         if (!implicitlyCastableTo(DestructuredTy, tup->getCanonicalType())) {
+         if (!implicitlyConvertibleTo(DestructuredTy,
+                                      tup->getCanonicalType())) {
             return DeclError();
          }
       }
@@ -1917,7 +1916,7 @@ static TypeResult unify(SemaPass& SP, Statement* Stmt,
       if (!unifiedTy) {
          unifiedTy = *exprTy;
       }
-      else if (!SP.implicitlyCastableTo(exprTy, unifiedTy)) {
+      else if (!SP.implicitlyConvertibleTo(exprTy, unifiedTy)) {
          return TypeError();
       }
    }
@@ -2807,43 +2806,43 @@ ExprResult SemaPass::visitStringInterpolation(StringInterpolation* Expr)
    DeclarationName DN = Context.getDeclNameTable().getNormalIdentifier(
        Context.getIdentifiers().get("toString"));
 
-   for (auto& S : Expr->getSegments()) {
-      auto Res = visitExpr(Expr, S);
+   auto *StrRep = getStringRepresentableDecl();
+   assert(StrRep && "string interpolation without StringRepresentable!");
+
+   auto *ToStringReq = StrRep->lookupSingle<MethodDecl>(DN);
+   for (Expression *&SegExpr : Expr->getSegments()) {
+      auto Res = getRValue(Expr, SegExpr);
       if (!Res)
          continue;
 
-      S = Res.getValue();
+      SegExpr = Res.getValue();
 
-      if (S->isDependent())
-         continue;
+      QualType T = SegExpr->getExprType();
+      assert(T->isRecordType() && "not StringRepresentable!");
 
-      if (S->getExprType()->isRecordType()
-      && S->getExprType()->getRecord() == Str) {
+      if (T->getRecord() == Str) {
          continue;
       }
 
-      // interpolation often produces empty strings in between interpolated
-      // segments
-      if (auto lit = dyn_cast<StringLiteral>(S)) {
-         if (lit->getValue().empty())
+      // Interpolation often produces empty strings in between interpolated
+      // segments.
+      if (auto lit = dyn_cast<StringLiteral>(SegExpr)) {
+         if (lit->getValue().empty()) {
             continue;
+         }
       }
 
-      auto CandSet = lookupFunction(DN, S, {}, {}, {}, Expr, false);
-      if (!CandSet)
-         continue;
-
-      if (CandSet.isDependent()) {
-         S->setIsTypeDependent(true);
-         Expr->setIsTypeDependent(true);
-
-         continue;
+      // Find the 'toString' method of the next segment.
+      MethodDecl *toStringImpl;
+      if (T->isProtocol()) {
+         toStringImpl = ToStringReq;
+      }
+      else {
+         toStringImpl = cast<MethodDecl>(
+             Context.getProtocolImpl(T->getRecord(), ToStringReq));
       }
 
-      auto& Cand = CandSet.getBestMatch();
-      auto fn = Cand.getFunc();
-
-      S = CreateCall(fn, CandSet.ResolvedArgs, S->getSourceLoc());
+      SegExpr = CreateCall(toStringImpl, SegExpr, SegExpr->getSourceLoc());
    }
 
    auto PlusEquals = getStringPlusEqualsString();
@@ -3679,18 +3678,17 @@ static ExprResult matchEnum(SemaPass& SP, CasePattern* Expr,
       ++i;
    }
 
-   auto CaseRes
-       = SP.lookupCase(Expr->getCaseNameIdent(), E, Args, {}, Labels, Expr);
-
-   if (CaseRes.isDependent()) {
-      Expr->setIsTypeDependent(true);
-   }
-   else if (!CaseRes) {
-      SP.diagnose(Expr, err_enum_case_not_found, Expr->getSourceRange(),
-                  E->getDeclName(), Expr->getCaseName(), !Args.empty());
-   }
-
    Expr->setExprType(Context.getRecordType(E));
+
+   if (Args.empty() && Case->getArgs().empty()) {
+      return Expr;
+   }
+
+   CandidateSet CandSet;
+   CandSet.addCandidate(Case);
+   sema::resolveCandidateSet(SP, CandSet, nullptr, Args, Labels, {}, {},
+                             Expr);
+
    return Expr;
 }
 
@@ -4112,10 +4110,6 @@ ExprResult SemaPass::visitLambdaExpr(LambdaExpr* Expr)
 {
    auto ContextualTy = Expr->getContextualType();
    if (ContextualTy && ContextualTy->isDependentType()) {
-      if (!Expr->getExprType()) {
-         visitTypeDependentContextualExpr(Expr);
-      }
-
       Expr->setExprType(ContextualTy);
       Expr->setIsTypeDependent(true);
       return Expr;
@@ -4528,7 +4522,7 @@ SemaPass::StaticExprResult SemaPass::evaluateAs(StmtOrDecl DependentStmt,
    if (!Res)
       return Res;
 
-   if (!implicitlyCastableTo(expr->getExprType(), Ty)) {
+   if (!implicitlyConvertibleTo(expr->getExprType(), Ty)) {
       diagnose(expr, err_type_mismatch, expr->getSourceLoc(),
                expr->getExprType(), Ty);
 

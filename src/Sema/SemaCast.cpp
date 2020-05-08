@@ -13,9 +13,9 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
                                   ConversionSequenceBuilder& Seq,
                                   bool MetaConversion = false);
 
-bool SemaPass::implicitlyCastableTo(CanType fromTy, CanType toTy)
+bool SemaPass::implicitlyConvertibleTo(CanType from, CanType to)
 {
-   auto Seq = getConversionSequence(fromTy, toTy);
+   auto Seq = getConversionSequence(from, to);
    if (Seq.isValid())
       return Seq.getStrength() == CastStrength::Implicit;
 
@@ -982,12 +982,6 @@ ConversionSequenceBuilder SemaPass::getConversionSequence(CanType fromTy,
    ast::getConversionSequence(*this, fromTy, toTy, Seq);
 
    return Seq;
-}
-
-void SemaPass::getConversionSequence(ConversionSequenceBuilder& Seq,
-                                     CanType from, CanType to)
-{
-   ast::getConversionSequence(*this, from, to, Seq);
 }
 
 } // namespace ast

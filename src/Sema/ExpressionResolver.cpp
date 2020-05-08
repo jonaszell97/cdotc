@@ -539,19 +539,6 @@ void ExprResolverImpl::diagnoseUnexpectedExpr()
 static void visitContextDependentExpr(SemaPass& SP, Expression* E)
 {
    switch (E->getTypeID()) {
-   case Statement::EnumCaseExprID: {
-      auto* EC = cast<EnumCaseExpr>(E);
-      EC->setIsTypeDependent(true);
-
-      for (auto* Arg : EC->getArgs()) {
-         auto Result = SP.visitExpr(EC, Arg);
-         if (Result) {
-            Arg = Result.get();
-         }
-      }
-
-      break;
-   }
    case Statement::CallExprID: {
       auto* CE = cast<CallExpr>(E);
       CE->setIsTypeDependent(true);

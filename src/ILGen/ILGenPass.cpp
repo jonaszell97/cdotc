@@ -41,9 +41,9 @@ ILGenPass::ILGenPass(il::Context& Ctx, SemaPass& SP)
       UInt8PtrTy(Context.getPointerType(Context.getUInt8Ty())),
       BoolTy(Context.getBoolTy()), CopyFnTy(nullptr), DeinitializerTy(nullptr),
       WordTy(Context.getIntTy()), USizeTy(Context.getUIntTy()), Cleanups(*this),
-      emitDI(SP.getCompilationUnit().getOptions().emitDebugInfo()),
+      emitDI(SP.getCompilerInstance().getOptions().emitDebugInfo()),
       MandatoryPassManager(),
-      Builder(Context, Ctx, SP.getCompilationUnit().getFileMgr(), emitDI)
+      Builder(Context, Ctx, SP.getCompilerInstance().getFileMgr(), emitDI)
 {
    WordZero = Builder.GetConstantInt(Context.getIntTy(), 0);
    WordOne = Builder.GetConstantInt(Context.getIntTy(), 1);
@@ -233,7 +233,7 @@ bool ILGenPass::run()
 {
    VisitPotentiallyLazyGlobals();
 
-   visitDeclContext(&SP.getCompilationUnit().getGlobalDeclCtx());
+   visitDeclContext(&SP.getCompilerInstance().getGlobalDeclCtx());
 
    if (SP.encounteredError())
       return true;
@@ -1338,10 +1338,10 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       auto& Ctx = SP.getContext();
       auto* M = Builder.getModule();
       QualType RetTy = Ctx.getInt32Ty();
-      auto Loc = SP.getCompilationUnit().getMainFileLoc();
+      auto Loc = SP.getCompilerInstance().getMainFileLoc();
 
       il::Function* MainFn;
-      if (!SP.getCompilationUnit().getOptions().noPrelude()) {
+      if (!SP.getCompilerInstance().getOptions().noPrelude()) {
          QualType ArgvTy = Ctx.getUInt8PtrTy()->getPointerTo(Ctx);
          il::Argument* Args[]
              = {Builder.CreateArgument(Ctx.getInt32Ty(),
@@ -1362,12 +1362,12 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
       InsertPointRAII IPR(*this, MainFn->getEntryBlock());
       Builder.SetDebugLoc(Loc);
 
-      if (!SP.getCompilationUnit().getOptions().noPrelude()) {
+      if (!SP.getCompilerInstance().getOptions().noPrelude()) {
          auto* ArgcII = &Ctx.getIdentifiers().get("argc");
          auto* ArgvII = &Ctx.getIdentifiers().get("argv");
          auto* StackBeginII = &Ctx.getIdentifiers().get("stackBegin");
 
-         auto *sysMod = SP.getCompilationUnit().getModuleMgr()
+         auto *sysMod = SP.getCompilerInstance().getModuleMgr()
                           .GetModule({
                              SP.getIdentifier("core"),
                              SP.getIdentifier("sys")
@@ -2848,7 +2848,7 @@ public:
 
 ctfe::CTFEResult ILGenPass::evaluateStaticExpr(Expression* expr)
 {
-   ModuleRAII MR(*this, SP.getCompilationUnit().getCompilationModule()
+   ModuleRAII MR(*this, SP.getCompilerInstance().getCompilationModule()
       ->getILModule());
 
    auto fn = Builder.CreateFunction("__ctfe_fn", expr->getExprType(), {}, false,
@@ -3009,7 +3009,7 @@ il::Function* ILGenPass::CreateUnittestFun()
    ModuleRAII MR(*this, getUnittestModule());
 
    auto* Fun = Builder.CreateFunction("main", VoidTy, {}, false, false,
-                                      SP.getCompilationUnit().getMainFileLoc());
+                                SP.getCompilerInstance().getMainFileLoc());
 
    Fun->setDeclared(false);
 
@@ -3026,7 +3026,7 @@ il::Function* ILGenPass::CreateUnittestFun()
    pushDefaultCleanup(TestCtx);
 
    auto* AddTestFn = getFunc(Info.UnittestContextAddTest);
-   auto& FileMgr = SP.getCompilationUnit().getFileMgr();
+   auto& FileMgr = SP.getCompilerInstance().getFileMgr();
    for (UnittestDecl* D : Unittests) {
       // Initialize the anonymous test class.
       Constant* StrView = MakeStdString(FileMgr.getFileName(D->getSourceLoc()));
@@ -4736,21 +4736,6 @@ il::Value* ILGenPass::visitTupleMemberExpr(TupleMemberExpr* node)
    return Builder.CreateTupleExtract(tup, node->getIndex());
 }
 
-il::Value* ILGenPass::visitEnumCaseExpr(EnumCaseExpr* node)
-{
-   auto* Case = node->getCase();
-
-   SmallVector<Value*, 8> args;
-   for (const auto& arg : node->getArgs()) {
-      args.push_back(visit(arg));
-   }
-
-   auto Val = Builder.CreateEnumInit(node->getEnum(), Case, args);
-   pushDefaultCleanup(Val);
-
-   return Val;
-}
-
 il::Value* ILGenPass::visitTemplateArgListExpr(TemplateArgListExpr* Expr)
 {
    return visit(Expr->getParentExpr());
@@ -5251,12 +5236,7 @@ void ILGenPass::HandleIntegralSwitch(MatchStmt* node)
                           ->getExpr()
                           ->ignoreParensAndImplicitCasts();
 
-         if (auto* EC = dyn_cast<EnumCaseExpr>(Expr)) {
-            values.push_back(cast<ConstantInt>(EC->getCase()->getILValue()));
-         }
-         else {
-            values.push_back(cast<ConstantInt>(visit(Expr)));
-         }
+         values.push_back(cast<ConstantInt>(visit(Expr)));
       }
    }
 
@@ -5994,8 +5974,7 @@ static il::Constant *MakeSimpleString(ASTContext &Ctx, ILBuilder &Builder,
 
 il::Constant* ILGenPass::MakeStdString(llvm::StringRef Str)
 {
-   ModuleRAII MR(*this,
-                 SP.getCompilationUnit().getCompilationModule()->getILModule());
+   ModuleRAII MR(*this, SP.getCompilerInstance().getCompilationModule()->getILModule());
 
    initStringInfo();
 

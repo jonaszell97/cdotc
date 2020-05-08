@@ -273,7 +273,7 @@ EnumDecl* ImporterImpl::importEnum(clang::EnumDecl* ClangE)
    // visible as aliases.
    if (!ClangE->getDeclName()) {
       for (auto* Case : D->getCases()) {
-         auto* EC = new (Ctx) EnumCaseExpr(Case->getSourceLoc(), Case);
+         auto* EC = DeclRefExpr::Create(Ctx, Case, Case->getSourceRange());
          auto* SE = StaticExpr::Create(Ctx, EC);
          auto* Alias = AliasDecl::Create(
              Ctx, Case->getSourceLoc(), AccessSpecifier::Public,

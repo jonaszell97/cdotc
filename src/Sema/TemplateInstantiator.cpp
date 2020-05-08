@@ -43,11 +43,11 @@ public:
                     DeclContext* InstCtx = nullptr, SourceLocation POI = {},
                     QualType Self = QualType())
        : ASTTypeVisitor(false), TypeBuilder(SP, SourceRange(POI)), SP(SP),
-         Context(SP.getContext()),
+         Context(SP.Context),
          InstScope(SP, InstCtx ? InstCtx : &SP.getDeclContext()),
          templateArgs(move(templateArgs)), Self(Self), POI(POI)
    {
-      SourceID = SP.getCompilationUnit().getFileMgr().getSourceId(
+      SourceID = SP.getCompilerInstance().getFileMgr().getSourceId(
           SP.getCurrentDecl()->getSourceLoc());
    }
 
@@ -55,11 +55,11 @@ public:
                     NamedDecl* Template, DeclContext* InstCtx = nullptr,
                     QualType Self = QualType(), SourceLocation POI = {})
        : ASTTypeVisitor(false), TypeBuilder(SP, SourceRange(POI)), SP(SP),
-         Context(SP.getContext()), InstScope(SP, InstCtx ? InstCtx : Template->getDeclContext()),
+         Context(SP.Context), InstScope(SP, InstCtx ? InstCtx : Template->getDeclContext()),
          templateArgs(move(templateArgs)), Template(Template), Self(Self),
          POI(POI)
    {
-      SourceID = SP.getCompilationUnit().getFileMgr().getSourceId(
+      SourceID = SP.getCompilerInstance().getFileMgr().getSourceId(
           SP.getCurrentDecl()->getSourceLoc());
 
       if (Self) {
@@ -70,10 +70,10 @@ public:
    InstantiatorImpl(SemaPass& SP, IdentifierInfo* SubstName,
                     il::Constant* SubstVal)
        : ASTTypeVisitor(false), TypeBuilder(SP, SourceRange()), SP(SP),
-         Context(SP.getContext()),
+         Context(SP.Context),
          InstScope(SP, &SP.getDeclContext()), ValueSubst{SubstName, SubstVal}
    {
-      SourceID = SP.getCompilationUnit().getFileMgr().getSourceId(
+      SourceID = SP.getCompilerInstance().getFileMgr().getSourceId(
           SP.getCurrentDecl()->getSourceLoc());
    }
 
@@ -641,7 +641,6 @@ private:
    SubscriptExpr* visitSubscriptExpr(SubscriptExpr* node);
    Expression* visitCallExpr(CallExpr* node);
    Expression* visitAnonymousCallExpr(AnonymousCallExpr* Expr);
-   EnumCaseExpr* visitEnumCaseExpr(EnumCaseExpr* node);
    TupleMemberExpr* visitTupleMemberExpr(TupleMemberExpr* node);
    TemplateArgListExpr* visitTemplateArgListExpr(TemplateArgListExpr* Expr);
 
@@ -829,72 +828,6 @@ private:
 
    Expression* makeLiteralExpr(Expression* Expr, QualType Ty,
                                const Variant& Val);
-
-   ASTContext const& getContext() const
-   {
-      return SP.getCompilationUnit().getContext();
-   }
-
-   template<class T, class... Args>
-   T* makeStmt(Statement const* node, Args&&... args)
-   {
-      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
-      ret->setSourceLoc(node->getSourceLoc());
-
-      return ret;
-   }
-
-   template<class T, class... Args>
-   T* makeDecl(NamedDecl const* node, Args&&... args)
-   {
-      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
-      ret->setSourceLoc(node->getSourceLoc());
-
-      return ret;
-   }
-
-   template<class T, class... Args>
-   T* makeDecl(Decl const* node, Args&&... args)
-   {
-      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
-      ret->setSourceLoc(node->getSourceLoc());
-
-      return ret;
-   }
-
-   template<class T, class... Args>
-   T* makeExpr(Expression const* node, Args&&... args)
-   {
-      auto ret = SP.makeStmt<T>(std::forward<Args&&>(args)...);
-
-      ret->setSourceLoc(node->getSourceLoc());
-      ret->setIsVariadicArgPackExpansion(node->isVariadicArgPackExpansion());
-
-      return ret;
-   }
-
-   template<class T>
-   std::vector<T*> cloneVector(const llvm::iterator_range<T**>& vec)
-   {
-      std::vector<T*> newVec;
-      for (const auto& v : vec) {
-         auto newStmt = visit(v);
-         newVec.push_back(cast<T>(newStmt));
-      }
-
-      return newVec;
-   }
-
-   template<class T> std::vector<T*> cloneVector(const std::vector<T*>& vec)
-   {
-      std::vector<T*> newVec;
-      for (const auto& v : vec) {
-         auto newStmt = visit(v);
-         newVec.push_back(cast<T>(newStmt));
-      }
-
-      return newVec;
-   }
 
    template<class T> std::vector<T*> cloneVector(llvm::ArrayRef<T*> vec)
    {
@@ -1294,7 +1227,7 @@ RecordDecl* InstantiatorImpl::instantiateRecordDecl(RecordDecl* Decl)
    }
 
    // make sure to set the parent context before calling this
-   Inst->setParentCtx(&SP.getCompilationUnit().getGlobalDeclCtx());
+   Inst->setParentCtx(&SP.getCompilerInstance().getGlobalDeclCtx());
    if (auto MF = Decl->getModFile())
       Inst->setModFile(MF->copy());
 
@@ -2015,13 +1948,13 @@ Expression* InstantiatorImpl::makeLiteralExpr(Expression* Expr, QualType valTy,
       switch (valTy->getBitwidth()) {
       case 1:
          literal = BoolLiteral::Create(Context, Expr->getSourceLoc(),
-                                       getContext().getBoolTy(),
+                                       Context.getBoolTy(),
                                        Val.getZExtValue() != 0);
 
          break;
       case 8:
          literal = CharLiteral::Create(Context, Expr->getSourceRange(),
-                                       getContext().getCharTy(), Val.getChar());
+                                       Context.getCharTy(), Val.getChar());
 
          break;
       default: {
@@ -2173,19 +2106,6 @@ InstantiatorImpl::visitBuiltinIdentExpr(BuiltinIdentExpr* node)
 {
    return BuiltinIdentExpr::Create(Context, node->getSourceLoc(),
                                    node->getIdentifierKind());
-}
-
-EnumCaseExpr* InstantiatorImpl::visitEnumCaseExpr(EnumCaseExpr* node)
-{
-   auto Inst
-       = new (Context) EnumCaseExpr(node->getSourceLoc(), node->getIdentInfo(),
-                                    astvec(copyExprList(node->getArgs())));
-
-   if (!node->isTypeDependent()) {
-      Inst->setCase(node->getCase());
-   }
-
-   return Inst;
 }
 
 FinalTemplateArgumentList* InstantiatorImpl::instantiateTemplateArgs(
@@ -2973,7 +2893,7 @@ StaticPrintDecl* InstantiatorImpl::visitStaticPrintDecl(StaticPrintDecl* node)
 static FinalTemplateArgumentList* MakeList(SemaPass& SP,
                                            const TemplateArgList& list)
 {
-   return FinalTemplateArgumentList::Create(SP.getContext(), list);
+   return FinalTemplateArgumentList::Create(SP.Context, list);
 }
 
 template<class T>
@@ -3002,7 +2922,7 @@ T* lookupExternalInstantiation(StringRef MangledName, SemaPass& SP)
 {
    return lookupExternalInstantiation<T>(
        MangledName,
-       SP.getCompilationUnit().getModuleMgr().getMainModule()->getDecl());
+       SP.getCompilerInstance().getModuleMgr().getMainModule()->getDecl());
 }
 
 unsigned TemplateInstantiator::getInstantiationDepth(NamedDecl* Decl)
@@ -3069,7 +2989,7 @@ static unsigned getInstantiationDepth(NamedDecl* Template,
 static bool checkDepth(SemaPass& SP, SourceLocation POI, unsigned Depth)
 {
    unsigned MaxDepth
-       = SP.getCompilationUnit().getOptions().MaxInstantiationDepth;
+       = SP.getCompilerInstance().getOptions().MaxInstantiationDepth;
    if (Depth > MaxDepth) {
       SP.diagnose(err_generic_error,
                   "maximum template instantiation depth ("
@@ -3814,7 +3734,7 @@ TemplateInstantiator::InstantiateFunction(FunctionDecl *Template,
    }
 
    // Remember where this template was instantiated.
-   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>(
+   auto instInfo = new (SP.Context) InstantiationInfo<CallableDecl>(
       PointOfInstantiation, TemplateArgs, Template, Depth);
 
    Inst->setInstantiationInfo(instInfo);
@@ -3915,7 +3835,7 @@ TemplateInstantiator::InstantiateMethod(MethodDecl *Template,
       return nullptr;
    }
 
-   auto instInfo = new (SP.getContext()) InstantiationInfo<CallableDecl>(
+   auto instInfo = new (SP.Context) InstantiationInfo<CallableDecl>(
       PointOfInstantiation, TemplateArgs, Template, Depth);
 
    Inst->setInstantiationInfo(instInfo);
@@ -4051,6 +3971,8 @@ bool TemplateInstantiator::InstantiateFunctionBody(CallableDecl *Inst)
    {
       SemaPass::DeclScopeRAII raii(*QC.Sema, Inst);
       SemaPass::ScopeGuard scope(*QC.Sema, Inst);
+      SemaPass::InStaticContextRAII StaticCtx(
+          *QC.Sema, Inst->isStatic() && !isa<InitDecl>(Inst));
 
       auto res = QC.Sema->visitStmt(Inst, BodyInst);
       if (res) {
@@ -4122,7 +4044,7 @@ TemplateInstantiator::InstantiateAlias(AliasDecl *Template,
    }
 
    auto* InstScope = SP.getCurrentDecl();
-   auto* InstInfo = new (SP.getContext()) InstantiationInfo<AliasDecl>(
+   auto* InstInfo = new (SP.Context) InstantiationInfo<AliasDecl>(
       PointOfInstantiation, TemplateArgs, Template, Depth);
 
    InstantiatorImpl Instantiator(SP, *InstInfo->templateArgs, Template,

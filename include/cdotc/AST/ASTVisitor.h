@@ -407,15 +407,6 @@ protected:
       return true;
    }
 
-   bool visitEnumCaseExpr(EnumCaseExpr* Stmt)
-   {
-      for (auto& E : Stmt->getArgs())
-         if (!static_cast<SubClass*>(this)->visitStmt(E))
-            return true;
-
-      return true;
-   }
-
    bool visitSubscriptExpr(SubscriptExpr* Stmt)
    {
       if (auto E = Stmt->getParentExpr())
@@ -1268,18 +1259,6 @@ protected:
          }
       }
 
-      for (auto& Val : Expr->getArgs()) {
-         auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
-         if (Result) {
-            Val = Result.get();
-         }
-      }
-
-      return Expr;
-   }
-
-   ExprResult visitEnumCaseExpr(EnumCaseExpr* Expr)
-   {
       for (auto& Val : Expr->getArgs()) {
          auto Result = static_cast<SubClass*>(this)->visitExpr(Val);
          if (Result) {
