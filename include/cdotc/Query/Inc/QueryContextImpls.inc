@@ -7394,10 +7394,26 @@ QueryResult QueryContext::LookupSingle(ast::NamedDecl* &Result, ast::DeclContext
 
 }
 
+template<> MultiLevelLookupQuery *QueryContext::getQuery<MultiLevelLookupQuery>(ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts)
+{
+   llvm::FoldingSetNodeID ID;
+   MultiLevelLookupQuery::Profile(ID, DC, Name, Opts);
+   void *InsertPos;
+   return MultiLevelLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
+}
+
 QueryResult QueryContext::MultiLevelLookup(const MultiLevelLookupResult* &Result, ast::DeclContext* DC, DeclarationName Name, LookupOpts Opts)
 
 {
-   auto *_Q = new(*this) MultiLevelLookupQuery(*this, DC, Name, Opts);
+   llvm::FoldingSetNodeID ID;
+   MultiLevelLookupQuery::Profile(ID, DC, Name, Opts);
+   void *InsertPos;
+   auto *_Q = MultiLevelLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
+   if (!_Q) {
+      _Q = new(*this) MultiLevelLookupQuery(*this, DC, Name, Opts);
+      MultiLevelLookupQueries.InsertNode(_Q, InsertPos);
+   }   _Q->refresh();
+
 #ifndef NDEBUG
    if (shouldReset()) _Q->Stat = Query::Idle;
 #endif
@@ -7408,7 +7424,7 @@ QueryResult QueryContext::MultiLevelLookup(const MultiLevelLookupResult* &Result
    case Query::Idle:
       {
          ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Idle;
+         _Q->Stat = Query::Running;
          if (auto _R = _Q->run()) {
             return _R;
          }
@@ -7428,10 +7444,26 @@ QueryResult QueryContext::MultiLevelLookup(const MultiLevelLookupResult* &Result
 
 }
 
+template<> MultiLevelTypeLookupQuery *QueryContext::getQuery<MultiLevelTypeLookupQuery>(CanType T, DeclarationName Name, LookupOpts Opts)
+{
+   llvm::FoldingSetNodeID ID;
+   MultiLevelTypeLookupQuery::Profile(ID, T, Name, Opts);
+   void *InsertPos;
+   return MultiLevelTypeLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
+}
+
 QueryResult QueryContext::MultiLevelTypeLookup(const MultiLevelLookupResult* &Result, CanType T, DeclarationName Name, LookupOpts Opts)
 
 {
-   auto *_Q = new(*this) MultiLevelTypeLookupQuery(*this, T, Name, Opts);
+   llvm::FoldingSetNodeID ID;
+   MultiLevelTypeLookupQuery::Profile(ID, T, Name, Opts);
+   void *InsertPos;
+   auto *_Q = MultiLevelTypeLookupQueries.FindNodeOrInsertPos(ID, InsertPos);
+   if (!_Q) {
+      _Q = new(*this) MultiLevelTypeLookupQuery(*this, T, Name, Opts);
+      MultiLevelTypeLookupQueries.InsertNode(_Q, InsertPos);
+   }   _Q->refresh();
+
 #ifndef NDEBUG
    if (shouldReset()) _Q->Stat = Query::Idle;
 #endif
@@ -7541,7 +7573,7 @@ QueryResult QueryContext::DirectLookup(const MultiLevelLookupResult* &Result, as
    case Query::Idle:
       {
          ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Idle;
+         _Q->Stat = Query::Running;
          if (auto _R = _Q->run()) {
             return _R;
          }

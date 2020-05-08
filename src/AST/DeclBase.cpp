@@ -764,6 +764,7 @@ void DeclList::appendDecl(NamedDecl* Decl)
    else {
       getAsVec()->push_back(Decl);
    }
+
 }
 
 void DeclList::removeDecl(NamedDecl* Decl)
@@ -807,6 +808,7 @@ void DeclContext::addDecl(Decl* decl)
    }
 
    lastAddedDecl = decl;
+   registerVisibleDeclChange();
 }
 
 DeclContext::AddDeclResultKind DeclContext::addDecl(NamedDecl* decl)
@@ -876,19 +878,22 @@ static bool shouldAddToOuterContext(DeclContext* This, NamedDecl* Decl)
 DeclContext::AddDeclResultKind
 DeclContext::makeDeclAvailable(DeclarationName Name, NamedDecl* decl)
 {
-   if (!Name)
+   if (!Name) {
       return ADR_Success;
+   }
 
    auto it = primaryCtx->namedDecls.find(Name);
    if (it == primaryCtx->namedDecls.end()) {
       primaryCtx->namedDecls.try_emplace(Name, decl);
+      registerVisibleDeclChange();
    }
    else {
       auto lookup = it->getSecond().getAsLookupResult();
       assert(!lookup.empty());
 
-      if (lookup.front()->getKind() != decl->getKind())
+      if (lookup.front()->getKind() != decl->getKind()) {
          return ADR_DuplicateDifferentKind;
+      }
 
       if (!lookup.front()->isOverloadable()) {
          if (lookup.front()->isRedeclarable()) {
@@ -899,6 +904,7 @@ DeclContext::makeDeclAvailable(DeclarationName Name, NamedDecl* decl)
       }
 
       it->getSecond().appendDecl(decl);
+      registerVisibleDeclChange();
    }
 
    if (isTransparent() && shouldAddToOuterContext(this, decl)) {
@@ -1038,17 +1044,21 @@ void DeclContext::removeVisibleDecl(NamedDecl* D, DeclarationName VisibleName)
    else {
       Decls.removeDecl(D);
    }
+
+   registerVisibleDeclChange();
 }
 
 void DeclContext::replaceDecl(Decl* Orig, Decl* Rep)
 {
-   if (Orig == Rep)
+   if (Orig == Rep) {
       return;
+   }
 
    if (Orig == firstDecl) {
       Rep->setNextDeclInContext(Orig->getNextDeclInContext());
       firstDecl = Rep;
 
+      registerVisibleDeclChange();
       return;
    }
 
@@ -1066,9 +1076,11 @@ void DeclContext::replaceDecl(Decl* Orig, Decl* Rep)
    }
 
    assert(found && "original decl not found");
-
-   if (lastAddedDecl == Orig)
+   if (lastAddedDecl == Orig) {
       lastAddedDecl = Rep;
+   }
+
+   registerVisibleDeclChange();
 }
 
 ModuleDecl* DeclContext::getDeclModule() const
