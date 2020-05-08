@@ -388,11 +388,6 @@ public:
       return Sema.visitExpr(Expr);
    }
 
-   ExprResult visitEnumCaseExpr(EnumCaseExpr* Expr)
-   {
-      return Sema.visitExpr(Expr);
-   }
-
    ExprResult visitBuiltinExpr(BuiltinExpr* Expr)
    {
       return Sema.visitExpr(Expr);
@@ -2371,11 +2366,6 @@ QualType ConstraintBuilder::visitSuperExpr(SuperExpr*, SourceType)
 }
 
 QualType ConstraintBuilder::visitCallExpr(CallExpr*, SourceType)
-{
-   llvm_unreachable("should have been replaced!");
-}
-
-QualType ConstraintBuilder::visitEnumCaseExpr(EnumCaseExpr*, SourceType)
 {
    llvm_unreachable("should have been replaced!");
 }

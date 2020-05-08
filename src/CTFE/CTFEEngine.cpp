@@ -46,7 +46,7 @@ namespace ctfe {
 class EngineImpl {
 public:
    explicit EngineImpl(ast::SemaPass& SP)
-       : SP(SP), TI(SP.getCompilationUnit(),
+       : SP(SP), TI(SP.getCompilerInstance(),
                     llvm::Triple(llvm::sys::getDefaultTargetTriple()))
    {
    }
@@ -1387,13 +1387,13 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
    if (type->isVoidType())
       return nullptr;
 
-   auto& ILCtx = SP.getCompilationUnit().getILCtx();
+   auto& ILCtx = SP.getCompilerInstance().getILCtx();
    auto buffer = Val.getBuffer();
    ValueType ValTy(ILCtx, type);
 
    auto& Builder = SP.getILGen().Builder;
    Builder.SetModule(
-       SP.getCompilationUnit().getCompilationModule()->getILModule());
+       SP.getCompilerInstance().getCompilationModule()->getILModule());
 
    if (type->isLargeInteger()) {
       return ConstantInt::get(

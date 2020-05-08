@@ -5919,7 +5919,7 @@ ParseResult Parser::parseUnittestDecl()
       return ParseError();
    }
 
-   if (!SP.getCompilationUnit().getOptions().runUnitTests()) {
+   if (!SP.getCompilerInstance().getOptions().runUnitTests()) {
       advance();
       skipUntilEven(tok::open_brace);
       advance();
@@ -6161,7 +6161,7 @@ ParseResult Parser::parseModuleDecl()
    }
 
    SourceRange SR(ModuleLoc, currentTok().getSourceLoc());
-   return SP.getCompilationUnit().getModuleMgr().GetOrCreateModule(SR,
+   return SP.getCompilerInstance().getModuleMgr().GetOrCreateModule(SR,
                                                                    moduleName);
 }
 
@@ -6315,7 +6315,7 @@ void Parser::parseMainFile()
 {
    EnterFunctionScope EF(*this);
 
-   SourceLocation Loc = SP.getCompilationUnit().getMainFileLoc();
+   SourceLocation Loc = SP.getCompilerInstance().getMainFileLoc();
    auto* II = &Context.getIdentifiers().get("_start");
    auto* Fn = FunctionDecl::Create(
        Context, AccessSpecifier::Private, Loc, DeclarationName(II), {},
@@ -6356,7 +6356,7 @@ void Parser::parseMainFile()
    Fn->setBody(CS);
    Fn->setIsMain(true);
 
-   SP.getCompilationUnit().setMainFn(Fn);
+   SP.getCompilerInstance().setMainFn(Fn);
    ActOnDecl(Fn);
 }
 

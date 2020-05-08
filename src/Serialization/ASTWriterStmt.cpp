@@ -592,22 +592,6 @@ void ASTStmtWriter::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* S)
    Record.AddStmt(S->getParentExpr());
 }
 
-void ASTStmtWriter::visitEnumCaseExpr(EnumCaseExpr* S)
-{
-   visitExpr(S);
-
-   Record.AddSourceLocation(S->getSourceLoc());
-   Record.AddDeclarationName(S->getDeclName());
-
-   auto& Args = S->getArgs();
-   Record.push_back(Args.size());
-
-   for (auto Arg : Args)
-      Record.AddStmt(Arg);
-
-   Record.AddDeclRef(S->getCase());
-}
-
 void ASTStmtWriter::visitCallExpr(CallExpr* S)
 {
    visitExpr(S);

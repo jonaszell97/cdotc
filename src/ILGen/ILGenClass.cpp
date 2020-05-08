@@ -1389,7 +1389,7 @@ QueryResult GetILTypeInfoQuery::run()
       Loc = T->getRecord()->getSourceLoc();
    }
    else {
-      auto* MainMod = sema().getCompilationUnit().getCompilationModule();
+      auto* MainMod = sema().getCompilerInstance().getCompilationModule();
       Mod = MainMod->getILModule();
       Loc = MainMod->getSourceLoc();
    }

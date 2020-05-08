@@ -42,6 +42,7 @@ class ILGenPass;
 class ReflectionBuilder;
 class TemplateInstantiator;
 
+/// This class takes care of the bulk of the semantic analysis of the program.
 class SemaPass : public EmptyASTVisitor<ExprResult, StmtResult, DeclResult> {
 public:
    using TemplateArgList = cdot::sema::TemplateArgList;
@@ -50,58 +51,98 @@ public:
    explicit SemaPass(CompilerInstance& compilationUnit);
    ~SemaPass();
 
-   Type* getBuiltinType(DeclarationName typeName);
-
+   /// \return The diagnostics engine of this compilation.
    DiagnosticsEngine& getDiags() { return Diags; }
 
-   CompilerInstance& getCompilationUnit() const { return *compilationUnit; }
-   void setCompilationUnit(CompilerInstance& CU) { compilationUnit = &CU; }
+   /// \return The active compiler instance.
+   CompilerInstance& getCompilerInstance() const { return *compilerInstance; }
 
-   ASTContext& getContext() const { return compilationUnit->getContext(); }
+   /// \return The AST context.
+   ASTContext& getContext() const { return Context; }
 
+   /// \return The declaration context that is currently being checked.
    DeclContext& getDeclContext() const { return *DeclCtx; }
-   void setDeclContext(DeclContext& Ctx) { DeclCtx = &Ctx; }
 
+   /// \return The symbol mangler instance.
    const SymbolMangler& getMangler() const { return mangle; }
+
+   /// \return The template instantiator instance.
    TemplateInstantiator& getInstantiator() const;
 
-   ConformanceResolver &getConformanceResolver();
-   bool IsBeingResolved(RecordDecl *R);
-   bool UncheckedConformanceExists(RecordDecl *R, ProtocolDecl *P);
+   /// \return The conformance resolver instance.
+   ConformanceResolver& getConformanceResolver();
 
-   void pushDeclContext(DeclContext* Ctx);
-   void popDeclContext();
-
-   bool implicitlyCastableTo(CanType from, CanType to);
-   ConversionSequenceBuilder getConversionSequence(CanType from, CanType to);
-   void getConversionSequence(ConversionSequenceBuilder& Seq, CanType from,
-                              CanType to);
-
-   Expression* convertCStyleVarargParam(Expression* Expr);
-
-   // -1 indicates compatible signatures, positive values are error codes to
-   // be used in diagnostics
-   int signaturesCompatible(CallableDecl* C1, CallableDecl* C2);
-
+   /// \return The ILGen instance.
    ILGenPass& getILGen() { return *ILGen.get(); }
 
+   /// \return Whether or not this record is currently being resolved by the
+   /// conformance resolver. If true, this record is not yet ready for full
+   /// lookup or instantiation.
+   bool IsBeingResolved(RecordDecl *R);
+
+   /// \return Whether or not any conformance of R to P exists,
+   /// ignoring constraints.
+   bool UncheckedConformanceExists(RecordDecl *R, ProtocolDecl *P);
+
+   /// Enter a new declaration context.
+   void pushDeclContext(DeclContext* Ctx) { this->DeclCtx = Ctx; }
+
+   /// Exit a declaration context.
+   void popDeclContext() { DeclCtx = DeclCtx->getParentCtx(); }
+
+   /// \return True iff there is an implicit conversion from `from` to `to`.
+   bool implicitlyConvertibleTo(CanType from, CanType to);
+
+   /// \return A possible conversion sequence from `from` to `to`, or an invalid
+   /// one if there is no conversion.
+   ConversionSequenceBuilder getConversionSequence(CanType from, CanType to);
+
+
+   /// Apply standard conversions for a C-style vararg function argument.
+   Expression* convertCStyleVarargParam(Expression* Expr);
+
+   /// Whether or not two function signatures are compatible. Used for checking
+   /// of overrides of virtual methods.
+   /// \return -1 indicates compatible signatures, positive values
+   /// are error codes to use in diagnostics.
+   int signaturesCompatible(CallableDecl* C1, CallableDecl* C2);
+
+   /// Diagnose an illegal redeclaration.
    void diagnoseRedeclaration(DeclContext& Ctx,
                               DeclContext::AddDeclResultKind ResKind,
                               DeclarationName Name, NamedDecl* Decl);
 
+   /// Make a declaration visible in a context under a specified name.
    void addDeclToContext(DeclContext& Ctx, DeclarationName Name,
                          NamedDecl* Decl);
+
+   /// Make a declaration visible in a context.
    void addDeclToContext(DeclContext& Ctx, NamedDecl* Decl);
+
+   /// Add a (potentially named) decl to a context.
    void addDeclToContext(DeclContext& Ctx, Decl* D);
 
+   /// Make a declaration visible in a context.
    void makeDeclAvailable(DeclContext& Dst, NamedDecl* Decl,
                           bool IgnoreRedecl = false);
+
+   /// Make a declaration visible in a context under a specified name.
    void makeDeclAvailable(DeclContext& Dst, DeclarationName Name,
                           NamedDecl* Decl, bool IgnoreRedecl = false);
 
+   /// Make all declarations of `Src` visible in `Dst`.
    void makeDeclsAvailableIn(DeclContext& Dst, DeclContext& Src,
                              bool IgnoreRedecl = false);
 
+private:
+   /// Semantically check a type-checked expression.
+   ExprResult visit(Expression* Expr, bool);
+
+   /// Semantically check a statement.
+   StmtResult visit(Statement* node, bool);
+
+public:
+   /// Semantically check a type-checked expression.
    [[nodiscard]] ExprResult visitExpr(StmtOrDecl DependentStmt, Expression* E)
    {
       auto res = visit(E, true);
@@ -115,6 +156,8 @@ public:
       return res;
    }
 
+   /// Semantically check a type-checked expression, converting it to an R-value
+   /// if necessary.
    [[nodiscard]] ExprResult getRValue(StmtOrDecl DependentStmt, Expression* E)
    {
       auto res = visit(E, true);
@@ -131,6 +174,8 @@ public:
       return castToRValue(res.get());
    }
 
+   /// Semantically check a type-checked expression, converting it to a
+   /// specific type if necessary.
    [[nodiscard]] ExprResult getAsOrCast(StmtOrDecl DependentStmt, Expression* E,
                                         QualType expectedType)
    {
@@ -167,6 +212,7 @@ public:
       return res;
    }
 
+   /// Semantically check a statement.
    [[nodiscard]] StmtResult visitStmt(StmtOrDecl DependentStmt, Statement* Stmt)
    {
       auto res = visit(Stmt, true);
@@ -180,14 +226,17 @@ public:
       return res;
    }
 
+    /// Semantically check a type-checked expression.
    [[nodiscard]] ExprResult visitExpr(Expression* E) { return visit(E, true); }
 
-   [[nodiscard]] StmtResult visitStmt(Statement* Stmt)
-   {
-      return visit(Stmt, true);
-   }
+   /// Semantically check a statement.
+   [[nodiscard]] StmtResult visitStmt(Statement* Stmt) { return visit(Stmt, true); }
 
-   // Initial Declarations during parsing
+   /// -------
+   /// The various 'ActOn' methods are called by the parser to do some work we
+   /// can do without type information, like making named declarations visible.
+   /// -------
+
    void ActOnDecl(DeclContext* DC, Decl* D);
    void ActOnImportDecl(DeclContext* DC, ImportDecl* D);
    void ActOnUsingDecl(DeclContext* DC, UsingDecl* D);
@@ -220,7 +269,10 @@ public:
    void ActOnStaticForDecl(DeclContext* DC, StaticForDecl* D);
    void ActOnMixinDecl(DeclContext* DC, MixinDecl* D);
 
-   StmtResult declareDebugStmt(DebugStmt* Stmt);
+   /// -------
+   /// These functions are used for semantically checking the various
+   /// attributes.
+   /// -------
 
    void checkDeclAttrs(Decl* D, Attr::VisitationPoint VP);
 
@@ -238,6 +290,10 @@ public:
 
 #include "cdotc/AST/Attributes.def"
 
+   /// Typecheck an expression (potentially using a constraint system). This
+   /// does not guarantee that the expression is semantically valid, the various
+   /// 'visit' functions are used after this to complete semantically checking
+   /// an expression.
    ExprResult typecheckExpr(Expression* Expr, SourceType RequiredType,
                             Statement* DependentStmt,
                             bool isHardRequirement = true)
@@ -253,6 +309,7 @@ public:
       return Result;
    }
 
+   /// See above.
    ExprResult typecheckExpr(Expression* Expr, SourceType RequiredType,
                             Decl* DependentDecl, bool isHardRequirement = true)
    {
@@ -267,6 +324,7 @@ public:
       return Result;
    }
 
+   /// See above.
    ExprResult typecheckExpr(Expression* Expr, SourceType RequiredType,
                             StmtOrDecl DependentDecl,
                             bool isHardRequirement = true)
@@ -282,9 +340,15 @@ public:
       return Result;
    }
 
+   /// See above.
    ExprResult typecheckExpr(Expression* Expr,
                             SourceType RequiredType = ast::SourceType(),
                             bool isHardRequirement = true);
+
+   /// -------
+   /// These functions handle semantic checking of expressions and statements
+   /// after their types have been assigned via constraint solving.
+   /// -------
 
    StmtResult visitCompoundStmt(CompoundStmt* Stmt);
 
@@ -316,7 +380,6 @@ public:
    ExprResult visitCallExpr(CallExpr* Call,
                             TemplateArgListExpr* TemplateArgs = nullptr);
    ExprResult visitAnonymousCallExpr(AnonymousCallExpr* Call);
-   ExprResult visitEnumCaseExpr(EnumCaseExpr* Expr);
    ExprResult visitTemplateArgListExpr(TemplateArgListExpr* Expr);
 
    ExprResult visitTupleMemberExpr(TupleMemberExpr* Expr);
@@ -327,6 +390,7 @@ public:
 
    void visitIfConditions(Statement* Stmt,
                           MutableArrayRef<IfCondition> Conditions);
+
    StmtResult visitIfStmt(IfStmt* Stmt);
 
    StmtResult visitMatchStmt(MatchStmt* Stmt);
@@ -418,23 +482,31 @@ public:
    ExprResult visitMacroExpansionExpr(MacroExpansionExpr* Expr);
    StmtResult visitMacroExpansionStmt(MacroExpansionStmt* Stmt);
 
+   /// Resolve a type as it appeared in the source to an actual type.
    TypeResult visitSourceType(Decl* D, const SourceType& Ty,
                               bool WantMeta = false);
+
+   /// Resolve a type as it appeared in the source to an actual type.
    TypeResult visitSourceType(Statement* S, const SourceType& Ty,
                               bool WantMeta = false);
+
+   /// Resolve a type as it appeared in the source to an actual type.
    TypeResult visitSourceType(const SourceType& Ty, bool WantMeta = false);
 
-   // disallow passing an rvalue as second parameter
+   /// Disallow passing an rvalue as second parameter.
    template<class T> TypeResult visitSourceType(T* D, SourceType&& Ty) = delete;
 
-   template<class T> TypeResult visitSourceType(SourceType&& Ty) = delete;
+   /// Disallow passing an rvalue as second parameter.
+   TypeResult visitSourceType(SourceType&& Ty) = delete;
 
+   /// The result of a compile-time expression evaluation.
    struct StaticExprResult {
       explicit StaticExprResult(Expression* Expr, il::Constant* V)
           : Expr(Expr), Value(V), HadError(false)
       {
       }
 
+      /* implicit */
       StaticExprResult(Expression* Expr = nullptr, bool typeDependent = false)
           : Expr(Expr), HadError(!typeDependent)
       {
@@ -446,11 +518,9 @@ public:
          return Value;
       }
 
-      Expression* getExpr() const { return Expr; }
-
-      bool hadError() const { return HadError; }
-
-      bool isDependent() const { return !Value && !HadError; }
+      [[nodiscard]] Expression* getExpr() const { return Expr; }
+      [[nodiscard]] bool hadError() const { return HadError; }
+      [[nodiscard]] bool isDependent() const { return !Value && !HadError; }
 
       operator bool() const { return !hadError() && !isDependent(); }
 
@@ -460,42 +530,55 @@ public:
       bool HadError;
    };
 
+   /// Try to evaluate a compile-time expression.
    StaticExprResult evalStaticExpr(StmtOrDecl DependentStmt, Expression* expr);
+
+   /// Try to evaluate a compile-time expression as a value of a specific type.
    StaticExprResult evaluateAs(StmtOrDecl DependentStmt, Expression* expr,
                                QualType Ty);
 
+   /// Try to evaluate a compile-time expression as a boolean value.
    Optional<bool> evaluateAsBool(StmtOrDecl DependentStmt, Expression* expr);
 
-   QualType getTypeForDecl(NamedDecl* ND);
-
+   /// Print a constraint to an output stream.
    void printConstraint(llvm::raw_ostream& OS, QualType ConstrainedType,
                         DeclConstraint* C, QualType Self = QualType());
 
+   /// \return the string representation of a constant value.
    bool getStringValue(Expression* Expr, il::Constant* V, llvm::StringRef& Str);
 
+   /// \return the bool value of a constant value.
    bool getBoolValue(Expression* Expr, il::Constant* V, bool& Val);
 
+   /// Check if a type is valid as the type of declaration (variable, property
+   /// or field). This excludes types like void or protocols with associated
+   /// types.
    void checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl);
 
+   /// Convert an abstract associated type to a concrete type.
    QualType CreateConcreteTypeFromAssociatedType(AssociatedType *AT,
                                                  QualType Outer,
                                                  QualType Original);
 
+   /// Resolve a nested associated type to a concrete type.
    QualType ResolveNestedAssociatedType(QualType AT, CanType Self);
+
+   /// Resolve a nested associated type to a concrete type.
    QualType ResolveNestedAssociatedType(
        QualType AT, DeclContext *DC = nullptr, QualType Self = QualType(),
        sema::FinalTemplateArgumentList *TemplateArgs = nullptr);
 
-   template<class T, class... Args> T* makeStmt(Args&&... args)
-   {
-      return new (getContext()) T(std::forward<Args&&>(args)...);
-   }
-
-   std::pair<DeclContext*, bool> getAsContext(QualType Ty);
+   /// \return The declaration represented by a type.
    NamedDecl* getTypeDecl(QualType Ty);
 
+   /// \return The type of a declaration.
+   QualType getTypeForDecl(NamedDecl* ND);
+
+   /// \return Whether or not a warning should be issued if the result of the
+   /// expression is unused.
    bool warnOnUnusedResult(Expression* E) const;
 
+   /// Helper function for diagnosing errors.
    template<class... Args>
    void diagnose(Statement* Stmt, diag::MessageKind msg, Args const&... args)
    {
@@ -506,6 +589,7 @@ public:
       diagnose(msg, std::forward<Args const&>(args)...);
    }
 
+   /// Helper function for diagnosing errors.
    template<class... Args>
    void diagnose(Decl* D, diag::MessageKind msg, Args const&... args)
    {
@@ -516,6 +600,7 @@ public:
       diagnose(msg, std::forward<Args const&>(args)...);
    }
 
+   /// Helper function for diagnosing errors.
    template<class... Args>
    void diagnose(StmtOrDecl SOD, diag::MessageKind msg, Args const&... args)
    {
@@ -526,6 +611,7 @@ public:
       diagnose(msg, std::forward<Args const&>(args)...);
    }
 
+   /// Helper function for diagnosing errors.
    template<class... Args>
    void diagnose(diag::MessageKind msg, Args const&... args)
    {
@@ -547,46 +633,52 @@ public:
       }
    }
 
+   /// Append a note of the current instantiation context to an
+   /// issued diagnostic.
    void noteInstantiationContext();
 
+   /// Diagnose an invalid template argument list.
    void diagnoseTemplateArgErrors(NamedDecl* Template, Statement* ErrorStmt,
                                   TemplateArgList& list,
                                   llvm::ArrayRef<Expression*> OriginalArgs,
                                   sema::TemplateArgListResult& Cand);
 
+   /// Whether or not two template parameters are effectively equal.
    bool equivalent(TemplateParamDecl* p1, TemplateParamDecl* p2);
 
+   /// Register the scope in which an instantiation was requested.
    void registerInstantiation(NamedDecl* Inst, NamedDecl* Scope)
    {
       InstScopeMap[Inst] = Scope;
    }
 
+   /// \return The scope in which an instantiation was requested.
    NamedDecl* getInstantiationScope(NamedDecl* Inst);
 
+   /// Validate that an 'override' method actually overrides a virtual method.
    void checkVirtualOrOverrideMethod(MethodDecl* M);
+
+   /// Verify that a class overrides every abstract method of its base class.
    void checkIfAbstractMethodsOverridden(ClassDecl* R);
 
+   /// Diagnose a global variable that somehow references itself in its
+   /// initializer.
    void diagnoseCircularlyDependentGlobalVariables(Expression* Expr,
                                                    NamedDecl* globalVar);
 
-   enum class Stage {
-      Parsing = 0,
-      PreparingNameLookup,
-      Sema,
-      ILGen,
-   };
-
-   Stage getStage() const { return stage; }
-   bool shouldCompleteInstantiations() const { return !Bits.DelayRecordInstantiations; }
-
+   /// \return The current function scope.
    CallableDecl* getCurrentFun() const;
 
+   /// Helper function to create an identifier from a static string.
    template<std::size_t StrLen>
    IdentifierInfo* getIdentifier(const char (&Str)[StrLen])
    {
       return &Context.getIdentifiers().get(Str);
    }
 
+   /// Helper struct that holds some info about the current state.
+   /// This is useful because Sema has to jump around a lot, so packing this in
+   /// a struct makes it easier to save and restore the values.
    struct SemaState {
       explicit SemaState(SemaPass& SP)
           : StateBits(SP.StateUnion),
@@ -607,8 +699,10 @@ public:
       SmallVectorImpl<AssociatedTypeDecl*>* ReferencedATs;
    };
 
+   /// \return The current sema state.
    SemaState getSemaState() { return SemaState(*this); }
 
+   /// Reset to a previous state.
    void resetState(SemaState& State)
    {
       StateUnion = State.StateBits;
@@ -619,6 +713,7 @@ public:
       ReferencedATs = State.ReferencedATs;
    }
 
+   /// Clear the sema state.
    void clearState()
    {
       StateUnion = 0;
@@ -630,6 +725,8 @@ public:
       ReferencedATs = nullptr;
    }
 
+   /// Enter a new diagnostic scope, effectively ignoring any previous
+   /// diagnostics.
    struct DiagnosticScopeRAII {
       explicit DiagnosticScopeRAII(SemaPass& SP, bool Disabled = false)
           : SP(SP), fatalError(SP.fatalError),
@@ -666,6 +763,7 @@ public:
       size_t numDiags;
    };
 
+   /// Register a new diagnostic consumer.
    struct DiagConsumerRAII {
       DiagConsumerRAII(SemaPass& SP, DiagnosticConsumer* PrevConsumer);
       ~DiagConsumerRAII();
@@ -675,6 +773,7 @@ public:
       DiagnosticConsumer* PrevConsumer;
    };
 
+   /// Register a void diagnostic consumer.
    struct IgnoreDiagsRAII : DiagConsumerRAII {
       explicit IgnoreDiagsRAII(SemaPass& SP, bool Enabled = true);
       ~IgnoreDiagsRAII();
@@ -683,6 +782,7 @@ public:
       bool Enabled;
    };
 
+   /// Temporarily enter a different scope.
    struct DeclScopeRAII {
       DeclScopeRAII(SemaPass& SP, DeclContext* Ctx);
 
@@ -700,23 +800,9 @@ public:
       llvm::DenseMap<QualType, QualType> typeSubstitutions;
    };
 
-   struct ScopeResetRAII {
-      explicit ScopeResetRAII(SemaPass& SP, Scope* S = nullptr)
-          : SP(SP), State(SP.getSemaState())
-      {
-         SP.clearState();
-         SP.currentScope = S;
-      }
-
-      ~ScopeResetRAII() { SP.resetState(State); }
-
-   private:
-      SemaPass& SP;
-      SemaState State;
-   };
-
    enum SetParentCtxDiscrim { SetParentContext };
 
+   /// Enter a new scope that is nested in the previous scope.
    struct DeclContextRAII {
       DeclContextRAII(SemaPass& SP, DeclContext* Ctx);
       DeclContextRAII(SemaPass& SP, DeclContext* Ctx, SetParentCtxDiscrim);
@@ -728,20 +814,7 @@ public:
       DeclContext* Prev;
    };
 
-   struct DefaultArgumentValueRAII {
-      DefaultArgumentValueRAII(SemaPass& SP)
-          : SP(SP), Previous(SP.Bits.InDefaultArgumentValue)
-      {
-         SP.Bits.InDefaultArgumentValue = true;
-      }
-
-      ~DefaultArgumentValueRAII() { SP.Bits.InDefaultArgumentValue = Previous; }
-
-   private:
-      SemaPass& SP;
-      bool Previous;
-   };
-
+   /// Create a new scope for the evaluation of a global variable.
    struct EnterGlobalVarScope {
       EnterGlobalVarScope(SemaPass& SP, GlobalVarDecl* V)
           : SP(SP), Prev(SP.EvaluatingGlobalVar)
@@ -756,6 +829,7 @@ public:
       GlobalVarDecl* Prev;
    };
 
+   /// Create a new scope for the evaluation of a compile-time expression.
    struct EnterCtfeScope {
       explicit EnterCtfeScope(SemaPass& SP) : SP(SP), previous(SP.Bits.InCTFE)
       {
@@ -769,44 +843,68 @@ public:
       bool previous;
    };
 
+   /// \return The current sema scope.
    Scope* getScope() const { return currentScope; }
+
+   /// \return Whether or not we're currently evaluating a compile-time
+   /// expression.
    bool inCTFE() const { return Bits.InCTFE; }
+
+   /// \return Whether or not incomplete template types are allowed to be
+   /// referenced.
    bool allowIncompleteTemplateTypes() const
    {
       return Bits.AllowIncompleteTemplateTypes;
    }
 
+   /// \return True iff the given type has a default value.
    bool hasDefaultValue(QualType type) const;
 
+   /// Issue all diagnostics encountered so far.
    void issueDiagnostics();
 
+   /// The number of total issued diagnostics.
    size_t getNumDiags() const;
+
+   /// Resize the stored diagnostics, effectively deleting the last ones after
+   /// `toSize`.
    void resizeDiags(size_t toSize);
 
+   /// True iff an error was encountered during compilation until now.
    bool encounteredError() const { return EncounteredError; }
+
+   /// Set whether or not an error was encountered.
    void setEncounteredError(bool b) { EncounteredError = b; }
 
-   size_t getNumGlobals() const { return numGlobals; }
-
+   /// Register the implementation of an associated type requirement for a record.
    void registerAssociatedTypeImpl(RecordDecl *R, AssociatedTypeDecl *AT,
                                    AliasDecl *Impl);
 
+   /// Register the implementation of an associated type requirement for a record.
    void registerAssociatedTypeImpl(RecordDecl *R, AliasDecl *Impl);
 
+   /// \return the implementation of an associated type requirement for a record.
    AliasDecl *getAssociatedTypeImpl(RecordDecl *R, DeclarationName Name);
 
+   /// \return the implementation of an associated type requirement for a record.
    template<std::size_t StrLen>
    AliasDecl *getAssociatedTypeImpl(RecordDecl *R, const char (&Str)[StrLen])
    {
       return getAssociatedTypeImpl(R, getIdentifier(Str));
    }
 
+   /// Apply the capabilities provided by constraints in the current context
+   /// to a type.
    QualType ApplyCapabilities(QualType T, DeclContext* DeclCtx = nullptr,
                               bool force = false);
 
+   /// \return The constraint set for a declaration.
    ConstraintSet* getDeclConstraints(NamedDecl* ND);
 
+   /// \return All conformances of a record.
    ArrayRef<Conformance*> getAllConformances(RecordDecl* R);
+
+   /// \return All conformances of a type.
    ArrayRef<Conformance*> getAllConformances(CanType T);
 
    // For setting some quick access flags to compilation options.
@@ -814,7 +912,7 @@ public:
 
 private:
    /// Pointer to the compiler instance this Sema object belongs to.
-   CompilerInstance* compilationUnit;
+   CompilerInstance* compilerInstance;
 
    /// Current diagnostic consumer. Default behaviour is to store the
    /// diagnostics and emit them when Sema is destructed.
@@ -833,9 +931,6 @@ public:
 private:
    using AssociatedTypeImplMapType = llvm::DenseMap<
        RecordDecl*, llvm::DenseMap<DeclarationName, AliasDecl*>>;
-
-   /// Compilation stage.
-   Stage stage = Stage::Parsing;
 
    /// Pointer to the current declaration context we're in.
    DeclContext* DeclCtx;
@@ -883,6 +978,7 @@ private:
    ConformanceResolver *ConfResolver;
 
 public:
+   /// Enter a new 'try' scope for exception handling.
    struct TryScopeRAII {
       explicit TryScopeRAII(SemaPass& SP) : SP(SP)
       {
@@ -897,6 +993,7 @@ public:
       SemaPass& SP;
    };
 
+   /// Enter a new 'do' scope for exception handling.
    struct DoScopeRAII {
       explicit DoScopeRAII(SemaPass& SP, bool Exhaustive) : SP(SP)
       {
@@ -909,15 +1006,7 @@ public:
       SemaPass& SP;
    };
 
-   struct EvaluatingRAII {
-      EvaluatingRAII(Decl* D) : D(D) { D->setBeingEvaluated(true); }
-
-      ~EvaluatingRAII() { D->setBeingEvaluated(false); }
-
-   private:
-      Decl* D;
-   };
-
+   /// Enter a unittest scope.
    struct UnittestRAII {
       explicit UnittestRAII(SemaPass& SP) : SP(SP)
       {
@@ -930,6 +1019,7 @@ public:
       SemaPass& SP;
    };
 
+   /// Info that is needed for a coroutine function.
    struct CoroutineInfo {
       /// The promise / awaitable type.
       QualType AwaitableType;
@@ -962,20 +1052,21 @@ public:
       InitDecl* CoroHandleInit = nullptr;
    };
 
+   /// \return The coroutine info for a function.
    const CoroutineInfo& getCoroutineInfo(CallableDecl* C);
+
+   /// \return The coroutine info for a type.
    const CoroutineInfo& getCoroutineInfo(QualType Ty)
    {
       return CoroutineInfoMap[Ty];
    }
 
+   /// Collect the coroutine info for a type.
    void collectCoroutineInfo(QualType Ty, StmtOrDecl D);
 
 private:
    /// Information about a particular type's coroutine implementation.
    llvm::DenseMap<QualType, CoroutineInfo> CoroutineInfoMap;
-
-   /// Number of global variables encountered.
-   size_t numGlobals = 0;
 
    /// ILGen instance, owned by Sema.
    std::unique_ptr<ILGenPass> ILGen;
@@ -995,7 +1086,7 @@ private:
       bool InDefaultArgumentValue : 1;
       bool InUnitTest : 1;
       bool DontApplyCapabilities : 1;
-      bool DelayRecordInstantiations : 1;
+      bool InStaticContext : 1;
    };
 
    union {
@@ -1034,8 +1125,10 @@ public:
    }
 
    BITS_RAII(DontApplyCapabilities, true);
-   BITS_RAII(DelayRecordInstantiations, true);
+   BITS_RAII(InDefaultArgumentValue, true);
+   BITS_RAII(InStaticContext, true);
 
+   /// Types of 'InitializableBy' protocols.
    enum class InitializableByKind {
       Integer = 0,
       Float,
@@ -1051,8 +1144,13 @@ public:
    };
 
 private:
+   /// Cache for looked up InitializableBy protocols.
    ProtocolDecl* InitializableBy[(int)InitializableByKind::_Last] = {nullptr};
+
+   /// The string initializer function used for synthesized strings.
    InitDecl* StringInit = nullptr;
+
+   /// The string += functions used for string interpolation.
    MethodDecl* StringPlusEqualsString = nullptr;
 
    /// Reflection builder instance, lazily initialized.
@@ -1070,6 +1168,10 @@ public:
 
    /// The error type, here for convenience.
    QualType ErrorTy;
+
+   /// ------
+   /// Methods for finding known declarations from the standard libarary.
+   /// ------
 
    Module* getStdModule();
    Module* getPreludeModule();
@@ -1155,27 +1257,49 @@ public:
    InitDecl* getStringInit();
    MethodDecl* getStringPlusEqualsString();
 
+   /// Whether or not the 'class' keyword can be used - only false if the user
+   /// explicitly requested no standard library, or if the standard library
+   /// could not be found.
    bool canUseClass(SourceLocation Loc);
 
+   /// True iff `D` is in the std.reflect module.
    bool isInReflectModule(Decl* D);
+
+   /// True iff `D` is in the builtin module.
    bool isInBuiltinModule(Decl* D);
+
+   /// True iff `D` is a declaration in the standard library.
    bool isInStdModule(Decl* D);
 
+   /// Get an Option<T> of the type `Ty`.
    QualType getOptionOf(QualType Ty, StmtOrDecl DependentStmt);
+
+   /// Get an Atomic<T> of the type `Ty`.
    QualType getAtomicOf(QualType Ty);
 
-   ExprResult visit(Expression* Expr, bool);
-   StmtResult visit(Statement* node, bool);
-
+   /// The current record context, or null if not in a record.
    RecordDecl* getCurrentRecordCtx();
+
+   /// The current extension context, or null if not in an extension.
    ExtensionDecl* getCurrentExtensionCtx();
+
+   /// The current extension context, or null if not in an extension.
    ExtensionDecl* getExtensionCtx(DeclContext *CurCtx);
 
-   bool inTemplate();
-   bool inUnboundedTemplate();
-   bool isInDependentContext();
+   /// The current named decl we're checking.
+   NamedDecl* getCurrentDecl() const;
 
+   /// True iff we're evaluating a static context (i.e. a static method or
+   /// property).
+   bool inStaticContext() const { return Bits.InStaticContext; }
+
+   /// Check that every declaration in a protocol extensions marked as 'default'
+   /// actually overrides a protocol requirement.
    void checkProtocolExtension(ExtensionDecl* Ext, ProtocolDecl* P);
+
+   /// -----
+   /// Type-related query functions.
+   /// -----
 
    bool IsEquatableType(QualType Ty);
    bool IsCopyableType(QualType Ty);
@@ -1187,6 +1311,7 @@ public:
    bool NeedsDeinitilization(QualType Ty);
    bool NeedsStructReturn(QualType Ty);
    bool ShouldPassByValue(QualType Ty);
+   bool ContainsAssociatedTypeConstraint(QualType Ty);
 
    bool ConformsTo(CanType T, CanType Existential);
    bool ConformsTo(CanType T, ProtocolDecl* Proto,
@@ -1197,20 +1322,14 @@ public:
 
    bool IsSubClassOf(ClassDecl* C, ClassDecl* Base, bool errorVal = true);
 
-   bool ContainsAssociatedTypeConstraint(QualType Ty);
-
+   /// Infer the types of a lambda expression from context.
    int inferLambdaArgumentTypes(LambdaExpr* LE, QualType fromTy);
-
-   NamedDecl* getCurrentDecl() const;
-
-   QualType getStaticForValue(IdentifierInfo* name) const;
 
    //===-------------------------------------------------------===//
    // CTFE
    //===-------------------------------------------------------===//
 
    bool prepareGlobalForCtfe(VarDecl* Decl);
-
    void makeExtensionVisible(ExtensionDecl* D);
 
    void addProtocolImplementation(MethodDecl* Impl)
@@ -1323,46 +1442,7 @@ public:
    }
 
    LoopScope* getLoopScope() const { return getSpecificScope<LoopScope>(); }
-
    BlockScope* getBlockScope() const { return getSpecificScope<BlockScope>(); }
-
-   CandidateSet lookupFunction(DeclContext* Ctx, DeclarationName name,
-                               Expression* SelfArg, ArrayRef<Expression*> args,
-                               ArrayRef<Expression*> templateArgs = {},
-                               ArrayRef<IdentifierInfo*> labels = {},
-                               Statement* Caller = nullptr,
-                               bool suppressDiags = false);
-
-   CandidateSet lookupFunction(DeclarationName name, Expression* SelfArg,
-                               ArrayRef<Expression*> args,
-                               ArrayRef<Expression*> templateArgs = {},
-                               ArrayRef<IdentifierInfo*> labels = {},
-                               Statement* Caller = nullptr,
-                               bool suppressDiags = false);
-
-   CandidateSet getCandidates(DeclarationName name, Expression* SelfExpr);
-
-   CandidateSet lookupCase(DeclarationName name, EnumDecl* E,
-                           ArrayRef<Expression*> args,
-                           ArrayRef<Expression*> templateArgs = {},
-                           ArrayRef<IdentifierInfo*> labels = {},
-                           Statement* Caller = nullptr,
-                           bool suppressDiags = false);
-
-   void lookupFunction(CandidateSet& CandSet, DeclarationName name,
-                       ArrayRef<Expression*> args,
-                       ArrayRef<Expression*> templateArgs = {},
-                       ArrayRef<IdentifierInfo*> labels = {},
-                       Statement* Expr = nullptr, bool suppressDiags = false);
-
-   void lookupFunction(CandidateSet& CandSet, DeclarationName name,
-                       Expression* SelfArg, ArrayRef<Expression*> args,
-                       ArrayRef<Expression*> templateArgs = {},
-                       ArrayRef<IdentifierInfo*> labels = {},
-                       Statement* Expr = nullptr, bool suppressDiags = false);
-
-
-   ExprResult visitTypeDependentContextualExpr(Expression* E);
 
    DeclResult doDestructure(DestructuringDecl* D, QualType DestructuredTy);
 
@@ -1387,10 +1467,6 @@ public:
    CallableDecl*
    maybeInstantiateMemberFunction(CallableDecl* Fn, StmtOrDecl Caller,
                                   bool NeedImmediateInstantiation = false);
-
-   MethodDecl* InstantiateMethod(RecordDecl* R, StringRef Name, StmtOrDecl SOD);
-   MethodDecl* InstantiateProperty(RecordDecl* R, StringRef Name, bool Getter,
-                                   StmtOrDecl SOD);
 
    RecordDecl* InstantiateRecord(SourceLocation POI, RecordDecl* R,
                                  sema::FinalTemplateArgumentList* TemplateArgs);
@@ -1424,16 +1500,9 @@ public:
        = delete;
 
    Expression* forceCast(Expression* Expr, QualType destTy);
-
    Expression* castToRValue(Expression* Expr);
-   void toRValue(Expression* Expr);
 
 public:
-   CallableDecl*
-   checkFunctionReference(IdentifierRefExpr* E, DeclarationName funcName,
-                          const MultiLevelLookupResult& MultiLevelResult,
-                          llvm::ArrayRef<Expression*> templateArgs);
-
    CallableDecl* checkFunctionReference(IdentifierRefExpr* E, CallableDecl* CD,
                                         ArrayRef<Expression*> templateArgs);
 
@@ -1443,52 +1512,7 @@ public:
    AliasDecl* checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
                                   ArrayRef<Expression*> templateArgs);
 
-   struct AliasResult {
-      explicit AliasResult(AliasDecl* Alias)
-          : TypeDependent(false), ValueDependent(false), HadError(false),
-            Result(Alias)
-      {
-      }
-
-      AliasResult(CandidateSet&& CandSet)
-          : TypeDependent(false), ValueDependent(false), HadError(true),
-            CandSet(move(CandSet))
-      {
-      }
-
-      AliasResult()
-          : TypeDependent(false), ValueDependent(false), HadError(true)
-      {
-      }
-
-      AliasResult(bool typeDependent, bool valueDependent,
-                  AliasDecl* Alias = nullptr)
-          : TypeDependent(typeDependent), ValueDependent(valueDependent),
-            HadError(true), Result(Alias)
-      {
-      }
-
-      bool isTypeDependent() const { return TypeDependent; }
-      bool isValueDependent() const { return ValueDependent; }
-
-      AliasDecl* getAlias() { return Result; }
-      CandidateSet& getCandSet() { return CandSet; }
-
-      operator bool() const
-      {
-         return !HadError && !TypeDependent && !ValueDependent;
-      }
-
-   private:
-      bool TypeDependent : 1;
-      bool ValueDependent : 1;
-      bool HadError : 1;
-
-      CandidateSet CandSet;
-      AliasDecl* Result;
-   };
-
-   // checks whether the parent expression of the given expression refers to
+   // Checks whether the parent expression of the given expression refers to
    // a namespace rather than a value and adjusts the expression appropriately
    NestedNameSpecifierWithLoc* checkNamespaceRef(Expression* Expr);
    bool refersToNamespace(Expression* E);

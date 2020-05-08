@@ -201,8 +201,6 @@ bool Expression::isContextDependent() const
    case ParenExprID:
    case AttributedExprID:
       return ignoreParensAndImplicitCasts()->isContextDependent();
-   case EnumCaseExprID:
-      return cast<EnumCaseExpr>(this)->getCase() == nullptr;
    case BuiltinIdentExprID: {
       auto* E = cast<BuiltinIdentExpr>(this);
       return E->getIdentifierKind() == BuiltinIdentifier::NULLPTR;
@@ -1515,47 +1513,6 @@ TupleMemberExpr::TupleMemberExpr(EmptyShell)
     : Expression(TupleMemberExprID), ParentExpr(nullptr), Index(0),
       PointerAccess(false)
 {
-}
-
-EnumCaseExpr::EnumCaseExpr(SourceLocation PeriodLoc, IdentifierInfo* caseName,
-                           ASTVector<Expression*>&& args)
-    : IdentifiedExpr(EnumCaseExprID, caseName), PeriodLoc(PeriodLoc),
-      args(std::move(args)), Case(nullptr)
-{
-}
-
-EnumCaseExpr::EnumCaseExpr(SourceLocation PeriodLoc, EnumCaseDecl* Case,
-                           ASTVector<Expression*>&& args)
-    : IdentifiedExpr(EnumCaseExprID, Case->getDeclName()), PeriodLoc(PeriodLoc),
-      args(std::move(args)), Case(Case)
-{
-}
-
-EnumCaseExpr::EnumCaseExpr(EmptyShell)
-    : IdentifiedExpr(EnumCaseExprID, nullptr), Case(nullptr)
-{
-}
-
-SourceRange EnumCaseExpr::getSourceRange() const
-{
-   unsigned Length;
-   if (Case) {
-      Length = Case->getDeclName().getIdentifierInfo()->getLength();
-   }
-   else {
-      Length = getIdentInfo()->getLength();
-   }
-
-   return SourceRange(PeriodLoc,
-                      SourceLocation(PeriodLoc.getOffset() + Length));
-}
-
-EnumDecl* EnumCaseExpr::getEnum() const
-{
-   if (!Case)
-      return nullptr;
-
-   return cast<EnumDecl>(Case->getRecord());
 }
 
 CallExpr::CallExpr(SourceLocation IdentLoc, SourceRange ParenRange,

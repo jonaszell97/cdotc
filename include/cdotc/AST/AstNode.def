@@ -65,7 +65,6 @@ CDOT_EXPR(TupleLiteral)
 
 CDOT_ABSTRACT(_firstIdentifiedExpr)
 CDOT_EXPR(IdentifierRefExpr)
-CDOT_EXPR(EnumCaseExpr)
 CDOT_ABSTRACT(_lastIdentifiedExpr)
 
 CDOT_EXPR(DeclRefExpr)

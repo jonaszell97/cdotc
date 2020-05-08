@@ -2156,37 +2156,6 @@ public:
    void setPointerAccess(bool b) { PointerAccess = b; }
 };
 
-class EnumCaseExpr : public IdentifiedExpr {
-   SourceLocation PeriodLoc;
-   ASTVector<Expression*> args;
-   EnumCaseDecl* Case;
-
-public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
-   static bool classofKind(NodeType kind) { return kind == EnumCaseExprID; }
-
-   EnumCaseExpr(SourceLocation PeriodLoc, IdentifierInfo* ident,
-                ASTVector<Expression*>&& args = {});
-
-   EnumCaseExpr(SourceLocation PeriodLoc, EnumCaseDecl* Case,
-                ASTVector<Expression*>&& args = {});
-
-   EnumCaseExpr(EmptyShell Empty);
-
-   SourceLocation getSourceLoc() const { return PeriodLoc; }
-   SourceRange getSourceRange() const;
-
-   void setPeriodLoc(SourceLocation Loc) { PeriodLoc = Loc; }
-
-   ASTVector<Expression*>& getArgs() { return args; }
-   ArrayRef<Expression*> getArgs() const { return args; }
-
-   EnumDecl* getEnum() const;
-
-   EnumCaseDecl* getCase() const { return Case; }
-   void setCase(EnumCaseDecl* Case) { EnumCaseExpr::Case = Case; }
-};
-
 enum class CallKind : unsigned {
    Unknown,
    Builtin,

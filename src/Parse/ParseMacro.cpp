@@ -1678,7 +1678,7 @@ public:
    MacroExpander(SemaPass& SP, MacroPattern* Pat, VariableMap& VarMap,
                  Parser::ExpansionKind Kind, SourceLocation ExpandedFrom,
                  MacroDecl* M)
-       : SP(SP), FileMgr(SP.getCompilationUnit().getFileMgr()),
+       : SP(SP), FileMgr(SP.getCompilerInstance().getFileMgr()),
          Pat(Pat), VarMap(VarMap), Kind(Kind), M(M),
          ExpandedFrom(ExpandedFrom)
    {
@@ -2017,7 +2017,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
 
       if (!FileName.startswith(StringRef(&fs::PathSeperator, 1))) {
          auto includeDirs
-             = SP.getCompilationUnit().getOptions().getIncludeDirs().vec();
+             = SP.getCompilerInstance().getOptions().getIncludeDirs().vec();
 
          includeDirs.push_back(fs::getPath(FileMgr.getFileName(Loc).str()));
 
@@ -2067,7 +2067,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
    case BuiltinMacro::include_c:
    case BuiltinMacro::include_cxx:
    case BuiltinMacro::include_system_header: {
-      ClangImporter& Importer = SP.getCompilationUnit().getClangImporter();
+      ClangImporter& Importer = SP.getCompilerInstance().getClangImporter();
 
       if (Tokens.size() != 1 || !Tokens.front().is(tok::stringliteral)) {
          SP.diagnose(err_generic_error, "expected string literal");
@@ -2104,7 +2104,7 @@ ParseResult MacroExpander::expand()
    }
 
    unsigned SourceID
-       = SP.getCompilationUnit().getFileMgr().getSourceId(ExpandedFrom);
+       = SP.getCompilerInstance().getFileMgr().getSourceId(ExpandedFrom);
 
    lex::Lexer Lexer(SP.getContext().getIdentifiers(), SP.getDiags(), Tokens,
                     SourceID);

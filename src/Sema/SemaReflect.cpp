@@ -1353,7 +1353,7 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl* Alias, Expression* Expr)
       DoCache = true;
       ResultExpr = BoolLiteral::Create(
           Context, Expr->getSourceLoc(), Context.getBoolTy(),
-          compilationUnit->getOptions().emitDebugInfo());
+          compilerInstance->getOptions().emitDebugInfo());
    }
    else if (II == ReflectionIdents[underlyingType]) {
       if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1

@@ -280,7 +280,7 @@ bool SemaPass::canUseClass(SourceLocation Loc)
               + missingFn + "' is missing",
           Loc);
 
-      auto& options = getCompilationUnit().getOptions();
+      auto& options = getCompilerInstance().getOptions();
       if (options.noPrelude()) {
          StringRef commandLineArgs = options.getCommandLineArguments();
          size_t offset = commandLineArgs.find("-no-prelude");
@@ -832,6 +832,8 @@ QueryResult PrepareFieldInterfaceQuery::run()
    FieldDecl* F = D;
    auto R = F->getRecord();
 
+   SemaPass::InStaticContextRAII StaticCtx(*QC.Sema, F->isStatic());
+
    if (!F->isStatic()) {
       if (isa<EnumDecl>(R)) {
          QC.Sema->diagnose(F, err_generic_error,
@@ -910,7 +912,8 @@ QueryResult TypecheckFieldQuery::run()
    if (auto defaultVal = F->getDefaultVal()) {
       defaultVal->setContextualType(fieldType);
 
-      SemaPass::DeclScopeRAII DSR(sema(), F->getRecord());
+      SemaPass::DeclScopeRAII DSR(*QC.Sema, F->getRecord());
+      SemaPass::InStaticContextRAII StaticCtx(*QC.Sema, F->isStatic());
 
       ExprResult typeRes = QC.Sema->typecheckExpr(defaultVal, fieldType, F);
       if (typeRes) {
@@ -934,6 +937,7 @@ QueryResult PreparePropInterfaceQuery::run()
 {
    auto* Decl = D;
    auto R = Decl->getRecord();
+   SemaPass::InStaticContextRAII StaticCtx(*QC.Sema, D->isStatic());
 
    auto res = QC.Sema->visitSourceType(Decl, Decl->getType());
    if (!res) {
@@ -1033,6 +1037,7 @@ QueryResult PrepareSubscriptInterfaceQuery::run()
 {
    auto* Decl = D;
    auto R = Decl->getRecord();
+   SemaPass::InStaticContextRAII StaticCtx(*QC.Sema, D->isStatic());
 
    auto res = QC.Sema->visitSourceType(Decl, Decl->getType());
    if (!res)
@@ -1408,7 +1413,7 @@ static void addRawRepresentableConformance(SemaPass& Sema, EnumDecl* E)
 
    // init? (rawValue: RawType)
    auto* ArgName = Sema.getIdentifier("rawValue");
-   bool UseFallible = !Sema.getCompilationUnit().getOptions().noPrelude();
+   bool UseFallible = !Sema.getCompilerInstance().getOptions().noPrelude();
    auto* Arg
        = FuncArgDecl::Create(Sema.Context, Loc, Loc, ArgName, ArgName,
                              ArgumentConvention::Owned, Ty, nullptr, false);
