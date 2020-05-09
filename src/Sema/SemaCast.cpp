@@ -11,6 +11,7 @@ namespace ast {
 
 static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
                                   ConversionSequenceBuilder& Seq,
+                                  SemaPass::ConversionOpts options,
                                   bool MetaConversion = false);
 
 bool SemaPass::implicitlyConvertibleTo(CanType from, CanType to)
@@ -281,7 +282,7 @@ static void FromMeta(SemaPass& SP, CanType from, CanType to,
    CanType To = to->removeMetaType()->getDesugaredType();
 
    ConversionSequenceBuilder ConvSeq;
-   ast::getConversionSequence(SP, From, To, ConvSeq, true);
+   ast::getConversionSequence(SP, From, To, ConvSeq, SemaPass::CO_None, true);
 
    if (!ConvSeq.isImplicit()) {
       return Seq.invalidate();
@@ -454,9 +455,74 @@ static void FromReference(SemaPass& SP, CanType from, CanType to,
 }
 
 static void FromRecord(SemaPass& SP, CanType from, CanType to,
-                       ConversionSequenceBuilder& Seq)
+                       ConversionSequenceBuilder& Seq,
+                       SemaPass::ConversionOpts options)
 {
    auto FromRec = from->getRecord();
+   if ((options & SemaPass::CO_IsClangParameterValue) && SP.isInStdModule(FromRec)) {
+      DeclarationName DeclName = FromRec->isInstantiation()
+          ? FromRec->getDeclName().getInstantiationName()
+          : FromRec->getDeclName();
+
+      if (!DeclName.isSimpleIdentifier()) {
+         return Seq.invalidate();
+      }
+
+      auto Ident = DeclName.getIdentifierInfo()->getIdentifier();
+      if (Ident == "Float" && to->isFloatTy()) {
+         return Seq.addStep(CastKind::ImplicitClangConversion, to);
+      }
+      if (Ident == "Double" && to->isDoubleTy()) {
+         return Seq.addStep(CastKind::ImplicitClangConversion, to);
+      }
+      if (Ident.contains("Int")) {
+         bool isUnsigned = Ident.front() == 'U';
+         int bitwidth = 0;
+
+         int base = 1;
+         const char *Cur = Ident.data() + Ident.size() - 1;
+         while (::isdigit(*Cur)) {
+            bitwidth += (int)(*Cur - '0') * base;
+            base *= 10;
+            --Cur;
+         }
+
+         if (to->getBitwidth() == bitwidth && to->isUnsigned() == isUnsigned) {
+            return Seq.addStep(CastKind::ImplicitClangConversion, to);
+         }
+
+         return Seq.invalidate();
+      }
+
+      if (!Ident.contains("Ptr") || !to->isPointerType()) {
+         return Seq.invalidate();
+      }
+
+      bool isMutable = Ident.contains("Mutable");
+      if (!isMutable && to->isMutablePointerType()) {
+         return Seq.invalidate();
+      }
+
+      if (to->getPointeeType()->isVoidType() || to->getPointeeType()->isEmptyTupleType()) {
+         return Seq.addStep(CastKind::ImplicitClangConversion, to);
+      }
+
+      bool isRaw = Ident.contains("Raw");
+      if (isRaw) {
+         return Seq.invalidate();
+      }
+
+      ConversionSequenceBuilder Other;
+      getConversionSequence(SP, from->getTemplateArgs().front().getType(),
+                            to->getPointeeType(), Other, options);
+
+      if (!Other.isValid()) {
+         return;
+      }
+
+      return Seq.addStep(CastKind::ImplicitClangConversion, to);
+   }
+
    auto OpName
        = SP.getContext().getDeclNameTable().getConversionOperatorName(to);
 
@@ -533,7 +599,7 @@ static void FromGenericRecord(SemaPass& SP, CanType from, CanType to,
       return Seq.addStep(CastKind::NoOp, from);
    }
 
-   return FromRecord(SP, from, to, Seq);
+   return FromRecord(SP, from, to, Seq, SemaPass::CO_None);
 }
 
 static void FromProtocol(SemaPass& SP, CanType from, CanType to,
@@ -610,7 +676,7 @@ static void FromTuple(SemaPass& SP, CanType from, CanType to,
       auto fromEl = FromTup->getContainedType(i);
       auto toEl = ToTup->getContainedType(i);
 
-      getConversionSequence(SP, fromEl, toEl, Seq);
+      getConversionSequence(SP, fromEl, toEl, Seq, SemaPass::CO_None);
       if (!Seq.isValid())
          return;
 
@@ -794,6 +860,7 @@ static bool lookupImplicitInitializer(SemaPass& SP, CanType from, CanType to,
 
 static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
                                   ConversionSequenceBuilder& Seq,
+                                  SemaPass::ConversionOpts options,
                                   bool MetaConversion)
 {
    // Implicit lvalue -> rvalue
@@ -948,7 +1015,7 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
          FromProtocol(SP, from, to, Seq);
       }
       else {
-         FromRecord(SP, from, to, Seq);
+         FromRecord(SP, from, to, Seq, options);
       }
 
       break;
@@ -976,10 +1043,11 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
 }
 
 ConversionSequenceBuilder SemaPass::getConversionSequence(CanType fromTy,
-                                                          CanType toTy)
+                                                          CanType toTy,
+                                                          ConversionOpts options)
 {
    ConversionSequenceBuilder Seq;
-   ast::getConversionSequence(*this, fromTy, toTy, Seq);
+   ast::getConversionSequence(*this, fromTy, toTy, Seq, options);
 
    return Seq;
 }

@@ -366,6 +366,14 @@ ExprResult SemaPass::typecheckExpr(Expression* Expr, SourceType RequiredType,
 
       return Expr;
    }
+   if (Expr->getContextualType()) {
+      auto Result = visitExpr(Expr);
+      if (Result && RequiredType && isHardRequirement) {
+         return forceCast(Result.get(), RequiredType);
+      }
+
+      return Result;
+   }
 
    if (RequiredType && RequiredType->isAutoType()) {
       RequiredType = SourceType();
@@ -975,16 +983,19 @@ bool SemaPass::IsSubClassOf(ClassDecl* C, ClassDecl* Base, bool errorVal)
    return Base->isBaseClassOf(C);
 }
 
-Expression* SemaPass::implicitCastIfNecessary(
-    Expression* Expr, QualType destTy, bool ignoreError, diag::MessageKind msg,
-    SourceLocation DiagLoc, SourceRange DiagRange, bool* hadError)
+Expression* SemaPass::implicitCastIfNecessary(Expression* Expr, QualType destTy,
+                                              bool ignoreError, ConversionOpts opts,
+                                              diag::MessageKind msg,
+                                              SourceLocation DiagLoc,
+                                              SourceRange DiagRange,
+                                              bool* hadError)
 {
    auto originTy = Expr->getExprType();
    if (originTy->isDependentType() || destTy->isDependentType()) {
       return Expr;
    }
 
-   auto ConvSeq = getConversionSequence(originTy, destTy);
+   auto ConvSeq = getConversionSequence(originTy, destTy, opts);
    if (ConvSeq.isDependent()) {
       Expr->setIsTypeDependent(true);
       return Expr;
@@ -1342,7 +1353,7 @@ void SemaPass::checkDeclaredVsGivenType(Decl* DependentDecl, Expression*& val,
       if (auto E = ST.getTypeExpr())
          SR = E->getSourceRange();
 
-      val = implicitCastIfNecessary(val, DeclaredType, false,
+      val = implicitCastIfNecessary(val, DeclaredType, false, CO_None,
                                     diag::err_type_mismatch, EqualsLoc, SR);
    }
 
@@ -2442,6 +2453,7 @@ ExprResult SemaPass::visitIntegerLiteral(IntegerLiteral* Expr)
                   }
                }
 
+               Expr->setExprType(Ty);
                return Res;
             }
 
@@ -3474,7 +3486,6 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
                                             Expression* MatchVal)
 {
    auto matchType = MatchVal->getExprType();
-   Expr->getExpr()->setContextualType(matchType);
 
    auto result = typecheckExpr(Expr->getExpr(), matchType, Expr);
    if (!result)
@@ -3988,8 +3999,8 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
          }
 
          Stmt->setReturnValue(implicitCastIfNecessary(
-             retVal, declaredReturnType, false, diag::err_type_mismatch,
-             Stmt->getReturnValue()->getSourceLoc(),
+             retVal, declaredReturnType, false, CO_None,
+             diag::err_type_mismatch, Stmt->getReturnValue()->getSourceLoc(),
              Stmt->getReturnValue()->getSourceRange()));
 
          retType = Stmt->getReturnValue()->getExprType();

@@ -22,6 +22,7 @@ template<> PassByValueQuery *QueryContext::getQuery<PassByValueQuery>(CanType T)
 template<> ContainsProtocolWithAssociatedTypesQuery *QueryContext::getQuery<ContainsProtocolWithAssociatedTypesQuery>(CanType T);
 template<> ContainsTemplateQuery *QueryContext::getQuery<ContainsTemplateQuery>(CanType T);
 template<> ContainsAssociatedTypeConstraintQuery *QueryContext::getQuery<ContainsAssociatedTypeConstraintQuery>(CanType T);
+template<> IsValidParameterValueQuery *QueryContext::getQuery<IsValidParameterValueQuery>(QualType givenType, QualType paramType, bool isSelf, bool importedFromClang);
 template<> SubstAssociatedTypesQuery *QueryContext::getQuery<SubstAssociatedTypesQuery>(QualType T, QualType Self);
 template<> SubstTemplateParamTypesQuery *QueryContext::getQuery<SubstTemplateParamTypesQuery>(QualType T, const sema::MultiLevelFinalTemplateArgList &TemplateArgs);
 template<> CheckTypeCapabilitiesQuery *QueryContext::getQuery<CheckTypeCapabilitiesQuery>(ast::NamedDecl* ND);

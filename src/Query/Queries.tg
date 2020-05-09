@@ -356,7 +356,8 @@ def ContainsAssociatedTypeConstraint : TypeMetaQuery
 def IsImplicitlyConvertible : Query<"IsImplicitlyConvertibleQuery::ResultType"> {
     parameters = [
         TypeParam<"From">,
-        TypeParam<"To">
+        TypeParam<"To">,
+        QueryParam<"flags", "uint8_t", "0">,
     ]
 
     simpleQuery = true
@@ -378,11 +379,9 @@ def IsValidParameterValue : Query<"IsValidParameterValueQuery::ResultType"> {
     parameters = [
         TypeParam<"givenType">,
         TypeParam<"paramType">,
-        BoolParam<"isSelf", "false">
+        BoolParam<"isSelf", "false">,
+        BoolParam<"importedFromClang", "false">,
     ]
-
-    simpleQuery = true
-    canBeDependent = true
 
     customHeaderCode = {
     public:
@@ -399,7 +398,8 @@ def IsValidParameterValue : Query<"IsValidParameterValueQuery::ResultType"> {
 def GetConversionSequence : Query<"ConversionSequence*"> {
     parameters = [
         TypeParam<"From">,
-        TypeParam<"To">
+        TypeParam<"To">,
+        QueryParam<"flags", "uint8_t", "0">,
     ]
 
     simpleQuery = true
@@ -1717,7 +1717,7 @@ def MultiLevelLookup : Query<"MultiLevelLookupResult"> {
     }
 
     refreshCondition = {
-        RevisionID < DC->getRevisionID()
+        RevisionID < DC->getRevisionID() || (Opts & LookupOpts::LocalLookup) != LookupOpts::None
     }
 
     onRefresh = {

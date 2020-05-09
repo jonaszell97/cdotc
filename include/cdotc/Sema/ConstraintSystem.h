@@ -936,6 +936,9 @@ public:
 
       /// \brief This type variable can be used to infer a template parameter.
       CanInferTemplateParam = 0x40,
+
+      /// \brief This type variable is a parameter to a clang-imported function.
+      ParameterOfClangImportedFunc = 0x80,
    };
 
    /// Allocator for constraints in this system.
@@ -1012,7 +1015,7 @@ private:
    /// are still satisfiable.
    bool applyConcreteBindings();
 
-/// Functions to check if a specific constraint is satisfied.
+    /// Functions to check if a specific constraint is satisfied.
 #define CDOT_CONSTRAINT(NAME) bool isSatisfied(NAME##Constraint* C);
 #include "cdotc/Sema/Constraints.def"
 

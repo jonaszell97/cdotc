@@ -105,18 +105,23 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       return Ctx.getTupleType({ElTy, ElTy});
    }
    case clang::Type::Pointer: {
+      bool isConst = Ty.isConstQualified()
+          || Ty->getPointeeType().isConstQualified();
+
+      // import any char* as UnsafePtr<UInt8>
       if (Ty->getPointeeType()->isCharType()) {
-         // import any char* as UnsafePtr<UInt8>
          return Ctx.getUInt8PtrTy();
       }
+
+      // import any void* as UnsafeRawPtr
       if (Ty->getPointeeType()->isVoidType()) {
-         // import any void* as UnsafeRawPtr
-         if (Ty.isConstQualified()) {
+         if (isConst) {
             return Ctx.getPointerType(Ctx.getVoidType());
          }
 
          return Ctx.getMutablePointerType(Ctx.getVoidType());
       }
+
       // Import function pointers as thin function types.
       if (Ty->getPointeeType()->isFunctionType()) {
          return getType(Ty->getPointeeType());
@@ -128,7 +133,7 @@ QualType ImporterImpl::getType(clang::QualType Ty)
          return Ctx.getUInt8PtrTy();
       }
 
-      if (Ty.isConstQualified()) {
+      if (isConst) {
          return Ctx.getPointerType(Pointee);
       }
 
@@ -138,13 +143,16 @@ QualType ImporterImpl::getType(clang::QualType Ty)
       return Ctx.getUInt8PtrTy();
    case clang::Type::LValueReference:
    case clang::Type::RValueReference: {
+      bool isConst = Ty.isConstQualified()
+                     || Ty->getPointeeType().isConstQualified();
+
       auto Pointee = getType(Ty->getPointeeType());
       if (!Pointee) {
          // Import as an opaque pointer.
          return Ctx.getUInt8PtrTy();
       }
 
-      if (Ty.isConstQualified()) {
+      if (isConst) {
          return Ctx.getReferenceType(Pointee);
       }
 
@@ -197,9 +205,19 @@ QualType ImporterImpl::getType(clang::QualType Ty)
 
       return Ctx.getFunctionType(Ret, Params, ParamInfo);
    }
+   case clang::Type::Typedef: {
+      auto *Decl = Ty->getAs<clang::TypedefType>()->getDecl();
+
+      // Import size_t as a signed integer.
+      if (Decl->getDeclName().isIdentifier() && Decl->getName() == "size_t") {
+         QualType SizeT = getType(Ty.getCanonicalType());
+         return Ctx.getIntegerTy(SizeT->getBitwidth(), false);
+      }
+
+      LLVM_FALLTHROUGH;
+   }
    case clang::Type::Paren:
    case clang::Type::Adjusted:
-   case clang::Type::Typedef:
    case clang::Type::Decayed:
    case clang::Type::TypeOf:
    case clang::Type::TypeOfExpr:

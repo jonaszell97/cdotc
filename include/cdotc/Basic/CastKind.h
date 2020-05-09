@@ -46,6 +46,8 @@ enum class CastKind : unsigned char {
    ToVoid,
    ToEmptyTuple,
    ToMetaType,
+
+   ImplicitClangConversion,
 };
 
 enum CastStrength : unsigned char { Implicit = 0, Normal, Fallible, Force };

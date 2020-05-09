@@ -910,8 +910,6 @@ QueryResult TypecheckFieldQuery::run()
 
    auto& fieldType = F->getType();
    if (auto defaultVal = F->getDefaultVal()) {
-      defaultVal->setContextualType(fieldType);
-
       SemaPass::DeclScopeRAII DSR(*QC.Sema, F->getRecord());
       SemaPass::InStaticContextRAII StaticCtx(*QC.Sema, F->isStatic());
 

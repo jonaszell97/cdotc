@@ -642,7 +642,7 @@ bool Query::canBeDependent() const
    case ContainsTemplateQueryID: return true;
    case ContainsAssociatedTypeConstraintQueryID: return true;
    case IsImplicitlyConvertibleQueryID: return true;
-   case IsValidParameterValueQueryID: return true;
+   case IsValidParameterValueQueryID: return false;
    case GetConversionSequenceQueryID: return true;
    case SubstTypeVariablesQueryID: return false;
    case SubstAssociatedTypesQueryID: return false;
@@ -2109,7 +2109,7 @@ void ContainsAssociatedTypeConstraintQuery::Profile(llvm::FoldingSetNodeID &ID, 
    T.Profile(ID);
 }
 
-IsImplicitlyConvertibleQuery::IsImplicitlyConvertibleQuery(QueryContext &QC, QualType From, QualType To) : Query(IsImplicitlyConvertibleQueryID, QC), From(From), To(To) {
+IsImplicitlyConvertibleQuery::IsImplicitlyConvertibleQuery(QueryContext &QC, QualType From, QualType To, uint8_t flags) : Query(IsImplicitlyConvertibleQueryID, QC), From(From), To(To), flags(flags) {
 
 }
 
@@ -2138,6 +2138,9 @@ OS << "'" << From << "'";
    OS << ',';
    OS << " To = ";
 OS << "'" << To << "'";
+   OS << ',';
+   OS << " flags = ";
+OS << flags;
 ;
 
    return OS.str();
@@ -2152,16 +2155,17 @@ QueryResult IsImplicitlyConvertibleQuery::finish(IsImplicitlyConvertibleQuery::R
 
 void IsImplicitlyConvertibleQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, From, To);
+   Profile(ID, From, To, flags);
 }
 
-void IsImplicitlyConvertibleQuery::Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To)
+void IsImplicitlyConvertibleQuery::Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To, uint8_t flags)
 {
    ID.AddPointer(From.getAsOpaquePtr());
    ID.AddPointer(To.getAsOpaquePtr());
+   ID.AddInteger(flags);
 }
 
-IsValidParameterValueQuery::IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType, uint8_t isSelf) : Query(IsValidParameterValueQueryID, QC), givenType(givenType), paramType(paramType), isSelf(isSelf) {
+IsValidParameterValueQuery::IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType, bool isSelf, bool importedFromClang) : Query(IsValidParameterValueQueryID, QC), givenType(givenType), paramType(paramType), isSelf(isSelf), importedFromClang(importedFromClang) {
 
 }
 
@@ -2193,6 +2197,9 @@ OS << "'" << paramType << "'";
    OS << ',';
    OS << " isSelf = ";
 OS << isSelf;
+   OS << ',';
+   OS << " importedFromClang = ";
+OS << importedFromClang;
 ;
 
    return OS.str();
@@ -2207,17 +2214,18 @@ QueryResult IsValidParameterValueQuery::finish(IsValidParameterValueQuery::Resul
 
 void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, givenType, paramType, isSelf);
+   Profile(ID, givenType, paramType, isSelf, importedFromClang);
 }
 
-void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType, uint8_t isSelf)
+void IsValidParameterValueQuery::Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType, bool isSelf, bool importedFromClang)
 {
    ID.AddPointer(givenType.getAsOpaquePtr());
    ID.AddPointer(paramType.getAsOpaquePtr());
    ID.AddInteger(isSelf);
+   ID.AddInteger(importedFromClang);
 }
 
-GetConversionSequenceQuery::GetConversionSequenceQuery(QueryContext &QC, QualType From, QualType To) : Query(GetConversionSequenceQueryID, QC), From(From), To(To) {
+GetConversionSequenceQuery::GetConversionSequenceQuery(QueryContext &QC, QualType From, QualType To, uint8_t flags) : Query(GetConversionSequenceQueryID, QC), From(From), To(To), flags(flags) {
 
 }
 
@@ -2246,6 +2254,9 @@ OS << "'" << From << "'";
    OS << ',';
    OS << " To = ";
 OS << "'" << To << "'";
+   OS << ',';
+   OS << " flags = ";
+OS << flags;
 ;
 
    return OS.str();
@@ -2260,13 +2271,14 @@ QueryResult GetConversionSequenceQuery::finish(ConversionSequence* Result, Statu
 
 void GetConversionSequenceQuery::Profile(llvm::FoldingSetNodeID &ID) const
 {
-   Profile(ID, From, To);
+   Profile(ID, From, To, flags);
 }
 
-void GetConversionSequenceQuery::Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To)
+void GetConversionSequenceQuery::Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To, uint8_t flags)
 {
    ID.AddPointer(From.getAsOpaquePtr());
    ID.AddPointer(To.getAsOpaquePtr());
+   ID.AddInteger(flags);
 }
 
 SubstTypeVariablesQuery::SubstTypeVariablesQuery(QueryContext &QC, QualType T, const llvm::DenseMap<TypeVariableType*, QualType>& ReplacementMap, SourceRange SR) : Query(SubstTypeVariablesQueryID, QC), T(T), ReplacementMap(ReplacementMap), SR(SR) {
@@ -7886,7 +7898,7 @@ void MultiLevelLookupQuery::refresh()
 
    if (Stat == Idle) return;
    if (
-        RevisionID < DC->getRevisionID()
+        RevisionID < DC->getRevisionID() || (Opts & LookupOpts::LocalLookup) != LookupOpts::None
     ) {
       Stat = Idle;
       

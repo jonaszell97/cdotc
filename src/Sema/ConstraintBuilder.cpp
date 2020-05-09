@@ -772,6 +772,7 @@ ConstraintBuilder::GenerationResult
 ConstraintBuilder::generateArgumentConstraints(Expression*& E,
                                                SourceType RequiredType,
                                                ConstraintLocator* Locator,
+                                               bool importedFromClang,
                                                ConstraintBuilder* outerBuilder)
 {
    auto SAR = support::saveAndRestore(GeneratingArgConstraints, true);
@@ -780,6 +781,12 @@ ConstraintBuilder::generateArgumentConstraints(Expression*& E,
    auto Result = generateConstraints(E, RequiredType, Locator);
    if (InvalidArg) {
       Result.Kind = InvalidArgument;
+   }
+
+   if (importedFromClang && Result.Type) {
+      if (auto *TV = Result.Type->asTypeVariableType()) {
+         Sys.addFlag(TV, ConstraintSystem::ParameterOfClangImportedFunc);
+      }
    }
 
    return Result;
@@ -1995,7 +2002,10 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
    else if (!Cand->getFunc()->isCompleteInitializer()) {
       ReturnType = Cand->getFunctionType()->getReturnType();
 
-      if (auto *M = dyn_cast<MethodDecl>(Cand->getFunc())) {
+      if (Cand->getFunc()->isImportedFromClang()) {
+         ReturnType = Sema.TransformImportedCType(ReturnType);
+      }
+      else if (auto *M = dyn_cast<MethodDecl>(Cand->getFunc())) {
          if (M->isProtocolRequirement() || M->isProtocolDefaultImpl()) {
             if (auto *AT = ReturnType->asAssociatedType()) {
                CanType ParentType = CandSet.ResolvedArgs.front()->getExprType();

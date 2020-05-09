@@ -159,6 +159,7 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
          Expr->setParentExpr(ParentRes.get());
       }
 
+      Expr->setContextualType(QualType());
       return Sys.QC.Sema->typecheckExpr(Expr);
    }
 

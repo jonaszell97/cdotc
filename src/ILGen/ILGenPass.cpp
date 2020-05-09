@@ -2059,6 +2059,25 @@ NamedDecl* ILGenPass::MaybeSpecialize(NamedDecl* A)
    return Rep;
 }
 
+static il::Value *TransformImportedClangReturnType(ILBuilder &Builder,
+                                                   CanType RequiredType,
+                                                   Value *Val)
+{
+   if (Val->getType().get() == RequiredType) {
+      return Val;
+   }
+
+   auto *Alloc = Builder.CreateAlloca(RequiredType);
+   if (Val->getType()->isPointerType()) {
+      auto *Decl = cast<StructDecl>(RequiredType->getRecord());
+      Val = Builder.CreateBitCast(
+          CastKind::BitCast, Val, Decl->getFields().front()->getType());
+   }
+
+   Builder.CreateStore(Val, Builder.CreateStructGEP(Alloc, 0));
+   return Builder.CreateLoad(Alloc);
+}
+
 il::Value* ILGenPass::CreateCall(CallableDecl* C, ArrayRef<il::Value*> args,
                                  Expression* Caller, bool DirectCall,
                                  il::Value* GenericArgs)
@@ -2076,37 +2095,6 @@ il::Value* ILGenPass::CreateCall(CallableDecl* C, ArrayRef<il::Value*> args,
    if (auto method = dyn_cast<MethodDecl>(C)) {
       isVirtual = method->isVirtual() && !DirectCall;
       isProtocolMethod = method->isProtocolRequirement();
-   }
-
-   // Unpack generic values.
-   SmallVector<Value*, 4> ArgVec;
-   ArgVec.reserve(args.size());
-
-   if (C->isNonStaticMethod()
-       && args.front()->getType()->isDependentRecordType()) {
-      auto& Self = args[0];
-      auto* Value = Builder.CreateIntrinsicCall(Intrinsic::generic_value, Self);
-      auto* Env
-          = Builder.CreateIntrinsicCall(Intrinsic::generic_environment, Self);
-
-      ArgVec.push_back(Builder.CreateLoad(Value));
-
-      auto* EnvVal = Builder.CreateBitCast(
-          CastKind::BitCast, Env,
-          Context.getReferenceType(SP.getGenericEnvironmentDecl()->getType()));
-
-      if (GenericArgs) {
-         auto* NewEnv
-             = GetGenericEnvironment(Builder.CreateAddrOf(EnvVal), GenericArgs);
-
-         ArgVec.push_back(NewEnv);
-      }
-      else {
-         ArgVec.push_back(Builder.CreateLoad(EnvVal));
-      }
-
-      ArgVec.append(args.begin() + 1, args.end());
-      args = ArgVec;
    }
 
    if (!C->throws()) {
@@ -4196,6 +4184,10 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
       else {
          V = CreateCall(CalledFn, args, Expr, Expr->isDirectCall(),
                         GenericArgs);
+      }
+
+      if (CalledFn->isImportedFromClang()) {
+         V = TransformImportedClangReturnType(Builder, Expr->getExprType(), V);
       }
 
       break;

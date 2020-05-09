@@ -1391,14 +1391,14 @@ QueryResult QueryContext::ContainsAssociatedTypeConstraint(bool &Result, CanType
 
 }
 
-QueryResult QueryContext::IsImplicitlyConvertible(IsImplicitlyConvertibleQuery::ResultType &Result, QualType From, QualType To)
+QueryResult QueryContext::IsImplicitlyConvertible(IsImplicitlyConvertibleQuery::ResultType &Result, QualType From, QualType To, uint8_t flags)
 
 {
-   auto Key = std::make_pair(From, To);
+   auto Key = std::make_pair(From, std::make_pair(To, flags));
    auto It = IsImplicitlyConvertibleQueries.find(Key);
    if (It != IsImplicitlyConvertibleQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
-IsImplicitlyConvertibleQuery _Q(*this, From, To);
+IsImplicitlyConvertibleQuery _Q(*this, From, To, flags);
 
 ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();
@@ -1409,32 +1409,63 @@ IsImplicitlyConvertibleQueries[Key] = Result;
 return QueryResult(QueryResult::Success);
 }
 
-QueryResult QueryContext::IsValidParameterValue(IsValidParameterValueQuery::ResultType &Result, QualType givenType, QualType paramType, uint8_t isSelf)
-
+template<> IsValidParameterValueQuery *QueryContext::getQuery<IsValidParameterValueQuery>(QualType givenType, QualType paramType, bool isSelf, bool importedFromClang)
 {
-   auto Key = std::make_pair(givenType, std::make_pair(paramType, isSelf));
-   auto It = IsValidParameterValueQueries.find(Key);
-   if (It != IsValidParameterValueQueries.end() && !shouldReset()) {
-      Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
-IsValidParameterValueQuery _Q(*this, givenType, paramType, isSelf);
-
-ExecutingQuery EQ(*this, &_Q);
-auto MaybeErr = _Q.run();
-if (MaybeErr.isErr()) return MaybeErr;
-
-Result = _Q.get();
-IsValidParameterValueQueries[Key] = Result;
-return QueryResult(QueryResult::Success);
+   llvm::FoldingSetNodeID ID;
+   IsValidParameterValueQuery::Profile(ID, givenType, paramType, isSelf, importedFromClang);
+   void *InsertPos;
+   return IsValidParameterValueQueries.FindNodeOrInsertPos(ID, InsertPos);
 }
 
-QueryResult QueryContext::GetConversionSequence(ConversionSequence* &Result, QualType From, QualType To)
+QueryResult QueryContext::IsValidParameterValue(IsValidParameterValueQuery::ResultType &Result, QualType givenType, QualType paramType, bool isSelf, bool importedFromClang)
 
 {
-   auto Key = std::make_pair(From, To);
+   llvm::FoldingSetNodeID ID;
+   IsValidParameterValueQuery::Profile(ID, givenType, paramType, isSelf, importedFromClang);
+   void *InsertPos;
+   auto *_Q = IsValidParameterValueQueries.FindNodeOrInsertPos(ID, InsertPos);
+   if (!_Q) {
+      _Q = new(*this) IsValidParameterValueQuery(*this, givenType, paramType, isSelf, importedFromClang);
+      IsValidParameterValueQueries.InsertNode(_Q, InsertPos);
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+QueryResult QueryContext::GetConversionSequence(ConversionSequence* &Result, QualType From, QualType To, uint8_t flags)
+
+{
+   auto Key = std::make_pair(From, std::make_pair(To, flags));
    auto It = GetConversionSequenceQueries.find(Key);
    if (It != GetConversionSequenceQueries.end() && !shouldReset()) {
       Result = It->getSecond();      return QueryResult(QueryResult::Success);   }
-GetConversionSequenceQuery _Q(*this, From, To);
+GetConversionSequenceQuery _Q(*this, From, To, flags);
 
 ExecutingQuery EQ(*this, &_Q);
 auto MaybeErr = _Q.run();

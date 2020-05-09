@@ -637,8 +637,21 @@ void DiagnosticBuilder::finalize()
    size_t LinePrefixSize = out.GetNumBytesInBuffer();
    out << errLineNo << " | ";
 
+   std::string ErrLineEscaped;
+   {
+      llvm::raw_string_ostream OS(ErrLineEscaped);
+      for (char c : ErrLine) {
+         if (c == '\t') {
+            OS << c;
+         }
+         else {
+            support::unescape_char(c, (llvm::raw_ostream&)OS);
+         }
+      }
+   }
+
    LinePrefixSize = out.GetNumBytesInBuffer() - LinePrefixSize;
-   out << ErrLine << "\n"
+   out << ErrLineEscaped << "\n"
        << std::string(LinePrefixSize, ' ') << Markers << "\n";
 
    Engine.finalizeDiag(out.str(), severity);
