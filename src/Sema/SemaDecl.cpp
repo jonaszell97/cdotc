@@ -1966,55 +1966,6 @@ StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt* Stmt)
    return StmtRes;
 }
 
-StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD, DeclarationName MacroName,
-                                      DeclContext& Ctx,
-                                      MacroDecl::Delimiter Delim,
-                                      llvm::ArrayRef<lex::Token> Tokens,
-                                      unsigned Kind)
-{
-   auto Macro = QC.LookupSingleAs<MacroDecl>(&Ctx, MacroName);
-   parse::ParseResult Result;
-
-   if (!Macro) {
-      diagnoseMemberNotFound(&Ctx, SOD, MacroName, err_macro_does_not_exist);
-      return StmtOrDecl();
-   }
-   else if (Delim != Macro->getDelim()) {
-      llvm::StringRef ExpectedDelim;
-      switch (Macro->getDelim()) {
-      case MacroDecl::Paren:
-         ExpectedDelim = "()";
-         break;
-      case MacroDecl::Brace:
-         ExpectedDelim = "{}";
-         break;
-      case MacroDecl::Square:
-         ExpectedDelim = "[]";
-         break;
-      }
-
-      diagnose(SOD, err_macro_expects_delim, SOD.getSourceRange(), MacroName,
-               ExpectedDelim);
-   }
-
-   if (Macro) {
-      Result = parse::Parser::expandMacro(*this, Macro, SOD, Tokens,
-                                          (parse::Parser::ExpansionKind)Kind);
-   }
-
-   if (Result.holdsDecl()) {
-      return Result.getDecl();
-   }
-   if (Result.holdsExpr()) {
-      return Result.getExpr();
-   }
-   if (Result.holdsStatement()) {
-      return Result.getStatement();
-   }
-
-   return nullptr;
-}
-
 Module* SemaPass::getStdModule()
 {
    Module* M;

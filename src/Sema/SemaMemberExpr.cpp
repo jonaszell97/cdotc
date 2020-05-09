@@ -1,8 +1,11 @@
+#include "cdotc/AST/Decl.h"
 #include "cdotc/AST/Type.h"
+#include "cdotc/AST/TypeVisitor.h"
 #include "cdotc/Basic/NestedNameSpecifier.h"
 #include "cdotc/IL/Constants.h"
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/Module/Module.h"
+#include "cdotc/Parse/Parser.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
 #include "cdotc/Sema/SemaPass.h"
@@ -192,7 +195,14 @@ static ExprResult CheckBuiltinIdentifier(SemaPass &Sema,
 static DeclContextLookupResult
 FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
                        DeclContext* LookupCtx, QualType LookupType) {
-   if (!Name.isSimpleIdentifier()) {
+   StringRef NameRef;
+   if (Name.isSimpleIdentifier()) {
+      NameRef = Name.getIdentifierInfo()->getIdentifier();
+   }
+   else if (Name.getKind() == DeclarationName::MacroName) {
+      NameRef = Name.getMacroName()->getIdentifier();
+   }
+   else {
       return DeclContextLookupResult();
    }
 
@@ -219,8 +229,6 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
    DeclContextLookupResult PotentialMatch;
    unsigned MinDistance = -1;
 
-   StringRef NameRef = Name.getIdentifierInfo()->getIdentifier();
-
    llvm::SmallSetVector<DeclContext*, 4> DeclCtxQueue;
    DeclCtxQueue.insert(LookupCtx);
 
@@ -241,12 +249,19 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
 
       for (auto &Entry : DC->getAllNamedDecls()) {
          auto OtherName = Entry.getFirst();
-         if (!OtherName.isSimpleIdentifier())
+
+         StringRef OtherNameRef;
+         if (OtherName.isSimpleIdentifier()) {
+            OtherNameRef = OtherName.getIdentifierInfo()->getIdentifier();
+         }
+         else if (OtherName.getKind() == DeclarationName::MacroName) {
+            OtherNameRef = OtherName.getMacroName()->getIdentifier();
+         }
+         else {
             continue;
+         }
 
-         StringRef OtherNameRef = OtherName.getIdentifierInfo()->getIdentifier();
          unsigned distance = NameRef.edit_distance(OtherNameRef, true, MaxEditDistance);
-
          if (distance < MaxEditDistance && distance < MinDistance) {
             MinDistance = distance;
             PotentialMatch = Entry.getSecond().getAsLookupResult();
@@ -556,8 +571,12 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
          MatchName = FirstMatch->getDeclName().toString();
       }
 
-      diagnose(note_generic_note, "did you mean '" + MatchName + "'?",
-               FirstMatch->getSourceLoc());
+      SourceLocation Loc = FirstMatch->getSourceLoc();
+      if (auto *Exp = compilerInstance->getFileMgr().getMacroExpansionLoc(Loc)) {
+         Loc = Exp->ExpandedFrom;
+      }
+
+      diagnose(note_generic_note, "did you mean '" + MatchName + "'?", Loc);
 
       auto *FakeLookupRes = new(Context) MultiLevelLookupResult;
       FakeLookupRes->addResult(PotentialMatches);
@@ -1048,7 +1067,7 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr* Expr)
 
       ResultType = Var->getType();
       if (!ResultType->isReferenceType()) {
-         if (Var->isConst() && Var->getValue()) {
+         if (Var->isConst() && (Var->getValue() || Var->isSynthesized())) {
             ResultType = Context.getReferenceType(ResultType);
          }
          else {
@@ -1243,6 +1262,29 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr* Ident)
                   Ident->getSourceRange());
 
          return Ident;
+      }
+      if (!hasDefaultValue(ctx)) {
+         diagnose(Ident, err_generic_error,
+                  "type '" + ctx.toDiagString() + "' does not have a default value",
+                  Ident->getSourceRange());
+      }
+      else {
+         // Make sure the default initializers are instantiated.
+         visitSpecificType<RecordType>(
+             [&](RecordType* RT) {
+                if (auto* S = dyn_cast<StructDecl>(RT->getRecord())) {
+                   auto* Init = S->getParameterlessConstructor();
+                   assert(Init && "no default constructor!");
+
+                   auto* Inst = maybeInstantiateTemplateMember(S, Init);
+                   if (Inst) {
+                      maybeInstantiateMemberFunction(Inst, Ident);
+                   }
+                }
+
+                return true;
+             },
+             ctx);
       }
 
       Ident->setExprType(ctx);
@@ -1643,6 +1685,80 @@ DeclResult SemaPass::checkNamespaceRef(MacroExpansionDecl* D)
    D->copyStatusFlags(ParentExpr);
 
    return D;
+}
+
+StmtOrDecl SemaPass::checkMacroCommon(StmtOrDecl SOD, DeclarationName MacroName,
+                                      DeclContext& Ctx,
+                                      MacroDecl::Delimiter Delim,
+                                      llvm::ArrayRef<lex::Token> Tokens,
+                                      unsigned Kind)
+{
+   auto Macro = QC.LookupSingleAs<MacroDecl>(&Ctx, MacroName);
+   parse::ParseResult Result;
+
+   if (!Macro) {
+      diagnoseMemberNotFound(&Ctx, SOD, MacroName, err_macro_does_not_exist);
+
+      // Look for declarations with similar names that the user might have meant.
+      auto PotentialMatches = FindSimilarlyNamedDecl(*this, MacroName, &Ctx,
+                                                     QualType());
+
+      if (PotentialMatches.empty()) {
+         return StmtOrDecl();
+      }
+
+      auto *FirstMatch = PotentialMatches.front();
+
+      std::string MatchName;
+      if (FirstMatch->getModule() != Ctx.getDeclModule()) {
+         MatchName = FirstMatch->getJoinedName('.', false, false, true);
+      }
+      else {
+         MatchName = FirstMatch->getDeclName().toString();
+      }
+
+      SourceLocation Loc = FirstMatch->getSourceLoc();
+      if (auto *Exp = compilerInstance->getFileMgr().getMacroExpansionLoc(Loc)) {
+         Loc = Exp->ExpandedFrom;
+      }
+
+      diagnose(note_generic_note, "did you mean '" + MatchName + "'?", Loc);
+      return StmtOrDecl();
+   }
+   else if (Delim != Macro->getDelim()) {
+      llvm::StringRef ExpectedDelim;
+      switch (Macro->getDelim()) {
+      case MacroDecl::Paren:
+         ExpectedDelim = "()";
+         break;
+      case MacroDecl::Brace:
+         ExpectedDelim = "{}";
+         break;
+      case MacroDecl::Square:
+         ExpectedDelim = "[]";
+         break;
+      }
+
+      diagnose(SOD, err_macro_expects_delim, SOD.getSourceRange(), MacroName,
+               ExpectedDelim);
+   }
+
+   if (Macro) {
+      Result = parse::Parser::expandMacro(*this, Macro, SOD, Tokens,
+                                          (parse::Parser::ExpansionKind)Kind);
+   }
+
+   if (Result.holdsDecl()) {
+      return Result.getDecl();
+   }
+   if (Result.holdsExpr()) {
+      return Result.getExpr();
+   }
+   if (Result.holdsStatement()) {
+      return Result.getStatement();
+   }
+
+   return nullptr;
 }
 
 static QualType ReplaceAssociatedTypes(SemaPass &Sema, QualType T,

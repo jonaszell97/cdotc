@@ -73,7 +73,7 @@ public:
       }
 
       auto ParentExpr = Sub->getParentExpr();
-      auto ParentResult = Sema.visitExpr(Sub, ParentExpr);
+      auto ParentResult = Sema.typecheckExpr(ParentExpr, SourceType(), Sub);
       if (!ParentResult) {
          Sub->setIsInvalid(true);
          Sub->setExprType(Sema.ErrorTy);
@@ -1223,195 +1223,6 @@ QualType ConstraintBuilder::visitStringInterpolation(StringInterpolation* Expr,
    return Var;
 }
 
-namespace {
-
-class ReturnStmtVisitor : public RecursiveASTVisitor<ReturnStmtVisitor> {
-   /// Reference to the constraint builder.
-   ConstraintBuilder& Builder;
-
-   /// Reference to the constraint system.
-   ConstraintSystem& Sys;
-
-   /// The type variable for the return type.
-   TypeVariableType* RetTypeVar;
-
-   /// Set to true if we found an expression we can not infer.
-   bool CanInfer = true;
-
-   bool canInferReturnExpr(Expression* Expr)
-   {
-      CanInfer = true;
-      RecursiveASTVisitor::visit(Expr);
-
-      return CanInfer;
-   }
-
-public:
-   ReturnStmtVisitor(ConstraintBuilder& Builder, ConstraintSystem& Sys,
-                     TypeVariableType* RetTypeVar)
-       : Builder(Builder), Sys(Sys), RetTypeVar(RetTypeVar)
-   {
-   }
-
-   /// True if we encountered a bad return statement.
-   bool FoundBadReturnStmt = false;
-
-   bool visitReturnStmt(ReturnStmt* Ret)
-   {
-      if (!Ret->getReturnValue()) {
-         Sys.newConstraint<TypeBindingConstraint>(
-             RetTypeVar, Sys.QC.Context.getEmptyTupleType(), nullptr);
-
-         return false;
-      }
-
-      Expression* RetExpr = Ret->getReturnValue();
-      if (!canInferReturnExpr(RetExpr)) {
-         Sys.QC.Sema->diagnose(
-             err_generic_error,
-             "cannot infer return type of complex expression, provide manual "
-             "annotation to disambiguate",
-             RetExpr->getSourceRange());
-
-         FoundBadReturnStmt = true;
-         return false;
-      }
-
-      QualType ValueType = Builder.visitExpr(Ret->getReturnValue());
-      Builder.newConstraint<ImplicitConversionConstraint>(ValueType, RetTypeVar,
-                                                          nullptr);
-
-      return false;
-   }
-
-   bool visitIdentifierRefExpr(IdentifierRefExpr* E)
-   {
-      if (E->getDeclName().getKind() != DeclarationName::ClosureArgumentName) {
-         CanInfer = false;
-      }
-
-      return false;
-   }
-
-#define CANT_INFER(NAME)                                                       \
-   bool visit##NAME##Expr(NAME##Expr* E)                                       \
-   {                                                                           \
-      CanInfer = false;                                                        \
-      return false;                                                            \
-   }
-
-   CANT_INFER(Call)
-   CANT_INFER(AnonymousCall)
-};
-
-} // anonymous namespace
-
-QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
-{
-   SmallVector<QualType, 2> ParamTypes;
-   ParamTypes.reserve(Expr->getArgs().size());
-
-   SmallVector<FunctionType::ParamInfo, 2> ParamInfo;
-   ParamTypes.reserve(Expr->getArgs().size());
-
-   llvm::DenseMap<unsigned, QualType> ClosureParams;
-   auto SAR = support::saveAndRestore(this->ClosureParams, &ClosureParams);
-
-   unsigned i = 0;
-   bool FoundParamWithoutType = false;
-
-   FunctionType *ReqType = nullptr;
-   if (T && T->isFunctionType()) {
-      ReqType = T->asFunctionType();
-   }
-
-   for (auto* Arg : Expr->getArgs()) {
-      auto TypeRes = Sema.visitSourceType(Expr, Arg->getType());
-      if (!TypeRes || TypeRes.get()->isAutoType()) {
-         FoundParamWithoutType = true;
-
-         QualType ParamTypeVar = Sys.newTypeVariable();
-         if (ReqType && ReqType->getNumParams() > i) {
-            ParamInfo.emplace_back(ReqType->getParamInfo()[i]);
-         }
-         else {
-            ParamInfo.emplace_back(ArgumentConvention::Default);
-         }
-
-         switch (ParamInfo.back().getConvention()) {
-         case ArgumentConvention::ImmutableRef:
-            ParamTypeVar = Sema.Context.getReferenceType(ParamTypeVar);
-            break;
-         case ArgumentConvention::MutableRef:
-            ParamTypeVar = Sema.Context.getMutableReferenceType(ParamTypeVar);
-            break;
-         default:
-            break;
-         }
-
-         ParamTypes.push_back(ParamTypeVar);
-         ClosureParams[i] = ParamTypeVar;
-      }
-      else {
-         ParamTypes.push_back(TypeRes.get());
-         ParamInfo.emplace_back(Arg->getConvention(), Arg->getLabel());
-      }
-
-      ++i;
-   }
-
-   // If there is no parameter whose type is not specified, we can typecheck
-   // the closure body to get the return type.
-   QualType ReturnType;
-   if (!FoundParamWithoutType) {
-      if (!Sema.visitExpr(Expr)) {
-         EncounteredError = true;
-         return Sys.newTypeVariable();
-      }
-
-      ReturnType = Expr->getReturnType();
-   }
-
-   auto TypeRes = Sema.visitSourceType(Expr, Expr->getReturnType());
-   if (TypeRes && !TypeRes.get()->isAutoType()) {
-      ReturnType = TypeRes.get();
-   }
-
-   // Create a fresh type variable for the return type.
-   TypeVariable RetTyVar = Sys.newTypeVariable();
-   if (!ReturnType) {
-      // Include the returned value in the constraint system.
-      ReturnStmtVisitor Visitor(*this, Sys, RetTyVar);
-      Visitor.visit(Expr->getBody());
-
-      if (Visitor.FoundBadReturnStmt) {
-         EncounteredError = true;
-      }
-
-      Sys.newConstraint<DefaultableConstraint>(
-          RetTyVar, Sema.Context.getEmptyTupleType(), nullptr);
-   }
-   else {
-      Sys.setPreferredBinding(RetTyVar, ReturnType);
-   }
-
-   // Equate the type of the whole expression with a tuple type containing
-   // the element types.
-   QualType ExprType = Sema.Context.getLambdaType(RetTyVar, ParamTypes, ParamInfo);
-
-   TypeVariable FunctionTy;
-   if (false&&ExprType->containsTypeVariable()) {
-      FunctionTy = Sys.newTypeVariable();
-      Sys.newConstraint<TypeEqualityConstraint>(FunctionTy, ExprType, nullptr);
-   }
-   else {
-      FunctionTy = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
-      Sys.newConstraint<TypeBindingConstraint>(FunctionTy, ExprType, nullptr);
-   }
-
-   return FunctionTy;
-}
-
 QualType ConstraintBuilder::visitTupleLiteral(TupleLiteral* Expr, SourceType T)
 {
    auto Elements = Expr->getElements();
@@ -2074,19 +1885,196 @@ QualType ConstraintBuilder::visitAnonymousCallExpr(AnonymousCallExpr* Call,
    return ReturnType;
 }
 
-//QualType ConstraintBuilder::visitAnonymousCallExprNew(AnonymousCallExpr* Expr,
-//                                                      SourceType RequiredType)
-//{
-//   // Constraint the parent type to have a member of the given name.
-//   auto ParentType = visitExpr(Expr->getParentExpr());
-//   auto *FuncTy = Sys.newTypeVariable();
-//
-//   Sys.newConstraint<MemberConstraint>(ParentType->asTypeVariableType(),
-//       cast<IdentifierRefExpr>(Expr->getParentExpr())->getDeclName(),
-//       FuncTy, makeLocator(Expr->getParentExpr()));
-//
-//   // Get the parameter type as a tuple.
-//}
+
+namespace {
+
+class ReturnStmtVisitor : public RecursiveASTVisitor<ReturnStmtVisitor> {
+   /// Reference to the constraint builder.
+   ConstraintBuilder& Builder;
+
+   /// Reference to the constraint system.
+   ConstraintSystem& Sys;
+
+   /// The type variable for the return type.
+   TypeVariableType* RetTypeVar;
+
+   /// Set to true if we found an expression we can not infer.
+   bool CanInfer = true;
+
+   bool canInferReturnExpr(Expression* Expr)
+   {
+      CanInfer = true;
+      RecursiveASTVisitor::visit(Expr);
+
+      return CanInfer;
+   }
+
+public:
+   ReturnStmtVisitor(ConstraintBuilder& Builder, ConstraintSystem& Sys,
+                     TypeVariableType* RetTypeVar)
+       : Builder(Builder), Sys(Sys), RetTypeVar(RetTypeVar)
+   {
+   }
+
+   /// True if we encountered a bad return statement.
+   bool FoundBadReturnStmt = false;
+
+   bool visitReturnStmt(ReturnStmt* Ret)
+   {
+      if (!Ret->getReturnValue()) {
+         Sys.newConstraint<TypeBindingConstraint>(
+             RetTypeVar, Sys.QC.Context.getEmptyTupleType(), nullptr);
+
+         return false;
+      }
+
+      Expression* RetExpr = Ret->getReturnValue();
+      if (!canInferReturnExpr(RetExpr)) {
+         Sys.QC.Sema->diagnose(
+             err_generic_error,
+             "cannot infer return type of complex expression, provide manual "
+             "annotation to disambiguate",
+             RetExpr->getSourceRange());
+
+         FoundBadReturnStmt = true;
+         return false;
+      }
+
+      QualType ValueType = Builder.visitExpr(Ret->getReturnValue());
+      Builder.newConstraint<ImplicitConversionConstraint>(ValueType, RetTypeVar,
+                                                          nullptr);
+
+      return false;
+   }
+
+   bool visitIdentifierRefExpr(IdentifierRefExpr* E)
+   {
+      if (E->getDeclName().getKind() != DeclarationName::ClosureArgumentName) {
+         CanInfer = false;
+      }
+
+      return false;
+   }
+
+#define CANT_INFER(NAME)                                                       \
+   bool visit##NAME##Expr(NAME##Expr* E)                                       \
+   {                                                                           \
+      CanInfer = false;                                                        \
+      return false;                                                            \
+   }
+
+   CANT_INFER(AnonymousCall)
+
+#undef CANT_INFER
+};
+
+} // anonymous namespace
+
+QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
+{
+   SmallVector<QualType, 2> ParamTypes;
+   ParamTypes.reserve(Expr->getArgs().size());
+
+   SmallVector<FunctionType::ParamInfo, 2> ParamInfo;
+   ParamTypes.reserve(Expr->getArgs().size());
+
+   llvm::DenseMap<unsigned, QualType> ClosureParams;
+   auto SAR = support::saveAndRestore(this->ClosureParams, &ClosureParams);
+
+   unsigned i = 0;
+   bool FoundParamWithoutType = false;
+
+   FunctionType *ReqType = nullptr;
+   if (T && T->isFunctionType()) {
+      ReqType = T->asFunctionType();
+   }
+
+   for (auto* Arg : Expr->getArgs()) {
+      auto TypeRes = Sema.visitSourceType(Expr, Arg->getType());
+      if (!TypeRes || TypeRes.get()->isAutoType()) {
+         FoundParamWithoutType = true;
+
+         QualType ParamTypeVar = Sys.newTypeVariable();
+         if (ReqType && ReqType->getNumParams() > i) {
+            ParamInfo.emplace_back(ReqType->getParamInfo()[i]);
+         }
+         else {
+            ParamInfo.emplace_back(ArgumentConvention::Default);
+         }
+
+         switch (ParamInfo.back().getConvention()) {
+         case ArgumentConvention::ImmutableRef:
+            ParamTypeVar = Sema.Context.getReferenceType(ParamTypeVar);
+            break;
+         case ArgumentConvention::MutableRef:
+            ParamTypeVar = Sema.Context.getMutableReferenceType(ParamTypeVar);
+            break;
+         default:
+            break;
+         }
+
+         ParamTypes.push_back(ParamTypeVar);
+         ClosureParams[i] = ParamTypeVar;
+      }
+      else {
+         ParamTypes.push_back(TypeRes.get());
+         ParamInfo.emplace_back(Arg->getConvention(), Arg->getLabel());
+      }
+
+      ++i;
+   }
+
+   // If there is no parameter whose type is not specified, we can typecheck
+   // the closure body to get the return type.
+   QualType ReturnType;
+   if (!FoundParamWithoutType) {
+      if (!Sema.visitExpr(Expr)) {
+         EncounteredError = true;
+         return Sys.newTypeVariable();
+      }
+
+      ReturnType = Expr->getReturnType();
+   }
+
+   auto TypeRes = Sema.visitSourceType(Expr, Expr->getReturnType());
+   if (TypeRes && !TypeRes.get()->isAutoType()) {
+      ReturnType = TypeRes.get();
+   }
+
+   // Create a fresh type variable for the return type.
+   TypeVariable RetTyVar = Sys.newTypeVariable();
+   if (!ReturnType) {
+      // Include the returned value in the constraint system.
+      ReturnStmtVisitor Visitor(*this, Sys, RetTyVar);
+      Visitor.visit(Expr->getBody());
+
+      if (Visitor.FoundBadReturnStmt) {
+         EncounteredError = true;
+      }
+
+      Sys.newConstraint<DefaultableConstraint>(
+          RetTyVar, Sema.Context.getEmptyTupleType(), nullptr);
+   }
+   else {
+      Sys.setPreferredBinding(RetTyVar, ReturnType);
+   }
+
+   // Equate the type of the whole expression with a tuple type containing
+   // the element types.
+   QualType ExprType = Sema.Context.getLambdaType(RetTyVar, ParamTypes, ParamInfo);
+
+   TypeVariable FunctionTy;
+   if (false&&ExprType->containsTypeVariable()) {
+      FunctionTy = Sys.newTypeVariable();
+      Sys.newConstraint<TypeEqualityConstraint>(FunctionTy, ExprType, nullptr);
+   }
+   else {
+      FunctionTy = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+      Sys.newConstraint<TypeBindingConstraint>(FunctionTy, ExprType, nullptr);
+   }
+
+   return FunctionTy;
+}
 
 QualType ConstraintBuilder::visitAssignExpr(AssignExpr* Expr, SourceType T)
 {

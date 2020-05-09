@@ -857,6 +857,7 @@ void ASTDeclWriter::visitRecordDecl(RecordDecl* D)
    Record.AddDeclRef(D->getDeinitializer());
 
    if (auto S = dyn_cast<StructDecl>(D)) {
+      Record.AddDeclRef(S->getParameterlessConstructor());
       Record.AddDeclRef(S->getMemberwiseInitializer());
       Record.AddDeclRef(S->getDefaultInitializer());
    }

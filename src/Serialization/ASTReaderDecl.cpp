@@ -915,12 +915,13 @@ void ASTDeclReader::visitRecordDecl(RecordDecl* D)
 
    unsigned DeinitID = Record.readDeclID();
    if (isa<StructDecl>(D)) {
+      unsigned ParameterlessID = Record.readDeclID();
       unsigned MemberwiseID = Record.readDeclID();
       unsigned DefaultID = Record.readDeclID();
 
       Reader.addDeclUpdate(D, ThisDeclID, DeinitID,
           operatorEqualsID, hashCodeID, toStringID, copyID, getRawValueID,
-          fromRawValueID, MemberwiseID, DefaultID);
+          fromRawValueID, ParameterlessID, MemberwiseID, DefaultID);
    }
    else {
       Reader.addDeclUpdate(D, ThisDeclID, DeinitID,
@@ -961,6 +962,7 @@ void ASTDeclUpdateVisitor::visitStructDecl(StructDecl* D)
 {
    visitRecordDecl(D);
 
+   D->setParameterlessConstructor(NextDecl<InitDecl>());
    D->setMemberwiseInitializer(NextDecl<InitDecl>());
    D->setDefaultInitializer(NextDecl<MethodDecl>());
 }

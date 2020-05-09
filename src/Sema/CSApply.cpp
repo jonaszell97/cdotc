@@ -102,35 +102,52 @@ public:
 
    ExprResult visitSubscriptExpr(SubscriptExpr *Expr)
    {
-      auto Result = StmtBuilder::visitSubscriptExpr(Expr);
-      assert(Result && "should never fail");
-
-      if (auto *Call = dyn_cast_or_null<CallExpr>(Expr->getCallExpr())) {
-         Result = visitExpr(Call);
-         if (!Result) {
-            return Result;
-         }
-
-         Call = cast<CallExpr>(Result.get());
-         Expr->setCallExpr(Call);
-
-         QualType ResultType = Call->getExprType();
-         auto *Sub = Expr->getSubscriptDecl();
-         assert(Sub && "subscript not found");
-
-         // Check read subscript getter.
-         if (Sub->isReadWrite() && Call->getFunc()->getDeclName().getSubscriptKind()
-                                   == DeclarationName::SubscriptKind::Getter) {
-            if (!Sub->hasSetter()) {
-               ResultType = ResultType->getTemplateArgs().front().getType();
-            }
-
-            ResultType = Sys.QC.Context.getMutableReferenceType(ResultType);
-         }
-
-         Expr->setExprType(ResultType);
-         Expr->setSemanticallyChecked(true);
+      auto *CE = Expr->getCallExpr();
+      if (!CE) {
+         return StmtBuilder::visitSubscriptExpr(Expr);
       }
+
+      if (auto Val = Expr->getParentExpr()) {
+         auto Result = visitExpr(Val);
+         if (Result) {
+            Expr->setParentExpr(Result.get());
+         }
+      }
+
+      auto Result = visitExpr(CE);
+      if (Result) {
+         Expr->setCallExpr(Result.get());
+      }
+
+      auto *Call = dyn_cast<CallExpr>(Expr->getCallExpr());
+      if (!Call) {
+         return Expr;
+      }
+
+      Result = visitExpr(Call);
+      if (!Result) {
+         return Result;
+      }
+
+      Call = cast<CallExpr>(Result.get());
+      Expr->setCallExpr(Call);
+
+      QualType ResultType = Call->getExprType();
+      auto *Sub = Expr->getSubscriptDecl();
+      assert(Sub && "subscript not found");
+
+      // Check read subscript getter.
+      if (Sub->isReadWrite() && Call->getFunc()->getDeclName().getSubscriptKind()
+                                == DeclarationName::SubscriptKind::Getter) {
+         if (!Sub->hasSetter()) {
+            ResultType = ResultType->getTemplateArgs().front().getType();
+         }
+
+         ResultType = Sys.QC.Context.getMutableReferenceType(ResultType);
+      }
+
+      Expr->setExprType(ResultType);
+      Expr->setSemanticallyChecked(true);
 
       return Expr;
    }
