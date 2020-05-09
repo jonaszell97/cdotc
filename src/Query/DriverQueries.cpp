@@ -160,8 +160,12 @@ QueryResult ParseSourceFileQuery::run()
    SemaPass::DeclScopeRAII DSR(*QC.Sema, FileDecl);
    Lexer lex(Context.getIdentifiers(), Sema.getDiags(), File.Buf, File.SourceId,
              File.BaseOffset);
-   Parser parser(Context, &lex, Sema);
 
+   if (auto *Consumer = CI.getCommentConsumer()) {
+      lex.setCommentConsumer(Consumer);
+   }
+
+   Parser parser(Context, &lex, Sema);
    parser.parse();
 
    if (QC.Sema->encounteredError()) {
@@ -215,8 +219,12 @@ QueryResult ParseMainSourceFileQuery::run()
 
    Lexer lex(Context.getIdentifiers(), Sema.getDiags(), File.Buf, File.SourceId,
              File.BaseOffset, '$', false);
-   Parser parser(Context, &lex, Sema);
 
+   if (auto *Consumer = CI.getCommentConsumer()) {
+      lex.setCommentConsumer(Consumer);
+   }
+
+   Parser parser(Context, &lex, Sema);
    lex.advance(false, true);
    parser.parseMainFile();
 
@@ -470,6 +478,11 @@ QueryResult CreateExecutableQuery::run()
    QC.PrintUsedMemory();
 
    IRGen->emitExecutable(OutFile, LLVMMod);
+   return finish();
+}
+
+QueryResult VerifyModuleQuery::run()
+{
    return finish();
 }
 

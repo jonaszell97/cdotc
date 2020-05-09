@@ -1,4 +1,5 @@
 template<> CompileModuleQuery *QueryContext::getQuery<CompileModuleQuery>();
+template<> VerifyModuleQuery *QueryContext::getQuery<VerifyModuleQuery>();
 template<> ParseModuleFileQuery *QueryContext::getQuery<ParseModuleFileQuery>(StringRef FileName);
 template<> CreateDefaultModuleQuery *QueryContext::getQuery<CreateDefaultModuleQuery>();
 template<> ParseSourceFileQuery *QueryContext::getQuery<ParseSourceFileQuery>(Module* Mod, StringRef FileName);

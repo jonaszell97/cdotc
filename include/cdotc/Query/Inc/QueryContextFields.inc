@@ -2,6 +2,9 @@
 /// \brief Single query instance.
 private:   CompileModuleQuery *CompileModuleInstance = nullptr;
 
+/// \brief Single query instance.
+private:   VerifyModuleQuery *VerifyModuleInstance = nullptr;
+
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
 private:   llvm::DenseMap<StringRef, ParseModuleFileQuery*> ParseModuleFileQueries;

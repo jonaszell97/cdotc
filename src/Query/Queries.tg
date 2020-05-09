@@ -166,6 +166,13 @@ def CompileModule : VoidQuery {
     description = "compiling module ${QC.CI.getCompilationModule()->getName()->getIdentifier()}"
 }
 
+/// Verify a module.
+def VerifyModule : VoidQuery {
+    // All parameters are taken from CompilerOptions.
+    parameters = []
+    description = "verifying module ${QC.CI.getCompilationModule()->getName()->getIdentifier()}"
+}
+
 /// Parse the module file.
 def ParseModuleFile : Query<"Module*"> {
     parameters = [

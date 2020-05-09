@@ -42,6 +42,10 @@ class IRGen;
 class Context;
 } // namespace il
 
+namespace lex {
+class CommentConsumer;
+} // namespace lex
+
 namespace module {
 class ModuleManager;
 } // namespace module
@@ -103,6 +107,7 @@ struct CompilerOptions {
       F_NoDebugIL = F_StaticModuleLib << 1,
       F_RunUnitTests = F_NoDebugIL << 1,
       F_SyntaxOnly = F_RunUnitTests << 1,
+      F_Verify = F_SyntaxOnly << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -180,6 +185,7 @@ public:
    bool noDebugIL() const { return flagIsSet(F_NoDebugIL); }
    bool runUnitTests() const { return flagIsSet(F_RunUnitTests); }
    bool syntaxOnly() const { return flagIsSet(F_SyntaxOnly); }
+   bool shouldVerify() const { return flagIsSet(F_Verify); }
 
    /// Experimental feature checks.
    bool runtimeGenerics() const
@@ -245,6 +251,8 @@ public:
    QueryContext& getQueryContext() const { return *QC; }
 
    ClangImporter& getClangImporter();
+
+   lex::CommentConsumer *getCommentConsumer() const { return CommentConsumer.get(); }
 
    bool doIncrementalCompilation() const { return IncMgr != nullptr; }
    serial::IncrementalCompilationManager* getIncMgr() const
@@ -324,6 +332,9 @@ private:
 
    /// Manager for incremental compilation
    std::unique_ptr<serial::IncrementalCompilationManager> IncMgr;
+
+   /// The comment consumer (if any).
+   std::unique_ptr<lex::CommentConsumer> CommentConsumer;
 
    /// The base module for this compilation.
    Module* CompilationModule = nullptr;

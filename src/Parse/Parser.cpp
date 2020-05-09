@@ -2697,7 +2697,7 @@ ParseResult Parser::parseExprSequence(int Flags)
       uint8_t whitespace = SequenceElement::None;
       if (currentTok().is(tok::space)) {
          whitespace |= SequenceElement::Left;
-         advance();
+         advance((Flags & F_StopAtNewline) == 0);
       }
 
       switch (currentTok().getKind()) {

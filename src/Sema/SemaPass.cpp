@@ -57,6 +57,9 @@ class NullDiagConsumer : public DiagnosticConsumer {
 } // anonymous namespace
 
 class SemaDiagConsumer final : public DiagnosticConsumer {
+   int NumErrs = 0;
+   int NumWarn = 0;
+
 public:
    SemaDiagConsumer(SemaPass& SP) : SP(SP) {}
 
@@ -68,8 +71,12 @@ public:
       StoredDiags.emplace_back(Diag.getMsg());
 
       switch (Diag.getSeverity()) {
+      case SeverityLevel::Warning:
+         ++NumWarn;
+         break;
       case SeverityLevel::Error:
          SP.setEncounteredError(true);
+         ++NumErrs;
          break;
       case SeverityLevel::Fatal:
          issueDiags(Diag.Engine);
@@ -91,9 +98,6 @@ public:
 
       for (auto& Diag : StoredDiags)
          llvm::outs() << Diag;
-
-      auto NumErrs = Engine.getNumErrors();
-      auto NumWarn = Engine.getNumWarnings();
 
       if (NumErrs && NumWarn) {
          llvm::outs() << NumErrs << " error" << (NumErrs > 1 ? "s" : "")

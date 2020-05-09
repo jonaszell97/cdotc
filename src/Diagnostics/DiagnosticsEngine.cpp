@@ -4,8 +4,8 @@ using namespace cdot;
 using namespace cdot::diag;
 
 Diagnostic::Diagnostic(DiagnosticsEngine& Engine, llvm::StringRef Msg,
-                       SeverityLevel Severity)
-    : Engine(Engine), Msg(Msg), Severity(Severity)
+                       SeverityLevel Severity, SourceRange SR)
+    : Engine(Engine), Msg(Msg), Severity(Severity), SR(SR)
 {
 }
 
@@ -17,6 +17,11 @@ DiagnosticsEngine::DiagnosticsEngine(DiagnosticConsumer* Consumer,
 
 void DiagnosticsEngine::finalizeDiag(llvm::StringRef msg, SeverityLevel Sev)
 {
+   SourceRange SR;
+   if (NumSourceRanges) {
+      SR = SourceRanges[0];
+   }
+
    NumArgs = 0;
    NumSourceRanges = 0;
 
@@ -42,5 +47,5 @@ void DiagnosticsEngine::finalizeDiag(llvm::StringRef msg, SeverityLevel Sev)
    }
 
    if (Consumer && !TooManyErrorsMsgEmitted)
-      Consumer->HandleDiagnostic(Diagnostic(*this, msg, Sev));
+      Consumer->HandleDiagnostic(Diagnostic(*this, msg, Sev, SR));
 }

@@ -3,6 +3,7 @@
 #endif
 
 CDOT_QUERY(CompileModuleQuery)
+CDOT_QUERY(VerifyModuleQuery)
 CDOT_QUERY(ParseModuleFileQuery)
 CDOT_QUERY(CreateDefaultModuleQuery)
 CDOT_QUERY(ParseSourceFileQuery)

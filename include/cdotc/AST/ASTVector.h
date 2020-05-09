@@ -358,7 +358,7 @@ public:
       iterator N = I;
       // Shift all elts down one.
       std::move(I + 1, this->end(), I);
-      // Drop the last elt.
+      // DROP the last elt.
       this->pop_back();
       return (N);
    }

@@ -30,16 +30,18 @@ class DiagnosticsEngine;
 
 struct Diagnostic {
    Diagnostic(DiagnosticsEngine& Engine, llvm::StringRef Msg,
-              diag::SeverityLevel Severity);
+              diag::SeverityLevel Severity, SourceRange SR);
 
    llvm::StringRef getMsg() const { return Msg; }
    diag::SeverityLevel getSeverity() const { return Severity; }
+   SourceRange getSourceRange() const { return SR; }
 
    DiagnosticsEngine& Engine;
 
 private:
    llvm::StringRef Msg;
    diag::SeverityLevel Severity;
+   SourceRange SR;
 };
 
 class DiagnosticsEngine {
