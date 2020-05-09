@@ -8,6 +8,8 @@
 #define CONCAT_SIMPLE(first, second) first ## second
 #define CONCAT(first, second) CONCAT_SIMPLE(first, second)
 
+#define STR_LEN(STRING_LITERAL) (sizeof(STRING_LITERAL) - 1)
+
 #ifndef __has_feature
 #define __has_feature(x) 0
 #endif

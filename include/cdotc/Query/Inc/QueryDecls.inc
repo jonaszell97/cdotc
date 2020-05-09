@@ -18,6 +18,26 @@ private:
 
 };
 
+class VerifyModuleQuery: public Query, public llvm::FoldingSetNode {
+public:
+   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
+   static bool classofKind(Kind K) { return K == Kind::VerifyModuleQueryID; }
+
+   using result_type = void;
+
+   std::string description() const;
+   std::string summary() const;
+
+   friend class Query; // for run().
+   friend class QueryContext; // for C'tor.
+
+private:
+   QueryResult run();
+
+   VerifyModuleQuery(QueryContext &QC);
+
+};
+
 class ParseModuleFileQuery: public Query {
 public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }

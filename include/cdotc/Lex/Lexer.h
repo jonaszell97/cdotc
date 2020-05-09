@@ -33,6 +33,14 @@ class DiagnosticBuilder;
 
 namespace lex {
 
+class CommentConsumer {
+public:
+   virtual ~CommentConsumer() = default;
+
+   virtual void HandleLineComment(llvm::StringRef, SourceRange) {}
+   virtual void HandleBlockComment(llvm::StringRef, SourceRange) {}
+};
+
 class Lexer {
 public:
    using TokenVec = std::vector<Token>;
@@ -149,6 +157,8 @@ public:
    SourceLocation getSourceLoc() const { return CurTok.getSourceLoc(); }
    IdentifierTable& getIdents() const { return Idents; }
 
+   void setCommentConsumer(CommentConsumer *C) { commentConsumer = C; }
+
    void printTokensTo(llvm::raw_ostream& out);
    void dump();
 
@@ -186,7 +196,6 @@ protected:
    Token lexClosureArgumentName();
 
    void lexOperator();
-   void lexPreprocessorExpr();
    Token skipSingleLineComment();
    Token skipMultiLineComment();
 
@@ -202,6 +211,9 @@ protected:
 
    IdentifierTable& Idents;
    DiagnosticsEngine& Diags;
+
+   /// The current comment consumer.
+   CommentConsumer *commentConsumer = nullptr;
 
    /// The current lexing mode, used to lex certain characters differently in
    /// different situations.

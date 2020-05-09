@@ -40,6 +40,48 @@ auto *_Q = CompileModuleInstance;
 
 }
 
+template<> VerifyModuleQuery *QueryContext::getQuery<VerifyModuleQuery>()
+{
+   return VerifyModuleInstance;
+}
+
+QueryResult QueryContext::VerifyModule()
+
+{
+   if (!VerifyModuleInstance)
+      VerifyModuleInstance = new(*this) VerifyModuleQuery(*this);
+auto *_Q = VerifyModuleInstance;
+
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
 template<> ParseModuleFileQuery *QueryContext::getQuery<ParseModuleFileQuery>(StringRef FileName)
 {
    auto It = ParseModuleFileQueries.find(FileName);

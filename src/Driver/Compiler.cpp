@@ -10,11 +10,13 @@
 #include "cdotc/ILGen/ILGenPass.h"
 #include "cdotc/IRGen/IRGen.h"
 #include "cdotc/Diagnostics/Diagnostics.h"
+#include "cdotc/Lex/Lexer.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Module/ModuleManager.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Serialization/IncrementalCompilation.h"
+#include "cdotc/Support/SaveAndRestore.h"
 #include "cdotc/Support/StringSwitch.h"
 #include "cdotc/Support/Timer.h"
 
@@ -59,8 +61,11 @@ static cl::list<string> LibrarySearchDirs("L", cl::ZeroOrMore, cl::Prefix,
 /// If given, debug info will be emitted.
 static cl::opt<bool> EmitDebugInfo("g", cl::desc("emit debug info"));
 
-/// If given, debug info will be emitted.
+/// If true, the module's unit tests will be executed.
 static cl::opt<bool> RunUnitTests("test", cl::desc("run unit tests"));
+
+/// If true, the compiler verifies against expected diagnostic comments.
+static cl::opt<bool> Verify("verify", cl::desc("verify expected diagnostics"));
 
 /// If given, IL will be emitted without debug info even if it is created.
 static cl::opt<bool> DebugIL("fdebug-il", cl::desc("emit IL with "
@@ -353,7 +358,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    if (RunUnitTests) {
       options.setFlag(CompilerOptions::F_RunUnitTests, true);
    }
-   if (SyntaxOnly) {
+   if (Verify) {
+      options.setFlag(CompilerOptions::F_Verify, true);
+   }
+   if (SyntaxOnly || Verify) {
       options.setFlag(CompilerOptions::F_SyntaxOnly, true);
    }
    if (EmitIL != "-") {
@@ -493,6 +501,298 @@ public:
 
 #endif
 
+#define DROP(STR_REF, STR) (STR_REF = STR_REF.drop_front(STR_LEN(STR)), STR_REF.empty())
+
+class VerifyCommentConsumer: public lex::CommentConsumer,
+                             public DiagnosticConsumer {
+private:
+   void DiagnoseInvalidExpectedComment(SourceRange SR)
+   {
+      Sema.diagnose(warn_generic_warn, "invalid 'expected-' annotation", SR);
+   }
+
+public:
+   /// An expected diagnostic introduced via  a comment.
+   struct ExpectedDiagnostic {
+      diag::SeverityLevel Severity = diag::SeverityLevel::Note;
+      StringRef Message;
+      FullSourceLoc Loc = FullSourceLoc("", 0, 0);
+      SourceRange RawLoc;
+
+      void print(llvm::raw_ostream &OS)
+      {
+         OS << "ExpectedDiagnostic(\n"
+            << "   Severity = " << (int)Severity << ",\n"
+            << "   Message = '" << Message << "',\n"
+            << "   Loc = " << Loc << ",\n"
+            << ")";
+      }
+   };
+
+   /// Reference to the Sema instance.
+   SemaPass &Sema;
+
+   /// The previous diagnostic consumer.
+   DiagnosticConsumer *DiagConsumer;
+
+   /// The expected diagnostics.
+   std::vector<ExpectedDiagnostic> ExpectedDiagnostics;
+
+   /// Set to true when we're already checking a diagnostic.
+   bool CheckingDiag = false;
+
+   /// C'tor.
+   explicit VerifyCommentConsumer(SemaPass &Sema)
+      : Sema(Sema), DiagConsumer(Sema.getDiags().getConsumer())
+   {
+      Sema.getDiags().setConsumer(this);
+   }
+
+   ~VerifyCommentConsumer()
+   {
+      Sema.getDiags().setConsumer(DiagConsumer);
+
+      for (auto &ExpectedDiag : ExpectedDiagnostics) {
+         Sema.diagnose(err_generic_error, "expected diagnostic not issued",
+             ExpectedDiag.RawLoc.getStart());
+      }
+   }
+
+   /// Check if a line comment adds an expected diagnostic.
+   void HandleLineComment(StringRef Comment, SourceRange SR) override
+   {
+      if (!Comment.startswith("// expected-")) {
+         return;
+      }
+
+      // Skip '// expected-'
+      if (DROP(Comment, "// expected-")) {
+         return DiagnoseInvalidExpectedComment(SR);
+      }
+
+      auto SAR = support::saveAndRestore(CheckingDiag, true);
+
+      ExpectedDiagnostic Diag;
+      Diag.RawLoc = SR;
+
+      if (Comment.startswith("error")) {
+         Diag.Severity = diag::SeverityLevel::Error;
+         if (DROP(Comment, "error")) {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+      }
+      else if (Comment.startswith("fatal")) {
+         Diag.Severity = diag::SeverityLevel::Fatal;
+         if (DROP(Comment, "fatal")) {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+      }
+      else if (Comment.startswith("warning")) {
+         Diag.Severity = diag::SeverityLevel::Warning;
+         if (DROP(Comment, "warning")) {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+      }
+      else if (Comment.startswith("note")) {
+         Diag.Severity = diag::SeverityLevel::Note;
+         if (DROP(Comment, "note")) {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+      }
+      else {
+         return DiagnoseInvalidExpectedComment(SR);
+      }
+
+      int64_t lineOffset = 0;
+      if (Comment.front() == '@') {
+         if (DROP(Comment, "@")) {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+
+         if (Comment.front() != '+' && Comment.front() != '-') {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+
+         int index = 1;
+         while (index < Comment.size() && ::isdigit(Comment[index])) {
+            ++index;
+         }
+
+         if (index == 0 || index == Comment.size()) {
+            return DiagnoseInvalidExpectedComment(SR);
+         }
+
+         StringRef NumStr = Comment.drop_back(Comment.size() - index);
+         llvm::APSInt I(NumStr);
+         lineOffset = I.getExtValue();
+
+         Comment = Comment.drop_front(index);
+      }
+
+      Diag.Loc = Sema.getCompilerInstance().getFileMgr()
+                     .getFullSourceLoc(SR.getStart());
+
+      if (lineOffset != 0) {
+         Diag.Loc = FullSourceLoc(Diag.Loc.getSourceFileName(),
+                                  Diag.Loc.getLine() + lineOffset,
+                                  Diag.Loc.getColumn());
+      }
+
+      if (!Comment.startswith(" {{") || DROP(Comment, " {{")) {
+         return DiagnoseInvalidExpectedComment(SR);
+      }
+
+      int length = 0;
+      while (length < Comment.size()) {
+         if (Comment[length] == '\\') {
+            ++length;
+         }
+         else if (Comment[length] == '}') {
+            if (length + 1 >= Comment.size()) {
+               return DiagnoseInvalidExpectedComment(SR);
+            }
+
+            if (Comment[length + 1] == '}') {
+               break;
+            }
+         }
+
+         ++length;
+      }
+
+      Diag.Message = Comment.drop_back(Comment.size() - length);
+
+      if (Comment.drop_front(length).size() != 2) {
+         Sema.diagnose(warn_generic_warn,
+             "leftover characters after parsing 'expected-' comment",
+             SR.getStart());
+      }
+
+      ExpectedDiagnostics.emplace_back(Diag);
+   }
+
+   /// Verify a diagnostic.
+   void HandleDiagnostic(const Diagnostic &Diag) override
+   {
+      if (CheckingDiag) {
+         DiagConsumer->HandleDiagnostic(Diag);
+         return;
+      }
+
+      auto SAR = support::saveAndRestore(CheckingDiag, true);
+
+      StringRef Msg = Diag.getMsg();
+      SeverityLevel Severity = Diag.getSeverity();
+
+      switch (Severity) {
+      case SeverityLevel::Error:
+         if (DROP(Msg, "\033[21;31merror:\033[0m ")) {
+            llvm_unreachable("invalid diagnostic!");
+         }
+
+         break;
+      case SeverityLevel::Fatal:
+         if (DROP(Msg, "\033[21;31mfatal error:\033[0m ")) {
+            llvm_unreachable("invalid diagnostic!");
+         }
+
+         break;
+      case SeverityLevel::Warning:
+         if (DROP(Msg, "\033[33mwarning:\033[0m ")) {
+            llvm_unreachable("invalid diagnostic!");
+         }
+
+         break;
+      case SeverityLevel::Note:
+         if (DROP(Msg, "\033[1;35mnote:\033[0m ")) {
+            llvm_unreachable("invalid diagnostic!");
+         }
+
+         break;
+      }
+
+      int firstNewLineIndex = 0;
+      while (Msg[firstNewLineIndex] != '\n') {
+         ++firstNewLineIndex;
+         assert(firstNewLineIndex < Msg.size() && "invalid diagnostic!");
+      }
+
+      Msg = Msg.drop_back(Msg.size() - firstNewLineIndex);
+
+      int sourceLocationLength = 0;
+      while (Msg[Msg.size() - sourceLocationLength - 1] != '(') {
+         ++sourceLocationLength;
+         assert(sourceLocationLength < Msg.size() && "invalid diagnostic!");
+      }
+
+      StringRef SourceLocStr = Msg.drop_front(Msg.size() - sourceLocationLength)
+                                  .drop_back(1);
+
+      SmallVector<StringRef, 3> SourceLocVec;
+      SourceLocStr.split(SourceLocVec, ':');
+
+      assert(SourceLocVec.size() == 3 && "invalid diagnostic!");
+
+      Msg = Msg.drop_back(SourceLocStr.size() + 3);
+
+      llvm::APSInt LineI(SourceLocVec[1]);
+      int64_t Line = LineI.getExtValue();
+
+      bool foundMatch = false;
+      std::vector<ExpectedDiagnostic>::iterator Match;
+
+      ExpectedDiagnostic *MatchWithWrongSeverity = nullptr;
+      ExpectedDiagnostic *MatchWithWrongLoc = nullptr;
+
+      auto end = ExpectedDiagnostics.end();
+      for (auto it = ExpectedDiagnostics.begin(); it != end; ++it) {
+         auto &ExpectedDiag = *it;
+         bool equalMsg = ExpectedDiag.Message == Msg;
+         bool equalSeverity = ExpectedDiag.Severity == Severity;
+         bool equalLoc = ExpectedDiag.Loc.getSourceFileName() == SourceLocVec[0]
+             && ExpectedDiag.Loc.getLine() == Line;
+
+         if (equalMsg && equalSeverity && equalLoc) {
+            Match = it;
+            foundMatch = true;
+            continue;
+         }
+
+         if (equalMsg && equalLoc && !equalSeverity) {
+            MatchWithWrongSeverity = &ExpectedDiag;
+         }
+         else if (equalMsg && !equalLoc && equalSeverity) {
+            MatchWithWrongLoc = &ExpectedDiag;
+         }
+      }
+
+      if (foundMatch) {
+         ExpectedDiagnostics.erase(Match);
+         return;
+      }
+
+      Sema.diagnose(err_generic_error,
+                    "unexpected diagnostic: " + Msg,
+                    Diag.getSourceRange());
+
+      if (MatchWithWrongSeverity) {
+         Sema.diagnose(
+             note_generic_note,
+             "potential expected diagnostic has wrong severity level",
+             MatchWithWrongSeverity->RawLoc.getStart());
+      }
+
+      if (MatchWithWrongLoc) {
+         Sema.diagnose(
+             note_generic_note,
+             "potential expected diagnostic has wrong location",
+             MatchWithWrongLoc->RawLoc.getStart());
+      }
+   }
+};
+
+#undef DROP
+
 } // anonymous namespace
 
 int CompilerInstance::compile()
@@ -509,6 +809,10 @@ int CompilerInstance::compile()
    TimerStackTraceEntry TimerStackTrace(*this);
    START_TIMER("Other");
 #endif
+
+   if (options.shouldVerify()) {
+      CommentConsumer = std::make_unique<VerifyCommentConsumer>(*Sema);
+   }
 
    switch (options.output()) {
    case OutputKind::Module:
@@ -554,6 +858,7 @@ int CompilerInstance::compile()
       llvm_unreachable("unhandled output kind");
    }
 
+   CommentConsumer = nullptr;
    return 0;
 }
 

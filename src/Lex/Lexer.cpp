@@ -1352,25 +1352,43 @@ void Lexer::lexOperator()
 
 Token Lexer::skipSingleLineComment()
 {
+   auto Begin = CurPtr - 1;
+   SourceLocation BeginLoc(Begin - BufStart + offset);
+
    while (*CurPtr != '\n' && *CurPtr != '\0')
       ++CurPtr;
+
+   if (commentConsumer) {
+      SourceLocation EndLoc(CurPtr - BufStart + offset);
+      llvm::StringRef Comment(Begin, CurPtr - Begin);
+      commentConsumer->HandleLineComment(Comment, SourceRange(BeginLoc, EndLoc));
+   }
 
    return lexNextToken();
 }
 
 Token Lexer::skipMultiLineComment()
 {
+   auto Begin = CurPtr - 1;
+   SourceLocation BeginLoc(Begin - BufStart + offset);
+
    assert(*CurPtr == '*');
 
    ++CurPtr;
-   while (1) {
+
+   bool done = false;
+   while (!done) {
+      assert(CurPtr < BufEnd && "file is not zero terminated!");
+
       switch (*CurPtr++) {
-      case '\0':
-         return lexNextToken();
+      case '\0': {
+         done = true;
+         break;
+      }
       case '*':
          if (*CurPtr == '/') {
             ++CurPtr;
-            return lexNextToken();
+            done = true;
          }
 
          LLVM_FALLTHROUGH;
@@ -1379,7 +1397,13 @@ Token Lexer::skipMultiLineComment()
       }
    }
 
-   llvm_unreachable("file is not zero terminated!");
+   if (commentConsumer) {
+      SourceLocation EndLoc(CurPtr - BufStart + offset);
+      llvm::StringRef Comment(Begin, CurPtr - Begin);
+      commentConsumer->HandleBlockComment(Comment, SourceRange(BeginLoc, EndLoc));
+   }
+
+   return lexNextToken();
 }
 
 void Lexer::expect_impl(tok::TokenType ty)

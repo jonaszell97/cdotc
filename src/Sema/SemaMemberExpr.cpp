@@ -202,6 +202,9 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
    else if (Name.getKind() == DeclarationName::MacroName) {
       NameRef = Name.getMacroName()->getIdentifier();
    }
+   else if (Name.getKind() == DeclarationName::LocalVarName) {
+      NameRef = Name.getLocalVarName().getIdentifierInfo()->getIdentifier();
+   }
    else {
       return DeclContextLookupResult();
    }
@@ -256,6 +259,9 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
          }
          else if (OtherName.getKind() == DeclarationName::MacroName) {
             OtherNameRef = OtherName.getMacroName()->getIdentifier();
+         }
+         else if (OtherName.getKind() == DeclarationName::LocalVarName) {
+            OtherNameRef = OtherName.getLocalVarName().getIdentifierInfo()->getIdentifier();
          }
          else {
             continue;

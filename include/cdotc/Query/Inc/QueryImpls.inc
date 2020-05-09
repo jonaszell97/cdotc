@@ -2,6 +2,7 @@ bool Query::isPure() const
 {
    switch (K) {
    case CompileModuleQueryID: return false;
+   case VerifyModuleQueryID: return false;
    case ParseModuleFileQueryID: return false;
    case CreateDefaultModuleQueryID: return false;
    case ParseSourceFileQueryID: return false;
@@ -205,6 +206,7 @@ bool Query::canBeCached() const
 {
    switch (K) {
    case CompileModuleQueryID: return true;
+   case VerifyModuleQueryID: return true;
    case ParseModuleFileQueryID: return true;
    case CreateDefaultModuleQueryID: return true;
    case ParseSourceFileQueryID: return true;
@@ -408,6 +410,7 @@ bool Query::canBeSerialized() const
 {
    switch (K) {
    case CompileModuleQueryID: return false;
+   case VerifyModuleQueryID: return false;
    case ParseModuleFileQueryID: return false;
    case CreateDefaultModuleQueryID: return false;
    case ParseSourceFileQueryID: return false;
@@ -611,6 +614,7 @@ bool Query::canBeDependent() const
 {
    switch (K) {
    case CompileModuleQueryID: return false;
+   case VerifyModuleQueryID: return false;
    case ParseModuleFileQueryID: return false;
    case CreateDefaultModuleQueryID: return false;
    case ParseSourceFileQueryID: return false;
@@ -828,6 +832,29 @@ std::string CompileModuleQuery::summary() const
    llvm::raw_string_ostream OS(s);
 
    OS << "[CompileModule]"
+;;
+
+   return OS.str();
+}
+
+VerifyModuleQuery::VerifyModuleQuery(QueryContext &QC) : Query(VerifyModuleQueryID, QC) {
+
+}
+
+std::string VerifyModuleQuery::description() const
+{
+   std::string s;
+   s += "verifying module ";
+   s += QC.CI.getCompilationModule()->getName()->getIdentifier();
+   return s;
+}
+
+std::string VerifyModuleQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[VerifyModule]"
 ;;
 
    return OS.str();
