@@ -1156,7 +1156,12 @@ bool ConstraintSystem::isSatisfied(ImplicitConversionConstraint* C)
       return true;
    }
 
-   auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS);
+   SemaPass::ConversionOpts opts = SemaPass::CO_None;
+   if ((getFlags(TypeVar) & ParameterOfClangImportedFunc) != 0) {
+      opts = SemaPass::CO_IsClangParameterValue;
+   }
+
+   auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS, opts);
    if (!ConvSeq.isValid()) {
       return false;
    }
@@ -2065,10 +2070,15 @@ uint64_t ConstraintSystem::calculateConversionPenalty(const Solution &S)
             continue;
          }
 
+         bool importedFromClang = false;
+         if ((getFlags(TypeVar) & ParameterOfClangImportedFunc) != 0) {
+            importedFromClang = true;
+         }
+
          QualType RHSTy = Visitor.visit(C->getRHSType());
          IsValidParameterValueQuery::result_type result;
          if (QC.IsValidParameterValue(result, ConcreteTy, RHSTy,
-                                      ArgDecl->isSelf())) {
+                                      ArgDecl->isSelf(), importedFromClang)) {
             continue;
          }
 

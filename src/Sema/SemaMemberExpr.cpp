@@ -8,6 +8,7 @@
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/IncrementalCompilation.h"
+#include "cdotc/Serialization/ModuleFile.h"
 
 #include <llvm/ADT/Twine.h>
 
@@ -209,6 +210,9 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
          directContextOnly = false;
       }
    }
+   else {
+      directContextOnly = !isa<ModuleDecl>(LookupCtx);
+   }
 
    static constexpr unsigned MaxEditDistance = 3;
 
@@ -216,8 +220,26 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
    unsigned MinDistance = -1;
 
    StringRef NameRef = Name.getIdentifierInfo()->getIdentifier();
-   while (LookupCtx) {
-      for (auto &Entry : LookupCtx->getAllNamedDecls()) {
+
+   llvm::SmallSetVector<DeclContext*, 4> DeclCtxQueue;
+   DeclCtxQueue.insert(LookupCtx);
+
+   if (!directContextOnly) {
+      LookupCtx = LookupCtx->getParentCtx();
+
+      while (LookupCtx && isa<NamedDecl>(LookupCtx)) {
+         DeclCtxQueue.insert(LookupCtx);
+         LookupCtx = LookupCtx->getParentCtx();
+      }
+   }
+
+   for (size_t i = 0; i < DeclCtxQueue.size(); ++i) {
+      auto *DC = DeclCtxQueue[i];
+      if (auto *ModFile = DC->getModFile()) {
+         ModFile->LoadAllDecls(*DC);
+      }
+
+      for (auto &Entry : DC->getAllNamedDecls()) {
          auto OtherName = Entry.getFirst();
          if (!OtherName.isSimpleIdentifier())
             continue;
@@ -231,11 +253,11 @@ FindSimilarlyNamedDecl(SemaPass &Sema, DeclarationName Name,
          }
       }
 
-      if (directContextOnly) {
-         return nullptr;
+      if (auto *Mod = dyn_cast<ModuleDecl>(DC)) {
+         for (auto *SubMod : Mod->getModule()->getSubModules()) {
+            DeclCtxQueue.insert(SubMod->getDecl());
+         }
       }
-
-      LookupCtx = LookupCtx->getParentCtx();
    }
 
    return PotentialMatch;
@@ -524,9 +546,18 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
          return ExprError();
       }
 
-      auto MatchName = PotentialMatches.front()->getDeclName();
-      diagnose(note_generic_note, "did you mean '" + MatchName.toString() + "'?",
-               PotentialMatches.front()->getSourceLoc());
+      auto *FirstMatch = PotentialMatches.front();
+
+      std::string MatchName;
+      if (FirstMatch->getModule() != Ident->getDeclCtx()->getDeclModule()) {
+         MatchName = FirstMatch->getJoinedName('.', false, false, true);
+      }
+      else {
+         MatchName = FirstMatch->getDeclName().toString();
+      }
+
+      diagnose(note_generic_note, "did you mean '" + MatchName + "'?",
+               FirstMatch->getSourceLoc());
 
       auto *FakeLookupRes = new(Context) MultiLevelLookupResult;
       FakeLookupRes->addResult(PotentialMatches);
@@ -1039,8 +1070,16 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr* Expr)
 
       ResultType = Arg->getType();
       if (!ResultType->isReferenceType()
-          && !Arg->hasAttribute<AutoClosureAttr>()) {
-         ResultType = Context.getReferenceType(ResultType);
+      && !Arg->hasAttribute<AutoClosureAttr>()) {
+         switch (Arg->getConvention()) {
+         case ArgumentConvention::MutableRef:
+         case ArgumentConvention::Owned:
+            ResultType = Context.getMutableReferenceType(ResultType);
+            break;
+         default:
+            ResultType = Context.getReferenceType(ResultType);
+            break;
+         }
       }
 
       break;

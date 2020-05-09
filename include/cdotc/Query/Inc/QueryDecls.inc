@@ -868,20 +868,21 @@ class IsImplicitlyConvertibleQuery: public Query {
 private:
    QueryResult run();
 
-   IsImplicitlyConvertibleQuery(QueryContext &QC, QualType From, QualType To);
+   IsImplicitlyConvertibleQuery(QueryContext &QC, QualType From, QualType To, uint8_t flags = 0);
 
    QueryResult finish(IsImplicitlyConvertibleQuery::ResultType Result, Status St = Done);
 
    QualType From;
    QualType To;
+   uint8_t flags;
    llvm::Optional<IsImplicitlyConvertibleQuery::ResultType> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To);
+   static void Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To, uint8_t flags);
 
 };
 
-class IsValidParameterValueQuery: public Query {
+class IsValidParameterValueQuery: public Query, public llvm::FoldingSetNode {
 
     public:
         struct ResultType {
@@ -908,17 +909,18 @@ class IsValidParameterValueQuery: public Query {
 private:
    QueryResult run();
 
-   IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType, uint8_t isSelf = false);
+   IsValidParameterValueQuery(QueryContext &QC, QualType givenType, QualType paramType, bool isSelf = false, bool importedFromClang = false);
 
    QueryResult finish(IsValidParameterValueQuery::ResultType Result, Status St = Done);
 
    QualType givenType;
    QualType paramType;
-   uint8_t isSelf;
+   bool isSelf;
+   bool importedFromClang;
    llvm::Optional<IsValidParameterValueQuery::ResultType> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType, uint8_t isSelf);
+   static void Profile(llvm::FoldingSetNodeID &ID, QualType givenType, QualType paramType, bool isSelf, bool importedFromClang);
 
 };
 
@@ -940,16 +942,17 @@ public:
 private:
    QueryResult run();
 
-   GetConversionSequenceQuery(QueryContext &QC, QualType From, QualType To);
+   GetConversionSequenceQuery(QueryContext &QC, QualType From, QualType To, uint8_t flags = 0);
 
    QueryResult finish(ConversionSequence* Result, Status St = Done);
 
    QualType From;
    QualType To;
+   uint8_t flags;
    llvm::Optional<ConversionSequence*> Result;
 public:
    void Profile(llvm::FoldingSetNodeID &ID) const;
-   static void Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To);
+   static void Profile(llvm::FoldingSetNodeID &ID, QualType From, QualType To, uint8_t flags);
 
 };
 

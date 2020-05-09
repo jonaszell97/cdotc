@@ -128,6 +128,7 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
       return Call;
    }
 
+   bool importedFromClang = C->isImportedFromClang();
    if (!Call->getExprType()) {
       QualType ExprType;
       if (auto* F = dyn_cast<FunctionDecl>(C)) {
@@ -155,6 +156,10 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
                                         Call->getSourceRange())) {
             Call->setIsInvalid(true);
          }
+      }
+
+      if (importedFromClang) {
+         ExprType = TransformImportedCType(ExprType);
       }
 
       Call->setExprType(ExprType);

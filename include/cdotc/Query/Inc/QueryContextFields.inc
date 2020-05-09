@@ -101,15 +101,15 @@ private:   llvm::DenseMap<CanType, ContainsAssociatedTypeConstraintQuery*> Conta
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:   llvm::DenseMap<std::pair<QualType, QualType>, IsImplicitlyConvertibleQuery::ResultType> IsImplicitlyConvertibleQueries;
+private:   llvm::DenseMap<std::pair<QualType, std::pair<QualType, uint8_t>>, IsImplicitlyConvertibleQuery::ResultType> IsImplicitlyConvertibleQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:   llvm::DenseMap<std::pair<QualType, std::pair<QualType, uint8_t>>, IsValidParameterValueQuery::ResultType> IsValidParameterValueQueries;
+private:   llvm::FoldingSet<IsValidParameterValueQuery> IsValidParameterValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:   llvm::DenseMap<std::pair<QualType, QualType>, ConversionSequence*> GetConversionSequenceQueries;
+private:   llvm::DenseMap<std::pair<QualType, std::pair<QualType, uint8_t>>, ConversionSequence*> GetConversionSequenceQueries;
 
 
 /// \brief Maps from query kinds to a folding set containing instances of

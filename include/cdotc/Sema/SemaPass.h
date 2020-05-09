@@ -93,10 +93,16 @@ public:
    /// \return True iff there is an implicit conversion from `from` to `to`.
    bool implicitlyConvertibleTo(CanType from, CanType to);
 
+   /// Conversion options.
+   enum ConversionOpts : uint8_t {
+      CO_None = 0x0,
+      CO_IsClangParameterValue = 0x1,
+   };
+
    /// \return A possible conversion sequence from `from` to `to`, or an invalid
    /// one if there is no conversion.
-   ConversionSequenceBuilder getConversionSequence(CanType from, CanType to);
-
+   ConversionSequenceBuilder getConversionSequence(CanType from, CanType to,
+                                                   ConversionOpts options = CO_None);
 
    /// Apply standard conversions for a C-style vararg function argument.
    Expression* convertCStyleVarargParam(Expression* Expr);
@@ -1159,6 +1165,9 @@ private:
    /// Map from instantiations to the scope in which they were instantiated
    llvm::DenseMap<NamedDecl*, NamedDecl*> InstScopeMap;
 
+   /// Cache for transformed imported clang types.
+   llvm::DenseMap<CanType, CanType> ClangTypeMap;
+
 public:
    /// Map from instantiated decl contexts to their template for lookup.
    llvm::DenseMap<DeclContext*, DeclContext*> LookupContextMap;
@@ -1325,6 +1334,10 @@ public:
    /// Infer the types of a lambda expression from context.
    int inferLambdaArgumentTypes(LambdaExpr* LE, QualType fromTy);
 
+   /// Transform a parameter type from an imported clang function into the
+   /// appropriate standard library type.
+   CanType TransformImportedCType(CanType T);
+
    //===-------------------------------------------------------===//
    // CTFE
    //===-------------------------------------------------------===//
@@ -1482,6 +1495,7 @@ public:
 
    Expression* implicitCastIfNecessary(Expression* Expr, QualType destTy,
                                        bool ignoreError = false,
+                                       ConversionOpts opts = CO_None,
                                        diag::MessageKind msg
                                        = diag::err_type_mismatch,
                                        SourceLocation DiagLoc = {},

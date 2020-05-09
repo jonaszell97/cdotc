@@ -443,6 +443,113 @@ static unsigned getPreviousNumVariadicArgs(TemplateParamDecl* Param,
 
 } // anonymous namespace
 
+static CanType TransformImportedCType(SemaPass &Sema, CanType T)
+{
+   if (Sema.getCompilerInstance().getOptions().noPrelude()) {
+      return T;
+   }
+
+   if (T->isIntegerType()) {
+      int bits = T->getBitwidth();
+      bool isUnsigned = T->isUnsigned();
+      switch (bits) {
+      case 1:
+         return Sema.getBoolDecl()->getType();
+      case 8:
+         return (isUnsigned ? Sema.getUInt8Decl() : Sema.getInt8Decl())->getType();
+      case 16:
+         return (isUnsigned ? Sema.getUInt16Decl() : Sema.getInt16Decl())->getType();
+      case 32:
+         return (isUnsigned ? Sema.getUInt32Decl() : Sema.getInt32Decl())->getType();
+      case 64:
+         return (isUnsigned ? Sema.getUInt64Decl() : Sema.getInt64Decl())->getType();
+      case 128:
+         return (isUnsigned ? Sema.getUInt128Decl() : Sema.getInt128Decl())->getType();
+      default:
+         return T;
+      }
+   }
+
+   if (T->isFloatTy()) {
+      return Sema.getFloatDecl()->getType();
+   }
+
+   if (T->isDoubleTy()) {
+      return Sema.getDoubleDecl()->getType();
+   }
+
+   if (T->isMutablePointerType()) {
+      CanType Pointee = T->getPointeeType();
+      if (Pointee->isVoidType()) {
+         return Sema.getUnsafeMutableRawPtrDecl()->getType();
+      }
+
+      StructDecl *PtrDecl;
+      if (Pointee->isInt8Ty()) {
+         PtrDecl = Sema.getUnsafeMutableBufferPtrDecl();
+      }
+      else {
+         PtrDecl = Sema.getUnsafeMutablePtrDecl();
+      }
+
+      TemplateArgument Arg(PtrDecl->getTemplateParams().front(),
+                           TransformImportedCType(Sema, Pointee));
+
+      auto *ArgList = FinalTemplateArgumentList::Create(Sema.Context, Arg);
+      assert(!ArgList->isStillDependent() && "dependent imported C func?");
+
+      auto *Inst = Sema.InstantiateRecord(SourceLocation(), PtrDecl, ArgList);
+      assert(Inst && "failed UnsafePtr instantiation!");
+
+      return Sema.Context.getRecordType(Inst);
+   }
+
+   if (T->isPointerType()) {
+      CanType Pointee = T->getPointeeType();
+      if (Pointee->isVoidType()) {
+         return Sema.getUnsafeRawPtrDecl()->getType();
+      }
+
+      StructDecl *PtrDecl;
+      if (Pointee->isInt8Ty()) {
+         PtrDecl = Sema.getUnsafeBufferPtrDecl();
+      }
+      else {
+         PtrDecl = Sema.getUnsafePtrDecl();
+      }
+
+      TemplateArgument Arg(PtrDecl->getTemplateParams().front(),
+                           TransformImportedCType(Sema, Pointee));
+
+      auto *ArgList = FinalTemplateArgumentList::Create(Sema.Context, Arg);
+      assert(!ArgList->isStillDependent() && "dependent imported C func?");
+
+      auto *Inst = Sema.InstantiateRecord(SourceLocation(), PtrDecl, ArgList);
+      assert(Inst && "failed UnsafePtr instantiation!");
+
+      return Sema.Context.getRecordType(Inst);
+   }
+
+   return T;
+}
+
+CanType SemaPass::TransformImportedCType(CanType T)
+{
+   if (compilerInstance->getOptions().noPrelude()) {
+      return T;
+   }
+
+   auto It = ClangTypeMap.find(T);
+   if (It != ClangTypeMap.end()) {
+      return It->getSecond();
+   }
+
+   CanType Result = ::TransformImportedCType(*this, T);
+   ClangTypeMap[T] = Result;
+
+   return Result;
+}
+
 static bool createParamConstraints(
     ConstraintSystem& Sys, DeclArgMapType& DeclArgMap,
     CandidateSet::Candidate& Cand, FuncArgDecl* ArgDecl, unsigned NumGivenArgs,
@@ -617,9 +724,7 @@ static bool createParamConstraints(
          }
       }
    }
-   else if (ArgDecl->getType()
-                ->properties()
-                .containsUnexpandedParameterPack()) {
+   else if (ArgDecl->getType()->properties().containsUnexpandedParameterPack()) {
       TemplateParamFinder Finder(Sema, Builder, templateArgs, VariadicParams);
 
       for (auto*& ArgVal : ArgValues) {
@@ -680,7 +785,8 @@ static bool createParamConstraints(
       if (ArgVal->isSemanticallyChecked() && !NeededTy->containsTemplateParamType()) {
          IsValidParameterValueQuery::result_type result;
          if (Sema.QC.IsValidParameterValue(result, ArgVal->getExprType(),
-                                           NeededTy, ArgDecl->isSelf())) {
+                                           NeededTy, ArgDecl->isSelf(),
+                                           Cand.getFunc()->isImportedFromClang())) {
             return true;
          }
 
@@ -702,8 +808,9 @@ static bool createParamConstraints(
       auto* Loc = Builder.makeLocator(ArgVal,
                                       PathElement::parameterType(ArgDecl));
 
-      auto Result = Builder.generateArgumentConstraints(ArgVal, NeededTy, Loc,
-                                                        outerBuilder);
+      auto Result = Builder.generateArgumentConstraints(
+          ArgVal, NeededTy, Loc, Cand.getFunc()->isImportedFromClang(),
+          outerBuilder);
 
       switch (Result.Kind) {
       case ConstraintBuilder::Success:
@@ -832,6 +939,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 {
    bool isTemplate = false;
    ArrayRef<FuncArgDecl*> ArgDecls;
+   SemaPass::ConversionOpts opts = SemaPass::CO_None;
 
    if (!Cand.isAnonymousCandidate()) {
       if (Cand.getFunc()->isInvalid()) {
@@ -841,6 +949,10 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
       ArgDecls = Cand.getFunc()->getArgs();
       isTemplate = Cand.getFunc()->isTemplateOrInTemplate();
+
+      if (Cand.getFunc()->isImportedFromClang()) {
+         opts = SemaPass::CO_IsClangParameterValue;
+      }
    }
 
    unsigned i = 0;
@@ -891,7 +1003,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
       }
 
       // Make sure the expression type is resolved.
-      auto Result = SP.typecheckExpr(E, requiredType, Caller);
+      auto Result = SP.typecheckExpr(E, requiredType, Caller, false);
       if (!Result) {
          ++i;
          continue;
@@ -925,7 +1037,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
       // Convert to the parameter type and apply automatic promotion.
       if (i < ParamTys.size() && requiredType) {
-         E = SP.implicitCastIfNecessary(E, requiredType);
+         E = SP.implicitCastIfNecessary(E, requiredType, false, opts);
       }
       else if (cstyleVararg) {
          E = SP.convertCStyleVarargParam(E);
@@ -1050,6 +1162,10 @@ static bool checkReturnType(SemaPass& Sema, CandidateSet::Candidate& Cand,
    }
    else if (Cand.getFunc()->isCompleteInitializer()) {
       ReturnType = Sema.Context.getRecordType(Cand.getFunc()->getRecord());
+   }
+   else if (Cand.getFunc()->isImportedFromClang()) {
+      ReturnType = Sema.TransformImportedCType(
+          Cand.getFunctionType()->getReturnType());
    }
    else {
       ReturnType = Cand.getFunctionType()->getReturnType();

@@ -183,7 +183,8 @@ public:
    /// Generate constraints for a function argument.
    [[nodiscard]] GenerationResult generateArgumentConstraints(
        ast::Expression*& E, ast::SourceType RequiredType,
-       ConstraintLocator* Locator, ConstraintBuilder* outerBuilder = nullptr);
+       ConstraintLocator* Locator, bool importedFromClang = false,
+       ConstraintBuilder* outerBuilder = nullptr);
 
    /// \return true iff all expressions are unambiguously typed.
    bool allUnambiguouslyTyped() const { return AllUnambiguous; }

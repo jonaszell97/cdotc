@@ -37,6 +37,7 @@ const char* CastNames[] = {"<noop>",
                            "enum_to_int",
                            "<to_void>",
                            "<to_()>",
-                           "<to_meta_type>"};
+                           "<to_meta_type>",
+                           "<clang_conv>"};
 
 } // namespace cdot

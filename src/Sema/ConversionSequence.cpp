@@ -34,6 +34,7 @@ unsigned cdot::getPenalty(CastKind kind)
    case CastKind::MetaTypeCast:
    case CastKind::ToVoid:
    case CastKind::ToEmptyTuple:
+   case CastKind::ImplicitClangConversion:
       return 0;
    case CastKind::Ext:
    case CastKind::FPExt:

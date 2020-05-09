@@ -2117,7 +2117,7 @@ QueryResult SubstTypeVariablesQuery::run()
 QueryResult IsImplicitlyConvertibleQuery::run()
 {
    ConversionSequence* Seq;
-   if (auto Err = QC.GetConversionSequence(Seq, From, To)) {
+   if (auto Err = QC.GetConversionSequence(Seq, From, To, flags)) {
       return Query::finish(Err);
    }
 
@@ -2130,7 +2130,7 @@ QueryResult IsImplicitlyConvertibleQuery::run()
 
 QueryResult GetConversionSequenceQuery::run()
 {
-   auto Builder = QC.Sema->getConversionSequence(From, To);
+   auto Builder = QC.Sema->getConversionSequence(From, To, (SemaPass::ConversionOpts)flags);
    if (Builder.isDependent()) {
       return Query::finish(Status::Dependent);
    }
@@ -2184,8 +2184,14 @@ QueryResult IsValidParameterValueQuery::run()
    QualType paramType = this->paramType;
 
    if (!paramType->containsTemplateParamType()) {
+      SemaPass::ConversionOpts opts = SemaPass::CO_None;
+      if (importedFromClang) {
+         opts = SemaPass::CO_IsClangParameterValue;
+      }
+
       IsImplicitlyConvertibleQuery::result_type result;
-      if (auto err = QC.IsImplicitlyConvertible(result, givenType, paramType)) {
+      if (auto err = QC.IsImplicitlyConvertible(result, givenType, paramType,
+                                                opts)) {
          return err;
       }
 

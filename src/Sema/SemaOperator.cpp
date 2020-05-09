@@ -351,7 +351,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr* Expr)
 
    rhs = implicitCastIfNecessary(
        rhs, lhs->getExprType()->asReferenceType()->getReferencedType(), false,
-       diag::err_assign_type_mismatch);
+       CO_None, diag::err_assign_type_mismatch);
 
    Expr->setRhs(rhs);
    Expr->setExprType(Context.getVoidType());

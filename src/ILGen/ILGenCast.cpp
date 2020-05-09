@@ -14,6 +14,26 @@ using namespace cdot::support;
 namespace cdot {
 namespace ast {
 
+static il::Value *TransformImportedClangType(ILBuilder &Builder,
+                                             Value *Val,
+                                             CanType ParamType)
+{
+   if (!Val->getType()->isRecordType()) {
+      return Val;
+   }
+
+   if (ParamType->isIntegerType() || ParamType->isFloatTy()) {
+      return Builder.CreateLoad(Builder.CreateStructGEP(Val, 0));
+   }
+
+   if (ParamType->isPointerType()) {
+      auto *RawPtr = Builder.CreateLoad(Builder.CreateStructGEP(Val, 0));
+      return Builder.CreateBitCast(CastKind::BitCast, RawPtr, ParamType);
+   }
+
+   return Val;
+}
+
 il::Value* ILGenPass::applySingleConversionStep(const ConversionStep& Step,
                                                 il::Value* Val, bool forced)
 {
@@ -173,6 +193,8 @@ il::Value* ILGenPass::applySingleConversionStep(const ConversionStep& Step,
       return Builder.GetEmptyTuple();
    case CastKind::ToMetaType:
       return Builder.GetUndefValue(ResTy);
+   case CastKind::ImplicitClangConversion:
+      return TransformImportedClangType(Builder, Val, ResTy);
    case CastKind::NoOp:
       return Val;
    }
