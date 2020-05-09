@@ -737,31 +737,19 @@ void SemaPass::issueDiagnostics()
    static_cast<SemaDiagConsumer*>(DiagConsumer.get())->issueDiags(Diags);
 }
 
-bool SemaPass::hasDefaultValue(QualType type) const
+bool SemaPass::hasDefaultValue(CanType type) const
 {
    switch (type->getTypeID()) {
    case Type::BuiltinTypeID:
    case Type::PointerTypeID:
    case Type::MutablePointerTypeID:
+   case Type::MetaTypeID:
       return true;
    case Type::ArrayTypeID:
       return hasDefaultValue(type->asArrayType()->getElementType());
    case Type::RecordTypeID: {
       if (auto* S = dyn_cast<StructDecl>(type->getRecord())) {
-         DeclarationName DN = Context.getDeclNameTable().getConstructorName(
-             Context.getRecordType(S));
-
-         const MultiLevelLookupResult* Lookup;
-         if (QC.DirectLookup(Lookup, S, DN)) {
-            return true;
-         }
-
-         for (auto* D : Lookup->allDecls()) {
-            auto* Init = cast<InitDecl>(D);
-            if (Init->getArgs().empty()) {
-               return true;
-            }
-         }
+         return S->getParameterlessConstructor() != nullptr;
       }
 
       return false;

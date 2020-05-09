@@ -4595,6 +4595,10 @@ ParseResult Parser::parseForStmt(IdentifierInfo* Label)
          }
       }
 
+      if (initDecl) {
+         initDecl->setSynthesized(true);
+      }
+
       advance();
    }
 

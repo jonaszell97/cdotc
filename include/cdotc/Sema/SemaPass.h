@@ -864,7 +864,7 @@ public:
    }
 
    /// \return True iff the given type has a default value.
-   bool hasDefaultValue(QualType type) const;
+   bool hasDefaultValue(CanType type) const;
 
    /// Issue all diagnostics encountered so far.
    void issueDiagnostics();

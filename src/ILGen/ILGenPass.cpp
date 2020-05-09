@@ -597,6 +597,10 @@ il::Value* ILGenPass::getDefaultValue(QualType Ty)
       return Builder.CreateStructInit(S, getFunc(Ctor), {});
    }
 
+   if (Ty->isMetaType()) {
+      return GetTypeInfo(Ty);
+   }
+
    return nullptr;
 }
 

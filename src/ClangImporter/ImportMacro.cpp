@@ -514,6 +514,9 @@ void ImporterImpl::importMacros(DeclContext* DC)
    auto& Sema = CI.getSema();
 
    for (auto* Name : MacroNames) {
+      if (Name->isStr("X_OK")) {
+          NO_OP;
+      }
       auto MD = Instance->getPreprocessor().getMacroDefinition(Name);
       auto* MI = MD.getMacroInfo();
 
