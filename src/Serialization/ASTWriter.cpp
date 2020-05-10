@@ -544,8 +544,17 @@ unsigned ASTWriter::getIdentifierRef(const IdentifierInfo* II)
 
 void ASTWriter::AddString(llvm::StringRef Str, RecordDataImpl& Record)
 {
-   Record.push_back(Str.size());
-   Record.insert(Record.end(), Str.begin(), Str.end());
+   size_t NumBytes = Str.size();
+   Record.push_back(NumBytes);
+
+   for (unsigned i = 0; i < NumBytes; i += 8) {
+      uint64_t Value = 0;
+      for (unsigned j = 0; j < 8 && i + j < NumBytes; ++j) {
+         Value |= (uint64_t)(Str[i + j]) << (j * 8);
+      }
+
+      Record.push_back(Value);
+   }
 }
 
 void ASTRecordWriter::AddTypeRef(SourceType T)

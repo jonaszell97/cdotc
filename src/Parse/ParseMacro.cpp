@@ -699,10 +699,10 @@ void MacroParser::parseExpansionFragment(
             Tokens.clear();
             parseExpansionFragment(Vec);
 
-            advance();
+            advance(false, true);
             continue;
          case tok::backslash:
-            advance();
+            advance(false, true);
             break;
          default:
             break;
@@ -1934,11 +1934,31 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       {
          llvm::raw_string_ostream OS(str);
          for (auto& Tok : Tokens) {
-            if (Tok.is(tok::stringliteral)) {
+            switch (Tok.getKind()) {
+            case tok::stringliteral:
                OS << Tok.getText();
-            }
-            else {
+               break;
+            case tok::macro_expression:
+               SP.diagnose(err_generic_error,
+                           "macro expression argument cannot be stringified",
+                           Tok.getSourceLoc());
+
+               break;
+            case tok::macro_statement:
+               SP.diagnose(err_generic_error,
+                           "macro statement argument cannot be stringified",
+                           Tok.getSourceLoc());
+
+               break;
+            case tok::macro_declaration:
+               SP.diagnose(err_generic_error,
+                           "macro declaration argument cannot be stringified",
+                           Tok.getSourceLoc());
+
+               break;
+            default:
                OS << Tok;
+               break;
             }
          }
       }

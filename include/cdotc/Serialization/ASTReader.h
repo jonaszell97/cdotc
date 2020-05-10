@@ -477,13 +477,7 @@ public:
                              const llvm::fltSemantics& Sem, unsigned& Idx);
 
    // Read a string
-   static std::string ReadString(const RecordData& Record, unsigned& Idx);
-
-   // Skip a string
-   static void SkipString(const RecordData& Record, unsigned& Idx)
-   {
-      Idx += Record[Idx] + 1;
-   }
+   static std::string ReadString(const RecordDataImpl& Record, unsigned& Idx);
 
    /// Reads attributes from the current stream position.
    void ReadAttributes(ASTRecordReader& Record, SmallVectorImpl<Attr*>& Attrs,

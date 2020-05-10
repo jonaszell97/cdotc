@@ -118,6 +118,17 @@ private:
    llvm::StringMap<SourceFileInfo> SourceFiles;
 
 public:
+   /// Information for a test module.
+   struct TestInfo {
+      /// Whether or not to verify the test files.
+      bool Verify = false;
+   };
+
+private:
+   /// Information for a test module.
+   llvm::Optional<TestInfo> testInfo;
+
+public:
    /// Create a new module.
    static Module* Create(ast::ASTContext& C, IdentifierInfo* Name,
                          SourceRange Loc, Module* ParentModule = nullptr);
@@ -216,10 +227,20 @@ public:
    {
       return SourceFiles;
    }
+
    bool addSourceFile(StringRef FileName, SourceFileInfo Info);
 
    bool importsModule(Module* D);
    bool importsModuleDirectly(Module* D);
+
+   /// \return The test info (crashes if not a test module.)
+   const TestInfo &getTestInfo() const { return *testInfo; }
+
+   /// \return Whether or not this is a test module.
+   bool isTestModule() const { return testInfo.hasValue(); }
+
+   /// Update the test info.
+   void setTestInfo(TestInfo &&Info) { testInfo = std::move(Info); }
 };
 
 } // namespace cdot

@@ -38,6 +38,31 @@ private:
 
 };
 
+class RunTestModuleQuery: public Query {
+public:
+   static bool classof(const Query *Q) { return classofKind(Q->kind()); }
+   static bool classofKind(Kind K) { return K == Kind::RunTestModuleQueryID; }
+
+   using result_type = void;
+
+   std::string description() const;
+   std::string summary() const;
+
+   friend class Query; // for run().
+   friend class QueryContext; // for C'tor.
+
+private:
+   QueryResult run();
+
+   RunTestModuleQuery(QueryContext &QC, Module* Mod);
+
+   Module* Mod;
+public:
+   void Profile(llvm::FoldingSetNodeID &ID) const;
+   static void Profile(llvm::FoldingSetNodeID &ID, Module* Mod);
+
+};
+
 class ParseModuleFileQuery: public Query {
 public:
    static bool classof(const Query *Q) { return classofKind(Q->kind()); }

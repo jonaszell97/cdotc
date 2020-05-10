@@ -3,10 +3,12 @@
 
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Diagnostics/DiagnosticsEngine.h"
+#include "cdotc/Support/SaveAndRestore.h"
 
-#include <cassert>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
+
+#include <cassert>
 #include <regex>
 
 using std::string;
@@ -58,6 +60,20 @@ void Lexer::reset(llvm::ArrayRef<Token> Tokens)
 
    CurTok = LookaheadVec.front();
    LookaheadIdx = 1;
+}
+
+void Lexer::lexCompleteFile()
+{
+   auto SAR1 = support::saveAndRestore(LastTok);
+   auto SAR2 = support::saveAndRestore(CurTok);
+
+   while (!CurTok.is(tok::eof)) {
+      advance(false, true);
+      LookaheadVec.push_back(CurTok);
+      ++LookaheadIdx;
+   }
+
+   LookaheadIdx = 0;
 }
 
 Token Lexer::makeEOF()

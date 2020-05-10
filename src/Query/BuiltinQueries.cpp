@@ -530,6 +530,7 @@ QueryResult GetBuiltinRecordQuery::run()
          auto* Not = UnaryOperator::Create(QC.Context, Loc, op::UnaryLNot, FnTy,
                                            ValueRef, true);
 
+         Self = SelfExpr::Create(QC.Context, Loc, true);
          auto* Ref = MemberRefExpr::Create(QC.Context, Self,
                                            S->getMemberwiseInitializer(), Loc);
 

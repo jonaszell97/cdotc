@@ -1610,18 +1610,25 @@ static bool resolveAnonymousCandidate(
 static bool shouldUseSelfArgument(CallableDecl* Fn, Expression* SelfArg,
                                   ArrayRef<Expression*> UnorderedArgs)
 {
-   auto* M = dyn_cast<MethodDecl>(Fn);
-   if (!M || M->isCompleteInitializer()) {
-      return Fn->isOperator();
-   }
-
-   // Because of the way operators are handled, sometimes there are two self
-   // arguments, so we need to drop one.
-   if (!M->isOperator() || M->isStatic()) {
+   if (SelfArg && !SelfArg->getExprType()->isMetaType()) {
+      // Always include non-metatype self arguments.
       return true;
    }
 
-   return UnorderedArgs.size() < M->getArgs().size();
+   auto* M = dyn_cast<MethodDecl>(Fn);
+   if (M) {
+      if (M->isCompleteInitializer()) {
+         return false;
+      }
+      if (UnorderedArgs.size() >= Fn->getArgs().size()) {
+         assert(SelfArg->getExprType()->isMetaType());
+         return false;
+      }
+
+      return true;
+   }
+
+   return Fn->isOperator() && SelfArg && UnorderedArgs.size() < Fn->getArgs().size();
 }
 
 CandidateSet::Candidate* sema::resolveCandidateSet(

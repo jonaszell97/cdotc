@@ -1345,7 +1345,8 @@ DeclRefExpr::DeclRefExpr(NamedDecl* Decl, SourceRange SR)
       AllowModuleRef(false)
 {
    assert((!MemberRefExpr::needsMemberRefExpr(Decl)
-           || isa<AssociatedTypeDecl>(Decl))
+           || isa<AssociatedTypeDecl>(Decl)
+           || isa<FunctionDecl>(Decl))
           && "should be a MemberRefExpr!");
 }
 

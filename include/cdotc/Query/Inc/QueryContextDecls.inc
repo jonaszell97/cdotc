@@ -1,5 +1,6 @@
 public: QueryResult CompileModule();
 public: QueryResult VerifyModule();
+public: QueryResult RunTestModule(Module* Mod);
 public: QueryResult ParseModuleFile(Module* &Result, StringRef FileName);
 public: QueryResult CreateDefaultModule(Module* &Result);
 public: QueryResult ParseSourceFile(ast::SourceFileDecl* &Result, Module* Mod, StringRef FileName);
@@ -200,6 +201,7 @@ public: QueryResult EquivalentSignatures(EquivalentSignaturesQuery::ResultKind &
 
 friend class CompileModuleQuery;
 friend class VerifyModuleQuery;
+friend class RunTestModuleQuery;
 friend class ParseModuleFileQuery;
 friend class CreateDefaultModuleQuery;
 friend class ParseSourceFileQuery;

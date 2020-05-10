@@ -91,26 +91,23 @@ public:
 
    void issueDiags(DiagnosticsEngine& Engine)
    {
-#ifndef NDEBUG
-      llvm::errs().flush();
-      std::this_thread::sleep_for(std::chrono::milliseconds(200));
-#endif
-
-      for (auto& Diag : StoredDiags)
-         llvm::outs() << Diag;
+      auto &OS = llvm::errs();
+      for (auto& Diag : StoredDiags) {
+         OS << Diag;
+      }
 
       if (NumErrs && NumWarn) {
-         llvm::outs() << NumErrs << " error" << (NumErrs > 1 ? "s" : "")
-                      << " and " << NumWarn << " warning"
-                      << (NumWarn > 1 ? "s" : "") << " emitted.\n";
+         OS << NumErrs << " error" << (NumErrs > 1 ? "s" : "")
+            << " and " << NumWarn << " warning"
+            << (NumWarn > 1 ? "s" : "") << " emitted.\n";
       }
       else if (NumWarn) {
-         llvm::outs() << NumWarn << " warning" << (NumWarn > 1 ? "s" : "")
-                      << " emitted.\n";
+         OS << NumWarn << " warning" << (NumWarn > 1 ? "s" : "")
+            << " emitted.\n";
       }
       else if (NumErrs) {
-         llvm::outs() << NumErrs << " error" << (NumErrs > 1 ? "s" : "")
-                      << " emitted.\n";
+         OS << NumErrs << " error" << (NumErrs > 1 ? "s" : "")
+            << " emitted.\n";
       }
 
       StoredDiags.clear();

@@ -148,7 +148,7 @@ set(SOURCE_FILES src/Lex/Token.cpp include/cdotc/Lex/Token.h src/Basic/Variant.c
         include/cdotc/Sema/ConstraintSystem.h src/Sema/ConstraintBuilder.cpp include/cdotc/Sema/ConstraintBuilder.h
         src/Sema/ConstraintGraph.cpp include/cdotc/Sema/ConstraintGraph.h src/Sema/ConstraintStep.cpp include/cdotc/Sema/ConstraintStep.h
         src/Sema/CSDiags.cpp src/Sema/CSApply.cpp src/Sema/OverloadResolver.cpp
-        src/Support/Log.cpp include/cdotc/Support/Log.h src/Sema/SemaDebug.cpp src/Lex/SourceLocation.cpp)
+        src/Support/Log.cpp include/cdotc/Support/Log.h src/Sema/SemaDebug.cpp src/Lex/SourceLocation.cpp src/Query/TestQueries.cpp)
 
 set(CDOTC_TBLGENS_SOURCE_FILES
         src/Tools/TableGenBackends/BuiltinOperatorBackend.cpp

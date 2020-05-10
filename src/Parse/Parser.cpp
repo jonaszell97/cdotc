@@ -1555,7 +1555,7 @@ ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType,
          }
       }
 
-      return maybeParseSubExpr(Expr, parsingType);
+      return maybeParseSubExpr(Expr, parsingType, parsingStmt);
    }
 
    // Anonymous call
@@ -1581,7 +1581,7 @@ ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType,
       auto call = AnonymousCallExpr::Create(Context, Parens, ParentExpr,
                                             args.args, args.labels);
 
-      return maybeParseSubExpr(call, parsingType);
+      return maybeParseSubExpr(call, parsingType, parsingStmt);
    }
 
    // Subscript expression
@@ -1608,7 +1608,7 @@ ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType,
       ParentExpr
           = SubscriptExpr::Create(Context, SquareRange, ParentExpr, indices);
 
-      return maybeParseSubExpr(ParentExpr, parsingType);
+      return maybeParseSubExpr(ParentExpr, parsingType, parsingStmt);
    }
 
    // macro expansion

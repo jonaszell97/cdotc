@@ -59,6 +59,7 @@ public:
        ~Lexer()
        = default;
 
+   void lexCompleteFile();
    void reset(llvm::ArrayRef<Token> Tokens);
 
    void lexDiagnostic();

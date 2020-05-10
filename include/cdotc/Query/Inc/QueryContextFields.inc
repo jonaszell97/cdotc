@@ -7,6 +7,10 @@ private:   VerifyModuleQuery *VerifyModuleInstance = nullptr;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
+private:   llvm::DenseMap<Module*, RunTestModuleQuery*> RunTestModuleQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
 private:   llvm::DenseMap<StringRef, ParseModuleFileQuery*> ParseModuleFileQueries;
 
 /// \brief Single query instance.

@@ -46,6 +46,10 @@ static cl::opt<string> OutputFilename("o", cl::desc("specify output filename"),
 static cl::list<string> InputFilenames(cl::Positional, cl::OneOrMore,
                                        cl::desc("<input file(s)>"));
 
+/// Implicitly imported modules.
+static cl::list<string> ImplicitImports("import", cl::ZeroOrMore,
+                                        cl::desc("<modules to import>"));
+
 /// Include paths to search for modules and source files.
 static cl::list<string> IncludePaths("I", cl::ZeroOrMore,
                                      cl::desc("<include path(s)>"));
@@ -63,6 +67,9 @@ static cl::opt<bool> EmitDebugInfo("g", cl::desc("emit debug info"));
 
 /// If true, the module's unit tests will be executed.
 static cl::opt<bool> RunUnitTests("test", cl::desc("run unit tests"));
+
+/// Whether or not we are compiling a test.
+static cl::opt<bool> IsTest("is-test", cl::desc("this file is a test"));
 
 /// If true, the compiler verifies against expected diagnostic comments.
 static cl::opt<bool> Verify("verify", cl::desc("verify expected diagnostics"));
@@ -219,6 +226,9 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    QC->Sema = Sema.get();
    cl::ParseCommandLineOptions(argc, argv);
 
+   if (argc > 0)
+      CompilerBinary = argv[0];
+
    for (int i = 0; i < argc; ++i) {
       if (i != 0) {
          options.commandLineArguments += ' ';
@@ -239,6 +249,9 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    bool FoundOther = false;
 
    for (auto& FileName : InputFilenames) {
+      if (FileName.empty())
+         continue;
+
       fs::getAllMatchingFiles(FileName, files);
 
       for (auto& f : files) {
@@ -389,6 +402,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       IncMgr = std::make_unique<serial::IncrementalCompilationManager>(*this);
    }
 
+   if (IsTest) {
+      options.setFlag(CompilerOptions::F_IsTest, true);
+   }
+
    /// Features
 
    if (RuntimeGenerics) {
@@ -532,6 +549,9 @@ public:
    /// Reference to the Sema instance.
    SemaPass &Sema;
 
+   /// Reference to the file manager.
+   fs::FileManager &FileMgr;
+
    /// The previous diagnostic consumer.
    DiagnosticConsumer *DiagConsumer;
 
@@ -541,9 +561,13 @@ public:
    /// Set to true when we're already checking a diagnostic.
    bool CheckingDiag = false;
 
+   /// Number of expected errors that were encountered.
+   int ExpectedErrors = 0;
+
    /// C'tor.
    explicit VerifyCommentConsumer(SemaPass &Sema)
-      : Sema(Sema), DiagConsumer(Sema.getDiags().getConsumer())
+      : Sema(Sema), FileMgr(Sema.getCompilerInstance().getFileMgr()),
+        DiagConsumer(Sema.getDiags().getConsumer())
    {
       Sema.getDiags().setConsumer(this);
    }
@@ -604,16 +628,19 @@ public:
       }
 
       int64_t lineOffset = 0;
+      bool lineOffsetIsRelative = false;
+
       if (Comment.front() == '@') {
          if (DROP(Comment, "@")) {
             return DiagnoseInvalidExpectedComment(SR);
          }
 
-         if (Comment.front() != '+' && Comment.front() != '-') {
-            return DiagnoseInvalidExpectedComment(SR);
+         int index = 0;
+         if (Comment.front() == '+' || Comment.front() == '-') {
+            lineOffsetIsRelative = true;
+            ++index;
          }
 
-         int index = 1;
          while (index < Comment.size() && ::isdigit(Comment[index])) {
             ++index;
          }
@@ -629,13 +656,13 @@ public:
          Comment = Comment.drop_front(index);
       }
 
-      Diag.Loc = Sema.getCompilerInstance().getFileMgr()
-                     .getFullSourceLoc(SR.getStart());
+      Diag.Loc = FileMgr.getFullSourceLoc(SR.getStart());
 
       if (lineOffset != 0) {
-         Diag.Loc = FullSourceLoc(Diag.Loc.getSourceFileName(),
-                                  Diag.Loc.getLine() + lineOffset,
-                                  Diag.Loc.getColumn());
+         Diag.Loc = FullSourceLoc(
+             Diag.Loc.getSourceFileName(),
+             lineOffsetIsRelative ? Diag.Loc.getLine() + lineOffset : lineOffset,
+             Diag.Loc.getColumn());
       }
 
       if (!Comment.startswith(" {{") || DROP(Comment, " {{")) {
@@ -719,24 +746,25 @@ public:
 
       Msg = Msg.drop_back(Msg.size() - firstNewLineIndex);
 
-      int sourceLocationLength = 0;
-      while (Msg[Msg.size() - sourceLocationLength - 1] != '(') {
-         ++sourceLocationLength;
-         assert(sourceLocationLength < Msg.size() && "invalid diagnostic!");
+      StringRef File;
+      int64_t Line = -1;
+
+      if (Diag.getSourceRange().getStart()) {
+         int sourceLocationLength = 0;
+         while (Msg[Msg.size() - sourceLocationLength - 1] != '(') {
+            ++sourceLocationLength;
+            assert(sourceLocationLength < Msg.size() && "invalid diagnostic!");
+         }
+
+         StringRef SourceLocStr
+             = Msg.drop_front(Msg.size() - sourceLocationLength).drop_back(1);
+
+         Msg = Msg.drop_back(SourceLocStr.size() + 3);
+
+         auto DiagLoc = FileMgr.getFullSourceLoc(Diag.getSourceRange().getStart());
+         File = DiagLoc.getSourceFileName();
+         Line = DiagLoc.getLine();
       }
-
-      StringRef SourceLocStr = Msg.drop_front(Msg.size() - sourceLocationLength)
-                                  .drop_back(1);
-
-      SmallVector<StringRef, 3> SourceLocVec;
-      SourceLocStr.split(SourceLocVec, ':');
-
-      assert(SourceLocVec.size() == 3 && "invalid diagnostic!");
-
-      Msg = Msg.drop_back(SourceLocStr.size() + 3);
-
-      llvm::APSInt LineI(SourceLocVec[1]);
-      int64_t Line = LineI.getExtValue();
 
       bool foundMatch = false;
       std::vector<ExpectedDiagnostic>::iterator Match;
@@ -749,7 +777,7 @@ public:
          auto &ExpectedDiag = *it;
          bool equalMsg = ExpectedDiag.Message == Msg;
          bool equalSeverity = ExpectedDiag.Severity == Severity;
-         bool equalLoc = ExpectedDiag.Loc.getSourceFileName() == SourceLocVec[0]
+         bool equalLoc = ExpectedDiag.Loc.getSourceFileName() == File
              && ExpectedDiag.Loc.getLine() == Line;
 
          if (equalMsg && equalSeverity && equalLoc) {
@@ -767,17 +795,20 @@ public:
       }
 
       if (foundMatch) {
+         if (Severity == SeverityLevel::Error || Severity == SeverityLevel::Fatal) {
+            ++ExpectedErrors;
+         }
+
          ExpectedDiagnostics.erase(Match);
          return;
       }
 
-      Sema.diagnose(err_generic_error,
-                    "unexpected diagnostic: " + Msg,
-                    Diag.getSourceRange());
+      DiagConsumer->HandleDiagnostic(Diag);
 
       if (MatchWithWrongSeverity) {
          Sema.diagnose(
              note_generic_note,
+             "previous diagnostic was unexpected; "
              "potential expected diagnostic has wrong severity level",
              MatchWithWrongSeverity->RawLoc.getStart());
       }
@@ -785,6 +816,7 @@ public:
       if (MatchWithWrongLoc) {
          Sema.diagnose(
              note_generic_note,
+             "previous diagnostic was unexpected; "
              "potential expected diagnostic has wrong location",
              MatchWithWrongLoc->RawLoc.getStart());
       }
@@ -814,18 +846,13 @@ int CompilerInstance::compile()
       CommentConsumer = std::make_unique<VerifyCommentConsumer>(*Sema);
    }
 
+   bool error = false;
    switch (options.output()) {
    case OutputKind::Module:
-      if (QC->CompileModule()) {
-         return 1;
-      }
-
+      error |= QC->CompileModule();
       break;
    case OutputKind::Executable:
-      if (QC->CreateExecutable(options.getOutFile())) {
-         return 1;
-      }
-
+      error |= QC->CreateExecutable(options.getOutFile());
       break;
    case OutputKind::ObjectFile: {
       std::error_code EC;
@@ -833,32 +860,37 @@ int CompilerInstance::compile()
 
       if (EC) {
          Sema->diagnose(err_generic_error, EC.message());
-         return 1;
+         error = true;
+         break;
       }
 
-      if (QC->CreateObject(OS)) {
-         return 1;
-      }
-
+      error |= QC->CreateObject(OS);
       break;
    }
    case OutputKind::StaticLib:
-      if (QC->CreateStaticLib(options.getOutFile())) {
-         return 1;
-      }
-
+      error |= QC->CreateStaticLib(options.getOutFile());
       break;
    case OutputKind::SharedLib:
-      if (QC->CreateDynamicLib(options.getOutFile())) {
-         return 1;
-      }
-
+      error |= QC->CreateDynamicLib(options.getOutFile());
       break;
    default:
       llvm_unreachable("unhandled output kind");
    }
 
-   CommentConsumer = nullptr;
+   if (Verify) {
+      int expectedErrors = static_cast<VerifyCommentConsumer*>(
+          CommentConsumer.get())->ExpectedErrors;
+
+      CommentConsumer = nullptr;
+
+      if (Sema->getDiags().getNumErrors() - expectedErrors > 0) {
+         return 1;
+      }
+   }
+   else if (Sema->getDiags().getNumErrors()) {
+      return 1;
+   }
+
    return 0;
 }
 
@@ -1030,6 +1062,37 @@ void CompilerInstance::createIRGen()
 
    IRGen
        = std::make_unique<il::IRGen>(*this, *LLVMCtx, options.emitDebugInfo());
+}
+
+void CompilerInstance::setCompilationModule(Module* Mod)
+{
+   if (CompilationModule != nullptr) {
+      assert(CompilationModule == Mod);
+      return;
+   }
+
+   CompilationModule = Mod;
+
+   SmallVector<StringRef, 2> ModuleName;
+   SmallVector<IdentifierInfo*, 2> ModuleIdents;
+
+   for (auto &Import : ImplicitImports) {
+      StringRef(Import).split(ModuleName, '.');
+      for (auto &NamePart : ModuleName) {
+         ModuleIdents.push_back(&Context->getIdentifiers().get(NamePart));
+      }
+
+      auto *ImportedMod = ModuleManager->GetModule(ModuleIdents);
+      if (!ImportedMod) {
+         Sema->diagnose(err_module_not_found, Import);
+      }
+      else {
+         Mod->addImport(ImportedMod);
+         Mod->getDecl()->addImportedModule(ImportedMod);
+      }
+
+      ModuleName.clear();
+   }
 }
 
 ClangImporter& CompilerInstance::getClangImporter()

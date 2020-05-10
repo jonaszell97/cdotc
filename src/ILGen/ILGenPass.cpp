@@ -1330,6 +1330,10 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    if (!func->isDeclared())
       return;
 
+   if (func->getName()=="_CNW4coreE16IndexingIteratorINW_0E6StringEEC1ENW_0E6StringEL0") {
+       NO_OP;
+   }
+
    if (auto* Lazy = func->getLazyFnInfo()) {
       Lazy->loadFunctionBody();
       return;
@@ -2280,6 +2284,10 @@ il::Value* ILGenPass::Forward(il::Value* Val)
 {
    // if this is a temporary, we can just remove the cleanup and keep the value
    if (eraseTemporaryCleanup(Val)) {
+      return Val;
+   }
+
+   if (isa<MoveInst>(LookThroughLoad(Val))) {
       return Val;
    }
 

@@ -3,6 +3,7 @@ bool Query::isPure() const
    switch (K) {
    case CompileModuleQueryID: return false;
    case VerifyModuleQueryID: return false;
+   case RunTestModuleQueryID: return false;
    case ParseModuleFileQueryID: return false;
    case CreateDefaultModuleQueryID: return false;
    case ParseSourceFileQueryID: return false;
@@ -207,6 +208,7 @@ bool Query::canBeCached() const
    switch (K) {
    case CompileModuleQueryID: return true;
    case VerifyModuleQueryID: return true;
+   case RunTestModuleQueryID: return true;
    case ParseModuleFileQueryID: return true;
    case CreateDefaultModuleQueryID: return true;
    case ParseSourceFileQueryID: return true;
@@ -411,6 +413,7 @@ bool Query::canBeSerialized() const
    switch (K) {
    case CompileModuleQueryID: return false;
    case VerifyModuleQueryID: return false;
+   case RunTestModuleQueryID: return false;
    case ParseModuleFileQueryID: return false;
    case CreateDefaultModuleQueryID: return false;
    case ParseSourceFileQueryID: return false;
@@ -615,6 +618,7 @@ bool Query::canBeDependent() const
    switch (K) {
    case CompileModuleQueryID: return false;
    case VerifyModuleQueryID: return false;
+   case RunTestModuleQueryID: return false;
    case ParseModuleFileQueryID: return false;
    case CreateDefaultModuleQueryID: return false;
    case ParseSourceFileQueryID: return false;
@@ -858,6 +862,41 @@ std::string VerifyModuleQuery::summary() const
 ;;
 
    return OS.str();
+}
+
+RunTestModuleQuery::RunTestModuleQuery(QueryContext &QC, Module* Mod) : Query(RunTestModuleQueryID, QC), Mod(Mod) {
+
+}
+
+std::string RunTestModuleQuery::description() const
+{
+   std::string s;
+   s += "running ";
+   s += "RunTestModule";
+   return s;
+}
+
+std::string RunTestModuleQuery::summary() const
+{
+   std::string s;
+   llvm::raw_string_ostream OS(s);
+
+   OS << "[RunTestModule]"
+;   OS << " Mod = ";
+OS << Mod;
+;
+
+   return OS.str();
+}
+
+void RunTestModuleQuery::Profile(llvm::FoldingSetNodeID &ID) const
+{
+   Profile(ID, Mod);
+}
+
+void RunTestModuleQuery::Profile(llvm::FoldingSetNodeID &ID, Module* Mod)
+{
+   ID.AddPointer(Mod);
 }
 
 ParseModuleFileQuery::ParseModuleFileQuery(QueryContext &QC, StringRef FileName) : Query(ParseModuleFileQueryID, QC), FileName(FileName) {

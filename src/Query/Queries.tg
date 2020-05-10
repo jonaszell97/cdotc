@@ -173,6 +173,13 @@ def VerifyModule : VoidQuery {
     description = "verifying module ${QC.CI.getCompilationModule()->getName()->getIdentifier()}"
 }
 
+/// Execute a test module.
+def RunTestModule : VoidQuery {
+    parameters = [
+        QueryParam<"Mod", "Module*">,
+    ]
+}
+
 /// Parse the module file.
 def ParseModuleFile : Query<"Module*"> {
     parameters = [

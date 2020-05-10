@@ -204,7 +204,7 @@ public:
    unsigned getDeclID(const ast::Decl* D);
 
    /// Add a string to the given record.
-   void AddString(llvm::StringRef Str, RecordDataImpl& Record);
+   static void AddString(llvm::StringRef Str, RecordDataImpl& Record);
 
    /// Write the given subexpression to the bitstream.
    void WriteSubStmt(ast::Statement* S);

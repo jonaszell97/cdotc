@@ -264,8 +264,9 @@ static void addModuleLib(IRGen& IRG, cdot::Module* CompilationMod,
    llvm::SmallPtrSet<cdot::Module*, 4> VisitedModules;
    VisitedModules.insert(CompilationMod);
 
-   for (auto* Imp : CompilationMod->getImports())
-      addModuleLib(IRG, Imp, args, VisitedModules);
+   for (auto* Imp : CompilationMod->getImports()) {
+      addModuleLib(IRG, Imp->getBaseModule(), args, VisitedModules);
+   }
 }
 
 static void addICULib(SmallVectorImpl<string>& LinkerArgs)

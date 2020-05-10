@@ -203,8 +203,7 @@ void ModuleWriter::WriteModuleInfo(Module* Mod)
       Record.push_back(ID);
 
       auto ModName = Mod->getName()->getIdentifier();
-      Record.push_back(ModName.size());
-      Record.append(ModName.begin(), ModName.end());
+      ASTWriter::AddString(ModName, Record);
 
       Record.push_back(CDOT_VERSION_MAJOR);
       Record.push_back(CDOT_VERSION_MINOR);
@@ -218,8 +217,7 @@ void ModuleWriter::WriteModuleInfo(Module* Mod)
 
       if (auto* Path = Mod->getModulePath()) {
          auto ModPath = Path->getIdentifier();
-         Record.push_back(ModPath.size());
-         Record.append(ModPath.begin(), ModPath.end());
+         ASTWriter::AddString(ModPath, Record);
       }
       else {
          Record.push_back(0);
@@ -259,8 +257,7 @@ void ModuleWriter::WriteModuleInfo(Module* Mod)
          Record.push_back(F.getValue().LastModified);
          Record.push_back(F.getValue().OriginalSourceID);
          Record.push_back(F.getValue().OriginalOffset);
-         Record.push_back(F.getKey().size());
-         Record.append(F.getKey().begin(), F.getKey().end());
+         ASTWriter::AddString(F.getKey(), Record);
       }
 
       Stream.EmitRecord(INPUT_FILES, Record);

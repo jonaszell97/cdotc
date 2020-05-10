@@ -166,5 +166,5 @@ int main(int argc, char* argv[])
 {
    int STACK_BEGIN = 0;
    (void)STACK_BEGIN;
-   cdot_main(argc, argv);
+   return cdot_main(argc, argv);
 }
