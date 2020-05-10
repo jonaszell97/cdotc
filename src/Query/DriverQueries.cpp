@@ -40,6 +40,10 @@ QueryResult CompileModuleQuery::run()
       return fail();
    }
 
+   if (Mod->isTestModule()) {
+      return finish(QC.RunTestModule(Mod));
+   }
+
    // Create the LLVM module.
    llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
@@ -77,6 +81,7 @@ QueryResult ParseModuleFileQuery::run()
       return fail();
    }
 
+   Mod->setModulePath(&QC.Context.getIdentifiers().get(FileName));
    QC.CI.setCompilationModule(Mod);
 
    // If the user asked not to import core, import policy so operators
@@ -163,6 +168,7 @@ QueryResult ParseSourceFileQuery::run()
 
    if (auto *Consumer = CI.getCommentConsumer()) {
       lex.setCommentConsumer(Consumer);
+      lex.lexCompleteFile();
    }
 
    Parser parser(Context, &lex, Sema);
@@ -222,6 +228,7 @@ QueryResult ParseMainSourceFileQuery::run()
 
    if (auto *Consumer = CI.getCommentConsumer()) {
       lex.setCommentConsumer(Consumer);
+      lex.lexCompleteFile();
    }
 
    Parser parser(Context, &lex, Sema);

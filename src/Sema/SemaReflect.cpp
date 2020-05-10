@@ -1094,8 +1094,15 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl* Alias, Expression* Expr)
          Expr->setIsMagicArgumentValue(true);
       }
 
-      auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
-      auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
+      auto &FileMgr = getCompilerInstance().getFileMgr();
+
+      auto Loc = Expr->getSourceLoc();
+      while (auto *Exp = FileMgr.getMacroExpansionLoc(Loc)) {
+         Loc = Exp->ExpandedFrom;
+      }
+
+      auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Loc);
+      auto FileName = Diags.getFileMgr()->getFileName(Loc);
 
       auto SLDecl = cast_or_null<StructDecl>(getReflectionDecl(SourceLocation));
       if (!SLDecl) {
@@ -1130,8 +1137,15 @@ ExprResult SemaPass::HandleReflectionAlias(AliasDecl* Alias, Expression* Expr)
          Expr->setIsMagicArgumentValue(true);
       }
 
-      auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Expr->getSourceLoc());
-      auto FileName = Diags.getFileMgr()->getFileName(Expr->getSourceLoc());
+      auto &FileMgr = getCompilerInstance().getFileMgr();
+
+      auto Loc = Expr->getSourceLoc();
+      while (auto *Exp = FileMgr.getMacroExpansionLoc(Loc)) {
+         Loc = Exp->ExpandedFrom;
+      }
+
+      auto LineAndCol = Diags.getFileMgr()->getLineAndCol(Loc);
+      auto FileName = Diags.getFileMgr()->getFileName(Loc);
 
       auto SLDecl = cast_or_null<StructDecl>(getReflectionDecl(RawSourceLocation));
       if (!SLDecl) {

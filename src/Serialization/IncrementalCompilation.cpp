@@ -55,8 +55,6 @@ IncrementalCompilationManager::~IncrementalCompilationManager()
 #ifndef NDEBUG
    FileDependency.print(
        [&](unsigned ID) { return IDFileMap[ID]->getValue().FileName; });
-
-   llvm::outs() << "\n\n";
 #endif
 }
 

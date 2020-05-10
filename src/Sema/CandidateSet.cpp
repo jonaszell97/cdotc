@@ -268,6 +268,30 @@ static QualType getArgumentType(CandidateSet::Candidate& Cand,
    return args.back()->getExprType();
 }
 
+static bool shouldUseSelfArgument(CallableDecl* Fn, Expression* SelfArg,
+                                  ArrayRef<Expression*> UnorderedArgs)
+{
+   if (SelfArg && !SelfArg->getExprType()->isMetaType()) {
+      // Always include non-metatype self arguments.
+      return true;
+   }
+
+   auto* M = dyn_cast<MethodDecl>(Fn);
+   if (M) {
+      if (M->isCompleteInitializer()) {
+         return false;
+      }
+      if (UnorderedArgs.size() == Fn->getArgs().size()) {
+         assert(SelfArg->getExprType()->isMetaType());
+         return false;
+      }
+
+      return true;
+   }
+
+   return Fn->isOperator() && SelfArg && UnorderedArgs.size() < Fn->getArgs().size();
+}
+
 static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
                               CandidateSet::Candidate& Cand,
                               ArrayRef<Expression*> args,
@@ -276,12 +300,8 @@ static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
 {
    bool IncludesSelf = false;
    if (!Cand.isAnonymousCandidate()) {
-      if (auto* I = dyn_cast<InitDecl>(Cand.getFunc())) {
-         IncludesSelf = I->isBaseInitializer();
-      }
-      else if (isa<MethodDecl>(Cand.getFunc())) {
-         IncludesSelf = true;
-      }
+      IncludesSelf = shouldUseSelfArgument(
+          Cand.getFunc(), args.front(), args.drop_front(1));
    }
 
    switch (Cand.FR) {
@@ -710,24 +730,25 @@ void CandidateSet::diagnoseFailedCandidates(
    bool Diagnosed = false;
    if (FuncName) {
       auto Kind = FuncName.getKind();
-      if (Kind == DeclarationName::InfixOperatorName) {
-         Diagnosed = true;
-         SP.diagnose(Caller, err_binop_not_applicable,
-                     FuncName.getInfixOperatorName()->getIdentifier(),
-                     SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
-                     SelfVal ? args[0]->getExprType() : args[1]->getExprType(),
-                     OpLoc ? OpLoc : Caller->getSourceLoc());
-      }
-      else if (Kind == DeclarationName::PrefixOperatorName
-               || Kind == DeclarationName::PostfixOperatorName) {
-         Diagnosed = true;
-         bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
-         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix, FuncName,
-                     0,
-                     SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
-                     OpLoc ? OpLoc : Caller->getSourceLoc());
-      }
-      else if (Kind == DeclarationName::ConstructorName) {
+//      if (Kind == DeclarationName::InfixOperatorName) {
+//         Diagnosed = true;
+//         SP.diagnose(Caller, err_binop_not_applicable,
+//                     FuncName.getInfixOperatorName()->getIdentifier(),
+//                     SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
+//                     SelfVal ? args[0]->getExprType() : args[1]->getExprType(),
+//                     OpLoc ? OpLoc : Caller->getSourceLoc());
+//      }
+//      else if (Kind == DeclarationName::PrefixOperatorName
+//               || Kind == DeclarationName::PostfixOperatorName) {
+//         Diagnosed = true;
+//         bool IsPostfix = Kind == DeclarationName::PostfixOperatorName;
+//         SP.diagnose(Caller, err_unary_op_not_applicable, IsPostfix, FuncName,
+//                     0,
+//                     SelfVal ? SelfVal->getExprType() : args[0]->getExprType(),
+//                     OpLoc ? OpLoc : Caller->getSourceLoc());
+//      }
+//      else
+      if (Kind == DeclarationName::ConstructorName) {
          Diagnosed = true;
          enum : int { Matching = 0, Accessible = 1 };
          auto R = FuncName.getConstructorType()->getRecord();

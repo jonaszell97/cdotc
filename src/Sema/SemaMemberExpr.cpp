@@ -906,7 +906,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       break;
    }
    case Decl::FunctionDeclID:
-      IsMemberRef = cast<FunctionDecl>(FoundDecl)->isOperator();
+      IsMemberRef = cast<FunctionDecl>(FoundDecl)->isOperator() && ParentType;
       break;
    case Decl::FieldDeclID: {
       auto* field = cast<FieldDecl>(FoundDecl);
@@ -2339,18 +2339,20 @@ static bool IsTestable(NamedDecl* ND)
    if (ND->hasAttribute<TestableAttr>())
       return true;
 
-   auto* Ctx = ND->getNonTransparentDeclContext();
-   if (auto* NamedCtx = dyn_cast<NamedDecl>(Ctx))
-      return IsTestable(NamedCtx);
+   auto* DC = ND->getNonTransparentDeclContext()->lookThroughExtension();
+   while (DC) {
+      if (isa<NamedDecl>(DC) && cast<NamedDecl>(DC)->hasAttribute<TestableAttr>()) {
+         return true;
+      }
+
+      DC = DC->getParentCtx()->lookThroughExtension();
+   }
 
    return false;
 }
 
 void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
 {
-   if (Bits.InUnitTest && IsTestable(ND))
-      return;
-
    addDependency(ND);
    auto AccessSpec = ND->getAccess();
 
@@ -2360,6 +2362,9 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
    case AccessSpecifier::Public:
       return;
    case AccessSpecifier::Private: {
+      if (compilerInstance->getOptions().isTest() && IsTestable(ND))
+         return;
+
       // only visible within the immediate context the symbol was defined in
       auto* Ctx = ND->getDeclContext();
 
@@ -2394,6 +2399,9 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
       break;
    }
    case AccessSpecifier::Protected: {
+      if (compilerInstance->getOptions().isTest() && IsTestable(ND))
+         return;
+
       // Only visible within declaration context or subclasses (should have
       // been rejected outside of classes)
       auto C = cast<ClassDecl>(ND->getNonTransparentDeclContext());
@@ -2424,6 +2432,9 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
       break;
    }
    case AccessSpecifier::FilePrivate: {
+      if (compilerInstance->getOptions().isTest() && IsTestable(ND))
+         return;
+
       // visible within the file it was declared
       auto& FileMgr = compilerInstance->getFileMgr();
       auto DeclID = FileMgr.getSourceId(ND->getSourceLoc());
@@ -2439,6 +2450,9 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
       break;
    }
    case AccessSpecifier::Internal: {
+      if (compilerInstance->getOptions().isTest() && IsTestable(ND))
+         return;
+
       if (getDeclContext().getDeclModule()->getBaseModule()
           == ND->getModule()->getBaseModule()) {
          return;

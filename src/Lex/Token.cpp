@@ -99,6 +99,11 @@ SourceLocation Token::getEndLoc() const
    case tok::macro_name:
       Length = (unsigned)getIdentifierInfo()->getIdentifier().size();
       break;
+   case tok::macro_expression:
+   case tok::macro_statement:
+   case tok::macro_declaration:
+      Length = 0;
+      break;
    default:
       llvm_unreachable("bad token kind");
    }
@@ -140,7 +145,9 @@ void Token::dump() const { print(llvm::errs()); }
 void Token::print(llvm::raw_ostream& OS) const
 {
    if (kind == tok::space) {
-      OS << getText();
+      for (int i = 0; i < Data; ++i)
+         OS << ' ';
+
       return;
    }
 

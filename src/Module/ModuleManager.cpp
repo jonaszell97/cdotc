@@ -172,10 +172,11 @@ ModuleDecl* ModuleManager::GetOrCreateModule(SourceRange Loc,
 
 Module* ModuleManager::GetModule(ArrayRef<IdentifierInfo*> Name)
 {
-   assert(!Name.empty() && "empty module name!");
+   if (Name.empty()) {
+      return nullptr;
+   }
 
-   auto Loc = CI.getMainFileLoc();
-
+   auto Loc = CI.getCompilationModule()->getSourceLoc();
    auto* Mod = LookupModule(Loc, Loc, Name.front());
    if (!Mod)
       return nullptr;

@@ -156,10 +156,6 @@ std::vector<string> getAllFilesInDirectoryImpl(llvm::StringRef dirName)
          break;
 
       auto& st = errOrStatus.get();
-      auto err = entry.status();
-      if (err)
-         break;
-
       switch (st.type()) {
       case Kind::regular_file:
       case Kind::symlink_file:

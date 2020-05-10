@@ -108,6 +108,7 @@ struct CompilerOptions {
       F_RunUnitTests = F_NoDebugIL << 1,
       F_SyntaxOnly = F_RunUnitTests << 1,
       F_Verify = F_SyntaxOnly << 1,
+      F_IsTest = F_Verify << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -186,6 +187,7 @@ public:
    bool runUnitTests() const { return flagIsSet(F_RunUnitTests); }
    bool syntaxOnly() const { return flagIsSet(F_SyntaxOnly); }
    bool shouldVerify() const { return flagIsSet(F_Verify); }
+   bool isTest() const { return flagIsSet(F_IsTest); }
 
    /// Experimental feature checks.
    bool runtimeGenerics() const
@@ -267,10 +269,12 @@ public:
    void setMainSourceFile(StringRef V) { MainSourceFile = V; }
 
    Module* getCompilationModule() const { return CompilationModule; }
-   void setCompilationModule(Module* V) { CompilationModule = V; }
+   void setCompilationModule(Module* V);
 
    ast::FunctionDecl* getMainFn() const { return MainFn; }
    void setMainFn(ast::FunctionDecl* V) { MainFn = V; }
+
+   StringRef getCompilerBinaryPath() const { return CompilerBinary; }
 
    void addModuleSource(unsigned SourceID, ast::ModuleDecl* Mod)
    {
@@ -287,6 +291,9 @@ public:
 private:
    /// The options for this compilation.
    CompilerOptions options;
+
+   /// The path to the invoked compiler binary.
+   StringRef CompilerBinary;
 
    /// The first source location in the first source file.
    SourceLocation MainFileLoc;

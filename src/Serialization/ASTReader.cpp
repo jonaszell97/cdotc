@@ -542,14 +542,11 @@ lex::Token ASTReader::ReadToken(const RecordDataImpl& Record, unsigned& Idx)
    case tok::stringliteral:
    case tok::fpliteral:
    case tok::integerliteral: {
-      auto Size = Record[Idx++];
-      char* Ptr = static_cast<char*>(Context.Allocate(Size, 1));
+      auto Str = ReadString(Record, Idx);
+      char* Ptr = static_cast<char*>(Context.Allocate(Str.size(), 1));
+      std::memcpy(Ptr, Str.data(), Str.size());
 
-      for (unsigned i = 0; i < Size; ++i) {
-         *Ptr++ = static_cast<char>(Record[Idx++]);
-      }
-
-      return Token(Ptr, Size, Kind, Loc);
+      return Token(Ptr, Str.size(), Kind, Loc);
    }
    default:
       return Token(Kind, Loc);
@@ -1275,13 +1272,22 @@ llvm::APFloat ASTReader::ReadAPFloat(const RecordData& Record,
    return llvm::APFloat(Sem, ReadAPInt(Record, Idx));
 }
 
-// Read a string
-std::string ASTReader::ReadString(const RecordData& Record, unsigned& Idx)
+std::string ASTReader::ReadString(const RecordDataImpl& Record, unsigned& Idx)
 {
-   unsigned Len = Record[Idx++];
-   std::string Result(Record.data() + Idx, Record.data() + Idx + Len);
-   Idx += Len;
-   return Result;
+   uint64_t NumBytes = Record[Idx++];
+
+   std::string str;
+   str.resize(NumBytes);
+
+   for (unsigned i = 0; i < NumBytes; i += 8) {
+      uint64_t Value = Record[Idx++];
+      for (unsigned j = 0; j < 8 && i + j < NumBytes; ++j) {
+         char c = (char)(Value >> (j * 8));
+         str[i + j] = c;
+      }
+   }
+
+   return str;
 }
 
 ASTReader::ASTReader(ModuleReader& Reader)
@@ -1296,24 +1302,6 @@ ASTReader::ASTReader(ModuleReader& Reader, ASTReader& DeclReader)
       CurrentImportLoc(Reader.ImportLoc)
 {
 }
-
-// ASTReader::ASTReader(ASTReader &&other) noexcept
-//   : Reader(other.Reader), Sema(other.Sema), Context(other.Context),
-//     FileMgr(other.FileMgr), DeclReader(other.DeclReader),
-//     CurrentImportLoc(other.CurrentImportLoc),
-//     Lookups(move(other.Lookups)), DeclsLoaded(move(other.DeclsLoaded)),
-//     DeclIDMap(move(other.DeclIDMap)), DeclsCursor(move(other.DeclsCursor)),
-//     TypesLoaded(move(other.TypesLoaded)),
-//     ConformanceData(move(other.ConformanceData)),
-//     ConformanceTable(move(other.ConformanceTable)),
-//     InstantiationTable(move(other.InstantiationTable)),
-//     DeclContextMap(move(other.DeclContextMap)),
-//     DeclsLoaded(move(other.DeclsLoaded)),
-//     DeclsLoaded(move(other.DeclsLoaded)),
-//
-//{
-//
-//}
 
 ASTReader::~ASTReader()
 {

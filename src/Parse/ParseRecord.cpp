@@ -732,7 +732,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
 
       Args[0] = SP.MakeSelfArg(ArrowLoc);
       Info.GetterMethod = MethodDecl::Create(
-         Context, AccessSpecifier::Default, ArrowLoc, DN, Type, Args, {},
+         Context, CurDeclAttrs.Access, ArrowLoc, DN, Type, Args, {},
          nullptr, IsStatic);
 
       Info.GetterMethod->setSynthesized(true);
@@ -790,6 +790,10 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             }
             else {
                Mutating = true;
+            }
+
+            if (AS == AccessSpecifier::Default) {
+               AS = CurDeclAttrs.Access;
             }
 
             advance();
@@ -921,6 +925,10 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
                            currentTok().getSourceLoc(), 0);
             }
 
+            if (AS == AccessSpecifier::Default) {
+               AS = CurDeclAttrs.Access;
+            }
+
             SawGetOrSet = true;
 
             DeclarationName DN;
@@ -958,6 +966,10 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
                SP.diagnose(warn_generic_warn,
                            "'nonmutating' is redundant on a getter",
                            MutLoc);
+            }
+
+            if (AS == AccessSpecifier::Default) {
+               AS = CurDeclAttrs.Access;
             }
 
             assert(!Info.GetterMethod
@@ -1362,6 +1374,28 @@ ParseResult Parser::parseMethodDecl()
    else if (!ParsingProtocol && !IsAbstract) {
       SP.diagnose(methodDecl, err_generic_error,
                   "method must have a definition", methodDecl->getSourceLoc());
+   }
+
+   if (IsOperator) {
+      if (methodDecl->isStatic()) {
+         SP.diagnose(err_generic_error, "operator methods cannot be static",
+                     CurDeclAttrs.StaticLoc);
+      }
+
+      if (methodDecl->getDeclName().getKind() == DeclarationName::InfixOperatorName) {
+         if (methodDecl->getArgs().size() != 2) {
+            SP.diagnose(err_generic_error,
+                        "infix operator method must have exactly one argument",
+                        methodDecl->getSourceLoc());
+         }
+      }
+      else {
+         if (methodDecl->getArgs().size() != 1) {
+            SP.diagnose(err_generic_error,
+                        "prefix / postfix operator method must have no arguments",
+                        methodDecl->getSourceLoc());
+         }
+      }
    }
 
    methodDecl->setVararg(varargLoc.isValid());
