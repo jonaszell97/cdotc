@@ -62,7 +62,7 @@ QueryResult CreateILModuleQuery::run()
       }
    }
 
-   if (QC.CI.getOptions().syntaxOnly()) {
+   if (QC.CI.getOptions().syntaxOnly() && !QC.CI.getOptions().shouldVerifyIL()) {
       return finish(nullptr);
    }
 
@@ -106,6 +106,10 @@ QueryResult CreateILModuleQuery::run()
       return fail();
    }
 
+   if (QC.CI.getOptions().shouldVerifyIL()) {
+      return finish(ILMod);
+   }
+
    auto &options = QC.CI.getOptions();
    if (options.emitIL()) {
       finish(ILMod);
@@ -127,7 +131,7 @@ QueryResult CreateILModuleQuery::run()
       llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
 
       if (EC) {
-         QC.Sema->diagnose(err_generic_error, EC.message());
+         QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());
       }
       else {
          QC.EmitIL(OS);

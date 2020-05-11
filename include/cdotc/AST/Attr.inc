@@ -359,6 +359,25 @@ public:
    {}
 };
 
+class InstantiateAttr: public DeclAttr {
+public:
+   static bool classof(const Attr* A) { return classofKind(A->getKind()); }
+   static bool classofKind(AttrKind kind){ return kind == AttrKind::Instantiate; }
+
+
+   void printPretty(llvm::raw_ostream &out) const;
+   InstantiateAttr *clone(ast::ASTContext &Ctx) const;
+
+
+private:
+
+
+public:
+   explicit InstantiateAttr(SourceRange SR = SourceRange())
+      : DeclAttr(AttrKind::Instantiate, SR)
+   {}
+};
+
 class _BuiltinAttr: public DeclAttr {
 public:
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }
@@ -429,9 +448,7 @@ public:
    Attr::VisitationPoint Attr::getVisitationPoint() const {
       switch (kind) {
       default: llvm_unreachable("bad attr kind!");
-         case AttrKind::Align:
-      return AfterSema;
-   case AttrKind::Opaque:
+         case AttrKind::Opaque:
    case AttrKind::DiscardableResult:
    case AttrKind::AutoClosure:
    case AttrKind::Escaping:
@@ -440,14 +457,17 @@ public:
    case AttrKind::NoDerive:
    case AttrKind::ExternallyInitialized:
       return Never;
-   case AttrKind::Inline:
-   case AttrKind::Implicit:
-      return AfterDeclaration;
    case AttrKind::Thin:
    case AttrKind::_Builtin:
    case AttrKind::_Semantics:
    case AttrKind::_Debug:
       return Immediate;
+   case AttrKind::Inline:
+   case AttrKind::Implicit:
+      return AfterDeclaration;
+   case AttrKind::Align:
+   case AttrKind::Instantiate:
+      return AfterSema;
    case AttrKind::Extern:
    case AttrKind::Strong:
    case AttrKind::VersionDecl:
@@ -462,40 +482,42 @@ public:
       default: llvm_unreachable("bad attr kind!");
          case AttrKind::_Debug:
       return false;
-   case AttrKind::ExternallyInitialized:
+   case AttrKind::Instantiate:
       return false;
-   case AttrKind::VersionDecl:
-      return false;
-   case AttrKind::_Builtin:
+   case AttrKind::VersionStmt:
       return false;
    case AttrKind::Strong:
       return false;
    case AttrKind::NoDerive:
       return false;
-   case AttrKind::CompileTime:
-      return true;
    case AttrKind::Testable:
-      return false;
-   case AttrKind::Opaque:
       return false;
    case AttrKind::Escaping:
       return false;
-   case AttrKind::VersionStmt:
+   case AttrKind::ExternallyInitialized:
       return false;
+   case AttrKind::CompileTime:
+      return true;
+   case AttrKind::DiscardableResult:
+      return true;
+   case AttrKind::_Builtin:
+      return false;
+   case AttrKind::VersionDecl:
+      return false;
+   case AttrKind::Inline:
+      return true;
    case AttrKind::Align:
       return false;
    case AttrKind::_Semantics:
       return false;
-   case AttrKind::AutoClosure:
+   case AttrKind::Opaque:
       return false;
-   case AttrKind::DiscardableResult:
-      return true;
    case AttrKind::Implicit:
       return false;
    case AttrKind::Thin:
       return false;
-   case AttrKind::Inline:
-      return true;
+   case AttrKind::AutoClosure:
+      return false;
    case AttrKind::Extern:
       return false;
 
@@ -733,6 +755,18 @@ void ExternallyInitializedAttr::printPretty(llvm::raw_ostream &out) const {
 
 ExternallyInitializedAttr *ExternallyInitializedAttr::clone(ast::ASTContext &Ctx) const {
    return new(Ctx) ExternallyInitializedAttr(SourceLoc);
+}
+
+
+
+void InstantiateAttr::printPretty(llvm::raw_ostream &out) const {
+
+   out << "@" << getSpelling();
+
+}
+
+InstantiateAttr *InstantiateAttr::clone(ast::ASTContext &Ctx) const {
+   return new(Ctx) InstantiateAttr(SourceLoc);
 }
 
 

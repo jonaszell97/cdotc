@@ -1390,8 +1390,7 @@ static bool resolveCandidate(
 
    if (Solutions.size() != 1) {
       if (!Sys.diagnoseAmbiguity(Solutions[0], Solutions[1])) {
-         Sema.diagnose(err_generic_error, "ambiguous solution",
-                       Caller->getSourceRange());
+         Sema.diagnose(err_ambiguous_solution, Caller->getSourceRange());
       }
    }
 
@@ -1567,8 +1566,7 @@ static bool resolveAnonymousCandidate(
 
    if (Solutions.size() != 1) {
       if (!Sys.diagnoseAmbiguity(Solutions[0], Solutions[1])) {
-         Sema.diagnose(err_generic_error, "ambiguous solution",
-                       Caller->getSourceRange());
+         Sema.diagnose(err_ambiguous_solution, Caller->getSourceRange());
       }
    }
 

@@ -23,7 +23,7 @@ void SemaPass::checkDeclAttrs(Decl* D, Attr::VisitationPoint VP)
 #include "cdotc/AST/Attributes.def"
 
       default:
-         llvm_unreachable("bad expr attr");
+         break;
       }
    }
 
@@ -42,7 +42,7 @@ StmtResult SemaPass::visitAttributedStmt(AttributedStmt* Stmt)
 #include "cdotc/AST/Attributes.def"
 
       default:
-         llvm_unreachable("bad expr attr");
+         break;
       }
    }
 
@@ -70,7 +70,7 @@ ExprResult SemaPass::visitAttributedExpr(AttributedExpr* Expr)
 #include "cdotc/AST/Attributes.def"
 
       default:
-         llvm_unreachable("bad expr attr");
+         break;
       }
    }
 
@@ -208,18 +208,6 @@ void SemaPass::check_SemanticsAttr(Decl* D, _SemanticsAttr* A)
    }
 }
 
-// void SemaPass::checkTemplateAttr(Decl *D, TemplateAttr *A)
-//{
-//   auto *ND = cast<NamedDecl>(D);
-//   if (!ND->isTemplate()) {
-//      diagnose(err_generic_error,
-//               "@template is only valid on generic declarations",
-//               A->getSourceRange());
-//   }
-//
-//   ND->setUnboundedTemplate(true);
-//}
-
 void SemaPass::checkStrongAttr(Decl* D, StrongAttr*)
 {
    cast<AliasDecl>(D)->setStrong(true);
@@ -228,6 +216,10 @@ void SemaPass::checkStrongAttr(Decl* D, StrongAttr*)
 void SemaPass::checkVersionStmtAttr(Statement*, VersionStmtAttr*) {}
 
 void SemaPass::checkVersionDeclAttr(Decl*, VersionDeclAttr*) {}
+
+void SemaPass::checkInstantiateAttr(Decl *D, InstantiateAttr *A)
+{
+}
 
 void SemaPass::check_DebugAttr(Decl *D, _DebugAttr *A) {}
 

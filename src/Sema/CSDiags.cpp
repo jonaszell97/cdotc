@@ -42,9 +42,8 @@ static bool diagnoseDisjunctionFailure(ConstraintSystem& Sys,
    }
 
    auto Name = Loc->getPathElements().back().getDeclarationName();
-   Sys.QC.Sema->diagnose(err_generic_error,
-                         "no visible overload of '" + Name.toString()
-                             + "' has type " + RequiredType.toDiagString(),
+   Sys.QC.Sema->diagnose(err_no_visible_overload_with_correct_type,
+                         Name, RequiredType,
                          Loc->getAnchor()->getSourceRange(), RequiredTypeLoc);
 
    for (auto* C : DJ->getConstraints()) {
@@ -58,6 +57,23 @@ static bool diagnoseDisjunctionFailure(ConstraintSystem& Sys,
    }
 
    return true;
+}
+
+static bool IsCastStrengthCompatible(CastStrength Given, CastStrength Needed)
+{
+   if (Needed == CastStrength::Implicit)
+      return Given != CastStrength::Fallible;
+
+   switch (Given) {
+   case CastStrength::Implicit:
+      llvm_unreachable("implicit cast in cast expression?");
+   case CastStrength::Normal:
+      return Needed == CastStrength::Normal;
+   case CastStrength::Fallible:
+      return Needed == CastStrength::Fallible;
+   case CastStrength::Force:
+      return true;
+   }
 }
 
 static bool diagnoseConversionFailure(ConstraintSystem& Sys,
@@ -121,8 +137,30 @@ static bool diagnoseConversionFailure(ConstraintSystem& Sys,
       }
    }
    else {
-      Sys.QC.Sema->diagnose(err_no_implicit_conv, ExprLoc, TypeLoc, BoundTy,
-                            RHSTy);
+      auto ConvSeq = Sys.QC.Sema->getConversionSequence(BoundTy, RHSTy);
+      if (!ConvSeq.isValid()) {
+         if (C->getAllowedStrength() == CastStrength::Implicit) {
+            Sys.QC.Sema->diagnose(err_no_implicit_conv, ExprLoc, TypeLoc,
+                                  BoundTy, RHSTy);
+         }
+         else {
+            Sys.QC.Sema->diagnose(err_no_explicit_cast, BoundTy, RHSTy,
+                ExprLoc, TypeLoc);
+         }
+      }
+      else if (!IsCastStrengthCompatible(C->getAllowedStrength(),
+                                         ConvSeq.getStrength())) {
+         if (ConvSeq.isImplicit()) {
+            Sys.QC.Sema->diagnose(warn_conv_is_implicit,
+                C->getAllowedStrength() == CastStrength::Fallible ? '?' : '!',
+                ExprLoc, TypeLoc);
+         }
+         else {
+            Sys.QC.Sema->diagnose(err_cast_requires_op,
+                BoundTy->removeReference(), RHSTy->removeReference(),
+                (int)ConvSeq.getStrength() - 1, ExprLoc, TypeLoc);
+         }
+      }
    }
 
    return true;
@@ -222,9 +260,8 @@ diagnoseConformanceFailure(ConstraintSystem& Sys, ConformanceConstraint* C,
    }
 
    auto* Loc = C->getLocator();
-   Sys.QC.Sema->diagnose(err_generic_error, BoundTy.toDiagString()
-                           + " does not conform to "
-                           + C->getProtoDecl()->getFullName(), TypeLoc,
+   Sys.QC.Sema->diagnose(err_type_does_not_conform, BoundTy,
+                         C->getProtoDecl()->getFullName(), TypeLoc,
                          Loc->getAnchor()->getSourceLoc());
 
    return true;
@@ -259,18 +296,14 @@ static bool diagnoseMemberFailure(ConstraintSystem& Sys, MemberConstraint* C,
 
    if (LookupRes->empty()) {
       Sys.QC.Sema->diagnose(
-          err_generic_error,
-          "type '" + BoundTy.toDiagString() + "' does not have a member named '"
-              + L->getPathElements().back().getDeclarationName().toString()
-              + "'",
+          err_member_not_found, BoundTy,
+          L->getPathElements().back().getDeclarationName(), false,
           L->getAnchor()->getSourceRange());
    }
    else {
       Sys.QC.Sema->diagnose(
-          err_generic_error,
-          "type '" + BoundTy.toDiagString() + "' does not have a member named '"
-              + L->getPathElements().back().getDeclarationName().toString()
-              + "' of type '" + MemberTy.toDiagString() + "'",
+          err_member_not_found, BoundTy,
+          L->getPathElements().back().getDeclarationName(), true, MemberTy,
           L->getAnchor()->getSourceRange());
 
       for (auto* ND : LookupRes->allDecls()) {
@@ -346,9 +379,7 @@ static bool diagnoseLiteralFailure(ConstraintSystem& Sys, LiteralConstraint* LC,
 
       if (!Conv) {
          // The default type does not conform to the ExpressibleBy* protocol.
-         Sys.QC.Sema->diagnose(err_generic_error,
-                               BoundTy.toDiagString()
-                                   + " is not expressible by " + Desc.str(),
+         Sys.QC.Sema->diagnose(err_not_expressible_by, BoundTy, Desc.str(),
                                ExprLoc, TypeLoc);
 
          return true;
@@ -766,8 +797,7 @@ bool ConstraintSystem::diagnoseAmbiguity(const Solution& S1, const Solution& S2)
       printConstraints(OS);
    }
 
-   QC.Sema->diagnose(err_generic_error, "ambiguous solution for system:\n" + s,
-                     Loc);
+   QC.Sema->diagnose(err_ambiguous_solution, Loc);
 
    std::string s1;
    std::string s2;

@@ -339,6 +339,8 @@ public:
    void setTagged(bool B) { InstBits.IsTagged = B; }
 
    bool isAllZerosValue() const;
+   const llvm::APSInt *getConstantIntegerValue() const;
+   const llvm::APFloat *getConstantFPValue() const;
 
    il::Context& getCtx() const { return type.getCtx(); }
    ast::ASTContext& getASTCtx() const;

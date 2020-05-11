@@ -1930,10 +1930,7 @@ public:
 
       Expression* RetExpr = Ret->getReturnValue();
       if (!canInferReturnExpr(RetExpr)) {
-         Sys.QC.Sema->diagnose(
-             err_generic_error,
-             "cannot infer return type of complex expression, provide manual "
-             "annotation to disambiguate",
+         Sys.QC.Sema->diagnose(err_lambda_complex_return,
              RetExpr->getSourceRange());
 
          FoundBadReturnStmt = true;
@@ -2170,9 +2167,7 @@ QualType ConstraintBuilder::visitAddrOfExpr(AddrOfExpr* Expr, SourceType T)
    }
    else if (!ReferenceTy->isTypeVariableType()
             && !ReferenceTy->isMutableReferenceType()) {
-      Sema.diagnose(Expr, err_generic_error,
-                    "cannot mutably borrow value of type "
-                        + ReferenceTy.toDiagString(),
+      Sema.diagnose(Expr, err_cannot_mutably_borrow, ReferenceTy,
                     Expr->getSourceRange());
 
       EncounteredError = true;

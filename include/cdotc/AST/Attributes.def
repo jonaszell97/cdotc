@@ -29,6 +29,7 @@
    CDOT_DECL_ATTR(Strong, strong)
    CDOT_DECL_ATTR(VersionDecl, version)
    CDOT_DECL_ATTR(ExternallyInitialized, externallyInitialized)
+   CDOT_DECL_ATTR(Instantiate, instantiate)
    CDOT_DECL_ATTR(_Builtin, _builtin)
    CDOT_DECL_ATTR(_Semantics, _semantics)
    CDOT_DECL_ATTR(_Debug, _debug)

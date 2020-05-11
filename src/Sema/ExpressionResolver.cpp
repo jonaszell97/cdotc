@@ -218,7 +218,7 @@ Expression* ExprResolverImpl::ParseUnaryExpression()
             break;
          }
 
-         SP.diagnose(ExprSeq, err_generic_error, "expected expression");
+         SP.diagnose(ExprSeq, err_expected_expression);
          return nullptr;
       }
 
@@ -520,8 +520,8 @@ Expression* ExprResolverImpl::ParseExpression(Expression* LHS,
          diagnoseUnexpectedExpr();
       }
       else {
-         SP.diagnose(ExprSeq, err_generic_error, lookahead().getLoc(),
-                     lookahead().asString() + " is not an operator");
+         SP.diagnose(ExprSeq, err_not_an_operator, lookahead().getLoc(),
+                     lookahead().asString());
       }
 
       return nullptr;

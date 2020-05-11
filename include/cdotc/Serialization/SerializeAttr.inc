@@ -37,6 +37,8 @@ void ASTAttrWriter::visitVersionStmtAttr(VersionStmtAttr *A) {
 }
 void ASTAttrWriter::visitExternallyInitializedAttr(ExternallyInitializedAttr *A) {
 }
+void ASTAttrWriter::visitInstantiateAttr(InstantiateAttr *A) {
+}
 void ASTAttrWriter::visit_BuiltinAttr(_BuiltinAttr *A) {
    Record.AddIdentifierRef(&Idents.get(A->getBuiltinName()));
 }
@@ -100,6 +102,9 @@ VersionStmtAttr *ASTAttrReader::readVersionStmtAttr(SourceRange SR) {
 }
 ExternallyInitializedAttr *ASTAttrReader::readExternallyInitializedAttr(SourceRange SR) {
    return new(C) ExternallyInitializedAttr(SR);
+}
+InstantiateAttr *ASTAttrReader::readInstantiateAttr(SourceRange SR) {
+   return new(C) InstantiateAttr(SR);
 }
 _BuiltinAttr *ASTAttrReader::read_BuiltinAttr(SourceRange SR) {
    auto builtinName = Record.getIdentifierInfo()->getIdentifier();

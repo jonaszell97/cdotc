@@ -95,8 +95,10 @@ void MemLocBuilder::visitGEPInst(const il::GEPInst& I)
 {
    visit(I.getOperand(0));
 
-   auto CI = dyn_cast<ConstantInt>(I.getIndex());
-   if (!CI) {
+   if (auto *IntVal = I.getIndex()->getConstantIntegerValue()) {
+      AddInteger(IntVal->getZExtValue());
+   }
+   else {
       // if we need an exact memory loc, we can't reason about a non-constant
       // GEP index
       if (Exact) {
@@ -106,9 +108,6 @@ void MemLocBuilder::visitGEPInst(const il::GEPInst& I)
 
       // otherwise we need to be conservative - assume that the entire
       // location so far is accessed
-   }
-   else {
-      AddInteger(CI->getZExtValue());
    }
 }
 

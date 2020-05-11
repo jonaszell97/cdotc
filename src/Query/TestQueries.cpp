@@ -83,6 +83,9 @@ struct Task {
 
       /// Verify the program and check that all expected diagnostics occur.
       VERIFY,
+
+      /// Verify the program and IL and check that all expected diagnostics occur.
+      VERIFY_IL,
    };
 
    /// C'tor.
@@ -159,6 +162,9 @@ static void ParseTasks(StringRef File, SmallVectorImpl<Task> &Tasks)
          auto &Task = Tasks.back();
          TaskStr.split(Task.Args, ' ');
       }
+      else if (TaskStr.startswith("VERIFY-IL")) {
+         Tasks.emplace_back(Task::VERIFY_IL);
+      }
       else if (TaskStr.startswith("VERIFY")) {
          Tasks.emplace_back(Task::VERIFY);
       }
@@ -169,6 +175,10 @@ static void ParseTasks(StringRef File, SmallVectorImpl<Task> &Tasks)
 
          TaskStr = TaskStr.drop_front(6);
          Tasks.back().OutputChecks.push_back(TaskStr);
+      }
+      else if (TaskStr.startswith("SKIP")) {
+         Tasks.clear();
+         return;
       }
    }
 
@@ -226,6 +236,9 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
          switch (Task.Kind) {
          case Task::VERIFY:
             args[2] = "-verify";
+            break;
+         case Task::VERIFY_IL:
+            args[2] = "-verify-with-il";
             break;
          case Task::RUN:
             args[2] = "";
@@ -362,8 +375,7 @@ QueryResult RunTestModuleQuery::run()
        "cdotc", QC.CI.getCompilerBinaryPath().drop_back(STR_LEN("cdotc")));
 
    if (!cdotcOrError) {
-      QC.Sema->diagnose(err_generic_error,
-          "'cdotc' executable could not be found");
+      QC.Sema->diagnose(err_executable_not_found, "cdotc");
       return fail();
    }
 
@@ -381,6 +393,7 @@ QueryResult RunTestModuleQuery::run()
        "-o", executable.c_str(),
        "-import=core.test",
        "-is-test",
+       "-error-limit=0",
        nullptr,
    };
 
@@ -392,8 +405,7 @@ QueryResult RunTestModuleQuery::run()
 
    llvm::raw_fd_ostream LogOS(LogFileName, EC, llvm::sys::fs::F_RW);
    if (EC) {
-      QC.Sema->diagnose(err_generic_error,
-          "error opening test log file: " + EC.message());
+      QC.Sema->diagnose(err_cannot_open_file, LogFileName, true, EC.message());
 
       return fail();
    }

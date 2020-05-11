@@ -102,9 +102,7 @@ checkProtocolDefaultDecl(SemaPass& SP, ProtocolDecl* P, ExtensionDecl* Ext,
       }
 
       if (!AT->getType()->isMetaType()) {
-         SP.diagnose(
-            err_generic_error,
-            "associated type implementation must refer to a type",
+         SP.diagnose(err_associated_type_impl_must_be_type,
             AT->getSourceRange());
 
          return false;
@@ -235,15 +233,15 @@ void SemaPass::checkProtocolExtension(ExtensionDecl* Ext, ProtocolDecl* P)
    for (auto* D : Ext->getDecls()) {
       auto* ND = dyn_cast<NamedDecl>(D);
       if (!ND) {
-         diagnose(err_generic_error, "cannot appear in protocol extension",
+         diagnose(err_invalid_in_protocol_extension,
                   D->getSourceLoc());
 
          continue;
       }
 
-      if (isa<FieldDecl>(D)) {
-         diagnose(D, err_generic_error,
-                  "'var / let' is not allowed in protocols", D->getSourceLoc());
+      if (auto *F = dyn_cast<FieldDecl>(D)) {
+         diagnose(D, err_var_let_invalid_in_protocol, F->isConst(),
+             D->getSourceLoc());
 
          continue;
       }
@@ -395,8 +393,7 @@ void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
    }
 
    if (D->isDefault() && !isa<ExtensionDecl>(DC)) {
-      diagnose(err_generic_error, "'default' is only allowed in protocol extensions",
-               D->getSourceLoc());
+      diagnose(err_default_only_in_protocol_extension, D->getSourceLoc());
    }
 
    switch (D->getKind()) {
@@ -517,10 +514,9 @@ void SemaPass::ActOnRecordDecl(DeclContext* DC, RecordDecl* R)
 
    if (auto *Outer = dyn_cast<NamedDecl>(DC)) {
       if (Outer->isTemplate()) {
-         diagnose(err_generic_error, "templates cannot contain nested types",
-             R->getSourceLoc());
-         diagnose(note_generic_note, "template declared here",
-                  Outer->getSourceLoc());
+         diagnose(err_template_nested_type, R->getSourceLoc());
+         diagnose(note_template_declared_here,
+                  Outer->getDeclName(), Outer->getSourceLoc());
       }
    }
 
@@ -642,6 +638,10 @@ void SemaPass::ActOnExtensionDecl(DeclContext* DC, ExtensionDecl* E)
 
 void SemaPass::ActOnOperatorDecl(DeclContext* DC, OperatorDecl* Op)
 {
+   if (!isa<SourceFileDecl>(DC) && !isa<ModuleDecl>(DC)) {
+      diagnose(Op, err_must_be_top_level, 1, Op->getSourceLoc());
+   }
+
    if (Op->isExternal()) {
       auto OpName = Op->getDeclName().getDeclaredOperatorName();
       switch (OpName.getKind()) {
@@ -668,6 +668,10 @@ void SemaPass::ActOnOperatorDecl(DeclContext* DC, OperatorDecl* Op)
 void SemaPass::ActOnPrecedenceGroupDecl(DeclContext* DC,
                                         PrecedenceGroupDecl* PG)
 {
+   if (!isa<SourceFileDecl>(DC) && !isa<ModuleDecl>(DC)) {
+      diagnose(PG, err_must_be_top_level, 0, PG->getSourceLoc());
+   }
+
    // Precedence groups are always visible at the top level.
    if (!PG->isExternal()) {
       addDeclToContext(*QC.CI.getCompilationModule()->getDecl(), PG);
@@ -718,7 +722,7 @@ void SemaPass::ActOnFieldDecl(DeclContext* DC, FieldDecl* F)
    }
 
    if (isa<ProtocolDecl>(DC)) {
-      diagnose(F, err_generic_error, "'var / let' is not allowed in protocols",
+      diagnose(F, err_var_let_invalid_in_protocol, F->isConst(),
                F->getSourceLoc());
    }
 }
@@ -726,12 +730,6 @@ void SemaPass::ActOnFieldDecl(DeclContext* DC, FieldDecl* F)
 void SemaPass::ActOnFunctionDecl(DeclContext* DC, FunctionDecl* F)
 {
    ActOnCallableDecl(*this, F);
-
-   bool IsMain = F->getDeclName().isStr("main") && F->isExternC();
-   if (IsMain) {
-      diagnose(F, err_generic_error,
-               "'extern C' function may not be called 'main'");
-   }
 
    if (F->getDeclName().isSimpleIdentifier()
        && F->getDeclName().getIdentifierInfo()->getIdentifier().startswith(
@@ -1324,9 +1322,7 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
    Ty.setTypeExpr(Result.get());
 
    if (!ResTy->isMetaType()) {
-      diagnose(err_generic_error, "expression does not evaluate to a type",
-          Ty.getTypeExpr()->getSourceRange());
-
+      diagnose(err_not_type, Ty.getTypeExpr()->getSourceRange());
       ResTy = Context.getMetaType(ResTy);
    }
 
@@ -1894,7 +1890,7 @@ Expression* SemaPass::resolveMacroExpansionExpr(MacroExpansionExpr* Expr)
    if (auto* Ident = cast_or_null<DeclRefExpr>(Expr->getParentExpr())) {
       Ctx = dyn_cast<DeclContext>(Ident->getDecl());
       if (!Ctx) {
-         diagnose(err_generic_error, "invalid macro lookup context",
+         diagnose(err_invalid_macro_lookup, Ident->getDecl(),
              Ident->getSourceRange());
       }
    }
@@ -1938,11 +1934,11 @@ StmtResult SemaPass::visitMacroExpansionStmt(MacroExpansionStmt* Stmt)
    if (auto* Ident = cast_or_null<DeclRefExpr>(Stmt->getParentExpr())) {
       Ctx = dyn_cast<DeclContext>(Ident->getDecl());
       if (!Ctx) {
-         diagnose(err_generic_error, "invalid macro lookup context",
+         diagnose(err_invalid_macro_lookup, Ident->getDecl(),
                   Ident->getSourceRange());
       }
    }
-   else if (Stmt->getParentExpr()) {
+   else if (Stmt->getParentExpr()) {//err_invalid_macro_lookup
       diagnose(err_generic_error, "invalid macro lookup context",
                Ident->getSourceRange());
    }

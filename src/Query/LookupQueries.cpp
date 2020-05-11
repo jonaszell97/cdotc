@@ -64,10 +64,9 @@ static void CheckTemplateExtension(QueryContext &QC, ExtensionDecl *Ext,
 {
    for (auto *D : Ext->getDecls()) {
       if (isa<RecordDecl>(D)) {
-         QC.Sema->diagnose(err_generic_error,
-             "templates cannot contain nested types", D->getSourceLoc());
-         QC.Sema->diagnose(note_generic_note,
-             "template declared here", Template->getSourceLoc());
+         QC.Sema->diagnose(err_template_nested_type, D->getSourceLoc());
+         QC.Sema->diagnose(note_template_declared_here, Template->getDeclName(),
+             Template->getSourceLoc());
       }
    }
 }
@@ -122,8 +121,7 @@ QueryResult FindExtensionsQuery::run()
       if (!isProtocol) {
          for (auto *Decl : Ext->getDecls()) {
             if (Decl->isDefault()) {
-               QC.Sema->diagnose(err_generic_error,
-                  "'default' is only allowed in protocol extensions",
+               QC.Sema->diagnose(err_default_only_in_protocol_extension,
                   Decl->getSourceLoc());
 
                Decl->setDefault(false);

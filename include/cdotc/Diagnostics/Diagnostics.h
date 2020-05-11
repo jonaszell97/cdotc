@@ -111,6 +111,7 @@ public:
 
    DiagnosticBuilder& operator<<(size_t i);
    DiagnosticBuilder& operator<<(int i);
+   DiagnosticBuilder& operator<<(char c);
    DiagnosticBuilder& operator<<(unsigned i) { return *this << (int)i; }
 
    DiagnosticBuilder& operator<<(const ast::NamedDecl* decl);

@@ -138,7 +138,7 @@ MemoryRestriction BorrowCheckPass::getRestriction(il::Value* V,
           MemoryRestriction::MutableBorrow | MemoryRestriction::Move, Loc);
    }
    case MemoryUse::MutableBorrow: {
-      // a mutable borrows prevents all uses
+      // a mutable borrow prevents all uses
       return MemoryRestriction(MemoryRestriction::Use, Loc);
    }
    }
@@ -402,17 +402,6 @@ void BorrowCheckPass::run()
                              visit(I, Gen, Kill);
                           },
                           false);
-
-   //   if (F->getName()=="_CNW4mainE6_startEv") {
-   //      int i = 2;
-   //      for (auto &B : *F) {
-   //         llvm::outs()<<B.getName()<<"\n";
-   //         llvm::outs()<<"   IN = "<<InMap[&B][i]<<"\n";
-   //         llvm::outs()<<"   OUT = "<<OutMap[&B][i]<<"\n";
-   //         llvm::outs()<<"   GEN = "<<GenMap[&B][i]<<"\n";
-   //         llvm::outs()<<"   KILL = "<<KillMap[&B][i]<<"\n";
-   //      }
-   //   }
 
    // check for overlapping borrows
    for (auto& B : *F) {

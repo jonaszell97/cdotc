@@ -100,15 +100,16 @@ void AccessPathBuilder::visitBitCastInst(const il::BitCastInst& I)
 
 void AccessPathBuilder::visitGEPInst(const il::GEPInst& I)
 {
-   auto CI = dyn_cast<ConstantInt>(I.getIndex());
-   if (!CI) {
+   visit(I.getOperand(0));
+
+   if (auto *IntVal = I.getIndex()->getConstantIntegerValue()) {
+      OS << "[" << *IntVal << "]";
+   }
+   else {
       // otherwise we need to be conservative - assume that the entire
       // location so far is accessed
-      return;
+      OS << "[?]";
    }
-
-   visit(I.getOperand(0));
-   OS << "[" << CI->getValue() << "]";
 }
 
 void AccessPathBuilder::visitFieldRefInst(const il::FieldRefInst& I)

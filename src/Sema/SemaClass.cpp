@@ -231,16 +231,16 @@ static bool resolveBaseClass(QueryContext& QC, ClassDecl* D)
    }
 
    if (!BaseTy->isRecordType()) {
-      QC.Sema->diagnose(BaseTypeSource.getTypeExpr(), err_generic_error,
-                        "cannot extend non-class " + BaseTy.toDiagString());
+      QC.Sema->diagnose(BaseTypeSource.getTypeExpr(), err_extending_non_class,
+                        BaseTy);
 
       return true;
    }
 
    auto* BaseClass = dyn_cast<ClassDecl>(BaseTy->getRecord());
    if (!BaseClass) {
-      QC.Sema->diagnose(BaseTypeSource.getTypeExpr(), err_generic_error,
-                        "cannot extend non-class " + BaseTy.toDiagString());
+      QC.Sema->diagnose(BaseTypeSource.getTypeExpr(), err_extending_non_class,
+                        BaseTy);
 
       return true;
    }
@@ -274,10 +274,7 @@ bool SemaPass::canUseClass(SourceLocation Loc)
 
    if (missingFn != nullptr) {
       diagnose(
-          err_generic_error,
-          std::string(
-              "'class' cannot be used because the builtin declaration for '")
-              + missingFn + "' is missing",
+          err_class_cannot_be_used, missingFn,
           Loc);
 
       auto& options = getCompilerInstance().getOptions();
@@ -331,6 +328,10 @@ QueryResult TypecheckClassQuery::run()
       return fail();
    }
 
+   if (QC.Sema->checkIfAbstractMethodsOverridden(D)) {
+      return fail();
+   }
+
    return finish();
 }
 
@@ -353,9 +354,7 @@ QueryResult ResolveRawTypeQuery::run()
 
          bool Conforms = QC.Sema->ConformsTo(res.get(), Hashable);
          if (!Conforms) {
-            QC.Sema->diagnose(err_generic_error,
-                              "enum raw type must conform to 'Hashable', "
-                                  + res.get()->toString() + " given",
+            QC.Sema->diagnose(err_enum_raw_type_not_hashable, res.get(),
                               E->getSourceLoc());
          }
          else {
@@ -363,9 +362,7 @@ QueryResult ResolveRawTypeQuery::run()
          }
       }
       else {
-         QC.Sema->diagnose(err_generic_error,
-                           "enum raw type must conform to 'Hashable'"
-                               + res.get()->toString() + " given",
+         QC.Sema->diagnose(err_enum_raw_type_not_hashable, res.get(),
                            E->getSourceLoc());
       }
    }
@@ -587,14 +584,7 @@ QueryResult PrepareMethodInterfaceQuery::run()
       return fail();
    }
 
-   // Check if this is the `copy` function of this type.
-   if (D->getDeclName().isStr("copy") && !D->isStatic()
-       && D->getArgs().size() == 1 && D->getReturnType()->isRecordType()
-       && D->getReturnType()->getRecord() == D->getRecord()) {
-      QC.RecordMeta[D->getRecord()].CopyFn = D;
-   }
-
-   // check virtual and override methods after all signatures (most
+   // Check virtual and override methods after all signatures (most
    // importantly those of base classes) are available.
    QC.Sema->checkVirtualOrOverrideMethod(D);
 
@@ -1142,8 +1132,8 @@ void SemaPass::checkVirtualOrOverrideMethod(MethodDecl* M)
       return;
 
    if (!isa<ClassDecl>(M->getRecord())) {
-      // virtual methods may only appear in a class declaration
-      if (M->isVirtualOrOverride()) {
+      // Virtual methods may only appear in a class declaration
+      if (M->isVirtualOrOverride() || M->isAbstract()) {
          if (!isa<ClassDecl>(M->getRecord())) {
             diagnose(M, err_virt_method_outside_class, M->isOverride(),
                      M->getSourceLoc());
@@ -1151,6 +1141,10 @@ void SemaPass::checkVirtualOrOverrideMethod(MethodDecl* M)
       }
 
       return;
+   }
+
+   if (!M->getRecord()->isAbstract() && M->isAbstract()) {
+      diagnose(M, err_abstract_in_non_abstract_class, M->getSourceLoc());
    }
 
    if (M->isVirtualOrOverride()) {
@@ -1221,11 +1215,12 @@ void SemaPass::checkVirtualOrOverrideMethod(MethodDecl* M)
    M->setOverridenMethod(OverridenMethod);
 }
 
-void SemaPass::checkIfAbstractMethodsOverridden(ClassDecl* R)
+bool SemaPass::checkIfAbstractMethodsOverridden(ClassDecl* R)
 {
    if (R->isAbstract())
-      return;
+      return false;
 
+   bool error = false;
    auto* Base = R->getParentClass();
    while (Base) {
       for (auto* M : Base->getDecls<MethodDecl>()) {
@@ -1235,7 +1230,8 @@ void SemaPass::checkIfAbstractMethodsOverridden(ClassDecl* R)
          bool found = false;
          const SingleLevelLookupResult* Candidates;
          if (QC.LookupFirst(Candidates, R, M->getDeclName())) {
-            return;
+            error = true;
+            continue;
          }
 
          for (auto& Cand : *Candidates) {
@@ -1255,11 +1251,14 @@ void SemaPass::checkIfAbstractMethodsOverridden(ClassDecl* R)
                      M->getDeclName(), Base->getDeclName(), R->getSourceLoc());
 
             diagnose(note_declared_here, M->getSourceLoc());
+            error = true;
          }
       }
 
       Base = Base->getParentClass();
    }
+
+   return error;
 }
 
 LLVM_ATTRIBUTE_UNUSED

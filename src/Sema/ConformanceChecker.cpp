@@ -1330,8 +1330,7 @@ bool ConformanceCheckerImpl::checkAssociatedType(RecordDecl* Rec,
    }
 
    if (!isa<AliasDecl>(Impl) && !isa<RecordDecl>(Impl)) {
-      Sema.diagnose(err_generic_error,
-                    "associated type implementation must be an alias or a record",
+      Sema.diagnose(err_associated_type_impl_must_be_alias,
                     Impl->getSourceLoc());
 
       return false;
@@ -1519,7 +1518,7 @@ NamedDecl* ConformanceCheckerImpl::checkPropImpl(RecordDecl *Rec,
 
    if (Prop->isReadWrite() && !FoundProp->isReadWrite()) {
       genericError(Rec, Proto);
-      Sema.diagnose(err_generic_error, "expected property to be read-write",
+      Sema.diagnose(note_incorrect_protocol_impl_must_be_read_write,
                     Prop->getSourceLoc());
 
       return nullptr;
@@ -1527,7 +1526,7 @@ NamedDecl* ConformanceCheckerImpl::checkPropImpl(RecordDecl *Rec,
 
    if (!Prop->isReadWrite() && FoundProp->isReadWrite()) {
       genericError(Rec, Proto);
-      Sema.diagnose(err_generic_error, "expected property not to be read-write",
+      Sema.diagnose(note_incorrect_protocol_impl_must_not_be_read_write,
                     Prop->getSourceLoc());
 
       return nullptr;
@@ -2581,8 +2580,7 @@ static void diagnoseCircularConformance(QueryContext &QC, CanType Self,
                                         UncheckedConformance& outer,
                                         DeclContext *introducedBy) {
    QC.Sema->diagnose(
-       err_generic_error,
-       "protocol " + Self->toDiagString() + " cannot conform to itself",
+       err_conform_to_itself, Self,
        cast<NamedDecl>(introducedBy)->getSourceLoc());
 
    SmallVector<ProtocolDecl*, 4> Chain { proto };
@@ -2595,7 +2593,7 @@ static void diagnoseCircularConformance(QueryContext &QC, CanType Self,
 
    Chain.push_back(proto);
 
-   std::string str = "Conformance chain: ";
+   std::string str = "conformance chain: ";
    {
       llvm::raw_string_ostream OS(str);
       for (int i = Chain.size() - 1; i >= 0; --i) {
@@ -2948,6 +2946,10 @@ bool ConformanceResolver::BuildWorklist()
    }
 
    for (auto *DC : DeclContexts) {
+      if (isa<ProtocolDecl>(DC)) {
+         continue;
+      }
+
       error |= BuildWorklist(DC);
    }
 
@@ -3619,10 +3621,8 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
          }
 
          if (foundImpl) {
-            QC.Sema->diagnose(
-                err_generic_error, "'" + R->getFullName() +
-                "' has multiple conflicting implementations for associated type '"
-                    + AT->getFullName() + "'", R->getSourceLoc());
+            QC.Sema->diagnose(err_conflicting_associated_type_impls,
+                R->getFullName(), AT->getFullName(), R->getSourceLoc());
 
             QC.Sema->diagnose(note_candidate_here, foundImpl->getSourceLoc());
             QC.Sema->diagnose(note_candidate_here, Impl->getSourceLoc());
@@ -3980,8 +3980,7 @@ QueryResult CheckAssociatedTypeConstraintsQuery::run()
 
          if (!Impl->isTypedef()) {
             QC.Sema->diagnose(
-               err_generic_error,
-               "associated type implementation must refer to a type",
+               err_associated_type_impl_must_be_type,
                Impl->getSourceRange());
 
             QC.Sema->diagnose(note_generic_note,

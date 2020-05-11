@@ -409,6 +409,11 @@ bool Parser::skipUntilNextDeclOrClosingBrace()
 
 ParseResult Parser::skipUntilProbableEndOfStmt()
 {
+   if (currentTok().is(tok::eof)) {
+      lexer->backtrack();
+      return ParseError();
+   }
+
    while (!lookahead().oneOf(tok::newline, tok::semicolon, tok::eof,
                              tok::open_brace, tok::close_paren,
                              tok::close_square, tok::close_brace)
@@ -420,6 +425,11 @@ ParseResult Parser::skipUntilProbableEndOfStmt()
 
 ParseResult Parser::skipUntilProbableEndOfStmt(cdot::lex::tok::TokenType kind)
 {
+   if (currentTok().is(tok::eof)) {
+      lexer->backtrack();
+      return ParseError();
+   }
+
    while (!lookahead().oneOf(kind, tok::newline, tok::semicolon, tok::eof,
                              tok::open_brace, tok::close_paren,
                              tok::close_square, tok::close_brace)
@@ -2326,7 +2336,11 @@ Expression* Parser::parseFloatingPointLiteral()
                    SourceLocation(Offset + text.size()));
 
    llvm::APFloat APF(0.0);
-   (void)APF.convertFromString(text, llvm::APFloat::rmNearestTiesToEven);
+   auto Status = APF.convertFromString(text, llvm::APFloat::rmNearestTiesToEven);
+   if ((Status & llvm::APFloat::opOverflow) != 0
+   || (Status & llvm::APFloat::opUnderflow) != 0) {
+      SP.diagnose(warn_inexact_fp, currentTok().getSourceLoc());
+   }
 
    cdot::Type* Ty;
    FPLiteral::Suffix suffix = FPLiteral::Suffix::None;
@@ -3197,8 +3211,7 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
    }
 
    if (!ignoreDeclAttrs && CurDeclAttrs.AccessLoc) {
-      SP.diagnose(err_generic_error,
-                  "local variables cannot have an access specifier",
+      SP.diagnose(err_access_not_allowed_here,
                   CurDeclAttrs.AccessLoc);
    }
 
@@ -3475,6 +3488,27 @@ ParseResult Parser::parseFunctionDecl()
    auto DefLoc = currentTok().getSourceLoc();
    advance();
 
+   if (currentTok().oneOf(tok::kw_mutating)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 0,
+          currentTok().getSourceLoc());
+      advance();
+   }
+   else if (currentTok().oneOf(Ident_nonmutating)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 1,
+          currentTok().getSourceLoc());
+      advance();
+   }
+   else if (currentTok().oneOf(tok::kw_abstract)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 2,
+          currentTok().getSourceLoc());
+      advance();
+   }
+   else if (currentTok().oneOf(Ident_override)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 3,
+          currentTok().getSourceLoc());
+      advance();
+   }
+
    bool IsOperator = false;
 
    FixKind Fix;
@@ -3493,12 +3527,12 @@ ParseResult Parser::parseFunctionDecl()
       funcName = parseOperatorName(Fix, isCastOp);
    }
    else {
-      if (!expectToken(tok::ident)) {
-         if (!findTokOnLine(tok::ident))
-            return skipUntilProbableEndOfStmt();
+      if (expectToken(tok::ident)) {
+         funcName = currentTok().getIdentifierInfo();
       }
-
-      funcName = currentTok().getIdentifierInfo();
+      else if (currentTok().oneOf(tok::open_paren, tok::eof)) {
+         lexer->backtrack();
+      }
    }
 
    auto templateParams = tryParseTemplateParameters();
@@ -4549,7 +4583,7 @@ ParseResult Parser::parseForStmt(IdentifierInfo* Label)
 {
    if (lookahead().is(tok::triple_period)) {
       if (Label != nullptr) {
-         SP.diagnose(err_generic_error, "for... statement cannot be labeled",
+         SP.diagnose(err_for_ellipsis_labeled,
                      currentTok().getSourceLoc());
       }
 
@@ -4909,6 +4943,7 @@ ParseResult Parser::parseKeyword()
    case tok::kw_private:
    case tok::kw_internal:
    case tok::kw_abstract:
+   case tok::kw_mutating:
       return parseNextDecl();
    default:
       SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
@@ -4922,8 +4957,7 @@ ParseResult Parser::parseKeyword()
 ParseResult Parser::parseTopLevelDecl()
 {
    if (CurDeclAttrs.Default) {
-      SP.diagnose(err_generic_error,
-                  "top-level declarations cannot be marked 'default'",
+      SP.diagnose(err_default_only_in_protocol_extension,
                   CurDeclAttrs.DefaultLoc);
 
       CurDeclAttrs.Default = false;
@@ -4932,11 +4966,13 @@ ParseResult Parser::parseTopLevelDecl()
    if (currentTok().is(tok::at))
       return parseAttributedDecl();
 
-   if (currentTok().is(Ident_deinit))
-      return parseGlobalDtor();
+   if (currentTok().is(tok::ident)) {
+      if (currentTok().is(Ident_deinit))
+         return parseGlobalDtor();
 
-   if (currentTok().is(Ident_unittest))
-      return parseUnittestDecl();
+      if (currentTok().is(Ident_unittest))
+         return parseUnittestDecl();
+   }
 
    auto Tok = currentTok();
    auto kind = Tok.getKind();
@@ -5069,8 +5105,7 @@ ParseResult Parser::parseTopLevelDecl()
    }
    case tok::kw_for: {
       if (!lookahead().is(tok::triple_period)) {
-         SP.diagnose(err_generic_error,
-                     "only 'for...' declarations can appear at the top level",
+         SP.diagnose(err_unexpected_kw, "for", true, "for...",
                      currentTok().getSourceLoc());
       }
 
@@ -5690,11 +5725,12 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
       case tok::kw_private:
       case tok::kw_internal:
       case tok::kw_protected:
+         if (CurDeclAttrs.Access != AccessSpecifier::Default) {
+            SP.diagnose(err_duplicate_access_spec, currentTok().getSourceLoc());
+         }
+
          CurDeclAttrs.Access = tokenToAccessSpec(currentTok().getKind());
          CurDeclAttrs.AccessLoc = currentTok().getSourceLoc();
-         break;
-      case tok::kw_abstract:
-         CurDeclAttrs.Abstract = true;
          break;
       case tok::kw_static:
          if (lookahead().oneOf(tok::kw_if, tok::kw_for)) {
@@ -5704,11 +5740,24 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
 
          CurDeclAttrs.StaticLoc = currentTok().getSourceLoc();
          break;
+      case tok::kw_mutating:
+         SP.diagnose(err_keyword_after_def, 0, currentTok().getSourceLoc());
+         break;
+      case tok::kw_abstract:
+         CurDeclAttrs.Abstract = true;
+         break;
       case tok::ident: {
          auto* II = currentTok().getIdentifierInfo();
          if (II == Ident_default) {
             CurDeclAttrs.Default = true;
             CurDeclAttrs.DefaultLoc = currentTok().getSourceLoc();
+         }
+         else if (II == Ident_nonmutating) {
+            SP.diagnose(err_keyword_after_def, 1, currentTok().getSourceLoc());
+         }
+         else if (II == Ident_override) {
+            SP.diagnose(err_keyword_after_def, 3,
+                        currentTok().getSourceLoc());
          }
          else {
             done = true;
@@ -5743,6 +5792,13 @@ ParseResult Parser::parseNextDecl()
       Result = parseTopLevelDecl();
    }
 
+   if (Result.isValid() && !isa<ImportDecl>(Result.getDecl())) {
+      FoundNonImportDecl = true;
+   }
+   if (CurDeclAttrs.Abstract && Result.isValid() && !isa<ClassDecl>(Result.getDecl())) {
+      SP.diagnose(err_keyword_after_def, 2, currentTok().getSourceLoc());
+   }
+
    assert((int)Prev.Access <= 5 && "bad access specifier");
    popDeclAttrs(Prev);
 
@@ -5760,21 +5816,29 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
       return parseAttributedStmt();
    }
 
-   if (currentTok().is(Ident_do) && lookahead(false).is(tok::open_brace))
-      return parseDoStmt();
+   if (currentTok().is(tok::ident)) {
+      if (currentTok().is(Ident_do) && lookahead(false).is(tok::open_brace))
+         return parseDoStmt();
 
-   if (currentTok().is(Ident_unsafe)) {
-      advance();
+      if (currentTok().is(Ident_unsafe)) {
+         advance();
 
-      auto Stmt = parseNextStmt(true);
-      if (Stmt)
-         Stmt.getStatement()->setUnsafe(true);
+         auto Stmt = parseNextStmt(true);
+         if (Stmt)
+            Stmt.getStatement()->setUnsafe(true);
 
-      return Stmt;
+         return Stmt;
+      }
+
+      if (currentTok().is(Ident_macro))
+         return parseMacro();
+
+      if (currentTok().oneOf(Ident_nonmutating, Ident_override,
+                             Ident_precedenceGroup, Ident_infix, Ident_prefix,
+                             Ident_postfix)) {
+         return parseNextDecl();
+      }
    }
-
-   if (currentTok().is(Ident_macro))
-      return parseMacro();
 
    ParseResult stmt;
 
@@ -6171,6 +6235,10 @@ ParseResult Parser::parseModuleDecl()
 
 ParseResult Parser::parseImportDecl()
 {
+   if (FoundNonImportDecl) {
+      SP.diagnose(err_import_not_at_begin, currentTok().getSourceLoc());
+   }
+
    bool Wildcard = false;
    auto ImportLoc = consumeToken();
    SmallVector<DeclarationName, 2> ImportedNames;
@@ -6338,12 +6406,18 @@ void Parser::parseMainFile()
 
          auto nextStmt = parseNextStmt(false);
          if (nextStmt.holdsStatement()) {
+            FoundNonImportDecl = true;
             Stmts.push_back(nextStmt.getStatement());
          }
          else if (nextStmt.holdsExpr()) {
+            FoundNonImportDecl = true;
             Stmts.push_back(nextStmt.getExpr());
          }
          else if (nextStmt.holdsDecl()) {
+            if (!isa<ImportDecl>(nextStmt.getDecl())) {
+               FoundNonImportDecl = true;
+            }
+
             Stmts.push_back(DeclStmt::Create(Context, nextStmt.getDecl()));
          }
          else {

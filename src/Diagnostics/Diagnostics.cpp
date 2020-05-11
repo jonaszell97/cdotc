@@ -669,6 +669,11 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(int i)
    return *this << (size_t)i;
 }
 
+DiagnosticBuilder& DiagnosticBuilder::operator<<(char c)
+{
+   return *this << (std::string() + c);
+}
+
 DiagnosticBuilder& DiagnosticBuilder::operator<<(size_t i)
 {
    Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_integer;

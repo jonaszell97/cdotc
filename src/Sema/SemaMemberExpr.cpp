@@ -2211,7 +2211,7 @@ void SemaPass::diagnoseMemberNotFound(DeclContext* Ctx, StmtOrDecl Subject,
          case Decl::ProtocolDeclID: {
             auto ND = cast<NamedDecl>(Ctx);
             diagnose(Subject, err_member_not_found, SR, ND, ND->getDeclName(),
-                     memberName);
+                     memberName, false);
 
             return;
          }
@@ -2219,7 +2219,7 @@ void SemaPass::diagnoseMemberNotFound(DeclContext* Ctx, StmtOrDecl Subject,
          case Decl::NamespaceDeclID: {
             auto ND = cast<NamedDecl>(Ctx);
             diagnose(Subject, err_member_not_found, SR, ND, ND->getFullName(),
-                     memberName);
+                     memberName, false);
 
             return;
          }
@@ -2341,11 +2341,12 @@ static bool IsTestable(NamedDecl* ND)
 
    auto* DC = ND->getNonTransparentDeclContext()->lookThroughExtension();
    while (DC) {
+      DC = DC->lookThroughExtension();
       if (isa<NamedDecl>(DC) && cast<NamedDecl>(DC)->hasAttribute<TestableAttr>()) {
          return true;
       }
 
-      DC = DC->getParentCtx()->lookThroughExtension();
+      DC = DC->getParentCtx();
    }
 
    return false;

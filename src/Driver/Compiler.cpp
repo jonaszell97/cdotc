@@ -74,6 +74,9 @@ static cl::opt<bool> IsTest("is-test", cl::desc("this file is a test"));
 /// If true, the compiler verifies against expected diagnostic comments.
 static cl::opt<bool> Verify("verify", cl::desc("verify expected diagnostics"));
 
+/// If true, the compiler verifies against expected diagnostic comments.
+static cl::opt<bool> VerifyIL("verify-with-il", cl::desc("verify expected diagnostics"));
+
 /// If given, IL will be emitted without debug info even if it is created.
 static cl::opt<bool> DebugIL("fdebug-il", cl::desc("emit IL with "
                                                    "debug info"));
@@ -261,12 +264,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
          auto FileName = ScratchBuf.str();
          if (ScratchBuf.endswith("dotm")) {
             if (FoundModule) {
-               Sema->diagnose(err_generic_error, "cannot compile more than one "
-                                                 "module per compilation");
+               Sema->diagnose(err_only_one_module);
             }
             if (FoundOther) {
-               Sema->diagnose(err_generic_error,
-                              "cannot compile other files along with a module");
+               Sema->diagnose(err_module_and_source_files);
             }
 
             FoundModule = true;
@@ -289,7 +290,7 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       EmitModules = true;
    }
    else if (EmitModules) {
-      Sema->diagnose(err_generic_error, "no module file specified");
+      Sema->diagnose(err_no_module_file);
       EmitModules = false;
    }
 
@@ -370,6 +371,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    }
    if (RunUnitTests) {
       options.setFlag(CompilerOptions::F_RunUnitTests, true);
+   }
+   if (VerifyIL) {
+      options.setFlag(CompilerOptions::F_VerifyIL, true);
+      Verify = true;
    }
    if (Verify) {
       options.setFlag(CompilerOptions::F_Verify, true);
@@ -577,7 +582,7 @@ public:
       Sema.getDiags().setConsumer(DiagConsumer);
 
       for (auto &ExpectedDiag : ExpectedDiagnostics) {
-         Sema.diagnose(err_generic_error, "expected diagnostic not issued",
+         Sema.diagnose(err_expected_diag_not_issued,
              ExpectedDiag.RawLoc.getStart());
       }
    }
@@ -859,7 +864,8 @@ int CompilerInstance::compile()
       llvm::raw_fd_ostream OS(options.getOutFile(), EC, llvm::sys::fs::F_RW);
 
       if (EC) {
-         Sema->diagnose(err_generic_error, EC.message());
+         Sema->diagnose(err_cannot_open_file, options.getOutFile(),
+             true, EC.message());
          error = true;
          break;
       }

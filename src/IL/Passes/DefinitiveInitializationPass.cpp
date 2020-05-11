@@ -725,6 +725,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
    if (It == MemoryLocs.end())
       return;
 
+   int selector = -1;
    auto Status = It->getSecond()->getInitializationState(MustGen, MayGen);
 
    bool IsValidUse = true;
@@ -732,11 +733,19 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
    case LocalVariable::FullyInitialized:
       break;
    case LocalVariable::NotInitialized:
+      if (I.isUnused()) {
+         break;
+      }
+
+      selector = 2;
+      IsValidUse = false;
+      break;
    case LocalVariable::MaybeUninitialized:
       if (I.isUnused()) {
          break;
       }
 
+      selector = 0;
       IsValidUse = false;
       break;
    case LocalVariable::PartiallyInitialized: {
@@ -751,6 +760,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
          break;
       }
 
+      selector = 3;
       IsValidUse = Use->isIndexingInstruction();
       break;
    }
@@ -766,6 +776,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
       F->setInvalid(true);
 
       Sema.diagnose(Decl, err_uninitialized_local, Decl->getDeclName(),
+                    selector,
                     I.getSourceLoc());
 
       Sema.diagnose(note_uninitialized_declared_here, Decl->getSourceLoc());
