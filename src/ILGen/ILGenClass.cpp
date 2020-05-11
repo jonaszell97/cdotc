@@ -1009,11 +1009,10 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl* M, RecordDecl* R)
    }
 
    auto* BoolVal = Builder.CreateAlloca(M->getReturnType());
-   auto* Ld = Builder.CreateLoad(BoolVal);
-   auto* GEP = Builder.CreateStructGEP(Ld, 0);
+   auto* GEP = Builder.CreateStructGEP(BoolVal, 0);
    Builder.CreateStore(res, GEP);
 
-   Builder.CreateRet(Ld);
+   Builder.CreateRet(Builder.CreateLoad(BoolVal));
 }
 
 void ILGenPass::DefineImplicitHashableConformance(MethodDecl* M, RecordDecl*) {}

@@ -873,9 +873,6 @@ llvm::Type* IRGen::getGlobalType(CanType Ty) { return getStorageType(Ty); }
 
 void IRGen::DeclareFunction(il::Function const* F)
 {
-   if (F->getName()=="_CNW4libc6assertE22__NSConstantString_tagD0ERS_L0") {
-      NO_OP;
-   }
    IRGenPrettyStackTraceEntry PSE(*F);
    auto funcTy = F->getType()->asFunctionType();
 

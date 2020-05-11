@@ -704,14 +704,12 @@ QueryResult VerifyConstraintQuery::run()
             QC.Sema->diagnose(ConstrainedDecl, err_member_not_found,
                               cast<NamedDecl>(CurCtx),
                               cast<NamedDecl>(CurCtx)->getDeclName(),
-                              Ident->getIdentifier(), C->SR);
+                              Ident->getIdentifier(), false, C->SR);
          }
          else {
-            QC.Sema->diagnose(ConstrainedDecl, err_generic_error,
-                              LookupTy.toDiagString()
-                                  + " does not have a member named "
-                                  + Ident->getIdentifier().str(),
-                              C->SR);
+            QC.Sema->diagnose(ConstrainedDecl, err_member_not_found,
+                              LookupTy.toDiagString(), Ident->getIdentifier(),
+                              false ,C->SR);
          }
 
          return fail();
@@ -1665,8 +1663,7 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
          Loc = D->getSourceLoc();
       }
 
-      QC.Sema->diagnose(D, err_generic_error,
-                        "function arguments may not be of type 'void'", Loc);
+      QC.Sema->diagnose(D, err_invalid_parameter_type, "void", Loc);
    }
 
    // Check if this argument is variadic.

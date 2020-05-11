@@ -58,13 +58,13 @@ ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind)
 
    if (head.ColonLoc && !isa<ClassDecl>(decl)) {
       SP.diagnose(
-          err_generic_error, "only classes can have an inheritance clause",
+          err_inheritance_clause_on_non_class,
           head.ColonLoc);
    }
 
    if (head.OpenParenLoc && !isa<EnumDecl>(decl)) {
       SP.diagnose(
-          err_generic_error, "only enums can define a raw type",
+          err_raw_type_on_non_enum,
           head.OpenParenLoc);
    }
 
@@ -86,8 +86,14 @@ ParseResult Parser::parseAnyRecord(lex::tok::TokenType kind)
 ParseResult Parser::parseExtension()
 {
    auto Loc = consumeToken(tok::kw_extend);
-   auto ExtendedType = parseType(false, true, true).tryGet();
+   if (currentTok().is(tok::smaller)) {
+      SP.diagnose(err_extension_template_params, currentTok().getSourceLoc());
+      lexer->backtrack();
+      tryParseTemplateParameters();
+      advance();
+   }
 
+   auto ExtendedType = parseType(false, true, true).tryGet();
    if (!ExtendedType) {
       if (!findTokOnLine(tok::open_brace)) {
          skipUntilNextDecl();
@@ -186,8 +192,7 @@ ParseResult Parser::parseRecordLevelDecl()
          break;
       case tok::ident: {
          if (currentTok().is(Ident_macro)) {
-            SP.diagnose(err_generic_error,
-                        "macros cannot be members of a type",
+            SP.diagnose(err_macro_must_be_top_level,
                         currentTok().getSourceLoc());
 
             return parseMacro();
@@ -199,8 +204,7 @@ ParseResult Parser::parseRecordLevelDecl()
          return parseCompoundDecl(false, false);
       case tok::kw_for: {
          if (!lookahead().is(tok::triple_period)) {
-            SP.diagnose(err_generic_error,
-                        "only 'for...' declarations can appear in records",
+            SP.diagnose(err_unexpected_kw, "for", true, "for...",
                         currentTok().getSourceLoc());
          }
 
@@ -382,7 +386,7 @@ ParseResult Parser::parseRecordLevelDecl()
    }
 
    if (!DefaultValid && CurDeclAttrs.Default) {
-      SP.diagnose(err_generic_error, "declaration cannot be marked 'default'",
+      SP.diagnose(err_default_only_in_protocol_extension,
                   CurDeclAttrs.DefaultLoc, selector);
    }
 
@@ -499,10 +503,7 @@ ParseResult Parser::parseConstrDecl()
          R->setExplicitMemberwiseInit(true);
       }
       else {
-         SP.diagnose(err_generic_error,
-                     "'memberwise init' declaration cannot"
-                     " appear here",
-                     currentTok().getSourceLoc());
+         SP.diagnose(err_memberwise_init_invalid, currentTok().getSourceLoc());
       }
 
       return ParseError();
@@ -543,8 +544,7 @@ ParseResult Parser::parseConstrDecl()
       body = parseCompoundStmt().tryGetStatement();
    }
    else if (!ParsingProtocol) {
-      SP.diagnose(Init, err_generic_error, "initializer must have a definition",
-                  Init->getSourceLoc());
+      SP.diagnose(Init, err_must_have_definition, Init, Init->getSourceLoc());
    }
 
    Init->setBody(body);
@@ -639,7 +639,7 @@ ParseResult Parser::parseFieldDecl()
             ? Info.GetterMethod->getSourceLoc()
             : Info.SetterMethod->getSourceLoc();
 
-         SP.diagnose(err_generic_error, "field accessor cannot have a body", loc);
+         SP.diagnose(err_field_accessor_defined, loc);
       }
 
       std::string newFieldName = "_";
@@ -664,7 +664,7 @@ ParseResult Parser::parseFieldDecl()
       if (Info.SetterMethod) {
          auto loc = Info.SetterMethod->getSourceLoc();
          if (isConst) {
-            SP.diagnose(err_generic_error, "'let' field cannot have a 'set' accessor", loc);
+            SP.diagnose(err_set_accessor_on_const, fieldName, loc);
          }
 
          auto *self = DeclRefExpr::Create(Context, Info.SetterMethod->getArgs()[0], loc);
@@ -754,6 +754,7 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
 
       AccessSpecifier AS = AccessSpecifier::Default;
       bool SawGetOrSet = false;
+      bool NotReadWrite = false;
 
       next = lookahead();
       while (!next.is(tok::close_brace)) {
@@ -802,8 +803,8 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             next = lookahead();
             if (!next.oneOf(Ident_get, Ident_read, Ident_set, Ident_write)) {
                SP.diagnose(
-                   err_generic_error,
-                   "expected 'get', 'set' or 'read' after '" + next.toString() + "'",
+                   err_expected_x_after_y, "'get', 'set' or 'read'",
+                   next.toString(),
                    next.getSourceLoc());
             }
          }
@@ -816,15 +817,24 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             }
 
             if (next.is(Ident_write)) {
-               Info.IsReadWrite = true;
+               if (NotReadWrite) {
+                  SP.diagnose(err_read_write_invalid, 0,
+                              next.getSourceLoc());
+               }
+               else {
+                  Info.IsReadWrite = true;
+               }
             }
             else if (Info.IsReadWrite) {
-               SP.diagnose(err_generic_error,
-                           "expected 'write' to go along with 'read'",
+               SP.diagnose(err_read_write_invalid, 1,
                            next.getSourceLoc());
             }
+            else {
+               NotReadWrite = true;
+            }
 
-            auto SetLoc = consumeToken();
+            advance();
+            auto SetLoc = currentTok().getSourceLoc();
             if (Info.SetterMethod) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 1);
@@ -911,15 +921,25 @@ void Parser::parseAccessor(SourceLocation Loc, IdentifierInfo* Name,
             }
 
             if (next.is(Ident_read)) {
-               Info.IsReadWrite = true;
+               if (NotReadWrite) {
+                  SP.diagnose(err_read_write_invalid, 1,
+                              next.getSourceLoc());
+               }
+               else {
+                  Info.IsReadWrite = true;
+               }
             }
             else if (Info.IsReadWrite) {
-               SP.diagnose(err_generic_error,
-                           "expected 'read' to go along with 'write'",
+               SP.diagnose(err_read_write_invalid, 0,
                            next.getSourceLoc());
             }
+            else {
+               NotReadWrite = true;
+            }
 
-            auto GetLoc = consumeToken();
+            advance();
+
+            auto GetLoc = currentTok().getSourceLoc();
             if (Info.GetterMethod) {
                SP.diagnose(err_duplicate_getter_setter,
                            currentTok().getSourceLoc(), 0);
@@ -1038,7 +1058,8 @@ ParseResult Parser::parsePropDecl()
    advance();
 
    if (!currentTok().is(tok::colon)) {
-      SP.diagnose(err_prop_must_have_type, currentTok().getSourceLoc(),
+      lexer->backtrack();
+      SP.diagnose(err_prop_must_have_type, BeginLoc,
                   0 /*property*/);
    }
    else {
@@ -1109,9 +1130,7 @@ ParseResult Parser::parseSubscriptDecl()
 ParseResult Parser::parseAssociatedType()
 {
    if (!ParsingProtocol) {
-      SP.diagnose(err_generic_error,
-                  "'associatedType' declarations may only appear in protocols, "
-                  "implement them with an alias instead",
+      SP.diagnose(err_associated_type_impl_use_alias,
                   currentTok().getSourceLoc());
    }
 
@@ -1249,6 +1268,11 @@ ParseResult Parser::parseMethodDecl()
          IsOverride = true;
          advance();
       }
+      else if (currentTok().is(Ident_nonmutating)) {
+         SP.diagnose(err_invalid_function_attr, Decl::MethodDeclID,
+                     1, currentTok().getSourceLoc());
+         advance();
+      }
       else {
          switch (currentTok().getKind()) {
          case tok::kw_mutating:
@@ -1282,8 +1306,14 @@ ParseResult Parser::parseMethodDecl()
    if (IsOperator) {
       methodName = parseOperatorName(Fix, isConversionOp);
    }
-   else {
+   else if (currentTok().is(tok::ident)) {
       methodName = currentTok().getIdentifierInfo();
+   }
+   else {
+      errorUnexpectedToken(currentTok(), tok::ident);
+      if (currentTok().oneOf(tok::open_paren, tok::eof)) {
+         lexer->backtrack();
+      }
    }
 
    auto templateParams = tryParseTemplateParameters();

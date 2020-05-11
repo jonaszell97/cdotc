@@ -100,7 +100,7 @@ PatternFragment* MacroParser::parsePattern()
    auto Penultimate = parseInnerPattern(Begin);
 
    auto End = PatternFragment::Create(SP.getContext());
-   Penultimate->addTransition(Token(tok::eof), End);
+   Penultimate->addTransition(P.lexer->makeEOF(), End);
 
    return Begin;
 }
@@ -978,7 +978,7 @@ ParseResult Parser::parseMacroExpansionExpr(Expression* ParentExpr)
       }
    }
 
-   Toks.emplace_back(tok::eof);
+   Toks.emplace_back(tok::eof, currentTok().getSourceLoc());
 
    SourceRange SR(BeginLoc, currentTok().getEndLoc());
    return MacroExpansionExpr::Create(Context, SR, MacroName, Delim, Toks,
@@ -1050,7 +1050,7 @@ ParseResult Parser::parseMacroExpansionStmt(Expression* ParentExpr)
       }
    }
 
-   Toks.emplace_back(tok::eof);
+   Toks.emplace_back(tok::eof, currentTok().getSourceLoc());
 
    SourceRange SR(BeginLoc, currentTok().getEndLoc());
    return MacroExpansionStmt::Create(Context, SR, MacroName, ParentExpr, Delim,
@@ -1122,7 +1122,7 @@ ParseResult Parser::parseMacroExpansionDecl(Expression* ParentExpr)
       }
    }
 
-   Toks.emplace_back(tok::eof);
+   Toks.emplace_back(tok::eof, currentTok().getSourceLoc());
    SourceRange SR(BeginLoc, currentTok().getEndLoc());
 
    auto Decl = MacroExpansionDecl::Create(Context, SR, MacroName, ParentExpr,
@@ -1263,6 +1263,9 @@ class PatternMatcher {
    /// Reasons for failed pattern matches.
    std::vector<MatchFailureReason> FailureReasons;
 
+   /// Transitions to check.
+   SmallVector<StateTransition, 2> TransitionsToCheck;
+
    bool compatibleTokens(const Token& Given, const Token& Needed);
    bool moveNext();
 
@@ -1338,8 +1341,14 @@ void PatternMatcher::diagnose(MacroDecl* D)
          printTok(Reason.ExpectedTok1, Tok1OS);
          printTok(Reason.ExpectedTok2, Tok2OS);
 
-         parser.SP.diagnose(Reason.msg, Reason.GivenTok.getSourceLoc(),
-                            Tok1OS.str(), Tok2OS.str(), GivenOS.str());
+         if (Reason.ExpectedTok2) {
+            parser.SP.diagnose(Reason.msg, Reason.GivenTok.getSourceLoc(),
+                               Tok1OS.str(), Tok2OS.str(), GivenOS.str());
+         }
+         else {
+            parser.SP.diagnose(Reason.msg, Reason.GivenTok.getSourceLoc(),
+                               Tok1OS.str(), false, GivenOS.str());
+         }
 
          parser.SP.diagnose(diag::note_pattern_here, Reason.PatternLoc);
          break;
@@ -1379,7 +1388,16 @@ bool PatternMatcher::moveNext()
    PatternFragment* UnconditionalTransition = nullptr;
    PatternFragment* VariableTransition = nullptr;
 
-   for (auto& Trans : State->getTransitions()) {
+   auto Transitions = State->getTransitions();
+   TransitionsToCheck.clear();
+   TransitionsToCheck.append(Transitions.begin(), Transitions.end());
+
+   SourceLocation neededLoc;
+   lex::Token neededTok1;
+   lex::Token neededTok2;
+
+   for (size_t i = 0; i < TransitionsToCheck.size(); ++i) {
+      auto &Trans = TransitionsToCheck[i];
       if (!Trans)
          continue;
 
@@ -1388,21 +1406,32 @@ bool PatternMatcher::moveNext()
             VariableTransition = Trans.Next;
          }
          else {
-            UnconditionalTransition = Trans.Next;
+            auto NextTransitions = Trans.Next->getTransitions();
+            TransitionsToCheck.append(NextTransitions.begin(),
+                                      NextTransitions.end());
          }
       }
       else if (Trans.isEOF() && parser.currentTok().is(tok::eof)) {
          NextState = Trans.Next;
          break;
       }
-      else if (compatibleTokens(parser.currentTok(), Trans.Tok)) {
-         NextState = Trans.Next;
+      else {
+         if (compatibleTokens(parser.currentTok(), Trans.Tok)) {
+            NextState = Trans.Next;
 
-         if (Trans.IsConsuming) {
-            parser.advance();
+            if (Trans.IsConsuming) {
+               parser.advance();
+            }
+
+            break;
          }
-
-         break;
+         else if (!neededTok1) {
+            neededLoc = Trans.Next->getLoc();
+            neededTok1 = Trans.Tok;
+         }
+         else if (!neededTok2) {
+            neededTok2 = Trans.Tok;
+         }
       }
    }
 
@@ -1415,9 +1444,8 @@ bool PatternMatcher::moveNext()
       }
       else {
          FailureReasons.emplace_back(
-             diag::note_pattern_not_viable_expected_tok, State->getLoc(),
-             State->getTransitions()[0].Tok, State->getTransitions()[1].Tok,
-             parser.currentTok());
+             diag::note_pattern_not_viable_expected_tok, neededLoc,
+             neededTok1, neededTok2, parser.currentTok());
 
          return false;
       }
@@ -1467,6 +1495,11 @@ bool PatternMatcher::moveNext()
          break;
       }
       case PatternFragment::Tok: {
+         if (parser.currentTok().is(tok::eof)) {
+            FailureReasons.emplace_back();
+            return false;
+         }
+
          auto It = VarMap.find(NextState->getVariableName());
          if (It == VarMap.end()) {
             It = VarMap
@@ -1909,7 +1942,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
          ++CloseParens;
          break;
       case tok::eof:
-         SP.diagnose(err_unexpected_eof, ExpansionToks[i].getSourceLoc());
+         SP.diagnose(err_unexpected_eof, true, ExpansionToks[i].getSourceLoc());
          return true;
       default:
          break;
@@ -1939,20 +1972,20 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
                OS << Tok.getText();
                break;
             case tok::macro_expression:
-               SP.diagnose(err_generic_error,
-                           "macro expression argument cannot be stringified",
+               SP.diagnose(err_macro_argument_cannot_be_stringified,
+                           "expression",
                            Tok.getSourceLoc());
 
                break;
             case tok::macro_statement:
-               SP.diagnose(err_generic_error,
-                           "macro statement argument cannot be stringified",
+               SP.diagnose(err_macro_argument_cannot_be_stringified,
+                           "statement",
                            Tok.getSourceLoc());
 
                break;
             case tok::macro_declaration:
-               SP.diagnose(err_generic_error,
-                           "macro declaration argument cannot be stringified",
+               SP.diagnose(err_macro_argument_cannot_be_stringified,
+                           "declaration",
                            Tok.getSourceLoc());
 
                break;
@@ -1986,8 +2019,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       }
       else {
          SP.diagnose(
-             err_generic_error,
-             "'counter!' expects an integer literal as its only argument",
+             err_counter_expects,
              Tokens.front().getSourceLoc());
 
          counterIndex = 0;
@@ -2013,11 +2045,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
          nameIndex = 0;
       }
       else {
-         SP.diagnose(err_generic_error,
-                     "'unique_name!' expects an integer literal as its only "
-                     "argument",
-                     Tokens.front().getSourceLoc());
-
+         SP.diagnose(err_unique_name_expects, Tokens.front().getSourceLoc());
          nameIndex = 0;
       }
 
@@ -2026,7 +2054,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
    case BuiltinMacro::include:
    case BuiltinMacro::include_str: {
       if (Tokens.size() != 1 || !Tokens.front().is(tok::stringliteral)) {
-         SP.diagnose(err_generic_error, "expected string literal");
+         SP.diagnose(err_unexpected_token, Tokens.front(), true, "string literal");
          return true;
       }
 
@@ -2057,7 +2085,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       }
 
       if (realFile.empty()) {
-         SP.diagnose(err_generic_error, "file " + FileName + " not found",
+         SP.diagnose(err_cannot_open_file, FileName, true, "not found",
                      Tokens.front().getSourceLoc());
 
          return true;
@@ -2090,7 +2118,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       ClangImporter& Importer = SP.getCompilerInstance().getClangImporter();
 
       if (Tokens.size() != 1 || !Tokens.front().is(tok::stringliteral)) {
-         SP.diagnose(err_generic_error, "expected string literal");
+         SP.diagnose(err_unexpected_token, Tokens.front(), true, "string literal");
          return true;
       }
 

@@ -82,8 +82,7 @@ static Expression* expressionFromNumericConstantToken(ImporterImpl& I,
    if (Literal.GetIntegerValue(ResultVal)) {
       // If this value didn't fit into uintmax_t, error and force to ull.
       I.CI.getSema().diagnose(diag::err_generic_error,
-                              "integer literal too "
-                              "wide",
+                              "integer literal too wide",
                               SR);
 
       Ty = Ctx.getUInt128Ty();

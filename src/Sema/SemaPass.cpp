@@ -445,8 +445,7 @@ ExprResult SemaPass::typecheckExpr(Expression* Expr, SourceType RequiredType,
       // Solve again, this time stopping after the first failure.
       Sys.solve(Solutions, true);
       if (!Sys.diagnoseFailure(Builder.Bindings)) {
-         diagnose(err_generic_error, "expression does not typecheck",
-                  Expr->getSourceRange());
+         diagnose(err_does_not_typecheck, Expr->getSourceRange());
 
 #ifndef NDEBUG
          std::string s;
@@ -474,8 +473,7 @@ ExprResult SemaPass::typecheckExpr(Expression* Expr, SourceType RequiredType,
 
    if (Solutions.size() != 1) {
       if (!Sys.diagnoseAmbiguity(Solutions[0], Solutions[1])) {
-         diagnose(err_generic_error, "ambiguous solution",
-                  Expr->getSourceRange());
+         diagnose(err_ambiguous_solution, Expr->getSourceRange());
       }
    }
 
@@ -2722,9 +2720,7 @@ ExprResult SemaPass::visitNoneLiteral(NoneLiteral* Expr)
    }
 
    if (!Expr->isInvalid()) {
-      diagnose(Expr, err_generic_error,
-               Ty.toString()
-                   + " does not conform to 'ExpressibleByNoneLiteral'",
+      diagnose(Expr, err_type_does_not_conform, Ty, "ExpressibleByNoneLiteral",
                Expr->getSourceRange());
    }
 
@@ -2906,11 +2902,7 @@ static MethodDecl* conformsToTruthValue(SemaPass& Sema, QualType CondTy,
    }
 
    if (!Sema.ConformsTo(CondTy, TruthValue)) {
-      Sema.diagnose(SOD, err_generic_error,
-                    "value used in binding statement must conform to "
-                    "'TruthValue'",
-                    SR);
-
+      Sema.diagnose(SOD, err_binding_invalid_truth_value, SR);
       return nullptr;
    }
 
@@ -2936,10 +2928,7 @@ static MethodDecl* conformsToTruthValue(SemaPass& Sema, QualType CondTy,
    }
 
    if (!ConformingRec) {
-      Sema.diagnose(SOD, err_generic_error,
-                    "value used in binding statement must conform to "
-                    "'TruthValue'",
-                    SR);
+      Sema.diagnose(SOD, err_binding_invalid_truth_value, SR);
 
       return nullptr;
    }
@@ -3029,10 +3018,7 @@ void SemaPass::visitIfConditions(Statement* Stmt,
                continue;
             }
 
-            diagnose(Stmt, err_generic_error,
-                     "value used in binding statement must conform to "
-                     "'Unwrappable'",
-                     CondExpr->getSourceRange());
+            diagnose(Stmt, err_binding_not_unwrappable, CondExpr->getSourceRange());
 
             return;
          }
@@ -3061,10 +3047,7 @@ void SemaPass::visitIfConditions(Statement* Stmt,
          }
 
          if (!ConformingRec) {
-            diagnose(Stmt, err_generic_error,
-                     "value used in binding statement must conform to "
-                     "'Unwrappable'",
-                     CondExpr->getSourceRange());
+            diagnose(Stmt, err_binding_not_unwrappable, CondExpr->getSourceRange());
 
             return;
          }
@@ -3535,9 +3518,7 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 
          if (!returnType->isRecordType() || returnType->getRecord() != BoolDecl) {
             diagnose(
-                Expr, err_generic_error,
-                "'~=' operator used in a match statement must return Bool",
-                Expr->getSourceRange());
+                Expr, err_match_op_must_be_bool, Expr->getSourceRange());
          }
       }
 
@@ -3568,8 +3549,8 @@ static ExprResult matchEnum(SemaPass& SP, CasePattern* Expr,
    auto* E = cast<EnumDecl>(Case->getRecord());
    if (!MatchVal->getExprType()->isRecordType()
        || E != MatchVal->getExprType()->getRecord()) {
-      SP.diagnose(Expr, err_generic_error, "cannot match values",
-                  Expr->getSourceLoc());
+      SP.diagnose(Expr, err_invalid_match, MatchVal->getExprType(),
+                  E->getType(), Expr->getSourceLoc());
 
       return ExprError();
    }
@@ -3644,8 +3625,8 @@ static ExprResult matchEnum(SemaPass& SP, CasePattern* Expr,
             }
             else {
                if (MatchVal->getExprType()->isNonMutableReferenceType()) {
-                  SP.diagnose(Expr, err_generic_error, "value is not mutable",
-                              Expr->getSourceLoc());
+                  SP.diagnose(Expr, err_match_val_not_mutable,
+                      Expr->getSourceLoc());
                }
 
                CaseArgTy = Context.getMutableReferenceType(
@@ -3762,13 +3743,13 @@ static ExprResult matchStruct(SemaPass& SP, CasePattern* Expr,
 {
    if (!MatchVal->getExprType()->isRecordType()
        || S != MatchVal->getExprType()->getRecord()) {
-      SP.diagnose(Expr, err_generic_error, "cannot match values",
+      SP.diagnose(Expr, err_invalid_match, MatchVal->getExprType(), S->getType(),
                   Expr->getSourceLoc());
 
       return ExprError();
    }
    if (S->getStoredFields().size() != Expr->getArgs().size()) {
-      SP.diagnose(Expr, err_generic_error, "cannot match values",
+      SP.diagnose(Expr, err_invalid_match, MatchVal->getExprType(), S->getType(),
                   Expr->getSourceLoc());
 
       return ExprError();
@@ -3791,7 +3772,7 @@ static ExprResult matchTuple(SemaPass& SP, CasePattern* Expr,
    QualType Ty = MatchVal->getExprType();
    if (!Ty->isTupleType()
        || Ty->asTupleType()->getArity() != Expr->getArgs().size()) {
-      SP.diagnose(Expr, err_generic_error, "cannot match values",
+      SP.diagnose(Expr, err_invalid_match,  Ty, Expr->getExprType(),
                   Expr->getSourceLoc());
 
       return ExprError();
@@ -3810,7 +3791,7 @@ static ExprResult matchArray(SemaPass& SP, CasePattern* Expr,
    QualType Ty = MatchVal->getExprType();
    if (!Ty->isArrayType()
        || Ty->asArrayType()->getNumElements() != Expr->getArgs().size()) {
-      SP.diagnose(Expr, err_generic_error, "cannot match values",
+      SP.diagnose(Expr, err_invalid_match, Ty, Expr->getExprType(),
                   Expr->getSourceLoc());
 
       return ExprError();
@@ -3872,7 +3853,7 @@ ExprResult SemaPass::visitCasePattern(CasePattern* Expr, Expression* MatchVal)
             ParentTy = ParentTy->asMetaType()->getUnderlyingType();
 
          if (!ParentTy->isRecordType()) {
-            diagnose(Expr, err_generic_error, "cannot lookup member in type",
+            diagnose(Expr, err_cannot_lookup_member_in_type, ParentTy,
                      Expr->getSourceRange());
 
             return ExprError();
@@ -3905,7 +3886,7 @@ ExprResult SemaPass::visitCasePattern(CasePattern* Expr, Expression* MatchVal)
    case Decl::StructDeclID:
       return matchStruct(*this, Expr, MatchVal, cast<StructDecl>(ND));
    default:
-      diagnose(Expr, err_generic_error, "cannot match values",
+      diagnose(Expr, err_invalid_match, Expr->getExprType(), ND->getFullName(),
                Expr->getSourceLoc());
       return ExprError();
    }
@@ -4541,7 +4522,7 @@ Optional<bool> SemaPass::evaluateAsBool(StmtOrDecl DependentStmt,
    }
 
    bool Val;
-   if (QC.GetBoolValue(Val, Res.getValue())) {
+   if (QC.GetBoolValue(Val, Res.getValue())) {//err_value_not_boolean
       diagnose(expr, err_generic_error, "expected boolean value",
                expr->getSourceRange());
 

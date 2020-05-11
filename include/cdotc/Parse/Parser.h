@@ -311,6 +311,7 @@ private:
 
    bool DiscardDecls = false;
    bool UnboundedByDefault = false;
+   bool FoundNonImportDecl = false;
 
    lex::Lexer* lexer;
    SemaPass& SP;

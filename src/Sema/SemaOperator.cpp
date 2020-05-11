@@ -330,8 +330,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr* Expr)
    Expr->setRhs(rhs);
 
    if (isa<SelfExpr>(lhs) && lhs->getExprType()->removeReference()->isClass()) {
-      diagnose(Expr, err_generic_error, "cannot assign to 'self' in a class",
-               Expr->getSourceRange());
+      diagnose(Expr, err_self_assign, Expr->getSourceRange());
    }
 
    if (!lhs->getExprType()->isMutableReferenceType()) {
@@ -340,9 +339,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr* Expr)
                   Expr->getSourceRange());
       }
       else if (!lhs->getExprType()->isReferenceType()) {
-         diagnose(Expr, err_generic_error,
-                  "cannot assign to non-mutable reference",
-                  Expr->getSourceRange());
+         diagnose(Expr, err_reassign_constant, Expr->getSourceRange());
       }
 
       Expr->setExprType(Context.getVoidType());
@@ -473,7 +470,8 @@ ExprResult SemaPass::visitCastExpr(CastExpr* Cast)
          RHSRange = E->getSourceRange();
 
       if (ConvSeq.isImplicit()) {
-         diagnose(Cast, err_generic_error, "conversion is implicit",
+         diagnose(Cast, warn_conv_is_implicit,
+                  Cast->getStrength() == CastStrength::Fallible ? '?' : '!',
                   Cast->getAsLoc(), LHSRange, RHSRange);
       }
       else {
@@ -527,9 +525,7 @@ ExprResult SemaPass::visitAddrOfExpr(AddrOfExpr* Expr)
 
    QualType T = Expr->getTarget()->getExprType();
    if (!T->isMutableReferenceType()) {
-      diagnose(Expr, err_generic_error,
-               "cannot mutably borrow value of type " + T.toDiagString(),
-               Expr->getSourceRange());
+      diagnose(Expr, err_cannot_mutably_borrow, T, Expr->getSourceRange());
    }
 
    Expr->setExprType(Context.getMutableReferenceType(T->removeReference()));

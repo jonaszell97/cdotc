@@ -65,6 +65,8 @@ public:
    void lexDiagnostic();
    void lexStringInterpolation();
 
+   void findComments();
+
    llvm::StringRef getCurrentIdentifier() const;
 
    enum class Mode : int {
@@ -158,8 +160,6 @@ public:
    SourceLocation getSourceLoc() const { return CurTok.getSourceLoc(); }
    IdentifierTable& getIdents() const { return Idents; }
 
-   void setCommentConsumer(CommentConsumer *C) { commentConsumer = C; }
-
    void printTokensTo(llvm::raw_ostream& out);
    void dump();
 
@@ -175,6 +175,8 @@ public:
    void setLastTok(Token LastTok) { this->LastTok = LastTok; }
    Token getLastTok() const { return LastTok; }
 
+   Token makeEOF();
+
    enum ParenKind { PAREN = '(', BRACE = '{', ANGLED = '<', SQUARE = '[' };
 
    friend diag::DiagnosticBuilder& operator<<(diag::DiagnosticBuilder& builder,
@@ -183,6 +185,9 @@ public:
       builder.setLoc(lex->getSourceLoc());
       return builder;
    }
+
+   /// The current comment consumer.
+   CommentConsumer *commentConsumer = nullptr;
 
    friend class parse::Parser;
 
@@ -197,8 +202,8 @@ protected:
    Token lexClosureArgumentName();
 
    void lexOperator();
-   Token skipSingleLineComment();
-   Token skipMultiLineComment();
+   void skipSingleLineComment();
+   void skipMultiLineComment();
 
    tok::TokenType getBuiltinOperator(llvm::StringRef str);
 
@@ -208,13 +213,8 @@ protected:
       return Token(args..., loc);
    }
 
-   Token makeEOF();
-
    IdentifierTable& Idents;
    DiagnosticsEngine& Diags;
-
-   /// The current comment consumer.
-   CommentConsumer *commentConsumer = nullptr;
 
    /// The current lexing mode, used to lex certain characters differently in
    /// different situations.

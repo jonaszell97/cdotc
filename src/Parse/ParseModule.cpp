@@ -352,7 +352,7 @@ Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
 
          break;
       case tok::eof:
-         SP.diagnose(err_unexpected_eof, currentTok().getSourceLoc());
+         SP.diagnose(err_unexpected_eof, true, currentTok().getSourceLoc());
          return nullptr;
       default:
          errorUnexpectedToken(currentTok(), tok::kw_module);

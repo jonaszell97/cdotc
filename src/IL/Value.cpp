@@ -1,6 +1,7 @@
 #include "cdotc/IL/Value.h"
 
 #include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
 #include "cdotc/IL/Constants.h"
 #include "cdotc/IL/Context.h"
 #include "cdotc/IL/Instructions.h"
@@ -409,6 +410,71 @@ bool Value::isAllZerosValue() const
       return C->isAllZerosValue();
 
    return false;
+}
+
+const llvm::APSInt* Value::getConstantIntegerValue() const
+{
+   if (auto *CI = dyn_cast<ConstantInt>(this)) {
+      return &CI->getValue();
+   }
+
+   if (auto *Ld = dyn_cast<LoadInst>(this)) {
+      return Ld->getOperand(0)->getConstantIntegerValue();
+   }
+
+   if (auto *GEP = dyn_cast<GEPInst>(this)) {
+      return GEP->getVal()->getConstantIntegerValue();
+   }
+
+   if (!isa<ConstantStruct>(this)) {
+      return nullptr;
+   }
+
+   auto *RT = getType()->asRecordType();
+   if (!RT || !RT->isStruct()) {
+      return nullptr;
+   }
+
+   auto *S = cast<ast::StructDecl>(RT->getRecord());
+   if (!S->hasAttribute<_BuiltinAttr>()
+   || !S->getDeclName().getIdentifierInfo()->getIdentifier().contains("Int")
+   || !S->getStoredFields().front()->getType()->isIntegerType()) {
+      return nullptr;
+   }
+
+   return cast<ConstantStruct>(this)->getElements().front()->getConstantIntegerValue();
+}
+
+const llvm::APFloat* Value::getConstantFPValue() const
+{
+   if (auto *CI = dyn_cast<ConstantFloat>(this)) {
+      return &CI->getValue();
+   }
+
+   if (auto *Ld = dyn_cast<LoadInst>(this)) {
+      return Ld->getOperand(0)->getConstantFPValue();
+   }
+
+   if (auto *GEP = dyn_cast<GEPInst>(this)) {
+      return GEP->getVal()->getConstantFPValue();
+   }
+
+   if (!isa<ConstantStruct>(this)) {
+      return nullptr;
+   }
+
+   auto *RT = getType()->asRecordType();
+   if (!RT || !RT->isStruct()) {
+      return nullptr;
+   }
+
+   auto *S = cast<ast::StructDecl>(RT->getRecord());
+   if (!S->hasAttribute<_BuiltinAttr>()
+       || !S->getStoredFields().front()->getType()->isFPType()) {
+      return nullptr;
+   }
+
+   return cast<ConstantStruct>(this)->getElements().front()->getConstantFPValue();
 }
 
 } // namespace il

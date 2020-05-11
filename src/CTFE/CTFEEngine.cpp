@@ -210,9 +210,7 @@ private:
 
    void diagnoseNoDefinition(il::GlobalVariable const* G)
    {
-      err(err_generic_error, G->getSourceLoc(),
-          "global variable with no definition cannot be evaluated at compile "
-          "time");
+      err(err_global_var_without_definition, G->getName(), G->getSourceLoc());
    }
 
    il::Function const* getFunctionDefinition(il::Function const& F)

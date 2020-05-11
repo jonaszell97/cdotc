@@ -1330,10 +1330,6 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
    if (!func->isDeclared())
       return;
 
-   if (func->getName()=="_CNW4coreE16IndexingIteratorINW_0E6StringEEC1ENW_0E6StringEL0") {
-       NO_OP;
-   }
-
    if (auto* Lazy = func->getLazyFnInfo()) {
       Lazy->loadFunctionBody();
       return;
@@ -3173,7 +3169,8 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
       }
 
       auto BeginBorrow
-          = Builder.CreateBeginBorrow(Val, Decl->getSourceLoc(), EndLoc, true);
+          = Builder.CreateBeginBorrow(Val, Decl->getSourceLoc(), EndLoc,
+              !Decl->isConst());
 
       addDeclValuePair(Decl, BeginBorrow);
       Cleanups.pushCleanup<BorrowCleanup>(BeginBorrow, EndLoc);
@@ -6171,7 +6168,10 @@ il::Value* ILGenPass::visitStringInterpolation(StringInterpolation* node)
       Builder.CreateCall(Fn, {MutStr, Val});
    }
 
-   return Builder.CreateLoad(MutStr);
+   auto *V = Builder.CreateLoad(MutStr);
+   pushDefaultCleanup(V);
+
+   return V;
 }
 
 il::Value* ILGenPass::visitTupleLiteral(TupleLiteral* node)

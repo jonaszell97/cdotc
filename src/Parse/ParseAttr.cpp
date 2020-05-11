@@ -249,18 +249,6 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr*>& Attrs,
          Kind = StringSwitch<AttrKind>(Ident)
 #define CDOT_DECL_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #include "cdotc/AST/Attributes.def"
-                    .Default(AttrKind::_invalidAttr);
-
-         break;
-      case AttrClass::Stmt:
-         Kind = StringSwitch<AttrKind>(Ident)
-#define CDOT_STMT_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
-#include "cdotc/AST/Attributes.def"
-                    .Default(AttrKind::_invalidAttr);
-
-         break;
-      case AttrClass::Expr:
-         Kind = StringSwitch<AttrKind>(Ident)
 #define CDOT_STMT_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #define CDOT_EXPR_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #define CDOT_TYPE_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
@@ -268,9 +256,35 @@ void Parser::parseAttributes(llvm::SmallVectorImpl<cdot::Attr*>& Attrs,
                     .Default(AttrKind::_invalidAttr);
 
          break;
+      case AttrClass::Stmt:
+         Kind = StringSwitch<AttrKind>(Ident)
+#define CDOT_STMT_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#include "cdotc/AST/Attributes.def"
+#define CDOT_EXPR_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#define CDOT_TYPE_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#define CDOT_DECL_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#include "cdotc/AST/Attributes.def"
+                    .Default(AttrKind::_invalidAttr);
+
+         break;
+      case AttrClass::Expr:
+         Kind = StringSwitch<AttrKind>(Ident)
+#define CDOT_EXPR_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#include "cdotc/AST/Attributes.def"
+#define CDOT_TYPE_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#define CDOT_STMT_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#define CDOT_DECL_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#include "cdotc/AST/Attributes.def"
+                    .Default(AttrKind::_invalidAttr);
+
+         break;
       case AttrClass::Type:
          Kind = StringSwitch<AttrKind>(Ident)
 #define CDOT_TYPE_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#include "cdotc/AST/Attributes.def"
+#define CDOT_EXPR_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#define CDOT_STMT_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
+#define CDOT_DECL_ATTR(Name, Spelling) .Case(#Spelling, AttrKind::Name)
 #include "cdotc/AST/Attributes.def"
                     .Default(AttrKind::_invalidAttr);
 
@@ -323,6 +337,14 @@ void Parser::checkAttrApplicability(ParseResult Result, Attr* A)
       else {
 #define CDOT_PARSE_ATTR_CHECK
 #include "cdotc/Parse/ParseAttr.inc"
+      }
+
+      if (auto *Fn = dyn_cast<CallableDecl>(Result.getDecl())) {
+         if (auto *Ext = dyn_cast<ExternAttr>(A)) {
+            if (Ext->getLang() == ExternAttr::C && Fn->getDeclName().isStr("main")) {
+               SP.diagnose(Fn, err_extern_c_main, Fn->getSourceLoc());
+            }
+         }
       }
    }
    else if (Result.holdsExpr()) {

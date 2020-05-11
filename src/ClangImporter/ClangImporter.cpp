@@ -154,9 +154,10 @@ SourceLocation ImporterImpl::getSourceLoc(clang::SourceLocation Loc)
 
    unsigned BaseOffset;
    if (It == FileIDMap.end()) {
-      auto FileInfo = CI.getFileMgr().openFile(SourceMgr.getFilename(Loc));
+      auto FileName = SourceMgr.getFilename(Loc);
+      auto FileInfo = CI.getFileMgr().openFile(FileName);
       if (!FileInfo.Buf) {
-         CI.getSema().diagnose(diag::err_generic_error, "file not found");
+         CI.getSema().diagnose(diag::err_cannot_open_file, FileName, false);
          return SourceLocation(this->BaseOffset);
       }
 
@@ -188,9 +189,10 @@ SourceRange ImporterImpl::getSourceLoc(clang::SourceRange Loc)
 
    unsigned BaseOffset;
    if (It == FileIDMap.end()) {
-      auto FileInfo = CI.getFileMgr().openFile(SourceMgr.getFilename(Begin));
+      auto FileName = SourceMgr.getFilename(Begin);
+      auto FileInfo = CI.getFileMgr().openFile(FileName);
       if (!FileInfo.Buf) {
-         CI.getSema().diagnose(diag::err_generic_error, "file not found");
+         CI.getSema().diagnose(diag::err_cannot_open_file, FileName, false);
          return SourceLocation(this->BaseOffset);
       }
 

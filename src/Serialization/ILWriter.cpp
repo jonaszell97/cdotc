@@ -78,8 +78,7 @@ void ILRecordWriter::AddIdentifierRef(const cdot::IdentifierInfo* II)
 
 void ILWriter::AddString(llvm::StringRef Str, RecordDataImpl& Record)
 {
-   Record.push_back(Str.size());
-   Record.insert(Record.end(), Str.begin(), Str.end());
+   Writer.AddString(Str, Record);
 }
 
 void ILRecordWriter::AddDeclarationName(cdot::DeclarationName Name)

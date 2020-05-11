@@ -12,6 +12,7 @@
 #include "cdotc/Parse/Parser.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/SaveAndRestore.h"
 #include "cdotc/Support/Timer.h"
 #include "cdotc/Support/Various.h"
 
@@ -63,8 +64,7 @@ QueryResult ParseModuleFileQuery::run()
 {
    auto File = QC.CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {
-      QC.Sema->diagnose(diag::err_generic_error,
-                        "could not open file " + FileName);
+      QC.Sema->diagnose(diag::err_cannot_open_file, FileName, false);
 
       return fail();
    }
@@ -109,8 +109,7 @@ QueryResult CreateDefaultModuleQuery::run()
 
    auto File = QC.CI.getFileMgr().openFile(MainFile);
    if (!File.Buf) {
-      QC.Sema->diagnose(diag::err_generic_error,
-                        "error opening file " + MainFile);
+      QC.Sema->diagnose(diag::err_cannot_open_file, MainFile, false);
 
       return fail();
    }
@@ -147,7 +146,7 @@ QueryResult ParseSourceFileQuery::run()
 
    auto File = CI.getFileMgr().openFile(AbsolutePath);
    if (!File.Buf) {
-      Sema.diagnose(diag::err_generic_error, "error opening file " + FileName);
+      Sema.diagnose(diag::err_cannot_open_file, FileName, false);
 
       return fail();
    }
@@ -167,12 +166,16 @@ QueryResult ParseSourceFileQuery::run()
              File.BaseOffset);
 
    if (auto *Consumer = CI.getCommentConsumer()) {
-      lex.setCommentConsumer(Consumer);
-      lex.lexCompleteFile();
+      auto SAR = support::saveAndRestore(lex.commentConsumer, Consumer);
+      lex.findComments();
    }
 
    Parser parser(Context, &lex, Sema);
    parser.parse();
+
+   if (QC.Sema->getDiags().getNumErrors()) {
+      QC.Sema->setEncounteredError(true);
+   }
 
    if (QC.Sema->encounteredError()) {
       return fail();
@@ -191,7 +194,7 @@ QueryResult ParseMainSourceFileQuery::run()
 
    auto File = CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {
-      Sema.diagnose(diag::err_generic_error, "error opening file " + FileName);
+      Sema.diagnose(diag::err_cannot_open_file, FileName, false);
 
       return fail();
    }
@@ -227,13 +230,17 @@ QueryResult ParseMainSourceFileQuery::run()
              File.BaseOffset, '$', false);
 
    if (auto *Consumer = CI.getCommentConsumer()) {
-      lex.setCommentConsumer(Consumer);
-      lex.lexCompleteFile();
+      auto SAR = support::saveAndRestore(lex.commentConsumer, Consumer);
+      lex.findComments();
    }
 
    Parser parser(Context, &lex, Sema);
    lex.advance(false, true);
    parser.parseMainFile();
+
+   if (QC.Sema->getDiags().getNumErrors()) {
+      QC.Sema->setEncounteredError(true);
+   }
 
    if (QC.Sema->encounteredError()) {
       return fail();
@@ -384,7 +391,7 @@ QueryResult CreateLLVMModuleQuery::run()
       llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
 
       if (EC) {
-         QC.Sema->diagnose(err_generic_error, EC.message());
+         QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());
       }
       else {
          QC.EmitIR(OS);

@@ -937,13 +937,13 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
    // Any type -> Existential
    if (to->isExistentialType()) {
       for (auto E : to->asExistentialType()->getExistentials()) {
-         bool Conforms
-             = SP.ConformsTo(from, cast<ProtocolDecl>(E->getRecord()));
-         if (Conforms) {
-            Seq.addStep(CastKind::ExistentialInit, to);
-            return;
+         bool Conforms = SP.ConformsTo(from, cast<ProtocolDecl>(E->getRecord()));
+         if (!Conforms) {
+            return Seq.invalidate();
          }
       }
+
+      return Seq.addStep(CastKind::ExistentialInit, to);
    }
 
    // Any type -> template parameter type

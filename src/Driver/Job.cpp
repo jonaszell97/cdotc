@@ -109,8 +109,7 @@ void ParseJob::run()
 
    auto File = CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {
-      Sema.diagnose(diag::err_generic_error, "error opening file " + FileName);
-
+      Sema.diagnose(diag::err_cannot_open_file, FileName, false);
       HadError = true;
       return;
    }
@@ -325,7 +324,7 @@ void EmitAssemblyJob::run()
    llvm::raw_fd_ostream OS(OutFile, EC, llvm::sys::fs::F_RW);
 
    if (EC) {
-      CI.getSema().diagnose(diag::err_generic_error, EC.message());
+      CI.getSema().diagnose(diag::err_cannot_open_file, OutFile, true, EC.message());
       HadError = true;
       return;
    }
@@ -352,7 +351,7 @@ void EmitObjectJob::run()
    llvm::raw_fd_ostream OS(OutFile, EC, llvm::sys::fs::F_RW);
 
    if (EC) {
-      CI.getSema().diagnose(diag::err_generic_error, EC.message());
+      CI.getSema().diagnose(diag::err_cannot_open_file, OutFile, true, EC.message());
       HadError = true;
       return;
    }
@@ -425,7 +424,7 @@ void EmitILJob::run()
    llvm::raw_fd_ostream OS(OutFile, EC, llvm::sys::fs::F_RW);
 
    if (EC) {
-      CI.getSema().diagnose(diag::err_generic_error, EC.message());
+      CI.getSema().diagnose(diag::err_cannot_open_file, OutFile, true, EC.message());
       HadError = true;
       return;
    }
@@ -453,7 +452,7 @@ void EmitIRJob::run()
    llvm::raw_fd_ostream OS(OutFile, EC, llvm::sys::fs::F_RW);
 
    if (EC) {
-      CI.getSema().diagnose(diag::err_generic_error, EC.message());
+      CI.getSema().diagnose(diag::err_cannot_open_file, OutFile, true, EC.message());
       HadError = true;
       return;
    }

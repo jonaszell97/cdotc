@@ -108,7 +108,8 @@ struct CompilerOptions {
       F_RunUnitTests = F_NoDebugIL << 1,
       F_SyntaxOnly = F_RunUnitTests << 1,
       F_Verify = F_SyntaxOnly << 1,
-      F_IsTest = F_Verify << 1,
+      F_VerifyIL = F_Verify << 1,
+      F_IsTest = F_VerifyIL << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -187,6 +188,7 @@ public:
    bool runUnitTests() const { return flagIsSet(F_RunUnitTests); }
    bool syntaxOnly() const { return flagIsSet(F_SyntaxOnly); }
    bool shouldVerify() const { return flagIsSet(F_Verify); }
+   bool shouldVerifyIL() const { return flagIsSet(F_VerifyIL); }
    bool isTest() const { return flagIsSet(F_IsTest); }
 
    /// Experimental feature checks.

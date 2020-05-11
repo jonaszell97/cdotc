@@ -852,6 +852,7 @@ void AttrParseEmitter::emit()
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -1014,7 +1015,7 @@ void AttrParseEmitter::emit()
       Switch << "SP.diagnose(err_attribute_not_valid_here,"
                 "            A->getSourceRange(), \""
              << cast<StringLiteral>(Attr->getFieldValue("name"))->getVal()
-             << "\");\n";
+             << "\"); break;\n";
 
       Switch << "}\n";
    }
@@ -1165,7 +1166,7 @@ void AttrParseEmitter::parseEnumArg(llvm::raw_ostream& out,
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
                   ")__"
-       << ArgInfo.AttrName << R"__( ", 5 /*one of */,
+       << ArgInfo.AttrName << R"__(", 5 /*one of */,
                   )__" << ArgInfo.ArgNo << ", \""
        << DiagStr << R"__(");
 

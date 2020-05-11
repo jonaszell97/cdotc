@@ -19,7 +19,7 @@ unsigned NumNeededArgs = 1;
       Ident = currentTok().getIdentifier();
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  "extern ", 5 /*one of */,
+                  "extern", 5 /*one of */,
                   1, "C, CXX");
 
       break;
@@ -46,6 +46,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -96,7 +97,7 @@ unsigned NumNeededArgs = 1;
       Ident = currentTok().getIdentifier();
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  "inline ", 5 /*one of */,
+                  "inline", 5 /*one of */,
                   1, "always, never, hint");
 
       break;
@@ -122,6 +123,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -182,6 +184,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -233,6 +236,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -287,6 +291,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -334,6 +339,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -381,6 +387,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -428,6 +435,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -475,6 +483,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -522,6 +531,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -572,7 +582,7 @@ unsigned NumNeededArgs = 1;
       Ident = currentTok().getIdentifier();
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  "noDerive ", 5 /*one of */,
+                  "noDerive", 5 /*one of */,
                   1, "Equatable, Copyable, Hashable, RawRepresentable, StringRepresentable, _All");
 
       break;
@@ -602,6 +612,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -662,6 +673,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -712,7 +724,7 @@ unsigned NumNeededArgs = 1;
       Ident = currentTok().getIdentifier();
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  "version ", 5 /*one of */,
+                  "version", 5 /*one of */,
                   1, "None, Windows, Darwin, macOS, Linux, POSIX");
 
       break;
@@ -741,6 +753,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -791,7 +804,7 @@ unsigned NumNeededArgs = 1;
       Ident = currentTok().getIdentifier();
    } else {
       SP.diagnose(err_attribute_bad_arg, currentTok().getSourceLoc(),
-                  "version ", 5 /*one of */,
+                  "version", 5 /*one of */,
                   1, "None, Windows, Darwin, macOS, Linux, POSIX");
 
       break;
@@ -820,6 +833,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -867,6 +881,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -897,6 +912,54 @@ unsigned NumNeededArgs = 0;
       auto EndLoc = currentTok().getSourceLoc();
 Attrs.push_back(new (Context) ExternallyInitializedAttr(SourceRange(AttrLoc, EndLoc)));
  break;}
+case AttrKind::Instantiate: {
+unsigned NumNeededArgs = 0;
+
+         unsigned ArgNo = 0;
+
+         if (lookahead().is(tok::open_paren)) {
+            advance();
+            advance();
+
+            while (!currentTok().is(tok::close_paren)) {
+               switch (ArgNo++) {
+               
+         default:
+            SP.diagnose(err_attribute_arg_count, currentTok().getSourceLoc(),
+                        Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
+
+            skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
+            if (!lookahead().is(tok::eof))
+               advance();
+
+            return;
+
+               }
+
+               advance();
+               if (!currentTok().oneOf(tok::comma, tok::close_paren)) {
+                  SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                              currentTok().toString(), true, "')'");
+
+                  if (!findTokOnLine(tok::comma, tok::close_paren)) {
+                     return skipAttribute();
+                  }
+               }
+
+               if (currentTok().is(tok::comma)) advance();
+            }
+         }
+
+         
+         if (ArgNo != NumNeededArgs) {
+            SP.diagnose(err_attribute_arg_count, AttrLoc, Ident, /*at least*/ 0,
+                        NumNeededArgs, ArgNo);
+            break;
+         }
+      auto EndLoc = currentTok().getSourceLoc();
+Attrs.push_back(new (Context) InstantiateAttr(SourceRange(AttrLoc, EndLoc)));
+ break;}
 case AttrKind::_Builtin: {
 std::string builtinName;
 unsigned NumNeededArgs = 1;
@@ -926,6 +989,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -997,6 +1061,7 @@ break;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -1044,6 +1109,7 @@ unsigned NumNeededArgs = 0;
                         Ident, /*at most*/ 1, NumNeededArgs, ArgNo);
 
             skipUntilEven(tok::open_paren);
+            if (lookahead().is(tok::close_paren)) advance();
             if (!lookahead().is(tok::eof))
                advance();
 
@@ -1082,56 +1148,59 @@ auto D = Result.getDecl();
 switch(A->getKind()) {
 case AttrKind::Extern: {if (isa<CallableDecl>(D)) break;
 if (isa<GlobalVarDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "extern");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "extern"); break;
 }
 case AttrKind::Inline: {if (isa<CallableDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "inline");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "inline"); break;
 }
 case AttrKind::Implicit: {if (isa<CallableDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "implicit");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "implicit"); break;
 }
 case AttrKind::Opaque: {if (isa<RecordDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "opaque");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "opaque"); break;
 }
 case AttrKind::Align: {if (isa<RecordDecl>(D)) break;
 if (isa<VarDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "align");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "align"); break;
 }
 case AttrKind::DiscardableResult: {if (isa<CallableDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "discardableResult");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "discardableResult"); break;
 }
 case AttrKind::AutoClosure: {if (isa<FuncArgDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "autoclosure");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "autoclosure"); break;
 }
 case AttrKind::Escaping: {if (isa<FuncArgDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "escaping");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "escaping"); break;
 }
 case AttrKind::Testable: {if (isa<Decl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "testable");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "testable"); break;
 }
 case AttrKind::CompileTime: {if (isa<Decl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "compiletime");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "compiletime"); break;
 }
 case AttrKind::NoDerive: {if (isa<RecordDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "noDerive");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "noDerive"); break;
 }
 case AttrKind::Strong: {if (isa<AliasDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "strong");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "strong"); break;
 }
 case AttrKind::VersionDecl: {if (isa<Decl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "version");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "version"); break;
 }
 case AttrKind::ExternallyInitialized: {if (isa<GlobalVarDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "externallyInitialized");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "externallyInitialized"); break;
+}
+case AttrKind::Instantiate: {if (isa<NamedDecl>(D)) break;
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "instantiate"); break;
 }
 case AttrKind::_Builtin: {if (isa<NamedDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_builtin");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_builtin"); break;
 }
 case AttrKind::_Semantics: {if (isa<NamedDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_semantics");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_semantics"); break;
 }
 case AttrKind::_Debug: {if (isa<NamedDecl>(D)) break;
-SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_debug");
+SP.diagnose(err_attribute_not_valid_here,            A->getSourceRange(), "_debug"); break;
 }
 default: break; 
 }

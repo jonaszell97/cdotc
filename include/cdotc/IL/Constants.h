@@ -117,7 +117,7 @@ public:
    double getDoubleVal() const { return Val.convertToDouble(); }
    float getFloatVal() const { return (float)Val.convertToDouble(); }
 
-   const llvm::APFloat getValue() const { return Val; }
+   const llvm::APFloat &getValue() const { return Val; }
 
    static bool classof(Value const* T)
    {

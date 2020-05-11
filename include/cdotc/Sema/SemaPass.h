@@ -665,7 +665,7 @@ public:
    void checkVirtualOrOverrideMethod(MethodDecl* M);
 
    /// Verify that a class overrides every abstract method of its base class.
-   void checkIfAbstractMethodsOverridden(ClassDecl* R);
+   bool checkIfAbstractMethodsOverridden(ClassDecl* R);
 
    /// Diagnose a global variable that somehow references itself in its
    /// initializer.
