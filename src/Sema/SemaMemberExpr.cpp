@@ -2438,8 +2438,8 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
 
       // visible within the file it was declared
       auto& FileMgr = compilerInstance->getFileMgr();
-      auto DeclID = FileMgr.getSourceId(ND->getSourceLoc());
-      auto CurrID = FileMgr.getSourceId(SOD.getSourceLoc());
+      auto DeclID = FileMgr.getLexicalSourceId(ND->getSourceLoc());
+      auto CurrID = FileMgr.getLexicalSourceId(SOD.getSourceLoc());
 
       if (DeclID == CurrID || FileMgr.wasIncludedFrom(CurrID, DeclID))
          return;

@@ -1765,7 +1765,10 @@ QueryResult AddImplicitConformanceQuery::run()
          break;
       }
 
-      QC.Sema->maybeInstantiateMemberFunction(Impl, R);
+      if (!R->isTemplate()) {
+         QC.Sema->maybeInstantiateMemberFunction(Impl, R);
+      }
+
       return finish(Impl);
    }
 

@@ -969,12 +969,12 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl* M, RecordDecl* R)
 
       llvm::SmallVector<BasicBlock*, 8> CompBlocks;
       while (i < numFields) {
-         CompBlocks.push_back(Builder.CreateBasicBlock("tuplecmp"));
+         CompBlocks.push_back(Builder.CreateBasicBlock("structcmp"));
          ++i;
       }
 
-      CompBlocks.push_back(Builder.CreateBasicBlock("tuplecmp.neq"));
-      auto EqBB = Builder.CreateBasicBlock("tuplecmp.eq");
+      CompBlocks.push_back(Builder.CreateBasicBlock("structcmp.neq"));
+      auto EqBB = Builder.CreateBasicBlock("structcmp.eq");
 
       for (i = 0; i < numFields; ++i) {
          Builder.CreateBr(CompBlocks[i]);

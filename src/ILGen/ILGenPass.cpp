@@ -2283,14 +2283,6 @@ il::Value* ILGenPass::Forward(il::Value* Val)
       return Val;
    }
 
-   if (isa<MoveInst>(LookThroughLoad(Val))) {
-      return Val;
-   }
-
-   if (SP.IsImplicitlyCopyableType(Val->getType())) {
-      return CreateCopy(Val);
-   }
-
    il::Value *OrigVal = Val;
 
    // Look through a load of the value.
@@ -2298,6 +2290,16 @@ il::Value* ILGenPass::Forward(il::Value* Val)
    if (auto *Ld = dyn_cast<LoadInst>(Val)) {
       wasLoad = true;
       Val = Ld->getTarget();
+   }
+
+   // If the user requested an explicit move, don't make a copy even if the type
+   // is implicitly copyable.
+   if (isa<MoveInst>(Val)) {
+      return OrigVal;
+   }
+
+   if (SP.IsImplicitlyCopyableType(OrigVal->getType())) {
+      return CreateCopy(OrigVal);
    }
 
    // if it's an lvalue, we can move it
@@ -3268,17 +3270,8 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
    if (auto* Expr = Decl->getValue()) {
       ExprCleanupRAII EC(*this);
 
-      Val = visit(Expr);
+      Val = Forward(visit(Expr));
       DeclTy = Val->getType();
-      CanEraseTemporary = EC.ignoreValue(Val);
-
-      // If this is a struct value, we can elide the copy;
-      // If it's refcounted, we would have to retain anyways so we can just
-      // avoid the release; and for all other values it does not make a
-      // difference
-      if (!CanEraseTemporary) {
-         Val = CreateCopy(Val);
-      }
    }
 
    il::Instruction* Alloca;
@@ -6743,13 +6736,7 @@ il::Value* ILGenPass::CreateEqualityComp(il::Value* lhs, il::Value* rhs,
    }
 
    if (lhsTy->isRecordType()) {
-      MethodDecl* EquatableDecl;
-      if (SP.QC.GetImplicitConformance(EquatableDecl, lhsTy->getRecord(),
-                                       ImplicitConformanceKind::Equatable)) {
-         return Builder.GetTrue();
-      }
-
-      if (EquatableDecl) {
+      if (auto *EquatableDecl = SP.QC.RecordMeta[lhsTy->getRecord()].OperatorEquals) {
          auto *result = CreateCall(EquatableDecl, {lhs, rhs});
          if (CastToBool) {
             return CastValueToBool(*this, result);

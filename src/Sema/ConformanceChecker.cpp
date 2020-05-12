@@ -1413,28 +1413,6 @@ void ConformanceCheckerImpl::inheritAttributes(NamedDecl* Req, NamedDecl* Impl)
    }
 }
 
-static bool shouldAddStringRepresentableConformance(RecordDecl* R)
-{
-   auto* Attr = R->getAttribute<NoDeriveAttr>();
-   if (!Attr) {
-      return true;
-   }
-
-   return Attr->getKind() != NoDeriveAttr::StringRepresentable
-          && Attr->getKind() != NoDeriveAttr::_All;
-}
-
-static bool shouldAddHashableConformance(RecordDecl* R)
-{
-   auto* Attr = R->getAttribute<NoDeriveAttr>();
-   if (!Attr) {
-      return true;
-   }
-
-   return Attr->getKind() != NoDeriveAttr::Hashable
-          && Attr->getKind() != NoDeriveAttr::_All;
-}
-
 void ConformanceCheckerImpl::addProtocolImpl(RecordDecl* R, NamedDecl* Req,
                                              NamedDecl* Impl)
 {
@@ -1897,24 +1875,6 @@ NamedDecl* ConformanceCheckerImpl::checkMethodImpl(RecordDecl *Rec,
       return nullptr;
    }
 
-   if (Proto == Sema.getCopyableDecl() && Method->getDeclName().isStr("copy")) {
-      Sema.QC.AddImplicitConformance(
-         MethodImpl, Rec, ImplicitConformanceKind::Copyable, MethodImpl);
-   }
-   else if (Proto == Sema.getStringRepresentableDecl()
-            && Method->getDeclName().isStr("toString")
-            && shouldAddStringRepresentableConformance(Rec)) {
-      Sema.QC.AddImplicitConformance(
-         MethodImpl, Rec, ImplicitConformanceKind::StringRepresentable,
-         MethodImpl);
-   }
-   else if (Proto == Sema.getHashableDecl()
-            && Method->getDeclName().isStr("hashValue")
-            && shouldAddHashableConformance(Rec)) {
-      Sema.QC.AddImplicitConformance(
-         MethodImpl, Rec, ImplicitConformanceKind::Hashable, MethodImpl);
-   }
-
    MethodImpl->setIsProtocolMethod(true);
    return MethodImpl;
 }
@@ -2018,7 +1978,33 @@ NamedDecl* ConformanceCheckerImpl::checkSingleDeclImpl(
    }
 
    if (auto Method = dyn_cast<MethodDecl>(Req)) {
-      return checkMethodImpl(Rec, Conf, Method);
+      auto *MethodImpl = cast_or_null<MethodDecl>(checkMethodImpl(Rec, Conf, Method));
+      if (!MethodImpl)
+         return nullptr;
+
+      if (Conf.conformance == Sema.getCopyableDecl()
+          && Method->getDeclName().isStr("copy")) {
+         Sema.QC.AddImplicitConformance(
+             MethodImpl, Rec, ImplicitConformanceKind::Copyable, MethodImpl);
+      }
+      else if (Conf.conformance == Sema.getStringRepresentableDecl()
+               && Method->getDeclName().isStr("toString")) {
+         Sema.QC.AddImplicitConformance(
+             MethodImpl, Rec, ImplicitConformanceKind::StringRepresentable,
+             MethodImpl);
+      }
+      else if (Conf.conformance == Sema.getHashableDecl()
+               && Method->getDeclName().isStr("hashValue")) {
+         Sema.QC.AddImplicitConformance(
+             MethodImpl, Rec, ImplicitConformanceKind::Hashable, MethodImpl);
+      }
+      else if (Conf.conformance == Sema.getEquatableDecl()
+               && Method->getDeclName().getInfixOperatorName()->isStr("==")) {
+         Sema.QC.AddImplicitConformance(
+             MethodImpl, Rec, ImplicitConformanceKind::Equatable, MethodImpl);
+      }
+
+      return MethodImpl;
    }
 
    llvm_unreachable("bad requirement kind");
