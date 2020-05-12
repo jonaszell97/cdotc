@@ -12,7 +12,6 @@
 
 #include <chrono>
 #include <regex>
-#include <thread>
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -78,13 +77,7 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, TestStatus S)
    return OS;
 }
 
-struct TestSummary {
-   /// Status of the test.
-   TestStatus Status = UNDETERMINED;
-
-   /// Detailed information about the test failure.
-   std::string FailureInfo;
-};
+struct Test;
 
 struct Task {
    enum TaskKind {
@@ -98,25 +91,188 @@ struct Task {
       VERIFY_IL,
    };
 
+   enum RedirectKind {
+      /// The stdout redirect.
+      STDOUT = 0,
+
+      /// The stderr redirect.
+      STDERR = 1,
+
+      /// The combined stdout and stderr redirects for an executable.
+      EXEC = 2,
+   };
+
    /// C'tor.
-   Task(TaskKind kind)
-       : Kind(kind)
+   Task(::Test *Test, TaskKind kind)
+       : Test(Test), Kind(kind)
    {
    }
+
+   /// The test this task belongs to.
+   ::Test *Test;
 
    /// The task kind.
    TaskKind Kind;
 
+   /// The status of this task.
+   TestStatus Status = UNDETERMINED;
+
    /// Regexes to match the output of the executable against.
    SmallVector<StringRef, 0> OutputChecks;
 
+   /// Arguments to pass to cdotc.
+   const char **CompileArgs;
+
    /// Additional task arguments.
    SmallVector<StringRef, 0> Args;
+
+   /// The task output executable.
+   string Executable;
+
+   /// The redirects.
+   string Redirects[3];
+};
+
+struct Test {
+   /// The module this test belongs to.
+   Module *M;
+
+   /// The file name of this test.
+   StringRef FileName;
+
+   /// Status of the test.
+   TestStatus Status = UNDETERMINED;
+
+   /// Log output for this test.
+   std::string Log;
+
+   /// The log stream for this test.
+   llvm::raw_string_ostream LogOS;
+
+   /// The tasks that belong to this test.
+   std::vector<std::unique_ptr<Task>> Tasks;
+
+   /// C'tor.
+   Test(Module *M, StringRef FileName)
+       : M(M), FileName(FileName), LogOS(Log)
+   {}
+};
+
+class TaskExecutor {
+public:
+   using callback_type = std::function<void(int)>;
+
+private:
+   struct PendingTask {
+      llvm::sys::ProcessInfo PI;
+      callback_type Callback;
+      bool done;
+
+      PendingTask(llvm::sys::ProcessInfo PI,
+                  callback_type&& Callback)
+          : PI(PI), Callback(move(Callback)), done(false)
+      {
+      }
+   };
+
+   /// Vector of tasks and their respective callbacks.
+   std::vector<PendingTask> tasks;
+
+   /// The stream to output test results to.
+   llvm::raw_ostream &OS;
+
+   /// The log file output stream.
+   llvm::raw_ostream &LogFile;
+
+public:
+   /// C'tor.
+   TaskExecutor(llvm::raw_ostream &OS, llvm::raw_ostream &LogFile)
+      : OS(OS), LogFile(LogFile)
+   {
+   }
+
+   void Execute(StringRef Program, const char **Args,
+                ArrayRef<Optional<StringRef>> Redirects,
+                callback_type &&Fn)
+   {
+      auto PI = llvm::sys::ExecuteNoWait(Program, Args, nullptr, Redirects);
+      if (PI.Pid == llvm::sys::ProcessInfo::InvalidPid) {
+         return Fn(-1);
+      }
+
+      tasks.emplace_back(PI, move(Fn));
+   }
+
+   void WaitUntilCompletion()
+   {
+      bool foundPendingTask = true;
+      while (foundPendingTask) {
+         foundPendingTask = false;
+
+         for (size_t i = 0; i < tasks.size(); ++i) {
+            auto &Task = tasks[i];
+            if (Task.done)
+               continue;
+
+            auto WaitPI = llvm::sys::Wait(Task.PI, 0, false);
+            if (WaitPI.Pid == Task.PI.Pid) {
+               Task.done = true;
+               Task.Callback(WaitPI.ReturnCode);
+
+               continue;
+            }
+
+            foundPendingTask = true;
+         }
+      }
+   }
+
+   void TaskComplete(Test &T, ::Task &Task)
+   {
+      if (Task.Status == UNDETERMINED) {
+         T.LogOS << "SUCCESS\n";
+         Task.Status = TestStatus::SUCCESS;
+      }
+
+      if (Task.Status != TestStatus::SUCCESS) {
+         auto &StderrRedirect = Task.Redirects[::Task::STDERR];
+         auto BufOrError = llvm::MemoryBuffer::getFile(StderrRedirect);
+         if (!BufOrError)
+            return;
+
+         T.LogOS << BufOrError.get()->getBuffer() << "\n";
+         fs::deleteFile(StderrRedirect);
+      }
+
+      if (&Task == T.Tasks.back().get()) {
+         TestComplete(T);
+      }
+   }
+
+   void TestComplete(Test &T)
+   {
+      bool foundNonSuccess = false;
+      for (auto &Task : T.Tasks) {
+         if (Task->Status != SUCCESS) {
+            foundNonSuccess = true;
+            T.Status = Task->Status;
+            break;
+         }
+      }
+
+      if (!foundNonSuccess) {
+         T.Status = SUCCESS;
+      }
+
+      OS << T.FileName << ": " << T.Status << "\n";
+      LogFile << T.LogOS.str();
+   }
 };
 
 } // anonymous namespace
 
-static void ParseTasks(StringRef File, SmallVectorImpl<Task> &Tasks)
+static void ParseTasks(Test *T, StringRef File,
+                       std::vector<std::unique_ptr<Task>> &Tasks)
 {
    auto FileBufOrError = llvm::MemoryBuffer::getFile(File);
    if (!FileBufOrError) {
@@ -166,25 +322,25 @@ static void ParseTasks(StringRef File, SmallVectorImpl<Task> &Tasks)
       }
 
       if (TaskStr.startswith("RUN")) {
-         Tasks.emplace_back(Task::RUN);
+         Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
          TaskStr = TaskStr.drop_front(3);
 
          auto &Task = Tasks.back();
-         TaskStr.split(Task.Args, ' ');
+         TaskStr.split(Task->Args, ' ');
       }
       else if (TaskStr.startswith("VERIFY-IL")) {
-         Tasks.emplace_back(Task::VERIFY_IL);
+         Tasks.emplace_back(std::make_unique<Task>(T, Task::VERIFY_IL));
       }
       else if (TaskStr.startswith("VERIFY")) {
-         Tasks.emplace_back(Task::VERIFY);
+         Tasks.emplace_back(std::make_unique<Task>(T, Task::VERIFY));
       }
       else if (TaskStr.startswith("CHECK")) {
-         if (Tasks.empty() || Tasks.back().Kind != Task::RUN) {
-            Tasks.emplace_back(Task::RUN);
+         if (Tasks.empty() || Tasks.back()->Kind != Task::RUN) {
+            Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
          }
 
          TaskStr = TaskStr.drop_front(6);
-         Tasks.back().OutputChecks.push_back(TaskStr);
+         Tasks.back()->OutputChecks.push_back(TaskStr);
       }
       else if (TaskStr.startswith("SKIP")) {
          Tasks.clear();
@@ -193,7 +349,7 @@ static void ParseTasks(StringRef File, SmallVectorImpl<Task> &Tasks)
    }
 
    if (Tasks.empty()) {
-      Tasks.emplace_back(Task::RUN);
+      Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
       return;
    }
 }
@@ -204,181 +360,195 @@ static long long CurrentTimeMillis()
        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 }
 
+static void AddTests(Module *M, llvm::StringMap<std::unique_ptr<Test>> &Tests)
+{
+   for (auto &File : M->getSourceFiles()) {
+      Tests.try_emplace(File.getKey(), std::make_unique<Test>(M, File.getKey()));
+   }
+
+   for (auto *SubMod : M->getSubModules()) {
+      AddTests(SubMod, Tests);
+   }
+}
+
 static void RunTestsForModule(QueryContext &QC, Module *M,
-                              llvm::StringMap<TestSummary> &TestMap,
-                              llvm::raw_ostream &OS,
-                              llvm::raw_ostream &LogOS,
-                              StringRef StdoutRedirect,
-                              StringRef StderrRedirect,
-                              StringRef RunRedirect,
-                              StringRef cdotc, const char *args[],
-                              StringRef executable)
+                              TaskExecutor &Executor,
+                              llvm::StringMap<std::unique_ptr<Test>> &Tests,
+                              StringRef cdotc)
 {
    static constexpr long long TimeoutTime = 10;
-   OS << "testing module '" << M->getFullName() << "'";
 
-   llvm::Optional<StringRef> Redirects[] = {
-       llvm::Optional<StringRef>(""),
-       llvm::Optional<StringRef>(StdoutRedirect),
-       llvm::Optional<StringRef>(StderrRedirect),
-   };
-
-   llvm::Optional<StringRef> RunRedirects[] = {
-       llvm::Optional<StringRef>(""),
-       llvm::Optional<StringRef>(RunRedirect),
-       llvm::Optional<StringRef>(RunRedirect),
-   };
-
-   SmallVector<Task, 2> Tasks;
    for (auto &File : M->getSourceFiles()) {
-      Tasks.clear();
-      OS << "\n" << " - " << File.getKey() << " ";
+      Test &Test = *Tests.find(File.getKey())->getValue();
+      auto &LogOS = Test.LogOS;
+      ParseTasks(&Test, File.getKey(), Test.Tasks);
 
-      args[1] = File.getKey().data();
-      ParseTasks(File.getKey(), Tasks);
+      if (Test.Tasks.empty()) {
+         Test.Status = SUCCESS;
+         continue;
+      }
 
-      TestSummary &Test = TestMap.try_emplace(File.getKey()).first->getValue();
-      for (auto &Task : Tasks) {
-         if (Test.Status != UNDETERMINED) {
-            break;
-         }
+      for (auto &TaskPtr : Test.Tasks) {
+         auto &Task = *TaskPtr;
+         Task.CompileArgs = QC.Context.Allocate<const char*>(10);
+         Task.CompileArgs[0] = cdotc.data();
+         Task.CompileArgs[1] = File.getKey().data();
+         Task.CompileArgs[2] = "-error-limit=0";
+         Task.CompileArgs[3] = "-fno-incremental";
 
          switch (Task.Kind) {
          case Task::VERIFY:
-            args[2] = "-verify";
-            break;
          case Task::VERIFY_IL:
-            args[2] = "-verify-with-il";
+            Task.CompileArgs[4] = Task.Kind == Task::VERIFY
+                ? "-verify" : "-verify-with-il";
+
+            Task.CompileArgs[5] = nullptr;
             break;
-         case Task::RUN:
-            args[2] = "";
+         case Task::RUN: {
+            Task.CompileArgs[4] = "-o";
+            Task.Executable = fs::getTmpFileName("out");
+            Task.CompileArgs[5] = Task.Executable.c_str();
+            Task.CompileArgs[6] = "-import=core.test";
+            Task.CompileArgs[7] = "-is-test";
+            Task.CompileArgs[8] = nullptr;
             break;
+         }
          }
 
          LogOS << "\nINVOKE ";
-         for (int i = 0;; ++i) {
-            if (!args[i])
+         for (int j = 0;; ++j) {
+            if (!Task.CompileArgs[j])
                break;
-            if (i != 0)
+            if (j != 0)
                LogOS << " ";
 
-            LogOS << args[i];
+            LogOS << Task.CompileArgs[j];
          }
          LogOS << "\n";
 
          auto startTime = CurrentTimeMillis();
-         auto ExitCode = llvm::sys::ExecuteAndWait(cdotc, args, nullptr,
-                                                   Redirects, TimeoutTime);
+         auto callback = [&](int ExitCode) {
+           switch (ExitCode) {
+           case 0:
+              break;
+           case -1:
+              LogOS << "UNDETERMINED: could not execute cdotc\n";
+              Task.Status = TestStatus::UNDETERMINED;
+              break;
+           case -2:
+           case 11: {
+              if (CurrentTimeMillis() - startTime > TimeoutTime * 1000) {
+                 LogOS << "TIMEOUT\n";
+                 Task.Status = TestStatus::TIMEOUT;
+              }
+              else {
+                 LogOS << "CRASH\n";
+                 Task.Status = TestStatus::CRASH;
+              }
 
-         switch (ExitCode) {
-         case 0:
-            break;
-         case -1:
-            LogOS << "UNDETERMINED: could not execute cdotc\n";
-            Test.Status = TestStatus::UNDETERMINED;
-            continue;
-         case -2:
-         case 11: {
-            if (CurrentTimeMillis() - startTime > TimeoutTime * 1000) {
-               LogOS << "TIMEOUT\n";
-               Test.Status = TestStatus::TIMEOUT;
-            }
-            else {
-               LogOS << "CRASH\n";
-               Test.Status = TestStatus::CRASH;
-            }
+              break;
+           }
+           default:
+              LogOS << "VERFAIL\n";
+              Task.Status = TestStatus::VERFAIL;
+              break;
+           }
 
-            continue;
-         }
-         default:
-            LogOS << "VERFAIL\n";
-            Test.Status = TestStatus::VERFAIL;
-            continue;
-         }
+           if (Task.Kind != Task::RUN || ExitCode != 0) {
+              Executor.TaskComplete(Test, Task);
+              return;
+           }
 
-         if (Task.Kind == Task::RUN) {
-            const char **ArgPtr = nullptr;
-            SmallVector<const char*, 0> Args;
-            if (!Task.Args.empty()) {
-               for (auto &Arg : Task.Args) {
-                  Args.push_back(Arg.data());
-               }
+           const char **ArgPtr = nullptr;
+           SmallVector<const char*, 0> Args;
+           if (!Task.Args.empty()) {
+              for (auto &Arg : Task.Args) {
+                 Args.push_back(Arg.data());
+              }
 
-               Args.push_back(nullptr);
-               ArgPtr = Args.data();
-            }
+              Args.push_back(nullptr);
+              ArgPtr = Args.data();
+           }
 
-            // Run the test executable.
-            int Status = llvm::sys::ExecuteAndWait(executable, ArgPtr, nullptr,
-                                                   RunRedirects);
+           // Run the test executable.
+           auto nextCallback = [&](int RunExitCode) {
+             if (RunExitCode == -1) {
+                LogOS << "VERFAIL: failed running output executable\n";
+                Task.Status = TestStatus::VERFAIL;
+                return Executor.TaskComplete(Test, Task);;
+             }
+             if (RunExitCode != 0) {
+                LogOS << "XFAIL: non-zero exit code on output executable\n";
+                Task.Status = TestStatus::XFAIL;
+                return Executor.TaskComplete(Test, Task);
+             }
 
-            if (Status == -1) {
-               LogOS << "VERFAIL: failed running output executable\n";
-               Test.Status = TestStatus::VERFAIL;
-               continue;
-            }
-            if (Status != 0) {
-               LogOS << "XFAIL: non-zero exit code on output executable\n";
-               Test.Status = TestStatus::XFAIL;
-               continue;
-            }
+             // Verify the output.
+             auto &RunRedirect = Task.Redirects[::Task::EXEC];
+             auto BufOrError = llvm::MemoryBuffer::getFile(RunRedirect);
+             if (!BufOrError)
+                return;
 
-            // Verify the output.
-            auto BufOrError = llvm::MemoryBuffer::getFile(RunRedirect);
-            if (!BufOrError)
-               continue;
+             std::string Output = BufOrError.get()->getBuffer();
+             if (Task.OutputChecks.empty()) {
+                if (!Output.empty()) {
+                   LogOS << Output << "\n";
+                   LogOS << "XFAIL: output not empty";
+                   Task.Status = TestStatus::XFAIL;
+                   return Executor.TaskComplete(Test, Task);
+                }
+             }
 
-            std::string Output = BufOrError.get()->getBuffer();
-            if (Task.OutputChecks.empty()) {
-               if (!Output.empty()) {
-                  LogOS << Output << "\n";
-                  LogOS << "XFAIL: output not empty";
-                  Test.Status = TestStatus::XFAIL;
-                  continue;
-               }
-            }
+             for (auto &Chk : Task.OutputChecks) {
+                std::regex re(Chk.data(), Chk.size());
+                std::smatch m;
 
-            for (auto &Chk : Task.OutputChecks) {
-               std::regex re(Chk.data(), Chk.size());
-               std::smatch m;
+                if (!std::regex_search(Output, m, re)) {
+                   LogOS << Output << "\n";
+                   LogOS << "XFAIL: output does not match pattern '" << Chk << "'\n";
+                   Task.Status = TestStatus::XFAIL;
+                   break;
+                }
+             }
 
-               if (!std::regex_search(Output, m, re)) {
-                  LogOS << Output << "\n";
-                  LogOS << "XFAIL: output does not match pattern '" << Chk << "'\n";
-                  Test.Status = TestStatus::XFAIL;
-                  break;
-               }
-            }
-         }
-      }
+             Executor.TaskComplete(Test, Task);
+           };
 
-      if (Test.Status == UNDETERMINED) {
-         LogOS << "SUCCESS\n";
-         Test.Status = TestStatus::SUCCESS;
-      }
+           auto &RunRedirect = Task.Redirects[::Task::EXEC];
+           RunRedirect = fs::getTmpFileName("txt");
+           llvm::Optional<StringRef> RunRedirects[] = {
+               llvm::Optional<StringRef>(""),
+               llvm::Optional<StringRef>(RunRedirect),
+               llvm::Optional<StringRef>(RunRedirect),
+           };
 
-      OS << Test.Status;
+           Executor.Execute(Task.Executable, ArgPtr, RunRedirects, move(nextCallback));
+         };
 
-      if (Test.Status != TestStatus::SUCCESS) {
-         auto BufOrError = llvm::MemoryBuffer::getFile(StderrRedirect);
-         if (!BufOrError)
-            continue;
+         auto &StdoutRedirect = Task.Redirects[::Task::STDOUT];
+         auto &StderrRedirect = Task.Redirects[::Task::STDERR];
 
-         LogOS << BufOrError.get()->getBuffer() << "\n";
-         fs::deleteFile(StderrRedirect);
+         StdoutRedirect = fs::getTmpFileName("txt");
+         StderrRedirect = fs::getTmpFileName("txt");
+
+         llvm::Optional<StringRef> Redirects[] = {
+             llvm::Optional<StringRef>(""),
+             llvm::Optional<StringRef>(StdoutRedirect),
+             llvm::Optional<StringRef>(StderrRedirect),
+         };
+
+         Executor.Execute(cdotc, Task.CompileArgs, Redirects, move(callback));
       }
    }
 
    for (auto *SubMod : M->getSubModules()) {
-      OS << "\n";
-      RunTestsForModule(QC, SubMod, TestMap, OS, LogOS, StdoutRedirect,
-                        StderrRedirect, RunRedirect, cdotc, args, executable);
+      RunTestsForModule(QC, SubMod, Executor, Tests, cdotc);
    }
 }
 
 QueryResult RunTestModuleQuery::run()
 {
-   llvm::StringMap<TestSummary> TestMap;
+   llvm::StringMap<std::unique_ptr<Test>> TestMap;
 
    // Find the cdotc executable.
    auto cdotcOrError = llvm::sys::findProgramByName(
@@ -390,22 +560,6 @@ QueryResult RunTestModuleQuery::run()
    }
 
    auto& cdotc = cdotcOrError.get();
-
-   // Create a temp file for test executables.
-   auto executable = fs::getTmpFileName("out");
-
-   // Prepare the compiler arguments.
-   const char *args[] = {
-       cdotc.c_str(),
-       nullptr, // < will be replaced with source file
-       nullptr, // < will be replaced with '-verify' for VERIFY tasks
-       "-fno-incremental",
-       "-o", executable.c_str(),
-       "-import=core.test",
-       "-is-test",
-       "-error-limit=0",
-       nullptr,
-   };
 
    // Create a log file.
    std::error_code EC;
@@ -420,22 +574,22 @@ QueryResult RunTestModuleQuery::run()
       return fail();
    }
 
-   // Tmp file for redirecting stdout and stderr.
-   auto StdoutRedirect = fs::getTmpFileName("txt");
-   auto StderrRedirect = fs::getTmpFileName("txt");
-   auto RunRedirect = fs::getTmpFileName("txt");
-
    auto &OS = llvm::outs();
-   RunTestsForModule(QC, Mod, TestMap, OS, LogOS, StdoutRedirect, StderrRedirect,
-                     RunRedirect, cdotc, args, executable);
+
+   // Tmp file for redirecting stdout and stderr.
+   TaskExecutor Executor(OS, LogOS);
+   AddTests(Mod, TestMap);
+   RunTestsForModule(QC, Mod, Executor, TestMap, cdotc);
+
+   Executor.WaitUntilCompletion();
 
    // Print the test summary.
    llvm::DenseMap<int, int> Totals;
    for (auto &Test : TestMap) {
-      Totals[Test.getValue().Status]++;
+      Totals[Test.getValue()->Status]++;
    }
 
-   llvm::outs() << "\n\n";
+   llvm::outs() << "\n";
    for (int i = 0; i <= CRASH; ++i) {
       if (!Totals[i])
          continue;
