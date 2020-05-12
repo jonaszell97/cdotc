@@ -631,7 +631,31 @@ il::Value* ILGenPass::getString(const llvm::Twine& twine)
                                    cast<il::Method>(Init), {globalStr, Len});
 }
 
-il::Value* ILGenPass::stringify(il::Value* Val) { llvm_unreachable("TODO!"); }
+il::Value* ILGenPass::stringify(il::Value* Val)
+{
+   switch (Val->getType()->getTypeID()) {
+   case Type::TupleTypeID:
+      llvm_unreachable("TODO!");
+   case Type::ArrayTypeID:
+      llvm_unreachable("TODO!");
+   case Type::ExistentialTypeID:
+      llvm_unreachable("TODO!");
+   case Type::RecordTypeID: {
+      auto R = Val->getType()->getRecord();
+
+      MethodDecl* ToStringFn;
+      if (SP.QC.GetImplicitConformance(
+          ToStringFn, R, ImplicitConformanceKind::StringRepresentable)) {
+         return Val;
+      }
+
+      assert(ToStringFn && "type cannot be copied!");
+      return CreateCall(ToStringFn, {Val});
+   }
+   default:
+      llvm_unreachable("type should not appear at IL level!");
+   }
+}
 
 static il::Constant* makeArrayFromString(ASTContext& Ctx, ILBuilder& Builder,
                                          llvm::StringRef Str)
@@ -1836,8 +1860,9 @@ bool ILGenPass::CanSynthesizeFunction(CallableDecl* C)
 
 bool ILGenPass::registerCalledFunction(CallableDecl* C, StmtOrDecl Caller)
 {
-   if (!inCTFE())
+   if (!inCTFE()) {
       return true;
+   }
 
    if (!prepareFunctionForCtfe(C, Caller)) {
       CtfeScopeStack.back().HadError = true;
@@ -2269,7 +2294,7 @@ il::Value* ILGenPass::CreateCopy(il::Value* Val)
       }
 
       assert(CopyFn && "type cannot be copied!");
-      return CreateCall(SP.maybeInstantiateTemplateMember(R, CopyFn), {Val});
+      return CreateCall(CopyFn, {Val});
    }
    default:
       llvm_unreachable("type should not appear at IL level!");

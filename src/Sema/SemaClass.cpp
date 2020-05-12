@@ -26,18 +26,12 @@ QueryResult PrepareRecordInterfaceQuery::run()
    auto& Meta = QC.RecordMeta[Rec];
    Meta.Opaque = Rec->hasAttribute<OpaqueAttr>();
 
-   // FIXME constraints
-
    auto* Ty = QC.Sema->Context.getRecordType(Rec);
    Ty->setDependent(Ty->isDependentType() || Rec->isInUnboundedTemplate());
 
    if (Rec->isInvalid()) {
       return finish(DoneWithError);
    }
-
-//   if (QC.CheckConformances(Ty)) {
-//      return finish(DoneWithError);
-//   }
 
    return finish();
 }
@@ -658,9 +652,9 @@ QueryResult AssignInitNameQuery::run()
 QueryResult PrepareInitInterfaceQuery::run()
 {
    auto R = D->getRecord();
-
-   if (D->getArgs().empty() && isa<StructDecl>(R) && D->isCompleteInitializer()
-       && !D->isMemberwise()) {
+   if (D->getArgs().empty()
+       && isa<StructDecl>(R)
+       && D->isCompleteInitializer()) {
       cast<StructDecl>(R)->setParameterlessConstructor(D);
    }
 
@@ -784,18 +778,26 @@ QueryResult TypecheckInitQuery::run()
 QueryResult PrepareDeinitInterfaceQuery::run()
 {
    auto& Context = QC.CI.getContext();
+   auto *Rec = D->getRecord();
 
    D->setReturnType(SourceType(Context.getVoidType()));
-   D->setMutating(!isa<ClassDecl>(D->getRecord()));
+   D->setMutating(!isa<ClassDecl>(Rec));
 
-   QualType SelfTy = Context.getRecordType(D->getRecord());
+   QualType SelfTy = Context.getRecordType(Rec);
    D->setSelfType(SelfTy);
 
    if (!D->getDeclName()) {
       auto DeclName = Context.getDeclNameTable().getDestructorName(SelfTy);
       D->setName(DeclName);
-      QC.Sema->makeDeclAvailable(*D->getRecord(), DeclName, D);
+
+      if (Rec->isInstantiation()) {
+         Rec->removeVisibleDecl(Rec->getDeinitializer(), DeclName);
+      }
+
+      QC.Sema->makeDeclAvailable(*Rec, DeclName, D);
    }
+
+   Rec->setDeinitializer(D);
 
    if (QC.PrepareCallableInterface(D)) {
       return fail();

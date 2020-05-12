@@ -65,7 +65,9 @@ struct DependencyNode : public llvm::FoldingSetNode {
    DependencyNode(DependencyNodeKind K, NamedDecl *Decl,
                   void *Data = nullptr)
        : Kind(K), Decl(Decl), Data(Data), Done(false)
-   {}
+   {
+
+   }
 
    NamedDecl *getOtherDecl() const
    {
@@ -413,6 +415,9 @@ class cdot::ConformanceResolver {
    /// The record decls that need to have their conformances checked.
    llvm::SetVector<RecordDecl*> PendingRecordDecls;
 
+   /// Allocator used for creating dependency nodes.
+   llvm::BumpPtrAllocator Allocator;
+
    /// The resolution dependency graph.
    DependencyGraph<DependencyNode*> Dependencies;
 
@@ -459,7 +464,8 @@ public:
 
    /// C'tor.
    explicit ConformanceResolver(QueryContext &QC)
-       : QC(QC), ConfTbl(QC.Context.getConformanceTable())
+       : QC(QC), ConfTbl(QC.Context.getConformanceTable()),
+         Dependencies(Allocator)
    {}
 
    UncheckedConformance &CreateCondConformance(ProtocolDecl* proto = nullptr,
@@ -1241,15 +1247,23 @@ NamedDecl* ConformanceCheckerImpl::checkIfProtocolDefaultImpl(
       }
    }
 
-   bool Dependent;
-   FilterImpls(Sema.QC, Rec, Conf, FoundImpls, Dependent);
-
-   if (Dependent && FoundImpls.size() > 1) {
-      FoundChanges = true;
-      return FoundImpls.front();
-   }
-   else if (FoundImpls.size() != 1) {
+   if (FoundImpls.empty()) {
       return nullptr;
+   }
+
+   // For templates we don't know which implementation applies until
+   // instantiation, so just check that there are possible ones.
+   if (!Rec->isTemplateOrInTemplate()) {
+      bool Dependent;
+      FilterImpls(Sema.QC, Rec, Conf, FoundImpls, Dependent);
+
+      if (Dependent && FoundImpls.size() > 1) {
+         FoundChanges = true;
+         return FoundImpls.front();
+      }
+      else if (FoundImpls.size() != 1) {
+         return nullptr;
+      }
    }
 
    NamedDecl *Impl = FoundImpls.front();
@@ -1704,6 +1718,7 @@ NamedDecl* ConformanceCheckerImpl::checkInitImpl(RecordDecl *Rec,
                                                  InitDecl *Init)
 {
    auto *Proto = Conf.conformance;
+
    // Make sure all initializers are deserialized.
    auto InitName = Sema.getContext().getDeclNameTable().getConstructorName(
       Sema.getContext().getRecordType(Rec));
@@ -1712,7 +1727,7 @@ NamedDecl* ConformanceCheckerImpl::checkInitImpl(RecordDecl *Rec,
       return nullptr;
    }
 
-   MethodDecl* MethodImpl = nullptr;
+   InitDecl* MethodImpl = nullptr;
    std::vector<MethodCandidate> Candidates;
 
    for (auto* D : FoundImpls) {
@@ -1741,20 +1756,29 @@ NamedDecl* ConformanceCheckerImpl::checkInitImpl(RecordDecl *Rec,
 
    if (!MethodImpl) {
       if (auto* Impl = checkIfProtocolDefaultImpl(Rec, Proto, Init, Conf)) {
-         return Impl;
+         MethodImpl = cast<InitDecl>(Impl);
       }
-      if (FoundChanges) {
+      else if (FoundChanges) {
          DelayedChecks.insert(Conf);
          CheckedConformanceSet.remove(Conf);
          return nullptr;
       }
+      else {
+         genericError(Rec, Proto);
+         Sema.diagnose(note_incorrect_protocol_impl_missing, Init, "init",
+                       Init->getSourceLoc());
 
-      genericError(Rec, Proto);
-      Sema.diagnose(note_incorrect_protocol_impl_missing, Init, "init",
-                    Init->getSourceLoc());
+         issueDiagnostics(Sema, Candidates);
+         return nullptr;
+      }
+   }
 
-      issueDiagnostics(Sema, Candidates);
-      return nullptr;
+   // This needs to be updated here in case Rec is a template and
+   // the parameterless constructor comes from a protocol default implementation.
+   if (Rec->isInstantiation() && MethodImpl->getArgs().empty()) {
+      if (auto *S = dyn_cast<StructDecl>(Rec)) {
+         S->setParameterlessConstructor(MethodImpl);
+      }
    }
 
    MethodImpl->setIsProtocolMethod(true);
@@ -3040,6 +3064,7 @@ ConformanceResolver::CreateUncheckedConformanceForImportedDecl(RecordDecl* Rec)
           C->getProto(), C->getConstraints(), C->getDeclarationCtx(),
           &baseConf);
 
+      innerConf.depth = C->getDepth();
       baseConf.innerConformances->emplace_back(move(innerConf));
    }
 
@@ -3519,7 +3544,6 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
    if (Node->Done) {
       return false;
    }
-
    if (HasNewDependencies(Node)) {
       shouldReset = true;
       return false;
@@ -3550,14 +3574,14 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
       if (PrepareImplicitDecls(Rec)) {
          error = true;
          Rec->setIsInvalid(true);
-
-         return false;
+         return true;
       }
 
       QualType T = QC.Context.getRecordType(Rec);
       if (QC.CheckConformances(T)) {
          error = true;
          Rec->setIsInvalid(true);
+         Node->Done = true;
 
          return false;
       }
@@ -3575,6 +3599,8 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
       if (it != ImplementedATs.end()) {
          QC.Context.addProtocolImpl(R, AT, it->getSecond());
          QC.Sema->registerAssociatedTypeImpl(R, AT, it->getSecond());
+         Node->Done = true;
+
          return false;
       }
 
@@ -3590,7 +3616,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
             for (DeclConstraint *C : *CS) {
                if (auto Err = QC.IsConstraintSatisfied(Satisfied, C, R, Impl)) {
                   if (!Err.isDependent()) {
-                     return true;
+                     error = true;
                   }
 
                   Satisfied = true;
@@ -3613,7 +3639,8 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
             QC.Sema->diagnose(note_candidate_here, foundImpl->getSourceLoc());
             QC.Sema->diagnose(note_candidate_here, Impl->getSourceLoc());
 
-            return true;
+            error = true;
+            break;
          }
 
          if (auto *DefaultImpl = dyn_cast<AssociatedTypeDecl>(Impl)) {
@@ -3722,14 +3749,21 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
           Node->getType()->asAssociatedType()->getOuterAT(),
           QC.Context.getRecordType(cast<RecordDecl>(Node->Decl)));
 
+      if (Resolved->isTemplateParamType()) {
+         break;
+      }
+
       auto &DepNode = GetDependencyNode(
           DependencyNode::ConcreteTypeOfAssociatedType, Resolved->getRecord(),
           Node->getType()->asAssociatedType()->getDecl());
 
-      Dependencies.getOrAddVertex(Node).addIncoming(&DepNode);
+      if (!DepNode.getVal()->Done) {
+         Dependencies.getOrAddVertex(Node).addIncoming(&DepNode);
+         if (!DepNode.getIncoming().empty()) {
+            shouldReset = true;
+         }
 
-      if (!DepNode.getIncoming().empty()) {
-         shouldReset = true;
+         return false;
       }
 
       break;
@@ -3769,18 +3803,50 @@ static void LogDependencyGraph(DependencyGraph<DependencyNode*> &Graph,
    LOG(ConformanceDependencies, OS.str());
 }
 
+LLVM_ATTRIBUTE_UNUSED
+void printStats(const DependencyGraph<DependencyNode*> &DG)
+{
+   int completeNodes = 0;
+   int isolatedNodes = 0;
+   auto size = DG.getVertices().size();
+
+   for (auto &Vert : DG.getVertices()) {
+      if (Vert->getVal()->Done)
+         ++completeNodes;
+      if (Vert->getIncoming().empty()&&Vert->getOutgoing().empty())
+         ++isolatedNodes;
+   }
+
+   llvm::errs() << "-------\n";
+   llvm::errs() << "Done: " << completeNodes << " / " << size << " (" << (int)(((float)completeNodes/(float)size)*100.f) << "%)\n";
+   llvm::errs() << "Isolated: " << isolatedNodes << " / " << size << " (" << (int)(((float)isolatedNodes/(float)size)*100.f) << "%)\n";
+   llvm::errs() << "-------\n";
+}
+
+LLVM_ATTRIBUTE_UNUSED
+void verifyNode(DependencyGraph<DependencyNode*>::Vertex *V)
+{
+   assert(V->getVal()->Done && "unfinished node");
+   for (auto *Inc : V->getIncoming())
+      verifyNode(Inc);
+}
+
+LLVM_ATTRIBUTE_UNUSED
+void verifyDAG(const DependencyGraph<DependencyNode*> &DG)
+{
+   for (auto *V : DG.getVertices()) {
+      if (!V->getVal()->Done)
+         continue;
+
+      verifyNode(V);
+   }
+}
+
 #endif
 
 bool ConformanceResolver::ResolveDependencyGraph()
 {
-   // Remove nodes that are already complete.
-   Dependencies.remove_if([](DependencyNode *V) {
-     return V->Done;
-   });
-
    llvm::SmallVector<DependencyNode*, 8> DependencyOrder;
-   int CurrentNodeIdx = 0;
-
    auto valid = Dependencies.constructOrderedList(DependencyOrder, true);
 
 #ifndef NDEBUG
@@ -3798,7 +3864,8 @@ END_LOG
    bool error = false;
    bool shouldReset = false;
 
-   for (CurrentNodeIdx = 0; CurrentNodeIdx < DependencyOrder.size(); ++CurrentNodeIdx) {
+   size_t CurrentNodeIdx = 0;
+   for (; CurrentNodeIdx < DependencyOrder.size(); ++CurrentNodeIdx) {
       auto *Node = DependencyOrder[CurrentNodeIdx];
       if (Node->Done) {
          continue;
@@ -3815,15 +3882,18 @@ END_LOG
          shouldReset = false;
          CurrentNodeIdx = -1;
 
-         DependencyOrder.clear();
+         Dependencies.remove_if([](DependencyNode *V) {
+           return V->Done;
+         });
 
+         DependencyOrder.clear();
          valid = Dependencies.constructOrderedList(DependencyOrder, true);
+
 #ifndef NDEBUG
          BEGIN_LOG(ConformanceDependencies)
             LogDependencyGraph(Dependencies, valid);
          END_LOG
 #endif
-
          assert(valid && "loop in conformance dependency graph!");
 
          for (auto *Vert : Dependencies.getVertices()) {
@@ -3832,13 +3902,12 @@ END_LOG
       }
    }
 
-   // Resolve new instantiations that were introduced.
-   if (CurrentNodeIdx < Dependencies.size()) {
-      return error || ResolveDependencyGraph();
-   }
-
    if (error) {
       return true;
+   }
+
+   if (CurrentNodeIdx < Dependencies.size()) {
+      return ResolveDependencyGraph();
    }
 
    auto PendingDecls = move(PendingRecordDecls);
@@ -3858,6 +3927,7 @@ END_LOG
 
    Dependencies.clear();
    NumDependencies.clear();
+   Allocator.Reset();
 
    return error;
 }

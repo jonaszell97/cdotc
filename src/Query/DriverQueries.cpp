@@ -12,6 +12,7 @@
 #include "cdotc/Parse/Parser.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Log.h"
 #include "cdotc/Support/SaveAndRestore.h"
 #include "cdotc/Support/Timer.h"
 #include "cdotc/Support/Various.h"

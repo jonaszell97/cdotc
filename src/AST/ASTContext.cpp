@@ -224,7 +224,9 @@ void ASTContext::updateProtocolImpl(const RecordDecl *R,
       }
    }
 
-   assert(Req && "no impl to update!");
+   if (!Req)
+      return;
+
    ProtocolImplMap[R][Req] = NewImpl;
 }
 

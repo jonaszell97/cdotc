@@ -3018,25 +3018,6 @@ static DeclarationName getNameFor(ASTContext& C, NamedDecl* D, RecordDecl* Inst)
    }
 }
 
-static void updateSpecialFunction(QueryContext& QC, NamedDecl* D,
-                                  NamedDecl* MemberInst, RecordDecl* Template,
-                                  RecordDecl* Inst,
-                                  RecordMetaInfo& TemplateInfo,
-                                  RecordMetaInfo& InstInfo)
-{
-   auto* M = dyn_cast<MethodDecl>(D);
-   if (!M)
-      return;
-
-   if (isa<DeinitDecl>(M)) {
-      Inst->setDeinitializer(cast<DeinitDecl>(MemberInst));
-   }
-   else if (isa<InitDecl>(M) && M->getArgs().empty() && isa<StructDecl>(Inst)) {
-      cast<StructDecl>(Inst)->setParameterlessConstructor(
-          cast<InitDecl>(MemberInst));
-   }
-}
-
 TemplateInstantiator::TemplateInstantiator(SemaPass &SP)
    : SP(SP), QC(SP.QC)
 {
@@ -3398,8 +3379,6 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
 
    auto *Info = Inst->getInstantiationInfo();
    auto *Template = Info->specializedTemplate;
-   auto& TemplateInfo = QC.RecordMeta[Template];
-   auto& InstInfo = QC.RecordMeta[Inst];
 
    // Make all protocol requirements visible.
    auto *ProtocolImpls = QC.Context.getProtocolImpls(Template);
@@ -3435,7 +3414,7 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
    }
 
    for (auto *ND : VisibleDecls) {
-      if (ND->isSynthesized()) {
+      if (ND->isSynthesized() || ND->instantiatedFromProtocolDefaultImpl()) {
          continue;
       }
 
@@ -3447,8 +3426,6 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
       }
 
       SP.makeDeclAvailable(*Inst, getNameFor(QC.Context, ND, Inst), ND);
-      updateSpecialFunction(QC, ND, ND, Template, Inst, TemplateInfo,
-                            InstInfo);
 
       if (auto *Sub = dyn_cast<SubscriptDecl>(ND)) {
          if (auto *Get = Sub->getGetterMethod()) {
@@ -3496,6 +3473,7 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
          auto *DeinitInst = QC.Sema->maybeInstantiateTemplateMember(
              Inst, Deinit);
 
+         Inst->setDeinitializer(DeinitInst);
          if (DeinitInst) {
             QC.Sema->maybeInstantiateMemberFunction(DeinitInst, Inst);
          }
@@ -3543,6 +3521,10 @@ TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
 
    // Instantiate declarations provided by protocol extensions.
    if (isa<ProtocolDecl>(TemplateMember->getRecord())) {
+      if (Inst->isTemplate()) {
+         return TemplateMember;
+      }
+
       NamedDecl* Result = InstantiateProtocolDefaultImpl(
          TemplateMember, QC.Context.getRecordType(Inst), false);
 
@@ -3624,15 +3606,6 @@ TemplateInstantiator::InstantiateTemplateMember(NamedDecl *TemplateMember,
       cast<CallableDecl>(MemberInst)
          ->setBodyTemplate(
             cast<CallableDecl>(TemplateMember)->getBodyTemplate());
-   }
-
-   // Don't do this for inner records.
-   if (Inst->isInstantiation()) {
-      auto& TemplateInfo = QC.RecordMeta[Inst];
-      auto& InstInfo = QC.RecordMeta[Inst];
-
-      updateSpecialFunction(QC, TemplateMember, MemberInst, Inst, Inst,
-                            TemplateInfo, InstInfo);
    }
 
    if (isa<FieldDecl>(MemberInst)) {

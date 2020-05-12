@@ -130,7 +130,7 @@ void PassManager::execute()
    unsigned Idx = 0, NumTransforms = (unsigned)Passes.size();
 
    while (Idx < NumTransforms && continueTransforming()) {
-      ILPass* Tr = Passes[Idx];
+      ILPass* Tr = Passes[Idx]; (void)Tr;
       assert((isa<FunctionPass>(Tr) || isa<ModulePass>(Tr))
              && "Unexpected pass kind!");
 

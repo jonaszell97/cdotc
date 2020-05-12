@@ -25,7 +25,8 @@ NamedDecl* SemaPass::maybeInstantiateTemplateMemberImpl(DeclContext* LookupCtx,
          LookupCtx = LookupCtx->getParentCtx();
       }
 
-      if (!SelfRec || SelfRec == P || isa<ProtocolDecl>(SelfRec)) {
+      if (!SelfRec || SelfRec == P || isa<ProtocolDecl>(SelfRec)
+      || SelfRec->isTemplate()) {
          return Member;
       }
 

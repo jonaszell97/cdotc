@@ -148,10 +148,8 @@ void ILGenPass::DefineDefaultInitializer(StructDecl* S)
    if (Self->isLvalue())
       Self = Builder.CreateLoad(Self);
 
-   auto TypeSize = SP.getContext().getTargetInfo().getAllocSizeOfType(
-       SP.getContext().getRecordType(S));
-
-   assert(TypeSize && "uncalculated record size");
+   assert(SP.getContext().getTargetInfo().getAllocSizeOfType(
+       SP.getContext().getRecordType(S)) && "uncalculated record size");
 
    if (auto C = dyn_cast<ClassDecl>(S)) {
       auto strongRefcnt = Builder.GetStrongRefcount(Self);
@@ -1378,9 +1376,6 @@ QueryResult GetILTypeInfoQuery::run()
    SourceLocation Loc;
 
    if (T->isRecordType()) {
-      if (T->getRecord()->getFullName()=="libc.assert.__NSConstantString_tag") {
-         NO_OP;
-      }
       if (QC.GetILModuleForDecl(Mod, T->getRecord())) {
          return fail();
       }
