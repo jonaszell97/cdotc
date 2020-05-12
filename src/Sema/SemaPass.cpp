@@ -747,7 +747,12 @@ bool SemaPass::hasDefaultValue(CanType type) const
    case Type::ArrayTypeID:
       return hasDefaultValue(type->asArrayType()->getElementType());
    case Type::RecordTypeID: {
-      if (auto* S = dyn_cast<StructDecl>(type->getRecord())) {
+      auto *R = type->getRecord();
+      if (auto* S = dyn_cast<StructDecl>(R)) {
+         if (QC.PrepareDeclInterface(S)) {
+            return true;
+         }
+
          return S->getParameterlessConstructor() != nullptr;
       }
 

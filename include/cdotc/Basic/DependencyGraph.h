@@ -10,7 +10,8 @@
 
 namespace cdot {
 
-template<class T> class DependencyGraph {
+template<class T, class AllocatorType = llvm::BumpPtrAllocator>
+class DependencyGraph {
 public:
    struct Vertex {
       explicit Vertex(T Ptr) : Val(Ptr) {}
@@ -98,39 +99,57 @@ public:
       std::unique_ptr<llvm::SetVector<Vertex*>> Outgoing;
    };
 
-   DependencyGraph() = default;
-   DependencyGraph(const DependencyGraph&) = delete;
+   explicit DependencyGraph(AllocatorType &Allocator)
+      : Allocator(Allocator)
+   {}
 
-   DependencyGraph(DependencyGraph&& that) : Vertices(std::move(that.Vertices))
+   DependencyGraph(const DependencyGraph&) = delete;
+   DependencyGraph(DependencyGraph&& that) noexcept
+      : Allocator(that.Allocator), Vertices(std::move(that.Vertices)),
+        VertexMap(std::move(that.VertexMap))
    {
       that.Vertices.clear();
+      that.VertexMap.clear();
    }
-
-   ~DependencyGraph() { destroyVerts(); }
 
    DependencyGraph& operator=(const DependencyGraph&) = delete;
    DependencyGraph& operator=(DependencyGraph&& that) noexcept
    {
-      destroyVerts();
-
       Vertices = std::move(that.Vertices);
+      VertexMap = std::move(that.VertexMap);
+
       that.Vertices.clear();
+      that.VertexMap.clear();
 
       return *this;
    }
 
-   Vertex& getOrAddVertex(T ptr)
+   [[nodiscard]] DependencyGraph clone() const
    {
-      auto it = VertexMap.find(ptr);
+      DependencyGraph Result(Allocator);
+      Result.Vertices = Vertices;
+      Result.VertexMap = VertexMap;
+
+      return Result;
+   }
+
+   Vertex& getOrAddVertex(T node)
+   {
+      auto it = VertexMap.find(node);
       if (it != VertexMap.end()) {
          return *it->getSecond();
       }
 
-      auto *result = new Vertex(std::move(ptr));
+      auto *result = new(Allocator) Vertex(node);
       Vertices.push_back(result);
-      VertexMap[ptr] = result;
+      VertexMap[node] = result;
 
       return *result;
+   }
+
+   bool containsNode(T node)
+   {
+      return VertexMap.find(node) != VertexMap.end();
    }
 
    template<class Actor> bool actOnGraphInOrder(Actor const& act)
@@ -159,7 +178,6 @@ public:
 
          V->reset();
          VertexMap.erase(V->getVal());
-         delete V;
       }
 
       Vertices.erase(begin, end);
@@ -202,13 +220,42 @@ public:
 
    void clear()
    {
-      destroyVerts();
       Vertices.clear();
       VertexMap.clear();
    }
 
    [[nodiscard]] bool empty() const { return Vertices.empty(); }
    [[nodiscard]] size_t size() const { return Vertices.size(); }
+
+   void computeConnectedComponents(
+       llvm::SmallVectorImpl<std::unique_ptr<DependencyGraph>> &Components)
+   {
+      auto NumNodes = Vertices.size();
+
+      llvm::DenseMap<Vertex*, unsigned> ComponentMap;
+      for (auto *V : Vertices)
+         ComponentMap[V] = NumNodes;
+
+      unsigned LastComponent = 0;
+      for (auto *V : Vertices) {
+         connectedComponentsImpl(V, NumNodes, NumNodes, LastComponent,
+                                 ComponentMap);
+      }
+
+      Components.reserve(LastComponent);
+      for (unsigned i = 0; i < LastComponent; ++i) {
+         Components.emplace_back(std::make_unique<DependencyGraph>(Allocator));
+      }
+
+      for (auto *V : Vertices) {
+         auto Component = ComponentMap[V];
+         auto &DG = Components[Component];
+         DG->Vertices.push_back(V);
+         DG->VertexMap.try_emplace(V->getVal(), V);
+      }
+
+      clear();
+   }
 
 #ifndef NDEBUG
    template<class PrintFn> void print(const PrintFn& Fn,
@@ -300,13 +347,32 @@ private:
       return cnt == Vertices.size();
    }
 
-   void destroyVerts()
+   void connectedComponentsImpl(Vertex* Node,
+                                unsigned NumNodes,
+                                unsigned CurrentComponent,
+                                unsigned& LastComponent,
+                                llvm::DenseMap<Vertex*, unsigned>& Components)
    {
-      for (const auto& vert : Vertices) {
-         delete vert;
+      if (Components[Node] != NumNodes) {
+         return;
+      }
+      if (CurrentComponent == NumNodes) {
+         CurrentComponent = LastComponent++;
+      }
+
+      Components[Node] = CurrentComponent;
+
+      for (auto* Other : Node->getIncoming()) {
+         connectedComponentsImpl(Other, NumNodes, CurrentComponent,
+                                 LastComponent, Components);
+      }
+      for (auto* Other : Node->getOutgoing()) {
+         connectedComponentsImpl(Other, NumNodes, CurrentComponent,
+                                 LastComponent, Components);
       }
    }
 
+   AllocatorType &Allocator;
    llvm::SmallVector<Vertex*, 8> Vertices;
    llvm::DenseMap<T, Vertex*> VertexMap;
 };

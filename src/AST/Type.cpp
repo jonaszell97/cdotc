@@ -944,9 +944,13 @@ public:
    void visitTypedefType(const TypedefType* Ty)
    {
       auto TD = cast<TypedefType>(Ty)->getTypedef();
-      OS << TD->getDeclName() << " (aka ";
-      visit(Ty->getAliasedType());
-      OS << ")";
+      OS << TD->getDeclName();
+
+      if (!TD->hasAttribute<_BuiltinAttr>()) {
+         OS << " (aka ";
+         visit(Ty->getAliasedType());
+         OS << ")";
+      }
    }
 
    void visitAssociatedType(const AssociatedType* Ty)
@@ -1039,11 +1043,7 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, QualType Ty)
       OS << "<null>";
    }
    else {
-#ifndef NDEBUG
       DiagTypePrinter(OS).visit(Ty);
-#else
-      TypePrinter(OS).visit(Ty);
-#endif
    }
 
    return OS;

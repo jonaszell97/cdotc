@@ -6,16 +6,26 @@
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Support/Timer.h"
 
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Program.h>
 
 #include <chrono>
 #include <regex>
+#include <thread>
 
 using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::diag;
 using namespace cdot::support;
+namespace cl = llvm::cl;
+
+/// Number of threads to use for testing.
+static cl::opt<unsigned>
+    ThreadCount("j",
+              cl::desc("maximum number of threads to use for running tests"
+                       " (defaults to number of physical cores)"),
+              cl::init(0));
 
 namespace {
 

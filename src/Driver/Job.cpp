@@ -532,7 +532,12 @@ PrintPhasesJob::PrintPhasesJob(CompilerInstance& CI)
 {
 }
 
-void PrintPhasesJob::run() { CI.displayPhaseDurations(llvm::errs()); }
+void PrintPhasesJob::run()
+{
+#ifndef NDEBUG
+   CI.displayPhaseDurations(llvm::errs());
+#endif
+}
 
 UnittestJob::UnittestJob(Job* PreviousJob, CompilerInstance& CI)
     : Job(UnittestJobID, PreviousJob, CI)

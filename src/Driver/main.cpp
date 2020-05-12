@@ -156,7 +156,9 @@ int cdot_main(int argc, char* argv[])
                                      static_cast<void*>(&compilationUnit));
 
    auto Result = compilationUnit.compile();
+#ifndef NDEBUG
    compilationUnit.displayPhaseDurations(llvm::errs());
+#endif
 
    llvm::remove_fatal_error_handler();
    return Result;

@@ -1,10 +1,8 @@
 #include "cdotc/IRGen/IRGen.h"
 
-#include "cdotc/AST/Decl.h"
 #include "cdotc/Basic/FileUtils.h"
 #include "cdotc/Driver/Compiler.h"
 #include "cdotc/IL/Context.h"
-#include "cdotc/IL/Module.h"
 #include "cdotc/Diagnostics/Diagnostics.h"
 #include "cdotc/Module/Module.h"
 #include "cdotc/Sema/SemaPass.h"
@@ -13,7 +11,6 @@
 #include "cdotc/Tools/IRDebug/IRDebugAnnotatePass.h"
 
 #include <llvm/IR/AssemblyAnnotationWriter.h>
-#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
@@ -22,14 +19,11 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Transforms/Coroutines.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
-
-#include <sstream>
 
 using namespace cdot::diag;
 namespace cl = llvm::cl;
@@ -55,7 +49,7 @@ void IRGen::finalize(const CompilerInstance& CU)
    auto& llvmOut = llvm::outs();
    auto isInvalid = llvm::verifyModule(*M, &llvmOut);
 
-   if (isInvalid || true) {
+   if (isInvalid) {
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(

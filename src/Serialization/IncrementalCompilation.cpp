@@ -46,7 +46,9 @@ static unsigned getCompilationHash(CompilerInstance& CI)
 
 IncrementalCompilationManager::IncrementalCompilationManager(
     CompilerInstance& CI)
-    : CI(CI), InfoFileBuf(nullptr), InfoFileReader(nullptr)
+    : CI(CI), InfoFileBuf(nullptr), InfoFileReader(nullptr),
+      FileDependency(CI.getContext().getAllocator()),
+      ReadFileDependency(CI.getContext().getAllocator())
 {
 }
 
