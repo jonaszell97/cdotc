@@ -1968,8 +1968,11 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
          llvm::raw_string_ostream OS(str);
          for (auto& Tok : Tokens) {
             switch (Tok.getKind()) {
+            case tok::charliteral:
+               OS << "'" << Tok.getText() << "'";
+               break;
             case tok::stringliteral:
-               OS << Tok.getText();
+               OS << '"' << Tok.getText() << '"';
                break;
             case tok::macro_expression:
                SP.diagnose(err_macro_argument_cannot_be_stringified,

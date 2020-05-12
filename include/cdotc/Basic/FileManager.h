@@ -172,6 +172,8 @@ public:
    SourceLocation getReplacementLocation(SourceLocation Loc);
    SourceID getReplacementID(SourceID ID);
 
+   SourceLocation getLexicalSourceLoc(SourceLocation Loc);
+
    void dumpSourceLine(SourceLocation Loc);
    void dumpSourceRange(SourceRange Loc);
 

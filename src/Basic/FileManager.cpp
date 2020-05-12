@@ -140,13 +140,9 @@ unsigned FileManager::getSourceId(SourceLocation loc)
    return m + 1;
 }
 
-SourceID FileManager::getLexicalSourceId(SourceLocation loc)
+SourceID FileManager::getLexicalSourceId(SourceLocation Loc)
 {
-   while (auto* Exp = getMacroExpansionLoc(loc)) {
-      loc = Exp->ExpandedFrom;
-   }
-
-   return getSourceId(loc);
+   return getSourceId(getLexicalSourceLoc(Loc));
 }
 
 llvm::StringRef FileManager::getFileName(SourceID sourceId)
@@ -197,6 +193,31 @@ SourceLocation FileManager::getReplacementLocation(SourceLocation Loc)
    }
    if (auto* Exp = getMacroExpansionLoc(Loc)) {
       return getReplacementLocation(Exp->PatternLoc);
+   }
+
+   return Loc;
+}
+
+SourceLocation FileManager::getLexicalSourceLoc(SourceLocation Loc)
+{
+   while (auto AliasLoc = getAliasLoc(Loc)) {
+      Loc = AliasLoc;
+   }
+   while (auto Import = getImportForLoc(Loc)) {
+      Loc = Import;
+   }
+
+   if (auto Exp = getMacroExpansionLoc(Loc)) {
+      Loc = Exp->ExpandedFrom;
+
+      while (true) {
+         Exp = getMacroExpansionLoc(Exp->ExpandedFrom);
+         if (!Exp) {
+            break;
+         }
+
+         Loc = Exp->ExpandedFrom;
+      }
    }
 
    return Loc;
