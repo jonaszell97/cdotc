@@ -3155,14 +3155,20 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
          return parseDestructuringDecl(isLet);
    }
 
-   if (!currentTok().is(tok::ident)) {
+   if (!currentTok().oneOf(tok::ident, tok::underscore)) {
       SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       return skipUntilProbableEndOfStmt();
    }
 
-   auto Name = currentTok().getIdentifierInfo();
+   DeclarationName Name;
+   if (currentTok().is(tok::ident)) {
+      Name = currentTok().getIdentifierInfo();
+   }
+   else {
+      Name = Context.getDeclNameTable().getErrorName();
+   }
 
    SourceType type;
    Expression* value = nullptr;

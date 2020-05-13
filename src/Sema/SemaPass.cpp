@@ -1435,10 +1435,12 @@ DeclResult SemaPass::visitLocalVarDecl(LocalVarDecl* Decl)
       Decl->setIsBorrow(true);
    }
 
-   DeclarationName DeclName = Context.getDeclNameTable().getLocalVarName(
-       Decl->getDeclName(), getBlockScope()->getScopeID());
+   if (!Decl->getDeclName().isErrorName()) {
+      DeclarationName DeclName = Context.getDeclNameTable().getLocalVarName(
+          Decl->getDeclName(), getBlockScope()->getScopeID());
 
-   makeDeclAvailable(getDeclContext(), DeclName, Decl);
+      makeDeclAvailable(getDeclContext(), DeclName, Decl);
+   }
 
    LOG(LocalVariables, "'", Decl->getFullName(),
        "': ", Decl->getType().getResolvedType());
