@@ -5,6 +5,7 @@ build/
 .vscode/
 cmake-build-debug/
 cmake-build-release/
+cmake-build-relwithdebinfo/
 xcode_build/
 CMakeLists.txt.user
 

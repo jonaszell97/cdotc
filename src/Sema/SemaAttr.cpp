@@ -221,6 +221,10 @@ void SemaPass::checkInstantiateAttr(Decl *D, InstantiateAttr *A)
 {
 }
 
+void SemaPass::checkTransparentAttr(Decl *D, TransparentAttr *A)
+{
+}
+
 void SemaPass::check_DebugAttr(Decl *D, _DebugAttr *A) {}
 
 #define CDOT_ATTR_SEMA

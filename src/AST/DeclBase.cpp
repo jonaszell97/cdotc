@@ -444,6 +444,8 @@ std::string NamedDecl::getJoinedName(char join, bool includeFile,
       }
       else if (auto *Mod = support::dyn_cast<ModuleDecl>(Ctx)) {
          printCtx &= includeAllModules || Mod->getModule()->isImported();
+         printCtx &= includeAllModules
+             || !Mod->getModule()->getBaseModule()->getName()->isStr("core");
       }
 
       if (printCtx) {

@@ -39,6 +39,8 @@ void ASTAttrWriter::visitExternallyInitializedAttr(ExternallyInitializedAttr *A)
 }
 void ASTAttrWriter::visitInstantiateAttr(InstantiateAttr *A) {
 }
+void ASTAttrWriter::visitTransparentAttr(TransparentAttr *A) {
+}
 void ASTAttrWriter::visit_BuiltinAttr(_BuiltinAttr *A) {
    Record.AddIdentifierRef(&Idents.get(A->getBuiltinName()));
 }
@@ -105,6 +107,9 @@ ExternallyInitializedAttr *ASTAttrReader::readExternallyInitializedAttr(SourceRa
 }
 InstantiateAttr *ASTAttrReader::readInstantiateAttr(SourceRange SR) {
    return new(C) InstantiateAttr(SR);
+}
+TransparentAttr *ASTAttrReader::readTransparentAttr(SourceRange SR) {
+   return new(C) TransparentAttr(SR);
 }
 _BuiltinAttr *ASTAttrReader::read_BuiltinAttr(SourceRange SR) {
    auto builtinName = Record.getIdentifierInfo()->getIdentifier();
