@@ -944,8 +944,12 @@ public:
    void visitTypedefType(const TypedefType* Ty)
    {
       auto TD = cast<TypedefType>(Ty)->getTypedef();
-      OS << TD->getDeclName();
+      if (TD->hasAttribute<TransparentAttr>()) {
+         visit(Ty->getAliasedType());
+         return;
+      }
 
+      OS << TD->getDeclName();
       if (!TD->hasAttribute<_BuiltinAttr>()) {
          OS << " (aka ";
          visit(Ty->getAliasedType());

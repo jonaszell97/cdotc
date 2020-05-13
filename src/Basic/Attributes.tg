@@ -155,6 +155,8 @@ def Instantiate : DeclAttr<"instantiate", [NamedDecl]> {
     Visit = AfterSema
 }
 
+def Transparent : DeclAttr<"transparent", [AliasDecl]> {}
+
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
     Visit = Immediate

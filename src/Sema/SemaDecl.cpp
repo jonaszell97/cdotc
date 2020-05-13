@@ -539,7 +539,7 @@ void SemaPass::ActOnStructDecl(DeclContext* DC, StructDecl* S) {}
 
 void SemaPass::ActOnProtoDecl(DeclContext* DC, ProtocolDecl* P)
 {
-   if (P->getDeclName().isStr("Any")) {
+   if (P->getDeclName().isStr("Any") && !P->isAny()) {
       Module* M;
       if (QC.GetBuiltinModule(M, GetBuiltinModuleQuery::Policy)) {
          return;
@@ -1322,7 +1322,7 @@ TypeResult SemaPass::visitSourceType(const SourceType& Ty, bool WantMeta)
    Ty.setTypeExpr(Result.get());
 
    if (!ResTy->isMetaType()) {
-      diagnose(err_not_type, Ty.getTypeExpr()->getSourceRange());
+      diagnose(err_not_type, ResTy, Ty.getTypeExpr()->getSourceRange());
       ResTy = Context.getMetaType(ResTy);
    }
 

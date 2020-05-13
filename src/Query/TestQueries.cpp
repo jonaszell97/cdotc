@@ -117,6 +117,9 @@ struct Task {
    /// The status of this task.
    TestStatus Status = UNDETERMINED;
 
+   /// The time this task was started at.
+   long long StartTime;
+
    /// Regexes to match the output of the executable against.
    SmallVector<StringRef, 0> OutputChecks;
 
@@ -426,7 +429,7 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
          }
          LogOS << "\n";
 
-         auto startTime = CurrentTimeMillis();
+         Task.StartTime = CurrentTimeMillis();
          auto callback = [&](int ExitCode) {
            switch (ExitCode) {
            case 0:
@@ -437,7 +440,7 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
               break;
            case -2:
            case 11: {
-              if (CurrentTimeMillis() - startTime > TimeoutTime * 1000) {
+              if (CurrentTimeMillis() - Task.StartTime > TimeoutTime * 1000) {
                  LogOS << "TIMEOUT\n";
                  Task.Status = TestStatus::TIMEOUT;
               }

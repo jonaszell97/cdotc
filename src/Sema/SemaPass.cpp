@@ -867,6 +867,13 @@ bool SemaPass::ContainsAssociatedTypeConstraint(QualType Ty)
 static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
                            bool AllowConditional)
 {
+   (void)AllowConditional;
+
+   if (Proto->isAny()) {
+      // FIXME - MoveOnly
+      return true;
+   }
+
    if (auto *RT = T->asRecordType()) {
       if (Sema.IsBeingResolved(RT->getRecord())) {
          if (Sema.UncheckedConformanceExists(RT->getRecord(), Proto)) {
@@ -880,13 +887,6 @@ static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
          }
       }
    }
-
-//   if (AllowConditional && T->getRecord()->isInstantiation()) {
-//      auto *Conf = Sema.Context.getConformanceTable().getConformance(
-//          T->getRecord()->getSpecializedTemplate(), Proto);
-//
-//      return Conf != nullptr;
-//   }
 
    bool result;
    if (Sema.QC.ConformsTo(result, T, Proto)) {
