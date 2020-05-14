@@ -128,6 +128,16 @@ ExprResult SemaPass::visitCallExpr(CallExpr* Call, TemplateArgListExpr* ArgExpr)
       return Call;
    }
 
+   if (C->throws()) {
+      if (TryScopeStack.empty()) {
+         diagnose(err_throwing_call_not_in_try, C->getDeclName(),
+                  Call->getSourceRange());
+      }
+      else {
+         TryScopeStack.back() = true;
+      }
+   }
+
    bool importedFromClang = C->isImportedFromClang();
    if (!Call->getExprType()) {
       QualType ExprType;
@@ -286,6 +296,16 @@ CallExpr* SemaPass::CreateCall(CallableDecl* C, ASTVector<Expression*>&& Args,
 
 ExprResult SemaPass::visitAnonymousCallExpr(AnonymousCallExpr* Call)
 {
+   if (Call->getFunctionType()->throws()) {
+      if (TryScopeStack.empty()) {
+         diagnose(err_throwing_call_not_in_try, DeclarationName(),
+                  Call->getSourceRange());
+      }
+      else {
+         TryScopeStack.back() = true;
+      }
+   }
+
    return Call;
 }
 

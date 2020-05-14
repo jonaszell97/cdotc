@@ -50,4 +50,10 @@
    static_assert(std::is_nothrow_move_constructible<TYPE>::value,              \
                  #TYPE " should be noexcept move constructible")
 
+#define FLAG_ENUM(NAME)                                                                       \
+   inline NAME operator|(NAME LHS, NAME RHS) { return (NAME)((int)LHS | (int)RHS); }          \
+   inline NAME operator|=(NAME &LHS, NAME RHS) { return LHS = (NAME)((int)LHS | (int)RHS); }  \
+   inline NAME operator&(NAME LHS, NAME RHS) { return (NAME)((int)LHS & (int)RHS); }          \
+   inline NAME operator&=(NAME &LHS, NAME RHS) { return LHS = (NAME)((int)LHS & (int)RHS); }
+
 #endif // CDOT_CONFIG_H

@@ -1335,55 +1335,6 @@ QueryResult QueryContext::PassByValue(bool &Result, CanType T)
 
 }
 
-template<> ContainsProtocolWithAssociatedTypesQuery *QueryContext::getQuery<ContainsProtocolWithAssociatedTypesQuery>(CanType T)
-{
-   auto It = ContainsProtocolWithAssociatedTypesQueries.find(T);
-   if (It != ContainsProtocolWithAssociatedTypesQueries.end()) return It->getSecond();
-   return nullptr;
-}
-
-QueryResult QueryContext::ContainsProtocolWithAssociatedTypes(bool &Result, CanType T)
-
-{
-   auto Key = T;
-   auto It = ContainsProtocolWithAssociatedTypesQueries.find(Key);
-   ContainsProtocolWithAssociatedTypesQuery *_Q;
-   if (It == ContainsProtocolWithAssociatedTypesQueries.end()) {
-      _Q = new(*this) ContainsProtocolWithAssociatedTypesQuery(*this, T);
-      ContainsProtocolWithAssociatedTypesQueries[_Q->T] = _Q;
-   } else {
-      _Q = It->getSecond();
-   }
-#ifndef NDEBUG
-   if (shouldReset()) _Q->Stat = Query::Idle;
-#endif
-   switch (_Q->status()) {
-   case Query::Running:
-      diagnoseCircularDependency(_Q);
-      return QueryResult(QueryResult::Error);
-   case Query::Idle:
-      {
-         ExecutingQuery EQ(*this, _Q);
-         _Q->Stat = Query::Running;
-         if (auto _R = _Q->run()) {
-            return _R;
-         }
-      }
-
-      Result = _Q->get();
-      return QueryResult(QueryResult::Success);
-   case Query::Done:
-   case Query::DoneWithError:
-      Result = _Q->get();
-      return QueryResult(QueryResult::Success);
-   case Query::Aborted:
-      return QueryResult(QueryResult::Error);
-   case Query::Dependent:
-      return QueryResult(QueryResult::Dependent);
-   }
-
-}
-
 template<> ContainsTemplateQuery *QueryContext::getQuery<ContainsTemplateQuery>(CanType T)
 {
    auto It = ContainsTemplateQueries.find(T);
@@ -1449,6 +1400,55 @@ QueryResult QueryContext::ContainsAssociatedTypeConstraint(bool &Result, CanType
    if (It == ContainsAssociatedTypeConstraintQueries.end()) {
       _Q = new(*this) ContainsAssociatedTypeConstraintQuery(*this, T);
       ContainsAssociatedTypeConstraintQueries[_Q->T] = _Q;
+   } else {
+      _Q = It->getSecond();
+   }
+#ifndef NDEBUG
+   if (shouldReset()) _Q->Stat = Query::Idle;
+#endif
+   switch (_Q->status()) {
+   case Query::Running:
+      diagnoseCircularDependency(_Q);
+      return QueryResult(QueryResult::Error);
+   case Query::Idle:
+      {
+         ExecutingQuery EQ(*this, _Q);
+         _Q->Stat = Query::Running;
+         if (auto _R = _Q->run()) {
+            return _R;
+         }
+      }
+
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Done:
+   case Query::DoneWithError:
+      Result = _Q->get();
+      return QueryResult(QueryResult::Success);
+   case Query::Aborted:
+      return QueryResult(QueryResult::Error);
+   case Query::Dependent:
+      return QueryResult(QueryResult::Dependent);
+   }
+
+}
+
+template<> ContainsProtocolWithAssociatedTypesQuery *QueryContext::getQuery<ContainsProtocolWithAssociatedTypesQuery>(QualType T)
+{
+   auto It = ContainsProtocolWithAssociatedTypesQueries.find(T);
+   if (It != ContainsProtocolWithAssociatedTypesQueries.end()) return It->getSecond();
+   return nullptr;
+}
+
+QueryResult QueryContext::ContainsProtocolWithAssociatedTypes(ast::ProtocolDecl* &Result, QualType T)
+
+{
+   auto Key = T;
+   auto It = ContainsProtocolWithAssociatedTypesQueries.find(Key);
+   ContainsProtocolWithAssociatedTypesQuery *_Q;
+   if (It == ContainsProtocolWithAssociatedTypesQueries.end()) {
+      _Q = new(*this) ContainsProtocolWithAssociatedTypesQuery(*this, T);
+      ContainsProtocolWithAssociatedTypesQueries[_Q->T] = _Q;
    } else {
       _Q = It->getSecond();
    }

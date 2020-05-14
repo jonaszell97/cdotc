@@ -265,6 +265,8 @@ ExprResult SolutionApplier::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
              Expr->getArgs().data());
 
    Expr->setExprType(Cand.getFunctionType()->getReturnType());
+   Expr->setFunctionType(Cand.getFunctionType());
+
    return Expr;
 }
 

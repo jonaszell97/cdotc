@@ -9,7 +9,7 @@
 #include "cdotc/Sema/Scope/Scope.h"
 #include "cdotc/Support/LLVM.h"
 
-#include <llvm/Bitcode/BitstreamReader.h>
+#include <llvm/Bitstream/BitstreamReader.h>
 
 #include <queue>
 
@@ -712,7 +712,11 @@ struct SavedStreamPosition {
    {
    }
 
-   ~SavedStreamPosition() { Cursor.JumpToBit(Offset); }
+   ~SavedStreamPosition()
+   {
+      auto Err = Cursor.JumpToBit(Offset); (void)Err;
+      assert(!Err && "invalid jump position");
+   }
 
 private:
    llvm::BitstreamCursor& Cursor;

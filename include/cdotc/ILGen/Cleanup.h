@@ -127,6 +127,7 @@ public:
          C.Emit(ILGen);
    }
 
+   void emitUntil(CleanupsDepth depth);
    void emitUntilWithoutPopping(CleanupsDepth depth);
 
    void clear()

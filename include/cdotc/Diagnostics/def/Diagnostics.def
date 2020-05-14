@@ -150,7 +150,7 @@
    CDOT_ERROR(err_left_uninitialized, "'$0' may not go out of scope while being partially uninitialized", false)
    CDOT_ERROR(err_type_not_found, "type '$0' not found", false)
    CDOT_ERROR(err_not_copyable, "type '$0' is not implicitly copyable${ 1 | if(, did you forget a '.copy()'?)}", false)
-   CDOT_ERROR(err_binding_invalid_truth_value, "value used in binding statement must conform to 'TruthValue'", false)
+   CDOT_ERROR(err_binding_invalid_truth_value, "value used in conditional statement must conform to 'TruthValue'", false)
    CDOT_ERROR(err_binding_not_unwrappable, "value used in binding statement must conform to 'Unwrappable'", false)
    CDOT_ERROR(err_module_not_found, "module '$0' not found", false)
    CDOT_ERROR(err_submodule_not_found, "module '$0' does not have a submodule named '$1'", false)

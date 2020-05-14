@@ -292,7 +292,7 @@ static llvm::cl::opt<bool>
     AssumeSingleThread("fassume-single-threaded",
                        llvm::cl::desc("use non-atomic reference counting"));
 
-llvm::Constant* IRGen::getMallocFn()
+llvm::FunctionCallee IRGen::getMallocFn()
 {
    if (!MallocFn) {
       MallocFn = M->getOrInsertFunction("_cdot_Malloc", Int8PtrTy, WordTy);
@@ -301,7 +301,7 @@ llvm::Constant* IRGen::getMallocFn()
    return MallocFn;
 }
 
-llvm::Constant* IRGen::getFreeFn()
+llvm::FunctionCallee IRGen::getFreeFn()
 {
    if (!FreeFn)
       FreeFn = M->getOrInsertFunction("_cdot_Free", VoidTy, Int8PtrTy);
@@ -309,7 +309,7 @@ llvm::Constant* IRGen::getFreeFn()
    return FreeFn;
 }
 
-llvm::Constant* IRGen::getThrowFn()
+llvm::FunctionCallee IRGen::getThrowFn()
 {
    if (!ThrowFn)
       ThrowFn = M->getOrInsertFunction("__cdot_throw", VoidTy, Int8PtrTy);
@@ -317,7 +317,7 @@ llvm::Constant* IRGen::getThrowFn()
    return ThrowFn;
 }
 
-llvm::Constant* IRGen::getAllocExcnFn()
+llvm::FunctionCallee IRGen::getAllocExcnFn()
 {
    if (!AllocExcFn)
       AllocExcFn
@@ -327,7 +327,7 @@ llvm::Constant* IRGen::getAllocExcnFn()
    return AllocExcFn;
 }
 
-llvm::Constant* IRGen::getRetainFn()
+llvm::FunctionCallee IRGen::getRetainFn()
 {
    if (!RetainFn) {
       if (AssumeSingleThread) {
@@ -342,7 +342,7 @@ llvm::Constant* IRGen::getRetainFn()
    return RetainFn;
 }
 
-llvm::Constant* IRGen::getReleaseFn()
+llvm::FunctionCallee IRGen::getReleaseFn()
 {
    if (!ReleaseFn) {
       if (AssumeSingleThread) {
@@ -357,7 +357,7 @@ llvm::Constant* IRGen::getReleaseFn()
    return ReleaseFn;
 }
 
-llvm::Constant* IRGen::getRetainLambdaFn()
+llvm::FunctionCallee IRGen::getRetainLambdaFn()
 {
    if (!RetainLambdaFn) {
       if (AssumeSingleThread) {
@@ -373,7 +373,7 @@ llvm::Constant* IRGen::getRetainLambdaFn()
    return RetainLambdaFn;
 }
 
-llvm::Constant* IRGen::getReleaseLambdaFn()
+llvm::FunctionCallee IRGen::getReleaseLambdaFn()
 {
    if (!ReleaseLambdaFn) {
       if (AssumeSingleThread) {
@@ -389,7 +389,7 @@ llvm::Constant* IRGen::getReleaseLambdaFn()
    return ReleaseLambdaFn;
 }
 
-llvm::Constant* IRGen::getRetainBoxFn()
+llvm::FunctionCallee IRGen::getRetainBoxFn()
 {
    if (!RetainBoxFn) {
       if (AssumeSingleThread) {
@@ -405,7 +405,7 @@ llvm::Constant* IRGen::getRetainBoxFn()
    return RetainBoxFn;
 }
 
-llvm::Constant* IRGen::getReleaseBoxFn()
+llvm::FunctionCallee IRGen::getReleaseBoxFn()
 {
    if (!ReleaseBoxFn) {
       if (AssumeSingleThread) {
@@ -421,7 +421,7 @@ llvm::Constant* IRGen::getReleaseBoxFn()
    return ReleaseBoxFn;
 }
 
-llvm::Constant* IRGen::getTypeInfoCmpFn()
+llvm::FunctionCallee IRGen::getTypeInfoCmpFn()
 {
    if (!TypeInfoCmpFn)
       TypeInfoCmpFn = M->getOrInsertFunction(
@@ -430,7 +430,7 @@ llvm::Constant* IRGen::getTypeInfoCmpFn()
    return TypeInfoCmpFn;
 }
 
-llvm::Constant* IRGen::getExitFn()
+llvm::FunctionCallee IRGen::getExitFn()
 {
    if (!ExitFn)
       ExitFn = M->getOrInsertFunction("exit", VoidTy, Builder.getInt32Ty());
@@ -438,7 +438,7 @@ llvm::Constant* IRGen::getExitFn()
    return ExitFn;
 }
 
-llvm::Constant* IRGen::getPrintExceptionFn()
+llvm::FunctionCallee IRGen::getPrintExceptionFn()
 {
    if (!PrintExceptionFn)
       PrintExceptionFn
@@ -447,7 +447,7 @@ llvm::Constant* IRGen::getPrintExceptionFn()
    return PrintExceptionFn;
 }
 
-llvm::Constant* IRGen::getCleanupExceptionFn()
+llvm::FunctionCallee IRGen::getCleanupExceptionFn()
 {
    if (!CleanupExceptionFn)
       CleanupExceptionFn
@@ -456,7 +456,7 @@ llvm::Constant* IRGen::getCleanupExceptionFn()
    return CleanupExceptionFn;
 }
 
-llvm::Constant* IRGen::getPrintfFn()
+llvm::FunctionCallee IRGen::getPrintfFn()
 {
    if (!PrintfFn)
       PrintfFn = M->getOrInsertFunction(
@@ -466,7 +466,7 @@ llvm::Constant* IRGen::getPrintfFn()
    return PrintfFn;
 }
 
-llvm::Constant* IRGen::getMemCmpFn()
+llvm::FunctionCallee IRGen::getMemCmpFn()
 {
    if (!MemCmpFn)
       MemCmpFn = M->getOrInsertFunction(
@@ -477,7 +477,7 @@ llvm::Constant* IRGen::getMemCmpFn()
    return MemCmpFn;
 }
 
-llvm::Constant* IRGen::getInitializeExistentialFn()
+llvm::FunctionCallee IRGen::getInitializeExistentialFn()
 {
    if (!InitializeExistentialFn) {
       InitializeExistentialFn = M->getOrInsertFunction(
@@ -489,7 +489,7 @@ llvm::Constant* IRGen::getInitializeExistentialFn()
    return InitializeExistentialFn;
 }
 
-llvm::Constant* IRGen::getDeinitializeExistentialFn()
+llvm::FunctionCallee IRGen::getDeinitializeExistentialFn()
 {
    if (!DeinitializeExistentialFn) {
       DeinitializeExistentialFn = M->getOrInsertFunction(
@@ -500,7 +500,7 @@ llvm::Constant* IRGen::getDeinitializeExistentialFn()
    return DeinitializeExistentialFn;
 }
 
-llvm::Constant* IRGen::getCopyExistentialFn()
+llvm::FunctionCallee IRGen::getCopyExistentialFn()
 {
    if (!CopyExistentialFn) {
       CopyExistentialFn = M->getOrInsertFunction(
@@ -511,7 +511,7 @@ llvm::Constant* IRGen::getCopyExistentialFn()
    return CopyExistentialFn;
 }
 
-llvm::Constant* IRGen::getCastExistentialFn()
+llvm::FunctionCallee IRGen::getCastExistentialFn()
 {
    if (!CastExistentialFn) {
       CastExistentialFn = M->getOrInsertFunction(
@@ -523,7 +523,7 @@ llvm::Constant* IRGen::getCastExistentialFn()
    return CastExistentialFn;
 }
 
-llvm::Constant* IRGen::getCastExistentialFallibleFn()
+llvm::FunctionCallee IRGen::getCastExistentialFallibleFn()
 {
    if (!CastExistentialFallibleFn) {
       CastExistentialFallibleFn = M->getOrInsertFunction(
@@ -535,7 +535,7 @@ llvm::Constant* IRGen::getCastExistentialFallibleFn()
    return CastExistentialFallibleFn;
 }
 
-llvm::Constant* IRGen::getUnwrapExistentialFn()
+llvm::FunctionCallee IRGen::getUnwrapExistentialFn()
 {
    if (!UnwrapExistentialFn) {
       UnwrapExistentialFn = M->getOrInsertFunction(
@@ -547,7 +547,7 @@ llvm::Constant* IRGen::getUnwrapExistentialFn()
    return UnwrapExistentialFn;
 }
 
-llvm::Constant* IRGen::getCopyClassFn()
+llvm::FunctionCallee IRGen::getCopyClassFn()
 {
    if (!CopyClassFn) {
       CopyClassFn = M->getOrInsertFunction(
@@ -558,7 +558,7 @@ llvm::Constant* IRGen::getCopyClassFn()
    return CopyClassFn;
 }
 
-llvm::Constant* IRGen::getGetConformanceFn()
+llvm::FunctionCallee IRGen::getGetConformanceFn()
 {
    if (!GetConformanceFn) {
       GetConformanceFn = M->getOrInsertFunction(
@@ -569,7 +569,7 @@ llvm::Constant* IRGen::getGetConformanceFn()
    return GetConformanceFn;
 }
 
-llvm::Constant* IRGen::getGetProtocolVTableFn()
+llvm::FunctionCallee IRGen::getGetProtocolVTableFn()
 {
    if (!GetProtocolVTableFn) {
       GetProtocolVTableFn = M->getOrInsertFunction(
@@ -580,7 +580,7 @@ llvm::Constant* IRGen::getGetProtocolVTableFn()
    return GetProtocolVTableFn;
 }
 
-llvm::Constant* IRGen::getGetGenericArgumentFn()
+llvm::FunctionCallee IRGen::getGetGenericArgumentFn()
 {
    if (!GetGenericArgumentFn) {
       GetGenericArgumentFn = M->getOrInsertFunction(
@@ -592,7 +592,7 @@ llvm::Constant* IRGen::getGetGenericArgumentFn()
    return GetGenericArgumentFn;
 }
 
-llvm::Constant* IRGen::getGetTemplateParamTypeValueFn()
+llvm::FunctionCallee IRGen::getGetTemplateParamTypeValueFn()
 {
    if (!GetTemplateParamTypeValueFn) {
       GetTemplateParamTypeValueFn = M->getOrInsertFunction(
@@ -603,7 +603,7 @@ llvm::Constant* IRGen::getGetTemplateParamTypeValueFn()
    return GetTemplateParamTypeValueFn;
 }
 
-llvm::Constant* IRGen::getDynamicDownCastFn()
+llvm::FunctionCallee IRGen::getDynamicDownCastFn()
 {
    if (!DynamicDownCastFn) {
       DynamicDownCastFn = M->getOrInsertFunction(
@@ -615,7 +615,7 @@ llvm::Constant* IRGen::getDynamicDownCastFn()
    return DynamicDownCastFn;
 }
 
-llvm::Constant* IRGen::getIntPowFn(QualType IntTy)
+llvm::FunctionCallee IRGen::getIntPowFn(QualType IntTy)
 {
    auto llvmTy = getStorageType(IntTy);
    llvm::StringRef funcName;
@@ -631,7 +631,8 @@ llvm::Constant* IRGen::getIntPowFn(QualType IntTy)
    }
 
    return M->getOrInsertFunction(
-       funcName, llvm::FunctionType::get(llvmTy, {llvmTy, llvmTy}, false));
+       funcName, llvm::FunctionType::get(llvmTy, {llvmTy, llvmTy}, false))
+       ;
 }
 
 llvm::CallInst* IRGen::CallRuntimeFunction(StringRef FuncName,
@@ -646,7 +647,7 @@ llvm::CallInst* IRGen::CallRuntimeFunction(StringRef FuncName,
    for (auto* V : Args)
       ParamTys.push_back(V->getType());
 
-   auto* Fn = M->getOrInsertFunction(
+   auto Fn = M->getOrInsertFunction(
        FuncName,
        llvm::FunctionType::get(RetTy ? RetTy : VoidTy, ParamTys, false));
 
@@ -1118,7 +1119,8 @@ void IRGen::ForwardDeclareGlobal(il::GlobalVariable const* G)
        (llvm::GlobalVariable::LinkageTypes)G->getLinkage(), nullptr,
        G->getName());
 
-   GV->setAlignment(TI.getAllocAlignOfType(G->getType()->getReferencedType()));
+   llvm::MaybeAlign align(TI.getAllocAlignOfType(G->getType()->getReferencedType()));
+   GV->setAlignment(align);
    GV->setUnnamedAddr((llvm::GlobalVariable::UnnamedAddr)G->getUnnamedAddr());
    GV->setVisibility((llvm::GlobalVariable::VisibilityTypes)G->getVisibility());
 
@@ -1315,8 +1317,12 @@ void IRGen::visitBasicBlock(BasicBlock& B)
       }
 
       addMappedValue(&I, val);
-      if (dyn_cast_or_null<llvm::TerminatorInst>(val))
-         break;
+
+      if (auto *Inst = dyn_cast_or_null<llvm::Instruction>(val)) {
+         if (Inst->isTerminator()) {
+            break;
+         }
+      }
    }
 
    assert(Builder.GetInsertBlock()->getTerminator()
@@ -1457,7 +1463,7 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
    else
       alloca = Builder.CreateAlloca(AllocatedType);
 
-   alloca->setAlignment(alignment);
+   alloca->setAlignment(llvm::MaybeAlign(alignment));
 
    Builder.restoreIP(IP);
    Builder.SetCurrentDebugLocation(Loc);
@@ -1486,7 +1492,7 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
       alloca = Builder.CreateAlloca(AllocatedType);
    }
 
-   alloca->setAlignment(alignment);
+   alloca->setAlignment(llvm::MaybeAlign(alignment));
 
    Builder.restoreIP(IP);
    Builder.SetCurrentDebugLocation(Loc);
@@ -2084,10 +2090,10 @@ llvm::Value* IRGen::visitAllocBoxInst(const il::AllocBoxInst& I)
 
    llvm::Constant* Deinit = nullptr;
    if (Ty->isClass()) {
-      Deinit = getReleaseFn();
+      Deinit = cast<llvm::Constant>(getReleaseFn().getCallee());
    }
    else if (Ty->isLambdaType()) {
-      Deinit = getReleaseLambdaFn();
+      Deinit = cast<llvm::Constant>(getReleaseLambdaFn().getCallee());
    }
    else if (auto Fn = I.getDeinitializer()) {
       Deinit = getFunction(Fn);
@@ -2105,7 +2111,15 @@ llvm::Value* IRGen::visitAssignInst(const AssignInst&)
    llvm_unreachable("didn't replace assign with store or init!");
 }
 
-static unsigned short getMemCpyAlign(QualType Ty) { return 1; }
+static llvm::MaybeAlign getMemCpyAlign(QualType)
+{
+   return llvm::MaybeAlign(1);
+}
+
+static llvm::MaybeAlign getMemCpyAlign(llvm::Type *)
+{
+   return llvm::MaybeAlign(1);
+}
 
 static llvm::AtomicOrdering getAtomicOrdering(MemoryOrder Order)
 {
@@ -2165,12 +2179,13 @@ llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
       emitDebugValue(I.getDst(), Src);
 
    if (NeedsStructReturn(Ty)) {
-      return Builder.CreateMemCpy(Dst, Src, TI.getAllocSizeOfType(Ty),
-                                  getMemCpyAlign(Ty));
+      return Builder.CreateMemCpy(Dst, getMemCpyAlign(I.getDst()->getType()),
+                                  Src, getMemCpyAlign(I.getSrc()->getType()),
+                                  TI.getAllocSizeOfType(Ty));
    }
 
    auto Store = Builder.CreateStore(Src, Dst);
-   Store->setAlignment(alignment);
+   Store->setAlignment(llvm::MaybeAlign(alignment));
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
       Store->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
@@ -2227,12 +2242,13 @@ llvm::Value* IRGen::visitInitInst(const InitInst& I)
       emitDebugValue(I.getDst(), Src);
 
    if (NeedsStructReturn(Ty)) {
-      return Builder.CreateMemCpy(Dst, Src, TI.getAllocSizeOfType(Ty),
-                                  getMemCpyAlign(Ty));
+      return Builder.CreateMemCpy(Dst, getMemCpyAlign(I.getDst()->getType()),
+                                  Src, getMemCpyAlign(I.getSrc()->getType()),
+                                  TI.getAllocSizeOfType(Ty));
    }
 
    auto Store = Builder.CreateStore(Src, Dst);
-   Store->setAlignment(alignment);
+   Store->setAlignment(llvm::MaybeAlign(alignment));
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
       Store->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
@@ -2441,7 +2457,7 @@ llvm::Value* IRGen::visitLoadInst(LoadInst const& I)
    }
 
    auto Ld = Builder.CreateLoad(val);
-   Ld->setAlignment(alignment);
+   Ld->setAlignment(llvm::MaybeAlign(alignment));
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
       Ld->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
@@ -2498,8 +2514,9 @@ llvm::Value* IRGen::visitRetInst(RetInst const& I)
             ++argIt;
 
          auto sretVal = &*argIt;
-         Builder.CreateMemCpy(sretVal, retVal, TI.getSizeOfType(V->getType()),
-                              getMemCpyAlign(V->getType()));
+         Builder.CreateMemCpy(sretVal, getMemCpyAlign(sretVal->getType()),
+                              retVal, getMemCpyAlign(retVal->getType()),
+                              TI.getSizeOfType(V->getType()));
       }
       else {
          return Builder.CreateRet(retVal);
@@ -2517,15 +2534,14 @@ llvm::Value* IRGen::visitYieldInst(const il::YieldInst& I)
    auto* CurrentFn = Builder.GetInsertBlock()->getParent();
 
    auto* Hdl = CoroHandleMap[CurrentFn];
-   auto* Align = Builder.getInt32(
-       TI.getAllocAlignOfType(I.getYieldedValue()->getType()));
-
+   unsigned alignment = TI.getAllocAlignOfType(I.getYieldedValue()->getType());
    auto* Promise
-       = Builder.CreateCall(CoroPromise, {Hdl, Align, Builder.getFalse()});
+       = Builder.CreateCall(CoroPromise, {Hdl, Builder.getInt32(alignment), Builder.getFalse()});
 
-   Builder.CreateMemCpy(Promise, getLlvmValue(I.getYieldedValue()),
-                        TI.getAllocSizeOfType(I.getYieldedValue()->getType()),
-                        (unsigned)Align->getZExtValue());
+   Builder.CreateMemCpy(Promise, llvm::MaybeAlign(alignment),
+                        getLlvmValue(I.getYieldedValue()),
+                        llvm::MaybeAlign(alignment),
+                        TI.getAllocSizeOfType(I.getYieldedValue()->getType()));
 
    auto* CoroSuspend
        = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::coro_suspend);
@@ -2588,8 +2604,8 @@ llvm::Value* IRGen::visitThrowInst(ThrowInst const& I)
 
    auto* ObjPtr = Builder.CreateStructGEP(ErrorTy, Alloc, 2);
    if (NeedsStructReturn(ThrownTy)) {
-      Builder.CreateMemCpy(ObjPtr, thrownVal, TypeSize,
-                           getMemCpyAlign(ThrownTy));
+      auto align = getMemCpyAlign(ThrownTy);
+      Builder.CreateMemCpy(ObjPtr, align, thrownVal, align, TypeSize);
    }
    else {
       Builder.CreateStore(
@@ -2795,7 +2811,9 @@ llvm::Value* IRGen::getVTable(llvm::Value* llvmVal)
    llvm::Value* Ld = Builder.CreateLoad(TypeInfo);
    Ld = Builder.CreateBitCast(Ld, TypeInfoTy->getPointerTo());
 
-   return Builder.CreateStructGEP(TypeInfoTy, Ld, MetaType::VTable);
+   auto *UnsafePtr = Builder.CreateStructGEP(TypeInfoTy, Ld, MetaType::VTable);
+   return Builder.CreateStructGEP(UnsafePtr->getType()->getPointerElementType(),
+                                  UnsafePtr, 0);
 }
 
 llvm::Value* IRGen::getTypeInfo(llvm::Value* llvmVal)
@@ -2854,7 +2872,9 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
              getLlvmValue(I.getOperand(2))};
 
       if (I.getCalledIntrinsic() == Intrinsic::memcpy) {
-         return Builder.CreateMemCpy(Args[0], Args[1], Args[2], 1);
+         auto DstAlign = getMemCpyAlign(I.getOperand(0)->getType());
+         auto SrcAlign = getMemCpyAlign(I.getOperand(1)->getType());
+         return Builder.CreateMemCpy(Args[0], DstAlign, Args[1], SrcAlign, Args[2]);
       }
 
       if (I.getCalledIntrinsic() == Intrinsic::memcmp) {
@@ -2862,14 +2882,15 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
              getMemCmpFn(), {toInt8Ptr(Args[0]), toInt8Ptr(Args[1]), Args[2]});
       }
 
-      return Builder.CreateMemSet(Args[0], Args[1], Args[2], 1);
+      auto SrcAlign = getMemCpyAlign(I.getOperand(1)->getType());
+      return Builder.CreateMemSet(Args[0], Args[1], Args[2], SrcAlign);
    }
    case Intrinsic::likely: {
       auto* Val = I.getArgs().front();
       auto* LLVMVal = getLlvmValue(Val);
 
       return Builder.CreateCall(
-          getIntrinsic(llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
+          getIntrinsic(llvm::Intrinsic::expect, Builder.getInt1Ty()),
           {LLVMVal, Builder.getTrue()});
    }
    case Intrinsic::unlikely: {
@@ -2877,7 +2898,7 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
       auto* LLVMVal = getLlvmValue(Val);
 
       return Builder.CreateCall(
-          getIntrinsic(llvm::Intrinsic::ID::expect, Builder.getInt1Ty()),
+          getIntrinsic(llvm::Intrinsic::expect, Builder.getInt1Ty()),
           {LLVMVal, Builder.getFalse()});
    }
    case Intrinsic::lifetime_begin: {
@@ -2936,12 +2957,10 @@ llvm::Value* IRGen::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::copy_existential: {
       auto *OrigVal = getLlvmValue(I.getArgs()[0]);
       auto* Val = toInt8Ptr(OrigVal);
-      auto *Result = Builder.CreateCall(getMallocFn(), wordSizedInt(
-          TI.getAllocSizeOfType(I.getArgs().front()->getType()
-          ->removeReference())));
+      auto *Result = Builder.CreateAlloca(OrigVal->getType()->getPointerElementType());
 
-      Builder.CreateCall(getCopyExistentialFn(), {Val, Result});
-      return Builder.CreateBitCast(Result, OrigVal->getType());
+      Builder.CreateCall(getCopyExistentialFn(), {Val, toInt8Ptr(Result)});
+      return Result;
    }
    case Intrinsic::existential_ref: {
       auto* Val = getLlvmValue(I.getArgs()[0]);
@@ -3142,18 +3161,9 @@ llvm::Function* IRGen::getIntrinsic(llvm::Intrinsic::ID ID,
 
 llvm::Value* IRGen::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst& I)
 {
-   auto& Fn = Intrinsics[I.getIntrinsicName()];
-   if (!Fn) {
-      SmallVector<llvm::Type*, 4> ParamTys;
-      for (auto& Arg : I.getArgs()) {
-         ParamTys.push_back(getStorageType(Arg->getType()));
-      }
-
-      auto* FnTy = llvm::FunctionType::get(getStorageType(I.getType()),
-                                           ParamTys, false);
-
-      Fn = M->getOrInsertFunction(I.getIntrinsicName()->getIdentifier(), FnTy);
-   }
+   auto *Fn = llvm::Intrinsic::getDeclaration(
+       M, getIntrinsicID(I.getIntrinsicName()->getIdentifier()),
+       getStorageType(I.getArgs().front()->getType()));
 
    llvm::SmallVector<llvm::Value*, 8> args;
    for (const auto& arg : I.getArgs())
@@ -3582,8 +3592,9 @@ llvm::Value* IRGen::InitEnum(ast::EnumDecl* EnumTy, ast::EnumCaseDecl* Case,
 
       auto val = CaseVals[i];
       if (NeedsStructReturn(Arg->getType())) {
-         Builder.CreateMemCpy(GEP, val, TI.getSizeOfType(Arg->getType()),
-                              getMemCpyAlign(Arg->getType()));
+         auto align = getMemCpyAlign(Arg->getType());
+         Builder.CreateMemCpy(GEP, align, val, align,
+                              TI.getSizeOfType(Arg->getType()));
       }
       else {
          Builder.CreateStore(val, GEP);
@@ -3675,16 +3686,16 @@ llvm::Value* IRGen::applyBinaryOp(unsigned OpCode, QualType ty,
 
       return Builder.CreateFRem(lhs, rhs);
    case OPC::Exp: {
-      llvm::Constant* powFn;
+      llvm::Value* powFn;
       if (lhs->getType()->isIntegerTy()) {
-         powFn = getIntPowFn(ty);
+         powFn = getIntPowFn(ty).getCallee();
       }
       else if (rhs->getType()->isIntegerTy()) {
-         powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::powi,
+         powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::powi,
                                                  {lhs->getType()});
       }
       else {
-         powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::ID::pow,
+         powFn = llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::pow,
                                                  {lhs->getType()});
       }
 
@@ -3915,17 +3926,18 @@ llvm::Value* IRGen::visitGenericInitInst(const GenericInitInst& I)
    auto* EnvRef = Builder.CreateStructGEP(Ty, Alloc, 1);
 
    QualType ValTy = I.getOperand(0)->getType();
+   auto align = llvm::MaybeAlign(TI.getAllocAlignOfType(ValTy));
+
    if (NeedsStructReturn(ValTy)) {
-      Builder.CreateMemCpy(ValRef, Val, TI.getAllocSizeOfType(ValTy),
-                           TI.getAllocAlignOfType(ValTy));
+      Builder.CreateMemCpy(ValRef, align, Val, align,
+                           TI.getAllocSizeOfType(ValTy));
    }
    else {
       Builder.CreateStore(Val, ValRef);
    }
 
    QualType EnvTy = I.getOperand(1)->getType();
-   Builder.CreateMemCpy(EnvRef, Env, TI.getAllocSizeOfType(EnvTy),
-                        TI.getAllocAlignOfType(EnvTy));
+   Builder.CreateMemCpy(EnvRef, align, Env, align, TI.getAllocSizeOfType(EnvTy));
 
    return Alloc;
 }

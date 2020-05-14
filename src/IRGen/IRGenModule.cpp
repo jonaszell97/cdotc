@@ -53,8 +53,7 @@ void IRGen::finalize(const CompilerInstance& CU)
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(
-             "/Users/Jonas/CDotProjects/StdLib/main/_error.ll", EC,
-             llvm::sys::fs::F_RW);
+             "/Users/Jonas/CDotProjects/StdLib/main/_error.ll", EC);
 
          llvm::AssemblyAnnotationWriter AAW;
          M->print(fd, &AAW);
@@ -62,8 +61,7 @@ void IRGen::finalize(const CompilerInstance& CU)
       {
          std::error_code EC;
          llvm::raw_fd_ostream fd(
-             "/Users/Jonas/CDotProjects/StdLib/main/_error.cdotil", EC,
-             llvm::sys::fs::F_RW);
+             "/Users/Jonas/CDotProjects/StdLib/main/_error.cdotil", EC);
 
          CU.getCompilationModule()->getILModule()->writeTo(fd);
       }
@@ -169,7 +167,7 @@ void IRGen::emitObjectFile(llvm::StringRef OutFile, llvm::Module* Module,
    using namespace llvm::sys::fs;
 
    int FD;
-   std::error_code EC = openFileForWrite(OutFile, FD, F_RW);
+   std::error_code EC = openFileForWrite(OutFile, FD);
    if (EC) {
       llvm::report_fatal_error(EC.message());
    }
@@ -182,8 +180,8 @@ void IRGen::emitObjectFile(llvm::StringRef OutFile, llvm::Module* Module,
    llvm::legacy::PassManager PM;
 
    // add object emitting pass
-   auto FileType = llvm::TargetMachine::CGFT_ObjectFile;
-   if (TargetMachine->addPassesToEmitFile(PM, OS, FileType)) {
+   auto FileType = llvm::CGFT_ObjectFile;
+   if (TargetMachine->addPassesToEmitFile(PM, OS, nullptr, FileType)) {
       llvm::report_fatal_error("TargetMachine can't emit object file\n");
    }
 
@@ -201,8 +199,8 @@ void IRGen::emitObjectFile(llvm::raw_ostream& OS, llvm::Module* Module)
    prepareModuleForEmission(Module);
    llvm::legacy::PassManager PM;
 
-   auto FileType = llvm::TargetMachine::CGFT_ObjectFile;
-   if (TargetMachine->addPassesToEmitFile(PM, SS, FileType)) {
+   auto FileType = llvm::CGFT_ObjectFile;
+   if (TargetMachine->addPassesToEmitFile(PM, SS, nullptr, FileType)) {
       llvm::report_fatal_error("TargetMachine can't emit assembly file\n");
    }
 
@@ -218,8 +216,8 @@ void IRGen::emitAsmFile(llvm::raw_ostream& OS, llvm::Module* Module)
    prepareModuleForEmission(Module);
    llvm::legacy::PassManager PM;
 
-   auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
-   if (TargetMachine->addPassesToEmitFile(PM, SS, FileType)) {
+   auto FileType = llvm::CGFT_AssemblyFile;
+   if (TargetMachine->addPassesToEmitFile(PM, SS, nullptr, FileType)) {
       llvm::report_fatal_error("TargetMachine can't emit assembly file\n");
    }
 
@@ -314,7 +312,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
    if (ClangSanitizers.empty()) {
       TmpFile = fs::getTmpFileName("o");
 
-      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC, llvm::sys::fs::F_RW);
+      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC);
       if (EC) {
          llvm::report_fatal_error(EC.message());
       }
@@ -324,7 +322,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
    else {
       TmpFile = fs::getTmpFileName("ll");
 
-      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC, llvm::sys::fs::F_RW);
+      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC);
       if (EC) {
          llvm::report_fatal_error(EC.message());
       }
@@ -409,8 +407,8 @@ void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module* Module)
       llvm::legacy::PassManager PM;
 
       // add object emitting pass
-      auto FileType = llvm::TargetMachine::CGFT_ObjectFile;
-      if (TargetMachine->addPassesToEmitFile(PM, OS, FileType)) {
+      auto FileType = llvm::CGFT_ObjectFile;
+      if (TargetMachine->addPassesToEmitFile(PM, OS, nullptr, FileType)) {
          llvm::report_fatal_error("TargetMachine can't emit object file\n");
       }
 
@@ -465,8 +463,8 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
       llvm::legacy::PassManager PM;
 
       // add object emitting pass
-      auto FileType = llvm::TargetMachine::CGFT_ObjectFile;
-      if (TargetMachine->addPassesToEmitFile(PM, OS, FileType)) {
+      auto FileType = llvm::CGFT_ObjectFile;
+      if (TargetMachine->addPassesToEmitFile(PM, OS, nullptr, FileType)) {
          llvm::report_fatal_error("TargetMachine can't emit object file\n");
       }
 

@@ -8,6 +8,7 @@
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Support/AtomicOrdering.h>
 
 #include <cassert>
 #include <string>
@@ -31,15 +32,14 @@ class Context;
 
 enum MDKind : unsigned;
 
-// Keep in sync with llvm::AtomicOrdering!
 enum class MemoryOrder : unsigned {
-   NotAtomic = 0,
-   Relaxed = 2,
+   NotAtomic = (unsigned)llvm::AtomicOrdering::NotAtomic,
+   Relaxed = (unsigned)llvm::AtomicOrdering::Monotonic,
    Consume = 3,
-   Acquire = 4,
-   Release = 5,
-   AcquireRelease = 6,
-   SequentiallyConsistent = 7,
+   Acquire = (unsigned)llvm::AtomicOrdering::Acquire,
+   Release = (unsigned)llvm::AtomicOrdering::Release,
+   AcquireRelease = (unsigned)llvm::AtomicOrdering::AcquireRelease,
+   SequentiallyConsistent = (unsigned)llvm::AtomicOrdering::SequentiallyConsistent,
 };
 
 llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, MemoryOrder MO);

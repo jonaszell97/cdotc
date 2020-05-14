@@ -1306,7 +1306,7 @@ Decl* ASTReader::ReadDeclRecord(unsigned ID)
    ReadingDecl = true;
 
    ReadingKindTracker ReadingKind(Read_Decl, *this);
-   DeclsCursor.JumpToBit(Loc);
+   (void) DeclsCursor.JumpToBit(Loc);
 
    ASTRecordReader Record(*this);
    ASTDeclReader Reader(*this, Record, ID, DeclLoc);
@@ -1314,7 +1314,7 @@ Decl* ASTReader::ReadDeclRecord(unsigned ID)
    ASTContext& C = getContext();
    Decl* D = nullptr;
 
-   unsigned Code = DeclsCursor.ReadCode();
+   unsigned Code = DeclsCursor.ReadCode().get();
    auto Kind = Record.readRecord(DeclsCursor, Code);
    switch ((DeclKinds)Kind) {
    case DECL_CONTEXT_LEXICAL:

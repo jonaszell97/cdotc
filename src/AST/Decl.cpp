@@ -626,6 +626,9 @@ FuncArgDecl* FuncArgDecl::CreateEmpty(ASTContext& C)
 
 SourceRange FuncArgDecl::getSourceRange() const
 {
+   if (VarOrLetLoc)
+      return VarOrLetLoc;
+
    if (!ColonLoc && type.getTypeExpr()) {
       return type.getTypeExpr()->getSourceRange();
    }

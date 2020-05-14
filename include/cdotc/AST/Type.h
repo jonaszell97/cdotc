@@ -40,14 +40,6 @@ public:
    enum { NumLowBitsAvailable = cdot::TypeAlignmentInBits };
 };
 
-template<> struct isPodLike<cdot::QualType> {
-   static const bool value = true;
-};
-
-template<> struct isPodLike<cdot::CanType> {
-   static const bool value = true;
-};
-
 class raw_ostream;
 
 } // namespace llvm
@@ -1535,7 +1527,7 @@ private:
 public:
    size_t size() const { return _Tys.size(); }
    bool empty() const { return _Tys.empty(); }
-   void push_back(QualType T);
+   bool push_back(QualType T);
    void remove(QualType T);
    QualType Build(ast::ASTContext &C);
 };

@@ -92,7 +92,7 @@ class ExprAttr : public Attr {
 public:
    static bool classofKind(AttrKind kind)
    {
-      return kind > AttrKind::_firstExprAttr && kind < AttrKind::_lastExprAttr;
+      return false;
    }
 
    static bool classof(const Attr* A) { return classofKind(A->getKind()); }

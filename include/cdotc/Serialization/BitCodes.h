@@ -4,7 +4,7 @@
 #include "cdotc/AST/Decl.h"
 #include "cdotc/AST/Statement.h"
 
-#include <llvm/Bitcode/BitCodes.h>
+#include <llvm/Bitstream/BitCodes.h>
 
 namespace cdot {
 namespace serial {

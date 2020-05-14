@@ -658,19 +658,32 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function* func)
 
    llvm::DISubprogram* MD;
 
-   auto File = getFileDI(F.getSourceLoc());
+   llvm::DINode::DIFlags Flags = llvm::DINode::FlagZero;
+   llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagZero;
+
+   if (!F.isDeclared()) {
+      SPFlags |= llvm::DISubprogram::SPFlagDefinition;
+   }
+
+   auto FileDI = getFileDI(F.getSourceLoc());
    if (auto M = dyn_cast<Method>(&F)) {
-      MD = DI->createMethod(
-          ScopeStack.top(), F.getUnmangledName(), F.getName(), File, line,
-          funcTy, false, !F.isDeclared(), M->isVirtual(),
-          M->getVtableOffset() == -1 ? 0 : M->getVtableOffset(), 1,
-          nullptr // FIXME
-          );
+      if (M->isVirtual()) {
+         Flags |= llvm::DINode::FlagVirtual;
+         SPFlags |= llvm::DISubprogram::SPFlagVirtual;
+      }
+
+      auto *RecordDI = getTypeDI(M->getEntryBlock()->getBlockArg(0)->getType()
+                                  ->removeMetaType()->removeReference());
+
+      MD = DI->createMethod(RecordDI,
+          F.getUnmangledName(), F.getName(), FileDI, line,
+          funcTy, M->getVtableOffset() == -1 ? 0 : M->getVtableOffset(), 1,
+          nullptr, Flags, SPFlags);
    }
    else {
       MD = DI->createFunction(ScopeStack.top(), F.getUnmangledName(),
-                              F.getName(), File, line, funcTy, false,
-                              !F.isDeclared(), scopeStart);
+                              F.getName(), FileDI, line, funcTy, scopeStart,
+                              Flags, SPFlags);
    }
 
    if (!F.isDeclared()) {

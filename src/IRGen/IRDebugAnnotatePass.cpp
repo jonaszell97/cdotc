@@ -52,7 +52,7 @@ void IRDebugAnnotatePass::writeModule(llvm::Module& M)
 {
    /// Dump the IR to a temporary file.
    std::error_code EC;
-   llvm::raw_fd_ostream OS(OutFile, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream OS(OutFile, EC);
 
    if (EC) {
       llvm::report_fatal_error(EC.message());
@@ -190,7 +190,10 @@ llvm::DISubprogram* IRDebugAnnotatePass::annotateFunction(llvm::Function& F)
    unsigned int scopeStart = 0;
    llvm::DISubprogram* MD
        = DI->createFunction(CU, F.getName(), F.getName(), DebugScope, CurLine,
-                            funcTy, false, !F.isDeclaration(), scopeStart);
+                            funcTy, scopeStart,
+                            F.isDeclaration()
+                               ? llvm::DINode::FlagFwdDecl
+                               : llvm::DINode::FlagZero);
 
    if (!F.isDeclaration()) {
       F.setSubprogram(MD);
@@ -294,7 +297,7 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
       return DI->createPointerType(
           getTypeDI(T->getPointerElementType()),
           DL->getPointerTypeSizeInBits(T),
-          DL->getPointerPrefAlignment(T->getPointerAddressSpace()));
+          DL->getPointerPrefAlignment(T->getPointerAddressSpace()).value());
    case llvm::Type::VoidTyID:
    case llvm::Type::TokenTyID:
    case llvm::Type::LabelTyID:
@@ -308,7 +311,7 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
 
       return DI->createPointerType(
           DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes)),
-          DL->getPointerSizeInBits(0), DL->getPointerPrefAlignment(0));
+          DL->getPointerSizeInBits(0), DL->getPointerPrefAlignment(0).value());
    }
    case llvm::Type::StructTyID: {
       auto* S = cast<llvm::StructType>(T);

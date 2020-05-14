@@ -3,10 +3,8 @@
 
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
-
-#ifndef NDEBUG
+#include <llvm/Support/Allocator.h>
 #include <llvm/Support/raw_ostream.h>
-#endif
 
 namespace cdot {
 

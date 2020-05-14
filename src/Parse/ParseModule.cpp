@@ -21,12 +21,16 @@ void IterateFilesInDirectory(StringRef dirName, const CallbackFn &Fn)
 
    std::error_code ec;
    iterator it(dirName, ec);
-   while (!ec) {
-      auto& entry = *it;
+   iterator end_it;
 
+   while (!ec && it != end_it) {
+      ec.clear();
+
+      auto& entry = *it;
       auto errOrStatus = entry.status();
       if (!errOrStatus) {
-         break;
+         it.increment(ec);
+         continue;
       }
 
       auto& st = errOrStatus.get();

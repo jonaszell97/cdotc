@@ -389,13 +389,40 @@ QueryResult CreateLLVMModuleQuery::run()
       Dir += ".ll";
 
       std::error_code EC;
-      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
+      llvm::raw_fd_ostream OS(Dir, EC);
 
       if (EC) {
          QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());
       }
       else {
          QC.EmitIR(OS);
+      }
+   }
+
+   if (options.emitASM()) {
+      finish(ILMod->getLLVMModule());
+
+      SmallString<128> Dir;
+      if (!options.EmitAsmPath.empty()) {
+         Dir = options.EmitAsmPath;
+      }
+      else {
+         Dir = "./ASM/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += Mod->getName()->getIdentifier();
+      Dir += ".s";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC);
+
+      if (EC) {
+         QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());
+      }
+      else {
+         IRGen->emitAsmFile(OS, ILMod->getLLVMModule());
       }
    }
 

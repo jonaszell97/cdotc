@@ -71,7 +71,8 @@ lex::Token ImporterImpl::getToken(const clang::Token& Tok)
       return Token(Data, Tok.getLength(), tok::charliteral, Loc);
    }
    case cl::string_literal:
-   case cl::angle_string_literal:
+   case cl::wide_string_literal:
+   case cl::header_name:
    case cl::utf8_string_literal:
    case cl::utf16_string_literal:
    case cl::utf32_string_literal: {
@@ -263,7 +264,8 @@ static bool isSimpleExpression(clang::MacroInfo* MI)
       case cl::utf16_char_constant:
       case cl::utf32_char_constant:
       case cl::string_literal:
-      case cl::angle_string_literal:
+      case cl::wide_string_literal:
+      case cl::header_name:
       case cl::utf8_string_literal:
       case cl::utf16_string_literal:
       case cl::utf32_string_literal:

@@ -87,7 +87,7 @@ public:
    std::unique_ptr<clang::ASTConsumer>
    CreateASTConsumer(clang::CompilerInstance&, StringRef) override
    {
-      return llvm::make_unique<DeclHandler>(Importer, Mod);
+      return std::make_unique<DeclHandler>(Importer, Mod);
    }
 };
 
@@ -339,12 +339,11 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
       ppOpts.addRemappedFile(DummyFileName, InputFile.getFile());
    }
    else {
-      ppOpts.addRemappedFile(DummyFileName, InputFile.getBuffer());
+      ppOpts.addRemappedFile(
+          DummyFileName, const_cast<llvm::MemoryBuffer*>(InputFile.getBuffer()));
    }
 
-   clang::InputKind InputKind
-       = IsCXX ? clang::InputKind::CXX : clang::InputKind::C;
-
+   clang::InputKind InputKind(IsCXX ? clang::Language::CXX : clang::Language::C);
    clang::LangOptions Opts;
    clang::CompilerInvocation::setLangDefaults(
        Opts, InputKind, CI.getContext().getTargetInfo().getTriple(), ppOpts);
@@ -352,9 +351,9 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
    auto PCHContainerOperations
        = std::make_shared<clang::PCHContainerOperations>();
    PCHContainerOperations->registerWriter(
-       llvm::make_unique<clang::ObjectFilePCHContainerWriter>());
+       std::make_unique<clang::ObjectFilePCHContainerWriter>());
    PCHContainerOperations->registerReader(
-       llvm::make_unique<clang::ObjectFilePCHContainerReader>());
+       std::make_unique<clang::ObjectFilePCHContainerReader>());
 
    // Create a compiler instance.
    this->Instance
@@ -404,11 +403,13 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
    FileIDMap[PP.getSourceManager().getMainFileID()] = BaseOffset;
 
    // Setup Preprocessor callbacks so we correctly handle macros.
-   auto ppTracker = llvm::make_unique<MacroHandler>(*this);
+   auto ppTracker = std::make_unique<MacroHandler>(*this);
    PP.addPPCallbacks(std::move(ppTracker));
 
    // Execute the parsing action.
-   action->Execute();
+   if (action->Execute()) {
+      return true;
+   }
 
    // Finalize module.
    importMacros(IntoMod);
@@ -435,14 +436,14 @@ ClangImporter::~ClangImporter() { delete pImpl; }
 bool ClangImporter::importCModule(StringRef File, DeclContext* IntoMod,
                                   SourceLocation ImportLoc)
 {
-   clang::FrontendInputFile InputFile(File, clang::InputKind::C);
+   clang::FrontendInputFile InputFile(File, clang::Language::C);
    return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false);
 }
 
 bool ClangImporter::importCXXModule(StringRef File, DeclContext* IntoMod,
                                     SourceLocation ImportLoc)
 {
-   clang::FrontendInputFile InputFile(File, clang::InputKind::CXX);
+   clang::FrontendInputFile InputFile(File, clang::Language::CXX);
    return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, true);
 }
 
@@ -455,7 +456,7 @@ bool ClangImporter::importSystemHeader(StringRef File, DeclContext* IntoMod,
    OS << "#include <" << File << ">";
 
    auto MemBuf = llvm::MemoryBuffer::getMemBuffer(OS.str());
-   clang::FrontendInputFile InputFile(MemBuf.release(), clang::InputKind::C);
+   clang::FrontendInputFile InputFile(MemBuf.release(), clang::Language::C);
 
    return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false,
                               Optional);

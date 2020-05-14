@@ -338,7 +338,7 @@ ExprResult SemaPass::visitAssignExpr(AssignExpr* Expr)
          diagnose(Expr, err_assign_to_rvalue, lhs->getExprType(),
                   Expr->getSourceRange());
       }
-      else if (!lhs->getExprType()->isReferenceType()) {
+      else {
          diagnose(Expr, err_reassign_constant, Expr->getSourceRange());
       }
 

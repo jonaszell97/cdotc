@@ -16,9 +16,7 @@ QueryResult OpenTmpFileQuery::run()
    auto FileName = fs::getTmpFileName(Extension);
    std::error_code EC;
 
-   auto OS = std::make_unique<llvm::raw_fd_ostream>(FileName, EC,
-                                                    llvm::sys::fs::F_RW);
-
+   auto OS = std::make_unique<llvm::raw_fd_ostream>(FileName, EC);
    if (EC) {
       return fail();
    }

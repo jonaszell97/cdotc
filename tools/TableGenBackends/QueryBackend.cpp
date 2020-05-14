@@ -19,11 +19,6 @@ using std::string;
 
 namespace {
 
-llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, std::string_view str)
-{
-   return OS << string(str);
-}
-
 std::ostream& operator<<(std::ostream& OS, StringRef str)
 {
    return OS << str.str();

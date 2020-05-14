@@ -325,7 +325,7 @@ private:
 
 ASSERT_NOEXCEPT_MOVE_CONSTRUCTIBLE(TemplateArgList);
 
-class LLVM_ALIGNAS(sizeof(void*)) FinalTemplateArgumentList final
+class alignas(sizeof(void*)) FinalTemplateArgumentList final
     : llvm::TrailingObjects<FinalTemplateArgumentList, TemplateArgument>,
       public llvm::FoldingSetNode {
    FinalTemplateArgumentList(llvm::MutableArrayRef<TemplateArgument> Args,

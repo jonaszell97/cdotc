@@ -597,8 +597,20 @@ namespace {
 
 bool isPointerLike(Value* V)
 {
-   return V->getType()->isRecordType() || V->getType()->isPointerType()
-          || V->getType()->isReferenceType() || V->getType()->isMetaType();
+   switch (V->getType()->getTypeID()) {
+   case Type::PointerTypeID:
+   case Type::MutablePointerTypeID:
+   case Type::ReferenceTypeID:
+   case Type::MutableReferenceTypeID:
+   case Type::MetaTypeID:
+   case Type::FunctionTypeID:
+   case Type::LambdaTypeID:
+   case Type::ExistentialTypeID:
+   case Type::RecordTypeID:
+      return true;
+   default:
+      return false;
+   }
 }
 
 void checkIntrinsicArgs(Intrinsic id, llvm::ArrayRef<Value*> args)

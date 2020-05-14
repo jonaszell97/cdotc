@@ -22,4 +22,4 @@ src/Diagnostics/def/raw
 src/Query/Queries.def
 src/Query/Queries.inc
 
-src/Tools/TableGenScripts
+tools/TableGenScripts

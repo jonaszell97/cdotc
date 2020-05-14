@@ -9,7 +9,7 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/SmallPtrSet.h>
-#include <llvm/Bitcode/BitstreamWriter.h>
+#include <llvm/Bitstream/BitstreamWriter.h>
 
 #include <queue>
 

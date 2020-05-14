@@ -16,6 +16,7 @@
 #include "cdotc/Support/Format.h"
 
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/DJB.h>
 #include <llvm/Support/SaveAndRestore.h>
 
 using namespace cdot;
@@ -165,14 +166,25 @@ bool ASTReader::ReadLexicalDeclContextStorage(uint64_t Offset, DeclContext* DC)
    assert(Offset != 0);
 
    SavedStreamPosition SavedPosition(DeclsCursor);
-   DeclsCursor.JumpToBit(Offset);
+   auto Err = DeclsCursor.JumpToBit(Offset);
+   (void) Err; assert(!Err && "invalid jump offset");
 
    RecordData Record;
    StringRef Blob;
 
-   unsigned Code = DeclsCursor.ReadCode();
-   unsigned RecCode = DeclsCursor.readRecord(Code, Record, &Blob);
+   auto CodeOrErr = DeclsCursor.ReadCode();
+   if (!CodeOrErr) {
+      Reader.Error("error reading code");
+   }
 
+   unsigned Code = CodeOrErr.get();
+
+   auto RecCodeOrError = DeclsCursor.readRecord(Code, Record, &Blob);
+   if (!RecCodeOrError) {
+      Reader.Error("error reading code");
+   }
+
+   unsigned RecCode = RecCodeOrError.get();
    if (RecCode != DECL_CONTEXT_LEXICAL) {
       Error("Expected lexical block");
       return true;
@@ -211,14 +223,24 @@ bool ASTReader::ReadVisibleDeclContextStorage(uint64_t Offset,
    assert(!DC->getModFile() && "duplicate module file");
 
    SavedStreamPosition SavedPosition(DeclsCursor);
-   DeclsCursor.JumpToBit(Offset);
+   (void) DeclsCursor.JumpToBit(Offset);
 
    RecordData Record;
    StringRef Blob;
 
-   unsigned Code = DeclsCursor.ReadCode();
-   unsigned RecCode = DeclsCursor.readRecord(Code, Record, &Blob);
+   auto CodeOrErr = DeclsCursor.ReadCode();
+   if (!CodeOrErr) {
+      Reader.Error("error reading code");
+   }
 
+   unsigned Code = CodeOrErr.get();
+
+   auto RecCodeOrError = DeclsCursor.readRecord(Code, Record, &Blob);
+   if (!RecCodeOrError) {
+      Reader.Error("error reading code");
+   }
+
+   unsigned RecCode = RecCodeOrError.get();
    if (RecCode != DECL_CONTEXT_VISIBLE) {
       Error("Expected visible lookup table block");
       return true;
@@ -269,13 +291,19 @@ QualType ASTReader::readTypeRecord(unsigned ID)
    ReadingKindTracker ReadingKind(Read_Type, *this);
 
    unsigned Idx = 0;
-   DeclsCursor.JumpToBit(Loc);
+   (void) DeclsCursor.JumpToBit(Loc);
 
    auto& Context = Reader.CI.getContext();
    RecordData Record;
-   unsigned Code = DeclsCursor.ReadCode();
 
-   auto TypeID = (Type::TypeID)DeclsCursor.readRecord(Code, Record);
+   auto CodeOrErr = DeclsCursor.ReadCode();
+   if (!CodeOrErr) {
+      Reader.Error("error reading code");
+   }
+
+   unsigned Code = CodeOrErr.get();
+
+   auto TypeID = (Type::TypeID)DeclsCursor.readRecord(Code, Record).get();
    switch (TypeID) {
    case Type::ArrayTypeID: {
       if (Record.size() != 2) {
@@ -655,7 +683,7 @@ ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor& Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -681,7 +709,7 @@ ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor& Stream)
       StringRef Blob;
 
       auto RecordType
-          = (ConformanceRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+          = (ConformanceRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
       default: // Default behavior: ignore.
@@ -704,7 +732,7 @@ ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor& Stream)
 InstantiationTableLookupTrait::hash_value_type
 InstantiationTableLookupTrait::ComputeHash(const internal_key_type& a)
 {
-   return llvm::HashString(a);
+   return llvm::djbHash(a);
 }
 
 std::pair<unsigned, unsigned>
@@ -762,7 +790,7 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor& Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -806,7 +834,7 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor& Stream)
       StringRef Blob;
 
       auto RecordType
-          = (ASTRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+          = (ASTRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
       default: // Default behavior: ignore.
@@ -899,7 +927,7 @@ LLVM_ATTRIBUTE_UNUSED
 static bool SkipCursorToBlock(llvm::BitstreamCursor& Cursor, unsigned BlockID)
 {
    while (true) {
-      llvm::BitstreamEntry Entry = Cursor.advance();
+      llvm::BitstreamEntry Entry = Cursor.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::EndBlock:
@@ -907,7 +935,7 @@ static bool SkipCursorToBlock(llvm::BitstreamCursor& Cursor, unsigned BlockID)
 
       case llvm::BitstreamEntry::Record:
          // Ignore top-level records.
-         Cursor.skipRecord(Entry.ID);
+         (void) Cursor.skipRecord(Entry.ID);
          break;
 
       case llvm::BitstreamEntry::SubBlock:
@@ -1321,5 +1349,11 @@ unsigned ASTRecordReader::readRecord(llvm::BitstreamCursor& Cursor,
 {
    Idx = 0;
    Record.clear();
-   return Cursor.readRecord(AbbrevID, Record);
+
+   auto CodeOrErr = Cursor.readRecord(AbbrevID, Record);
+   if (!CodeOrErr) {
+      Reader->Reader.Error("error reading record");
+   }
+
+   return CodeOrErr.get();
 }

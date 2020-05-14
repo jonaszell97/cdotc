@@ -13,7 +13,7 @@ namespace sema {
 class FinalTemplateArgumentList;
 } // namespace sema
 
-class LLVM_ALIGNAS(8) NestedNameSpecifier : public llvm::FoldingSetNode {
+class alignas(8) NestedNameSpecifier : public llvm::FoldingSetNode {
 public:
    enum Kind : uint8_t {
       /// \brief An ordinary, unresolved identifier.

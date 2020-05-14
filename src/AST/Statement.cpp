@@ -440,9 +440,23 @@ SourceRange DiscardAssignStmt::getSourceRange() const
    return SourceRange(UnderscoreLoc, RHS->getSourceRange().getEnd());
 }
 
+DoStmt *DoStmt::Create(ASTContext &C, SourceRange SR, Statement *body,
+                       IdentifierInfo *Label) {
+   return new(C) DoStmt(SR, body, Label);
+}
+
 DoStmt::DoStmt(SourceRange SR, Statement* body, IdentifierInfo* Label)
     : Statement(DoStmtID), SR(SR), body(body), NumCatchBlocks(0), Label(Label)
 {
+}
+
+DoStmt *DoStmt::Create(ASTContext &C, SourceRange SR, Statement *body,
+                       ArrayRef<CatchBlock> catchBlocks,
+                       IdentifierInfo *Label) {
+   void* Mem = C.Allocate(totalSizeToAlloc<CatchBlock>(catchBlocks.size()),
+                          alignof(DoStmt));
+
+   return new(Mem) DoStmt(SR, body, catchBlocks, Label);
 }
 
 DoStmt::DoStmt(SourceRange SR, Statement* body,
@@ -450,8 +464,16 @@ DoStmt::DoStmt(SourceRange SR, Statement* body,
     : Statement(DoStmtID), SR(SR), body(body),
       NumCatchBlocks((unsigned)catchBlocks.size()), Label(Label)
 {
+   if (NumCatchBlocks)
+      support::cast<CompoundStmt>(body)->setPreserveScope(true);
+
    std::copy(catchBlocks.begin(), catchBlocks.end(),
              getTrailingObjects<CatchBlock>());
+}
+
+DoStmt *DoStmt::Create(ASTContext &C, EmptyShell, unsigned N) {
+   void* Mem = C.Allocate(totalSizeToAlloc<CatchBlock>(N), alignof(DoStmt));
+   return new(Mem) DoStmt(EmptyShell(), N);
 }
 
 DoStmt::DoStmt(EmptyShell, unsigned N)

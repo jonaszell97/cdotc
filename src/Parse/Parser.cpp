@@ -2336,10 +2336,16 @@ Expression* Parser::parseFloatingPointLiteral()
                    SourceLocation(Offset + text.size()));
 
    llvm::APFloat APF(0.0);
-   auto Status = APF.convertFromString(text, llvm::APFloat::rmNearestTiesToEven);
-   if ((Status & llvm::APFloat::opOverflow) != 0
-   || (Status & llvm::APFloat::opUnderflow) != 0) {
+   auto StatusOrErr = APF.convertFromString(text, llvm::APFloat::rmNearestTiesToEven);
+   if (!StatusOrErr) {
       SP.diagnose(warn_inexact_fp, currentTok().getSourceLoc());
+   }
+   else {
+      auto Status = StatusOrErr.get();
+      if ((Status & llvm::APFloat::opOverflow) != 0
+          || (Status & llvm::APFloat::opUnderflow) != 0) {
+         SP.diagnose(warn_inexact_fp, currentTok().getSourceLoc());
+      }
    }
 
    cdot::Type* Ty;
@@ -3384,6 +3390,7 @@ void Parser::parseFuncArgs(SourceLocation& varargLoc,
          }
          // Type
          else {
+            NameLoc = currentTok().getSourceLoc();
             ArgName = DeclarationName();
             lexer->backtrack();
          }
@@ -3412,8 +3419,9 @@ void Parser::parseFuncArgs(SourceLocation& varargLoc,
       maybeParseConvention(Conv, OwnershipLoc);
 
       auto typeResult = parseType();
-      if (typeResult)
+      if (typeResult) {
          argType = typeResult.get();
+      }
       else {
          argType = SourceType(Context.getAutoType());
          skipUntilProbableEndOfExpr();
@@ -3462,6 +3470,10 @@ void Parser::parseFuncArgs(SourceLocation& varargLoc,
          }
 
          ArgName = Context.getDeclNameTable().getNormalIdentifier(*II);
+      }
+
+      if (!ColonLoc) {
+         ColonLoc = NameLoc;
       }
 
       auto argDecl = FuncArgDecl::Create(Context, OwnershipLoc, ColonLoc,
@@ -5661,7 +5673,6 @@ ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
       }
 
       SourceLocation VarOrLetLoc = currentTok().getSourceLoc();
-      AccessSpecifier access = AccessSpecifier::Default;
       bool isLet = true;
 
       if (!currentTok().is(tok::ident)) {
@@ -5681,17 +5692,20 @@ ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
          advance();
 
          auto typeResult = parseType(true);
-         if (typeResult)
+         if (typeResult) {
             type = typeResult.get();
-         else
+         }
+         else {
             skipUntilProbableEndOfExpr();
+         }
       }
       else {
          SP.diagnose(err_generic_error, currentTok().getSourceLoc(),
                      "catch must have a defined type");
       }
 
-      auto L = LocalVarDecl::Create(Context, access, VarOrLetLoc, ColonLoc,
+      auto L = LocalVarDecl::Create(Context, AccessSpecifier::Public,
+                                    VarOrLetLoc, ColonLoc,
                                     isLet, Name, type, nullptr);
 
       L->setLexicalContext(&SP.getDeclContext());
@@ -5715,7 +5729,7 @@ ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
       SP.diagnose(err_catch_all_must_be_alone, CatchAllLoc);
    }
 
-   return new (Context) DoStmt(SourceRange(DoLoc), CS, CatchBlocks, Label);
+   return DoStmt::Create(Context, SourceRange(DoLoc), CS, CatchBlocks, Label);
 }
 
 Parser::DeclAttrs Parser::pushDeclAttrs()

@@ -123,7 +123,7 @@ struct ParseResult {
    }
 
 private:
-   llvm::PointerUnion3<Decl*, Statement*, void*> Value;
+   llvm::PointerUnion<Decl*, Statement*, void*> Value;
 };
 
 struct ParseTypeResult {

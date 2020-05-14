@@ -97,6 +97,7 @@ public:
    enum ConversionOpts : uint8_t {
       CO_None = 0x0,
       CO_IsClangParameterValue = 0x1,
+      CO_IsSelfValue = 0x2,
    };
 
    /// \return A possible conversion sequence from `from` to `to`, or an invalid
@@ -1322,7 +1323,7 @@ public:
    bool ShouldPassByValue(QualType Ty);
    bool ContainsAssociatedTypeConstraint(QualType Ty);
 
-   bool ConformsTo(CanType T, CanType Existential);
+   bool ConformsTo(CanType T, CanType Existential, bool anyConformance = false);
    bool ConformsTo(CanType T, ProtocolDecl* Proto,
                    bool AllowConditional = false);
 
@@ -1624,6 +1625,9 @@ public:
 
    friend class ReflectionBuilder;
 };
+
+/// Helper functions for conversion options.
+FLAG_ENUM(SemaPass::ConversionOpts)
 
 } // namespace ast
 } // namespace cdot

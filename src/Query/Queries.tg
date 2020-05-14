@@ -363,9 +363,18 @@ def NeedsRetainOrRelease : TypeMetaQuery
 def NeedsDeinitilization : TypeMetaQuery
 def NeedsStructReturn : TypeMetaQuery
 def PassByValue : TypeMetaQuery
-def ContainsProtocolWithAssociatedTypes : TypeMetaQuery
 def ContainsTemplate : TypeMetaQuery
 def ContainsAssociatedTypeConstraint : TypeMetaQuery
+
+def ContainsProtocolWithAssociatedTypes : Query<"ast::ProtocolDecl*"> {
+    parameters = [
+        // The type to calculate meta info about.
+        TypeParam<"T">
+    ]
+
+    description = "checking $NAME on ${T.toDiagString()}"
+    canBeDependent = true
+}
 
 def IsImplicitlyConvertible : Query<"IsImplicitlyConvertibleQuery::ResultType"> {
     parameters = [

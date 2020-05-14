@@ -8,8 +8,8 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringSet.h>
-#include <llvm/Bitcode/BitstreamReader.h>
-#include <llvm/Bitcode/BitstreamWriter.h>
+#include <llvm/Bitstream/BitstreamReader.h>
+#include <llvm/Bitstream/BitstreamWriter.h>
 
 namespace cdot {
 namespace ast {

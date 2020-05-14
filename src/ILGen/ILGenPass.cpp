@@ -436,7 +436,7 @@ il::Value* ILGenPass::getMethod(il::Value* Self, MethodDecl* M)
 {
    unsigned Offset = 0;
    if (M->isVirtual()) {
-      Offset = getFunc(M)->getVtableOffset();
+      Offset = getVTableOffset(M);
    }
    else if (M->isProtocolRequirement()) {
       Offset = getProtocolMethodOffset(M);
@@ -2132,7 +2132,7 @@ il::Value* ILGenPass::CreateCall(CallableDecl* C, ArrayRef<il::Value*> args,
          il::GlobalVariable* ProtocolTypeInfo = nullptr;
 
          if (isVirtual) {
-            Offset = cast<Method>(getFunc(C))->getVtableOffset();
+            Offset = getVTableOffset(cast<MethodDecl>(C));
          }
          else {
             Offset = getProtocolMethodOffset(cast<MethodDecl>(C));
@@ -2178,10 +2178,11 @@ il::Value* ILGenPass::CreateCall(CallableDecl* C, ArrayRef<il::Value*> args,
       }
    }
    else {
-      if (EHStack.back().EmitCleanups)
-         Cleanups.emitAllWithoutPopping();
+      if (EHStack.back()->EmitCleanups) {
+         Cleanups.emitUntilWithoutPopping(EHStack.back()->getDepth());
+      }
 
-      Builder.CreateBr(EHStack.back().LandingPad, lpad->getBlockArg(0));
+      Builder.CreateBr(EHStack.back()->LandingPad, lpad->getBlockArg(0));
    }
 
    Builder.restoreIP(IP);
@@ -2192,7 +2193,7 @@ il::Value* ILGenPass::CreateCall(CallableDecl* C, ArrayRef<il::Value*> args,
       il::GlobalVariable* ProtocolTypeInfo = nullptr;
 
       if (isVirtual) {
-         Offset = cast<Method>(getFunc(C))->getVtableOffset();
+         Offset = getVTableOffset(cast<MethodDecl>(C));
       }
       else {
          Offset = getProtocolMethodOffset(cast<MethodDecl>(C));
@@ -3183,6 +3184,11 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
    DeclarationName DN = Decl->getDeclName();
    QualType DeclTy = getSubstitution(Decl->getType());
 
+   StringRef Name;
+   if (!Decl->getDeclName().isErrorName()) {
+      Name = Decl->getName();
+   }
+
    if (Decl->isBorrow()) {
       il::Value* Val;
       {
@@ -3231,7 +3237,7 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
          MovedVal = Val;
       }
       else {
-         MovedVal = Builder.CreateMove(Val, Decl->getName());
+         MovedVal = Builder.CreateMove(Val, Name);
       }
 
       addDeclValuePair(Decl, MovedVal);
@@ -3259,7 +3265,7 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
       }
       else {
          auto Inst = Builder.CreateAlloca(DeclTy, Alignment, Decl->isCaptured(),
-                                          Decl->isConst(), Decl->getName());
+                                          Decl->isConst(), Name);
 
          Inst->setIsInitializer(true);
          Alloca = Inst;
@@ -3305,7 +3311,7 @@ void ILGenPass::visitLocalVarDecl(LocalVarDecl* Decl)
    }
    else {
       auto Inst = Builder.CreateAlloca(DeclTy, Alignment, Decl->isCaptured(),
-                                       Decl->isConst(), Decl->getName());
+                                       Decl->isConst(), Name);
 
       Inst->setIsInitializer(true);
       Alloca = Inst;
@@ -4227,7 +4233,7 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
       return nullptr;
    }
 
-   if (!V->getType()->isVoidType()) {
+   if (!V->getType()->isVoidType() && !CalledFn->throws()) {
       pushDefaultCleanup(V);
    }
 
@@ -7009,12 +7015,6 @@ il::Value* ILGenPass::visitLambdaExpr(LambdaExpr* Expr)
    Builder.restoreIP(IP);
    auto val = Builder.CreateLambdaInit(L, Expr->getExprType(), Captures);
 
-   for (auto capt : Captures) {
-      // retain the box for this capture
-      if (isa<AllocBoxInst>(capt))
-         Builder.CreateRetain(Builder.CreateLoad(capt));
-   }
-
    pushDefaultCleanup(val);
    return val;
 }
@@ -7052,13 +7052,15 @@ void ILGenPass::visitDoStmt(DoStmt* Stmt)
    lpad->addBlockArg(SP.getContext().getUInt8PtrTy(), "opaque_err");
 
    auto MergeBB = Builder.CreateBasicBlock("do.merge");
+   CleanupsDepth Depth = Cleanups.getCleanupsDepth();
 
    {
-      EHScopeRAII EHS(*this, lpad);
+      EHScopeRAII EHS(*this, lpad, Stmt->getCatchBlocks().empty());
       visit(Stmt->getBody());
 
-      if (!Builder.GetInsertBlock()->getTerminator())
+      if (!Builder.GetInsertBlock()->getTerminator()) {
          Builder.CreateBr(MergeBB);
+      }
    }
 
    Builder.SetInsertPoint(lpad);
@@ -7169,21 +7171,34 @@ void ILGenPass::visitDoStmt(DoStmt* Stmt)
                                      BodyBB->getBlockArg(1));
       }
 
-      if (!Builder.GetInsertBlock()->getTerminator())
+      if (!Builder.GetInsertBlock()->getTerminator()) {
          Builder.CreateBr(MergeBB);
+      }
    }
 
    Builder.SetInsertPoint(NotCaughtBB);
 
-   if (!Builder.GetInsertBlock()->getParent()->mightThrow()) {
-      Builder.CreateIntrinsicCall(
-          Intrinsic::print_runtime_error,
-          Builder.GetConstantInt(WordTy,
-                                 IntrinsicCallInst::UnexpectedThrownError));
-      Builder.CreateUnreachable();
+   // If there is an outer do scope, emit the cleanups of this one and try to
+   // catch the error there.
+   if (!EHStack.empty()) {
+      Cleanups.emitUntil(Depth);
+      Builder.CreateBr(EHStack.back()->LandingPad, NotCaughtBB->getBlockArg(0));
    }
    else {
-      Builder.CreateRethrow(NotCaughtBB->getBlockArg(0));
+      // Otherwise we're leaving the function, so emit all cleanups.
+      Cleanups.emitAllWithoutPopping();
+
+      if (!Builder.GetInsertBlock()->getParent()->mightThrow()) {
+         Builder.CreateIntrinsicCall(
+             Intrinsic::print_runtime_error,
+             Builder.GetConstantInt(
+                 WordTy, IntrinsicCallInst::UnexpectedThrownError));
+
+         Builder.CreateUnreachable();
+      }
+      else {
+         Builder.CreateRethrow(NotCaughtBB->getBlockArg(0));
+      }
    }
 
    Builder.SetInsertPoint(MergeBB);
@@ -7191,8 +7206,12 @@ void ILGenPass::visitDoStmt(DoStmt* Stmt)
 
 il::Value* ILGenPass::visitTryExpr(TryExpr* Expr)
 {
-   if (Expr->getKind() != TryExpr::Fallible)
-      return visit(Expr->getExpr());
+   if (Expr->getKind() != TryExpr::Fallible) {
+      auto *Result = visit(Expr->getExpr());
+      pushDefaultCleanup(Result);
+
+      return Result;
+   }
 
    auto* OptionTy = cast<EnumDecl>(Expr->getExprType()->getRecord());
 
@@ -7208,23 +7227,29 @@ il::Value* ILGenPass::visitTryExpr(TryExpr* Expr)
    auto* merge = Builder.CreateBasicBlock("try.fallible.merge");
    merge->addBlockArg(Expr->getExprType(), "result");
 
-   EHScopeRAII ESR(*this, lpad, /*EmitCleanups=*/false);
+   {
+      EHScopeRAII ESR(*this, lpad, /*EmitCleanups=*/false);
 
-   auto Val = visit(Expr->getExpr());
-   auto SomeVal = Builder.CreateEnumInit(OptionTy, SomeCase, Val);
+      auto Val = visit(Expr->getExpr());
+      auto SomeVal = Builder.CreateEnumInit(OptionTy, SomeCase, Val);
 
-   Builder.CreateBr(merge, SomeVal);
-   Builder.SetInsertPoint(lpad);
+      Builder.CreateBr(merge, SomeVal);
+      Builder.SetInsertPoint(lpad);
 
-   // clean up the error
-   Builder.CreateIntrinsicCall(Intrinsic::cleanup_exception,
-                               lpad->getBlockArg(0));
+      // clean up the error
+      Builder.CreateIntrinsicCall(Intrinsic::cleanup_exception,
+                                  lpad->getBlockArg(0));
 
-   auto NoneVal = Builder.CreateEnumInit(OptionTy, NoneCase, {});
-   Builder.CreateBr(merge, NoneVal);
+      auto NoneVal = Builder.CreateEnumInit(OptionTy, NoneCase, {});
+      Builder.CreateBr(merge, NoneVal);
 
-   Builder.SetInsertPoint(merge);
-   return merge->getBlockArg(0);
+      Builder.SetInsertPoint(merge);
+   }
+
+   auto *Ret = merge->getBlockArg(0);
+   pushDefaultCleanup(Ret);
+
+   return Ret;
 }
 
 void ILGenPass::visitThrowStmt(ThrowStmt* Stmt)

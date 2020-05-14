@@ -2,14 +2,17 @@
 
 #include "cdotc/Support/Format.h"
 
+#include <llvm/Support/Error.h>
+
 using namespace cdot;
 
 LiteralParser::FPResult LiteralParser::parseFloating()
 {
    llvm::APFloat APF(0.0);
-   auto status = APF.convertFromString(Str, llvm::APFloat::rmNearestTiesToEven);
+   auto statusOrErr = APF.convertFromString(Str, llvm::APFloat::rmNearestTiesToEven);
 
-   return FPResult{std::move(APF), status};
+   return FPResult{std::move(APF),
+       !statusOrErr ? llvm::APFloat::opInexact : statusOrErr.get()};
 }
 
 uint8_t LiteralParser::getIntegerRadix()

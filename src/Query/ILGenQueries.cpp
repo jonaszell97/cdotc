@@ -128,7 +128,7 @@ QueryResult CreateILModuleQuery::run()
       Dir += ".cdotil";
 
       std::error_code EC;
-      llvm::raw_fd_ostream OS(Dir, EC, llvm::sys::fs::F_RW);
+      llvm::raw_fd_ostream OS(Dir, EC);
 
       if (EC) {
          QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());

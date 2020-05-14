@@ -2014,7 +2014,7 @@ ExprResult SemaPass::visitTupleMemberExpr(TupleMemberExpr* Expr)
    TupleType* tup = ParentExpr->getExprType()->removeReference()->asTupleType();
    if (!tup) {
       diagnose(Expr, err_not_tuple, Expr->getSourceLoc(),
-               ParentExpr->getExprType());
+               ParentExpr->getExprType()->removeReference());
 
       return ExprError();
    }

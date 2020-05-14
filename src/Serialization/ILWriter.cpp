@@ -15,6 +15,7 @@
 #include "cdotc/Serialization/ModuleWriter.h"
 
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/DJB.h>
 #include <llvm/Support/EndianStream.h>
 #include <llvm/Support/OnDiskHashTable.h>
 
@@ -315,7 +316,7 @@ public:
 
    static hash_value_type ComputeHash(key_type_ref Key)
    {
-      return llvm::HashString(Key);
+      return llvm::djbHash(Key);
    }
 
    static std::pair<unsigned, unsigned>
@@ -323,7 +324,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       LE.write<uint32_t>(Key.size());
       LE.write<uint32_t>(4);
 
@@ -342,7 +343,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       LE.write<uint32_t>(Data);
    }
 };

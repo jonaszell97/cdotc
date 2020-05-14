@@ -60,8 +60,7 @@ void VerifierPass::visitGlobals(il::Module& M)
    if (!IsValid) {
       std::error_code EC;
       llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error"
-                              ".cdotil",
-                              EC, llvm::sys::fs::F_RW);
+                              ".cdotil", EC);
 
       M.writeTo(fd);
       fd.flush();

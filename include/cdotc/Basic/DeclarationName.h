@@ -278,10 +278,6 @@ public:
    enum { NumLowBitsAvailable = 0 };
 };
 
-template<> struct isPodLike<cdot::DeclarationName> {
-   static const bool value = true;
-};
-
 } // namespace llvm
 
 namespace cdot {

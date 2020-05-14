@@ -225,6 +225,7 @@ QualType ImporterImpl::getType(clang::QualType Ty)
    case clang::Type::UnaryTransform:
    case clang::Type::Elaborated:
    case clang::Type::Attributed:
+   case clang::Type::MacroQualified:
       return getType(Ty.getCanonicalType());
    case clang::Type::Record: {
       auto* RecTy = Ty->castAs<clang::RecordType>();

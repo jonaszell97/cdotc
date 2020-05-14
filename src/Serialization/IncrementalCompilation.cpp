@@ -62,9 +62,9 @@ IncrementalCompilationManager::~IncrementalCompilationManager()
 
 static bool startsWithCacheFileMagic(llvm::BitstreamCursor& Stream)
 {
-   return Stream.canSkipToPos(4) && Stream.Read(8) == 'C'
-          && Stream.Read(8) == 'A' && Stream.Read(8) == 'S'
-          && Stream.Read(8) == 'T';
+   return Stream.canSkipToPos(4) && Stream.Read(8).get() == 'C'
+          && Stream.Read(8).get() == 'A' && Stream.Read(8).get() == 'S'
+          && Stream.Read(8).get() == 'T';
 }
 
 ReadResult IncrementalCompilationManager::ReadInfoFile()
@@ -102,7 +102,7 @@ ReadResult IncrementalCompilationManager::ReadInfoFile()
          return Success;
       }
 
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::Record:
@@ -205,7 +205,7 @@ ReadResult IncrementalCompilationManager::ReadCacheControlBlock(
 
    RecordData Record;
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::EndBlock:
@@ -233,7 +233,7 @@ ReadResult IncrementalCompilationManager::ReadCacheControlBlock(
       Record.clear();
 
       StringRef Blob;
-      auto RecordType = Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType = Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch ((ControlRecordTypes)RecordType) {
       case CACHE_FILE: {
@@ -406,7 +406,7 @@ writeDeclsPerFile(StringRef FileName, fs::FileManager& FileMgr,
    Path += FileName;
 
    std::error_code EC;
-   llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream OS(Path, EC);
 
    SmallVector<StringRef, 16> FileNames;
    for (auto& Pair : DeclsPerFile) {
@@ -460,7 +460,7 @@ static void writeILVals(StringRef FileName, il::Module& M)
    Path += FileName;
 
    std::error_code EC;
-   llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream OS(Path, EC);
 
    for (auto& Name : Names) {
       OS << Name.first << " " << Name.second << "\n";
@@ -556,7 +556,7 @@ void IncrementalCompilationManager::WriteFileInfo()
    Stream.ExitBlock();
 
    std::error_code EC;
-   llvm::raw_fd_ostream FS(InfoFileName, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream FS(InfoFileName, EC);
    if (EC) {
       llvm::report_fatal_error(EC.message());
    }

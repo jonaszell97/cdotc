@@ -896,7 +896,7 @@ static bool conformsToImpl(SemaPass& Sema, CanType T, ProtocolDecl* Proto,
    return result;
 }
 
-bool SemaPass::ConformsTo(CanType T, CanType Existential)
+bool SemaPass::ConformsTo(CanType T, CanType Existential, bool anyConformance)
 {
    if (auto *R = Existential->asRecordType()) {
       if (auto *P = dyn_cast<ProtocolDecl>(R->getRecord())) {
@@ -904,18 +904,45 @@ bool SemaPass::ConformsTo(CanType T, CanType Existential)
       }
    }
 
+   RecordDecl *SelfRec = nullptr;
+   ClassDecl *SelfClass = nullptr;
+   if (T->isRecordType()) {
+      SelfRec = T->getRecord();
+      SelfClass = dyn_cast<ClassDecl>(SelfRec);
+   }
+
    if (auto *Ext = Existential->asExistentialType()) {
-      bool AllConform = true;
       for (QualType E : Ext->getExistentials()) {
          if (auto* P = dyn_cast<ProtocolDecl>(E->getRecord())) {
-            if (!ConformsTo(T, P)) {
-               AllConform = false;
-               break;
+            bool Conforms = ConformsTo(T, P);
+            if (Conforms && anyConformance) {
+               return true;
+            }
+
+            if (anyConformance && P == SelfRec) {
+               return true;
+            }
+
+            if (!Conforms && !SelfClass && !anyConformance) {
+               return false;
+            }
+         }
+         else {
+            auto *C = cast<ClassDecl>(E->getRecord());
+            if (!SelfClass)
+               return false;
+
+            if (SelfClass != C && !C->isBaseClassOf(SelfClass)) {
+               return false;
             }
          }
       }
 
-      return AllConform;
+      if (anyConformance) {
+         return false;
+      }
+
+      return true;
    }
 
    return false;
@@ -1246,21 +1273,22 @@ StmtResult SemaPass::visitDeclStmt(DeclStmt* Stmt)
 
 void SemaPass::checkIfTypeUsableAsDecl(SourceType Ty, StmtOrDecl DependentDecl)
 {
-   // Use 'isa' here to avoid getting the canonical type.
-   if (isa<RecordType>(*Ty.getResolvedType())) {
-      auto *Proto = dyn_cast<ProtocolDecl>(Ty->getRecord());
-      if (Proto && Proto->hasAssociatedTypeConstraint()) {
-         SourceRange SR;
-         if (auto E = Ty.getTypeExpr()) {
-            SR = E->getSourceRange();
-         }
-         else {
-            SR = DependentDecl.getSourceLoc();
-         }
+   ProtocolDecl *Proto;
+   if (QC.ContainsProtocolWithAssociatedTypes(Proto, Ty)) {
+      return;
+   }
 
-         diagnose(DependentDecl, err_protocol_cannot_be_used_as_type,
-                  Proto->getDeclName(), SR);
+   if (Proto) {
+      SourceRange SR;
+      if (auto E = Ty.getTypeExpr()) {
+         SR = E->getSourceRange();
       }
+      else {
+         SR = DependentDecl.getSourceLoc();
+      }
+
+      diagnose(DependentDecl, err_protocol_cannot_be_used_as_type,
+               Proto->getDeclName(), SR);
    }
 }
 
@@ -1419,6 +1447,9 @@ bool SemaPass::visitVarDecl(VarDecl* Decl)
                                Decl->getEqualsLoc());
 
       Decl->setValue(Val);
+   }
+   else {
+      checkIfTypeUsableAsDecl(Decl->getType(), Decl);
    }
 
    return true;
@@ -1675,6 +1706,97 @@ DeclResult SemaPass::doDestructure(DestructuringDecl* D,
    return destructureError();
 }
 
+static MethodDecl* conformsToTruthValue(SemaPass& Sema, QualType CondTy,
+                                        StmtOrDecl SOD, SourceRange SR)
+{
+   ProtocolDecl* TruthValue;
+   if (Sema.QC.GetBuiltinProtocol(TruthValue,
+                                  GetBuiltinProtocolQuery::TruthValue)) {
+      return nullptr;
+   }
+
+   if (!Sema.ConformsTo(CondTy, TruthValue)) {
+      Sema.diagnose(SOD, err_binding_invalid_truth_value, SR);
+      return nullptr;
+   }
+
+   if (auto* AT = CondTy->asAssociatedType()) {
+      CondTy = AT->getDecl()->getCovariance();
+   }
+
+   RecordDecl* ConformingRec = nullptr;
+   if (auto* RT = CondTy->asRecordType()) {
+      bool ConformsTo = Sema.ConformsTo(CondTy, TruthValue);
+      if (ConformsTo) {
+         ConformingRec = RT->getRecord();
+      }
+   }
+   else if (auto* Ext = CondTy->asExistentialType()) {
+      for (auto ET : Ext->getExistentials()) {
+         bool ConformsTo = Sema.ConformsTo(ET, TruthValue);
+         if (ConformsTo) {
+            ConformingRec = ET->getRecord();
+            break;
+         }
+      }
+   }
+
+   if (!ConformingRec) {
+      Sema.diagnose(SOD, err_binding_invalid_truth_value, SR);
+
+      return nullptr;
+   }
+
+   if (Sema.QC.PrepareDeclInterface(ConformingRec)) {
+      SOD.setIsInvalid(true);
+      return nullptr;
+   }
+
+   // Make sure the 'truthValue' getter is instantiated.
+   DeclarationName DN = Sema.getIdentifier("truthValue");
+   auto* P = Sema.QC.LookupSingleAs<PropDecl>(ConformingRec, DN);
+
+   assert(P && "TruthValue not correctly implemented!");
+   return cast<MethodDecl>(
+       Sema.maybeInstantiateMemberFunction(P->getGetterMethod(), SOD));
+}
+
+static MethodDecl* validateTruthValue(SemaPass& Sema, Expression*& CondExpr,
+                                      StmtOrDecl SOD)
+{
+   RecordDecl* BoolDecl;
+   if (Sema.QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool)) {
+      SOD.setIsInvalid(true);
+      return nullptr;
+   }
+   if (Sema.QC.PrepareDeclInterface(BoolDecl)) {
+      SOD.setIsInvalid(true);
+      return nullptr;
+   }
+
+   QualType BoolTy = Sema.Context.getRecordType(BoolDecl);
+
+   auto CondRes = Sema.typecheckExpr(CondExpr, BoolTy, SOD, false);
+   if (!CondRes) {
+      SOD.copyStatusFlags(CondExpr);
+      return nullptr;
+   }
+
+   CondRes = Sema.getRValue(SOD, CondRes.get());
+   if (!CondRes) {
+      return nullptr;
+   }
+
+   CondExpr = CondRes.get();
+
+   CanType CondTy = CondExpr->getExprType();
+   if (CondTy->isInt1Ty() || CondTy == BoolTy) {
+      return nullptr;
+   }
+
+   return conformsToTruthValue(Sema, CondTy, SOD, CondExpr->getSourceRange());
+}
+
 StmtResult SemaPass::visitForStmt(ForStmt* Stmt)
 {
    ScopeGuard scope(*this);
@@ -1696,21 +1818,8 @@ StmtResult SemaPass::visitForStmt(ForStmt* Stmt)
    }
 
    if (auto Term = Stmt->getTermination()) {
-      QualType BoolTy;
-      if (auto *Bool = getBoolDecl()) {
-         BoolTy = Bool->getType();
-      }
-      else {
-         BoolTy = Context.getBoolTy();
-      }
-
-      auto condResult = typecheckExpr(Term, BoolTy, Stmt);
-      if (!condResult) {
-         return StmtError();
-      }
-
-      auto Cast = implicitCastIfNecessary(condResult.get(), BoolTy);
-      Stmt->setTermination(Cast);
+      (void) validateTruthValue(*this, Term, Stmt);
+      Stmt->setTermination(Term);
    }
 
    if (auto body = Stmt->getBody()) {
@@ -1757,6 +1866,10 @@ static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
        SP,  &SP.getContext().getIdentifiers().get("getIterator"),
        Stmt->getRangeExpr(), {}, Stmt);
 
+   if (!GetIteratorExpr) {
+      return TypeError();
+   }
+
    auto GetIteratorFn = GetIteratorExpr->getFunc();
    assert(GetIteratorFn && "Iterable conformance not correctly checked");
 
@@ -1770,6 +1883,7 @@ static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
    // reference to the iterator.
    auto ItExpr = BuiltinExpr::CreateTemp(
        SP.getContext().getMutableReferenceType(Iterator));
+   ItExpr.setSourceRange(Stmt->getRangeExpr()->getSourceRange());
 
    Expression* ItExprPtr = &ItExpr;
    auto *NextCallExpr = FindFunction(
@@ -1837,8 +1951,12 @@ static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
          return TypeError();
       }
 
-      assert(Element && "IteratorProtocol not correctly implemented!");
-      ResultType = cast<AliasDecl>(Element)->getType()->removeMetaType();
+      if (Element) {
+         ResultType = cast<AliasDecl>(Element)->getType()->removeMetaType();
+      }
+      else {
+         ResultType = OptionType->getTemplateArgs().front().getType();
+      }
    }
 
    return SP.ApplyCapabilities(ResultType);
@@ -1849,8 +1967,10 @@ StmtResult SemaPass::visitForInStmt(ForInStmt* Stmt)
    ScopeGuard scope(*this);
 
    auto IteratedType = checkForInStmt(*this, Stmt);
-   if (!IteratedType)
+   if (!IteratedType) {
+      Stmt->setIsInvalid(true);
       IteratedType = ErrorTy;
+   }
 
    auto Decl = Stmt->getDecl();
    if (Decl) {
@@ -2897,97 +3017,6 @@ StmtResult SemaPass::visitContinueStmt(ContinueStmt* Stmt)
             /*continue*/ 0);
 
    return Stmt;
-}
-
-static MethodDecl* conformsToTruthValue(SemaPass& Sema, QualType CondTy,
-                                        StmtOrDecl SOD, SourceRange SR)
-{
-   ProtocolDecl* TruthValue;
-   if (Sema.QC.GetBuiltinProtocol(TruthValue,
-                                  GetBuiltinProtocolQuery::TruthValue)) {
-      return nullptr;
-   }
-
-   if (!Sema.ConformsTo(CondTy, TruthValue)) {
-      Sema.diagnose(SOD, err_binding_invalid_truth_value, SR);
-      return nullptr;
-   }
-
-   if (auto* AT = CondTy->asAssociatedType()) {
-      CondTy = AT->getDecl()->getCovariance();
-   }
-
-   RecordDecl* ConformingRec = nullptr;
-   if (auto* RT = CondTy->asRecordType()) {
-      bool ConformsTo = Sema.ConformsTo(CondTy, TruthValue);
-      if (ConformsTo) {
-         ConformingRec = RT->getRecord();
-      }
-   }
-   else if (auto* Ext = CondTy->asExistentialType()) {
-      for (auto ET : Ext->getExistentials()) {
-         bool ConformsTo = Sema.ConformsTo(ET, TruthValue);
-         if (ConformsTo) {
-            ConformingRec = ET->getRecord();
-            break;
-         }
-      }
-   }
-
-   if (!ConformingRec) {
-      Sema.diagnose(SOD, err_binding_invalid_truth_value, SR);
-
-      return nullptr;
-   }
-
-   if (Sema.QC.PrepareDeclInterface(ConformingRec)) {
-      SOD.setIsInvalid(true);
-      return nullptr;
-   }
-
-   // Make sure the 'truthValue' getter is instantiated.
-   DeclarationName DN = Sema.getIdentifier("truthValue");
-   auto* P = Sema.QC.LookupSingleAs<PropDecl>(ConformingRec, DN);
-
-   assert(P && "TruthValue not correctly implemented!");
-   return cast<MethodDecl>(
-       Sema.maybeInstantiateMemberFunction(P->getGetterMethod(), SOD));
-}
-
-static MethodDecl* validateTruthValue(SemaPass& Sema, Expression*& CondExpr,
-                                      StmtOrDecl SOD)
-{
-   RecordDecl* BoolDecl;
-   if (Sema.QC.GetBuiltinRecord(BoolDecl, GetBuiltinRecordQuery::Bool)) {
-      SOD.setIsInvalid(true);
-      return nullptr;
-   }
-   if (Sema.QC.PrepareDeclInterface(BoolDecl)) {
-      SOD.setIsInvalid(true);
-      return nullptr;
-   }
-
-   QualType BoolTy = Sema.Context.getRecordType(BoolDecl);
-
-   auto CondRes = Sema.typecheckExpr(CondExpr, BoolTy, SOD, false);
-   if (!CondRes) {
-      SOD.copyStatusFlags(CondExpr);
-      return nullptr;
-   }
-
-   CondRes = Sema.getRValue(SOD, CondRes.get());
-   if (!CondRes) {
-      return nullptr;
-   }
-
-   CondExpr = CondRes.get();
-
-   CanType CondTy = CondExpr->getExprType();
-   if (CondTy->isInt1Ty() || CondTy == BoolTy) {
-      return nullptr;
-   }
-
-   return conformsToTruthValue(Sema, CondTy, SOD, CondExpr->getSourceRange());
 }
 
 void SemaPass::visitIfConditions(Statement* Stmt,
