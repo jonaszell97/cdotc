@@ -47,7 +47,7 @@ class Statement;
 class NamedDecl;
 class ConstraintSet;
 
-class LLVM_ALIGNAS(sizeof(void*)) Decl {
+class alignas(sizeof(void*)) Decl {
 public:
    struct EmptyShell {
    };
@@ -466,7 +466,7 @@ protected:
 
    Decl* nextDeclInContext = nullptr;
 
-   struct LLVM_ALIGNAS(8) MultipleDeclContext {
+   struct alignas(8) MultipleDeclContext {
       DeclContext* LogicalDC;
       DeclContext* LexicalDC;
    };

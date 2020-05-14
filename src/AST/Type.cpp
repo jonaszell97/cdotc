@@ -1578,20 +1578,22 @@ TypeVariableType::TypeVariableType(unsigned ID)
    Bits.Props |= TypeProperties::ContainsTypeVariable;
 }
 
-void ExistentialTypeBuilder::push_back(QualType T)
+bool ExistentialTypeBuilder::push_back(QualType T)
 {
    if (T->isAnyType()) {
-      return;
+      return true;
    }
 
    if (auto *Ext = T->asExistentialType()) {
+      bool allNew = true;
       for (QualType Inner : Ext->getExistentials()) {
-         push_back(Inner);
+         allNew &= push_back(Inner);
       }
+
+      return allNew;
    }
-   else {
-      _Tys.insert(T);
-   }
+
+   return _Tys.insert(T);
 }
 
 void ExistentialTypeBuilder::remove(QualType T)

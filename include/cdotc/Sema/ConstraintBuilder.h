@@ -173,7 +173,8 @@ public:
 
    static std::pair<ExprResult, bool> rebuildExpression(ast::SemaPass& Sema,
                                                         ast::Expression* E,
-                                                        ast::Expression *baseExpr = nullptr);
+                                                        ast::Expression *baseExpr = nullptr,
+                                                        bool GeneratingArgConstraints = false);
 
    /// Generate constraints for an expression.
    [[nodiscard]] GenerationResult generateConstraints(

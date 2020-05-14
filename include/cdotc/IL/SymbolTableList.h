@@ -76,8 +76,6 @@ public:
    SymbolTableList& operator=(SymbolTableList&& List)
    {
       if (this != &List) {
-         delete SymTab;
-
          Owner = List.Owner;
          SymTab = std::move(List.SymTab);
          ilist = std::move(List.ilist);

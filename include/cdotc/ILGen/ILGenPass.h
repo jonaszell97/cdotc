@@ -499,6 +499,8 @@ public:
 
    il::Value* GetDynamicTypeInfo(il::Value* Val);
 
+   unsigned getVTableOffset(MethodDecl *M);
+
    unsigned getProtocolMethodOffset(MethodDecl* ProtoMethod);
    void setProtocolMethodOffset(MethodDecl* ProtoMethod, unsigned Offset);
 
@@ -685,32 +687,33 @@ public:
    QualType getSubstitution(QualType Ty);
 
 private:
-   struct EHScope {
-      EHScope(il::BasicBlock* LandingPad, bool EmitCleanups = true)
-          : LandingPad(LandingPad), EmitCleanups(EmitCleanups)
-      {
-      }
-
-      il::BasicBlock* LandingPad;
-      bool EmitCleanups;
-   };
-
-   std::vector<EHScope> EHStack;
-   llvm::DenseSet<uintptr_t> VisitedDecls;
-
    struct EHScopeRAII {
       EHScopeRAII(ILGenPass& ILGen, il::BasicBlock* LP,
                   bool EmitCleanups = true)
-          : ILGen(ILGen)
+          : LandingPad(LP), EmitCleanups(EmitCleanups),
+            ILGen(ILGen), Depth(ILGen.Cleanups.getCleanupsDepth())
       {
-         ILGen.EHStack.emplace_back(LP, EmitCleanups);
+         ILGen.EHStack.push_back(this);
       }
 
-      ~EHScopeRAII() { ILGen.EHStack.pop_back(); }
+      ~EHScopeRAII()
+      {
+         ILGen.EHStack.pop_back();
+      }
+
+      [[nodiscard]] CleanupsDepth getDepth() const { return Depth; }
+
+   public:
+      il::BasicBlock* LandingPad;
+      bool EmitCleanups;
 
    private:
       ILGenPass& ILGen;
+      CleanupsDepth Depth;
    };
+
+   std::vector<EHScopeRAII*> EHStack;
+   llvm::DenseSet<uintptr_t> VisitedDecls;
 
    template<class T> bool alreadyVisited(T* ptr)
    {

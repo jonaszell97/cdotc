@@ -4,7 +4,6 @@
 #include "cdotc/Basic/FileManager.h"
 #include "cdotc/Basic/FileUtils.h"
 #include "cdotc/ClangImporter/ClangImporter.h"
-#include "cdotc/Driver/Job.h"
 #include "cdotc/IL/Context.h"
 #include "cdotc/IL/Module.h"
 #include "cdotc/ILGen/ILGenPass.h"
@@ -124,6 +123,12 @@ static cl::opt<string> EmitIR("emit-ir",
                               cl::desc("emit LLVM-IR files (to directory)"),
                               cl::cat(OutputCat), cl::ValueOptional,
                               cl::init("-"));
+
+/// If given, assembly files will be emitted.
+static cl::opt<string> EmitASM("emit-asm",
+                               cl::desc("emit assembly files (to directory)"),
+                               cl::cat(OutputCat), cl::ValueOptional,
+                               cl::init("-"));
 
 /// Maximum number of errors to emit before aborting.
 static cl::opt<unsigned>
@@ -382,6 +387,7 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    if (SyntaxOnly || Verify) {
       options.setFlag(CompilerOptions::F_SyntaxOnly, true);
    }
+
    if (EmitIL != "-") {
       options.setFlag(CompilerOptions::F_EmitIL, true);
 
@@ -391,6 +397,7 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
 
       options.EmitILPath = EmitIL.getValue();
    }
+
    if (EmitIR != "-") {
       options.setFlag(CompilerOptions::F_EmitIR, true);
 
@@ -400,6 +407,17 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
 
       options.EmitIRPath = EmitIR.getValue();
    }
+
+   if (EmitASM != "-") {
+      options.setFlag(CompilerOptions::F_EmitAsm, true);
+
+      if (!EmitASM.empty() && EmitASM.getValue().back() != fs::PathSeperator) {
+         EmitASM.getValue() += fs::PathSeperator;
+      }
+
+      options.EmitAsmPath = EmitASM.getValue();
+   }
+
    if (ClearCaches) {
       serial::IncrementalCompilationManager::clearCaches();
    }
@@ -441,9 +459,6 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
 
 CompilerInstance::~CompilerInstance()
 {
-   for (auto* Job : Jobs)
-      delete Job;
-
    Context->cleanup();
 }
 
@@ -861,7 +876,7 @@ int CompilerInstance::compile()
       break;
    case OutputKind::ObjectFile: {
       std::error_code EC;
-      llvm::raw_fd_ostream OS(options.getOutFile(), EC, llvm::sys::fs::F_RW);
+      llvm::raw_fd_ostream OS(options.getOutFile(), EC);
 
       if (EC) {
          Sema->diagnose(err_cannot_open_file, options.getOutFile(),
@@ -897,167 +912,6 @@ int CompilerInstance::compile()
       return 1;
    }
 
-   return 0;
-}
-
-int CompilerInstance::setupJobs()
-{
-   SmallString<128> MainFile;
-
-   // Create an InputJob and a ParseJob for every source file.
-
-   for (auto& File : options.getInputFiles(InputKind::SourceFile)) {
-      if (MainFile.empty())
-         MainFile = File;
-
-      auto Input = addJob<InputJob>(File);
-      addJob<ParseJob>(Input);
-   }
-
-   addJob<PrintUsedMemoryJob>(Jobs.back());
-
-   {
-      START_TIMER("Parsing");
-      if (auto EC = runJobs())
-         return EC;
-   }
-
-   if (IncMgr) {
-      addJob<LoadCacheJob>();
-   }
-
-   // Setup the file independent pipeline.
-   addJob<SemaJob>();
-   addJob<PrintUsedMemoryJob>(Jobs.back());
-
-   if (auto EC = runJobs())
-      return EC;
-
-   if (SyntaxOnly)
-      return 0;
-
-   addJob<ILGenJob>();
-   addJob<ILVerifyJob>();
-   addJob<ILCanonicalizeJob>();
-   addJob<ILOptimizeJob>();
-
-   addJob<PrintUsedMemoryJob>(Jobs.back());
-
-   SmallVector<Job*, 4> IRGenJobs;
-   auto* Mod = getCompilationModule();
-
-   // Create the module emission pipeline
-   if (options.emitModules()) {
-      addJob<IRGenJob>(*Mod->getILModule());
-      IRGenJobs.push_back(Jobs.back());
-
-      if (RunUnitTests) {
-         addJob<UnittestJob>(Jobs.back());
-         return 0;
-      }
-
-      addEmitJobs(IRGenJobs);
-      addJob<EmitModuleJob>(*Mod);
-   }
-   // Else do a normal compilation
-   else {
-      addJob<IRGenJob>(*Mod->getILModule());
-      IRGenJobs.push_back(Jobs.back());
-
-      addEmitJobs(IRGenJobs);
-
-      auto* IRLinkJob = addJob<LinkIRJob>(IRGenJobs);
-
-      if (RunUnitTests) {
-         addJob<UnittestJob>(Jobs.back());
-         return 0;
-      }
-
-      // Only emit assembly files.
-      if (options.textOutputOnly()) {
-         auto PrevSize = MainFile.size();
-         MainFile += ".s";
-
-         addJob<EmitAssemblyJob>(MainFile, IRLinkJob);
-         MainFile.resize(PrevSize);
-      }
-      // Only emit object files.
-      else if (options.noLinking()) {
-         auto PrevSize = MainFile.size();
-         MainFile += ".o";
-
-         addJob<EmitObjectJob>(MainFile, IRLinkJob);
-         MainFile.resize(PrevSize);
-      }
-      // Else link a complete binary
-      else {
-         auto ExecFile = options.getOutFile();
-         addJob<EmitExecutableJob>(ExecFile, IRLinkJob);
-      }
-   }
-
-   if (!NoIncremental)
-      addJob<CacheJob>();
-
-   return 0;
-}
-
-void CompilerInstance::addEmitJobs(ArrayRef<Job*> IRGenJobs)
-{
-   auto* Mod = getCompilationModule();
-
-   // Emit IL if requested
-   if (options.emitIL()) {
-      SmallString<128> Dir;
-      if (!EmitIL.empty()) {
-         Dir = EmitIL;
-      }
-      else {
-         Dir = "./IL/";
-      }
-
-      fs::createDirectories(Dir);
-
-      Dir += Mod->getName()->getIdentifier();
-      Dir += ".cdotil";
-
-      addJob<EmitILJob>(*Mod->getILModule(), Dir);
-   }
-
-   // Emit IR if requested
-   if (options.emitIR()) {
-      SmallString<128> Dir;
-      if (!EmitIR.empty()) {
-         Dir = EmitIR;
-      }
-      else {
-         Dir = "./IR/";
-      }
-
-      fs::createDirectories(Dir);
-
-      unsigned i = 0;
-
-      Dir += Mod->getName()->getIdentifier();
-      Dir += ".ll";
-
-      auto* IRJob = IRGenJobs[i++];
-      addJob<EmitIRJob>(IRJob, Dir);
-   }
-}
-
-int CompilerInstance::runJobs()
-{
-   for (auto* Job : Jobs) {
-      Job->run();
-      if (Job->hadError())
-         return 1;
-   }
-
-   for (auto* Job : Jobs)
-      delete Job;
-
-   Jobs.clear();
    return 0;
 }
 

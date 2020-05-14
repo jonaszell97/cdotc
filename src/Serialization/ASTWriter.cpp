@@ -18,6 +18,7 @@
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/DJB.h>
 #include <llvm/Support/OnDiskHashTable.h>
 
 using namespace cdot;
@@ -39,7 +40,7 @@ unsigned ComputeHash(DeclarationName Name)
    case DeclarationName::PostfixOperatorName:
    case DeclarationName::MacroName:
       support::hash_combine(
-          hash, llvm::HashString(Name.getIdentifierInfo()->getIdentifier()));
+          hash, llvm::djbHash(Name.getIdentifierInfo()->getIdentifier()));
 
       break;
    case DeclarationName::InstantiationName:
@@ -113,7 +114,7 @@ public:
 
    hash_value_type ComputeHash(key_type_ref Name)
    {
-      return llvm::HashString(Name);
+      return llvm::djbHash(Name);
    }
 
    std::pair<unsigned, unsigned> EmitKeyDataLength(llvm::raw_ostream& Out,
@@ -125,7 +126,7 @@ public:
 
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
 
       assert((uint16_t)DataLen == DataLen && (uint16_t)KeyLen == KeyLen);
       LE.write<uint16_t>(DataLen);
@@ -143,7 +144,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       LE.write<uint32_t>(ID);
    }
 };
@@ -979,7 +980,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       unsigned KeyLen = GetKeyLength(Name);
 
       LE.write<uint16_t>(KeyLen);
@@ -998,7 +999,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       LE.write<uint8_t>(Name.getKind());
       switch (Name.getKind()) {
       case DeclarationName::NormalIdentifier:
@@ -1063,7 +1064,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       uint64_t Start = Out.tell();
       (void)Start;
       for (unsigned I = Lookup.first, N = Lookup.second; I != N; ++I)
@@ -1167,7 +1168,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       LE.write<uint32_t>(Key);
    }
 
@@ -1175,7 +1176,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
       LE.write<uint32_t>(Data);
    }
 };
@@ -1206,7 +1207,7 @@ void ASTWriter::WriteConformanceData()
       using namespace llvm::support;
       llvm::raw_svector_ostream OS(Blob);
 
-      endian::Writer<little> Writer(OS);
+      endian::Writer Writer(OS, llvm::support::little);
       for (auto R : EmittedRecordDecls) {
          ConformanceOffsetMap[R] = static_cast<unsigned>(OS.tell());
 

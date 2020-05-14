@@ -216,12 +216,12 @@ def err_type_not_callable : Error<"given type $0 is not callable">
 def err_assign_non_mutating_self : Error<"cannot reassign 'self' in a non-mutating method">
 def err_assign_to_rvalue : Error<"cannot assign to rvalue of type $0">
 def err_move_from_immutable_to_mutable : Error<"cannot move immutable ${ 0 | select(value, variable '$1') } into a mutable binding">
-def  err_cannot_move_immutable : Error<"cannot move immutable value '$0'">
+def err_cannot_move_immutable : Error<"cannot move immutable value '$0'">
 def err_left_uninitialized : Error<"'$0' may not go out of scope while being partially uninitialized">
 def err_type_not_found : Error<"type '$0' not found">
 def err_not_copyable : Error<"type '$0' is not implicitly copyable${ 1 | if(, did you forget a '.copy()'?)}">
 
-def err_binding_invalid_truth_value : Error<"value used in binding statement must conform to 'TruthValue'">
+def err_binding_invalid_truth_value : Error<"value used in conditional statement must conform to 'TruthValue'">
 def err_binding_not_unwrappable : Error<"value used in binding statement must conform to 'Unwrappable'">
 
 def err_module_not_found : Error<"module '$0' not found">

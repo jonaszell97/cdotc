@@ -7,18 +7,7 @@
 #include <llvm/Support/Allocator.h>
 
 namespace llvm {
-// Provide DenseMapInfo for unsigned chars.
-template<> struct DenseMapInfo<unsigned char> {
-   static inline unsigned char getEmptyKey() { return ~0; }
-   static inline unsigned char getTombstoneKey() { return ~0 - 1; }
-   static unsigned getHashValue(const unsigned char& Val) { return Val * 37U; }
-   static bool isEqual(const unsigned char& LHS, const unsigned char& RHS)
-   {
-      return LHS == RHS;
-   }
-};
-
-// Provide DenseMapInfo for unsigned chars.
+// Provide DenseMapInfo for modules.
 template<> struct DenseMapInfo<::cdot::Module*> {
    static inline ::cdot::Module* getEmptyKey()
    {

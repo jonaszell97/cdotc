@@ -16,6 +16,7 @@
 #include "cdotc/Serialization/ModuleReader.h"
 
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/DJB.h>
 
 using namespace cdot;
 using namespace cdot::il;
@@ -148,7 +149,7 @@ ReadResult ILReader::ReadILModule(llvm::BitstreamCursor& Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -179,7 +180,7 @@ ReadResult ILReader::ReadILModule(llvm::BitstreamCursor& Stream)
 
       StringRef Blob;
       auto RecordType
-          = (ILRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+          = (ILRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
       default:
@@ -232,7 +233,7 @@ ReadResult ILReader::ReadILModuleEager()
 ILSymbolTableLookupTrait::hash_value_type
 ILSymbolTableLookupTrait::ComputeHash(const internal_key_type& a)
 {
-   return llvm::HashString(a);
+   return llvm::djbHash(a);
 }
 
 ReadResult ILReader::readValueSymTab(uint32_t TblOffset, llvm::StringRef Blob)
@@ -255,7 +256,7 @@ unsigned ILRecordReader::readRecord(llvm::BitstreamCursor& Cursor,
    Idx = 0;
    Record.clear();
 
-   return Cursor.readRecord(AbbrevID, Record);
+   return Cursor.readRecord(AbbrevID, Record).get();
 }
 
 void ILReader::ReadValueRecord(unsigned ID)
@@ -266,12 +267,12 @@ void ILReader::ReadValueRecord(unsigned ID)
    auto& Cursor = Reader.DeclsCursor;
    SavedStreamPosition Pos(Cursor);
 
-   Cursor.JumpToBit(Offset);
+   (void) Cursor.JumpToBit(Offset);
 
    ILRecordReader Record(*this);
    Value* V;
 
-   unsigned Code = Cursor.ReadCode();
+   unsigned Code = Cursor.ReadCode().get();
    auto Kind = Record.readRecord(Cursor, Code);
    switch (Kind) {
    case Value::ArgumentID:
@@ -616,11 +617,11 @@ ILReader::readFunctionEntryBlock(unsigned ID,
    auto& Cursor = Reader.DeclsCursor;
    SavedStreamPosition Pos(Cursor);
 
-   Cursor.JumpToBit(Offset);
+   (void) Cursor.JumpToBit(Offset);
 
    ILRecordReader Record(*this);
 
-   unsigned Code = Cursor.ReadCode();
+   unsigned Code = Cursor.ReadCode().get();
    auto Kind = Record.readRecord(Cursor, Code); (void)Kind;
    assert(Kind == Value::BasicBlockID && "not a basic block");
 

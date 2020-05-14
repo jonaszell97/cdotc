@@ -1305,6 +1305,20 @@ QueryResult DirectLookupQuery::run()
          }
       }
 
+      if (auto *C = dyn_cast<ClassDecl>(R)) {
+         if (auto *Base = C->getParentClass()) {
+            const MultiLevelLookupResult* BaseResult;
+            if (QC.DirectLookup(BaseResult, Base, Name, LookInExtensions, Opts)) {
+               return fail();
+            }
+
+            if (!BaseResult->empty()) {
+               Result.addResult(*BaseResult);
+               return finish(move(Result));
+            }
+         }
+      }
+
       if (!Result.empty() || !isa<ProtocolDecl>(R)) {
          return finish(move(Result));
       }

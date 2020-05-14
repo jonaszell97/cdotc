@@ -951,7 +951,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
       isTemplate = Cand.getFunc()->isTemplateOrInTemplate();
 
       if (Cand.getFunc()->isImportedFromClang()) {
-         opts = SemaPass::CO_IsClangParameterValue;
+         opts |= SemaPass::CO_IsClangParameterValue;
       }
    }
 
@@ -1037,7 +1037,12 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
       // Convert to the parameter type and apply automatic promotion.
       if (i < ParamTys.size() && requiredType) {
-         E = SP.implicitCastIfNecessary(E, requiredType, false, opts);
+         auto localOpts = opts;
+         if (ArgDecl && ArgDecl->isSelf()) {
+            localOpts |= SemaPass::CO_IsSelfValue;
+         }
+
+         E = SP.implicitCastIfNecessary(E, requiredType, false, localOpts);
       }
       else if (cstyleVararg) {
          E = SP.convertCStyleVarargParam(E);
@@ -1657,7 +1662,9 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
          continue;
       }
 
-      auto rebuiltExpr = ConstraintBuilder::rebuildExpression(Sema, argValue, baseExpr);
+      auto rebuiltExpr = ConstraintBuilder::rebuildExpression(Sema, argValue,
+                                                              baseExpr, true);
+
       if (!rebuiltExpr.first) {
          argValue->setIsInvalid(true);
          argValue->setExprType(Sema.ErrorTy);

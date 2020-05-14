@@ -1,5 +1,7 @@
 #include "cdotc/Basic/FileUtils.h"
 
+#include "cdotc/Support/LLVM.h"
+
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
@@ -221,8 +223,10 @@ string findFileInDirectories(llvm::StringRef fileName,
          auto& entry = *it;
 
          auto errOrStatus = entry.status();
-         if (!errOrStatus)
-            break;
+         if (!errOrStatus) {
+            it.increment(ec);
+            continue;
+         }
 
          auto& st = errOrStatus.get();
          switch (st.type()) {
@@ -248,17 +252,14 @@ string findFileInDirectories(llvm::StringRef fileName,
 
 int executeCommand(llvm::StringRef Program, llvm::ArrayRef<string> args)
 {
-   std::unique_ptr<const char*> argArray(new const char*[args.size() + 1]);
-   size_t i = 0;
+   SmallVector<StringRef, 2> ArgVec;
+   ArgVec.reserve(args.size());
 
-   while (i < args.size()) {
-      argArray.get()[i] = args[i].c_str();
-      ++i;
+   for (auto &arg : args) {
+      ArgVec.emplace_back(arg);
    }
 
-   argArray.get()[i] = nullptr;
-
-   return llvm::sys::ExecuteAndWait(Program, argArray.get());
+   return llvm::sys::ExecuteAndWait(Program, ArgVec);
 }
 
 long long getLastModifiedTime(llvm::Twine const& pathToFile)
@@ -288,8 +289,10 @@ void iterateOverFilesInDirectory(llvm::StringRef dir, Handler const& H)
       auto& entry = *it;
 
       auto errOrStatus = entry.status();
-      if (!errOrStatus)
-         break;
+      if (!errOrStatus) {
+         it.increment(ec);
+         continue;
+      }
 
       auto& st = errOrStatus.get();
       switch (st.type()) {
@@ -457,7 +460,7 @@ std::string getTmpFileName(llvm::StringRef Ext)
    llvm::sys::path::system_temp_directory(true, TmpDir);
 
    TmpFile.insert(TmpFile.begin(), TmpDir.begin(), TmpDir.end());
-   return TmpFile.str();
+   return TmpFile.str().str();
 }
 
 std::string exec(const std::string& cmd)

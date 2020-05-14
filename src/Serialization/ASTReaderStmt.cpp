@@ -1173,7 +1173,7 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor& Cursor)
    ASTContext& C = Context;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Cursor.advanceSkippingSubblocks();
+      llvm::BitstreamEntry Entry = Cursor.advanceSkippingSubblocks().get();
       bool Finished = false;
 
       switch (Entry.Kind) {
@@ -1252,7 +1252,7 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor& Cursor)
          S = MatchStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::DoStmtID:
-         S = new (C) DoStmt(Empty, Record[ASTStmtReader::NumStmtFields]);
+         S = DoStmt::Create(C, Empty, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::ThrowStmtID:
          S = new (C) ThrowStmt(Empty);
@@ -1591,11 +1591,11 @@ Scope* ASTReader::ReadScopeRecord(unsigned ID)
    // Keep track of where we are in the stream, then jump back there
    // after reading this scope.
    SavedStreamPosition SavedPosition(DeclsCursor);
-   DeclsCursor.JumpToBit(Loc);
+   (void) DeclsCursor.JumpToBit(Loc);
 
    ASTRecordReader Record(*this);
 
-   unsigned Code = DeclsCursor.ReadCode();
+   unsigned Code = DeclsCursor.ReadCode().get();
    auto Kind = Record.readRecord(DeclsCursor, Code);
 
    ASTScopeReader Reader(Record);

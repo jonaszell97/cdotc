@@ -136,8 +136,8 @@ static NamespaceDecl* importNamespace(ImporterImpl& I, clang::NamespaceDecl* NS)
       Name = I.getName(NS->getDeclName());
    }
 
-   auto* D = NamespaceDecl::Create(Ctx, I.getSourceLoc(NS->getLocStart()),
-                                   I.getSourceLoc(NS->getLocStart()), Name);
+   auto* D = NamespaceDecl::Create(Ctx, I.getSourceLoc(NS->getBeginLoc()),
+                                   I.getSourceLoc(NS->getBeginLoc()), Name);
 
    D->setImportedFromClang(true);
    D->setRBraceLoc(I.getSourceLoc(NS->getRBraceLoc()));
@@ -171,7 +171,7 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
    }
 
    auto* Rec = StructDecl::Create(Ctx, getAccess(ClangRec->getAccess()),
-                                  getSourceLoc(ClangRec->getLocStart()), Name,
+                                  getSourceLoc(ClangRec->getBeginLoc()), Name,
                                   {}, {});
 
    Rec->setImportedFromClang(true);
@@ -194,7 +194,7 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
          continue;
       }
 
-      SourceLocation FieldLoc = getSourceLoc(F->getLocStart());
+      SourceLocation FieldLoc = getSourceLoc(F->getBeginLoc());
 
       Expression* DefaultVal = nullptr;
       if (CI.getSema().hasDefaultValue(FieldTy)) {
@@ -248,14 +248,14 @@ EnumDecl* ImporterImpl::importEnum(clang::EnumDecl* ClangE)
    }
 
    auto* D = EnumDecl::Create(Ctx, getAccess(ClangE->getAccess()),
-                              getSourceLoc(ClangE->getLocStart()), Name, {}, {},
+                              getSourceLoc(ClangE->getBeginLoc()), Name, {}, {},
                               SourceType(getType(ClangE->getIntegerType())));
 
    D->setImportedFromClang(true);
    DeclMap[ClangE] = D;
 
    for (clang::EnumConstantDecl* EnumVal : ClangE->enumerators()) {
-      auto Loc = getSourceLoc(EnumVal->getLocStart());
+      auto Loc = getSourceLoc(EnumVal->getBeginLoc());
       auto ValName = getName(EnumVal->getDeclName());
 
       auto* Case = EnumCaseDecl::Create(Ctx, AccessSpecifier::Public, Loc, Loc,
@@ -505,7 +505,7 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl* ClangU)
 
    auto* Rec
        = StructDecl::Create(Ctx, getAccess(ClangU->getAccess()),
-                            getSourceLoc(ClangU->getLocStart()), Name, {}, {});
+                            getSourceLoc(ClangU->getBeginLoc()), Name, {}, {});
 
    Rec->setImportedFromClang(true);
    DeclMap[ClangU] = Rec;
@@ -545,7 +545,7 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl* ClangU)
          MaxAlign = Align;
       }
 
-      SourceLocation FieldLoc = getSourceLoc(F->getLocStart());
+      SourceLocation FieldLoc = getSourceLoc(F->getBeginLoc());
       auto* Prop = CreateUnionAccessor(
           CI.getSema(), Ctx, FieldTy, getName(F->getDeclName()), Storage,
           FieldLoc, F->getType().isConstQualified());
@@ -587,7 +587,7 @@ AliasDecl* ImporterImpl::importTypedef(clang::TypedefNameDecl* ClangTD)
       return nullptr;
    }
 
-   auto Loc = getSourceLoc(ClangTD->getLocStart());
+   auto Loc = getSourceLoc(ClangTD->getBeginLoc());
    auto* E = new (Ctx)
        IdentifierRefExpr(Loc, IdentifierKind::MetaType, Ctx.getMetaType(RetTy));
 

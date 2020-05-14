@@ -215,7 +215,7 @@ void ModuleManager::EmitModule(Module* Mod)
       fs::deleteFile(OutFile);
    }
 
-   llvm::raw_fd_ostream OS(OutFile.str(), EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream OS(OutFile.str(), EC);
    if (EC) {
       llvm::report_fatal_error(EC.message());
    }

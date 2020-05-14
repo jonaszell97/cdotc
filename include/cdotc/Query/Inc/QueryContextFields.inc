@@ -96,15 +96,15 @@ private:   llvm::DenseMap<CanType, PassByValueQuery*> PassByValueQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
-private:   llvm::DenseMap<CanType, ContainsProtocolWithAssociatedTypesQuery*> ContainsProtocolWithAssociatedTypesQueries;
-
-/// \brief Maps from query kinds to a folding set containing instances of
-/// that query.
 private:   llvm::DenseMap<CanType, ContainsTemplateQuery*> ContainsTemplateQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.
 private:   llvm::DenseMap<CanType, ContainsAssociatedTypeConstraintQuery*> ContainsAssociatedTypeConstraintQueries;
+
+/// \brief Maps from query kinds to a folding set containing instances of
+/// that query.
+private:   llvm::DenseMap<QualType, ContainsProtocolWithAssociatedTypesQuery*> ContainsProtocolWithAssociatedTypesQueries;
 
 /// \brief Maps from query kinds to a folding set containing instances of
 /// that query.

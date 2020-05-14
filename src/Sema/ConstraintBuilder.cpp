@@ -33,6 +33,9 @@ class ExprRebuilder : public StmtBuilder<ExprRebuilder> {
    /// The base expression we're rebuilding.
    Expression *BaseExpr;
 
+   /// Whether or not we're generating constraints for a function argument.
+   bool GeneratingArgConstraints;
+
 public:
    /// Set to true iff this expression is type dependent.
    bool TypeDependent = false;
@@ -43,8 +46,10 @@ public:
    /// Set to true if the expression needs full constraint based typechecking.
    bool NeedsFullTypechecking = false;
 
-   explicit ExprRebuilder(SemaPass& Sema, Expression *BaseExpr)
-      : Sema(Sema), BaseExpr(BaseExpr)
+   explicit ExprRebuilder(SemaPass& Sema, Expression *BaseExpr,
+                          bool GeneratingArgConstraints)
+      : Sema(Sema), BaseExpr(BaseExpr),
+        GeneratingArgConstraints(GeneratingArgConstraints)
    {}
 
    ExprResult visitExprSequence(ExprSequence* Expr)
@@ -531,55 +536,55 @@ public:
 
    ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitIntegerLiteral(IntegerLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitFPLiteral(FPLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitStringLiteral(StringLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitCharLiteral(CharLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitBoolLiteral(BoolLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitNoneLiteral(NoneLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= GeneratingArgConstraints;
       return Expr;
    }
 
    ExprResult visitArrayLiteral(ArrayLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= Expr != BaseExpr;
       return StmtBuilder::visitArrayLiteral(Expr);
    }
 
    ExprResult visitDictionaryLiteral(DictionaryLiteral *Expr)
    {
-      NeedsFullTypechecking = Expr != BaseExpr;
+      NeedsFullTypechecking |= Expr != BaseExpr;
       return StmtBuilder::visitDictionaryLiteral(Expr);
    }
 
@@ -728,12 +733,13 @@ public:
 
 std::pair<ExprResult, bool>
 ConstraintBuilder::rebuildExpression(ast::SemaPass& Sema, Expression* E,
-                                     ast::Expression *baseExpr)
+                                     ast::Expression *baseExpr,
+                                     bool GeneratingArgConstraints)
 {
    if (!baseExpr)
       baseExpr = E;
 
-   ExprRebuilder ExprBuilder(Sema, baseExpr);
+   ExprRebuilder ExprBuilder(Sema, baseExpr, GeneratingArgConstraints);
 
    auto Result = ExprBuilder.visitExpr(E);
    if (!Result || ExprBuilder.EncounteredError) {
@@ -748,7 +754,7 @@ std::pair<ExprResult, bool>
  ConstraintBuilder::rebuildExpression(Expression* E,
                                       ast::Expression *baseExpr)
 {
-   return rebuildExpression(Sema, E, baseExpr);
+   return rebuildExpression(Sema, E, baseExpr, GeneratingArgConstraints);
 }
 
 ConstraintBuilder::GenerationResult

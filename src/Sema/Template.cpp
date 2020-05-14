@@ -33,7 +33,7 @@ static bool isDependentType(TemplateParamDecl *Param, QualType type)
 
    auto &QC = Param->getASTCtx().CI.getQueryContext();
 
-   bool Result;
+   ProtocolDecl *Result;
    if (QC.ContainsProtocolWithAssociatedTypes(Result, type)) {
       return false;
    }
@@ -42,11 +42,12 @@ static bool isDependentType(TemplateParamDecl *Param, QualType type)
       return true;
    }
 
-   if (QC.ContainsTemplate(Result, type)) {
+   bool ContainsTemplate;
+   if (QC.ContainsTemplate(ContainsTemplate, type)) {
       return false;
    }
 
-   return Result;
+   return ContainsTemplate;
 }
 
 TemplateArgument::TemplateArgument(TemplateParamDecl* Param,

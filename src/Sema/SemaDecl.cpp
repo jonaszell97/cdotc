@@ -1577,19 +1577,24 @@ ExprResult SemaPass::visitOptionTypeExpr(OptionTypeExpr* Expr)
 
 ExprResult SemaPass::visitExistentialTypeExpr(ExistentialTypeExpr* Expr)
 {
-   SmallVector<QualType, 8> Tys;
+   ExistentialTypeBuilder Builder;
    for (auto& Ty : Expr->getExistentials()) {
       auto Res = visitSourceType(Expr, Ty);
       if (!Res)
          continue;
 
       QualType T = Res.get();
-      if (auto* Ext = T->asExistentialType()) {
-         Tys.append(Ext->getExistentials().begin(),
-                    Ext->getExistentials().end());
+      if (T->isAnyType()) {
+         diagnose(warn_generic_warn,
+                  "using 'Any' in existential type is redundant",
+                  Ty.getSourceRange(Expr->getSourceRange()));
       }
-      else if (T->isProtocol()) {
-         Tys.push_back(T);
+      else if (T->isProtocol() || T->isExistentialType() || T->isClass()) {
+         if (!Builder.push_back(T)) {
+            diagnose(warn_generic_warn,
+                "duplicate type '" + T.toDiagString() + "' in existential type",
+                Ty.getSourceRange(Expr->getSourceRange()));
+         }
       }
       else {
          SourceRange Loc;
@@ -1604,7 +1609,15 @@ ExprResult SemaPass::visitExistentialTypeExpr(ExistentialTypeExpr* Expr)
       }
    }
 
-   Expr->setExprType(Context.getMetaType(Context.getExistentialType(Tys)));
+   QualType Result;
+   if (Builder.empty()) {
+      Result = Context.getRecordType(getAnyDecl());
+   }
+   else {
+      Result = Builder.Build(Context);
+   }
+
+   Expr->setExprType(Context.getMetaType(Result));
    return visitTypeExpr(Expr);
 }
 

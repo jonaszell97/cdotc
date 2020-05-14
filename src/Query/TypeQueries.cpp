@@ -78,11 +78,16 @@ QueryResult IsEquatableQuery::run()
 
 QueryResult ContainsProtocolWithAssociatedTypesQuery::run()
 {
-   bool result = false;
-   visitSpecificType<RecordType>([&](RecordType *R) {
+   ProtocolDecl *result = nullptr;
+   visitSpecificType<RecordType, TemplateParamType, AssociatedType>(
+       [&](QualType T) {
+      if (T->isTemplateParamType() || T->isAssociatedType())
+         return false;
+
+      auto *R = T->asRecordType();
       if (auto *Proto = dyn_cast<ProtocolDecl>(R->getRecord())) {
          if (Proto->hasAssociatedTypeConstraint()) {
-            result = true;
+            result = Proto;
             return false;
          }
       }
@@ -203,6 +208,7 @@ QueryResult IsImplicitlyCopyableQuery::run()
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
    case Type::FunctionTypeID:
+   case Type::LambdaTypeID:
    case Type::MetaTypeID:
       Result = true;
       break;
@@ -2121,11 +2127,15 @@ QueryResult IsImplicitlyConvertibleQuery::run()
       return Query::finish(Err);
    }
 
-   if (!Seq || !Seq->isImplicit()) {
+   if (!Seq) {
       return finish({false, 0});
    }
 
-   return finish({true, Seq->getPenalty()});
+   if (Seq->isImplicit()) {
+      return finish({true, Seq->getPenalty()});
+   }
+
+   return finish({false, 0});
 }
 
 QueryResult GetConversionSequenceQuery::run()
@@ -2186,7 +2196,10 @@ QueryResult IsValidParameterValueQuery::run()
    if (!paramType->containsTemplateParamType()) {
       SemaPass::ConversionOpts opts = SemaPass::CO_None;
       if (importedFromClang) {
-         opts = SemaPass::CO_IsClangParameterValue;
+         opts |= SemaPass::CO_IsClangParameterValue;
+      }
+      if (isSelf) {
+         opts |= SemaPass::CO_IsSelfValue;
       }
 
       IsImplicitlyConvertibleQuery::result_type result;

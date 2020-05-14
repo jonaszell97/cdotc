@@ -5,7 +5,7 @@
 
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallPtrSet.h>
-#include <llvm/Bitcode/BitstreamReader.h>
+#include <llvm/Bitstream/BitstreamReader.h>
 
 namespace cdot {
 namespace ast {

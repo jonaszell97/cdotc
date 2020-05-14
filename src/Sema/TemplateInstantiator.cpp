@@ -2527,11 +2527,11 @@ DoStmt* InstantiatorImpl::visitDoStmt(DoStmt* node)
    catchBlocks.reserve(node->getCatchBlocks().size());
 
    for (const auto& CB : node->getCatchBlocks()) {
-      catchBlocks.emplace_back(visitLocalVarDecl(CB.varDecl), visit(CB.Body));
+      catchBlocks.emplace_back(copyOrNull(CB.varDecl), visit(CB.Body));
    }
 
-   return new (Context) DoStmt(node->getSourceRange(), visit(node->getBody()),
-                               catchBlocks, node->getLabel());
+   return DoStmt::Create(Context, node->getSourceRange(), visit(node->getBody()),
+                         catchBlocks, node->getLabel());
 }
 
 TryExpr* InstantiatorImpl::visitTryExpr(TryExpr* Expr)

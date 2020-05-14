@@ -197,8 +197,8 @@ EnumExtractInst::EnumExtractInst(Value* Val, ast::EnumCaseDecl* Case,
     : UnaryInstruction(EnumExtractInstID, Val, nullptr, parent), Case(Case),
       caseVal(caseVal)
 {
-   auto rec = Val->getType()->getRecord();
-   assert(isa<EnumDecl>(rec) && "can't extract raw value of non-enum");
+   assert(isa<EnumDecl>(Val->getType()->getRecord())
+       && "can't extract raw value of non-enum");
 
    setIndirect(Case->isIndirect());
 
@@ -377,6 +377,11 @@ CallInst::CallInst(TypeID id, Value* func, FunctionType* FuncTy,
                   parent),
       MultiOperandInst(args, args.size() + 1)
 {
+   func->addUse(this);
+   for (const auto& arg : args) {
+      arg->addUse(this);
+   }
+
    Operands[numOperands - 1] = func;
 }
 

@@ -6,7 +6,7 @@
 #include "cdotc/AST/Type.h"
 #include "cdotc/Serialization/BitCodes.h"
 
-#include <llvm/Bitcode/BitstreamWriter.h>
+#include <llvm/Bitstream/BitstreamWriter.h>
 
 #include <queue>
 

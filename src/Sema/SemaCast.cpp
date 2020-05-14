@@ -388,10 +388,12 @@ static void FromAssociatedType(SemaPass& SP, AssociatedType *from,
 }
 
 static void FromExistential(SemaPass& SP, CanType from, CanType to,
-                            ConversionSequenceBuilder& Seq);
+                            ConversionSequenceBuilder& Seq,
+                            SemaPass::ConversionOpts opts);
 
 static void FromReference(SemaPass& SP, CanType from, CanType to,
-                          ConversionSequenceBuilder& Seq)
+                          ConversionSequenceBuilder& Seq,
+                          SemaPass::ConversionOpts opts)
 {
    assert(to->isReferenceType() && "lvalue to rvalue should be handled before");
 
@@ -435,7 +437,7 @@ static void FromReference(SemaPass& SP, CanType from, CanType to,
 
    if (FromTy->isExistentialType() && ToTy->isRecordType()) {
       ConversionSequenceBuilder InnerSeq;
-      FromExistential(SP, FromTy, ToTy, InnerSeq);
+      FromExistential(SP, FromTy, ToTy, InnerSeq, opts);
 
       if (InnerSeq.isImplicit()) {
          return Seq.addStep(CastKind::BitCast, to);
@@ -609,14 +611,13 @@ static void FromProtocol(SemaPass& SP, CanType from, CanType to,
       return Seq.invalidate();
    }
 
-   auto ToRec = to->getRecord();
-   if (auto P = dyn_cast<ProtocolDecl>(ToRec)) {
-      bool ConformsTo = SP.ConformsTo(from, P);
-      if (ConformsTo) {
-         return Seq.addStep(CastKind::NoOp, to);
-      }
+   bool ConformsTo = SP.ConformsTo(to, cast<ProtocolDecl>(from->getRecord()));
+   if (!ConformsTo) {
+      return Seq.invalidate();
+   }
 
-      // FIXME conditional conformance
+   auto ToRec = to->getRecord();
+   if (isa<ProtocolDecl>(ToRec)) {
       return Seq.addStep(CastKind::ExistentialCastFallible, to,
                          CastStrength::Fallible);
    }
@@ -626,29 +627,41 @@ static void FromProtocol(SemaPass& SP, CanType from, CanType to,
 }
 
 static void FromExistential(SemaPass& SP, CanType from, CanType to,
-                            ConversionSequenceBuilder& Seq)
+                            ConversionSequenceBuilder& Seq,
+                            SemaPass::ConversionOpts opts)
 {
    if (!to->isRecordType()) {
       return Seq.invalidate();
    }
 
    auto ToRec = to->getRecord();
-   if (auto* Proto = dyn_cast<ProtocolDecl>(ToRec)) {
-      for (auto P : from->asExistentialType()->getExistentials()) {
-         auto FromRec = cast<ProtocolDecl>(P->getRecord());
-         if (FromRec == ToRec) {
-            Seq.addStep(CastKind::NoOp, to);
-            return;
+   if (auto *ToProto = dyn_cast<ProtocolDecl>(ToRec)) {
+      for (auto &T : from->asExistentialType()->getExistentials()) {
+         if (T->getRecord() == ToRec) {
+            return Seq.addStep(CastKind::NoOp, to);
          }
-
-         bool ConformsTo = SP.ConformsTo(P, Proto);
-         if (ConformsTo) {
-            return Seq.addStep(CastKind::ExistentialCast, to,
-                               CastStrength::Implicit);
+         if (SP.ConformsTo(T, ToProto)) {
+            return Seq.addStep(CastKind::NoOp, to);
          }
       }
+   }
 
-      // FIXME conditional conformance
+   if (auto *ToClass = dyn_cast<ClassDecl>(ToRec)) {
+      for (auto &T : from->asExistentialType()->getExistentials()) {
+         auto *FromClass = dyn_cast<ClassDecl>(T->getRecord());
+         if (FromClass
+         && (ToClass == FromClass || ToClass->isBaseClassOf(FromClass))) {
+            return Seq.addStep(CastKind::NoOp, to);
+         }
+      }
+   }
+
+   bool ConformsTo = SP.ConformsTo(to, from, isa<ProtocolDecl>(ToRec));
+   if (!ConformsTo) {
+      return Seq.invalidate();
+   }
+
+   if (isa<ProtocolDecl>(ToRec)) {
       return Seq.addStep(CastKind::ExistentialCastFallible, to,
                          CastStrength::Fallible);
    }
@@ -936,11 +949,9 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
 
    // Any type -> Existential
    if (to->isExistentialType()) {
-      for (auto E : to->asExistentialType()->getExistentials()) {
-         bool Conforms = SP.ConformsTo(from, cast<ProtocolDecl>(E->getRecord()));
-         if (!Conforms) {
-            return Seq.invalidate();
-         }
+      bool Conforms = SP.ConformsTo(from, to);
+      if (!Conforms) {
+         return Seq.invalidate();
       }
 
       return Seq.addStep(CastKind::ExistentialInit, to);
@@ -1005,7 +1016,7 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
       break;
    case Type::ReferenceTypeID:
    case Type::MutableReferenceTypeID:
-      FromReference(SP, from, to, Seq);
+      FromReference(SP, from, to, Seq, options);
       break;
    case Type::DependentRecordTypeID:
       FromGenericRecord(SP, from, to, Seq);
@@ -1020,7 +1031,7 @@ static void getConversionSequence(SemaPass& SP, CanType fromTy, CanType toTy,
 
       break;
    case Type::ExistentialTypeID:
-      FromExistential(SP, from, to, Seq);
+      FromExistential(SP, from, to, Seq, options);
       break;
    case Type::TupleTypeID:
       FromTuple(SP, from->uncheckedAsTupleType()->getCanonicalType(), to, Seq);

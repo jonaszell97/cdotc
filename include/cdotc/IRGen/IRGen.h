@@ -163,45 +163,47 @@ private:
 
    llvm::FunctionType* getLambdaType(FunctionType* FTy);
 
-   llvm::Constant* getMallocFn();
-   llvm::Constant* getFreeFn();
-   llvm::Constant* getThrowFn();
-   llvm::Constant* getAllocExcnFn();
+   llvm::FunctionCallee getMallocFn();
+   llvm::FunctionCallee getFreeFn();
+   llvm::FunctionCallee getThrowFn();
+   llvm::FunctionCallee getAllocExcnFn();
 
-   llvm::Constant* getReleaseFn();
-   llvm::Constant* getRetainFn();
-   llvm::Constant* getReleaseLambdaFn();
-   llvm::Constant* getRetainLambdaFn();
-   llvm::Constant* getReleaseBoxFn();
-   llvm::Constant* getRetainBoxFn();
-   llvm::Constant* getTypeInfoCmpFn();
-   llvm::Constant* getPrintExceptionFn();
-   llvm::Constant* getCleanupExceptionFn();
-   llvm::Constant* getExitFn();
+   llvm::FunctionCallee getReleaseFn();
+   llvm::FunctionCallee getRetainFn();
+   llvm::FunctionCallee getReleaseLambdaFn();
+   llvm::FunctionCallee getRetainLambdaFn();
+   llvm::FunctionCallee getReleaseBoxFn();
+   llvm::FunctionCallee getRetainBoxFn();
+   llvm::FunctionCallee getTypeInfoCmpFn();
+   llvm::FunctionCallee getPrintExceptionFn();
+   llvm::FunctionCallee getCleanupExceptionFn();
+   llvm::FunctionCallee getExitFn();
 
-   llvm::Constant* getInitializeExistentialFn();
-   llvm::Constant* getDeinitializeExistentialFn();
-   llvm::Constant* getCopyExistentialFn();
-   llvm::Constant* getCastExistentialFn();
-   llvm::Constant* getCastExistentialFallibleFn();
-   llvm::Constant* getUnwrapExistentialFn();
-   llvm::Constant* getCopyClassFn();
-   llvm::Constant* getGetProtocolVTableFn();
-   llvm::Constant* getGetConformanceFn();
+   llvm::FunctionCallee getInitializeExistentialFn();
+   llvm::FunctionCallee getDeinitializeExistentialFn();
+   llvm::FunctionCallee getCopyExistentialFn();
+   llvm::FunctionCallee getCastExistentialFn();
+   llvm::FunctionCallee getCastExistentialFallibleFn();
+   llvm::FunctionCallee getUnwrapExistentialFn();
+   llvm::FunctionCallee getCopyClassFn();
+   llvm::FunctionCallee getGetProtocolVTableFn();
+   llvm::FunctionCallee getGetConformanceFn();
 
-   llvm::Constant* getGetGenericArgumentFn();
-   llvm::Constant* getGetTemplateParamTypeValueFn();
+   llvm::FunctionCallee getGetGenericArgumentFn();
+   llvm::FunctionCallee getGetTemplateParamTypeValueFn();
 
-   llvm::Constant* getDynamicDownCastFn();
+   llvm::FunctionCallee getDynamicDownCastFn();
 
-   llvm::Constant* getPrintfFn();
-   llvm::Constant* getMemCmpFn();
-   llvm::Constant* getIntPowFn(QualType IntTy);
+   llvm::FunctionCallee getPrintfFn();
+   llvm::FunctionCallee getMemCmpFn();
+   llvm::FunctionCallee getIntPowFn(QualType IntTy);
 
    llvm::StructType* getEnumCaseTy(ast::EnumCaseDecl* Decl);
 
    llvm::Function* getIntrinsic(llvm::Intrinsic::ID ID,
                                 llvm::ArrayRef<llvm::Type*> Tys = {});
+
+   llvm::Intrinsic::ID getIntrinsicID(StringRef Name);
 
    template<class... Args>
    void debugPrint(const llvm::Twine& str, Args&&... args)
@@ -235,7 +237,7 @@ private:
    llvm::DenseMap<ast::RecordDecl*, llvm::StructType*> StructTypeMap;
    llvm::DenseMap<QualType, llvm::Type*> TypeMap;
 
-   llvm::DenseMap<StringRef, llvm::Constant*> RuntimeFunctions;
+   llvm::DenseMap<StringRef, llvm::FunctionCallee> RuntimeFunctions;
 
    const il::DebugLocalInst* ElidedDebugLocalInst = nullptr;
 
@@ -243,7 +245,8 @@ private:
    llvm::BasicBlock::iterator AllocaIt;
 
    llvm::DenseMap<ast::EnumCaseDecl*, llvm::StructType*> EnumCaseTys;
-   llvm::DenseMap<IdentifierInfo*, llvm::Constant*> Intrinsics;
+   llvm::DenseMap<IdentifierInfo*, llvm::FunctionCallee> Intrinsics;
+   llvm::StringMap<llvm::Intrinsic::ID> IntrinsicIDs;
 
    using FunctionPriorityPair = std::pair<llvm::Function*, unsigned short>;
 
@@ -280,37 +283,37 @@ private:
 
    llvm::FunctionType* DeinitializerTy;
 
-   llvm::Constant* MallocFn;
-   llvm::Constant* FreeFn;
-   llvm::Constant* ThrowFn;
-   llvm::Constant* AllocExcFn;
-   llvm::Constant* RetainFn;
-   llvm::Constant* ReleaseFn;
-   llvm::Constant* RetainLambdaFn;
-   llvm::Constant* ReleaseLambdaFn;
-   llvm::Constant* RetainBoxFn;
-   llvm::Constant* ReleaseBoxFn;
-   llvm::Constant* PrintfFn;
-   llvm::Constant* MemCmpFn;
-   llvm::Constant* TypeInfoCmpFn;
-   llvm::Constant* PrintExceptionFn;
-   llvm::Constant* CleanupExceptionFn;
-   llvm::Constant* ExitFn;
+   llvm::FunctionCallee MallocFn;
+   llvm::FunctionCallee FreeFn;
+   llvm::FunctionCallee ThrowFn;
+   llvm::FunctionCallee AllocExcFn;
+   llvm::FunctionCallee RetainFn;
+   llvm::FunctionCallee ReleaseFn;
+   llvm::FunctionCallee RetainLambdaFn;
+   llvm::FunctionCallee ReleaseLambdaFn;
+   llvm::FunctionCallee RetainBoxFn;
+   llvm::FunctionCallee ReleaseBoxFn;
+   llvm::FunctionCallee PrintfFn;
+   llvm::FunctionCallee MemCmpFn;
+   llvm::FunctionCallee TypeInfoCmpFn;
+   llvm::FunctionCallee PrintExceptionFn;
+   llvm::FunctionCallee CleanupExceptionFn;
+   llvm::FunctionCallee ExitFn;
 
-   llvm::Constant* InitializeExistentialFn;
-   llvm::Constant* DeinitializeExistentialFn;
-   llvm::Constant* CopyExistentialFn;
-   llvm::Constant* CopyClassFn;
-   llvm::Constant* CastExistentialFn;
-   llvm::Constant* CastExistentialFallibleFn;
-   llvm::Constant* UnwrapExistentialFn;
-   llvm::Constant* GetProtocolVTableFn;
-   llvm::Constant* GetConformanceFn;
+   llvm::FunctionCallee InitializeExistentialFn;
+   llvm::FunctionCallee DeinitializeExistentialFn;
+   llvm::FunctionCallee CopyExistentialFn;
+   llvm::FunctionCallee CopyClassFn;
+   llvm::FunctionCallee CastExistentialFn;
+   llvm::FunctionCallee CastExistentialFallibleFn;
+   llvm::FunctionCallee UnwrapExistentialFn;
+   llvm::FunctionCallee GetProtocolVTableFn;
+   llvm::FunctionCallee GetConformanceFn;
 
-   llvm::Constant* GetGenericArgumentFn;
-   llvm::Constant* GetTemplateParamTypeValueFn;
+   llvm::FunctionCallee GetGenericArgumentFn;
+   llvm::FunctionCallee GetTemplateParamTypeValueFn;
 
-   llvm::Constant* DynamicDownCastFn;
+   llvm::FunctionCallee DynamicDownCastFn;
 
    llvm::Constant* WordOne;
    llvm::Constant* WordZero;

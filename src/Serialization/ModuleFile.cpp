@@ -24,10 +24,6 @@ static void addDeclToContext(SemaPass& Sema, DeclContext& Ctx, Decl* D)
 {
    if (auto ND = support::cast_or_null<NamedDecl>(D)) {
       Sema.makeDeclAvailable(Ctx, ND, true);
-
-//      if (auto *Ext = dyn_cast<ExtensionDecl>(&Ctx)) {
-//         Sema.makeDeclAvailable(*Ext->getExtendedRecord(), ND, true);
-//      }
    }
 }
 

@@ -181,7 +181,8 @@ Expression* ImporterImpl::expressionFromLiteralToken(const clang::Token& Tok)
    case clang::tok::utf32_char_constant:
       return expressionFromCharToken(*this, Tok);
    case clang::tok::string_literal:
-   case clang::tok::angle_string_literal:
+   case clang::tok::wide_string_literal:
+   case clang::tok::header_name:
    case clang::tok::utf8_string_literal:
    case clang::tok::utf16_string_literal:
    case clang::tok::utf32_string_literal:

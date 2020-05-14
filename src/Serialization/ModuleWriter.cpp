@@ -15,6 +15,7 @@
 #include <llvm/ADT/Hashing.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/DJB.h>
 #include <llvm/Support/OnDiskHashTable.h>
 #include <llvm/Support/PrettyStackTrace.h>
 
@@ -475,7 +476,7 @@ public:
 
    hash_value_type ComputeHash(key_type_ref Key)
    {
-      return llvm::HashString(Key->getIdentifier());
+      return llvm::djbHash(Key->getIdentifier());
    }
 
    std::pair<unsigned, unsigned>
@@ -486,7 +487,7 @@ public:
 
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, llvm::support::little);
 
       assert((uint16_t)DataLen == DataLen && (uint16_t)KeyLen == KeyLen);
       LE.write<uint16_t>(DataLen);
@@ -511,7 +512,7 @@ public:
    {
       using namespace llvm::support;
 
-      endian::Writer<little> LE(Out);
+      endian::Writer LE(Out, little);
       LE.write<uint32_t>(ID);
    }
 };

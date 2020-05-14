@@ -7,7 +7,7 @@
 #include "cdotc/Serialization/ILWriter.h"
 
 #include <llvm/ADT/DenseMap.h>
-#include <llvm/Bitcode/BitstreamWriter.h>
+#include <llvm/Bitstream/BitstreamWriter.h>
 
 #include <queue>
 

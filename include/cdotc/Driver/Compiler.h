@@ -89,7 +89,6 @@ enum class OptimizationLevel : uint8_t {
 };
 
 class CompilerInstance;
-class Job;
 
 struct CompilerOptions {
    enum Flag : uint64_t {
@@ -110,6 +109,7 @@ struct CompilerOptions {
       F_Verify = F_SyntaxOnly << 1,
       F_VerifyIL = F_Verify << 1,
       F_IsTest = F_VerifyIL << 1,
+      F_EmitAsm = F_IsTest << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -141,6 +141,7 @@ public:
    unsigned MaxInstantiationDepth = 0;
    llvm::StringRef EmitILPath;
    llvm::StringRef EmitIRPath;
+   llvm::StringRef EmitAsmPath;
 
    llvm::StringRef getCommandLineArguments() const
    {
@@ -181,6 +182,7 @@ public:
    bool emitModules() const { return flagIsSet(F_EmitModules); }
    bool emitIL() const { return flagIsSet(F_EmitIL); }
    bool emitIR() const { return flagIsSet(F_EmitIR); }
+   bool emitASM() const { return flagIsSet(F_EmitAsm); }
    bool isStdLib() const { return flagIsSet(F_IsStdLib); }
    bool printStats() const { return flagIsSet(F_PrintStats); }
    bool emitStaticModuleLib() const { return flagIsSet(F_StaticModuleLib); }
@@ -223,11 +225,6 @@ public:
    CompilerInstance& operator=(CompilerInstance const& CU) = delete;
 
    int compile();
-
-   int setupJobs();
-   int runJobs();
-
-   void addEmitJobs(ArrayRef<Job*> IRGenJobs);
 
    void reportInternalCompilerError();
    void reportBackendFailure(llvm::StringRef msg);
@@ -303,9 +300,6 @@ private:
    /// The file name and path of the main source file.
    StringRef MainSourceFile;
 
-   /// Job queue needed for completing the compilation.
-   std::vector<Job*> Jobs;
-
    /// The compilation's file manager.
    std::unique_ptr<fs::FileManager> FileMgr;
 
@@ -350,12 +344,6 @@ private:
 
    /// The main function of the compilation, if we're creating an executable.
    ast::FunctionDecl* MainFn = nullptr;
-
-   template<class JobTy, class... Args> JobTy* addJob(Args&&... args)
-   {
-      Jobs.push_back(new JobTy(std::forward<Args&&>(args)..., *this));
-      return static_cast<JobTy*>(Jobs.back());
-   }
 
 #ifndef NDEBUG
    /// The total elapsed time for each timer category.

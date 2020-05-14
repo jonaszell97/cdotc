@@ -11,7 +11,7 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/DenseMap.h>
-#include <llvm/Bitcode/BitstreamReader.h>
+#include <llvm/Bitstream/BitstreamReader.h>
 #include <llvm/Support/OnDiskHashTable.h>
 
 #include <queue>

@@ -45,6 +45,11 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass& ILGen, il::Value* Val)
       return;
    }
 
+   if (ty->isExistentialType()) {
+      Builder.CreateIntrinsicCall(Intrinsic::deinit_existential, Val);
+      return;
+   }
+
    if (RecordType* Obj = ty->asRecordType()) {
       if (Obj->isRawEnum())
          return;
@@ -214,6 +219,11 @@ bool CleanupStack::ignoreValue(CleanupsDepth depth, il::Value* Val)
    }
 
    return false;
+}
+
+void CleanupStack::emitUntil(CleanupsDepth depth)
+{
+   emitCleanups(depth, true, true);
 }
 
 void CleanupStack::emitUntilWithoutPopping(CleanupsDepth depth)

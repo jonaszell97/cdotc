@@ -2092,6 +2092,7 @@ class BuiltinExpr : public Expression {
    explicit BuiltinExpr(SourceType T);
 
    SourceType T;
+   SourceRange SR;
 
 public:
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
@@ -2106,7 +2107,8 @@ public:
    const SourceType& getType() const { return T; }
    void setType(SourceType T) { this->T = T; }
 
-   SourceRange getSourceRange() const { return SourceRange(); }
+   void setSourceRange(SourceRange SR) { this->SR = SR; }
+   SourceRange getSourceRange() const { return SR; }
 };
 
 enum class MemberKind : unsigned {

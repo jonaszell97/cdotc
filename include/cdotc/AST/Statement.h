@@ -27,7 +27,7 @@ class Expression;
 class PatternExpr;
 class StaticExpr;
 
-class LLVM_ALIGNAS(sizeof(void*)) Statement : public AstNode {
+class alignas(sizeof(void*)) Statement : public AstNode {
 public:
    struct EmptyShell {
    };
@@ -812,6 +812,12 @@ struct CatchBlock {
 
 class DoStmt final : public Statement,
                      llvm::TrailingObjects<DoStmt, CatchBlock> {
+   DoStmt(SourceRange SR, Statement* body, IdentifierInfo* Label);
+   DoStmt(SourceRange SR, Statement* body, ArrayRef<CatchBlock> catchBlocks,
+          IdentifierInfo* Label);
+
+   DoStmt(EmptyShell Empty, unsigned N);
+
    SourceRange SR;
    Statement* body;
    unsigned NumCatchBlocks;
@@ -821,13 +827,15 @@ public:
    static bool classofKind(NodeType kind) { return kind == DoStmtID; }
    static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
 
+   static DoStmt *Create(ASTContext &C, SourceRange SR,
+                         Statement* body, IdentifierInfo* Label);
+   static DoStmt *Create(ASTContext &C, SourceRange SR, Statement* body,
+                         ArrayRef<CatchBlock> catchBlocks,
+                         IdentifierInfo* Label);
+
+   static DoStmt *Create(ASTContext &C, EmptyShell Empty, unsigned N);
+
    friend TrailingObjects;
-
-   DoStmt(SourceRange SR, Statement* body, IdentifierInfo* Label);
-   DoStmt(SourceRange SR, Statement* body, ArrayRef<CatchBlock> catchBlocks,
-          IdentifierInfo* Label);
-
-   DoStmt(EmptyShell Empty, unsigned N);
 
    SourceRange getSourceRange() const { return SR; }
    void setSourceRange(SourceRange SR) { DoStmt::SR = SR; }

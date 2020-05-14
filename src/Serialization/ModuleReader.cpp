@@ -60,9 +60,7 @@ ModuleReader::~ModuleReader()
 void ModuleReader::Error(llvm::StringRef Msg) const
 {
    CI.getSema().diagnose(diag::err_generic_error, Msg);
-   //   CI.getSema().~SemaPass();
-   //
-   //   std::exit(1);
+   std::abort();
 }
 
 void ModuleReader::Error(unsigned DiagID, llvm::StringRef Arg1,
@@ -129,15 +127,15 @@ bool ModuleReader::ReadBlockAbbrevs(llvm::BitstreamCursor& Cursor,
 
    while (true) {
       uint64_t Offset = Cursor.GetCurrentBitNo();
-      unsigned Code = Cursor.ReadCode();
+      unsigned Code = Cursor.ReadCode().get();
 
       // We expect all abbrevs to be at the start of the block.
       if (Code != llvm::bitc::DEFINE_ABBREV) {
-         Cursor.JumpToBit(Offset);
+         (void) Cursor.JumpToBit(Offset);
          return false;
       }
 
-      Cursor.ReadAbbrevRecord();
+      (void) Cursor.ReadAbbrevRecord();
    }
 }
 
@@ -160,7 +158,7 @@ ReadResult ModuleReader::ReadOptionsBlock()
    ReadResult Result = Success;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -177,7 +175,7 @@ ReadResult ModuleReader::ReadOptionsBlock()
 
       // Read and process a record.
       Record.clear();
-      switch ((OptionsRecordTypes)Stream.readRecord(Entry.ID, Record)) {
+      switch ((OptionsRecordTypes)Stream.readRecord(Entry.ID, Record).get()) {
       case LANGUAGE_OPTIONS: {
          if (ParseLanguageOptions(Record, true, true))
             Result = ConfigurationMismatch;
@@ -206,7 +204,7 @@ ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor& Stream)
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -250,7 +248,7 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor& Stream,
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -422,7 +420,7 @@ ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor& Stream)
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -502,7 +500,7 @@ ReadResult ModuleReader::ReadCacheControlBlock()
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -573,7 +571,7 @@ ModuleReader::ReadOffsetRangeBlock(llvm::BitstreamCursor& Stream,
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -657,7 +655,7 @@ ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor& Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -682,7 +680,7 @@ ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor& Stream)
       StringRef Blob;
 
       auto RecordType
-          = (IdentifierRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+          = (IdentifierRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
       default: // Default behavior: ignore.
@@ -745,7 +743,7 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor& Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -771,7 +769,7 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor& Stream)
       StringRef Blob;
 
       auto RecordType
-          = (OffsetBlockRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+          = (OffsetBlockRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
       default: // Default behavior: ignore.
@@ -860,7 +858,7 @@ ReadResult ModuleReader::ReadStaticLibBlock()
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -886,7 +884,7 @@ ReadResult ModuleReader::ReadStaticLibBlock()
       StringRef Blob;
 
       auto RecordType
-          = (StaticLibRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+          = (StaticLibRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
       default: // Default behavior: ignore.
@@ -961,9 +959,9 @@ void ModuleReader::LoadModuleImports(StringRef FileName)
 
 static bool startsWithASTFileMagic(llvm::BitstreamCursor& Stream)
 {
-   return Stream.canSkipToPos(4) && Stream.Read(8) == 'C'
-          && Stream.Read(8) == 'A' && Stream.Read(8) == 'S'
-          && Stream.Read(8) == 'T';
+   return Stream.canSkipToPos(4) && Stream.Read(8).get() == 'C'
+          && Stream.Read(8).get() == 'A' && Stream.Read(8).get() == 'S'
+          && Stream.Read(8).get() == 'T';
 }
 
 static long long getCurrentTimeMillis()
@@ -1027,7 +1025,7 @@ Module* ModuleReader::ReadModule()
          return Mod;
       }
 
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::Record:

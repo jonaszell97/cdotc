@@ -121,13 +121,13 @@ struct Task {
    long long StartTime;
 
    /// Regexes to match the output of the executable against.
-   SmallVector<StringRef, 0> OutputChecks;
+   SmallVector<string, 0> OutputChecks;
 
    /// Arguments to pass to cdotc.
-   const char **CompileArgs;
+   SmallVector<StringRef, 0> CompileArgs;
 
    /// Additional task arguments.
-   SmallVector<StringRef, 0> Args;
+   SmallVector<string, 0> Args;
 
    /// The task output executable.
    string Executable;
@@ -194,11 +194,11 @@ public:
    {
    }
 
-   void Execute(StringRef Program, const char **Args,
+   void Execute(StringRef Program, ArrayRef<StringRef> Args,
                 ArrayRef<Optional<StringRef>> Redirects,
                 callback_type &&Fn)
    {
-      auto PI = llvm::sys::ExecuteNoWait(Program, Args, nullptr, Redirects);
+      auto PI = llvm::sys::ExecuteNoWait(Program, Args, llvm::None, Redirects);
       if (PI.Pid == llvm::sys::ProcessInfo::InvalidPid) {
          return Fn(-1);
       }
@@ -329,7 +329,12 @@ static void ParseTasks(Test *T, StringRef File,
          TaskStr = TaskStr.drop_front(3);
 
          auto &Task = Tasks.back();
-         TaskStr.split(Task->Args, ' ');
+
+         SmallVector<StringRef, 2> Args;
+         TaskStr.split(Args, ' ');
+
+         for (auto &Arg : Args)
+            Task->Args.emplace_back(Arg);
       }
       else if (TaskStr.startswith("VERIFY-IL")) {
          Tasks.emplace_back(std::make_unique<Task>(T, Task::VERIFY_IL));
@@ -393,35 +398,30 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
 
       for (auto &TaskPtr : Test.Tasks) {
          auto &Task = *TaskPtr;
-         Task.CompileArgs = QC.Context.Allocate<const char*>(10);
-         Task.CompileArgs[0] = cdotc.data();
-         Task.CompileArgs[1] = File.getKey().data();
-         Task.CompileArgs[2] = "-error-limit=0";
-         Task.CompileArgs[3] = "-fno-incremental";
+         Task.CompileArgs.emplace_back(cdotc.data());
+         Task.CompileArgs.emplace_back(File.getKey().data());
+         Task.CompileArgs.emplace_back("-error-limit=0");
+         Task.CompileArgs.emplace_back("-fno-incremental");
 
          switch (Task.Kind) {
          case Task::VERIFY:
          case Task::VERIFY_IL:
-            Task.CompileArgs[4] = Task.Kind == Task::VERIFY
-                ? "-verify" : "-verify-with-il";
+            Task.CompileArgs.emplace_back(Task.Kind == Task::VERIFY
+                ? "-verify" : "-verify-with-il");
 
-            Task.CompileArgs[5] = nullptr;
             break;
          case Task::RUN: {
-            Task.CompileArgs[4] = "-o";
+            Task.CompileArgs.emplace_back("-o");
             Task.Executable = fs::getTmpFileName("out");
-            Task.CompileArgs[5] = Task.Executable.c_str();
-            Task.CompileArgs[6] = "-import=core.test";
-            Task.CompileArgs[7] = "-is-test";
-            Task.CompileArgs[8] = nullptr;
+            Task.CompileArgs.emplace_back(Task.Executable.c_str());
+            Task.CompileArgs.emplace_back("-import=core.test");
+            Task.CompileArgs.emplace_back("-is-test");
             break;
          }
          }
 
          LogOS << "\nINVOKE ";
-         for (int j = 0;; ++j) {
-            if (!Task.CompileArgs[j])
-               break;
+         for (int j = 0; j < Task.CompileArgs.size(); ++j) {
             if (j != 0)
                LogOS << " ";
 
@@ -462,21 +462,18 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
               return;
            }
 
-           const char **ArgPtr = nullptr;
-           SmallVector<const char*, 0> Args;
+           SmallVector<StringRef, 0> Args;
            if (!Task.Args.empty()) {
+              Args.reserve(Task.Args.size());
               for (auto &Arg : Task.Args) {
-                 Args.push_back(Arg.data());
+                 Args.push_back(Arg);
               }
-
-              Args.push_back(nullptr);
-              ArgPtr = Args.data();
            }
 
            // Run the test executable.
            auto nextCallback = [&](int RunExitCode) {
              if (RunExitCode == -1) {
-                LogOS << "VERFAIL: failed running output executable\n";
+                LogOS << "XFAIL: failed running output executable\n";
                 Task.Status = TestStatus::VERFAIL;
                 return Executor.TaskComplete(Test, Task);;
              }
@@ -525,7 +522,8 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
                llvm::Optional<StringRef>(RunRedirect),
            };
 
-           Executor.Execute(Task.Executable, ArgPtr, RunRedirects, move(nextCallback));
+           Executor.Execute(Task.Executable, Args, RunRedirects,
+                            move(nextCallback));
          };
 
          auto &StdoutRedirect = Task.Redirects[::Task::STDOUT];
@@ -567,13 +565,14 @@ QueryResult RunTestModuleQuery::run()
    // Create a log file.
    std::error_code EC;
    string LogFileName = fs::getPath(Mod->getModulePath()->getIdentifier());
-   LogFileName += fs::PathSeperator;
+   if (LogFileName.empty() || LogFileName.back() != fs::PathSeperator)
+      LogFileName += fs::PathSeperator;
+
    LogFileName += "test.log";
 
-   llvm::raw_fd_ostream LogOS(LogFileName, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream LogOS(LogFileName, EC);
    if (EC) {
       QC.Sema->diagnose(err_cannot_open_file, LogFileName, true, EC.message());
-
       return fail();
    }
 

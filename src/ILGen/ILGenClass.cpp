@@ -451,8 +451,12 @@ il::GlobalVariable* ILGenPass::GenerateVTable(ClassDecl* C)
    for (auto* M : VirtualMethods) {
       il::Method* Fn = getFunc(M);
       Fn->setVtableOffset((unsigned)Impls.size());
-
-      Impls.push_back(ConstantExpr::getBitCast(Fn, RawPtrTy));
+      if (M->isAbstract() && C->isAbstract()) {
+         Impls.push_back(Builder.GetConstantNull(RawPtrTy));
+      }
+      else {
+         Impls.push_back(ConstantExpr::getBitCast(Fn, RawPtrTy));
+      }
    }
 
    auto VT = Builder.GetConstantArray(Impls);
@@ -1355,6 +1359,16 @@ void ILGenPass::SetPTable(RecordDecl* R, ProtocolDecl* P,
    PTableMap[R][P] = GV;
 }
 
+unsigned ILGenPass::getVTableOffset(MethodDecl* M)
+{
+   il::GlobalVariable *VT;
+   if (SP.QC.GetILTypeInfo(VT, M->getRecord()->getType())) {
+      return true;
+   }
+
+   return getFunc(M)->getVtableOffset();
+}
+
 unsigned ILGenPass::getProtocolMethodOffset(MethodDecl* ProtoMethod)
 {
    auto It = ProtocolMethodOffsets.find(ProtoMethod);
@@ -1462,10 +1476,10 @@ static Constant *CreateStruct(ILBuilder &Builder, Constant *Val, QualType T)
 
 QueryResult CreateILRecordTypeInfoQuery::run()
 {
-   auto& ILGen = sema().getILGen();
+   auto& ILGen = QC.Sema->getILGen();
    auto& Builder = ILGen.Builder;
 
-   auto& Context = sema().getContext();
+   auto& Context = QC.Context;
    auto& TI = Context.getTargetInfo();
 
    QualType T = Context.getRecordType(R);

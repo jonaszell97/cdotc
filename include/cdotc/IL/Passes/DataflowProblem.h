@@ -18,7 +18,7 @@ inline void andNot(llvm::BitVector& LHS, llvm::BitVector& RHS, unsigned NumBits)
 {
    assert(LHS.size() == NumBits && RHS.size() == NumBits);
    for (unsigned i = 0; i < NumBits; ++i) {
-      LHS[i] = LHS[i] & ~RHS[i];
+      LHS[i] = LHS[i] & !RHS[i];
    }
 }
 
