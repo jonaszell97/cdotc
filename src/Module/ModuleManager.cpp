@@ -292,12 +292,17 @@ void ModuleManager::ImportPrelude(Module* IntoMod)
 
 void ModuleManager::ImportModule(ImportDecl* I)
 {
-   auto& Sema = CI.getSema();
-   auto* Mod
-       = LookupModule(I->getSourceRange(),
-                      CI.getFileMgr().createModuleImportLoc(I->getSourceLoc()),
-                      I->getQualifiedImportName().front().getIdentifierInfo());
+   auto *MainMod = CI.getCompilationModule();
+   Module *Mod = MainMod->getSubModule(
+       I->getQualifiedImportName().front().getIdentifierInfo());
 
+   if (!Mod) {
+      Mod = LookupModule(I->getSourceRange(),
+                         CI.getFileMgr().createModuleImportLoc(I->getSourceLoc()),
+                         I->getQualifiedImportName().front().getIdentifierInfo());
+   }
+
+   auto& Sema = CI.getSema();
    if (!Mod) {
       Sema.diagnose(diag::err_module_not_found, I->getSourceRange(),
                     I->getQualifiedImportName().front());

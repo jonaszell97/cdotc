@@ -1490,13 +1490,8 @@ public:
       if (LHS.getLabel() != RHS.getLabel())
          return false;
 
-      switch (LHS.getConvention()) {
-      case ArgumentConvention::Default:
-         return true;
-      default:
-         return (int)RHS.getConvention() <= (int)LHS.getConvention()
-            || RHS.getConvention() == ArgumentConvention::Default;
-      }
+      return Sys.QC.Sema->AreConventionsCompatible(RHS.getConvention(),
+                                                   LHS.getConvention());
    }
 
    bool visitFunctionType(FunctionType* LHS, QualType RHS)

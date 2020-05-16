@@ -2067,15 +2067,8 @@ QualType ConstraintBuilder::visitLambdaExpr(LambdaExpr* Expr, SourceType T)
    // the element types.
    QualType ExprType = Sema.Context.getLambdaType(RetTyVar, ParamTypes, ParamInfo);
 
-   TypeVariable FunctionTy;
-   if (false&&ExprType->containsTypeVariable()) {
-      FunctionTy = Sys.newTypeVariable();
-      Sys.newConstraint<TypeEqualityConstraint>(FunctionTy, ExprType, nullptr);
-   }
-   else {
-      FunctionTy = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
-      Sys.newConstraint<TypeBindingConstraint>(FunctionTy, ExprType, nullptr);
-   }
+   TypeVariable FunctionTy = Sys.newTypeVariable(ConstraintSystem::HasConcreteBinding);
+   Sys.newConstraint<TypeBindingConstraint>(FunctionTy, ExprType, nullptr);
 
    return FunctionTy;
 }
@@ -2222,20 +2215,31 @@ QualType ConstraintBuilder::visitIfExpr(IfExpr* Expr, SourceType T)
    auto* TrueVal = Expr->getTrueVal();
    auto* FalseVal = Expr->getFalseVal();
 
-   auto* trueTypeVar = getTypeVar(TrueVal, true, T);
-   auto* falseTypeVar = getTypeVar(FalseVal, true, T);
+   QualType TrueType = getRValue(TrueVal, T);
+   TypeVariableType *TrueTypeVar = TrueType->asTypeVariableType();
 
-   if (!trueTypeVar || !falseTypeVar) {
-      return nullptr;
+   if (!TrueTypeVar) {
+      TrueTypeVar = Sys.newTypeVariable();
+      Sys.newConstraint<TypeBindingConstraint>(
+          TrueTypeVar, TrueType->removeReference(), nullptr);
+   }
+
+   QualType FalseType = getRValue(FalseVal, T);
+   TypeVariableType *FalseTypeVar = FalseType->asTypeVariableType();
+
+   if (!FalseTypeVar) {
+      FalseTypeVar = Sys.newTypeVariable();
+      Sys.newConstraint<TypeBindingConstraint>(
+          FalseTypeVar, FalseType->removeReference(), nullptr);
    }
 
    // Create a type variable for a common type between TrueVal and FalseVal.
    auto* commonType = Sys.newTypeVariable();
 
-   Sys.newConstraint<ImplicitConversionConstraint>(trueTypeVar, commonType,
+   Sys.newConstraint<ImplicitConversionConstraint>(TrueTypeVar, commonType,
                                                    makeLocator(TrueVal));
 
-   Sys.newConstraint<ImplicitConversionConstraint>(falseTypeVar, commonType,
+   Sys.newConstraint<ImplicitConversionConstraint>(FalseTypeVar, commonType,
                                                    makeLocator(TrueVal));
 
    return commonType;

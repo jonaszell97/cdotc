@@ -2224,6 +2224,9 @@ def EquivalentSignatures : Query<"EquivalentSignaturesQuery::ResultKind"> {
             /// There is a label mismatch.
             LabelMismatch,
 
+            /// There is a convention mismatch.
+            ConventionMismatch,
+
             /// 'throws' does not match.
             ThrowsMismatch,
 

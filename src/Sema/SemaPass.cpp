@@ -763,6 +763,22 @@ bool SemaPass::hasDefaultValue(CanType type) const
    }
 }
 
+bool SemaPass::AreConventionsCompatible(ArgumentConvention Needed,
+                                        ArgumentConvention Given) const
+{
+   if (Given == Needed || Needed == ArgumentConvention::Default)
+      return true;
+
+   switch (Needed) {
+   case ArgumentConvention::ImmutableRef:
+      return Given == ArgumentConvention::MutableRef;
+   case ArgumentConvention::Borrowed:
+      return true;
+   default:
+      return false;
+   }
+}
+
 bool SemaPass::IsPersistableType(QualType Ty)
 {
    bool Result;
@@ -957,6 +973,10 @@ bool SemaPass::ConformsTo(CanType T, ProtocolDecl* Proto, ExtensionDecl *Ext, bo
 {
    if (Ext == nullptr) {
       return conformsToImpl(*this, T, Proto, AllowConditional);
+   }
+
+   if (!Ext->getExtendedRecord()) {
+      llvm::errs() << "missing extended record for extension " << Ext->getFullSourceLoc() << "\n";
    }
 
    CanType extendedType = Context.getRecordType(Ext->getExtendedRecord());

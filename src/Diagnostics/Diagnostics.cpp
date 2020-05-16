@@ -34,7 +34,7 @@ static llvm::StringRef getMessage(MessageKind msg)
 #define CDOT_MSG(Name, Msg)                                                    \
    case Name:                                                                  \
       return #Msg;
-#include "cdotc/Diagnostics/def/Diagnostics.def"
+#include "cdotc/Diagnostics/Diagnostics.def"
    }
 
    llvm_unreachable("bad msg kind");
@@ -398,7 +398,7 @@ static SeverityLevel getSeverity(MessageKind msg)
 #define CDOT_ERROR(Name, Msg, IsFatal)                                         \
    case Name:                                                                  \
       return IsFatal ? SeverityLevel::Fatal : SeverityLevel::Error;
-#include "cdotc/Diagnostics/def/Diagnostics.def"
+#include "cdotc/Diagnostics/Diagnostics.def"
    }
 }
 

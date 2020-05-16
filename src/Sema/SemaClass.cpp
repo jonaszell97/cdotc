@@ -1241,6 +1241,9 @@ bool SemaPass::checkIfAbstractMethodsOverridden(ClassDecl* R)
             if (!BaseMethod || BaseMethod->isAbstract())
                continue;
 
+            if (QC.PrepareDeclInterface(BaseMethod))
+               continue;
+
             auto Err = signaturesCompatible(M, BaseMethod);
             if (Err < 0) {
                found = true;

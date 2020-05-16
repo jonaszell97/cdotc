@@ -1296,6 +1296,22 @@ NamedDecl* ConformanceCheckerImpl::checkIfProtocolDefaultImpl(
    return Inst;
 }
 
+static StringRef ConventionToString(ArgumentConvention C)
+{
+   switch (C) {
+   case ArgumentConvention::Owned:
+      return "owned";
+   case ArgumentConvention::Borrowed:
+      return "borrow";
+   case ArgumentConvention::MutableRef:
+      return "mut ref";
+   case ArgumentConvention::ImmutableRef:
+      return "ref";
+   case ArgumentConvention::Default:
+      llvm_unreachable("should not happen!");
+   }
+}
+
 static void
 issueDiagnostics(SemaPass& SP,
                  ArrayRef<ConformanceCheckerImpl::MethodCandidate> Cands)
@@ -1328,6 +1344,12 @@ issueDiagnostics(SemaPass& SP,
          break;
       case diag::note_incorrect_protocol_impl_method_no_label:
          SP.diagnose(Cand.Msg, Cand.Data1 + 1, (IdentifierInfo*)Cand.Data2,
+                     Cand.SR);
+         break;
+      case diag::note_incorrect_protocol_impl_convention:
+         SP.diagnose(Cand.Msg, ConventionToString((ArgumentConvention)Cand.Data1),
+                     Cand.Data2 + 1,
+                     ConventionToString((ArgumentConvention)Cand.Data3),
                      Cand.SR);
          break;
       case diag::note_incorrect_protocol_impl_prop:
@@ -1964,6 +1986,19 @@ bool ConformanceCheckerImpl::CompareArgumentLists(
          Cand.Data2 = i;
          Cand.Data3 = GivenArgs[i]->getLabel() != nullptr;
          Cand.Data4 = (uintptr_t)GivenArgs[i]->getLabel();
+         Cand.SR = Impl->getSourceLoc();
+
+         ArgsValid = false;
+         break;
+      }
+      if (!Sema.AreConventionsCompatible(NeededArgs[i]->getConvention(),
+                                         GivenArgs[i]->getConvention())) {
+         auto& Cand = Candidates.emplace_back();
+
+         Cand.Msg = note_incorrect_protocol_impl_convention;
+         Cand.Data1 = (uintptr_t)NeededArgs[i]->getConvention();
+         Cand.Data2 = i;
+         Cand.Data3 = (uintptr_t)GivenArgs[i]->getConvention();
          Cand.SR = Impl->getSourceLoc();
 
          ArgsValid = false;
@@ -4147,7 +4182,7 @@ QueryResult AddSingleConformanceQuery::run()
 
 QueryResult ConformsToQuery::run()
 {
-   QualType T = this->T->getDesugaredType()->removeMetaType();
+   QualType T = this->T->getDesugaredType();
    if (P->isAny()) {
       return finish(true);
    }

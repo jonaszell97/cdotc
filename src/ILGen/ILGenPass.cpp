@@ -1528,7 +1528,8 @@ void ILGenPass::DefineFunction(CallableDecl* CD)
                auto Call = Builder.CreateCall(
                    getFunc(cast<StructDecl>(CD->getRecord())
                                ->getDefaultInitializer()),
-                   SelfVal);
+                   CD->getRecord()->isClass()
+                      ? Builder.CreateLoad(SelfVal) : SelfVal);
 
                Call->setSynthesized(true);
             }
@@ -4138,6 +4139,7 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
    auto arg_it = CalledFn->arg_begin();
    auto arg_end = CalledFn->arg_end();
 
+   bool IsDelegatingFallibleInit = false;
    bool NeedSelf = isa<MethodDecl>(CalledFn)
                    && (!isa<InitDecl>(CalledFn) || Expr->isDotInit());
 
@@ -4163,7 +4165,9 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
          ++i;
          ++arg_it;
 
-         args.push_back(nullptr);
+         IsDelegatingFallibleInit = true;
+         args.push_back(&getCurrentFn()->getEntryBlock()->getArgs().front());
+
          continue;
       }
 
@@ -4301,6 +4305,23 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
 
    if (!V) {
       return nullptr;
+   }
+
+   // If we called a fallible 'self.init' or 'super.init', we need to check
+   // whether or not it was successful.
+   if (IsDelegatingFallibleInit) {
+      auto *OptSelf = args.front();
+      auto *CaseVal = GetEnumRawValueAsInteger(OptSelf, false, true);
+
+      auto *NoneBB = Builder.CreateBasicBlock("delegating.init.none");
+      auto *SomeBB = Builder.CreateBasicBlock("delegating.init.some");
+
+      Builder.CreateCondBr(Builder.CreateIsZero(CaseVal), NoneBB, SomeBB);
+
+      Builder.SetInsertPoint(NoneBB);
+      createFallibleInitReturn(true);
+
+      Builder.SetInsertPoint(SomeBB);
    }
 
    if (!V->getType()->isVoidType() && !CalledFn->throws()) {
@@ -5107,29 +5128,30 @@ il::BasicBlock* ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
 
          Builder.SetDebugLoc(VarDecl->getSourceLoc());
 
-         Value *CondVal;
+         Value *Opt;
          {
             ExprCleanupRAII ECR(*this);
-            CondVal = Forward(visit(VarDecl->getValue()));
-         }
+            Value *CondVal = visit(VarDecl->getValue());
 
-         if (!C.BindingData.TryUnwrapFn->hasMutableSelf()) {
-            CondVal = Builder.CreateLoad(CondVal);
-         }
-         else if (!CondVal->getType()->isReferenceType()) {
-            auto* Alloc = Builder.CreateAlloca(CondVal->getType());
-            Builder.CreateStore(CondVal, Alloc);
+            if (!C.BindingData.TryUnwrapFn->hasMutableSelf()) {
+               CondVal = Builder.CreateLoad(CondVal);
+            }
+            else if (!CondVal->getType()->isReferenceType()) {
+               auto* Alloc = Builder.CreateAlloca(CondVal->getType());
+               Builder.CreateStore(CondVal, Alloc);
 
-            CondVal = Alloc;
-         }
-         else if (!CondVal->getType()->isMutableReferenceType()) {
-            CondVal = Builder.CreateBitCast(CastKind::BitCast,
-                CondVal, Context.getMutableReferenceType(
-                    CondVal->getType()->removeReference()));
-         }
+               CondVal = Alloc;
+            }
+            else if (!CondVal->getType()->isMutableReferenceType()) {
+               CondVal = Builder.CreateBitCast(
+                   CastKind::BitCast,
+                   CondVal, Context.getMutableReferenceType(
+                       CondVal->getType()->removeReference()));
+            }
 
-         auto* Opt = CreateCall(C.BindingData.TryUnwrapFn, CondVal,
-                                VarDecl->getValue());
+            Opt = CreateCall(C.BindingData.TryUnwrapFn, CondVal,
+                             VarDecl->getValue());
+         }
 
          QualType OptTy = Opt->getType();
          NextConditionVal
@@ -5667,55 +5689,58 @@ il::Value* ILGenPass::visitIsPattern(IsPattern* node, il::Value* MatchVal,
    llvm_unreachable("unimplemented!");
 }
 
+void ILGenPass::createFallibleInitReturn(bool isNone)
+{
+   ILBuilder::SynthesizedRAII SR(Builder);
+
+   auto OptVal = &Builder.GetInsertBlock()->getParent()->getEntryBlock()
+                         ->getArgs().front();
+
+   // push cleanups for every field of self. DefinitiveInitialization will
+   // make sure only the ones that were actually initialized are cleaned up
+   auto S = dyn_cast<StructDecl>(OptVal->getType()->getRecord()
+                                       ->getTemplateArgs().front().getType()
+                                       ->getRecord());
+
+   if (S) {
+      auto SelfVal
+          = cast<Method>(Builder.GetInsertBlock()->getParent())->getSelf();
+
+      SelfVal = Builder.CreateLoad(SelfVal);
+
+      ExprCleanupRAII ECR(*this);
+      for (auto F : S->getFields()) {
+         if (!SP.NeedsDeinitilization(F->getType()))
+            continue;
+
+         pushDefaultCleanup(
+             Builder.CreateFieldRef(SelfVal, F->getDeclName()));
+      }
+   }
+
+   if (isNone) {
+      // make 'self' none
+      Value* Dst = OptVal;
+      Value* Val = Builder.GetConstantInt(Context.getUInt8Ty(), 0);
+      Value* Size = Builder.GetConstantInt(
+          Context.getUInt64Ty(),
+          Context.getTargetInfo().getAllocSizeOfType(OptVal->getType()));
+
+      auto* SelfVal
+          = Builder.CreateLoad(cast<il::Method>(getCurrentFn())->getSelf());
+
+      Builder.CreateDealloc(SelfVal, SelfVal->getType()->isClass());
+      Builder.CreateIntrinsicCall(Intrinsic::memset, {Dst, Val, Size});
+   }
+
+   auto Ret = Builder.CreateRetVoid();
+   Ret->setIsFallibleInitNoneRet(true);
+}
+
 void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
 {
    if (Stmt->isFallibleInitReturn()) {
-      ILBuilder::SynthesizedRAII SR(Builder);
-
-      auto OptVal = &Builder.GetInsertBlock()->getParent()->getEntryBlock()
-          ->getArgs().front();
-
-      // push cleanups for every field of self. DefinitiveInitialization will
-      // make sure only the ones that were actually initialized are cleaned up
-      auto S = dyn_cast<StructDecl>(OptVal->getType()->getRecord()
-                                          ->getTemplateArgs().front().getType()
-                                          ->getRecord());
-
-      if (S) {
-         auto SelfVal
-             = cast<Method>(Builder.GetInsertBlock()->getParent())->getSelf();
-
-         SelfVal = Builder.CreateLoad(SelfVal);
-
-         ExprCleanupRAII ECR(*this);
-         for (auto F : S->getFields()) {
-            if (!SP.NeedsDeinitilization(F->getType()))
-               continue;
-
-            pushDefaultCleanup(
-                Builder.CreateFieldRef(SelfVal, F->getDeclName()));
-         }
-      }
-
-      if (Stmt->getReturnValue()) {
-         // make 'self' none
-         Value* Dst = OptVal;
-         Value* Val = Builder.GetConstantInt(Context.getUInt8Ty(), 0);
-         Value* Size = Builder.GetConstantInt(
-             Context.getUInt64Ty(),
-             Context.getTargetInfo().getAllocSizeOfType(OptVal->getType()));
-
-         auto* SelfVal
-             = Builder.CreateLoad(cast<il::Method>(getCurrentFn())->getSelf());
-
-         Builder.CreateDealloc(SelfVal, SelfVal->getType()->isClass());
-         Builder.CreateIntrinsicCall(Intrinsic::memset, {Dst, Val, Size});
-      }
-
-      auto Ret = Builder.CreateRetVoid();
-      Ret->setIsFallibleInitNoneRet(true);
-
-      return;
+      return createFallibleInitReturn(Stmt->getReturnValue() != nullptr);
    }
 
    auto* Fn = getCurrentFn();

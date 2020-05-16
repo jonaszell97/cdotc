@@ -1307,10 +1307,15 @@ QueryResult EquivalentSignaturesQuery::run()
       }
 
       if (!Equivalent)
-         return finish(ParamTypeMismatch); // incompatible signature
+         return finish(ParamTypeMismatch);
 
       if (Arg->getLabel() != Other->getLabel())
-         return finish(LabelMismatch); // incompatible labels
+         return finish(LabelMismatch);
+
+      if (!QC.Sema->AreConventionsCompatible(Arg->getConvention(),
+                                             Other->getConvention())) {
+         return finish(ConventionMismatch);
+      }
    }
 
    if (C1->throws())

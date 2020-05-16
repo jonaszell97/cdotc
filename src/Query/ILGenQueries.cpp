@@ -62,6 +62,10 @@ QueryResult CreateILModuleQuery::run()
       }
    }
 
+   if (error) {
+      return fail();
+   }
+
    if (QC.CI.getOptions().syntaxOnly() && !QC.CI.getOptions().shouldVerifyIL()) {
       return finish(nullptr);
    }
