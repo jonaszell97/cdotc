@@ -7,7 +7,8 @@ class Module;
 
 namespace cdot {
 
-void addIRDebugInfo(llvm::Module& M, llvm::StringRef ToFile);
+void addIRDebugInfo(llvm::Module& M);
+void addIRDebugInfo(llvm::Module& M, llvm::StringRef FileName);
 
 } // namespace cdot
 

@@ -99,7 +99,7 @@ bool ConformanceTable::addConformance(ASTContext& C, ConformanceKind Kind,
       }
    }
 
-   assert((!constraints || introducedIn)
+   assert((!constraints || constraints->empty() || introducedIn)
       && "constrained conformance should have a DeclContext!");
 
    Conformance* Conf = new (C) Conformance(Kind, P, constraints, introducedIn, depth);

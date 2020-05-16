@@ -666,7 +666,8 @@ def err_try_in_non_throwing_fn : Error<"'try' may only appear in a throwing func
 def err_not_throwable : Error<"${ 0 | select(thrown,caught) } value must conform to 'Throwable'">
 def err_duplicate_catch : Error<"equivalent catch statements">
 def note_previous_catch : Note<"previous catch statement was here">
-def err_catch_all_must_be_alone : Error<"catch-all statement must appear alone">
+def err_catch_all_must_be_last : Error<"'catch _' must be the last catch clause in a do statement">
+def err_catch_all_must_be_alone : Error<"only one 'catch _' clause is allowed in a do statement">
 
 // Async / Await
 

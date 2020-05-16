@@ -464,9 +464,6 @@ DoStmt::DoStmt(SourceRange SR, Statement* body,
     : Statement(DoStmtID), SR(SR), body(body),
       NumCatchBlocks((unsigned)catchBlocks.size()), Label(Label)
 {
-   if (NumCatchBlocks)
-      support::cast<CompoundStmt>(body)->setPreserveScope(true);
-
    std::copy(catchBlocks.begin(), catchBlocks.end(),
              getTrailingObjects<CatchBlock>());
 }

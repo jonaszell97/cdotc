@@ -82,8 +82,9 @@ public:
          switch (Var->getInitializationState(Must, May)) {
          case PartiallyInitialized:
             return PartiallyInitialized;
-         case NotInitialized:
          case MaybeUninitialized:
+            return MaybeUninitialized;
+         case NotInitialized:
             FoundUninitialized = true;
             break;
          case FullyInitialized:
@@ -124,7 +125,8 @@ public:
 
 DefinitiveInitializationPass::DefinitiveInitializationPass(
     ast::ILGenPass& ILGen)
-    : FunctionPass(PassKind::DefinitiveInitializationPassID), ILGen(ILGen)
+    : FunctionPass(PassKind::DefinitiveInitializationPassID), ILGen(ILGen),
+      SelfLoc(MemoryLocation::get())
 {
 }
 
@@ -317,12 +319,16 @@ void DefinitiveInitializationPass::visitAssignInst(il::AssignInst& I,
                                                    BitVector& Gen,
                                                    BitVector& Kill)
 {
+   if (auto *FR = dyn_cast<FieldRefInst>(I.getDst())) {
+      auto LocRef = MemoryLocation::get(FR->getOperand(0));
+      if (LocRef == SelfLoc) {
+         I.setTagged(true);
+      }
+   }
+
    auto Loc = MemoryLocation::get(I.getDst(), false);
    if (!Loc)
       return;
-
-   if (SelfFields.find(Loc) != SelfFields.end())
-      I.setTagged(true);
 
    auto* Var = lookupLocal(Loc);
    if (!Var)
@@ -355,12 +361,16 @@ void DefinitiveInitializationPass::visitInitInst(il::InitInst& I,
    if (I.isSynthesized())
       return;
 
+   if (auto *FR = dyn_cast<FieldRefInst>(I.getDst())) {
+      auto LocRef = MemoryLocation::get(FR->getOperand(0));
+      if (LocRef == SelfLoc) {
+         I.setTagged(true);
+      }
+   }
+
    auto Loc = MemoryLocation::get(I.getDst(), false);
    if (!Loc)
       return;
-
-   if (SelfFields.find(Loc) != SelfFields.end())
-      I.setTagged(true);
 
    auto* Var = lookupLocal(Loc);
    if (!Var)
@@ -489,16 +499,18 @@ void DefinitiveInitializationPass::visitLoadInst(il::LoadInst& I,
                                                  BitVector& Kill)
 {
    auto Loc = MemoryLocation::get(I.getTarget());
-   if (SelfFields.find(Loc) != SelfFields.end())
+   if (SelfFields.find(Loc) != SelfFields.end()) {
       I.setTagged(true);
+   }
 }
 
 void DefinitiveInitializationPass::prepareInitializer(ast::CallableDecl* FnDecl,
                                                       il::Initializer& I)
 {
    auto S = dyn_cast<ast::StructDecl>(FnDecl->getRecord());
-   if (!S)
+   if (!S) {
       return;
+   }
 
    auto Val = I.getSelf();
 
@@ -507,6 +519,12 @@ void DefinitiveInitializationPass::prepareInitializer(ast::CallableDecl* FnDecl,
       return;
 
    SelfVal = getLocal(Val, Loc, Val->getType()->removeReference(), false);
+   SelfLoc = Loc;
+
+   if (cast<ast::InitDecl>(FnDecl)->isBaseInitializer()) {
+      return;
+   }
+
    bool IsFallibleInit = FnDecl->isFallibleInit();
 
    // mark fields with default values as initialized
@@ -536,8 +554,10 @@ void DefinitiveInitializationPass::run()
    bool IsInit = false;
 
    // in an initializer, all properties of 'self' need to be initialized
+   bool IsBaseInit = false;
    if (auto I = dyn_cast<Initializer>(F)) {
       IsInit = true;
+      IsBaseInit = cast<ast::InitDecl>(FnDecl)->isBaseInitializer();
       prepareInitializer(FnDecl, *I);
    }
 
@@ -580,6 +600,7 @@ void DefinitiveInitializationPass::run()
    solveDataFlowProblem(*F);
    SecondPass = true;
 
+   SmallPtrSet<ast::FieldDecl*, 4> InvalidFields;
    for (auto& B : *F) {
       BitVector MustGen(MemoryLocCounter);
       MustGen |= MustInMap[&B];
@@ -630,7 +651,7 @@ void DefinitiveInitializationPass::run()
                                   F->getSourceLoc());
       }
 
-      if (SelfVal) {
+      if (SelfVal && !IsBaseInit) {
          auto Term = dyn_cast_or_null<RetInst>(B.getTerminator());
          if (!Term)
             continue;
@@ -652,21 +673,24 @@ void DefinitiveInitializationPass::run()
          auto FieldIt = S->stored_field_begin();
          for (auto& Val : SelfVal->getContainedVars()) {
             auto FieldState = Val->getInitializationState(MustGen, MayGen);
-            if (FieldState != LocalVariable::FullyInitialized)
-               break;
+            if (FieldState != LocalVariable::FullyInitialized) {
+               auto Field = *FieldIt;
+
+               // don't error twice for the same field
+               if (!InvalidFields.insert(Field).second)
+                  continue;
+
+               F->setInvalid(true);
+               ILGen.getSema().diagnose(
+                   Field, err_field_must_be_initialized,
+                   Field->getDeclName(), F->getSourceLoc());
+
+               ILGen.getSema().diagnose(
+                   note_declared_here, Field->getSourceLoc());
+            }
 
             ++FieldIt;
          }
-
-         auto Field = *FieldIt;
-
-         // don't error twice for the same field
-         if (Field->isInvalid())
-            continue;
-
-         F->setInvalid(true);
-         ILGen.getSema().diagnose(Field, err_field_must_be_initialized,
-                                  Field->getDeclName(), F->getSourceLoc());
       }
    }
 
@@ -776,8 +800,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
       F->setInvalid(true);
 
       Sema.diagnose(Decl, err_uninitialized_local, Decl->getDeclName(),
-                    selector,
-                    I.getSourceLoc());
+                    selector, I.getSourceLoc());
 
       Sema.diagnose(note_uninitialized_declared_here, Decl->getSourceLoc());
    }
@@ -795,11 +818,7 @@ void DefinitiveInitializationPass::checkDeinitilization(il::CallInst& I,
                                                         BitVector& MustGen,
                                                         BitVector& MayGen)
 {
-   if (isa<VirtualCallInst>(I))
-      return;
-
-   auto Fn = ILGen.getDeclForValue(I.getCalledFunction());
-   if (!Fn || !isa<ast::DeinitDecl>(Fn))
+   if (!I.isDeinitCall())
       return;
 
    auto Val = LookThroughLoad(I.getArgs().front());
@@ -821,8 +840,8 @@ void DefinitiveInitializationPass::checkDeinitilization(il::CallInst& I,
    case LocalVariable::NotInitialized: {
       InstsToRemove.push_back(&I);
 
-      // remove any loads or indexing instructions that are used for this
-      // deinitializer call
+      // Remove any loads or indexing instructions that are used for this
+      // deinitializer call.
       Instruction* Curr = dyn_cast<Instruction>(I.getOperand(0));
       while (Curr && (isa<LoadInst>(Curr) || Curr->isIndexingInstruction())) {
          InstsToRemove.push_back(Curr);

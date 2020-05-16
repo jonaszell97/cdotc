@@ -581,6 +581,97 @@ lex::Token ASTReader::ReadToken(const RecordDataImpl& Record, unsigned& Idx)
    }
 }
 
+ConstraintSet*
+ASTReader::ReadConstraintSet(const RecordDataImpl &Record, unsigned int &Idx)
+{
+   auto NumDeclConstraints = Record[Idx++];
+   if (!NumDeclConstraints)
+      return ConstraintSet::Create(Context, {});
+
+   std::vector<DeclConstraint*> declConstraints;
+   declConstraints.reserve(NumDeclConstraints);
+
+   while (NumDeclConstraints--) {
+      declConstraints.push_back(ReadConstraint(Record, Idx));
+   }
+
+   return ConstraintSet::Create(Context, declConstraints);
+}
+
+DeclConstraint*
+ASTReader::ReadConstraint(const RecordDataImpl &Record, unsigned int &Idx)
+{
+   auto Kind = (DeclConstraint::Kind)Record[Idx++];
+   auto constrainedType = GetType(Record[Idx++]);
+
+   switch (Kind) {
+   case DeclConstraint::Concept: {
+      auto* Concept = cast<AliasDecl>(GetDecl(Record[Idx++]));
+      return DeclConstraint::Create(Context, constrainedType,
+                                    Concept);
+   }
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated: {
+      QualType Ty = GetType(Record[Idx++]);
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    Ty);
+   }
+   default:
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    QualType());
+   }
+}
+
+ConstraintSet*
+ASTReader::ReadConstraintSet(const char *&data)
+{
+   using namespace llvm::support;
+
+   auto NumDeclConstraints = endian::readNext<uint64_t, little, unaligned>(data);
+   if (!NumDeclConstraints)
+      return ConstraintSet::Create(Context, {});
+
+   std::vector<DeclConstraint*> declConstraints;
+   declConstraints.reserve(NumDeclConstraints);
+
+   while (NumDeclConstraints--) {
+      declConstraints.push_back(ReadConstraint(data));
+   }
+
+   return ConstraintSet::Create(Context, declConstraints);
+}
+
+DeclConstraint*
+ASTReader::ReadConstraint(const char *&data)
+{
+   using namespace llvm::support;
+
+   auto Kind = (DeclConstraint::Kind)endian::readNext<uint8_t, little, unaligned>(data);
+   auto constrainedType = GetType(endian::readNext<uint32_t, little, unaligned>(data));
+
+   switch (Kind) {
+   case DeclConstraint::Concept: {
+      auto* Concept = cast<AliasDecl>(GetDecl(
+          endian::readNext<uint32_t, little, unaligned>(data)));
+      return DeclConstraint::Create(Context, constrainedType,
+                                    Concept);
+   }
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated: {
+      QualType Ty = GetType(endian::readNext<uint32_t, little, unaligned>(data));
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    Ty);
+   }
+   default:
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    QualType());
+   }
+}
+
 ConformanceLookupTrait::internal_key_type
 ConformanceLookupTrait::ReadKey(const unsigned char* d, unsigned n)
 {
@@ -613,11 +704,7 @@ ConformanceLookupTrait::ReadData(const internal_key_type& key,
       auto *Decl = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
       auto *DC = cast_or_null<DeclContext>(Decl);
       auto Depth = endian::readNext<uint8_t, little, unaligned>(data);
-
-      ConstraintSet *CS = nullptr;
-      if (DC) {
-         CS = Ctx.getExtConstraints(Decl);
-      }
+      auto *CS = Reader.ReadConstraintSet(data);
 
       ConfTable.addConformance(Ctx, Kind, R, Proto, DC, CS, Depth);
    }

@@ -86,9 +86,12 @@ il::Value* ILGenPass::applySingleConversionStep(const ConversionStep& Step,
       auto Option = ResTy->getRecord();
       auto WrappedTy = Option->getTemplateArgs().front().getType();
 
-      return Builder.CreateDynamicCast(
+      auto *DynCast = Builder.CreateDynamicCast(
           Val, GetOrCreateTypeInfo(WrappedTy),
           getContext().getASTCtx().getRecordType(Option));
+
+      pushDefaultCleanup(DynCast);
+      return DynCast;
    }
    case CastKind::ExistentialInit: {
       Builder.getModule()->addRecord(getSema().getExistentialContainerDecl());

@@ -1160,6 +1160,7 @@ void IRGen::visitFunction(Function& F)
    if (F.isDeclared())
       return;
 
+   InitializedFlagMap.clear();
    IRGenPrettyStackTraceEntry PSE((F));
 
    auto func = cast<llvm::Function>(ValueMap[&F]);
@@ -1275,7 +1276,15 @@ void IRGen::visitFunction(Function& F)
 
 llvm::GlobalVariable* IRGen::getOrCreateInitializedFlag(const il::Value* ForVal)
 {
-   auto It = InitializedFlagMap.find(ForVal);
+   uintptr_t Key;
+   if (auto *FieldRef = dyn_cast<FieldRefInst>(ForVal)) {
+      Key = (uintptr_t)FieldRef->getFieldName().getAsOpaquePtr();
+   }
+   else {
+      Key = (uintptr_t)ForVal;
+   }
+
+   auto It = InitializedFlagMap.find(Key);
    if (It != InitializedFlagMap.end())
       return It->getSecond();
 
@@ -1283,7 +1292,7 @@ llvm::GlobalVariable* IRGen::getOrCreateInitializedFlag(const il::Value* ForVal)
                                         llvm::GlobalVariable::PrivateLinkage,
                                         Builder.getFalse());
 
-   InitializedFlagMap[ForVal] = Flag;
+   InitializedFlagMap[Key] = Flag;
    return Flag;
 }
 
@@ -2136,7 +2145,7 @@ llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
    auto Dst = getLlvmValue(I.getDst());
    auto Src = getLlvmValue(I.getSrc());
 
-   if (I.getDst()->isTagged()) {
+   if (I.isTagged()) {
       Builder.CreateStore(Builder.getTrue(),
                           getOrCreateInitializedFlag(I.getDst()));
    }
@@ -2199,7 +2208,7 @@ llvm::Value* IRGen::visitInitInst(const InitInst& I)
    auto Dst = getLlvmValue(I.getDst());
    auto Src = getLlvmValue(I.getSrc());
 
-   if (I.getDst()->isTagged()) {
+   if (I.isTagged()) {
       Builder.CreateStore(Builder.getTrue(),
                           getOrCreateInitializedFlag(I.getDst()));
    }
@@ -2301,7 +2310,7 @@ llvm::Value* IRGen::visitMoveInst(const il::MoveInst& I)
    llvm::GlobalVariable* Flag = getOrCreateInitializedFlag(I.getOperand(0));
    Builder.CreateStore(Builder.getFalse(), Flag);
 
-   auto It = InitializedFlagMap.find(&I);
+   auto It = InitializedFlagMap.find((uintptr_t)&I);
    if (It != InitializedFlagMap.end()) {
       Builder.CreateStore(Builder.getTrue(), It->getSecond());
    }
@@ -3418,7 +3427,7 @@ llvm::Value* IRGen::visitStructInitInst(StructInitInst const& I)
          ValAlloc = Builder.CreateBitCast(buff, getStorageType(ValueTy));
       }
       else {
-         ValAlloc = CreateAlloca(ValueTy);
+         ValAlloc = Builder.CreateLoad(CreateAlloca(ValueTy));
       }
 
       alloca = InitEnum(Opt, Some, {ValAlloc});
@@ -3956,7 +3965,9 @@ llvm::Value* IRGen::visitDynamicCastInst(const DynamicCastInst& I)
    auto* TypeInfo = getLlvmValue(I.getTargetTypeInfo());
    auto* Val = getLlvmValue(I.getOperand(0));
 
-   Builder.CreateCall(getDynamicDownCastFn(), {Val, TypeInfo, ResultAlloc});
+   Builder.CreateCall(getDynamicDownCastFn(),
+       {toInt8Ptr(Val), toInt8Ptr(TypeInfo), toInt8Ptr(ResultAlloc)});
+
    return ResultAlloc;
 }
 

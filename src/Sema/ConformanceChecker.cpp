@@ -418,6 +418,9 @@ class cdot::ConformanceResolver {
    /// Allocator used for creating dependency nodes.
    llvm::BumpPtrAllocator Allocator;
 
+   /// The protocol conformance dependency graph.
+   DependencyGraph<ProtocolDecl*> ConformanceDAG;
+
    /// The resolution dependency graph.
    DependencyGraph<DependencyNode*> Dependencies;
 
@@ -456,6 +459,7 @@ class cdot::ConformanceResolver {
    }
 
    bool CreateUncheckedConformanceForImportedDecl(RecordDecl *R);
+   bool ResolveConformanceDependencies();
 
    friend class SemaPass;
 
@@ -465,7 +469,7 @@ public:
    /// C'tor.
    explicit ConformanceResolver(QueryContext &QC)
        : QC(QC), ConfTbl(QC.Context.getConformanceTable()),
-         Dependencies(Allocator)
+         ConformanceDAG(Allocator), Dependencies(Allocator)
    {}
 
    UncheckedConformance &CreateCondConformance(ProtocolDecl* proto = nullptr,
@@ -1222,21 +1226,21 @@ NamedDecl* ConformanceCheckerImpl::checkIfProtocolDefaultImpl(
    FoundImpls.clear();
 
    // Find the most specific implementations.
-   int minDepth = INT_MAX;
+   int maxSpecificity = 0;
    for (auto* ND : Impls) {
-      for (auto [Decl, Depth] : ApplicableDefaultImpls) {
+      for (auto [Decl, Specificity] : ApplicableDefaultImpls) {
          if (Decl != ND) {
             continue;
          }
 
-         minDepth = std::min(Depth, minDepth);
+         maxSpecificity = std::max(Specificity, maxSpecificity);
       }
    }
 
    for (auto* ND : Impls) {
       // Check that constraints on this default impl are satisfied.
-      for (auto [Decl, Depth] : ApplicableDefaultImpls) {
-         if (Decl != ND || Depth > minDepth) {
+      for (auto [Decl, Specificity] : ApplicableDefaultImpls) {
+         if (Decl != ND || Specificity < maxSpecificity) {
             continue;
          }
          if (!TestSet.insert(Decl).second) {
@@ -1262,6 +1266,15 @@ NamedDecl* ConformanceCheckerImpl::checkIfProtocolDefaultImpl(
          return FoundImpls.front();
       }
       else if (FoundImpls.size() != 1) {
+         Sema.diagnose(warn_generic_warn,
+             "default implementation of " + D->getDeclName().toString()
+             + " is ambiguous for " + Rec->getFullName(),
+             D->getSourceLoc());
+
+         for (auto *Impl : FoundImpls) {
+            Sema.diagnose(note_candidate_here, Impl->getSourceLoc());
+         }
+
          return nullptr;
       }
    }
@@ -1409,7 +1422,8 @@ void ConformanceCheckerImpl::scanApplicableExtension(
          continue;
 
       if (ND->isDefault()) {
-         ApplicableDefaultImpls.insert(std::make_pair(ND, C->getDepth()));
+         ApplicableDefaultImpls.insert(
+             std::make_pair(ND, C->getProto()->getSpecificity()));
       }
       else {
          ExtensionDecls.insert(ND);
@@ -2198,181 +2212,6 @@ QueryResult ReferencedAssociatedTypesReadyQuery::run()
 
 namespace {
 
-class DependencyFinder : public RecursiveASTVisitor<DependencyFinder> {
-   /// The query context.
-   QueryContext &QC;
-
-   /// The conformance resolver.
-   ConformanceResolver &Resolver;
-
-   /// The dependency graph node to add dependencies to.
-   ConformanceResolver::DependencyVertex  &Node;
-
-   /// The needed associated types for the record.
-   SmallPtrSetImpl<IdentifierInfo*> &NeededATs;
-
-   /// The current decl context.
-   RecordDecl *DC;
-
-   /// Shared vector to use while resolving an identifier.
-   SmallVector<Expression*, 4> NestedName;
-
-   /// Covariance of the template parameter we're visiting, if any.
-   ProtocolDecl *CurrentCovariance = nullptr;
-
-   /// Whether or not we encountered an error.
-   bool encounteredError = false;
-
-public:
-   DependencyFinder(QueryContext &QC,
-                    ConformanceResolver &Resolver,
-                    ConformanceResolver::DependencyVertex &Node,
-                    SmallPtrSetImpl<IdentifierInfo*> &NeededATs,
-                    RecordDecl *DC)
-       : QC(QC), Resolver(Resolver), Node(Node), NeededATs(NeededATs),
-         DC(DC)
-   {}
-
-   bool hasError() const { return encounteredError; }
-
-   bool visitIdentifierRefExpr(IdentifierRefExpr *Expr)
-   {
-      Expression *CurExpr = Expr;
-      bool valid = true;
-
-      while (CurExpr && valid) {
-         NestedName.push_back(CurExpr);
-
-         switch (CurExpr->getTypeID()) {
-         case Expression::TemplateArgListExprID:
-            CurExpr = cast<TemplateArgListExpr>(CurExpr)->getParentExpr();
-            break;
-         case Expression::IdentifierRefExprID: {
-            auto *Ident = cast<IdentifierRefExpr>(CurExpr);
-            CurExpr = Ident->getParentExpr();
-
-            valid &= !Ident->isPointerAccess();
-            valid &= Ident->getDeclName().isSimpleIdentifier();
-
-            break;
-         }
-         default:
-            valid = false;
-            break;
-         }
-      }
-
-      if (!valid) {
-         NestedName.clear();
-         return false;
-      }
-
-      DeclContext *LookupCtx = DC;
-      LookupOpts Opts = DefaultLookupOpts | LookupOpts::TypeLookup;
-
-      for (size_t i = NestedName.size() - 1; i >= 0; --i) {
-         IdentifierRefExpr *CurIdent = cast<IdentifierRefExpr>(NestedName[i]);
-         TemplateArgListExpr *TemplateArgs = nullptr;
-
-         if (i > 0 && isa<TemplateArgListExpr>(NestedName[i - 1])) {
-            TemplateArgs = cast<TemplateArgListExpr>(NestedName[--i]);
-         }
-
-         const MultiLevelLookupResult *Result;
-         if (QC.MultiLevelLookup(Result, LookupCtx, CurIdent->getDeclName(), Opts)) {
-            encounteredError = true;
-            return false;
-         }
-
-         if (Result->empty() || !Result->unique()) {
-            return false;
-         }
-
-         auto *FoundDecl = Result->uniqueDecl();
-         switch (FoundDecl->getKind()) {
-         case Decl::NamespaceDeclID:
-         case Decl::ModuleDeclID:
-         case Decl::StructDeclID:
-         case Decl::ClassDeclID:
-         case Decl::EnumDeclID:
-         case Decl::ProtocolDeclID:
-            LookupCtx = cast<DeclContext>(FoundDecl);
-            break;
-         case Decl::ImportDeclID:
-            LookupCtx = cast<ImportDecl>(FoundDecl)->getImportedModule()
-                                                   ->getDecl();
-            break;
-         case Decl::AssociatedTypeDeclID: {
-            auto &DepNode = Resolver.GetDependencyNode(
-                DependencyNode::ConcreteTypeOfAssociatedType,
-                cast<RecordDecl>(LookupCtx), FoundDecl);
-
-            Node.addIncoming(&DepNode);
-            break;
-         }
-         case Decl::AliasDeclID: {
-            if (NeededATs.count(FoundDecl->getDeclName().getIdentifierInfo())) {
-               auto& DepNode = Resolver.GetDependencyNode(
-                   DependencyNode::ConcreteTypeOfAssociatedType,
-                   cast<RecordDecl>(LookupCtx), FoundDecl);
-
-               Node.addIncoming(&DepNode);
-            }
-
-            break;
-         }
-         case Decl::UsingDeclID:
-            llvm_unreachable("should never be visible");
-         default:
-            return false;
-         }
-
-         auto *R = dyn_cast<RecordDecl>(FoundDecl);
-         if (!R) {
-            if (TemplateArgs) {
-               encounteredError = true;
-               return false;
-            }
-
-            continue;
-         }
-
-         if (!TemplateArgs) {
-            if (R->isTemplate()) {
-               encounteredError = true;
-               return false;
-            }
-
-            continue;
-         }
-
-         auto &Params = R->getTemplateParams();
-         size_t n = 0;
-
-         for (auto *E : TemplateArgs->getExprs()) {
-            auto *P = Params[n < Params.size() ? n : Params.size() - 1];
-            auto Covar = P->getCovariance();
-
-            ProtocolDecl *CovarProto = nullptr;
-            if (Covar && Covar->isRecordType()) {
-               CovarProto = cast<ProtocolDecl>(Covar->getRecord());
-            }
-
-            auto SAR = support::saveAndRestore(CurrentCovariance, CovarProto);
-            visit(E);
-         }
-      }
-
-      if (CurrentCovariance && isa<RecordDecl>(LookupCtx)) {
-         Resolver.AddConformanceDependency(
-             Node, cast<RecordDecl>(LookupCtx), CurrentCovariance);
-      }
-
-      NestedName.clear();
-      return false;
-   }
-};
-
 class TypeDependencyFinder: public RecursiveTypeVisitor<TypeDependencyFinder> {
    /// The query context.
    QueryContext &QC;
@@ -2652,9 +2491,8 @@ bool ConformanceResolver::registerConformance(
       return false;
    }
 
-   if (Self->isProtocol()) {
-      if (newConf.combinedConstraints
-          && !newConf.combinedConstraints->empty()) {
+   if (auto *SelfProto = dyn_cast<ProtocolDecl>(Self->getRecord())) {
+      if (newConf.combinedConstraints && !newConf.combinedConstraints->empty()) {
          ConfTbl.addConformance(QC.Context, ConformanceKind::Conditional,
                                 Self->getRecord(), proto, newConf.introducedBy,
                                 newConf.combinedConstraints, newConf.depth);
@@ -2665,7 +2503,10 @@ bool ConformanceResolver::registerConformance(
                                 nullptr, newConf.depth);
       }
 
-      auto *SelfProto = cast<ProtocolDecl>(Self->getRecord());
+      auto &SelfNode = ConformanceDAG.getOrAddVertex(SelfProto);
+      auto &OtherNode = ConformanceDAG.getOrAddVertex(proto);
+      SelfNode.addIncoming(&OtherNode);
+
       SelfProto->setHasAssociatedTypeConstraint(
           SelfProto->hasAssociatedTypeConstraint()
           || proto->hasAssociatedTypeConstraint());
@@ -2955,6 +2796,8 @@ bool ConformanceResolver::BuildWorklist()
       error |= BuildWorklist(DC);
    }
 
+   error |= ResolveConformanceDependencies();
+
    for (auto *DC : DeclContexts) {
       if (isa<ProtocolDecl>(DC)) {
          continue;
@@ -3006,6 +2849,10 @@ bool ConformanceResolver::BuildWorklist(DeclContext *DC)
          ConfTbl.addConformance(
             QC.Context, ConformanceKind::Implicit, Rec, Any, Rec,
             QC.Context.EmptyConstraintSet);
+
+         if (auto *Proto = dyn_cast<ProtocolDecl>(Rec)) {
+            Proto->setSpecificity(1);
+         }
       }
    }
 
@@ -3930,6 +3777,34 @@ END_LOG
    Allocator.Reset();
 
    return error;
+}
+
+bool ConformanceResolver::ResolveConformanceDependencies()
+{
+   if (ConformanceDAG.empty())
+      return false;
+
+   SmallVector<ProtocolDecl*, 16> Protocols;
+   bool valid = ConformanceDAG.constructOrderedList(Protocols);
+   if (!valid) {
+      assert(QC.Sema->encounteredError() && "should have been diagnosed!");
+      ConformanceDAG.clear();
+      return true;
+   }
+
+   for (auto *P : Protocols) {
+      unsigned Specificity = P->getSpecificity();
+      for (auto *Conf : ConfTbl.getAllConformances(P)) {
+         Specificity = std::max(Specificity,
+                                Conf->getProto()->getSpecificity() + 1);
+      }
+
+      P->setSpecificity(Specificity);
+      LOG(ProtocolSpecificity, P->getDeclName(), ": ", Specificity);
+   }
+
+   ConformanceDAG.clear();
+   return false;
 }
 
 bool SemaPass::PrepareNameLookup(DeclContext *DC)

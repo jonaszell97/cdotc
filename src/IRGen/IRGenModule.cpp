@@ -43,31 +43,22 @@ static cl::opt<std::string>
 
 void IRGen::finalize(const CompilerInstance& CU)
 {
-   if (DI)
+   if (DI) {
       emitModuleDI();
+   }
 
    auto& llvmOut = llvm::outs();
    auto isInvalid = llvm::verifyModule(*M, &llvmOut);
 
    if (isInvalid) {
-      {
-         std::error_code EC;
-         llvm::raw_fd_ostream fd(
-             "/Users/Jonas/CDotProjects/StdLib/main/_error.ll", EC);
+      llvm::AssemblyAnnotationWriter AAW;
+      M->print(llvm::errs(), &AAW);
+      llvm::errs() << "\n";
+      CU.getCompilationModule()->getILModule()->writeTo(llvm::errs());
 
-         llvm::AssemblyAnnotationWriter AAW;
-         M->print(fd, &AAW);
-      }
-      {
-         std::error_code EC;
-         llvm::raw_fd_ostream fd(
-             "/Users/Jonas/CDotProjects/StdLib/main/_error.cdotil", EC);
-
-         CU.getCompilationModule()->getILModule()->writeTo(fd);
-      }
-
-      if (isInvalid)
+      if (isInvalid) {
          llvm::report_fatal_error("invalid LLVM module");
+      }
    }
 }
 
@@ -152,8 +143,7 @@ void IRGen::prepareModuleForEmission(llvm::Module* Module)
              "-debug-ir cannot be used in conjunction with -g");
       }
       else if (EmitIRDebugInfo.empty()) {
-         auto TmpFileName = fs::getTmpFileName("ll");
-         addIRDebugInfo(*Module, TmpFileName);
+         addIRDebugInfo(*Module);
       }
       else {
          addIRDebugInfo(*Module, EmitIRDebugInfo);
@@ -310,24 +300,20 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
 
    string TmpFile;
    if (ClangSanitizers.empty()) {
-      TmpFile = fs::getTmpFileName("o");
-
-      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC);
-      if (EC) {
-         llvm::report_fatal_error(EC.message());
+      auto TmpObjOS = fs::openTmpFile("o", &TmpFile);
+      if (!TmpObjOS) {
+         llvm::report_fatal_error("could not open temporary file");
       }
 
-      emitObjectFile(TmpObjOS, Module);
+      emitObjectFile(*TmpObjOS, Module);
    }
    else {
-      TmpFile = fs::getTmpFileName("ll");
-
-      llvm::raw_fd_ostream TmpObjOS(TmpFile, EC);
-      if (EC) {
-         llvm::report_fatal_error(EC.message());
+      auto TmpObjOS = fs::openTmpFile("ll", &TmpFile);
+      if (!TmpObjOS) {
+         llvm::report_fatal_error("could not open temporary file");
       }
 
-      Module->print(TmpObjOS, nullptr);
+      Module->print(*TmpObjOS, nullptr);
    }
 
    auto clangPathOrError = llvm::sys::findProgramByName("clang");
@@ -376,7 +362,8 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
 
    args.resize(initialSize);
 
-   if (options.emitDebugInfo()) {
+   llvm::Triple Target(Module->getTargetTriple());
+   if (options.emitDebugInfo() && Target.isOSDarwin()) {
       auto DsymPath = llvm::sys::findProgramByName("dsymutil");
       if (!DsymPath.getError()) {
          string dsymArgs[] = {

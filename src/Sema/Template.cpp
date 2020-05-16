@@ -21,6 +21,8 @@ namespace sema {
 
 static bool isDependentType(TemplateParamDecl *Param, QualType type)
 {
+   assert(!type->isReferenceType() && "tried to use reference as template argument!");
+
    if (!type) {
       return false;
    }

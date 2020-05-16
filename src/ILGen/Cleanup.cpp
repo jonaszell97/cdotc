@@ -27,98 +27,26 @@ void DefaultCleanup::deinitializeValue(ast::ILGenPass& ILGen, il::Value* Val)
    auto& Builder = ILGen.Builder;
    auto ty = Val->getType()->removeReference();
 
-   if (Val->isLvalue())
-      Builder.CreateLifetimeEnd(Val);
-
    auto& Sema = ILGen.getSema();
-   if (!Sema.NeedsDeinitilization(ty))
-      return;
-
-   ILBuilder::SynthesizedRAII SR(Builder);
-
-   if (ty->isRefcounted() || ty->isLambdaType() || ty->isBoxType()) {
-      if (Val->isLvalue()) {
-         Val = Builder.CreateLoad(Val);
-      }
-
-      Builder.CreateRelease(Val);
+   if (!Sema.NeedsDeinitilization(ty)) {
       return;
    }
 
-   if (ty->isExistentialType()) {
-      Builder.CreateIntrinsicCall(Intrinsic::deinit_existential, Val);
-      return;
+   auto *DeinitFn = ILGen.GetDeinitFn(ty);
+
+   ILBuilder::SynthesizedRAII Synthesized(Builder);
+   if (!Val->isLvalue()) {
+      auto *Alloc = Builder.CreateAlloca(Val->getType());
+      Builder.CreateStore(Val, Alloc);
+      Val = Alloc;
+   }
+   else if (!Val->getType()->isMutableReferenceType()) {
+      Val = Builder.CreateBitCast(CastKind::BitCast,
+          Val, DeinitFn->getEntryBlock()->getArgs().front().getType());
    }
 
-   if (RecordType* Obj = ty->asRecordType()) {
-      if (Obj->isRawEnum())
-         return;
-
-      if (Obj->isProtocol()) {
-         Builder.CreateIntrinsicCall(Intrinsic::deinit_existential, Val);
-         return;
-      }
-
-      auto deinit = ty->getRecord()->getDeinitializer();
-      assert(deinit && "trivially deinitializable type!");
-
-      deinit = ILGen.getSema().maybeInstantiateTemplateMember(ty->getRecord(),
-                                                              deinit);
-
-      if (ILGen.inCTFE()) {
-         if (!ILGen.registerCalledFunction(deinit, deinit)) {
-            return;
-         }
-      }
-
-      if (!Val->isLvalue()) {
-         auto* Alloc = Builder.CreateAlloca(Val->getType());
-         Builder.CreateStore(Val, Alloc);
-         Val = Alloc;
-      }
-      else if (Val->getType()->isNonMutableReferenceType()) {
-         Val = Builder.CreateBitCast(
-             CastKind::BitCast, Val,
-             ILGen.getSema().Context.getMutableReferenceType(
-                 Val->getType()->getReferencedType()));
-      }
-
-      ILGen.CreateCall(deinit, {Val});
-      return;
-   }
-
-   if (ArrayType* Arr = ty->asArrayType()) {
-      auto NumElements = Arr->getNumElements();
-      for (unsigned i = 0; i < NumElements; ++i) {
-         auto GEP = Builder.CreateGEP(Val, i);
-         auto Ld = Builder.CreateLoad(GEP);
-
-         deinitializeValue(ILGen, Ld);
-      }
-
-      return;
-   }
-
-   if (TupleType* Tup = ty->asTupleType()) {
-      size_t i = 0;
-      auto Cont = Tup->getContainedTypes();
-      size_t numTys = Cont.size();
-
-      while (i < numTys) {
-         if (!Sema.NeedsDeinitilization(Cont[i])) {
-            ++i;
-            continue;
-         }
-
-         auto val = Builder.CreateTupleExtract(Val, i);
-         auto Ld = Builder.CreateLoad(val);
-
-         deinitializeValue(ILGen, Ld);
-         ++i;
-      }
-
-      return;
-   }
+   auto *Call = Builder.CreateCall(DeinitFn, Val);
+   Call->setDeinitCall(true);
 }
 
 void BorrowCleanup::Emit(ast::ILGenPass& ILGen)
@@ -224,6 +152,11 @@ bool CleanupStack::ignoreValue(CleanupsDepth depth, il::Value* Val)
 void CleanupStack::emitUntil(CleanupsDepth depth)
 {
    emitCleanups(depth, true, true);
+}
+
+void CleanupStack::popUntil(CleanupsDepth depth)
+{
+   emitCleanups(depth, true, false);
 }
 
 void CleanupStack::emitUntilWithoutPopping(CleanupsDepth depth)

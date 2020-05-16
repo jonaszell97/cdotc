@@ -253,7 +253,7 @@ private:
    llvm::SmallVector<FunctionPriorityPair, 4> GlobalInitFns;
    llvm::SmallVector<FunctionPriorityPair, 4> GlobalDeinitFns;
 
-   llvm::DenseMap<const il::Value*, llvm::GlobalVariable*> InitializedFlagMap;
+   llvm::DenseMap<uintptr_t, llvm::GlobalVariable*> InitializedFlagMap;
 
    llvm::LLVMContext& Ctx;
    llvm::Module* M;

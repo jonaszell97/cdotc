@@ -1199,6 +1199,69 @@ void ASTWriter::WriteConformanceAbbrevs()
    ConformanceDataAbbrev = Stream.EmitAbbrev(move(Abv));
 }
 
+void ASTWriter::WriteConstraint(const DeclConstraint* C, RecordDataImpl &Record)
+{
+   Record.push_back(C->getKind());
+   Record.push_back(GetOrCreateTypeID(C->getConstrainedType()));
+
+   switch (C->getKind()) {
+   case DeclConstraint::Concept:
+      Record.push_back(GetDeclRef(C->getConcept()));
+      break;
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated:
+      Record.push_back(GetOrCreateTypeID(C->getType()));
+      break;
+   default:
+      break;
+   }
+}
+
+void ASTWriter::WriteConstraintSet(const ConstraintSet *CS, RecordDataImpl &Record)
+{
+   Record.push_back(CS->size());
+   for (auto *C : *CS) {
+      WriteConstraint(C, Record);
+   }
+}
+
+void ASTWriter::WriteConstraint(const DeclConstraint* C,
+                                llvm::support::endian::Writer &Writer)
+{
+   Writer.write<uint8_t>(C->getKind());
+   Writer.write<uint32_t>(GetOrCreateTypeID(C->getConstrainedType()));
+
+   switch (C->getKind()) {
+   case DeclConstraint::Concept:
+      Writer.write<uint32_t>(GetDeclRef(C->getConcept()));
+      break;
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated:
+      Writer.write<uint32_t>(GetOrCreateTypeID(C->getType()));
+      break;
+   default:
+      break;
+   }
+}
+
+void ASTWriter::WriteConstraintSet(const ConstraintSet *CS,
+                                   llvm::support::endian::Writer &Writer)
+{
+   if (!CS) {
+      Writer.write<uint64_t>(0);
+      return;
+   }
+
+   Writer.write<uint64_t>(CS->size());
+   for (auto *C : *CS) {
+      WriteConstraint(C, Writer);
+   }
+}
+
 void ASTWriter::WriteConformanceData()
 {
    auto& ConfTable = Writer.CI.getContext().getConformanceTable();
@@ -1219,6 +1282,7 @@ void ASTWriter::WriteConformanceData()
             Writer.write<uint32_t>(GetDeclRef(Conf->getProto()));
             Writer.write<uint32_t>(GetDeclRef(cast_or_null<NamedDecl>(Conf->getDeclarationCtx())));
             Writer.write<uint8_t>(Conf->getDepth());
+            WriteConstraintSet(Conf->getConstraints(), Writer);
          }
 
          auto *Impls = this->Writer.CI.getContext().getProtocolImpls(R);

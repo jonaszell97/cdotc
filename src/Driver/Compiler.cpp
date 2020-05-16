@@ -719,11 +719,10 @@ public:
    }
 
    /// Verify a diagnostic.
-   void HandleDiagnostic(const Diagnostic &Diag) override
+   bool HandleDiagnostic(const Diagnostic &Diag) override
    {
       if (CheckingDiag) {
-         DiagConsumer->HandleDiagnostic(Diag);
-         return;
+         return DiagConsumer->HandleDiagnostic(Diag);
       }
 
       auto SAR = support::saveAndRestore(CheckingDiag, true);
@@ -820,10 +819,10 @@ public:
          }
 
          ExpectedDiagnostics.erase(Match);
-         return;
+         return false;
       }
 
-      DiagConsumer->HandleDiagnostic(Diag);
+      bool shouldRegister = DiagConsumer->HandleDiagnostic(Diag);
 
       if (MatchWithWrongSeverity) {
          Sema.diagnose(
@@ -840,6 +839,8 @@ public:
              "potential expected diagnostic has wrong location",
              MatchWithWrongLoc->RawLoc.getStart());
       }
+
+      return shouldRegister;
    }
 };
 
@@ -899,16 +900,10 @@ int CompilerInstance::compile()
    }
 
    if (Verify) {
-      int expectedErrors = static_cast<VerifyCommentConsumer*>(
-          CommentConsumer.get())->ExpectedErrors;
-
       CommentConsumer = nullptr;
-
-      if (Sema->getDiags().getNumErrors() - expectedErrors > 0) {
-         return 1;
-      }
    }
-   else if (Sema->getDiags().getNumErrors()) {
+
+   if (Sema->getDiags().getNumErrors()) {
       return 1;
    }
 

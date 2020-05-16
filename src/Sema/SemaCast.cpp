@@ -691,7 +691,7 @@ static void FromTuple(SemaPass& SP, CanType from, CanType to,
 
       getConversionSequence(SP, fromEl, toEl, Seq, SemaPass::CO_None);
       if (!Seq.isValid())
-         return;
+         return Seq .invalidate();
 
       Seq.addHalt();
    }

@@ -63,7 +63,7 @@ if(clang_libs)
 endif()
 
 # set CXX flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -fvisibility=hidden")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic")
 
 # add include directories
 include_directories(include)
@@ -100,18 +100,23 @@ set_target_properties(cdotrt
 install(TARGETS cdotrt
         DESTINATION "/usr/local/lib")
 
+target_compile_options(cdotc
+        PUBLIC "-fvisibility=hidden")
 target_compile_options(cdotc_asan
         PUBLIC "-fsanitize=address"
-        PUBLIC "-fno-omit-frame-pointer")
+        PUBLIC "-fno-omit-frame-pointer"
+        PUBLIC "-fvisibility=hidden")
 target_compile_options(cdotc_ubsan
         PUBLIC "-fsanitize=undefined"
-        PUBLIC "-fno-omit-frame-pointer")
+        PUBLIC "-fno-omit-frame-pointer"
+        PUBLIC "-fvisibility=hidden")
 target_compile_options(cdotc_coverage
         PUBLIC "-fprofile-instr-generate"
-        PUBLIC "-fcoverage-mapping")
+        PUBLIC "-fcoverage-mapping"
+        PUBLIC "-fvisibility=hidden")
 
-target_link_libraries(cdotc ${llvm_libs} ${clang_libs} -fvisibility=hidden)
-target_link_libraries(cdotc-tblgens ${llvm_libs} -fvisibility=hidden)
+target_link_libraries(cdotc ${llvm_libs} ${clang_libs} -fvisibility=hidden -w)
+target_link_libraries(cdotc-tblgens ${llvm_libs})
 
 target_link_libraries(cdotc_asan
         ${llvm_libs} ${clang_libs}

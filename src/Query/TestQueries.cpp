@@ -120,6 +120,9 @@ struct Task {
    /// The time this task was started at.
    long long StartTime;
 
+   /// Expected exit code of the application.
+   int ExitCode = 0;
+
    /// Regexes to match the output of the executable against.
    SmallVector<string, 0> OutputChecks;
 
@@ -274,6 +277,15 @@ public:
 
 } // anonymous namespace
 
+static void replaceAll(string& str, StringRef find, StringRef replacement)
+{
+   size_t startPos = 0;
+   while ((startPos = str.find(find.data(), startPos)) != string::npos) {
+      str.replace(startPos, find.size(), replacement.data());
+      startPos += replacement.size();
+   }
+}
+
 static void ParseTasks(Test *T, StringRef File,
                        std::vector<std::unique_ptr<Task>> &Tasks)
 {
@@ -342,6 +354,23 @@ static void ParseTasks(Test *T, StringRef File,
       else if (TaskStr.startswith("VERIFY")) {
          Tasks.emplace_back(std::make_unique<Task>(T, Task::VERIFY));
       }
+      else if (TaskStr.startswith("CHECK-EXIT")) {
+         if (Tasks.empty() || Tasks.back()->Kind != Task::RUN) {
+            Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
+         }
+
+         TaskStr = TaskStr.drop_front(11);
+         Tasks.back()->ExitCode = std::stoi(TaskStr);
+      }
+      else if (TaskStr.startswith("CHECK-NEXT")) {
+         if (Tasks.empty() || Tasks.back()->OutputChecks.empty()) {
+            continue;
+         }
+
+         TaskStr = TaskStr.drop_front(11);
+         Tasks.back()->OutputChecks.back() += "\n";
+         Tasks.back()->OutputChecks.back() += TaskStr;
+      }
       else if (TaskStr.startswith("CHECK")) {
          if (Tasks.empty() || Tasks.back()->Kind != Task::RUN) {
             Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
@@ -353,6 +382,16 @@ static void ParseTasks(Test *T, StringRef File,
       else if (TaskStr.startswith("SKIP")) {
          Tasks.clear();
          return;
+      }
+   }
+
+   for (auto &Task : Tasks) {
+      for (auto &Chk : Task->OutputChecks) {
+         if (Chk.find('%') == string::npos)
+            continue;
+
+         replaceAll(Chk, "%S", File);
+         replaceAll(Chk, "%s", fs::getFileNameAndExtension(File));
       }
    }
 
@@ -477,8 +516,11 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
                 Task.Status = TestStatus::VERFAIL;
                 return Executor.TaskComplete(Test, Task);;
              }
-             if (RunExitCode != 0) {
-                LogOS << "XFAIL: non-zero exit code on output executable\n";
+             if (RunExitCode != Task.ExitCode) {
+                LogOS << "XFAIL: unexpected exit code " << RunExitCode
+                      << " on output executable, expected " << Task.ExitCode
+                      << "\n";
+
                 Task.Status = TestStatus::XFAIL;
                 return Executor.TaskComplete(Test, Task);
              }

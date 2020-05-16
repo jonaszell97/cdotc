@@ -26,11 +26,7 @@ void DiagnosticsEngine::finalizeDiag(llvm::StringRef msg, SeverityLevel Sev)
    NumSourceRanges = 0;
 
    switch (Sev) {
-   case SeverityLevel::Warning:
-      ++NumWarnings;
-      break;
    case SeverityLevel::Error:
-      ++NumErrors;
       if (MaxErrors && NumErrors > MaxErrors) {
          if (!TooManyErrorsMsgEmitted) {
             Diag(fatal_too_many_errors);
@@ -46,6 +42,22 @@ void DiagnosticsEngine::finalizeDiag(llvm::StringRef msg, SeverityLevel Sev)
       break;
    }
 
-   if (Consumer && !TooManyErrorsMsgEmitted)
-      Consumer->HandleDiagnostic(Diagnostic(*this, msg, Sev, SR));
+   bool shouldRegister = false;
+   if (Consumer && !TooManyErrorsMsgEmitted) {
+      shouldRegister = Consumer->HandleDiagnostic(Diagnostic(*this, msg, Sev, SR));
+   }
+
+   if (!shouldRegister)
+      return;
+
+   switch (Sev) {
+   case SeverityLevel::Warning:
+      ++NumWarnings;
+      break;
+   case SeverityLevel::Error:
+      ++NumErrors;
+      break;
+   default:
+      break;
+   }
 }

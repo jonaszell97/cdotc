@@ -493,7 +493,8 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
 
    // Check that '.init' is only called on 'self'.
    if (DeclName.getKind() == DeclarationName::BaseConstructorName) {
-      if (!dyn_cast_or_null<SelfExpr>(Ident->getParentExpr())) {
+      if (!dyn_cast_or_null<SelfExpr>(Ident->getParentExpr())
+          && !dyn_cast_or_null<SuperExpr>(Ident->getParentExpr())) {
          diagnose(Ident, err_dot_init_must_be_on_self, Ident->getSourceRange());
          Ident->setExprType(Context.getVoidType());
 

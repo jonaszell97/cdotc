@@ -504,7 +504,7 @@ QualType LiteralConstraint::getDefaultLiteralType(ConstraintSystem& Sys)
 
       TemplateArgList List(*QC.Sema, DefaultAlias);
       List.insert(TemplateArgument(DefaultAlias->getTemplateParams().front(),
-                                   elementType));
+                                   elementType->removeReference()));
 
       if (!List.checkCompatibility() || List.isStillDependent()) {
          return QualType();
@@ -536,9 +536,9 @@ QualType LiteralConstraint::getDefaultLiteralType(ConstraintSystem& Sys)
 
       TemplateArgList List(*QC.Sema, DefaultAlias);
       List.insert(TemplateArgument(DefaultAlias->getTemplateParams().front(),
-                                   keyType));
+                                   keyType->removeReference()));
       List.insert(TemplateArgument(DefaultAlias->getTemplateParams()[1],
-                                   valueType));
+                                   valueType->removeReference()));
 
       if (!List.checkCompatibility() || List.isStillDependent()) {
          return QualType();

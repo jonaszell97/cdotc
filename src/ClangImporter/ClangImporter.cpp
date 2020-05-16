@@ -232,15 +232,6 @@ static void addDefaultInvocationArgs(CompilerInstance& CI,
 
    // Add system root directory.
    if (Target.isOSDarwin()) {
-      // FIXME
-      ArgStrings.emplace_back("-I/Applications/Xcode.app/Contents/Developer/"
-                              "Toolchains/"
-                              "XcodeDefault.xctoolchain/usr/include/c++/v1");
-
-      ArgStrings.emplace_back("-I/Applications/Xcode.app/Contents/Developer/"
-                              "Toolchains/XcodeDefault.xctoolchain/"
-                              "usr/lib/clang/9.1.0/include");
-
       ArgStrings.emplace_back("-isysroot");
    }
    else {

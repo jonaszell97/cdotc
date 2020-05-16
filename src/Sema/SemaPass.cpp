@@ -50,10 +50,6 @@ public:
    }
 };
 
-class NullDiagConsumer : public DiagnosticConsumer {
-   void HandleDiagnostic(const Diagnostic&) override {}
-};
-
 } // anonymous namespace
 
 class SemaDiagConsumer final : public DiagnosticConsumer {
@@ -63,10 +59,10 @@ class SemaDiagConsumer final : public DiagnosticConsumer {
 public:
    SemaDiagConsumer(SemaPass& SP) : SP(SP) {}
 
-   void HandleDiagnostic(const Diagnostic& Diag) override
+   bool HandleDiagnostic(const Diagnostic& Diag) override
    {
       if (Ignore)
-         return;
+         return false;
 
       StoredDiags.emplace_back(Diag.getMsg());
 
@@ -84,6 +80,8 @@ public:
       default:
          break;
       }
+
+      return true;
    }
 
    size_t getNumDiags() const { return StoredDiags.size(); }
@@ -122,31 +120,27 @@ private:
 
 SemaPass::DiagConsumerRAII::DiagConsumerRAII(SemaPass& SP,
                                              DiagnosticConsumer* Consumer)
-    : SP(SP), PrevConsumer(SP.DiagConsumer.get())
+    : SP(SP), PrevConsumer(SP.getDiags().getConsumer())
 {
-   SP.DiagConsumer.release();
-   SP.DiagConsumer.reset(Consumer);
+   SP.getDiags().setConsumer(Consumer);
 }
 
 SemaPass::DiagConsumerRAII::~DiagConsumerRAII()
 {
-   SP.DiagConsumer.release();
-   SP.DiagConsumer.reset(PrevConsumer);
+   SP.getDiags().setConsumer(PrevConsumer);
 }
 
+std::unique_ptr<DiagnosticConsumer> SemaPass::IgnoreDiagsRAII::NullConsumer
+   = std::make_unique<VoidDiagnosticConsumer>();
+
 SemaPass::IgnoreDiagsRAII::IgnoreDiagsRAII(SemaPass& SP, bool Enabled)
-    : DiagConsumerRAII(SP, SP.DiagConsumer.get()), Enabled(Enabled)
+    : DiagConsumerRAII(SP, Enabled ? NullConsumer.get()
+                                   : SP.getDiags().getConsumer())
 {
-   if (Enabled) {
-      static_cast<SemaDiagConsumer *>(SP.DiagConsumer.get())->Ignore = true;
-   }
 }
 
 SemaPass::IgnoreDiagsRAII::~IgnoreDiagsRAII()
 {
-   if (Enabled) {
-      static_cast<SemaDiagConsumer *>(SP.DiagConsumer.get())->Ignore = false;
-   }
 }
 
 SemaPass::SemaPass(CompilerInstance& compilationUnit)
@@ -1010,7 +1004,8 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr, QualType destTy,
                                               bool* hadError)
 {
    auto originTy = Expr->getExprType();
-   if (originTy->isDependentType() || destTy->isDependentType()) {
+   if (originTy->isDependentType() || destTy->isDependentType()
+   || destTy->isAutoType()) {
       return Expr;
    }
 
@@ -1502,48 +1497,80 @@ DeclResult SemaPass::visitGlobalVarDecl(GlobalVarDecl* Decl)
    return Decl;
 }
 
-static CallableDecl* lookupDestructuringOp(SemaPass& SP, QualType tup,
+static CallExpr *FindFunction(SemaPass &SP, DeclarationName Name,
+                              Expression *SelfExpr, ArrayRef<Expression*> Args,
+                              StmtOrDecl DepStmt, bool issueDiags = true)
+{
+   SemaPass::IgnoreDiagsRAII DiagRAII(SP, !issueDiags);
+   auto *Ident = new(SP.Context) IdentifierRefExpr(SelfExpr->getSourceRange(),
+                                                   SelfExpr, Name);
+
+   auto *GetIteratorCall = AnonymousCallExpr::Create(
+       SP.Context, SelfExpr->getSourceRange(), Ident,
+       Args, {});
+
+   auto GetIteratorResult = SP.typecheckExpr(GetIteratorCall, SourceType(), DepStmt);
+   if (!GetIteratorResult) {
+      return nullptr;
+   }
+
+   return cast<CallExpr>(GetIteratorResult.get());
+}
+
+static CallableDecl* lookupDestructuringOp(SemaPass& SP, QualType NeededTuple,
                                            QualType givenTy,
                                            unsigned NumNeededValues, Decl* D,
                                            bool& Ambiguous)
 {
    Ambiguous = false;
 
-   if (!givenTy->isRecordType())
+   DeclarationName Name = SP.getIdentifier("destructure");
+   const MultiLevelLookupResult *Result;
+   if (SP.QC.MultiLevelTypeLookup(Result, givenTy, Name)) {
       return nullptr;
-
-   auto* R = givenTy->asRecordType()->getRecord();
-   CallableDecl* DestructuringOp = nullptr;
-   if (tup) {
-      auto OpName
-          = SP.getContext().getDeclNameTable().getConversionOperatorName(tup);
-
-      DestructuringOp = SP.QC.LookupSingleAs<CallableDecl>(R, OpName);
    }
-   else {
-      for (auto* M : R->getDecls<MethodDecl>()) {
-         if (!M->isConversionOp())
-            continue;
 
-         QualType RetTy = M->getReturnType();
-         if (!RetTy->isTupleType()
-             || RetTy->asTupleType()->getArity() != NumNeededValues)
-            continue;
+   SmallVector<CallableDecl*, 1> FoundDecls;
+   for (auto *Decl : Result->allDecls()) {
+      auto *Fn = dyn_cast<CallableDecl>(Decl);
+      if (!Fn) {
+         continue;
+      }
 
-         if (DestructuringOp) {
-            Ambiguous = true;
-            SP.diagnose(D, err_ambiguous_destructure, D->getSourceRange());
-            SP.diagnose(note_candidate_here, M->getSourceLoc());
-            SP.diagnose(note_candidate_here, DestructuringOp->getSourceLoc());
+      if (Fn->getArgs().size() != 1) {
+         continue;
+      }
 
-            return nullptr;
-         }
+      if (SP.QC.PrepareDeclInterface(Fn)) {
+         continue;
+      }
 
-         DestructuringOp = M;
+      auto *Ret = Fn->getReturnType()->asTupleType();
+      if (!Ret || Ret->getArity() != NumNeededValues) {
+         continue;
+      }
+
+      if (NeededTuple && NeededTuple != Ret) {
+         continue;
+      }
+
+      FoundDecls.push_back(Fn);
+   }
+
+   if (FoundDecls.empty()) {
+      return nullptr;
+   }
+
+   if (FoundDecls.size() > 1) {
+      Ambiguous = true;
+      SP.diagnose(D, err_ambiguous_destructure, D->getSourceRange());
+
+      for (auto *Fn : FoundDecls) {
+         SP.diagnose(note_candidate_here, Fn->getSourceLoc());
       }
    }
 
-   return DestructuringOp;
+   return FoundDecls.front();
 }
 
 static DeclResult finalizeInvalidDestructureDecl(SemaPass& SP,
@@ -1632,8 +1659,9 @@ DeclResult SemaPass::doDestructure(DestructuringDecl* D,
    TupleType* tup = nullptr;
    if (!DeclaredTy->isAutoType()) {
       tup = DeclaredTy->asTupleType();
-      if (!tup)
+      if (!tup) {
          return destructureError();
+      }
    }
    else {
       DeclaredTy = DestructuredTy;
@@ -1657,15 +1685,23 @@ DeclResult SemaPass::doDestructure(DestructuringDecl* D,
 
    if (auto* R = DestructuredTy->asRecordType()) {
       auto S = dyn_cast<StructDecl>(R->getRecord());
-      if (!S)
+      if (!S) {
          return destructureError();
+      }
 
       if (tup) {
          unsigned needed = S->getNumNonStaticFields();
+         if (needed != tup->getArity()) {
+            NoteNumValues = true;
+            return destructureError();
+         }
+
+         unsigned i = 0;
          for (auto F : S->getFields()) {
-            auto next = tup->getContainedType(needed);
-            if (!implicitlyConvertibleTo(F->getType(), next))
-               break;
+            auto next = tup->getContainedType(i++);
+            if (!implicitlyConvertibleTo(F->getType(), next)) {
+               return destructureError();
+            }
          }
 
          if (needed == NumDecls) {
@@ -1691,16 +1727,20 @@ DeclResult SemaPass::doDestructure(DestructuringDecl* D,
          NoteNumValues = true;
       }
    }
-   else if (DestructuredTy->isTupleType()) {
+   else if (auto *FromTup = DestructuredTy->asTupleType()) {
       if (tup) {
          if (!implicitlyConvertibleTo(DestructuredTy,
                                       tup->getCanonicalType())) {
-            return DeclError();
+            return destructureError();
          }
       }
 
-      D->setDestructuringKind(DestructuringDecl::Tuple);
-      return finalize(DestructuredTy->asTupleType());
+      if (FromTup->getArity() == NumDecls) {
+         D->setDestructuringKind(DestructuringDecl::Tuple);
+         return finalize(DestructuredTy->asTupleType());
+      }
+
+      NoteNumValues = true;
    }
 
    return destructureError();
@@ -1832,23 +1872,6 @@ StmtResult SemaPass::visitForStmt(ForStmt* Stmt)
    }
 
    return Stmt;
-}
-
-static CallExpr *FindFunction(SemaPass &SP, DeclarationName Name,
-                              Expression *SelfExpr, ArrayRef<Expression*> Args,
-                              StmtOrDecl DepStmt)
-{
-   auto *Ident = new(SP.Context) IdentifierRefExpr(SelfExpr->getSourceRange(), SelfExpr, Name);
-   auto *GetIteratorCall = AnonymousCallExpr::Create(
-       SP.Context, SelfExpr->getSourceRange(), Ident,
-       Args, {});
-
-   auto GetIteratorResult = SP.typecheckExpr(GetIteratorCall, SourceType(), DepStmt);
-   if (!GetIteratorResult) {
-      return nullptr;
-   }
-
-   return cast<CallExpr>(GetIteratorResult.get());
 }
 
 static TypeResult checkForInStmt(SemaPass& SP, ForInStmt* Stmt)
@@ -3049,6 +3072,9 @@ void SemaPass::visitIfConditions(Statement* Stmt,
              = CondExpr->getExprType()->removeReference()->getDesugaredType();
 
          if (!CondTy->isRecordType() && !CondTy->isExistentialType()) {
+            if (CondTy->isErrorType()) {
+               continue;
+            }
             if (CondTy->isDependentType()) {
                Stmt->setIsTypeDependent(true);
                continue;
@@ -3084,8 +3110,7 @@ void SemaPass::visitIfConditions(Statement* Stmt,
 
          if (!ConformingRec) {
             diagnose(Stmt, err_binding_not_unwrappable, CondExpr->getSourceRange());
-
-            return;
+            continue;
          }
 
          if (QC.PrepareDeclInterface(ConformingRec)) {
@@ -3272,29 +3297,34 @@ static bool checkDuplicates(SemaPass& SP, QualType MatchedVal, MatchStmt* Stmt)
 
 static void
 checkIfExhaustive(SemaPass& SP, MatchStmt* Stmt, QualType MatchedVal,
-                  llvm::DenseMap<EnumCaseDecl*, SourceRange>& FullyCoveredCases)
+                  llvm::DenseMap<NamedDecl*, SourceRange>& FullyCoveredCases)
 {
    if (Stmt->isHasDefault())
       return;
 
-   if (!MatchedVal->isRecordType() || !MatchedVal->isEnum()) {
+   auto *RT = MatchedVal->asRecordType();
+   if (!RT) {
       SP.diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
       return;
    }
 
-   auto R = cast<EnumDecl>(MatchedVal->getRecord());
+   auto *R = MatchedVal->getRecord();
+   if (auto *E = dyn_cast<EnumDecl>(R)) {
+      bool FirstMiss = true;
+      for (auto* Case : E->getCases()) {
+         if (FullyCoveredCases.find(Case) == FullyCoveredCases.end()) {
+            if (FirstMiss) {
+               FirstMiss = false;
+               SP.diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
+            }
 
-   bool FirstMiss = true;
-   for (auto* Case : R->getCases()) {
-      if (FullyCoveredCases.find(Case) == FullyCoveredCases.end()) {
-         if (FirstMiss) {
-            FirstMiss = false;
-            SP.diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
+            SP.diagnose(Stmt, note_missing_case, Case->getName(),
+                        Case->getSourceLoc());
          }
-
-         SP.diagnose(Stmt, note_missing_case, Case->getName(),
-                     Case->getSourceLoc());
       }
+   }
+   else {
+      SP.diagnose(Stmt, err_match_not_exhaustive, Stmt->getSourceLoc());
    }
 }
 
@@ -3325,8 +3355,9 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt* Stmt)
 
    unsigned i = 0;
    bool IntegralSwitch = true;
+   bool Exhaustive = false;
    unsigned NumCases = (unsigned)Stmt->getCases().size();
-   llvm::DenseMap<EnumCaseDecl*, SourceRange> FullyCoveredCases;
+   llvm::DenseMap<NamedDecl*, SourceRange> FullyCoveredCases;
 
    for (auto& C : Stmt->getCases()) {
       bool isNotLast = i != NumCases - 1;
@@ -3391,6 +3422,10 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt* Stmt)
 
             if (!ContainsExpressions) {
                Case = CP->getCaseDecl();
+
+               if (!Case && (MatchType->isStruct() || MatchType->isTupleType())) {
+                  Exhaustive = true;
+               }
             }
 
             IntegralSwitch &= CP->getArgs().empty();
@@ -3430,9 +3465,11 @@ StmtResult SemaPass::visitMatchStmt(MatchStmt* Stmt)
    if (Stmt->isTypeDependent())
       return Stmt;
 
-   checkIfExhaustive(*this, Stmt, MatchType, FullyCoveredCases);
-   checkDuplicates(*this, MatchType, Stmt);
+   if (!Exhaustive) {
+      checkIfExhaustive(*this, Stmt, MatchType, FullyCoveredCases);
+   }
 
+   checkDuplicates(*this, MatchType, Stmt);
    return Stmt;
 }
 
@@ -3495,9 +3532,17 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 {
    auto matchType = MatchVal->getExprType();
 
-   auto result = typecheckExpr(Expr->getExpr(), matchType, Expr);
-   if (!result)
+   bool hardRequirement = false;
+   if (auto *Ident = dyn_cast<IdentifierRefExpr>(Expr->getExpr())) {
+      if (Ident->hasLeadingDot()) {
+         hardRequirement = true;
+      }
+   }
+
+   auto result = typecheckExpr(Expr->getExpr(), matchType, Expr, hardRequirement);
+   if (!result) {
       return ExprError();
+   }
 
    result = getRValue(Expr, result.get());
    if (!result) {
@@ -3525,8 +3570,8 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
 
          casePattern = CasePattern::Create(
              Context, Expr->getSourceRange(), CasePattern::K_EnumOrStruct,
-             Call->getParentExpr(), EC->getDeclName().getIdentifierInfo(),
-             resultVec);
+             BuiltinExpr::Create(Context, Context.getMetaType(EC->getRecord()->getType())),
+             EC->getDeclName().getIdentifierInfo(), resultVec);
       }
    }
 
@@ -3536,11 +3581,10 @@ ExprResult SemaPass::visitExpressionPattern(ExpressionPattern* Expr,
    }
 
    auto caseVal = Expr->getExpr()->getExprType();
-
    auto* MatchII = &Context.getIdentifiers().get("~=");
    auto MatchName = Context.getDeclNameTable().getInfixOperatorName(*MatchII);
-   auto *MatchFnExpr = FindFunction(*this,  MatchName, MatchVal,
-                                    Expr->getExpr(), Expr);
+   auto *MatchFnExpr = FindFunction(*this,  MatchName, Expr->getExpr(),
+                                    MatchVal, Expr, false);
 
    if (MatchFnExpr) {
       auto *MatchFn = MatchFnExpr->getFunc();
@@ -3871,6 +3915,9 @@ ExprResult SemaPass::visitCasePattern(CasePattern* Expr, Expression* MatchVal)
       if (!ParentRes)
          return ExprError();
 
+      ParentExpr = ParentRes.get();
+      Expr->setParentExpr(ParentExpr);
+
       if (auto Ident = dyn_cast<IdentifierRefExpr>(ParentExpr)) {
          if (Ident->getKind() == IdentifierKind::Namespace) {
             LookupCtx = Ident->getNamespaceDecl();
@@ -3946,6 +3993,7 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
    }
 
    // Check that a return in a fallible initializer returns 'none' or nothing.
+   bool isInitializer = false;
    if (auto Init = dyn_cast<InitDecl>(fn)) {
       if (Init->isFallible()) {
          Stmt->setIsFallibleInitReturn(true);
@@ -3961,6 +4009,8 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
 
          return Stmt;
       }
+
+      isInitializer = true;
    }
 
    QualType declaredReturnType = ApplyCapabilities(fn->getReturnType());
@@ -3978,6 +4028,18 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
 
    // Check that the returned value is compatible with the declared return type.
    if (auto retVal = Stmt->getReturnValue()) {
+      auto NL = dyn_cast<NoneLiteral>(Stmt->getReturnValue());
+      if (isInitializer && NL) {
+         diagnose(Stmt, err_generic_error,
+             "cannot return 'none' from a non-fallible initializer",
+             NL->getSourceRange());
+
+         diagnose(note_generic_note, "did you mean to use 'init?'?",
+             fn->getSourceLoc());
+
+         return Stmt;
+      }
+
       auto result = typecheckExpr(retVal, declaredReturnType, Stmt);
       if (!result) {
          return Stmt;
@@ -4365,7 +4427,27 @@ ExprResult SemaPass::visitTryExpr(TryExpr* Expr)
    if (!Res)
       return ExprError();
 
-   if (!TSR.containsThrowingCall()) {
+   Expr->setExpr(Res.get());
+
+   bool foundThrowingCall = false;
+   visitSpecificStatement<CallExpr, AnonymousCallExpr>([&](Expression *E) {
+      if (auto *Call = dyn_cast<CallExpr>(E)) {
+         if (Call->getFunc()->throws()) {
+            foundThrowingCall = true;
+            return false;
+         }
+      }
+      if (auto *Call = dyn_cast<AnonymousCallExpr>(E)) {
+         if (Call->getFunctionType()->throws()) {
+            foundThrowingCall = true;
+            return false;
+         }
+      }
+
+     return true;
+   }, Expr->getExpr());
+
+   if (!foundThrowingCall) {
       diagnose(Expr, err_try_without_call_to_throwing_fn,
                Expr->getExpr()->getSourceRange());
    }
@@ -4373,10 +4455,17 @@ ExprResult SemaPass::visitTryExpr(TryExpr* Expr)
    switch (Expr->getKind()) {
    case TryExpr::Normal: {
       // 'try' may only appear in an exhaustive 'do' statement or in a
-      // throwing function
-      if (DoScopeStack.empty() || !DoScopeStack.back()) {
-         auto Fn = getCurrentFun();
-         if (!Fn->throws()) {
+      // throwing function.
+      if (!getCurrentFun()->throws()) {
+         bool foundCatchAll = false;
+         for (int i = DoScopeStack.size() - 1; i >= 0; --i) {
+            if (DoScopeStack[i]) {
+               foundCatchAll = true;
+               break;
+            }
+         }
+
+         if (!foundCatchAll) {
             diagnose(Expr, err_try_in_non_throwing_fn, Expr->getSourceRange());
          }
       }
@@ -4394,23 +4483,13 @@ ExprResult SemaPass::visitTryExpr(TryExpr* Expr)
          diagnose(Expr, err_no_builtin_decl, Expr->getSourceLoc(),
                   /*try?*/ 11);
 
-         return ExprError();
+         Expr->setExprType(Expr->getExpr()->getExprType());
+      }
+      else {
+         QualType ExprTy = getOptionOf(Expr->getExpr()->getExprType(), Expr);
+         Expr->setExprType(ExprTy);
       }
 
-      QualType ExprTy = Expr->getExpr()->getExprType();
-      sema::TemplateArgument Arg(Opt->getTemplateParams().front(), ExprTy,
-                                 Expr->getSourceLoc());
-
-      auto TemplateArgs = sema::FinalTemplateArgumentList::Create(Context, Arg);
-      auto Inst = InstantiateRecord(Expr->getSourceLoc(), Opt, TemplateArgs);
-
-      QualType ResultTy;
-      if (Inst)
-         ResultTy = Context.getRecordType(Inst);
-      else
-         ResultTy = Context.getRecordType(Opt);
-
-      Expr->setExprType(ResultTy);
       break;
    }
    }
@@ -5434,12 +5513,13 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr* Expr)
             {
             }
 
-            void HandleDiagnostic(const Diagnostic& Diag) override
+            bool HandleDiagnostic(const Diagnostic& Diag) override
             {
                auto S
                    = StringLiteral::Create(SP.getContext(), SR, Diag.getMsg());
 
                elements.push_back(S);
+               return false;
             }
          };
 

@@ -819,8 +819,6 @@ void CandidateSet::diagnoseAmbiguousCandidates(SemaPass& SP, Statement* Caller)
                      makeFakeSourceLoc(*this, FuncName, Cand));
       }
       else {
-         SP.diagnose(Caller, note_generic_note, Cand.getFunc()->getFullName(),
-             Cand.getSourceLoc());
          SP.diagnose(Caller, note_candidate_here, Cand.getSourceLoc());
       }
    }

@@ -94,6 +94,7 @@ QueryResult ParseModuleFileQuery::run()
 
       if (policy && policy != Mod) {
          Mod->getDecl()->addImportedModule(policy);
+         Mod->addImport(policy);
       }
    }
    else {
@@ -212,6 +213,7 @@ QueryResult ParseMainSourceFileQuery::run()
 
       if (policy && policy != Mod) {
          Mod->getDecl()->addImportedModule(policy);
+         Mod->addImport(policy);
       }
    }
    else {
