@@ -975,21 +975,6 @@ static bool HandleFoundDecl(DeclContext* Ctx, DeclarationName Name,
       return true;
    }
 
-   // If we found a using declaration, resolve it.
-   if (auto* U = dyn_cast<UsingDecl>(Result.front())) {
-      SmallVector<NamedDecl*, 2> FoundDecls;
-      if (QC.ResolveUsing(U, &FoundDecls)) {
-         return true;
-      }
-
-      for (auto* ND : FoundDecls) {
-         // FIXME
-         Data.Result.addResult(DeclContextLookupResult(ND));
-      }
-
-      return false;
-   }
-
    Data.Result.addResult(Result);
    return false;
 }

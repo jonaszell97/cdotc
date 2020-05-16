@@ -721,19 +721,6 @@ def ResolveImport : VoidQuery {
     ignoreCircularDependency = true
 }
 
-/// Resolve a `using` declaration.
-def ResolveUsing : VoidQuery {
-    parameters = [
-        // The using declaration to resolve.
-        QueryParam<"U", "ast::UsingDecl*">,
-
-        // If not null, used declarations are added to this vector.
-        QueryParam<"FoundDecls", "llvm::SmallVectorImpl<ast::NamedDecl*>*", "nullptr", true>
-    ]
-
-    ignoreCircularDependency = true
-}
-
 /// Resolve a `static if` declaration.
 def ResolveStaticIf : Query<"ast::Decl*"> {
     parameters = [

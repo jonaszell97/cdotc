@@ -292,8 +292,6 @@ bool DumperImpl::visitNamespaceDecl(NamespaceDecl* stmt)
 
 bool DumperImpl::visitUnittestDecl(UnittestDecl* decl) { return true; }
 
-bool DumperImpl::visitUsingDecl(UsingDecl* stmt) { return true; }
-
 bool DumperImpl::visitModuleDecl(ModuleDecl* stmt) { return true; }
 
 bool DumperImpl::visitImportDecl(ImportDecl* stmt) { return true; }

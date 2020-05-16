@@ -440,7 +440,6 @@ class cdot::ConformanceResolver {
    bool PrepareMacros(DeclContext *DC);
    bool PrepareStaticDecls(DeclContext *DC);
    bool PrepareImports(DeclContext *DC);
-   bool PrepareUsings(DeclContext *DC);
    bool PrepareImplicitDecls(DeclContext *DC);
 
    bool FindDependencies(RecordDecl *R, UncheckedConformance &baseConf);
@@ -2737,16 +2736,6 @@ bool ConformanceResolver::PrepareImports(DeclContext *DC)
    return fail;
 }
 
-bool ConformanceResolver::PrepareUsings(DeclContext *DC)
-{
-   auto fail = false;
-   for (auto* Decl : DC->getDecls<UsingDecl>()) {
-      fail |= QC.ResolveUsing(Decl);
-   }
-
-   return fail;
-}
-
 bool ConformanceResolver::PrepareImplicitDecls(DeclContext *DC)
 {
    auto *R = dyn_cast<RecordDecl>(DC);
@@ -2797,10 +2786,6 @@ bool ConformanceResolver::FindDeclContexts(DeclContext *DC, bool includeFunction
 
    auto *Rec = dyn_cast<RecordDecl>(DC);
    if (!Rec) {
-      if (PrepareUsings(DC)) {
-         return true;
-      }
-
       QC.Sema->updateLookupLevel(DC, LookupLevel::Complete);
    }
 

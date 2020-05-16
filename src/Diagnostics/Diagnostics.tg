@@ -117,6 +117,7 @@ def err_declared_with_definition : Error<"'declare'd statements may not have a d
 
 def err_bad_extern_kind : Error<"unknown extern kind '$0'">
 def err_import_not_at_begin : Error<"'import' statements may only appear at the beginning of a file">
+def err_module_must_be_imported : Error<"submodule '$0' must be explicitly imported">
 
 def err_labeled_args_last : Error<"labeled arguments must come last in a function call">
 

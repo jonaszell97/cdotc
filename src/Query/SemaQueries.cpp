@@ -214,75 +214,8 @@ QueryResult ExpandMacroDeclQuery::run()
    return finish(Result.getDecl());
 }
 
-QueryResult ResolveUsingQuery::run()
-{
-   finish();
-
-   const MultiLevelLookupResult* LookupRes;
-   if (QC.NestedNameLookup(
-           LookupRes, U->getDeclContext(), U->getNestedImportName(),
-           DefaultLookupOpts | LookupOpts::IssueDiag, U->getSourceLoc())) {
-      return fail();
-   }
-
-   if (U->isWildcardImport()) {
-      if (LookupRes->size() != 1 || LookupRes->front().size() != 1) {
-         QC.Sema->diagnose(U, err_using_target_ambiguous, U->getSourceRange());
-
-         NamedDecl* Cand1 = LookupRes->front().front();
-         NamedDecl* Cand2;
-
-         if (LookupRes->size() == 1) {
-            Cand2 = LookupRes->front()[1];
-         }
-         else {
-            Cand2 = (*LookupRes)[1].front();
-         }
-
-         QC.Sema->diagnose(note_candidate_here, Cand1->getSourceLoc());
-         QC.Sema->diagnose(note_candidate_here, Cand2->getSourceLoc());
-
-         return finish(DoneWithError);
-      }
-
-      NamedDecl* Target = LookupRes->front().front();
-      if (!isa<DeclContext>(Target)) {
-         QC.Sema->diagnose(U, err_cannot_lookup_member_in, Target,
-                           Target->getDeclName());
-
-         return finish(DoneWithError);
-      }
-
-      if (auto* I = dyn_cast<ImportDecl>(Target)) {
-         Target = I->getImportedModule()->getDecl();
-      }
-
-      LOG(UsingStatements, "made ", Target->getFullName(), " visible in ",
-          U->getDeclContext()->getNameAsString());
-
-      QC.Sema->makeDeclsAvailableIn(*U->getDeclContext(),
-                                    *cast<DeclContext>(Target));
-   }
-   else {
-      for (NamedDecl* ND : LookupRes->allDecls()) {
-         LOG(UsingStatements, "made ", ND->getFullName(), " visible in ",
-             U->getDeclContext()->getNameAsString());
-
-         QC.Sema->makeDeclAvailable(*U->getDeclContext(), ND);
-
-         if (FoundDecls) {
-            FoundDecls->push_back(ND);
-         }
-      }
-   }
-
-   return finish();
-}
-
 QueryResult ResolveImportQuery::run()
 {
-   finish();
-
    QC.CI.getModuleMgr().ImportModule(I);
 
    auto* Mod = I->getImportedModule();
@@ -307,6 +240,14 @@ QueryResult ResolveImportQuery::run()
 
    bool Valid = true;
    for (auto& Name : I->getNamedImports()) {
+      if (Name.isStr("self")) {
+         I->setName(Mod->getName());
+         I->addImportedModule(Mod);
+         QC.Sema->makeDeclAvailable(*I->getDeclContext(), I, false, true);
+
+         continue;
+      }
+
       const SingleLevelLookupResult* LookupRes;
       if (QC.LookupFirst(LookupRes, Mod->getDecl(), Name)) {
          return fail();
@@ -324,7 +265,7 @@ QueryResult ResolveImportQuery::run()
          LOG(ImportStatements, "imported ", ND->getFullName(), " into ",
              I->getDeclContext()->getNameAsString());
 
-         QC.Sema->makeDeclAvailable(*I->getDeclContext(), ND);
+         QC.Sema->makeDeclAvailable(*I->getDeclContext(), ND, false, true);
 
          if (FoundDecls) {
             FoundDecls->push_back(ND);
@@ -1413,7 +1354,6 @@ QueryResult PrepareDeclInterfaceQuery::run()
       PREPARE_DECL(Compound)
       PREPARE_DECL(Module)
    case Decl::ImportDeclID:
-   case Decl::UsingDeclID:
    case Decl::LocalVarDeclID:
    case Decl::MacroDeclID:
    case Decl::MacroExpansionDeclID:

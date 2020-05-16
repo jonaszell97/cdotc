@@ -597,7 +597,6 @@ private:
    ParseResult parseNextStmt(bool AllowBracedBlock = true);
 
    ParseResult parseNamespaceDecl();
-   ParseResult parseUsingDecl();
    ParseResult parseModuleDecl();
    ParseResult parseImportDecl();
 

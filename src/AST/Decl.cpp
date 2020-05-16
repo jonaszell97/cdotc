@@ -201,44 +201,6 @@ void ConstraintSet::print(llvm::raw_ostream& OS) const
    }
 }
 
-UsingDecl::UsingDecl(SourceRange Loc, AccessSpecifier Access,
-                     DeclarationName Name,
-                     llvm::ArrayRef<DeclarationName> NestedImportName,
-                     bool wildCardImport)
-    : NamedDecl(UsingDeclID, Access, Name), Loc(Loc),
-      IsWildCard(wildCardImport),
-      NumSpecifierNames((unsigned)NestedImportName.size())
-{
-   std::copy(NestedImportName.begin(), NestedImportName.end(),
-             getTrailingObjects<DeclarationName>());
-}
-
-UsingDecl* UsingDecl::Create(ASTContext& C, SourceRange Loc,
-                             AccessSpecifier Access, DeclarationName Name,
-                             llvm::ArrayRef<DeclarationName> NestedImportName,
-                             bool wildCardImport)
-{
-   void* Mem
-       = C.Allocate(totalSizeToAlloc<DeclarationName>(NestedImportName.size()),
-                    alignof(UsingDecl));
-
-   return new (Mem)
-       UsingDecl(Loc, Access, Name, NestedImportName, wildCardImport);
-}
-
-UsingDecl::UsingDecl(EmptyShell, unsigned N)
-    : NamedDecl(UsingDeclID, AccessSpecifier::Default, DeclarationName()),
-      IsWildCard(false), NumSpecifierNames(N)
-{
-}
-
-UsingDecl* UsingDecl::CreateEmpty(ASTContext& C, unsigned N)
-{
-   void* Mem
-       = C.Allocate(totalSizeToAlloc<DeclarationName>(N), alignof(UsingDecl));
-   return new (Mem) UsingDecl(EmptyShell(), N);
-}
-
 ImportDecl::ImportDecl(SourceRange Loc, AccessSpecifier Access,
                        llvm::ArrayRef<DeclarationName> moduleName,
                        llvm::ArrayRef<DeclarationName> namedImports,

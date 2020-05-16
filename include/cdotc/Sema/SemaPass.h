@@ -131,11 +131,13 @@ public:
 
    /// Make a declaration visible in a context.
    void makeDeclAvailable(DeclContext& Dst, NamedDecl* Decl,
-                          bool IgnoreRedecl = false);
+                          bool IgnoreRedecl = false,
+                          bool IsImport = false);
 
    /// Make a declaration visible in a context under a specified name.
    void makeDeclAvailable(DeclContext& Dst, DeclarationName Name,
-                          NamedDecl* Decl, bool IgnoreRedecl = false);
+                          NamedDecl* Decl, bool IgnoreRedecl = false,
+                          bool IsImport = false);
 
    /// Make all declarations of `Src` visible in `Dst`.
    void makeDeclsAvailableIn(DeclContext& Dst, DeclContext& Src,
@@ -246,7 +248,6 @@ public:
 
    void ActOnDecl(DeclContext* DC, Decl* D);
    void ActOnImportDecl(DeclContext* DC, ImportDecl* D);
-   void ActOnUsingDecl(DeclContext* DC, UsingDecl* D);
 
    void ActOnRecordDecl(DeclContext* DC, RecordDecl* R);
    void ActOnStructDecl(DeclContext* DC, StructDecl* S);

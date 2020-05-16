@@ -117,7 +117,6 @@ CDOT_KEYWORD(match)
 #endif
 
 #ifdef CDOT_SOFT_KEYWORD
-   CDOT_SOFT_KEYWORD(using)
    CDOT_SOFT_KEYWORD(read)
    CDOT_SOFT_KEYWORD(write)
    CDOT_SOFT_KEYWORD(nonmutating)

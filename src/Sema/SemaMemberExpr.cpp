@@ -344,6 +344,8 @@ static DeclContext *checkNamespaceRef(SemaPass& SP, IdentifierRefExpr* Expr)
       return nullptr;
    }
 
+   bool IsBaseExpr = !ParentExpr->getParentExpr();
+
    if (auto* Ident = dyn_cast<IdentifierRefExpr>(ParentExpr->ignoreParens())) {
       Ident->setAllowNamespaceRef(true);
    }
@@ -368,9 +370,18 @@ static DeclContext *checkNamespaceRef(SemaPass& SP, IdentifierRefExpr* Expr)
       switch (ND->getKind()) {
       case Decl::NamespaceDeclID:
       case Decl::ImportDeclID:
-      case Decl::ModuleDeclID:
          Ctx = cast<DeclContext>(ND);
          break;
+      case Decl::ModuleDeclID: {
+         auto *Mod = cast<ModuleDecl>(ND);
+         if (IsBaseExpr && !Mod->getModule()->isBaseModule()) {
+            SP.diagnose(err_module_must_be_imported, ND->getDeclName(),
+                        DeclRef->getSourceLoc());
+         }
+
+         Ctx = Mod;
+         break;
+      }
       default:
          break;
       }

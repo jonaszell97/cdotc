@@ -272,8 +272,6 @@ void PrettyPrinterImpl::visitNamespaceDecl(NamespaceDecl* stmt) {}
 
 void PrettyPrinterImpl::visitUnittestDecl(UnittestDecl* decl) {}
 
-void PrettyPrinterImpl::visitUsingDecl(UsingDecl* stmt) {}
-
 void PrettyPrinterImpl::visitModuleDecl(ModuleDecl* stmt) {}
 
 void PrettyPrinterImpl::visitImportDecl(ImportDecl* stmt) {}

@@ -643,20 +643,6 @@ void ASTDeclWriter::visitImportDecl(ImportDecl* D)
       Record.AddDeclarationName(I);
 }
 
-void ASTDeclWriter::visitUsingDecl(UsingDecl* D)
-{
-   visitNamedDecl(D);
-
-   Record.AddSourceRange(D->getSourceRange());
-   Record.push_back(D->isWildcardImport());
-
-   auto Name = D->getNestedImportName();
-   Record[0] = Name.size();
-
-   for (auto I : Name)
-      Record.AddDeclarationName(I);
-}
-
 void ASTDeclWriter::visitVarDecl(VarDecl* D)
 {
    visitNamedDecl(D);

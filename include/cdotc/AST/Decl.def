@@ -42,7 +42,6 @@ CDOT_NAMED_DECL(ModuleDecl)
 CDOT_NAMED_DECL(SourceFileDecl)
 
 CDOT_NAMED_DECL(ImportDecl)
-CDOT_NAMED_DECL(UsingDecl)
 
 CDOT_ABSTRACT(_firstVarDecl)
 CDOT_NAMED_DECL(LocalVarDecl)
