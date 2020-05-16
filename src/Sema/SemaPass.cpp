@@ -232,9 +232,6 @@ void SemaPass::addDeclToContext(DeclContext& Ctx, DeclarationName declName,
    if (declName.isErrorName())
       return;
 
-   if (isa<UsingDecl>(Decl))
-      return addDeclToContext(Ctx, (ast::Decl*)Decl);
-
    auto res = isa<RecordDecl>(&Ctx) ? cast<RecordDecl>(&Ctx)->addDecl(Decl)
                                     : Ctx.addDecl(declName, Decl);
 
@@ -253,18 +250,19 @@ void SemaPass::addDeclToContext(DeclContext& Ctx, NamedDecl* Decl)
 void SemaPass::addDeclToContext(DeclContext& Ctx, Decl* D) { Ctx.addDecl(D); }
 
 void SemaPass::makeDeclAvailable(DeclContext& Dst, NamedDecl* Decl,
-                                 bool IgnoreRedecl)
+                                 bool IgnoreRedecl, bool IsImport)
 {
-   makeDeclAvailable(Dst, Decl->getDeclName(), Decl, IgnoreRedecl);
+   makeDeclAvailable(Dst, Decl->getDeclName(), Decl, IgnoreRedecl, IsImport);
 }
 
 void SemaPass::makeDeclAvailable(DeclContext& Dst, DeclarationName Name,
-                                 NamedDecl* Decl, bool IgnoreRedecl)
+                                 NamedDecl* Decl, bool IgnoreRedecl,
+                                 bool IsImport)
 {
    if (Name.isErrorName())
       return;
 
-   auto Res = Dst.makeDeclAvailable(Name, Decl);
+   auto Res = Dst.makeDeclAvailable(Name, Decl, IsImport);
    if (!IgnoreRedecl && !Decl->isImportedFromClang())
       diagnoseRedeclaration(Dst, Res, Name, Decl);
 }

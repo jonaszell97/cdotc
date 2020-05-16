@@ -234,44 +234,6 @@ public:
    Expression* TypeOrConceptExpr;
 };
 
-class UsingDecl final : public NamedDecl,
-                        llvm::TrailingObjects<UsingDecl, DeclarationName> {
-   UsingDecl(SourceRange Loc, AccessSpecifier Access, DeclarationName Name,
-             llvm::ArrayRef<DeclarationName> NestedImportName,
-             bool wildCardImport);
-
-   UsingDecl(EmptyShell, unsigned N);
-
-   SourceRange Loc;
-   bool IsWildCard;
-   unsigned NumSpecifierNames;
-
-public:
-   static bool classofKind(DeclKind kind) { return kind == UsingDeclID; }
-   static bool classof(Decl const* T) { return classofKind(T->getKind()); }
-
-   static UsingDecl* Create(ASTContext& C, SourceRange Loc,
-                            AccessSpecifier Access, DeclarationName Name,
-                            llvm::ArrayRef<DeclarationName> NestedImportName,
-                            bool wildCardImport);
-
-   static UsingDecl* CreateEmpty(ASTContext& C, unsigned N);
-
-   using TrailingObjects::getTrailingObjects;
-   friend TrailingObjects;
-
-   SourceRange getSourceRange() const { return Loc; }
-   void setSourceRange(SourceRange SR) { Loc = SR; }
-
-   llvm::ArrayRef<DeclarationName> getNestedImportName() const
-   {
-      return {getTrailingObjects<DeclarationName>(), NumSpecifierNames};
-   }
-
-   bool isWildcardImport() const { return IsWildCard; }
-   void setWildcardImport(bool V) { IsWildCard = V; }
-};
-
 class TemplateParamDecl : public NamedDecl {
 public:
    static TemplateParamDecl*

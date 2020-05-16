@@ -326,8 +326,7 @@ bool Parser::skipUntilNextDecl()
       case tok::kw_fileprivate:
          return true;
       case tok::ident:
-         if (currentTok().oneOf(Ident_using, Ident_infix, Ident_prefix,
-                                Ident_postfix)) {
+         if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)) {
             return true;
          }
 
@@ -379,8 +378,7 @@ bool Parser::skipUntilNextDeclOrClosingBrace()
       case tok::kw_fileprivate:
          return true;
       case tok::ident:
-         if (currentTok().oneOf(Ident_using, Ident_infix, Ident_prefix,
-                                Ident_postfix)) {
+         if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)) {
             return true;
          }
 
@@ -2598,9 +2596,6 @@ Parser::ParseArtefactKind Parser::getNextArtefactKind()
    case tok::kw_static_print:
       return K_Decl;
    case tok::ident:
-      if (currentTok().is(Ident_using)) {
-         return K_Decl;
-      }
       if ((currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
            && validOperatorFollows())) {
          return K_Decl;
@@ -5088,10 +5083,6 @@ ParseResult Parser::parseTopLevelDecl()
          return parseMacro();
       }
 
-      if (Tok.is(Ident_using)) {
-         return parseUsingDecl();
-      }
-
       if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
           && validOperatorFollows()) {
          return parseOperatorDecl();
@@ -6178,119 +6169,6 @@ ParseResult Parser::parseNamespaceDecl()
    return NS;
 }
 
-ParseResult Parser::parseUsingDecl()
-{
-   auto UsingLoc = currentTok().getSourceLoc();
-
-   llvm::SmallVector<DeclarationName, 4> declContext;
-   llvm::SmallVector<DeclarationName, 4> importedItems;
-
-   bool First = true;
-   SourceLocation wildCardLoc;
-
-   while (First || lookahead().is(tok::period)) {
-      advance();
-      if (currentTok().is(tok::period))
-         advance();
-
-      if (currentTok().is(tok::open_brace))
-         break;
-
-      if (currentTok().is(tok::times)) {
-         wildCardLoc = currentTok().getSourceLoc();
-         break;
-      }
-      if (!currentTok().is(tok::ident)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                     currentTok().toString(), true, "identifier");
-
-         return skipUntilProbableEndOfStmt();
-      }
-
-      declContext.emplace_back(currentTok().getIdentifierInfo());
-      First = false;
-   }
-
-   SourceLocation LBraceLoc;
-   SourceLocation RBraceLoc;
-
-   if (currentTok().is(tok::open_brace)) {
-      LBraceLoc = currentTok().getSourceLoc();
-
-      if (!expect(tok::ident, tok::times)) {
-         return skipUntilProbableEndOfStmt();
-      }
-
-      while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().is(tok::times)) {
-            wildCardLoc = currentTok().getSourceLoc();
-         }
-         else {
-            importedItems.emplace_back(currentTok().getIdentifierInfo());
-         }
-
-         advance();
-
-         if (currentTok().is(tok::comma))
-            advance();
-      }
-
-      RBraceLoc = currentTok().getSourceLoc();
-   }
-
-   DeclarationName Name;
-   if (lookahead().is(Ident_as)) {
-      if (!importedItems.empty() || wildCardLoc.isValid()) {
-         SP.diagnose(err_invalid_using_alias, currentTok().getSourceLoc());
-      }
-
-      advance();
-      advance();
-
-      if (!currentTok().is(tok::ident)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                     currentTok().toString(), true, "identifier");
-      }
-      else {
-         Name = currentTok().getIdentifierInfo();
-      }
-   }
-   else if (!wildCardLoc) {
-      Name = declContext.back();
-   }
-
-   SourceRange SR(UsingLoc, currentTok().getSourceLoc());
-   if (!importedItems.empty()) {
-      if (wildCardLoc.isValid()) {
-         SP.diagnose(err_import_multiple_with_wildcard, wildCardLoc);
-         importedItems.clear();
-      }
-      else {
-         for (auto& Item : importedItems) {
-            declContext.push_back(Item);
-
-            auto D = UsingDecl::Create(Context, SR, CurDeclAttrs.Access, Item,
-                                       declContext, wildCardLoc.isValid());
-
-            D->setAccessLoc(CurDeclAttrs.AccessLoc);
-
-            ActOnDecl(D);
-            declContext.pop_back();
-         }
-
-         return ParseError();
-      }
-   }
-
-   auto D = UsingDecl::Create(Context, SR, CurDeclAttrs.Access, Name,
-                              declContext, wildCardLoc.isValid());
-
-   D->setAccessLoc(CurDeclAttrs.AccessLoc);
-   ActOnDecl(D);
-
-   return D;
-}
-
 ParseResult Parser::parseModuleDecl()
 {
    assert(currentTok().is(tok::kw_module) && "don't call this otherwise!");
@@ -6341,17 +6219,17 @@ ParseResult Parser::parseImportDecl()
    else if (currentTok().is(tok::open_brace)) {
       advance();
       while (!currentTok().is(tok::close_brace)) {
-         if (!currentTok().is(tok::ident)) {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                        currentTok().toString(), true, "identifier");
-
-            advance();
-            continue;
+         if (currentTok().is(tok::kw_self)) {
+            ImportedNames.push_back(&Idents.get("self"));
+         }
+         else {
+            auto Name = parseDeclName(false);
+            if (Name.first && Name.first.isSimpleIdentifier()) {
+               ImportedNames.push_back(Name.first.getIdentifierInfo());
+            }
          }
 
-         ImportedNames.push_back(currentTok().getIdentifierInfo());
          advance();
-
          if (currentTok().is(tok::comma))
             advance();
       }

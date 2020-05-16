@@ -222,7 +222,6 @@ bool Decl::hasTrailingObjects() const
    case Decl::AliasDeclID:
    case Decl::MacroDeclID:
    case Decl::ImportDeclID:
-   case Decl::UsingDeclID:
    case Decl::ExtensionDeclID:
    case Decl::FunctionDeclID:
    case Decl::MethodDeclID:
@@ -866,7 +865,6 @@ static bool shouldAddToOuterContext(DeclContext* This, NamedDecl* Decl)
 
    switch (Decl->getKind()) {
    case Decl::ImportDeclID:
-   case Decl::UsingDeclID:
       return false;
    case Decl::MacroDeclID:
       // fileprivate macros are not visible in any other file.
@@ -878,7 +876,8 @@ static bool shouldAddToOuterContext(DeclContext* This, NamedDecl* Decl)
 }
 
 DeclContext::AddDeclResultKind
-DeclContext::makeDeclAvailable(DeclarationName Name, NamedDecl* decl)
+DeclContext::makeDeclAvailable(DeclarationName Name, NamedDecl* decl,
+                               bool IsImport)
 {
    if (!Name) {
       return ADR_Success;
@@ -909,7 +908,7 @@ DeclContext::makeDeclAvailable(DeclarationName Name, NamedDecl* decl)
       registerVisibleDeclChange();
    }
 
-   if (isTransparent() && shouldAddToOuterContext(this, decl)) {
+   if (!IsImport && isTransparent() && shouldAddToOuterContext(this, decl)) {
       return parentCtx->makeDeclAvailable(Name, decl);
    }
 

@@ -377,9 +377,6 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
       case Decl::ImportDeclID:
          msg += "import declaration";
          break;
-      case Decl::UsingDeclID:
-         msg += "using declaration";
-         break;
       default:
          llvm_unreachable("missing diagnostic specifier!");
       }

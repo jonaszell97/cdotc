@@ -1748,8 +1748,6 @@ protected:
 
    void visitImportDecl(ImportDecl* D) {}
 
-   void visitUsingDecl(UsingDecl* D) {}
-
    void visitVarDecl(VarDecl* D) { visitType(D->getType()); }
 
    void visitLocalVarDecl(LocalVarDecl* D) { visitVarDecl(D); }

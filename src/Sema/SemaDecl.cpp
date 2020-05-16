@@ -455,9 +455,6 @@ void SemaPass::ActOnDecl(DeclContext* DC, Decl* D)
    case Decl::ImportDeclID:
       ActOnImportDecl(DC, cast<ImportDecl>(D));
       break;
-   case Decl::UsingDeclID:
-      ActOnUsingDecl(DC, cast<UsingDecl>(D));
-      break;
    case Decl::SubscriptDeclID:
       ActOnSubscriptDecl(DC, cast<SubscriptDecl>(D));
       break;
@@ -823,12 +820,6 @@ void SemaPass::ActOnMixinDecl(DeclContext* DC, MixinDecl* D)
 void SemaPass::ActOnImportDecl(DeclContext* DC, ImportDecl* D)
 {
    addDeclToContext(*DC, D);
-   checkDefaultAccessibility(D);
-}
-
-void SemaPass::ActOnUsingDecl(DeclContext* DC, UsingDecl* D)
-{
-   addDeclToContext(*DC, (Decl*)D);
    checkDefaultAccessibility(D);
 }
 

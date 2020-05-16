@@ -292,7 +292,7 @@ void ModuleManager::ImportPrelude(Module* IntoMod)
 
 void ModuleManager::ImportModule(ImportDecl* I)
 {
-   auto *MainMod = CI.getCompilationModule();
+   auto *MainMod = I->getDeclModule()->getBaseModule()->getModule();
    Module *Mod = MainMod->getSubModule(
        I->getQualifiedImportName().front().getIdentifierInfo());
 
@@ -324,7 +324,8 @@ void ModuleManager::ImportModule(ImportDecl* I)
 
    // diagnose circular dependencies
    auto* CurrentMod = I->getDeclContext()->getDeclModule()->getModule();
-   if (Mod->importsModule(CurrentMod)) {
+   if (Mod->getBaseModule() != CurrentMod->getBaseModule()
+   &&  Mod->importsModule(CurrentMod)) {
       Sema.diagnose(I, diag::err_circular_module_dependency,
                     I->getSourceRange(), Mod->getFullName(),
                     CurrentMod->getFullName());

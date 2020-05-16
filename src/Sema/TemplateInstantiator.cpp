@@ -592,7 +592,6 @@ private:
    MacroExpansionStmt* visitMacroExpansionStmt(MacroExpansionStmt* Stmt);
    MacroExpansionDecl* visitMacroExpansionDecl(MacroExpansionDecl* Decl);
 
-   UsingDecl* visitUsingDecl(UsingDecl* node);
    ImportDecl* visitImportDecl(ImportDecl* node);
 
    UnittestDecl* visitUnittestDecl(UnittestDecl* D);
@@ -2550,13 +2549,6 @@ ThrowStmt* InstantiatorImpl::visitThrowStmt(ThrowStmt* node)
 {
    return new (Context)
        ThrowStmt(node->getSourceLoc(), visit(node->getThrownVal()));
-}
-
-UsingDecl* InstantiatorImpl::visitUsingDecl(UsingDecl* node)
-{
-   return UsingDecl::Create(Context, node->getSourceRange(), node->getAccess(),
-                            node->getDeclName(), node->getNestedImportName(),
-                            node->isWildcardImport());
 }
 
 ImportDecl* InstantiatorImpl::visitImportDecl(ImportDecl* node)

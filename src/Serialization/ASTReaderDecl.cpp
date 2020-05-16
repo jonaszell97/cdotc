@@ -694,18 +694,6 @@ void ASTDeclReader::visitImportDecl(ImportDecl* D)
       *Ptr++ = Record.readDeclarationName();
 }
 
-void ASTDeclReader::visitUsingDecl(UsingDecl* D)
-{
-   visitNamedDecl(D);
-
-   D->setSourceRange(ReadSourceRange());
-   D->setWildcardImport(Record.readBool());
-
-   auto* Ptr = D->getTrailingObjects<DeclarationName>();
-   while (NumTrailingObjects--)
-      *Ptr++ = Record.readDeclarationName();
-}
-
 void ASTDeclReader::visitVarDecl(VarDecl* D)
 {
    visitNamedDecl(D);
@@ -1372,9 +1360,6 @@ Decl* ASTReader::ReadDeclRecord(unsigned ID)
       break;
    case DECL_ImportDecl:
       D = ImportDecl::CreateEmpty(C, Record[0]);
-      break;
-   case DECL_UsingDecl:
-      D = UsingDecl::CreateEmpty(C, Record[0]);
       break;
    case DECL_LocalVarDecl:
       D = LocalVarDecl::CreateEmpty(C);

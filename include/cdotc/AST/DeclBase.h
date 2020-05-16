@@ -881,7 +881,8 @@ public:
    [[nodiscard]] AddDeclResultKind makeDeclAvailable(NamedDecl* decl);
 
    [[nodiscard]] AddDeclResultKind makeDeclAvailable(DeclarationName Name,
-                                                     NamedDecl* decl);
+                                                     NamedDecl* decl,
+                                                     bool IsImport = false);
 
    void replaceDecl(Decl* Orig, Decl* Rep);
 

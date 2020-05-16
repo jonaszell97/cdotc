@@ -87,8 +87,6 @@ Module* Module::getSubModule(IdentifierInfo* Name) const
 
 void Module::addImport(Module* D)
 {
-   assert(!D->importsModule(this) && "circular module imports!");
-
    auto* Base = D->getBaseModule();
    if (!Base->getImportedFrom())
       Base->setImportedFrom(this);
