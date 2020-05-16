@@ -430,6 +430,8 @@ public:
    void retainIfNecessary(il::Value* V);
    void releaseIfNecessary(il::Value* V);
 
+   void createFallibleInitReturn(bool isNone);
+
    il::GlobalVariable* GenerateVTable(ClassDecl* C);
    il::GlobalVariable* GeneratePTable(RecordDecl* R, ProtocolDecl* P);
 

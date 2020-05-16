@@ -387,6 +387,12 @@ void BorrowCheckPass::checkOverlappingMemoryUse(const il::Instruction& I,
 
 void BorrowCheckPass::run()
 {
+   if (isa<Initializer>(F)) {
+      if (cast<ast::InitDecl>(ILGen.getDeclForValue(F))->isBaseInitializer()) {
+         return;
+      }
+   }
+
    UA = PM->getAnalysis<UnsafeAnalysis>()->get(F);
 
    computeMemoryAccesses(*F);

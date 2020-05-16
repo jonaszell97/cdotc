@@ -70,6 +70,7 @@ static bool matchingLabels(SemaPass& Sema, CandidateSet& CandSet,
    FuncArgDecl* VariadicArgDecl = nullptr;
 
    bool isSubscript = isa<MethodDecl>(CD) && cast<MethodDecl>(CD)->isSubscript();
+   bool isOperator = CD->isOperator();
    bool CStyleVararg = CD->isCstyleVararg();
    unsigned NumGivenArgs = UnorderedArgs.size();
 
@@ -130,9 +131,10 @@ static bool matchingLabels(SemaPass& Sema, CandidateSet& CandSet,
          return false;
       }
 
-      // Allow missing labels for operator calls.
+      // Allow missing labels for operator & subscript calls.
       if (ArgDecl->getLabel() != nullptr) {
-         if (!isSubscript && !checkImplicitLabel(ArgDecl->getLabel(), Label, ArgVal)) {
+         if (!isSubscript && !isOperator
+         && !checkImplicitLabel(ArgDecl->getLabel(), Label, ArgVal)) {
             Cand.setHasIncompatibleLabel(i, Label);
             return false;
          }

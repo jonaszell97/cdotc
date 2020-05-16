@@ -867,6 +867,10 @@ public:
    /// \return True iff the given type has a default value.
    bool hasDefaultValue(CanType type) const;
 
+   /// Check whether or not two argument conventions are compatible.
+   bool AreConventionsCompatible(ArgumentConvention Needed,
+                                 ArgumentConvention Given) const;
+
    /// Issue all diagnostics encountered so far.
    void issueDiagnostics();
 
@@ -1538,8 +1542,8 @@ public:
    QualType getParentType(Expression* ParentExpr);
 
 private:
-   QualType HandleFieldAccess(Expression* Expr, FieldDecl* F);
-   QualType HandlePropAccess(Expression* Expr, PropDecl* P);
+   QualType HandleFieldAccess(MemberRefExpr* Expr, FieldDecl* F);
+   QualType HandlePropAccess(MemberRefExpr* Expr, PropDecl* P);
 
    Expression* checkCustomDeref(Expression* E, QualType T);
 

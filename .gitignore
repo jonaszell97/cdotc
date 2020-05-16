@@ -11,15 +11,8 @@ CMakeLists.txt.user
 
 StdLib/
 
-src/AST/Attr.inc
-src/AST/Attributes.def
-
-src/Diagnostics/def/backup
-src/Diagnostics/def/Diagnostics.def
-src/Diagnostics/def/parsed
-src/Diagnostics/def/raw
-
-src/Query/Queries.def
-src/Query/Queries.inc
-
+include/cdotc/AST/Attr.inc
+include/cdotc/AST/Attributes.def
+include/cdotc/Diagnostics/Diagnostics.def
+include/cdotc/Query/Inc
 tools/TableGenScripts

@@ -394,8 +394,10 @@ ExprResult SemaPass::visitIfExpr(IfExpr* Expr)
 {
    visitIfConditions(Expr, Expr->getCond());
 
-   auto TrueValRes
-       = visitExpr(Expr, Expr->getTrueVal(), Expr->getContextualType());
+   Expr->getTrueVal()->setContextualType(Expr->getContextualType());
+   Expr->getFalseVal()->setContextualType(Expr->getContextualType());
+
+   auto TrueValRes = getRValue(Expr, Expr->getTrueVal());
    if (!TrueValRes)
       return ExprError();
 
@@ -404,7 +406,7 @@ ExprResult SemaPass::visitIfExpr(IfExpr* Expr)
    auto TrueType = Expr->getTrueVal()->getExprType();
    Expr->setExprType(TrueType);
 
-   auto FalseValRes = visitExpr(Expr, Expr->getFalseVal(), TrueType);
+   auto FalseValRes = getRValue(Expr, Expr->getFalseVal());
    if (!FalseValRes)
       return Expr; // recoverable since the type of the full expression is known
 

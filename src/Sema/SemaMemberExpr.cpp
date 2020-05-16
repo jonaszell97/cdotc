@@ -1817,7 +1817,7 @@ static QualType ReplaceAssociatedTypes(SemaPass &Sema, QualType T,
    return T;
 }
 
-QualType SemaPass::HandleFieldAccess(Expression* Expr, FieldDecl* F)
+QualType SemaPass::HandleFieldAccess(MemberRefExpr* Expr, FieldDecl* F)
 {
    if (QC.PrepareDeclInterface(F)) {
       return QualType();
@@ -1868,10 +1868,44 @@ QualType SemaPass::HandleFieldAccess(Expression* Expr, FieldDecl* F)
    }
 }
 
-QualType SemaPass::HandlePropAccess(Expression* Expr, PropDecl* P)
+static bool UseBackingField(RecordDecl *CurDecl, RecordDecl *SelfDecl)
+{
+   if (CurDecl == SelfDecl)
+      return true;
+
+   auto *CurClass = dyn_cast<ClassDecl>(CurDecl);
+   auto *SelfClass = dyn_cast<ClassDecl>(SelfDecl);
+
+   if (!CurClass || !SelfClass)
+      return false;
+
+   return SelfClass->isBaseClassOf(CurClass);
+}
+
+QualType SemaPass::HandlePropAccess(MemberRefExpr* Expr, PropDecl* P)
 {
    if (QC.PrepareDeclInterface(P)) {
       return QualType();
+   }
+
+   // In an initializer, the name of a synthesized property actually refers
+   // to the backing field.
+   if (P->isSynthesized()) {
+      if (auto *M = dyn_cast_or_null<MethodDecl>(getCurrentFun())) {
+         if (UseBackingField(M->getRecord(), P->getRecord())) {
+            string backingFieldName = "_";
+            backingFieldName += P->getName();
+
+            DeclarationName DN
+                = &Context.getIdentifiers().get(backingFieldName);
+
+            auto* F = P->getRecord()->lookupSingle<FieldDecl>(DN);
+            if (F) {
+               Expr->setMemberDecl(F);
+               return HandleFieldAccess(Expr, F);
+            }
+         }
+      }
    }
 
    QualType ResultTy;
@@ -2422,7 +2456,7 @@ void SemaPass::checkAccessibility(NamedDecl* ND, StmtOrDecl SOD)
          }
 
          auto SubClass = dyn_cast<ClassDecl>(Curr);
-         if (SubClass && C->isBaseClassOf(SubClass)) {
+         if (SubClass && (C == SubClass || C->isBaseClassOf(SubClass))) {
             return;
          }
       }
