@@ -582,6 +582,9 @@ private:
       return Loc;
    }
 
+   std::pair<DeclarationName, SourceRange>
+   parseDeclName(bool allowUnderscore = true, bool emitDiagnostics = true);
+
    void maybeParseConvention(ArgumentConvention& Conv, SourceLocation& Loc);
 
    void parseDeclConstraints(std::vector<ParsedConstraint>& Constraints);
@@ -606,7 +609,8 @@ private:
                             bool skipKeywords = false,
                             bool ignoreDeclAttrs = false);
 
-   ParseResult parseDestructuringDecl(bool isLet, bool isForIn = false);
+   ParseResult parseDestructuringDecl(bool isLet, bool isForIn = false,
+                                      bool allowTrailingClosure = true);
 
    ParseResult parseKeyword();
 

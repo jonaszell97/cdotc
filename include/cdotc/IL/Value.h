@@ -110,6 +110,7 @@ protected:
       bool Verified : 1;
       bool Canonicalized : 1;
       bool Optimized : 1;
+      bool IsDeinit : 1;
    };
 
    struct ConstantBits {

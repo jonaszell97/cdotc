@@ -61,6 +61,9 @@ void appendToPath(llvm::SmallVectorImpl<char>& Path, llvm::StringRef Append);
 void appendToPath(llvm::SmallVectorImpl<char>& Path, const llvm::Twine& Append);
 void appendToPath(std::string& Path, const llvm::Twine& Append);
 
+std::unique_ptr<llvm::raw_fd_ostream> openTmpFile(llvm::StringRef Ext,
+                                                  std::string *FileName = nullptr);
+
 std::string getTmpFileName(llvm::StringRef Ext);
 std::string exec(const std::string& cmd);
 

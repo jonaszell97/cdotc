@@ -216,9 +216,7 @@ QueryResult GenerateILForDeclQuery::run()
    }
 
    if (auto* InnerDC = dyn_cast<DeclContext>(D)) {
-      if (QC.GenerateILForContext(InnerDC)) {
-         return fail();
-      }
+      (void) QC.GenerateILForContext(InnerDC);
    }
 
    return finish();
@@ -227,10 +225,6 @@ QueryResult GenerateILForDeclQuery::run()
 QueryResult GenerateILForContextQuery::run()
 {
    if (QC.TypeCheckDeclContext(DC)) {
-      return fail();
-   }
-
-   if (QC.Sema->encounteredError()) {
       return fail();
    }
 

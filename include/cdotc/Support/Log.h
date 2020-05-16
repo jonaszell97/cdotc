@@ -68,6 +68,9 @@ enum LogKind : uint64_t {
    /// \brief Log total allocated memory.
    AllocatedMemory = 0x4000,
 
+   /// \brief Log protocol specificity.
+   ProtocolSpecificity = 0x8000,
+
    /// \brief Log variable declarations,
    Variables = LocalVariables | GlobalVariables,
 

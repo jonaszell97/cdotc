@@ -30,8 +30,6 @@ class ASTDeclWriter : public ASTVisitor<ASTDeclWriter> {
    void WriteInstantiationInfo(ASTRecordWriter& Record,
                                const InstantiationInfo<T>& II, NamedDecl* Inst);
 
-   void WriteDeclConstraint(const DeclConstraint& C);
-
 public:
    ASTDeclWriter(ASTContext& Context, ASTWriter& Writer,
                  ASTWriter::RecordData& Record)
@@ -201,26 +199,6 @@ void ASTDeclWriter::visitDecl(Decl* D)
    }
 }
 
-void ASTDeclWriter::WriteDeclConstraint(const DeclConstraint& C)
-{
-   Record.push_back(C.getKind());
-   Record.AddTypeRef(C.getConstrainedType());
-
-   switch (C.getKind()) {
-   case DeclConstraint::Concept:
-      Record.AddDeclRef(C.getConcept());
-      break;
-   case DeclConstraint::TypeEquality:
-   case DeclConstraint::TypeInequality:
-   case DeclConstraint::TypePredicate:
-   case DeclConstraint::TypePredicateNegated:
-      Record.AddTypeRef(C.getType());
-      break;
-   default:
-      break;
-   }
-}
-
 void ASTDeclWriter::visitNamedDecl(NamedDecl* D)
 {
    visitDecl(D);
@@ -230,11 +208,7 @@ void ASTDeclWriter::visitNamedDecl(NamedDecl* D)
    Record.AddDeclarationName(D->getDeclName());
 
    auto DeclConstraints = Context.getExtConstraints(D);
-   Record.push_back(DeclConstraints->size());
-
-   for (auto& C : *DeclConstraints) {
-      WriteDeclConstraint(*C);
-   }
+   Writer.WriteConstraintSet(DeclConstraints, Record.getRecordData());
 
    auto Attrs = D->getAttributes();
    Record.AddAttributes(Attrs);
@@ -909,10 +883,11 @@ void ASTDeclWriter::visitProtocolDecl(ProtocolDecl* D)
 {
    visitRecordDecl(D);
 
-   uint8_t flags = 0;
-   flags |= (D->isAny() << 0);
-   flags |= (D->hasAssociatedTypeConstraint() << 1);
-   flags |= (D->hasStaticRequirements() << 2);
+   uint64_t flags = 0;
+   flags |= ((uint64_t)D->isAny() << 0u);
+   flags |= ((uint64_t)D->hasAssociatedTypeConstraint() << 1u);
+   flags |= ((uint64_t)D->hasStaticRequirements() << 2u);
+   flags |= ((uint64_t)D->getSpecificity() << 3u);
 
    Record.push_back(flags);
 }

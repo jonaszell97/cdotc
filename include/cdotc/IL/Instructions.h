@@ -394,6 +394,9 @@ public:
 
    bool isTaggedDeinit() const;
 
+   bool isDeinitCall() const { return InstBits.IsDeinit; }
+   void setDeinitCall(bool V) { InstBits.IsDeinit = V; }
+
 protected:
    CallInst(TypeID id, Context& Ctx, ArrayRef<Value*> args, BasicBlock* parent);
 

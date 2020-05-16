@@ -965,43 +965,43 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl* M, RecordDecl* R)
       unsigned i = 0;
 
       if (!numFields) {
-         Builder.CreateRet(Builder.GetTrue());
-         return;
+         res = Builder.GetTrue();
       }
+      else {
+         llvm::SmallVector<BasicBlock*, 8> CompBlocks;
+         while (i < numFields) {
+            CompBlocks.push_back(Builder.CreateBasicBlock("structcmp"));
+            ++i;
+         }
 
-      llvm::SmallVector<BasicBlock*, 8> CompBlocks;
-      while (i < numFields) {
-         CompBlocks.push_back(Builder.CreateBasicBlock("structcmp"));
-         ++i;
+         CompBlocks.push_back(Builder.CreateBasicBlock("structcmp.neq"));
+         auto EqBB = Builder.CreateBasicBlock("structcmp.eq");
+
+         for (i = 0; i < numFields; ++i) {
+            Builder.CreateBr(CompBlocks[i]);
+            Builder.SetInsertPoint(CompBlocks[i], true);
+
+            auto val1 = Builder.CreateStructGEP(Self, i);
+            auto val2 = Builder.CreateStructGEP(Other, i);
+
+            auto eq = CreateEqualityComp(Builder.CreateLoad(val1),
+                                         Builder.CreateLoad(val2));
+
+            Builder.CreateCondBr(eq, EqBB, CompBlocks[i + 1]);
+         }
+
+         auto MergeBB = Builder.CreateBasicBlock("structcmp.merge");
+         MergeBB->addBlockArg(Context.getBoolTy());
+
+         Builder.SetInsertPoint(EqBB, true);
+         Builder.CreateBr(MergeBB, {Builder.GetTrue()});
+
+         Builder.SetInsertPoint(CompBlocks.back(), true);
+         Builder.CreateBr(MergeBB, {Builder.GetFalse()});
+
+         Builder.SetInsertPoint(MergeBB);
+         res = MergeBB->getBlockArg(0);
       }
-
-      CompBlocks.push_back(Builder.CreateBasicBlock("structcmp.neq"));
-      auto EqBB = Builder.CreateBasicBlock("structcmp.eq");
-
-      for (i = 0; i < numFields; ++i) {
-         Builder.CreateBr(CompBlocks[i]);
-         Builder.SetInsertPoint(CompBlocks[i], true);
-
-         auto val1 = Builder.CreateStructGEP(Self, i);
-         auto val2 = Builder.CreateStructGEP(Other, i);
-
-         auto eq = CreateEqualityComp(Builder.CreateLoad(val1),
-                                      Builder.CreateLoad(val2));
-
-         Builder.CreateCondBr(eq, EqBB, CompBlocks[i + 1]);
-      }
-
-      auto MergeBB = Builder.CreateBasicBlock("structcmp.merge");
-      MergeBB->addBlockArg(Context.getBoolTy());
-
-      Builder.SetInsertPoint(EqBB, true);
-      Builder.CreateBr(MergeBB, {Builder.GetTrue()});
-
-      Builder.SetInsertPoint(CompBlocks.back(), true);
-      Builder.CreateBr(MergeBB, {Builder.GetFalse()});
-
-      Builder.SetInsertPoint(MergeBB);
-      res = MergeBB->getBlockArg(0);
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       res = CreateEnumComp(Self, Other);

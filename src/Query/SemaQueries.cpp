@@ -828,6 +828,10 @@ QueryResult VerifyConstraintQuery::run()
 
 QueryResult VerifyConstraintsQuery::run()
 {
+   if (ConstrainedDecl->isExternal()) {
+      return finish(QC.Context.getExtConstraints(ConstrainedDecl));
+   }
+
    auto parsedConstraints = QC.Context.getParsedConstraints(ConstrainedDecl);
    if (parsedConstraints.empty()) {
       return finish(QC.Context.EmptyConstraintSet);

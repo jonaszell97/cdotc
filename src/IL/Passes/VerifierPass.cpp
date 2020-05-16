@@ -58,12 +58,7 @@ void VerifierPass::visitGlobals(il::Module& M)
       visitGlobalVariable(G);
 
    if (!IsValid) {
-      std::error_code EC;
-      llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error"
-                              ".cdotil", EC);
-
-      M.writeTo(fd);
-      fd.flush();
+      M.writeTo(llvm::errs());
    }
 }
 
@@ -114,12 +109,7 @@ void VerifierPass::run()
    F->setVerified(true);
 
    if (!IsValid) {
-      std::error_code EC;
-      llvm::raw_fd_ostream fd("/Users/Jonas/CDotProjects/ex/stdlib/_error"
-                              ".cdotil",
-                              EC, llvm::sys::fs::F_Append);
-
-      F->print(fd);
+      F->print(llvm::errs());
    }
 }
 

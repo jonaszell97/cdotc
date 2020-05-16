@@ -1464,7 +1464,7 @@ ProtocolDecl::ProtocolDecl(AccessSpecifier access, SourceLocation KeywordLoc,
     : RecordDecl(ProtocolDeclID, access, KeywordLoc, Name,
                  move(conformanceTypes), move(templateParams)),
       HasAssociatedTypeConstraint(false), IsAny(false),
-      HasStaticRequirements(false)
+      HasStaticRequirements(false), Specificity(0)
 {
 }
 
@@ -1480,7 +1480,7 @@ ProtocolDecl::Create(ASTContext& C, AccessSpecifier access,
 
 ProtocolDecl::ProtocolDecl(EmptyShell Empty)
     : RecordDecl(Empty, ProtocolDeclID), HasAssociatedTypeConstraint(false),
-      IsAny(false), HasStaticRequirements(false)
+      IsAny(false), HasStaticRequirements(false), Specificity(0)
 {
 }
 

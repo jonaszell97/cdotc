@@ -35,6 +35,9 @@ class DefinitiveInitializationPass
    /// Used to verify that all fields are initialized in a constructor
    LocalVariable* SelfVal = nullptr;
 
+   /// Memory location of the self value.
+   MemoryLocation SelfLoc;
+
    /// Memory locations we track through the function
    llvm::DenseMap<MemoryLocation, LocalVariable*> MemoryLocs;
 

@@ -16,14 +16,14 @@ struct Diagnostic;
 class DiagnosticConsumer {
 public:
    virtual ~DiagnosticConsumer() = default;
-   virtual void HandleDiagnostic(const Diagnostic& Diag) = 0;
+   virtual bool HandleDiagnostic(const Diagnostic& Diag) = 0;
 };
 
 class VoidDiagnosticConsumer : public DiagnosticConsumer {
 public:
    VoidDiagnosticConsumer() = default;
 
-   void HandleDiagnostic(const Diagnostic&) override {}
+   bool HandleDiagnostic(const Diagnostic&) override { return false; }
 };
 
 class DiagnosticsEngine;

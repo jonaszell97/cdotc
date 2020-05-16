@@ -1751,6 +1751,9 @@ public:
    bool hasStaticRequirements() const { return HasStaticRequirements; }
    void setHasStaticRequirements(bool b) { HasStaticRequirements = b; }
 
+   unsigned getSpecificity() const { return Specificity; }
+   void setSpecificity(unsigned V) { Specificity = V; }
+
 private:
    ProtocolDecl(AccessSpecifier access, SourceLocation KeywordLoc,
                 DeclarationName Name, ASTVector<SourceType>&& conformanceTypes,
@@ -1761,6 +1764,7 @@ private:
    bool HasAssociatedTypeConstraint : 1;
    bool IsAny : 1;
    bool HasStaticRequirements : 1;
+   unsigned Specificity : 14;
 };
 
 class ExtensionDecl final : public NamedDecl,

@@ -1091,6 +1091,7 @@ QualType ConstraintBuilder::visitAttributedExpr(AttributedExpr* Expr,
 
 QualType ConstraintBuilder::visitTryExpr(TryExpr* Expr, SourceType T)
 {
+   SemaPass::TryScopeRAII TSR(Sema);
    return visitExpr(Expr->getExpr());
 }
 

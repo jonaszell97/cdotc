@@ -10,6 +10,10 @@
 
 #include <queue>
 
+namespace llvm::support::endian {
+struct Writer;
+} // namespace llvm::support::endian
+
 namespace cdot {
 namespace lex {
 struct Token;
@@ -173,6 +177,14 @@ public:
 
    /// Get the ID for a module.
    unsigned GetModuleID(Module* M);
+
+   /// Write a constraint set to a record.
+   void WriteConstraintSet(const ast::ConstraintSet *CS, RecordDataImpl& Record);
+   void WriteConstraint(const ast::DeclConstraint *C, RecordDataImpl& Record);
+   void WriteConstraintSet(const ast::ConstraintSet *CS,
+                           llvm::support::endian::Writer &writer);
+   void WriteConstraint(const ast::DeclConstraint *C,
+                        llvm::support::endian::Writer &writer);
 
    /// Write the table containing the modules operator and precedence
    /// group decls

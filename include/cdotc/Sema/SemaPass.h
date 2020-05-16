@@ -786,7 +786,7 @@ public:
       ~IgnoreDiagsRAII();
 
    private:
-      bool Enabled;
+      static std::unique_ptr<DiagnosticConsumer> NullConsumer;
    };
 
    /// Temporarily enter a different scope.

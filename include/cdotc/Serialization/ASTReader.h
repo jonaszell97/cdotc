@@ -483,6 +483,14 @@ public:
    void ReadAttributes(ASTRecordReader& Record, SmallVectorImpl<Attr*>& Attrs,
                        bool* FoundInterestingAttr = nullptr);
 
+   /// Read a constraint set.
+   ast::DeclConstraint *ReadConstraint(const RecordDataImpl& Record,
+                                       unsigned& Idx);
+   ast::ConstraintSet *ReadConstraintSet(const RecordDataImpl& Record,
+                                         unsigned& Idx);
+   ast::DeclConstraint *ReadConstraint(const char *&data);
+   ast::ConstraintSet *ReadConstraintSet(const char *&data);
+
    /// Reads a statement.
    ast::Statement* ReadStmt();
 
@@ -552,6 +560,9 @@ public:
 
    /// The current position in this record.
    unsigned getIdx() const { return Idx; }
+
+   /// The current position in this record.
+   unsigned &getIdxRef() { return Idx; }
 
    /// The length of this record.
    size_t size() const { return Record.size(); }

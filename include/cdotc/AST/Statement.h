@@ -821,6 +821,7 @@ class DoStmt final : public Statement,
    SourceRange SR;
    Statement* body;
    unsigned NumCatchBlocks;
+   bool Exhaustive = false;
    IdentifierInfo* Label = nullptr;
 
 public:
@@ -855,6 +856,9 @@ public:
 
    IdentifierInfo* getLabel() const { return Label; }
    void setLabel(IdentifierInfo* V) { Label = V; }
+
+   bool isExhaustive() const { return Exhaustive; }
+   void setExhaustive(bool V) { Exhaustive = V; }
 };
 
 class ThrowStmt : public Statement {

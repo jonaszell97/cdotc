@@ -128,6 +128,7 @@ public:
    }
 
    void emitUntil(CleanupsDepth depth);
+   void popUntil(CleanupsDepth depth);
    void emitUntilWithoutPopping(CleanupsDepth depth);
 
    void clear()

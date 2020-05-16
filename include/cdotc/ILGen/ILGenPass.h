@@ -56,7 +56,7 @@ public:
 
    void visitDeclContext(DeclContext* Ctx);
 
-   void visitCompoundStmt(CompoundStmt* node);
+   void visitCompoundStmt(CompoundStmt* node, bool introduceCleanupScope = true);
    void visitNamespaceDecl(NamespaceDecl* node);
 
    void visitUnittestDecl(UnittestDecl* D);
@@ -536,6 +536,7 @@ public:
    }
 
    il::Function* CreateUnittestFun();
+   il::Function *GetDeinitFn(QualType T);
 
 private:
    llvm::DenseMap<QualType, il::GlobalVariable*> TypeInfoMap;
@@ -551,6 +552,8 @@ private:
 
    llvm::DenseMap<sema::FinalTemplateArgumentList*, il::Constant*>
        GenericArgumentMap;
+
+   llvm::DenseMap<QualType, il::Function*> DeinitFunctions;
 
 public:
    QualType VoidTy;
@@ -688,9 +691,8 @@ public:
 
 private:
    struct EHScopeRAII {
-      EHScopeRAII(ILGenPass& ILGen, il::BasicBlock* LP,
-                  bool EmitCleanups = true)
-          : LandingPad(LP), EmitCleanups(EmitCleanups),
+      EHScopeRAII(ILGenPass& ILGen, il::BasicBlock* LP)
+          : LandingPad(LP),
             ILGen(ILGen), Depth(ILGen.Cleanups.getCleanupsDepth())
       {
          ILGen.EHStack.push_back(this);

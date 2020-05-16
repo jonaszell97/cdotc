@@ -18,7 +18,9 @@ using namespace cdot::support;
 namespace {
 
 class IRDebugAnnotatePass : public llvm::ModulePass {
+   std::unique_ptr<llvm::raw_fd_ostream> OS;
    llvm::StringRef OutFile;
+
    unsigned CurLine = 1;
    llvm::DICompileUnit* CU = nullptr;
    llvm::DIFile* DebugScope = nullptr;
@@ -37,8 +39,20 @@ class IRDebugAnnotatePass : public llvm::ModulePass {
                             unsigned& i);
 
 public:
-   IRDebugAnnotatePass(llvm::StringRef OutFile = "")
-       : ModulePass(ID), OutFile(OutFile)
+   IRDebugAnnotatePass()
+      : ModulePass(ID), OutFile(fs::getTmpFileName("ll"))
+   {
+      std::error_code EC;
+      OS = std::make_unique<llvm::raw_fd_ostream>(OutFile, EC);
+
+      if (EC) {
+         llvm::report_fatal_error(EC.message());
+      }
+   }
+
+   IRDebugAnnotatePass(std::unique_ptr<llvm::raw_fd_ostream> &&OS,
+                       llvm::StringRef OutFile)
+       : ModulePass(ID), OS(std::move(OS)), OutFile(OutFile)
    {
    }
 
@@ -50,16 +64,8 @@ public:
 
 void IRDebugAnnotatePass::writeModule(llvm::Module& M)
 {
-   /// Dump the IR to a temporary file.
-   std::error_code EC;
-   llvm::raw_fd_ostream OS(OutFile, EC);
-
-   if (EC) {
-      llvm::report_fatal_error(EC.message());
-   }
-
    llvm::AssemblyAnnotationWriter AAW;
-   M.print(OS, &AAW);
+   M.print(*OS, &AAW);
 }
 
 bool IRDebugAnnotatePass::runOnModule(llvm::Module& M)
@@ -376,10 +382,26 @@ static llvm::RegisterPass<IRDebugAnnotatePass>
 
 namespace cdot {
 
-void addIRDebugInfo(llvm::Module& M, llvm::StringRef ToFile)
+void addIRDebugInfo(llvm::Module& M)
 {
+   std::string fileName;
+   auto OS = fs::openTmpFile("ll", &fileName);
+
    llvm::legacy::PassManager PM;
-   PM.add(new IRDebugAnnotatePass(ToFile));
+   PM.add(new IRDebugAnnotatePass(std::move(OS), fileName));
+   PM.run(M);
+}
+
+void addIRDebugInfo(llvm::Module& M, llvm::StringRef FileName)
+{
+   std::error_code EC;
+   auto OS = std::make_unique<llvm::raw_fd_ostream>(FileName, EC);
+   if (EC) {
+      llvm::report_fatal_error(EC.message());
+   }
+
+   llvm::legacy::PassManager PM;
+   PM.add(new IRDebugAnnotatePass(std::move(OS), FileName));
    PM.run(M);
 }
 

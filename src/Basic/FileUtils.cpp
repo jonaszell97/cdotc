@@ -374,14 +374,20 @@ std::error_code makeAbsolute(llvm::SmallVectorImpl<char>& Buf)
 
 llvm::StringRef getLibraryDir()
 {
-   // FIXME
+#ifndef _WIN32
    return "/usr/local/lib";
+#else
+   return "C:\\Windows\\System32";
+#endif
 }
 
 llvm::StringRef getIncludeDir()
 {
-   // FIXME
+#ifndef _WIN32
    return "/usr/local/include";
+#else
+   return "C:\\Windows\\System32";
+#endif
 }
 
 #pragma clang diagnostic push
@@ -446,20 +452,35 @@ void appendToPath(std::string& Path, const llvm::Twine& Append)
    Path.insert(Path.end(), append.begin(), append.end());
 }
 
-std::string getTmpFileName(llvm::StringRef Ext)
+std::unique_ptr<llvm::raw_fd_ostream>
+openTmpFile(StringRef Ext, std::string *FileName)
 {
-   llvm::SmallString<128> TmpFile;
-   auto EC
-       = llvm::sys::fs::createUniqueFile("cdot-tmp-%%%%%%%%." + Ext, TmpFile);
+   using namespace llvm::sys::fs;
 
+   int FD;
+   llvm::SmallString<128> TmpFile;
+
+   auto EC = createTemporaryFile("cdot-tmp-%%%%%%%%", Ext, FD, TmpFile);
+   if (EC) {
+      return nullptr;
+   }
+
+   if (FileName)
+      *FileName = TmpFile.str();
+
+   return std::make_unique<llvm::raw_fd_ostream>(FD, true);
+}
+
+std::string getTmpFileName(StringRef Ext)
+{
+   using namespace llvm::sys::fs;
+
+   llvm::SmallString<128> TmpFile;
+   auto EC = getPotentiallyUniqueTempFileName("cdot-tmp-%%%%%%%%", Ext, TmpFile);
    if (EC) {
       llvm::report_fatal_error(EC.message());
    }
 
-   llvm::SmallString<56> TmpDir;
-   llvm::sys::path::system_temp_directory(true, TmpDir);
-
-   TmpFile.insert(TmpFile.begin(), TmpDir.begin(), TmpDir.end());
    return TmpFile.str().str();
 }
 

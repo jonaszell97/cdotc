@@ -46,8 +46,6 @@ class ASTDeclReader : public ASTVisitor<ASTDeclReader> {
    InstantiationInfo<T>* ReadInstInfo(Decl* D, ASTRecordReader& Record,
                                       ASTContext& C);
 
-   DeclConstraint* ReadDeclConstraint();
-
 public:
    ASTDeclReader(ASTReader& Reader, ASTRecordReader& Record,
                  unsigned thisDeclID, SourceLocation ThisDeclLoc)
@@ -137,31 +135,6 @@ void ASTDeclReader::visitDecl(Decl* D)
    D->setFlags(Record.readInt());
 }
 
-DeclConstraint* ASTDeclReader::ReadDeclConstraint()
-{
-   auto Kind = Record.readEnum<DeclConstraint::Kind>();
-   auto constrainedType = Record.readType();
-
-   switch (Kind) {
-   case DeclConstraint::Concept: {
-      auto* Concept = Record.readDeclAs<AliasDecl>();
-      return DeclConstraint::Create(Reader.getContext(), constrainedType,
-                                    Concept);
-   }
-   case DeclConstraint::TypeEquality:
-   case DeclConstraint::TypeInequality:
-   case DeclConstraint::TypePredicate:
-   case DeclConstraint::TypePredicateNegated: {
-      QualType Ty = Record.readType();
-      return DeclConstraint::Create(Reader.getContext(), Kind, constrainedType,
-                                    Ty);
-   }
-   default:
-      return DeclConstraint::Create(Reader.getContext(), Kind, constrainedType,
-                                    QualType());
-   }
-}
-
 void ASTDeclReader::visitNamedDecl(NamedDecl* ND)
 {
    visitDecl(ND);
@@ -170,18 +143,8 @@ void ASTDeclReader::visitNamedDecl(NamedDecl* ND)
    ND->setAccessLoc(ReadSourceLocation());
    ND->setName(Record.readDeclarationName());
 
-   auto NumDeclConstraints = Record.readInt();
-   if (NumDeclConstraints > 0) {
-      std::vector<DeclConstraint*> declConstraints;
-      declConstraints.reserve(NumDeclConstraints);
-
-      while (NumDeclConstraints--) {
-         declConstraints.push_back(ReadDeclConstraint());
-      }
-
-      auto* CS = ConstraintSet::Create(Reader.getContext(), declConstraints);
-      Reader.getContext().setConstraints(ND, CS);
-   }
+   auto *CS = Reader.ReadConstraintSet(Record.getRecordData(), Record.getIdxRef());
+   Reader.getContext().setConstraints(ND, CS);
 
    SmallVector<Attr*, 4> Attrs;
    bool FoundInterestingAttr;
@@ -1009,6 +972,7 @@ void ASTDeclReader::visitProtocolDecl(ProtocolDecl* D)
    D->setIsAny((Flags & 0x1) != 0);
    D->setHasAssociatedTypeConstraint((Flags & 0x2) != 0);
    D->setHasStaticRequirements((Flags & 0x4) != 0);
+   D->setSpecificity((unsigned)(Flags >> 3));
 }
 
 void ASTDeclUpdateVisitor::visitProtocolDecl(ProtocolDecl* D)

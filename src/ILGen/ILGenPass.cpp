@@ -2178,10 +2178,7 @@ il::Value* ILGenPass::CreateCall(CallableDecl* C, ArrayRef<il::Value*> args,
       }
    }
    else {
-      if (EHStack.back()->EmitCleanups) {
-         Cleanups.emitUntilWithoutPopping(EHStack.back()->getDepth());
-      }
-
+      Cleanups.emitUntilWithoutPopping(EHStack.back()->getDepth());
       Builder.CreateBr(EHStack.back()->LandingPad, lpad->getBlockArg(0));
    }
 
@@ -2928,12 +2925,12 @@ void ILGenPass::visitDeclContext(DeclContext* Ctx)
    }
 }
 
-void ILGenPass::visitCompoundStmt(CompoundStmt* node)
+void ILGenPass::visitCompoundStmt(CompoundStmt* node, bool introduceCleanupScope)
 {
    CompoundStmtRAII CSR(*this, node);
    auto Stmts = node->getStatements();
 
-   if (node->preservesScope()) {
+   if (node->preservesScope() || !introduceCleanupScope) {
       for (const auto& Stmt : Stmts) {
          if (Builder.GetInsertBlock()->getTerminator()) {
             SP.diagnose(Stmt, err_unreachable_code, Stmt->getSourceLoc());
@@ -3075,6 +3072,79 @@ il::Function* ILGenPass::CreateUnittestFun()
    Builder.CreateRetVoid();
 
    return Fun;
+}
+
+il::Function* ILGenPass::GetDeinitFn(QualType T)
+{
+   T = T->removeReference();
+
+   if (T->isRecordType() && !T->isClass() && !T->isProtocol()) {
+      return GetDeinitializer(T->getRecord());
+   }
+
+   auto It = DeinitFunctions.find(T);
+   if (It != DeinitFunctions.end()) {
+      return It->getSecond();
+   }
+
+   QualType ArgType = Context.getMutableReferenceType(T);
+   auto *DeinitFn = Builder.CreateFunction(T.toDiagString() + ".deinit",
+       Context.getVoidType(), Builder.CreateArgument(ArgType), false, false);
+
+   DeinitFn->addDefinition();
+   DeinitFn->setLinkage(GlobalObject::InternalLinkage);
+
+   InsertPointRAII insertPointRAII(*this, DeinitFn->getEntryBlock());
+   ILBuilder::SynthesizedRAII SR(Builder);
+
+   Builder.CreateDebugLoc(
+       SP.getCompilerInstance().getCompilationModule()->getSourceLoc());
+
+   Value *Val = DeinitFn->getEntryBlock()->getBlockArg(0);
+   Builder.CreateLifetimeEnd(Val);
+
+   if (T->isRefcounted() || T->isLambdaType() || T->isBoxType()) {
+      if (Val->isLvalue()) {
+         Val = Builder.CreateLoad(Val);
+      }
+
+      Builder.CreateRelease(Val);
+   }
+   else if (T->isExistentialType() || T->isProtocol()) {
+      Builder.CreateIntrinsicCall(Intrinsic::deinit_existential, Val);
+   }
+   else if (ArrayType* Arr = T->asArrayType()) {
+      auto NumElements = Arr->getNumElements();
+      for (unsigned i = 0; i < NumElements; ++i) {
+         auto GEP = Builder.CreateGEP(Val, i);
+         auto Ld = Builder.CreateLoad(GEP);
+
+         DefaultCleanup(Ld).Emit(*this);
+      }
+   }
+   else if (TupleType* Tup = T->asTupleType()) {
+      size_t i = 0;
+      auto Cont = Tup->getContainedTypes();
+      size_t numTys = Cont.size();
+
+      while (i < numTys) {
+         if (!SP.NeedsDeinitilization(Cont[i])) {
+            ++i;
+            continue;
+         }
+
+         auto val = Builder.CreateTupleExtract(Val, i);
+         auto Ld = Builder.CreateLoad(val);
+
+         DefaultCleanup(Ld).Emit(*this);
+         ++i;
+      }
+   }
+
+   Builder.CreateRetVoid();
+
+   DeinitFunctions[T] = DeinitFn;
+   return DeinitFn;
 }
 
 void ILGenPass::DefineLazyGlobal(il::GlobalVariable* glob,
@@ -4993,7 +5063,6 @@ il::BasicBlock* ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
    unsigned NumConditions = (unsigned)Conditions.size();
 
    for (auto& C : Conditions) {
-      ExprCleanupRAII CS(*this);
       Builder.SetInsertPoint(CurrCondBB);
 
       il::Value* NextConditionVal;
@@ -5007,6 +5076,7 @@ il::BasicBlock* ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
 
       switch (C.K) {
       case IfCondition::Expression: {
+         ExprCleanupRAII CS(*this);
          Builder.SetDebugLoc(C.ExprData.Expr->getSourceLoc());
 
          auto* ExprVal = visit(C.ExprData.Expr);
@@ -5037,15 +5107,25 @@ il::BasicBlock* ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
 
          Builder.SetDebugLoc(VarDecl->getSourceLoc());
 
-         auto CondVal = visit(VarDecl->getValue());
+         Value *CondVal;
+         {
+            ExprCleanupRAII ECR(*this);
+            CondVal = Forward(visit(VarDecl->getValue()));
+         }
+
          if (!C.BindingData.TryUnwrapFn->hasMutableSelf()) {
             CondVal = Builder.CreateLoad(CondVal);
          }
-         else if (!CondVal->getType()->isMutableReferenceType()) {
+         else if (!CondVal->getType()->isReferenceType()) {
             auto* Alloc = Builder.CreateAlloca(CondVal->getType());
             Builder.CreateStore(CondVal, Alloc);
 
             CondVal = Alloc;
+         }
+         else if (!CondVal->getType()->isMutableReferenceType()) {
+            CondVal = Builder.CreateBitCast(CastKind::BitCast,
+                CondVal, Context.getMutableReferenceType(
+                    CondVal->getType()->removeReference()));
          }
 
          auto* Opt = CreateCall(C.BindingData.TryUnwrapFn, CondVal,
@@ -5058,12 +5138,17 @@ il::BasicBlock* ILGenPass::visitIfConditions(ArrayRef<IfCondition> Conditions,
          NextConditionVal = Builder.CreateLoad(
              Builder.CreateStructGEP(NextConditionVal, 0, true));
 
-         InsertPointRAII IPR(*this, NextBB);
-         auto* SomeCase = cast<EnumDecl>(OptTy->getRecord())->getSomeCase();
-         auto* Unwrapped
-             = Builder.CreateEnumExtract(Opt, SomeCase, 0, VarDecl->isConst());
+         Value *Unwrapped;
+         {
+            InsertPointRAII IPR(*this, NextBB);
+            auto* SomeCase = cast<EnumDecl>(OptTy->getRecord())->getSomeCase();
+            Unwrapped = Builder.CreateEnumExtract(Opt, SomeCase, 0,
+                                                  VarDecl->isConst());
+         }
 
          addDeclValuePair(VarDecl, Unwrapped);
+         pushDefaultCleanup(Opt);
+
          break;
       }
       case IfCondition::Pattern: {
@@ -5097,10 +5182,10 @@ void ILGenPass::visitIfStmt(IfStmt* node)
       ElseBranch = MergeBB;
    }
 
-   visitIfConditions(node->getConditions(), IfBranch, ElseBranch);
-
    {
       CleanupRAII CS(*this);
+      visitIfConditions(node->getConditions(), IfBranch, ElseBranch);
+
       BreakContinueRAII BR(*this, node->getLabel() ? MergeBB : nullptr, nullptr,
                            CS.getDepth(), node->getLabel());
 
@@ -5381,7 +5466,7 @@ il::Value* ILGenPass::visitExpressionPattern(ExpressionPattern* node,
 
    Value* Eq;
    if (auto* Op = node->getComparisonOp()) {
-      Eq = CreateCall(Op, {MatchVal, Expr}, node);
+      Eq = CreateCall(Op, {Expr, MatchVal}, node);
    }
    else {
       Eq = CreateEqualityComp(MatchVal, Expr);
@@ -7052,11 +7137,13 @@ void ILGenPass::visitDoStmt(DoStmt* Stmt)
    lpad->addBlockArg(SP.getContext().getUInt8PtrTy(), "opaque_err");
 
    auto MergeBB = Builder.CreateBasicBlock("do.merge");
-   CleanupsDepth Depth = Cleanups.getCleanupsDepth();
+   auto Depth = Cleanups.getCleanupsDepth();
 
    {
-      EHScopeRAII EHS(*this, lpad, Stmt->getCatchBlocks().empty());
-      visit(Stmt->getBody());
+      EHScopeRAII EHS(*this, lpad);
+      visitCompoundStmt(cast<CompoundStmt>(Stmt->getBody()), false);
+
+      Cleanups.emitUntil(Depth);
 
       if (!Builder.GetInsertBlock()->getTerminator()) {
          Builder.CreateBr(MergeBB);
@@ -7064,12 +7151,15 @@ void ILGenPass::visitDoStmt(DoStmt* Stmt)
    }
 
    Builder.SetInsertPoint(lpad);
-
    auto Err = &lpad->getArgs().front();
 
-   llvm::SmallVector<il::BasicBlock*, 8> CatchBlocks;
+   SmallVector<il::BasicBlock*, 2> CatchBlocks;
+   const CatchBlock *CatchAll = nullptr;
+
    for (auto& C : Stmt->getCatchBlocks()) {
-      (void)C;
+      if (!C.varDecl) {
+         CatchAll = &C;
+      }
 
       auto CatchBB = Builder.CreateBasicBlock("do.catch");
       CatchBB->addBlockArg(Err->getType(), "excn");
@@ -7077,117 +7167,126 @@ void ILGenPass::visitDoStmt(DoStmt* Stmt)
       CatchBlocks.emplace_back(CatchBB);
    }
 
-   Builder.CreateBr(CatchBlocks.front(), {Err});
-
    il::BasicBlock* NotCaughtBB = Builder.CreateBasicBlock("do.rethrow");
-   NotCaughtBB->addBlockArg(Err->getType(), "excn");
-   CatchBlocks.push_back(NotCaughtBB);
+   if (!CatchAll) {
+      NotCaughtBB->addBlockArg(Err->getType(), "excn");
+   }
 
-   unsigned i = 0;
-   for (auto& C : Stmt->getCatchBlocks()) {
-      // catch-all block
-      if (!C.varDecl) {
+   if (!CatchBlocks.empty()) {
+      Builder.CreateBr(CatchBlocks.front(), {Err});
+      CatchBlocks.push_back(NotCaughtBB);
+
+      unsigned i = 0;
+      for (auto& C : Stmt->getCatchBlocks()) {
+         // catch-all block
+         if (!C.varDecl) {
+            il::BasicBlock* CondBB = CatchBlocks[i++];
+            il::BasicBlock* BodyBB = Builder.CreateBasicBlock("catch.body");
+            BodyBB->addBlockArg(Err->getType(), "err");
+
+            Builder.SetInsertPoint(CondBB);
+            Builder.CreateBr(BodyBB, {CondBB->getBlockArg(0)});
+
+            Builder.SetInsertPoint(BodyBB);
+            visit(C.Body);
+
+            {
+               TerminatorRAII TR(*this);
+               Builder.CreateIntrinsicCall(Intrinsic::cleanup_exception,
+                                           BodyBB->getBlockArg(0));
+            }
+
+            if (!Builder.GetInsertBlock()->getTerminator())
+               Builder.CreateBr(MergeBB);
+
+            break;
+         }
+
+         QualType CaughtTy = C.varDecl->getType();
+
          il::BasicBlock* CondBB = CatchBlocks[i++];
+         il::BasicBlock* NextBB = CatchBlocks[i];
+
          il::BasicBlock* BodyBB = Builder.CreateBasicBlock("catch.body");
+         BodyBB->addBlockArg(SP.getContext().getReferenceType(CaughtTy),
+                             "excn");
          BodyBB->addBlockArg(Err->getType(), "err");
 
          Builder.SetInsertPoint(CondBB);
-         Builder.CreateBr(BodyBB, {CondBB->getBlockArg(0)});
+
+         Err = CondBB->getBlockArg(0);
+
+         Value* TI
+             = Builder.CreateIntrinsicCall(Intrinsic::excn_typeinfo_ref, Err);
+         Value* ExcnObj
+             = Builder.CreateIntrinsicCall(Intrinsic::excn_object_ref, Err);
+
+         auto Cmp = Builder.CreateIntrinsicCall(
+             Intrinsic::typeinfo_cmp,
+             {Builder.CreateLoad(TI), GetOrCreateTypeInfo(CaughtTy)});
+
+         if (auto Cond = C.Condition) {
+            il::BasicBlock* EqBB = Builder.CreateBasicBlock("catch.eq");
+            EqBB->addBlockArg(ExcnObj->getType(), "excn_obj");
+
+            Builder.CreateCondBr(Cmp, EqBB, NextBB, {ExcnObj}, {Err});
+            Builder.SetInsertPoint(EqBB);
+
+            il::Value* TypedExcn = Builder.CreateBitCast(
+                CastKind::BitCast, EqBB->getBlockArg(0),
+                SP.getContext().getReferenceType(CaughtTy));
+
+            addDeclValuePair(C.varDecl, EqBB->getBlockArg(0));
+
+            auto CondVal = visit(Cond);
+            Builder.CreateCondBr(CondVal, BodyBB, NextBB, {TypedExcn, Err},
+                                 {Err});
+         }
+         else {
+            il::BasicBlock* EqBB = Builder.CreateBasicBlock("catch.eq");
+            EqBB->addBlockArg(ExcnObj->getType(), "excn_obj");
+
+            Builder.CreateCondBr(Cmp, EqBB, NextBB, {ExcnObj}, {Err});
+            Builder.SetInsertPoint(EqBB);
+
+            il::Value* TypedExcn = Builder.CreateBitCast(
+                CastKind::BitCast, EqBB->getBlockArg(0),
+                SP.getContext().getReferenceType(CaughtTy));
+
+            Builder.CreateBr(BodyBB, {TypedExcn, Err});
+         }
 
          Builder.SetInsertPoint(BodyBB);
+         addDeclValuePair(C.varDecl, BodyBB->getBlockArg(0));
          visit(C.Body);
 
          {
             TerminatorRAII TR(*this);
             Builder.CreateIntrinsicCall(Intrinsic::cleanup_exception,
-                                        BodyBB->getBlockArg(0));
+                                        BodyBB->getBlockArg(1));
          }
 
-         if (!Builder.GetInsertBlock()->getTerminator())
+         if (!Builder.GetInsertBlock()->getTerminator()) {
             Builder.CreateBr(MergeBB);
-
-         break;
+         }
       }
-
-      QualType CaughtTy = C.varDecl->getType();
-
-      il::BasicBlock* CondBB = CatchBlocks[i++];
-      il::BasicBlock* NextBB = CatchBlocks[i];
-
-      il::BasicBlock* BodyBB = Builder.CreateBasicBlock("catch.body");
-      BodyBB->addBlockArg(SP.getContext().getReferenceType(CaughtTy), "excn");
-      BodyBB->addBlockArg(Err->getType(), "err");
-
-      Builder.SetInsertPoint(CondBB);
-
-      Err = CondBB->getBlockArg(0);
-
-      Value* TI
-          = Builder.CreateIntrinsicCall(Intrinsic::excn_typeinfo_ref, Err);
-      Value* ExcnObj
-          = Builder.CreateIntrinsicCall(Intrinsic::excn_object_ref, Err);
-
-      auto Cmp = Builder.CreateIntrinsicCall(
-          Intrinsic::typeinfo_cmp,
-          {Builder.CreateLoad(TI), GetOrCreateTypeInfo(CaughtTy)});
-
-      if (auto Cond = C.Condition) {
-         il::BasicBlock* EqBB = Builder.CreateBasicBlock("catch.eq");
-         EqBB->addBlockArg(ExcnObj->getType(), "excn_obj");
-
-         Builder.CreateCondBr(Cmp, EqBB, NextBB, {ExcnObj}, {Err});
-         Builder.SetInsertPoint(EqBB);
-
-         il::Value* TypedExcn = Builder.CreateBitCast(
-             CastKind::BitCast, EqBB->getBlockArg(0),
-             SP.getContext().getReferenceType(CaughtTy));
-
-         addDeclValuePair(C.varDecl, EqBB->getBlockArg(0));
-
-         auto CondVal = visit(Cond);
-         Builder.CreateCondBr(CondVal, BodyBB, NextBB, {TypedExcn, Err}, {Err});
-      }
-      else {
-         il::BasicBlock* EqBB = Builder.CreateBasicBlock("catch.eq");
-         EqBB->addBlockArg(ExcnObj->getType(), "excn_obj");
-
-         Builder.CreateCondBr(Cmp, EqBB, NextBB, {ExcnObj}, {Err});
-         Builder.SetInsertPoint(EqBB);
-
-         il::Value* TypedExcn = Builder.CreateBitCast(
-             CastKind::BitCast, EqBB->getBlockArg(0),
-             SP.getContext().getReferenceType(CaughtTy));
-
-         Builder.CreateBr(BodyBB, {TypedExcn, Err});
-      }
-
-      Builder.SetInsertPoint(BodyBB);
-      addDeclValuePair(C.varDecl, BodyBB->getBlockArg(0));
-      visit(C.Body);
-
-      {
-         TerminatorRAII TR(*this);
-         Builder.CreateIntrinsicCall(Intrinsic::cleanup_exception,
-                                     BodyBB->getBlockArg(1));
-      }
-
-      if (!Builder.GetInsertBlock()->getTerminator()) {
-         Builder.CreateBr(MergeBB);
-      }
+   }
+   else {
+      Builder.CreateBr(NotCaughtBB, Err);
    }
 
    Builder.SetInsertPoint(NotCaughtBB);
 
    // If there is an outer do scope, emit the cleanups of this one and try to
    // catch the error there.
-   if (!EHStack.empty()) {
-      Cleanups.emitUntil(Depth);
+   if (CatchAll) {
+      Builder.CreateUnreachable();
+   }
+   else if (!EHStack.empty()) {
+      Cleanups.emitUntilWithoutPopping(EHStack.back()->getDepth());
       Builder.CreateBr(EHStack.back()->LandingPad, NotCaughtBB->getBlockArg(0));
    }
    else {
-      // Otherwise we're leaving the function, so emit all cleanups.
-      Cleanups.emitAllWithoutPopping();
-
       if (!Builder.GetInsertBlock()->getParent()->mightThrow()) {
          Builder.CreateIntrinsicCall(
              Intrinsic::print_runtime_error,
@@ -7228,7 +7327,7 @@ il::Value* ILGenPass::visitTryExpr(TryExpr* Expr)
    merge->addBlockArg(Expr->getExprType(), "result");
 
    {
-      EHScopeRAII ESR(*this, lpad, /*EmitCleanups=*/false);
+      EHScopeRAII ESR(*this, lpad);
 
       auto Val = visit(Expr->getExpr());
       auto SomeVal = Builder.CreateEnumInit(OptionTy, SomeCase, Val);

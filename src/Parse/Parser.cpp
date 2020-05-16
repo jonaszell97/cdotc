@@ -190,7 +190,6 @@ Token Parser::lookahead(bool ignoreNewline, bool sw)
 void Parser::advance(bool ignoreNewline, bool sw)
 {
    lexer->advance(ignoreNewline, sw);
-   //   llvm::outs()<<lexer->currentTok().toString();
 }
 
 const lex::Token& Parser::currentTok() const { return lexer->currentTok(); }
@@ -521,6 +520,27 @@ bool Parser::findTokOnLine(IdentifierInfo* Id)
    }
 
    return false;
+}
+
+std::pair<DeclarationName, SourceRange>
+Parser::parseDeclName(bool allowUnderscore, bool emitDiagnostics)
+{
+   if (currentTok().is(tok::underscore)) {
+      if (allowUnderscore) {
+         SourceRange SR(currentTok().getSourceLoc(), currentTok().getEndLoc());
+         return {Context.getDeclNameTable().getErrorName(), SR};
+      }
+   }
+   else if (currentTok().is(tok::ident)) {
+      SourceRange SR(currentTok().getSourceLoc(), currentTok().getEndLoc());
+      return {currentTok().getIdentifierInfo(), SR};
+   }
+
+   if (emitDiagnostics) {
+      errorUnexpectedToken(currentTok(), tok::ident);
+   }
+
+   return {Context.getDeclNameTable().getErrorName(), SourceRange()};
 }
 
 ParseTypeResult Parser::parseType(bool allowInferredArraySize,
@@ -2809,6 +2829,7 @@ ParseResult Parser::parseExprSequence(int Flags)
          break;
 #define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
 #include "cdotc/Lex/Tokens.def"
+      {
          if (currentTok().is(tok::colon) && (Flags & F_StopAtColon) != 0) {
             lexer->backtrack();
             done = true;
@@ -2829,10 +2850,45 @@ ParseResult Parser::parseExprSequence(int Flags)
             whitespace |= SequenceElement::Right;
          }
 
-         frags.emplace_back(op::fromString(currentTok().toString()), whitespace,
-                            currentTok().getSourceLoc());
+         auto OpKind = op::fromToken(currentTok().getKind());
+         if (OpKind != op::UnknownOp) {
+            frags.emplace_back(OpKind, whitespace,
+                               currentTok().getSourceLoc());
+         }
+         else {
+            StringRef OpStr;
+            switch (currentTok().getKind()) {
+            case tok::colon:
+               OpStr = ":";
+               break;
+            case tok::question:
+               OpStr = "?";
+               break;
+            case tok::exclaim:
+               OpStr = "!";
+               break;
+            case tok::triple_period:
+               OpStr = "...";
+               break;
+            case tok::exclaim_is:
+               OpStr = "!is";
+               break;
+            case tok::plus_plus:
+               OpStr = "++";
+               break;
+            case tok::minus_minus:
+               OpStr = "--";
+               break;
+            default:
+               llvm_unreachable("bad operator token!");
+            }
+
+            auto* II = &Context.getIdentifiers().get(OpStr);
+            frags.emplace_back(II, whitespace, currentTok().getSourceLoc());
+         }
 
          break;
+      }
       case tok::underscore:
          if (frags.empty()) {
             if (lookahead(false, true).isWhitespace()) {
@@ -3158,7 +3214,7 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
       VarOrLetLoc = consumeToken(tok::kw_var, tok::kw_let);
 
       if (currentTok().is(tok::open_paren))
-         return parseDestructuringDecl(isLet);
+         return parseDestructuringDecl(isLet, false, allowTrailingClosure);
    }
 
    if (!currentTok().oneOf(tok::ident, tok::underscore)) {
@@ -3168,13 +3224,7 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
       return skipUntilProbableEndOfStmt();
    }
 
-   DeclarationName Name;
-   if (currentTok().is(tok::ident)) {
-      Name = currentTok().getIdentifierInfo();
-   }
-   else {
-      Name = Context.getDeclNameTable().getErrorName();
-   }
+   auto NameAndLoc = parseDeclName();
 
    SourceType type;
    Expression* value = nullptr;
@@ -3214,7 +3264,8 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
 
    if (!InRecordScope && !InFunctionScope) {
       auto G = GlobalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
-                                     ColonLoc, isLet, Name, type, value);
+                                     ColonLoc, isLet, NameAndLoc.first,
+                                     type, value);
 
       G->setAccessLoc(CurDeclAttrs.AccessLoc);
       G->setEqualsLoc(EqualsLoc);
@@ -3228,7 +3279,8 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
    }
 
    auto L = LocalVarDecl::Create(Context, AccessSpecifier::Public, VarOrLetLoc,
-                                 ColonLoc, isLet, Name, type, value);
+                                 ColonLoc, isLet, NameAndLoc.first, type,
+                                 value);
 
    L->setAccessLoc(CurDeclAttrs.AccessLoc);
    L->setEqualsLoc(EqualsLoc);
@@ -3237,7 +3289,8 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
    return L;
 }
 
-ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
+ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn,
+                                           bool allowTrailingClosure)
 {
    assert(currentTok().is(tok::open_paren) && "should not be called otherwise");
 
@@ -3248,19 +3301,12 @@ ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
    advance();
 
    while (!currentTok().is(tok::close_paren)) {
-      if (!currentTok().is(tok::ident)) {
-         errorUnexpectedToken(currentTok(), tok::ident);
-         skipUntilNextDecl();
-
-         return ParseError();
-      }
-
-      auto loc = currentTok().getSourceLoc();
-      auto Name = currentTok().getIdentifierInfo();
+      auto NameAndLoc = parseDeclName();
       if (global) {
          auto G
              = GlobalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
-                                     loc, isLet, Name, SourceType(), nullptr);
+                                     NameAndLoc.second.getStart(), isLet,
+                                     NameAndLoc.first, SourceType(), nullptr);
 
          ActOnDecl(G);
          decls.push_back(G);
@@ -3268,7 +3314,8 @@ ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
       else {
          auto L
              = LocalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
-                                    loc, isLet, Name, SourceType(), nullptr);
+                                    NameAndLoc.second.getStart(), isLet,
+                                    NameAndLoc.first, SourceType(), nullptr);
 
          L->setLexicalContext(&SP.getDeclContext());
          decls.push_back(L);
@@ -3300,7 +3347,12 @@ ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
       advance();
       advance();
 
-      value = parseExprSequence().tryGetExpr();
+      auto flags = DefaultFlags;
+      if (!allowTrailingClosure) {
+         flags &= ~F_AllowBraceClosure;
+      }
+
+      value = parseExprSequence(flags).tryGetExpr();
    }
 
    SourceRange SR(VarOrLetLoc, currentTok().getSourceLoc());
@@ -4039,10 +4091,25 @@ void Parser::parseIfConditions(SmallVectorImpl<IfCondition>& Conditions,
    bool expectNewline = StopAt == tok::newline;
    while (!currentTok().is(StopAt)) {
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
-         auto* VD = parseVarDecl(false, false, true).tryGetDecl<LocalVarDecl>();
+         LocalVarDecl *VD = nullptr;
+         if (auto* Decl = parseVarDecl(false, false, true).tryGetDecl()) {
+            bool hasValue = false;
+            if (auto* LV = dyn_cast<LocalVarDecl>(Decl)) {
+               hasValue = LV->getValue() != nullptr;
+               VD = LV;
+            }
+            else if (auto* D = dyn_cast<DestructuringDecl>(Decl)) {
+               SP.diagnose(err_generic_error,
+                   "destructuring cannot be used in a conditional statement",
+                   D->getSourceLoc());
 
-         if (VD && !VD->getValue()) {
-            SP.diagnose(err_if_let_must_have_value, VD->getSourceLoc());
+               hasValue = true;
+               VD = cast<LocalVarDecl>(D->getDecls().front());
+            }
+
+            if (!hasValue) {
+               SP.diagnose(err_if_let_must_have_value, Decl->getSourceLoc());
+            }
          }
 
          Conditions.emplace_back(VD, nullptr);
@@ -5651,10 +5718,6 @@ ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
    auto CS = CompoundStmt::Create(Context, Stmts, false, LBraceLoc,
                                   currentTok().getSourceLoc());
 
-   if (!lookahead().is(tok::kw_catch)) {
-      return CS;
-   }
-
    SourceLocation CatchAllLoc;
    SmallVector<CatchBlock, 2> CatchBlocks;
 
@@ -5663,6 +5726,11 @@ ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
       advance();
 
       if (currentTok().is(tok::underscore)) {
+         if (CatchAllLoc.isValid()) {
+            SP.diagnose(err_catch_all_must_be_alone, currentTok().getSourceLoc());
+            SP.diagnose(note_previous_catch, CatchAllLoc);
+         }
+
          CatchAllLoc = currentTok().getSourceLoc();
          advance();
 
@@ -5725,8 +5793,8 @@ ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
       CatchBlocks.emplace_back(CatchBlock(L, body, Cond));
    }
 
-   if (CatchAllLoc.isValid() && CatchBlocks.size() != 1) {
-      SP.diagnose(err_catch_all_must_be_alone, CatchAllLoc);
+   if (CatchAllLoc.isValid() && CatchBlocks.back().varDecl) {
+      SP.diagnose(err_catch_all_must_be_last, CatchAllLoc);
    }
 
    return DoStmt::Create(Context, SourceRange(DoLoc), CS, CatchBlocks, Label);
