@@ -1274,7 +1274,7 @@ void IRGen::visitFunction(Function& F)
    this->AllocaBB = nullptr;
 }
 
-llvm::GlobalVariable* IRGen::getOrCreateInitializedFlag(const il::Value* ForVal)
+llvm::Value* IRGen::getOrCreateInitializedFlag(const il::Value* ForVal)
 {
    uintptr_t Key;
    if (auto *FieldRef = dyn_cast<FieldRefInst>(ForVal)) {
@@ -1288,11 +1288,15 @@ llvm::GlobalVariable* IRGen::getOrCreateInitializedFlag(const il::Value* ForVal)
    if (It != InitializedFlagMap.end())
       return It->getSecond();
 
-   auto Flag = new llvm::GlobalVariable(*M, Builder.getInt1Ty(), false,
-                                        llvm::GlobalVariable::PrivateLinkage,
-                                        Builder.getFalse());
+   auto IP = Builder.saveIP();
+   Builder.SetInsertPoint(&Builder.GetInsertBlock()->getParent()->getEntryBlock());
+
+   auto *Flag = Builder.CreateAlloca(Builder.getInt1Ty());
+   Builder.CreateStore(Builder.getFalse(), Flag);
 
    InitializedFlagMap[Key] = Flag;
+   Builder.restoreIP(IP);
+
    return Flag;
 }
 
@@ -2145,9 +2149,9 @@ llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
    auto Dst = getLlvmValue(I.getDst());
    auto Src = getLlvmValue(I.getSrc());
 
-   if (I.isTagged()) {
-      Builder.CreateStore(Builder.getTrue(),
-                          getOrCreateInitializedFlag(I.getDst()));
+   if (I.isTagged() || I.getDst()->isTagged()) {
+      Builder.CreateStore(
+          Builder.getTrue(), getOrCreateInitializedFlag(I.getDst()));
    }
 
    // can happen if we elided the store already
@@ -2208,9 +2212,9 @@ llvm::Value* IRGen::visitInitInst(const InitInst& I)
    auto Dst = getLlvmValue(I.getDst());
    auto Src = getLlvmValue(I.getSrc());
 
-   if (I.isTagged()) {
-      Builder.CreateStore(Builder.getTrue(),
-                          getOrCreateInitializedFlag(I.getDst()));
+   if (I.isTagged() || I.getDst()->isTagged()) {
+      Builder.CreateStore(
+          Builder.getTrue(), getOrCreateInitializedFlag(I.getDst()));
    }
 
    // can happen if we elided the store already
@@ -2307,7 +2311,7 @@ llvm::Value* IRGen::visitWeakReleaseInst(const il::WeakReleaseInst& I)
 llvm::Value* IRGen::visitMoveInst(const il::MoveInst& I)
 {
    // update the flag indicating this value was moved from
-   llvm::GlobalVariable* Flag = getOrCreateInitializedFlag(I.getOperand(0));
+   llvm::Value* Flag = getOrCreateInitializedFlag(I.getOperand(0));
    Builder.CreateStore(Builder.getFalse(), Flag);
 
    auto It = InitializedFlagMap.find((uintptr_t)&I);
@@ -3213,7 +3217,7 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
    if (I.isTaggedDeinit()) {
       // check the flag to see if it was moved
       auto* Val = LookThroughLoad(I.getOperand(0));
-      llvm::GlobalVariable* Flag = getOrCreateInitializedFlag(Val);
+      llvm::Value* Flag = getOrCreateInitializedFlag(Val);
       auto FlagLd = Builder.CreateLoad(Flag);
 
       auto* InitializedBB = llvm::BasicBlock::Create(

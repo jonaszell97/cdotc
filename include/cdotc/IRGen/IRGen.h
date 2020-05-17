@@ -217,7 +217,7 @@ private:
                                        ArrayRef<llvm::Value*> Args,
                                        llvm::Type* RetTy = nullptr);
 
-   llvm::GlobalVariable* getOrCreateInitializedFlag(const il::Value* ForVal);
+   llvm::Value* getOrCreateInitializedFlag(const il::Value* ForVal);
 
    CompilerInstance& CI;
    ast::SemaPass& Sema;
@@ -253,7 +253,7 @@ private:
    llvm::SmallVector<FunctionPriorityPair, 4> GlobalInitFns;
    llvm::SmallVector<FunctionPriorityPair, 4> GlobalDeinitFns;
 
-   llvm::DenseMap<uintptr_t, llvm::GlobalVariable*> InitializedFlagMap;
+   llvm::DenseMap<uintptr_t, llvm::Value*> InitializedFlagMap;
 
    llvm::LLVMContext& Ctx;
    llvm::Module* M;
