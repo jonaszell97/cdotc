@@ -794,7 +794,9 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
       Sema.diagnose(Decl, err_uninitialized_local, Decl->getDeclName(),
                     selector, I.getSourceLoc());
 
-      Sema.diagnose(note_uninitialized_declared_here, Decl->getSourceLoc());
+      if (!isa<ast::FuncArgDecl>(Decl) || !cast<ast::FuncArgDecl>(Decl)->isSelf()) {
+         Sema.diagnose(note_uninitialized_declared_here, Decl->getSourceLoc());
+      }
    }
 }
 
