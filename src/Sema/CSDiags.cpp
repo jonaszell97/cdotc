@@ -296,13 +296,13 @@ static bool diagnoseMemberFailure(ConstraintSystem& Sys, MemberConstraint* C,
 
    if (LookupRes->empty()) {
       Sys.QC.Sema->diagnose(
-          err_member_not_found, BoundTy,
+          err_type_member_not_found, BoundTy,
           L->getPathElements().back().getDeclarationName(), false,
           L->getAnchor()->getSourceRange());
    }
    else {
       Sys.QC.Sema->diagnose(
-          err_member_not_found, BoundTy,
+          err_type_member_not_found, BoundTy,
           L->getPathElements().back().getDeclarationName(), true, MemberTy,
           L->getAnchor()->getSourceRange());
 

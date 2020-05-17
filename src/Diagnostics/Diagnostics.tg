@@ -434,6 +434,7 @@ def err_class_not_accessible : Error<"${ 0 | decl_kind } $1 is not accessible">
 def err_class_not_found : Error<"class $0 not found">
 def err_instantiate_abstract_class : Error<"cannot instantiate abstract class $0">
 def err_member_not_found : Error<"${ 0 | decl_kind } '$1' does not have a member named '$2'${ 3 | if( of type '$4') }">
+def err_type_member_not_found : Error<"type '$0' does not have a member named '$1'${ 2 | if( of type '$3') }">
 def err_not_found : Error<"$0 not found">
 def err_member_needs_initializing : Error<"member $0 must be initialized in every constructor">
 def err_generic_type_not_found : Error<"${ 0 | decl_kind } does not have a generic type $1">

@@ -968,14 +968,14 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl* M, RecordDecl* R)
          res = Builder.GetTrue();
       }
       else {
-         llvm::SmallVector<BasicBlock*, 8> CompBlocks;
+         SmallVector<BasicBlock*, 8> CompBlocks;
          while (i < numFields) {
             CompBlocks.push_back(Builder.CreateBasicBlock("structcmp"));
             ++i;
          }
 
-         CompBlocks.push_back(Builder.CreateBasicBlock("structcmp.neq"));
-         auto EqBB = Builder.CreateBasicBlock("structcmp.eq");
+         CompBlocks.push_back(Builder.CreateBasicBlock("structcmp.eq"));
+         auto NeqBB = Builder.CreateBasicBlock("structcmp.neq");
 
          for (i = 0; i < numFields; ++i) {
             Builder.CreateBr(CompBlocks[i]);
@@ -987,16 +987,16 @@ void ILGenPass::DefineImplicitEquatableConformance(MethodDecl* M, RecordDecl* R)
             auto eq = CreateEqualityComp(Builder.CreateLoad(val1),
                                          Builder.CreateLoad(val2));
 
-            Builder.CreateCondBr(eq, EqBB, CompBlocks[i + 1]);
+            Builder.CreateCondBr(eq, CompBlocks[i + 1], NeqBB);
          }
 
          auto MergeBB = Builder.CreateBasicBlock("structcmp.merge");
          MergeBB->addBlockArg(Context.getBoolTy());
 
-         Builder.SetInsertPoint(EqBB, true);
+         Builder.SetInsertPoint(CompBlocks.back(), true);
          Builder.CreateBr(MergeBB, {Builder.GetTrue()});
 
-         Builder.SetInsertPoint(CompBlocks.back(), true);
+         Builder.SetInsertPoint(NeqBB, true);
          Builder.CreateBr(MergeBB, {Builder.GetFalse()});
 
          Builder.SetInsertPoint(MergeBB);
@@ -1138,37 +1138,32 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl* M,
    auto Self = fun->getEntryBlock()->getBlockArg(0);
    fun->setSelf(Self);
 
-   auto PlusEquals = getFunc(SP.getStringPlusEqualsString());
+   auto Separator = getString(", ");
+   SmallVector<Value*, 8> Strings;
 
    if (auto StructTy = dyn_cast<StructDecl>(R)) {
-      auto Str = getString(StructTy->getName() + " { ");
-      auto Separator = getString(", ");
+      Strings.push_back(getString(StructTy->getName() + " { "));
 
-      unsigned numFields = StructTy->getNumNonStaticFields();
       unsigned i = 0;
-
       for (const auto& F : StructTy->getFields()) {
+         if (i != 0) {
+            Strings.push_back(Separator);
+         }
+
          auto fieldRef = Builder.CreateStructGEP(Self, i);
          auto nameStr = getString(F->getName() + " = ");
-         auto valStr = stringify(fieldRef);
+         auto valStr = stringify(Builder.CreateLoad(fieldRef));
 
-         Builder.CreateCall(PlusEquals, {Str, nameStr});
-         Builder.CreateCall(PlusEquals, {Str, valStr});
-
-         if (i < numFields - 1)
-            Builder.CreateCall(PlusEquals, {Str, Separator});
+         Strings.push_back(nameStr);
+         Strings.push_back(valStr);
 
          ++i;
       }
 
-      Builder.CreateCall(PlusEquals, {Str, getString(" }")});
-      Builder.CreateRet(Str);
+      Strings.push_back(getString(" }"));
    }
    else if (auto EnumTy = dyn_cast<EnumDecl>(R)) {
       auto RawVal = GetEnumRawValueAsInteger(Self);
-      auto Separator = getString(", ");
-      (void)Separator;
-
       auto Switch = Builder.CreateSwitch(RawVal, makeUnreachableBB());
 
       for (const auto& C : EnumTy->getCases()) {
@@ -1177,33 +1172,36 @@ void ILGenPass::DefineImplicitStringRepresentableConformance(MethodDecl* M,
 
          Builder.SetInsertPoint(nextBB);
 
-         auto Str = getString("." + C->getName()
-                              + (C->getArgs().empty() ? "" : "("));
-         auto numValues = C->getArgs().size();
-         size_t i = 0;
+         Strings.push_back(
+             getString("." + C->getName() + (C->getArgs().empty() ? "" : "(")));
 
-         for (auto* Val : C->getArgs()) {
-            (void)Val;
+         auto numValues = C->getArgs().size();
+         for (size_t i = 0; i < numValues; ++i) {
+            if (i != 0) {
+               Strings.push_back(Separator);
+            }
 
             auto caseVal = Builder.CreateEnumExtract(Self, C, i);
-            auto valStr = stringify(caseVal);
+            auto valStr = stringify(Builder.CreateLoad(caseVal));
 
-            Builder.CreateCall(PlusEquals, {Str, valStr});
-            if (i < numValues - 1)
-               Builder.CreateCall(PlusEquals, {Str, Separator});
-
-            ++i;
+            Strings.push_back(valStr);
          }
 
-         if (!C->getArgs().empty())
-            Builder.CreateCall(PlusEquals, {Str, getString(")")});
+         if (!C->getArgs().empty()) {
+            Strings.push_back(getString(")"));
+         }
 
-         Builder.CreateRet(Str);
+         Builder.CreateRet(getString(Strings));
+         Strings.clear();
       }
+
+      return;
    }
    else {
-      Builder.CreateRet(getString(R->getName()));
+      Strings.push_back(getString(R->getName()));
    }
+
+   Builder.CreateRet(getString(Strings));
 }
 
 void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl* R)
