@@ -9,8 +9,9 @@
 
 namespace cdot {
 namespace ast {
-class ILGenPass;
 class CallableDecl;
+class FieldDecl;
+class ILGenPass;
 } // namespace ast
 
 namespace il {
@@ -78,6 +79,10 @@ class DefinitiveInitializationPass
 
    void verifyMemoryUse(Instruction& I, llvm::BitVector& MustGen,
                         llvm::BitVector& MayGen);
+
+   void checkSelfInitializationState(llvm::BitVector& MustGen,
+                                     llvm::BitVector& MayGen,
+                                     SmallPtrSetImpl<ast::FieldDecl*> &InvalidFields);
 
    void checkDeinitilization(CallInst& I, llvm::BitVector& MustGen,
                              llvm::BitVector& MayGen);

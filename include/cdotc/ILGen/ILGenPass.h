@@ -430,7 +430,9 @@ public:
    void retainIfNecessary(il::Value* V);
    void releaseIfNecessary(il::Value* V);
 
-   void createFallibleInitReturn(bool isNone);
+   void createFallibleInitReturn(bool isNone,
+                                 bool afterSelfInit = false,
+                                 bool afterSuperInit = false);
 
    il::GlobalVariable* GenerateVTable(ClassDecl* C);
    il::GlobalVariable* GeneratePTable(RecordDecl* R, ProtocolDecl* P);
@@ -446,6 +448,7 @@ public:
    il::Method* GetOperatorEquals(RecordDecl* R);
    il::Method* GetToStringFn(RecordDecl* R);
 
+   il::Value* getString(ArrayRef<il::Value*> Strings);
    il::Value* stringify(il::Value* Val);
    il::Value* getString(const llvm::Twine& str);
    il::Constant* getConstantVal(QualType Ty, const cdot::Variant& V);

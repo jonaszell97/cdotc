@@ -541,16 +541,25 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
                 }
              }
 
-             for (auto &Chk : Task.OutputChecks) {
-                std::regex re(Chk.data(), Chk.size());
-                std::smatch m;
+             try {
+                for (auto& Chk : Task.OutputChecks) {
+                   std::regex re(Chk.data(), Chk.size());
+                   std::smatch m;
 
-                if (!std::regex_search(Output, m, re)) {
-                   LogOS << Output << "\n";
-                   LogOS << "XFAIL: output does not match pattern '" << Chk << "'\n";
-                   Task.Status = TestStatus::XFAIL;
-                   break;
+                   if (!std::regex_search(Output, m, re)) {
+                      LogOS << Output << "\n";
+                      LogOS << "XFAIL: output does not match pattern '" << Chk
+                            << "'\n";
+                      Task.Status = TestStatus::XFAIL;
+                      break;
+                   }
                 }
+             }
+             catch (std::regex_error &re)
+             {
+                LogOS << Output << "\n";
+                LogOS << "XFAIL: invalid pattern: " << re.what() << "\n";
+                Task.Status = TestStatus::XFAIL;
              }
 
              Executor.TaskComplete(Test, Task);

@@ -615,8 +615,25 @@ void DefinitiveInitializationPass::run()
             verifyMemoryUse(I, MustGen, MayGen);
          }
 
-         if (isa<CallInst>(I)) {
-            checkDeinitilization(cast<CallInst>(I), MustGen, MayGen);
+         if (auto *Call = dyn_cast<CallInst>(&I)) {
+            checkDeinitilization(*Call, MustGen, MayGen);
+
+            // 'self' may not be partially initialized before a 'self.init' call.
+            if (!IsBaseInit) {
+               auto *CalledFn = Call->getCalledFunction();
+               if (auto Init = dyn_cast<Initializer>(CalledFn)) {
+                  if (Init->getCtorKind() == ConstructorKind::Base) {
+                     auto State = SelfVal->getInitializationState(MustGen, MayGen);
+                     if (State != LocalVariable::NotInitialized) {
+                        ILGen.getSema().diagnose(
+                            err_generic_error,
+                            "'self' must be fully uninitialized before a call to a "
+                            "delegating initializer",
+                            Call->getSourceLoc());
+                     }
+                  }
+               }
+            }
          }
 
          visit(I, MustGen, Kill);
@@ -626,8 +643,8 @@ void DefinitiveInitializationPass::run()
          detail::andNot(MustGen, Kill, MemoryLocCounter);
       }
 
-      // if this is an exit block, verify that no locals or arguments are
-      // left partially initialized
+      // If this is an exit block, verify that no locals or arguments are
+      // left partially initialized.
       if (!B.isExitBlock())
          continue;
 
@@ -660,37 +677,7 @@ void DefinitiveInitializationPass::run()
          if (Term->IsFallibleInitNoneRet())
             continue;
 
-         auto State = SelfVal->getInitializationState(MustGen, MayGen);
-         if (State == LocalVariable::FullyInitialized)
-            continue;
-
-         auto S = cast<ast::StructDecl>(
-             SelfVal->Val->getType()->removeReference()->getRecord());
-
-         if (S->getStoredFields().empty())
-            continue;
-
-         auto FieldIt = S->stored_field_begin();
-         for (auto& Val : SelfVal->getContainedVars()) {
-            auto FieldState = Val->getInitializationState(MustGen, MayGen);
-            if (FieldState != LocalVariable::FullyInitialized) {
-               auto Field = *FieldIt;
-
-               // don't error twice for the same field
-               if (!InvalidFields.insert(Field).second)
-                  continue;
-
-               F->setInvalid(true);
-               ILGen.getSema().diagnose(
-                   Field, err_field_must_be_initialized,
-                   Field->getDeclName(), F->getSourceLoc());
-
-               ILGen.getSema().diagnose(
-                   note_declared_here, Field->getSourceLoc());
-            }
-
-            ++FieldIt;
-         }
+         checkSelfInitializationState(MustGen, MayGen, InvalidFields);
       }
    }
 
@@ -713,6 +700,8 @@ void DefinitiveInitializationPass::run()
 
    MemoryLocCounter = 0;
    SelfVal = nullptr;
+   SelfLoc = MemoryLocation::get();
+
    MemoryLocs.clear();
    InitializedArgs.clear();
    Whitelist.clear();
@@ -732,14 +721,17 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
                                                    BitVector& MustGen,
                                                    BitVector& MayGen)
 {
-   if (I.isSynthesized())
+   if (I.isSynthesized()) {
       return;
+   }
 
-   if (!isa<LoadInst>(&I) && !isa<MoveInst>(&I) && !isa<BeginBorrowInst>(&I))
+   if (!isa<LoadInst>(I) && !isa<MoveInst>(I) && !isa<BeginBorrowInst>(I)) {
       return;
+   }
 
-   if (UA->isUnsafe(I))
+   if (UA->isUnsafe(I)) {
       return;
+   }
 
    auto Mem = MemoryLocation::get(I.getOperand(0), false);
    if (!Mem)
@@ -757,7 +749,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
    case LocalVariable::FullyInitialized:
       break;
    case LocalVariable::NotInitialized:
-      if (I.isUnused()) {
+      if (I.isUnused() && !isa<AssignInst>(I)) {
          break;
       }
 
@@ -765,7 +757,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
       IsValidUse = false;
       break;
    case LocalVariable::MaybeUninitialized:
-      if (I.isUnused()) {
+      if (I.isUnused() && !isa<AssignInst>(I)) {
          break;
       }
 
@@ -773,7 +765,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
       IsValidUse = false;
       break;
    case LocalVariable::PartiallyInitialized: {
-      if (I.isUnused()) {
+      if (I.isUnused() && !isa<AssignInst>(I)) {
          break;
       }
 
@@ -790,7 +782,7 @@ void DefinitiveInitializationPass::verifyMemoryUse(il::Instruction& I,
    }
    }
 
-   // verify that the memory has been initialized before this use
+   // Verify that the memory has been initialized before this use.
    if (!IsValidUse) {
       auto& Sema = ILGen.getSema();
       auto Decl = ILGen.getDeclForValue(I.getOperand(0)->ignoreBitCast());
@@ -812,6 +804,44 @@ static il::Value* LookThroughLoad(il::Value* V)
       return Ld->getTarget();
 
    return V;
+}
+
+void DefinitiveInitializationPass::checkSelfInitializationState(
+    BitVector& MustGen,
+    BitVector& MayGen,
+    llvm::SmallPtrSetImpl<ast::FieldDecl*> &InvalidFields)
+{
+   auto State = SelfVal->getInitializationState(MustGen, MayGen);
+   if (State == LocalVariable::FullyInitialized)
+      return;
+
+   auto S = cast<ast::StructDecl>(
+       SelfVal->Val->getType()->removeReference()->getRecord());
+
+   if (S->getStoredFields().empty())
+      return;
+
+   auto FieldIt = S->stored_field_begin();
+   for (auto& Val : SelfVal->getContainedVars()) {
+      auto FieldState = Val->getInitializationState(MustGen, MayGen);
+      if (FieldState != LocalVariable::FullyInitialized) {
+         auto Field = *FieldIt;
+
+         // don't error twice for the same field
+         if (!InvalidFields.insert(Field).second)
+            continue;
+
+         F->setInvalid(true);
+         ILGen.getSema().diagnose(
+             Field, err_field_must_be_initialized,
+             Field->getDeclName(), F->getSourceLoc());
+
+         ILGen.getSema().diagnose(
+             note_declared_here, Field->getSourceLoc());
+      }
+
+      ++FieldIt;
+   }
 }
 
 void DefinitiveInitializationPass::checkDeinitilization(il::CallInst& I,
