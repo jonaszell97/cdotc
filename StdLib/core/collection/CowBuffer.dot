@@ -1,0 +1,713 @@
+
+import { Atomic } from atomic
+
+@_builtin @compiletime
+fileprivate struct CowBufferImpl<Data> {
+    /// Small layout on little endian 64-bit platform
+    /// (C = Character, S = Size, F = Small Flag, O = Owned Flag)
+    /// CCCC_CCCC CCCC_CCCC XCCC_CCCC
+    /// ^ _data   ^ _size   ^ _capacity
+    /// where X = FOSS_SSSS
+    ///           ^ MSB
+    var _data: UnsafeMutableBufferPtr<Data>
+    var _size: UInt
+    var _capacity: UInt
+
+    /// This buffers reference count.
+    /// If it is zero, the buffer is not currently shared.
+    var _refcount = 0
+
+    /// Flag that is set when this buffer owns its memory.
+    static let OwnedFlag: UInt = 0x1u << 62
+
+    /// Flag that is set when this is using a small, inline representation.
+    static let SmallFlag: UInt = 0x1u << 63
+
+    /// Mask to extract the 5-bit size from a 64-bit value.
+    static let SmallSizeMask: UInt = 0b0001_1111u << 56
+
+    /// Mask to extract the 61-bit capacity from a 64-bit value.
+    static let CapacityMask: UInt = ~(0b1110_0000u << 56)
+
+    /// Number of bytes that fit into the small representation.
+    static let SmallCapacity: UInt = UInt((3 * reflect.sizeOf<UInt> - 1) / reflect.sizeOf<Data>)
+
+    /// Default capacity to allocate when growing from zero.
+    static let DefaultCapacity: Int = 16
+
+    /// Whether or not it is worth it to use a small representation.
+    static let UseSmallRepr: Bool = SmallCapacity > 1
+
+    /// Memberwise C'tor.
+    fileprivate memberwise init
+
+    /// Initializes an owned, potentially small buffer.
+    init {
+        self._data = .null
+        self._size = 0
+        self._capacity = 0
+
+        if UseSmallRepr {
+            initSmall()
+        }
+    }
+
+    /// Initializes an owned buffer with a capacity of at least \param minCapacity.
+    init (withInitialCapacity minCapacity: Int) {
+        self.init()
+        grow(byAtLeast: minCapacity)
+    }
+
+    /// Initialize from a static string. This is only called by the compiler
+    /// when the lifetime of \param bytes is guaranteed to exceed the lifetime of
+    /// this string.
+    fileprivate init (staticBuffer bytes: UnsafeMutableBufferPtr<Data>, size: Int) {
+        self.init()
+
+        self.owned = false
+        self.small = false
+        self.bytes = bytes.copy()
+        self.bufferSize = size
+    }
+
+    /// D'tor. Frees the memory if this buffer owns it.
+    deinit {
+        if !owned {
+            return
+        }
+
+        for i in 0..bufferSize {
+            bytes.withReference(i) {
+                builtin.deinit($0)
+            }
+        }
+
+        if !small {
+            self.bytes.deallocate()
+        }
+    }
+
+    /// \return The refcount as an atomic.
+    prop atomicRefCount: Atomic<Int> => Atomic<Int>(_referencing: self._refcount)
+
+    /// \return the flags of this buffer.
+    prop flags: UInt {
+        get {
+            return _capacity
+        }
+        set {
+            _capacity = newVal
+        }
+    }
+
+    /// \return true iff this buffer owns its memory.
+    prop owned: Bool {
+        get {
+            return flags & OwnedFlag != 0
+        }
+        set {
+            if newVal {
+                flags = flags | OwnedFlag
+            }
+            else {
+                flags = flags & ~OwnedFlag
+            }
+        }
+    }
+
+    /// \return true iff this buffer uses a small representation.
+    prop small: Bool {
+        get {
+            if !UseSmallRepr {
+                return false
+            }
+            else {
+                return flags & SmallFlag != 0
+            }
+        }
+        set {
+            if newVal {
+                flags = flags | SmallFlag
+            }
+            else {
+                flags = flags & ~SmallFlag
+            }
+        }
+    }
+
+    /// \return this buffers current reference count.
+    prop refcount: UInt32 {
+        return atomicRefCount.load()
+    }
+
+    /// \return true iff this buffer is currently refcounted.
+    prop refcounted: Bool {
+        return refcount != 0
+    }
+
+    /// \return the byte array of this buffer.
+    prop bytes: UnsafeMutableBufferPtr<Data> {
+        get {
+            if small {
+                return UnsafeMutableBufferPtr<Data>(rawPointer: builtin.addressOf(self))
+            }
+
+            return _data.copy()
+        }
+        set {
+            _data = newVal
+        }
+    }
+
+    /// \return the current size of this buffer.
+    prop bufferSize: Int {
+        get {
+            if small {
+                return Int((flags & SmallSizeMask) >> 56)
+            }
+
+            return Int(_size)
+        }
+        set {
+            var newVal = UInt(newVal)
+            if small {
+                assert!(newVal <= SmallCapacity, "small size too large!")
+                flags = flags & ~SmallSizeMask
+                flags = flags | (newVal << 56)
+            }
+            else {
+                _size = newVal
+            }
+        }
+    }
+
+    /// \return this strings current capacity.
+    prop bufferCapacity: Int {
+        get {
+            if small {
+                return Int(SmallCapacity)
+            }
+
+            return Int(_capacity & CapacityMask)
+        }
+        set {
+            var newVal = UInt(newVal)
+            assert!(newVal & ~CapacityMask == 0, "capacity too large!")
+
+            _capacity &= ~CapacityMask
+            _capacity |= newVal
+        }
+    }
+
+    /// Increments this buffers reference count by one.
+    def mutating retain() {
+        ++atomicRefCount
+    }
+
+    /// Decrements this buffers reference count by one.
+    def mutating release() {
+        var rfc = --atomicRefCount
+        if rfc == 0 {
+            // Controlled self destruction.
+            mem.delete(UnsafeMutablePtr<Self>(rawPointer: builtin.addressOf(&self)))
+        }
+    }
+
+    /// Initializes a small buffer.
+    def mutating initSmall() {
+        self.small = true
+        self.owned = true
+    }
+
+    /// Turn this buffer into an owned buffer, if it is not already one.
+    def mutating makeOwned(ensuringCapacity minCapacity: Int = 0) {
+        if owned {
+            // Check if we have enough capacity.
+            if bufferCapacity < minCapacity {
+                // If we're small, we still need to switch to owned storage to gain capacity.
+                if !small {
+                    grow(byAtLeast: minCapacity - bufferCapacity)
+                    return
+                }
+            }
+            else {
+                return
+            }
+        }
+
+        var minCapacity = minCapacity
+        if minCapacity == 0 {
+            minCapacity = math.max(DefaultCapacity, math.closestPowerOfTwo(roundingUp: bufferSize))
+        }
+
+        // Allocate storage.
+        var buffer = mem.allocate<Data>(minCapacity)
+
+        // Copy existing bytes.
+        mem.copy(to: buffer, from: bytes, bufferSize)
+
+        // Remember previous size.
+        var prevSize = bufferSize
+
+        // Clear small state and mark memory as owned.
+        self.small = false
+        self.owned = true
+        self._data = buffer
+        self._size = UInt(prevSize)
+        self.bufferCapacity = minCapacity
+    }
+
+    /// Insert the element \param el at the offset \param position.
+    def mutating insert(_ el: owned Data, at position: Int) {
+        if bufferSize == bufferCapacity {
+            grow(byAtLeast: 1)
+        }
+
+        if position != bufferSize {
+            // Move all following elements one to the back.
+            mem.move(to: self.bytes + position + 1,
+                     from: self.bytes + position,
+                     1)
+        }
+
+        self.bytes[position] = builtin.move(el)
+        self.bufferSize = self.bufferSize + 1
+    }
+
+    /// Remove \param n bytes following \param offset.
+    def mutating remove(at position: Int) {
+        // Deinitialize the value.
+        self.bytes[position].withReference {
+            builtin.deinit(&$0)
+        }
+
+        if position != bufferSize {
+            // Copy all following elements one to the front.
+            mem.move(to: self.bytes + (position - 1),
+                     from: self.bytes + position,
+                     1)
+        }
+
+        // Decrease the size.
+        self.bufferSize = self.bufferSize - 1
+    }
+
+    /// Reverse the bytes in the buffer.
+    def mutating reverse(fromIndex position: Int) {
+        mem.reverse(memory: self.bytes + position,
+                    size: self.bufferSize - position)
+    }
+
+    /// Grow this buffer by at least \param n bytes.
+    /// \param n the minimum number of bytes to grow.
+    def mutating grow(byAtLeast n: Int = 1) {
+        assert!(n >= 1, "growing by zero bytes!")
+
+        var growTo = math.closestPowerOfTwo(roundingUp: bufferCapacity + n)
+        if small || !owned {
+            return makeOwned(ensuringCapacity: growTo)
+        }
+
+        // Reallocate to make sure there is enough storage.
+        bytes = mem.reallocate(bytes, toSize: growTo)
+        bufferCapacity = growTo
+    }
+
+    /// Clear the storage buffer.
+    def mutating clear() {
+        bufferSize = 0
+    }
+}
+
+extend CowBufferImpl with Copyable {
+    /// \inherit
+    public def copy() -> Self {
+        var copy = Self(_data: _data.copy(), _size, _capacity)
+        copy.owned = false
+
+        return copy
+    }
+}
+
+extend CowBufferImpl {
+    def _dump() {
+        var s = "CowBufferImpl ${builtin.addressOf(self)} {\n"
+        s += "   small = $small,\n"
+        s += "   owned = $owned,\n"
+        s += "   refcount = $refcount,\n"
+        s += "   bufferSize = $bufferSize,\n"
+        s += "   bufferCapacity = $bufferCapacity,\n"
+        s += "   bytes = '${bytes.toString(bufferSize)}'\n"
+        s += "}"
+
+        print(s)
+    }
+}
+
+struct BufferSlice<Data> {
+    /// The buffer type that this slice looks into.
+    alias BufferType = CowBufferImpl<Data>
+
+    /// Reference to a shared buffer.
+    var buffer: UnsafeMutablePtr<BufferType>
+
+    /// Offset into the buffer that this slice starts at.
+    var offset: Int
+
+    /// Length of this slice.
+    var length: Int
+
+    /// Memberwise C'tor.
+    init (_ buffer: UnsafeMutablePtr<BufferType>, _ offset: Int, _ length: Int) {
+        self.buffer = buffer.copy()
+        self.offset = offset
+        self.length = length
+
+        buffer->retain()
+    }
+
+    /// D'tor.
+    deinit {
+        buffer->release()
+    }
+
+    /// \return the byte array that represents this String.
+    prop bytes: UnsafeMutableBufferPtr<Data> {
+        return buffer->bytes + offset
+    }
+
+    /// \return the byte size of this string.
+    prop bufferSize: Int {
+        return length
+    }
+
+    /// \return the byte capacity of this string.
+    prop bufferCapacity: Int {
+        return bufferSize
+    }
+
+    /// \return `true` iff this StringBuffer owns its memory.
+    prop owned: Bool {
+        get {
+            return buffer->owned
+        }
+        set {
+            buffer->owned = newVal
+        }
+    }
+
+    /// @undocumented
+    def _dump() {
+        var s = "BufferSlice ${builtin.addressOf(self)} {\n"
+        s += "   CowBufferImpl $buffer {\n"
+        s += "      small = ${buffer->small},\n"
+        s += "      owned = ${buffer->owned},\n"
+        s += "      refcount = ${buffer->refcount},\n"
+        s += "      bufferSize = ${buffer->bufferSize},\n"
+        s += "      bufferCapacity = ${buffer->bufferCapacity},\n"
+        s += "      bytes = '${buffer->bytes.toString(buffer->bufferSize)}'\n"
+        s += "   },\n"
+        s += "   offset = $offset,\n"
+        s += "   length = $length\n"
+        s += "}"
+
+        print(s)
+    }
+}
+
+extend BufferSlice with ImplicitlyCopyable {
+    /// \inherit
+    public def copy() -> Self {
+        buffer->retain()
+        return BufferSlice(buffer, offset, length)
+    }
+}
+
+enum CowBufferStorage<Data> with Copyable {
+    /// Shared string buffer storage.
+    case Shared(UnsafeMutablePtr<CowBufferImpl<Data>>)
+
+    /// Direct string buffer storage.
+    case Direct(CowBufferImpl<Data>)
+
+    /// Slice storage.
+    case Slice(BufferSlice<Data>)
+}
+
+struct CowBuffer<Data> {
+    alias BufferType = CowBufferImpl<Data>
+    alias SliceType = BufferSlice<Data>
+    alias Storage = CowBufferStorage<Data>
+
+    /// The storage for this string. Can either be shared (i.e. refcounted),
+    /// or owned exclusively by this string.
+    var storage: Storage
+    var __padding: [Byte; 3] = default
+
+    /// Memberwise C'tor.
+    private memberwise init
+
+    /// Empty C'tor.
+    init {
+        storage = .Direct(BufferType())
+    }
+
+    /// Initializes an owned buffer with a capacity of at least \param minCapacity.
+    init (withInitialCapacity minCapacity: Int) {
+         storage = .Direct(BufferType(withInitialCapacity: minCapacity))
+    }
+
+    /// C'tor. Initializes a substring.
+    init (_ str: mut ref Self, offset: Int, length: Int) {
+        match str.storage {
+        case .Shared(let ptr):
+            // Already shared.
+            self.storage = .Slice(SliceType(ptr, offset, length))
+        case .Direct(let buf):
+            // We need to make our buffer shared.
+            var alloc = mem.new(BufferType(buf._data, buf._size, buf._capacity))
+            alloc->retain()
+            alloc->owned = true
+
+            // Make sure to not destroy the buffer here.
+            unsafe {
+                str.owned = false
+                str.storage = .Shared(alloc)
+            }
+
+            self.storage = .Slice(SliceType(alloc, offset, length))
+        case .Slice(let substr):
+            // Already a slice.
+            self.storage = .Slice(SliceType(substr.buffer, offset, length))
+        }
+    }
+
+    /// Initialize from a static buffer. This is only called by the compiler
+    /// when the lifetime of the buffer is guaranteed to exceed the lifetime of
+    /// this struct.
+    fileprivate init (staticBuffer bytes: UnsafeBufferPtr<Data>, size: Int) {
+        self.storage = .Direct(BufferType(staticBuffer: bytes, size))
+    }
+
+    /// D'tor.
+    deinit {
+        match storage {
+        case .Shared(var ptr):
+            ptr->release()
+        default:
+            break
+        }
+    }
+
+    /// \return the byte array that represents this String.
+    prop bytes: UnsafeMutableBufferPtr<Data> {
+        match storage {
+        case .Shared(let ptr):
+            return ptr->bytes
+        case .Direct(let buf):
+            return buf.bytes
+        case .Slice(let substr):
+            return substr.bytes
+        }
+    }
+
+    /// \return the byte size of this string.
+    prop bufferSize: Int {
+        match storage {
+        case .Shared(let ptr):
+            return ptr->bufferSize
+        case .Direct(let buf):
+            return buf.bufferSize
+        case .Slice(let substr):
+            return substr.length
+        }
+    }
+
+    /// \return the byte capacity of this string.
+    prop bufferCapacity: Int {
+        match storage {
+        case .Shared(let ptr):
+            return ptr->bufferCapacity
+        case .Direct(let buf):
+            return buf.bufferCapacity
+        case .Slice(let substr):
+            return substr.bufferCapacity
+        }
+    }
+
+    /// \return `true` iff this StringBuffer owns its memory.
+    prop owned: Bool {
+        get {
+            match storage {
+            case .Shared(let ptr):
+                return false
+            case .Direct(let buf):
+                return buf.owned
+            case .Slice(let substr):
+                return false
+            }
+        }
+        set {
+            match storage {
+            case .Shared(let ptr):
+                unreachable!("cannot take ownership of shared buffer!")
+            case .Direct(var buf):
+                return buf.owned = newVal
+            case .Slice(var substr):
+                unreachable!("cannot take ownership of shared buffer!")
+            }
+        }
+    }
+
+    /// \return `true` iff this buffer is currently using a small representation.
+    prop _small: Bool {
+        match storage {
+        case .Shared(let ptr):
+            return ptr->small
+        case .Direct(let buf):
+            return buf.small
+        case .Slice(let substr):
+            return substr.buffer->small
+        }
+    }
+
+    /// Make sure that we own our buffer and can modify it.
+    def mutating makeOwned() {
+        match storage {
+        case .Shared(let ptr):
+            // We need to switch to owned storage.
+            var buf = BufferType(staticBuffer: ptr->bytes,
+                                 size: ptr->bufferSize)
+            buf.makeOwned()
+
+            // Release the shared buffer.
+            ptr->release()
+
+            unsafe {
+                storage = .Direct(buf)
+            }
+        case .Direct(var buf):
+            buf.makeOwned()
+        case .Slice(let substr):
+            // We're no longer a substring. Switch to owned storage.
+            var buf = BufferType(staticBuffer: substr.bytes,
+                                 size: substr.bufferSize)
+
+            buf.makeOwned()
+
+            unsafe {
+                storage = .Direct(buf)
+            }
+        }
+    }
+
+    /// Grow this buffer by at least \param n bytes.
+    /// \param n the minimum number of bytes to grow.
+    def mutating grow(byAtLeast n: Int = 1) {
+        makeOwned()
+
+        if case .Direct(var buf) = storage {
+            buf.grow(byAtLeast: n)
+        }
+        else {
+            unreachable!("buffer should be owned!")
+        }
+    }
+
+    /// Insert the given element into the buffer.
+    def mutating insert(_ el: owned Data, at position: Int) {
+        makeOwned()
+
+        if case .Direct(var buf) = storage {
+            buf.insert(el, at: position)
+        }
+        else {
+            unreachable!("buffer should be owned!")
+        }
+    }
+
+    /// Remove \param n bytes following \param offset.
+    def mutating remove(at pos: Int) {
+        makeOwned()
+
+        if case .Direct(var buf) = storage {
+            buf.remove(at: pos)
+        }
+        else {
+            unreachable!("buffer should be owned!")
+        }
+    }
+
+    /// Reverse the bytes in the buffer.
+    def mutating reverse(fromIndex position: Int) {
+        makeOwned()
+
+        if case .Direct(var buf) = storage {
+            buf.reverse(fromIndex: position)
+        }
+        else {
+            unreachable!("buffer should be owned!")
+        }
+    }
+
+    /// Clear the storage buffer.
+    def mutating clear() {
+        match storage {
+        case .Shared(let ptr):
+            // Release the shared buffer.
+            storage = .Direct(BufferType())
+        case .Direct(var buf):
+            buf.clear()
+        case .Slice(let substr):
+            // Release the substring buffer.
+            storage = .Direct(BufferType())
+        }
+    }
+
+    /// \undocumented
+    def _dump() {
+        match storage {
+        case .Shared(let ptr):
+            return ptr->_dump()
+        case .Direct(var buf):
+            return buf._dump()
+        case .Slice(let substr):
+            return substr._dump()
+        }
+    }
+}
+
+extend CowBuffer with Copyable {
+    /// \inherit
+    public def copy() -> Self {
+        match storage {
+        case .Shared(var ptr):
+            ptr->retain()
+            return Self(storage: .Shared(ptr))
+        case .Direct(let buf):
+            // If we don't own our buffer, we don't need to refcount it.
+            if !owned {
+                return Self(storage: unsafe storage.copy())
+            }
+
+            // Otherwise we need to keep track of references to this buffer.
+            var alloc = mem.new(BufferType(_data: buf._data.copy(), _size: buf._size, _capacity: buf._capacity))
+            alloc->retain()
+
+            // We need to change our own storage too.
+            unsafe {
+                alloc->retain()
+
+                var mutStorage = UnsafeMutablePtr<Storage>(rawPointer: builtin.addressOf(self.storage))
+                mutStorage.store(.Shared(alloc.copy()))
+            }
+
+            return Self(storage: .Shared(alloc))
+        case .Slice(var substr):
+            // Already a substring.
+            return Self(storage: .Slice(SliceType(substr.buffer,
+                                                  substr.offset,
+                                                  substr.length)))
+        }
+    }
+}

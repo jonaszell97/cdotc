@@ -1,0 +1,323 @@
+
+module posix {
+    defaultAccess = public
+
+    // Implicitly import the `builtin.ops` module to make builtin operators visible.
+    implicitImports = [builtin.ops]
+
+    module aio {
+        include_system = ["aio.h"?]
+    }
+
+    module arpa {
+        module inet {
+            include_system = ["arpa/inet.h"?]
+        }
+    }
+
+    module assert {
+        include_system = ["assert.h"?]
+    }
+
+    module complex {
+        include_system = ["complex.h"?]
+    }
+
+    module cpio {
+        include_system = ["cpio.h"?]
+    }
+
+    module ctype {
+        include_system = ["ctype.h"?]
+    }
+
+    module dirent {
+        include_system = ["dirent.h"?]
+    }
+
+    module dlfcn {
+        include_system = ["dlfcn.h"?]
+    }
+
+    module errno {
+        include_system = ["errno.h"?]
+    }
+
+    module fcntl {
+        include_system = ["fcntl.h"?]
+    }
+
+    module fenv {
+        include_system = ["fenv.h"?]
+    }
+
+    module float {
+        include_system = ["float.h"?]
+    }
+
+    module fmtmsg {
+        include_system = ["fmtmsg.h"?]
+    }
+
+    module fnmatch {
+        include_system = ["fnmatch.h"?]
+    }
+
+    module ftw {
+        include_system = ["ftw.h"?]
+    }
+
+    module glob {
+        include_system = ["glob.h"?]
+    }
+
+    module grp {
+        include_system = ["grp.h"?]
+    }
+
+    module iconv {
+        include_system = ["iconv.h"?]
+    }
+
+    module inttypes {
+        include_system = ["inttypes.h"?]
+    }
+
+    module iso646 {
+        // include_system = ["iso646.h"?]
+    }
+
+    module langinfo {
+        include_system = ["langinfo.h"?]
+    }
+
+    module libgen {
+        include_system = ["libgen.h"?]
+    }
+
+    module limits {
+        include_system = ["limits.h"?]
+    }
+
+    module locale {
+        include_system = ["locale.h"?]
+    }
+
+    module math {
+        include_system = ["math.h"?]
+    }
+
+    module monetary {
+        include_system = ["monetary.h"?]
+    }
+
+    module mqueue {
+        // include_system = ["mqueue.h"?]
+    }
+
+    module ndbm {
+        include_system = ["ndbm.h"?]
+    }
+
+    module net {
+        module `if` {
+            include_system = ["net/if.h"?]
+        }
+    }
+
+    module netdb {
+        include_system = ["netdb.h"?]
+    }
+
+    module netinet {
+        module in {
+            include_system = ["netinet/in.h"?]
+        }
+
+        module tcp {
+            include_system = ["netinet/tcp.h"?]
+        }
+    }
+
+    module nl_types {
+        include_system = ["nl_types.h"?]
+    }
+
+    module poll {
+        include_system = ["poll.h"?]
+    }
+
+    module pthread {
+        include_system = ["pthread.h"?]
+    }
+
+    module pwd {
+        include_system = ["pwd.h"?]
+    }
+
+    module regex {
+        include_system = ["regex.h"?]
+    }
+
+    module sched {
+        include_system = ["sched.h"?]
+    }
+
+    module search {
+        include_system = ["search.h"?]
+    }
+
+    module semaphore {
+        include_system = ["semaphore.h"?]
+    }
+
+    module setjmp {
+        include_system = ["setjmp.h"?]
+    }
+
+    module signal {
+        include_system = ["signal.h"?]
+    }
+
+    module spawn {
+        include_system = ["spawn.h"?]
+    }
+
+    module stdarg {
+        include_system = ["stdarg.h"?]
+    }
+
+    module stdbool {
+        include_system = ["stdbool.h"?]
+    }
+
+    module stddef {
+        include_system = ["stddef.h"?]
+    }
+
+    module stdio {
+        include_system = ["stdio.h"?]
+    }
+
+    module stdlib {
+        include_system = ["stdlib.h"?]
+    }
+
+    module string {
+        include_system = ["string.h"?]
+    }
+
+    module strings {
+        include_system = ["strings.h"?]
+    }
+
+    module stropts {
+        include_system = ["stropts.h"?]
+    }
+
+    module sys {
+        module ipc {
+            include_system = ["sys/ipc.h"?]
+        }
+        module mman {
+            include_system = ["sys/mman.h"?]
+        }
+        module msg {
+            include_system = ["sys/msg.h"?]
+        }
+        module resource {
+            include_system = ["sys/resource.h"?]
+        }
+        module select {
+            include_system = ["sys/select.h"?]
+        }
+        module sem {
+            include_system = ["sys/sem.h"?]
+        }
+        module shm {
+            include_system = ["sys/shm.h"?]
+        }
+        module socket {
+            include_system = ["sys/socket.h"?]
+        }
+        module stat {
+            include_system = ["sys/stat.h"?]
+        }
+        module statvfs {
+            include_system = ["sys/statvfs.h"?]
+        }
+        module time {
+            include_system = ["sys/time.h"?]
+        }
+        module times {
+            include_system = ["sys/times.h"?]
+        }
+        module types {
+            include_system = ["sys/types.h"?]
+        }
+        module uio {
+            include_system = ["sys/uio.h"?]
+        }
+        module un {
+            include_system = ["sys/un.h"?]
+        }
+        module utsname {
+            include_system = ["sys/utsname.h"?]
+        }
+        module wait {
+            include_system = ["sys/wait.h"?]
+        }
+    }
+
+    module syslog {
+        include_system = ["syslog.h"?]
+    }
+
+    module tar {
+        include_system = ["tar.h"?]
+    }
+
+    module termios {
+        include_system = ["termios.h"?]
+    }
+
+    module tgmath {
+        include_system = ["tgmath.h"?]
+    }
+
+    module time {
+        include_system = ["time.h"?]
+    }
+
+    module trace {
+        include_system = ["trace.h"?]
+    }
+
+    module ulimit {
+        include_system = ["ulimit.h"?]
+    }
+
+    module unistd {
+        include_system = ["unistd.h"?]
+    }
+
+    module utime {
+        include_system = ["utime.h"?]
+    }
+
+    module utmpx {
+        include_system = ["utmpx.h"?]
+    }
+
+    module wchar {
+        include_system = ["wchar.h"?]
+    }
+
+    module wctype {
+        include_system = ["wctype.h"?]
+    }
+
+    module wordexp {
+        include_system = ["wordexp.h"?]
+    }
+}

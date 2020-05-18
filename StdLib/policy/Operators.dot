@@ -1,0 +1,141 @@
+
+precedenceGroup AssignmentPrecedence {
+    associativity: right
+    assignment: true
+}
+
+precedenceGroup TernaryPrecedence {
+    associativity: right
+    higherThan: AssignmentPrecedence
+}
+
+precedenceGroup DefaultPrecedence {
+    higherThan: TernaryPrecedence
+}
+
+precedenceGroup LogicalDisjunctionPrecedence {
+    associativity: left
+    higherThan: TernaryPrecedence
+}
+
+precedenceGroup LogicalConjunctionPrecedence {
+    associativity: left
+    higherThan: LogicalDisjunctionPrecedence
+}
+
+precedenceGroup ComparisonPrecedence {
+    higherThan: LogicalConjunctionPrecedence
+}
+
+precedenceGroup NilCoalescingPrecedence {
+    associativity: right
+    higherThan: ComparisonPrecedence
+}
+
+precedenceGroup CastingPrecedence {
+    higherThan: NilCoalescingPrecedence
+}
+
+precedenceGroup RangeFormationPrecedence {
+    higherThan: CastingPrecedence
+}
+
+precedenceGroup AdditionPrecedence {
+    associativity: left
+    higherThan: RangeFormationPrecedence
+}
+
+precedenceGroup MultiplicationPrecedence {
+    associativity: left
+    higherThan: AdditionPrecedence
+}
+
+precedenceGroup BitwiseShiftPrecedence {
+    higherThan: MultiplicationPrecedence
+}
+
+precedenceGroup ExponentiationPrecedence {
+    associativity: left
+    higherThan: BitwiseShiftPrecedence
+}
+
+postfix ++
+postfix --
+
+postfix ()
+
+postfix ?
+postfix *
+
+prefix ++
+prefix --
+prefix !
+prefix ~
+prefix +
+prefix -
+
+infix =   : AssignmentPrecedence
+infix *=  : AssignmentPrecedence
+infix /=  : AssignmentPrecedence
+infix %=  : AssignmentPrecedence
+infix +=  : AssignmentPrecedence
+infix -=  : AssignmentPrecedence
+infix <<= : AssignmentPrecedence
+infix >>= : AssignmentPrecedence
+infix **= : AssignmentPrecedence
+infix &=  : AssignmentPrecedence
+infix ^=  : AssignmentPrecedence
+infix |=  : AssignmentPrecedence
+
+infix &*=  : AssignmentPrecedence
+infix &+=  : AssignmentPrecedence
+infix &-=  : AssignmentPrecedence
+infix &<<= : AssignmentPrecedence
+infix &>>= : AssignmentPrecedence
+
+infix ||  : LogicalDisjunctionPrecedence
+
+infix &&  : LogicalConjunctionPrecedence
+
+infix <   : ComparisonPrecedence
+infix <=  : ComparisonPrecedence
+infix >   : ComparisonPrecedence
+infix >=  : ComparisonPrecedence
+infix ==  : ComparisonPrecedence
+infix !=  : ComparisonPrecedence
+infix === : ComparisonPrecedence
+infix !== : ComparisonPrecedence
+infix ~=  : ComparisonPrecedence
+infix <=> : ComparisonPrecedence
+
+infix ??  : NilCoalescingPrecedence
+
+infix as  : CastingPrecedence
+infix as? : CastingPrecedence
+infix as! : CastingPrecedence
+
+infix ..= : RangeFormationPrecedence
+infix ..  : RangeFormationPrecedence
+
+infix +   : AdditionPrecedence
+infix -   : AdditionPrecedence
+infix |   : AdditionPrecedence
+infix ^   : AdditionPrecedence
+
+infix &+   : AdditionPrecedence
+infix &-   : AdditionPrecedence
+
+infix *   : MultiplicationPrecedence
+infix &*   : MultiplicationPrecedence
+
+infix /   : MultiplicationPrecedence
+infix %   : MultiplicationPrecedence
+infix &   : MultiplicationPrecedence
+
+infix **  : ExponentiationPrecedence
+
+infix <<  : BitwiseShiftPrecedence
+infix >>  : BitwiseShiftPrecedence
+
+infix &<<  : BitwiseShiftPrecedence
+infix &>>  : BitwiseShiftPrecedence

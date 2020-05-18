@@ -1,0 +1,130 @@
+
+import builtin
+import libc
+import reflect
+import rt
+
+/// Allocate `size` bytes, aligned to a boundary of `alignTo` bytes.
+public def allocate(_ size: Int, alignTo alignment: Int = 1,
+                    _ loc: reflect.RawSourceLocation = reflect.rawSourceLocation) -> UnsafeMutableRawPtr {
+    return UnsafeMutableRawPtr(rawPointer: rt._cdot_Malloc(size.value, loc))
+}
+
+/// Allocate enough memory for `amount` instances of type `T`, aligned to a 
+/// boundary of `alignTo` bytes.
+public def allocate<T>(_ loc: reflect.RawSourceLocation = reflect.rawSourceLocation) -> UnsafeMutablePtr<T> 
+{
+    return UnsafeMutablePtr<T>(rawPointer: rt._cdot_Malloc(reflect.sizeOf<T>.value, loc))
+}
+
+/// Allocate enough memory for `amount` instances of type `T`, aligned to a 
+/// boundary of `alignTo` bytes.
+public def allocate<T>(_ amount: Int, alignTo alignment: Int = reflect.alignOf<T>,
+                       loc: reflect.RawSourceLocation = reflect.rawSourceLocation)
+    -> UnsafeMutableBufferPtr<T> 
+{
+    return UnsafeMutableBufferPtr<T>(rawPointer: rt._cdot_Malloc((reflect.sizeOf<T> * amount).value, loc))
+}
+
+@inline(hint)
+public def reallocate(_ ptr: UnsafeMutableRawPtr, toSize newAmount: Int,
+                      loc: reflect.RawSourceLocation = reflect.rawSourceLocation) -> UnsafeMutableRawPtr {
+    return UnsafeMutableRawPtr(rawPointer:
+        rt._cdot_Realloc(ptr.rawPointer, newAmount.value, loc))
+}
+
+@inline(hint)
+public def reallocate<T>(_ ptr: UnsafeMutableBufferPtr<T>, toSize newAmount: Int,
+                         loc: reflect.RawSourceLocation = reflect.rawSourceLocation)
+    -> UnsafeMutableBufferPtr<T>
+{
+    return UnsafeMutableBufferPtr<T>(rawPointer: rt._cdot_Realloc(
+        ptr.rawPointer, (reflect.sizeOf<T> * newAmount).value, loc))
+}
+
+@inline(hint)
+public def new<T>(_ value: owned T) -> UnsafeMutablePtr<T> {
+    var mem = allocate<T>()
+    var mut = value
+
+    var addr = UnsafePtr<T>(rawPointer: builtin.addressOf(&mut))
+    move(to: mem, from: addr)
+
+    // Cancel the scheduled cleanup for `value`.
+    builtin.consume(mut)
+
+    return mem
+}
+
+@inline(hint)
+public def delete<T>(_ ptr: UnsafeMutablePtr<T>) {
+    builtin.deinit(*ptr)
+    ptr.deallocate()
+}
+
+public def swap<T>(_ t: mut ref T, _ u: mut ref T) {
+    var tmp = t
+    t = u
+    u = tmp
+}
+
+public def replace<T>(_ mem: mut ref T, with value: owned T) {
+    replace(UnsafeMutablePtr(referencing: &mem), with: builtin.move(value))
+}
+
+public def replace<T>(_ mem: UnsafeMutablePtr<T>, with value: owned T) {
+    _ = libc.string.memcpy(mem, builtin.addressOf(value), reflect.sizeOf<T>)
+    builtin.consume(value)
+}
+
+public def reverse<T>(_ ptr: UnsafeMutableBufferPtr<T>, _ size: Int) {
+    for i in 0..(size / 2) {
+        var tmp = ptr[size - i - 1]
+        ptr[size - i - 1] = ptr[i]
+        ptr[i] = tmp
+    }
+}
+
+public def move(to dst: UnsafeMutableRawPtr, 
+                from src: UnsafeRawPtr,
+                _ n: Int) {
+    _ = libc.string.memmove(dst, src, n)
+}
+
+public def move<T>(to dst: UnsafeMutableBufferPtr<T>,
+                   from src: UnsafeBufferPtr<T>,
+                   _ n: Int = 1) {
+    _ = libc.string.memmove(dst, src, n * reflect.sizeOf<T>)
+}
+
+public def move<T>(to dst: UnsafeMutablePtr<T>, from src: UnsafePtr<T>) {
+    _ = libc.string.memmove(dst, src, reflect.sizeOf<T>)
+}
+
+public def copy(to dst: UnsafeMutableRawPtr,
+                from src: UnsafeRawPtr,
+                _ n: Int) {
+    _ = libc.string.memcpy(dst, src, n)
+}
+
+public def copy<T>(to dst: UnsafeMutableBufferPtr<T>,
+                   from src: UnsafeBufferPtr<T>,
+                   _ n: Int = 1) {
+    _ = libc.string.memcpy(dst, src, n * reflect.sizeOf<T>)
+}
+
+public def copy<T>(to dst: UnsafeMutablePtr<T>, from src: UnsafePtr<T>) {
+    _ = libc.string.memcpy(dst, src, reflect.sizeOf<T>)
+}
+
+public def set(_ buffer: UnsafeMutableRawPtr, size: Int, value: Byte = 0) {
+    _ = libc.string.memset(buffer, Int32(value), size)
+}
+
+public def cmp(_ lhs: UnsafeRawPtr, _ rhs: UnsafeRawPtr, _ n: Int) -> Int {
+    return Int(libc.string.memcmp(lhs, rhs, n))
+}
+
+public def cmp<T>(_ lhs: UnsafeBufferPtr<T>, _ rhs: UnsafeBufferPtr<T>, _ n: Int = 1) -> Int {
+    return Int(libc.string.memcmp(lhs, rhs, n * reflect.sizeOf<T>))
+}

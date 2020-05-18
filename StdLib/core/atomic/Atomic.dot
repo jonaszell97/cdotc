@@ -1,0 +1,244 @@
+
+import builtin
+import sys
+
+/*
+
+enum class AtomicOrdering {
+  NotAtomic = 0,
+  Unordered = 1,
+  Monotonic = 2, // Equivalent to C++'s relaxed.
+  // Consume = 3,  // Not specified yet.
+  Acquire = 4,
+  Release = 5,
+  AcquireRelease = 6,
+  SequentiallyConsistent = 7
+};
+
+ */
+
+public enum MemoryOrder(Int32) {
+    case NotAtomic              = 0
+    case Unordered              = 1
+    case Relaxed                = 2
+    case Consume                = 3
+    case Acquire                = 4
+    case Release                = 5
+    case AcquireRelease         = 6
+    case SequentiallyConsistent = 7
+}
+
+/// Derived StringRepresentable conformance.
+extend MemoryOrder with StringRepresentable {}
+
+/// Internal protocol used to mark valid atomic types.
+internal protocol _AtomicProtocol {
+    /// The type of the underlying atomic value.
+    associatedType _AtomicType: _BuiltinPrimitiveType
+
+    /// \return The underlying atomic value.
+    prop _atomicValue: _AtomicType { get }
+
+    /// Initialize from the atomic value.
+    init (_atomicValue value: _AtomicType)
+}
+
+@compiletime @testable
+public struct Atomic<T: _AtomicProtocol> {
+    /// The underlying value.
+    private var value: UnsafeMutablePtr<T._AtomicType>
+
+    /// C'tor. Initialize from a T.
+    init (allocatingMemory value: T) {
+        self.value = UnsafeMutablePtr<T._AtomicType>.allocate()
+        self.value.store(value._atomicValue)
+    }
+
+    /// Initialize from a reference.
+    init (_referencing valueRef: ref T) {
+        self.value = UnsafeMutablePtr<T._AtomicType>(rawPointer: builtin.addressOf(valueRef))
+    }
+
+    /// Null C'tor.
+    init (_ value: owned UnsafeMutablePtr<T._AtomicType> = .null) {
+        self.value = value
+    }
+
+    /// Manual deinitializer.
+    def mutating deinitialize() {
+        self.value.deallocate()
+        self.value = .null
+    }
+
+    /// Whether or not the atomic value is currently null.
+    prop isNull: Bool => value.isNull
+
+    /// Check that the given memory order is valid for a load.
+    private static def checkValidLoadOrder(_ memoryOrder: MemoryOrder) {
+        match memoryOrder {
+        default:
+            return
+        case .Release:
+        case .AcquireRelease:
+        case .NotAtomic:
+            sys.reportFatalError("memory order $memoryOrder is invalid for a load")
+        }
+    }
+
+    /// Check that the given memory order is valid for a store.
+    private static def checkValidStoreOrder(_ memoryOrder: MemoryOrder) {
+        match memoryOrder {
+        default:
+            return
+        case .Consume:
+        case .Acquire:
+        case .AcquireRelease:
+        case .NotAtomic:
+            sys.reportFatalError("memory order $memoryOrder is invalid for a store")
+        }
+    }
+
+    /// Check that the given memory order is valid for an exchange.
+    private static def checkValidExchangeOrder(_ memoryOrder: MemoryOrder) {
+        match memoryOrder {
+        default:
+            return
+        case .Release:
+        case .AcquireRelease:
+        case .NotAtomic:
+            sys.reportFatalError("memory order $memoryOrder is invalid for an exchange")
+        }
+    }
+
+    /// Load the value with the given memory order.
+    def load(memoryOrder: MemoryOrder = .SequentiallyConsistent) -> T {
+        checkValidLoadOrder(memoryOrder)
+        return T(_atomicValue: builtin.atomic_load(self.value.raw, memoryOrder.rawValue.value))
+    }
+
+    /// Store `storeVal` to the underyling memory address.
+    def mutating store(_ storeVal: owned T,
+                       memoryOrder: MemoryOrder = .SequentiallyConsistent) {
+        checkValidStoreOrder(memoryOrder)
+        return builtin.atomic_store(storeVal._atomicValue, self.value.raw, memoryOrder.rawValue.value)
+    }
+
+    /// Expands to an instruction that atomically checks whether a specified value 
+    /// is in a memory location, and, if it is, stores a new value.
+    /// \return the value that was loaded.
+    @discardableResult
+    def mutating cmpxchg(compareTo cmp: T, exchangeWith newVal: T,
+                         successOrdering: MemoryOrder = .SequentiallyConsistent,
+                         failureOrdering: MemoryOrder = .SequentiallyConsistent) -> T {
+        checkValidExchangeOrder(successOrdering)
+        checkValidExchangeOrder(failureOrdering)
+
+        var result = builtin.atomic_cmpxchg(self.value.raw, cmp._atomicValue, newVal._atomicValue,
+                                            successOrdering.rawValue.value,
+                                            failureOrdering.rawValue.value)
+
+        return T(_atomicValue: result)
+    }
+}
+
+fileprivate macro define_proxy_cmp_fn{
+    ($($op:tok)*) => { $(
+        def infix $op(rhs: Self) -> Bool {
+            return self.load() $op rhs.load()
+        }
+
+        def infix $op(rhs: T) -> Bool {
+            return self.load() $op rhs
+        }
+    )... }
+}
+
+extend Atomic with Comparable where T is Comparable {
+    /// Three-way comparison operator.
+    /// \return -1 iff `self < rhs`, 0 if `self == rhs`, 1 otherwise
+    def infix <=>(rhs: Self) -> Int {
+        return self.load() <=> rhs.load()
+    }
+
+    def infix <=>(rhs: T) -> Int {
+        return self.load() <=> rhs
+    }
+
+    define_proxy_cmp_fn!{ == != < > <= >= }
+}
+
+extend Atomic with Dereferenceable {
+    /// \inherit
+    alias DereferencedType = T
+
+    /// \inherit
+    prop deref: DereferencedType {
+        read {
+            return load()
+        }
+        write {
+            store(newVal)
+        }
+    }
+}
+
+fileprivate macro define_rmw_op {
+    ($(($name:tok, $enumOp:tok, $op:tok))*) => {
+        $(
+            def $name(_ rhs: T, order: MemoryOrder = .SequentiallyConsistent) -> T {
+                var cpy = self.copy()
+                _ = builtin.atomic_rmw(.$enumOp, cpy.value.raw, rhs._atomicValue,
+                                       order.rawValue.value)
+
+                return cpy.value
+            }
+
+            def infix $op(rhs: T) -> T {
+                return $name(rhs)
+            }
+
+            def infix ${$op=}(rhs: T) {
+                _ = builtin.atomic_rmw(.$enumOp, self.value.raw, rhs._atomicValue,
+                                       MemoryOrder.SequentiallyConsistent.rawValue.value)
+            }
+        )...
+    }
+}
+
+extend Atomic where T is BuiltinIntegerType {
+    define_rmw_op!{ (add, Add, +) (sub, Sub, -) (and, And, &) (or, Or, |) (xor, Xor, ^) }
+
+    /// Increment the contained value by one.
+    /// \return the incremented value.
+    @discardableResult def prefix ++() -> T {
+        self += 1 as T
+        return load()
+    }
+
+    /// Increment the contained value by one.
+    /// \return the value before incrementing.
+    def postfix ++() -> T {
+        var cpy = load()
+        self += 1 as T
+
+        return cpy
+    }
+
+    /// Decrement the contained value by one.
+    /// \return the decremented value.
+    @discardableResult def prefix --() -> T {
+        self -= 1 as T
+        return load()
+    }
+
+    /// Decrement the contained value by one.
+    /// \return the value before decrementing.
+    def postfix --() -> T {
+        var cpy = load()
+        self -= 1 as T
+        
+        return cpy
+    }
+}
+
+extend Atomic with Copyable, ImplicitlyCopyable {}

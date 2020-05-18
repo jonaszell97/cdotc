@@ -1,0 +1,48 @@
+
+// VERIFY
+
+struct S with R, V {}
+
+protocol R {}
+protocol V {}
+
+protocol P {
+    associatedType T: V
+}
+
+protocol Q with P {
+    associatedType T: R
+}
+
+struct Test with Q {
+    alias T = S
+}
+
+// Conflicting default implementations
+protocol P1 {
+    associatedType X = Int32
+}
+protocol P2 {
+    associatedType X = Int64
+}
+protocol P3 with P1, P2 {
+    associatedType X
+}
+
+struct X with P3 {} // expected-error {{'X' has multiple conflicting implementations for associated type 'P3.X'}}
+// expected-note@23 {{candidate declared here}}
+// expected-note@26 {{candidate declared here}}
+
+// Constrained conformance
+protocol P4 {
+    associatedType AT: P5
+}
+
+protocol P5 {}
+
+struct Test2 with P4 {
+    alias AT = Test3<Int32>
+}
+
+struct Test3<T> {}
+extend Test3 with P5 where T == Int {}

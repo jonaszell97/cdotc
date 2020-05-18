@@ -1,0 +1,10 @@
+
+// RUN
+// CHECK hello
+
+import core.io
+
+{
+    var out = io.stdout
+    out << "hello\n"
+}

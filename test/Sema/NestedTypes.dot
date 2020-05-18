@@ -1,0 +1,22 @@
+
+// VERIFY
+
+// Lookup of inner members defined in an extension.
+struct Outer {}
+extend Outer {
+    struct Inner {}
+}
+
+_ = Outer.Inner()
+
+// Templates cannot contain inner members.
+struct Template<T> {
+    struct Inner {} // expected-error {{templates cannot contain nested types}}
+    // expected-note@-2 {{'Template' declared as a template here}}
+}
+
+// FIXME currently not issued because the previous diagostic happens during parsing.
+// extend Template {
+//     struct InnerInExtension {} // expected-error {{templates cannot contain nested types}}
+//     // expected-note@13 {{template declared here}}
+// }

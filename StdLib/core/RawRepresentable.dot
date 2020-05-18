@@ -1,0 +1,11 @@
+
+public protocol RawRepresentable {
+    /// The raw type.
+    associatedType RawType
+
+    /// Initialize from a value of the raw type.
+    init? (rawValue: RawType)
+
+    /// Get the raw value of this instance.
+    prop rawValue: RawType { get }
+}

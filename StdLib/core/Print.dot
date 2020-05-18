@@ -1,0 +1,59 @@
+
+/// Prints \param terminator to stdout. Used as a recursion breaker for `print` below.
+@compiletime
+public def print(separator: Character = ' ', terminator: Character = '\n') {
+    // FIXME
+    _ = libc.stdio.printf("%c", terminator.ascii)
+}
+
+/// Prints \param t to stdout.
+/// \param separator is printed after each item except the last.
+/// \param terminator is printed after the last item.
+@compiletime public def print<T: StringRepresentable>(_ t: T, terminator: Character = '\n') {
+    var str = t.toString()
+    str.withCString {
+        _ = libc.stdio.printf("%s", $0)
+    }
+
+     _ = libc.stdio.printf("%c", terminator.ascii)
+}
+
+/// Print the items of \param seq to stdout.
+/// \param separator is printed after each item except the last.
+/// \param terminator is printed after the last item.
+@compiletime public def print<It: Iterable>(
+    _ seq: It,
+    separator: Character = ' ',
+    terminator: Character = '\n')
+        where It.It.Element is StringRepresentable
+{
+    var i = 0
+    for s in seq {
+        if i > 0 {
+            _ = libc.stdio.printf("%c", separator.ascii)
+        }
+
+        var str = s.toString()
+        str.withCString {
+            _ = libc.stdio.printf("%s", $0)
+        }
+
+        i += 1
+    }
+
+    _ = libc.stdio.printf("%c", terminator.ascii)
+}
+
+// @compiletime
+// public def print<T, ...Args>(_ t: T, _ args: Args...,
+//                              separator: Character = ' ',
+//                              terminator: Character = '\n') {
+//     var s = String(_: t)
+//     s.withCString {
+//         _ = libc.printf("%s", $0)
+//     }
+
+//     // FIXME
+//     _ = libc.stdio.printf("%c", separator.ascii)
+//     print(args..., separator: separator, terminator: terminator)
+// }

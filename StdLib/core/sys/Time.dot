@@ -1,0 +1,154 @@
+
+import { i64, i32 } from builtin
+import libc
+
+/// Time unit used for various system functions.
+public enum TimeUnit {
+    case Seconds
+    case Millis
+    case Nanos
+}
+
+/// Struct that represents a point in time.
+public struct DateTime {
+    /// Internal value representing the unix timestamp.
+    internal let timestamp: UInt64
+
+    /// Initialize from a unix timestamp.
+    init (timestamp: UInt64) {
+        self.timestamp = timestamp
+    }
+}
+
+/// Represents a time span.
+public struct TimeSpan {
+    /// Passed time in milliseconds.
+    internal let value: UInt64
+
+    /// Initialize from a millisecond timespan.
+    init (milliseconds: UInt64) {
+        self.value = milliseconds
+    }
+
+    /// Initialize from a second timespan.
+    init (seconds: Double) {
+        self.value = UInt64(seconds * 1000.0)
+    }
+
+    /// Initialize from a minute timespan.
+    init (minutes: Double) {
+        self.value = UInt64(minutes * 60.0 * 1000.0)
+    }
+
+    /// \return The time in milliseconds.
+    public prop millis: UInt64 => value
+
+    /// \return The time in seconds, rounding down.
+    public prop seconds: UInt64 => value / 1000
+
+    /// \return The exact time in seconds.
+    public prop exactSeconds: Double => Double(value) / 1000.0
+
+    /// \return The time in minutes, rounding down.
+    public prop minutes: UInt64 => seconds / 60
+
+    /// \return The exact time in minutes.
+    public prop exactMinutes: Double => exactSeconds / 60.0
+
+    /// \return The time in hours, rounding down.
+    public prop hours: UInt64 => minutes / 60
+
+    /// \return The exact time in hours.
+    public prop exactHours: Double => exactMinutes / 60.0
+
+    /// \return The time in days, rounding down.
+    public prop days: UInt64 => hours / 24
+
+    /// \return The exact time in hours.
+    public prop exactDays: Double => exactHours / 24.0
+}
+
+/// Return a timestamp representing the current time.
+public def currentTime() -> DateTime {
+    return DateTime(timestamp: UInt64(libc.time.time(__nullptr)))
+}
+
+/*
+internal struct timeval {
+    let tv_sec: i64     // seconds
+    let tv_usec: i32    // microseconds
+}
+
+def highResolutionClock() -> Int {
+    alias OS = reflect.targetInfo.operatingSystem
+    static if OS == .windows {
+        declare C def QueryPerformanceCounter(UnsafeMutablePtr<u64>) -> Void
+
+        var val = 0u64
+        QueryPerformanceCounter(builtin.addressOf(&val))
+
+        return val as Int
+    }
+    else {
+        declare C def gettimeofday(UnsafeMutablePtr<timeval>, UnsafeMutableRawPtr) -> Void
+
+        var t = timeval(tv_sec: 0, tv_usec: 0)
+        gettimeofday(builtin.addressOf(&t), 0 as! UnsafeMutableRawPtr)
+
+        return t.tv_usec as Int
+    }
+}
+
+internal def elapsedTimeMicros(_ begin: Int, _ end: Int) -> Int {
+    let frequency: Int
+
+    alias OS = reflect.targetInfo.operatingSystem
+    static if OS == .windows {
+        declare C def QueryPerformanceFrequency(UnsafeMutablePtr<u64>) -> Void
+        var i = 0u64
+        QueryPerformanceFrequency(builtin.addressOf(&i))
+
+        frequency = i as Int
+    }
+    else {
+        frequency = 1
+    }
+
+    return (end - begin) / frequency
+}
+
+alias CLOCKS_PER_SEC = 1000000.0
+
+struct Timer {
+    internal let time: Int
+}
+
+def startTimer() -> Timer {
+    var t = Timer(time: highResolutionClock())
+    return t
+}
+
+def endTimer(_ t: owned Timer, _ unit: TimeUnit = .Millis) -> Int {
+    let endTime = highResolutionClock()
+    let quotient: Int
+    match unit {
+        case .Nanos:
+            quotient = 1
+        case .Millis:
+            quotient = 1000
+        case .Seconds:
+            quotient = 1_000_000
+    }
+
+    return elapsedTimeMicros(t.time, endTime) / quotient
+}
+
+macro benchmark {
+    ($code:stmt) => {{
+        var timer = startTimer()
+        { $code }
+
+        var duration = endTimer(timer)
+        print("benchmark took ${duration}ms to complete")
+    }}
+}*/

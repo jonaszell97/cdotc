@@ -1,0 +1,53 @@
+
+// VERIFY
+
+def tomBrady() throws -> Int {
+    throw "dime"
+}
+
+def nathanPeterman() {
+    throw "interception" // expected-error {{'throw' cannot appear in a non-throwing function 'nathanPeterman'}}
+}
+
+def mustCatch() {
+    _ = tomBrady() // expected-error {{call to throwing function 'tomBrady' must appear in a 'try' expression}}
+    _ = try tomBrady() // expected-error {{'try' may only appear in a throwing function or an exhaustive 'do' statement}}
+
+    let _ : Int? = try? tomBrady()
+    let _ : Int = try! tomBrady()
+
+    do {
+        _ = try tomBrady() // expected-error {{'try' may only appear in a throwing function or an exhaustive 'do' statement}}
+    }
+
+    do {
+        _ = try tomBrady()
+    }
+    catch _ {
+
+    }
+
+    do {
+        _ = try tomBrady() // expected-error {{'try' may only appear in a throwing function or an exhaustive 'do' statement}}
+    }
+    catch s: String {
+
+    }
+
+    do {
+        _ = try tomBrady()
+    }
+    catch a: Any {
+
+    }
+}
+
+def cannotThrow() {}
+
+def mayCatch() throws {
+    _ = tomBrady() // expected-error {{call to throwing function 'tomBrady' must appear in a 'try' expression}}
+    _ = try tomBrady()
+    _ = try cannotThrow() // expected-error {{expression after 'try' must contain a call to a throwing function}}
+    _ = try (3 + 4 << tomBrady()) // OK
+    _ = (3 + 4 << tomBrady()) // expected-error {{call to throwing function 'tomBrady' must appear in a 'try' expression}}
+}

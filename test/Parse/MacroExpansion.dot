@@ -1,0 +1,35 @@
+
+// VERIFY
+
+macro Mac1 {
+    ($($x:tok)* <> $($y:tok)*) => { $($x $y)... }, // expected-error {{unexpected expression; expecting binary operator}}
+    // expected-error@-1 {{'y' and 'x' appear in the same expansion context but have different amounts of repetition (3 vs 4)}}
+}
+
+Mac1!() // expected-error {{macro 'Mac1!' expects '{}' as its delimiter}}
+// expected-error@-1 {{could not match given arguments against any pattern of macro 'Mac1!'}}
+
+Mac1!{1 2 3 <> 4 5 6} // expected-note {{in expansion of macro 'Mac1' here}}
+Mac1!{1 2 3 <> 4 5 6 7}
+
+let x: Int = Mac1!{+ <> 3} // OK
+let y: Int = Mac1!{3 + <> + 4} // OK
+
+macro my_struct {
+    ($name:ident /*{*/
+        $(let $fieldName:ident = $value:expr;)+
+    /*}*/) => {}
+    // expected-note@-2 {{pattern declared here}}
+    // expected-note@-3 {{pattern declared here}}
+}
+
+my_struct! S1 { // expected-error {{could not match given arguments against any pattern of macro 'my_struct!'}}
+} // expected-note {{pattern not viable: expected 'let', found end of file}}
+
+my_struct! S2 { // expected-error {{could not match given arguments against any pattern of macro 'my_struct!'}}
+    let x = 3
+} // expected-note {{pattern not viable: expected ';', found end of file}}
+
+my_struct! S3 {
+    let x = 3;
+}

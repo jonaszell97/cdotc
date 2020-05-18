@@ -1,0 +1,473 @@
+
+struct IndexingIterator<Base: Collection> {
+    /// The collection we are iterating over.
+    var base: Base
+
+    /// The current index into the collection.
+    var index: Base.Index
+
+    /// Initialize from any collection.
+    init (_ base: owned Base) {
+        self.base = builtin.move(base)
+        self.index = self.base.startIndex
+    }
+}
+
+extend IndexingIterator with IteratorProtocol {
+    /// The element type of the collection.
+    alias Element = Base.Element
+
+    /// \return the next element in the collection.
+    def mutating next() -> Element? {
+        if self.index >= base.endIndex {
+            return none
+        }
+
+        var element = base[self.index]
+        self.index = base.index(after: self.index)
+
+        return .Some(element)
+    }
+}
+
+protocol _DefaultIndices {}
+
+struct DefaultIndices<Base: Collection> with _DefaultIndices {
+    /// The collection we are iterating over.
+    var base: Base
+
+    /// The start index.
+    var _startIndex: Base.Index
+
+    /// The end index.
+    var _endIndex: Base.Index
+
+    /// Initialize from any collection.
+    init (_ base: owned Base) {
+        self.base = builtin.move(base)
+        self._startIndex = self.base.startIndex
+        self._endIndex = self.base.endIndex
+    }
+
+    /// Initialize from any collection.
+    init (_ base: owned Base, from _startIndex: Index, to _endIndex: Index) {
+        self.base = builtin.move(base)
+        self._startIndex = _startIndex
+        self._endIndex = _endIndex
+    }
+}
+
+extend DefaultIndices with Collection {
+    /// \inherit
+    alias Element = Base.Index
+
+    /// \inherit
+    alias Index = Base.Index
+
+    /// \inherit
+    alias Indices = Self
+
+    /// \inherit
+    alias SubSequence = Self
+
+    /// \inherit
+    prop startIndex: Index => _startIndex
+
+    /// \inherit
+    prop endIndex: Index => _endIndex
+
+    /// \inherit
+    subscript (position: Index) -> Element {
+        return position
+    }
+
+    /// \inherit
+    subscript (bounds: Range<Index>) -> SubSequence {
+        return Self(base, from: bounds.startIndex, to: bounds.endIndex)
+    }
+
+    /// \inherit
+    prop indices: Indices => self
+}
+
+extend DefaultIndices with BidirectionalCollection where Base is BidirectionalCollection {
+    /// \inherit
+    def index(before idx: Index) -> Index {
+        return base.index(before: idx)
+    }
+}
+
+extend DefaultIndices with RandomAccessCollection where Base is RandomAccessCollection {
+}
+
+protocol Collection with Iterable {
+    /// The type of elements contained in the collection.
+    associatedType Element
+
+    /// The type of indices of this collection.
+    associatedType Index: Comparable = Int
+
+    /// The type of sub-sequences of this collection.
+    associatedType SubSequence: Collection = Slice<Self>
+        where SubSequence.Element == Element
+        where SubSequence.Index == Index
+        where SubSequence.SubSequence == SubSequence
+
+    /// \return the position of the first element in a nonempty collection.
+    ///
+    /// If the collection is empty, `startIndex` is equal to `endIndex`.
+    prop startIndex: Index { get }
+
+    /// \return the collection's "past the end" position - that is, the position one
+    /// greater than the last valid subscript argument.
+    ///
+    /// If the collection is empty, `endIndex` is equal to `startIndex`.
+    prop endIndex: Index { get }
+
+    /// Accesses the element at the specified position.
+    subscript (position: Index) -> Element { get }
+
+    /// Accesses a contiguous subrange of the collection's elements.
+    subscript (bounds: Range<Index>) -> SubSequence { get }
+
+    /// A type that represents the indices that are valid for subscripting the
+    /// collection, in ascending order.
+    associatedType Indices: Collection = DefaultIndices<Self>
+        where Indices.Element == Index
+        where Indices.Index == Index
+        where Indices.SubSequence == Indices
+
+    /// \return the indices that are valid for subscripting the collection, in ascending
+    /// order.
+    prop indices: Indices { get }
+
+    /// \return a Boolean value indicating whether the collection is empty.
+    prop empty: Bool { get }
+
+    /// \return the number of elements in the collection.
+    prop size: Int { get }
+
+    /// \return the number of elements that the collection can store without resizing.
+    prop capacity: Int { get }
+
+    /// \return the index after the given one.
+    def index(after: Index) -> Index
+
+    /// \return \param idx advanced by \param advancedBy.
+    def index(_ idx: Index, advancedBy n: Int) -> Index
+
+    /// \return \param idx advanced by \param advancedBy, but not if it exceeds `limitedBy`.
+    def index(_ idx: Index, advancedBy n: Int, limitedBy: Index) -> Index?
+
+    /// Verify that an index is in bounds.
+    def _checkIndex(_ index: Index)
+
+    /// Verify the range for a subsequence access.
+    def _checkRange(_ range: Range<Index>)
+
+    /// \return the distance between two indices.
+    def distance(from start: Index, to end: Index) -> Int
+}
+
+extend Collection {
+    /// \inherit
+    default prop empty: Bool {
+        return size == 0
+    }
+
+    /// \inherit
+    default prop size: Int {
+        return distance(from: startIndex, to: endIndex)
+    }
+
+    /// \inherit
+    default prop underestimatedSize: Int {
+        return size
+    }
+
+    /// \inherit
+    default prop capacity: Int {
+        return size
+    }
+
+    /// \return the first element in the collection, or `none` if the collection is empty.
+    prop first: Element? {
+        if empty {
+            return none
+        }
+
+        return .Some(self[startIndex])
+    }
+
+    /// \inherit
+    default def index(_ idx: Index, advancedBy n: Int) -> Index {
+        precondition!(idx >= 0, "Negative offset only allowed on BidirectionalCollection!")
+
+        var idx = idx
+        for var i = 0; i < n; i += 1 {
+            idx = index(after: idx)
+        }
+
+        return idx
+    }
+
+    /// \inherit
+    default def index(_ idx: Index, advancedBy n: Int, limitedBy: Index) -> Index? {
+        precondition!(idx >= 0, "Negative offset only allowed on BidirectionalCollection!")
+
+        var idx = idx
+        for var i = 0; i < n; i += 1 {
+            idx = index(after: idx)
+
+            if idx > limitedBy {
+                return none
+            }
+        }
+
+        return .Some(idx)
+    }
+
+    /// \return the first index where the predicate is satisfied, or `endIndex` if it never is.
+    def firstIndex(where isSatisfied: (Element) -> Bool) -> Index {
+        var idx = startIndex
+        while idx != endIndex {
+            if isSatisfied(self[idx]) {
+                return idx
+            }
+
+            idx = index(after: idx)
+        }
+
+        return endIndex
+    }
+
+    /// \inherit
+    default def _checkIndex(_ index: Index) {
+        precondition!(index < endIndex, "collection index out of bounds! ($index >= $endIndex)")
+    }
+
+    /// \inherit
+    default def _checkRange(_ range: Range<Index>) {
+        precondition!(range.startIndex >= startIndex, "Range start index out of bounds")
+        precondition!(range.endIndex < endIndex, "Range end index out of bounds")
+    }
+
+    /// \inherit
+    default def distance(from start: Index, to end: Index) -> Int {
+        var distance = 0
+        var start = start
+
+        while start != end {
+            distance += 1
+            start = index(after: start)
+        }
+
+        return distance
+    }
+}
+
+extend Collection where Index is Strideable {
+    /// \inherit
+    default def index(after idx: Index) -> Index {
+        return idx.next()
+    }
+
+    /// \inherit
+    default def index(_ idx: Index, advancedBy n: Int) -> Index {
+        return idx.advanced(by: n)
+    }
+
+    /// \inherit
+    default def index(_ idx: Index, advancedBy n: Int, limitedBy: Index) -> Index? {
+        var newIdx = idx.advanced(by: n)
+        if newIdx > limitedBy {
+            return none
+        }
+
+        return newIdx
+    }
+}
+
+extend Collection {
+    /// Provide a default iterator using the collection's indices.
+    default alias It = IndexingIterator<Self>
+}
+
+extend Collection where It == IndexingIterator<Self> {
+    /// \inherit
+    default def getIterator() -> It {
+        return IndexingIterator(self.copy())
+    }
+}
+
+extend Collection where Self !is _Slice
+                  where Self !is _DefaultIndices
+                  where SubSequence == Slice<Self> {
+    /// \inherit
+    default subscript (bounds: Range<Index>) -> SubSequence {
+        return SubSequence(self, bounds)
+    }
+}
+
+extend Collection where Self !is _DefaultIndices
+                  where Self !is _Slice
+                  where Indices == DefaultIndices<Self> {
+    /// \inherit
+    default prop indices: Indices {
+        return DefaultIndices(self)
+    }
+}
+
+extend Collection {
+    /// \return an array containing subsequenes delimited by the elements where `shouldSplit`
+    /// returns `true`.
+    // def split(where shouldSplit: (Element) -> Bool) -> [SubSequence] {
+    //     var idx = startIndex
+    //     var curStart = startIndex
+    //     var arr = [SubSequence]()
+
+    //     while idx != endIndex {
+    //         var el = self[idx]
+    //         if shouldSplit(el) {
+    //             arr.append(self[curStart..idx])
+    //             curStart = idx
+    //         }
+
+    //         idx = index(after: idx)
+    //     }
+
+    //     return arr
+    // }
+}
+
+extend Collection with Equatable where Element is Equatable
+                                 where It.Element is Equatable {
+    /// \inherit
+    default def infix ==(rhs: Self) -> Bool {
+        if self.size != rhs.size {
+            return false
+        }
+
+        var idx = startIndex
+        for el in rhs {
+            if el != self[idx] {
+                return false
+            }
+
+            idx = index(after: idx)
+        }
+
+        return true
+    }
+
+    /// \return the first index where the predicate is satisfied, or `endIndex` if it never is.
+    def firstIndex(of element: Element) -> Index {
+        var idx = startIndex
+        while idx != endIndex {
+            if self[idx] == element {
+                return idx
+            }
+
+            idx = index(after: idx)
+        }
+
+        return endIndex
+    }
+
+    /// \return an array containing subsequenes delimited by `delimiter`.
+    def split(at delimiter: Element, omittingEmptySequences: Bool = true) -> [SubSequence] {
+        var idx = startIndex
+        var curStart = startIndex
+        var arr = Array<SubSequence>()
+
+        while idx != endIndex {
+            var el = self[idx]
+            if el == delimiter {
+                if !omittingEmptySequences || curStart != idx {
+                    arr.append(self[curStart..idx])
+                }
+
+                curStart = idx
+            }
+
+            idx = index(after: idx)
+        }
+
+        return arr
+    }
+}
+
+extend Collection with Comparable where Element is Comparable
+                                  where It.Element is Comparable {
+    /// \inherit
+    default def infix <=>(rhs: Self) -> Int {
+        var sizeMatch = self.size <=> rhs.size
+        if sizeMatch != 0 {
+            return sizeMatch
+        }
+
+        var idx = startIndex
+        for el in rhs {
+            var elMatch = el <=> self[idx]
+            if elMatch != 0 {
+                return elMatch
+            }
+
+            idx = index(after: idx)
+        }
+
+        return 0
+    }
+}
+
+extend Collection {
+    /// \return the first `n` elements of the collection, or all elements if 
+    /// it contains less than `n` elements.
+    def prefix(_ n: Int) -> SubSequence {
+        precondition!(n >= 0, "Cannot take a negative amount of elements")
+        var end = if n <= size then n else size
+        return self[0..end]
+    }
+
+    /// \return the last `n` elements of the collection, or all elements if 
+    /// it contains less than `n` elements.
+    def suffix(_ n: Int) -> SubSequence {
+        precondition!(n >= 0, "Cannot take a negative amount of elements")
+        let amount = math.max(0, size - n)
+        let start = index(startIndex, advancedBy: amount, limitedBy: endIndex) ?? endIndex
+        return self[start..endIndex]
+    }
+
+    /// \return a subsequence that does not contain the first `n` elements.
+    def dropFirst(_ n: Int = 1) -> SubSequence {
+        precondition!(n >= 0, "Cannot drop a negative amount of elements")
+        let start = index(startIndex, advancedBy: n, limitedBy: endIndex) ?? endIndex
+        return self[start..endIndex]
+    }
+
+    /// \return a subsequence that does not contain the last `n` elements.
+    def dropLast(_ n: Int = 1) -> SubSequence {
+        precondition!(n >= 0, "Cannot drop a negative amount of elements")
+        let amount = math.max(0, size - n)
+        let end = index(startIndex, advancedBy: amount, limitedBy: endIndex) ?? endIndex
+        return self[startIndex..end]
+    }
+
+    /// \return a subsequence from the start of the collection up to, but not
+    /// including, the specified position.
+    def prefix(upTo end: Index) -> SubSequence {
+        return self[startIndex..end]
+    }
+
+    /// \return a subsequence from the specified position to the end of the
+    /// collection.
+    def suffix(from start: Index) -> SubSequence {
+        return self[start..endIndex]
+    }
+
+    /// \return a subsequence from the start of the collection up to and
+    /// including the specified position.
+    def prefix(through end: Index) -> SubSequence {
+        return prefix(upTo: index(after: end))
+    }
+}

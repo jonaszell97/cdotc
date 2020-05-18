@@ -3,16 +3,19 @@ build/
 .history/
 .idea/
 .vscode/
+.build/
+bin/
 cmake-build-debug/
 cmake-build-release/
 cmake-build-relwithdebinfo/
 xcode_build/
 CMakeLists.txt.user
 
-StdLib/
+test/test.log
 
 include/cdotc/AST/Attr.inc
 include/cdotc/AST/Attributes.def
+include/cdotc/Parse/ParseAttr.inc
 include/cdotc/Diagnostics/Diagnostics.def
 include/cdotc/Query/Inc
 tools/TableGenScripts

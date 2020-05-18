@@ -1,0 +1,30 @@
+
+// VERIFY
+
+protocol P1 {}
+protocol P2 {}
+
+struct S1 with P1 {}
+struct S2 with P1 {}
+struct S3 {}
+
+class Base {
+    def virtual f1() {}
+}
+class Derived : Base with P1, P2 {
+    init {}
+    def override f1() {}
+}
+
+var p: P1 = S1()
+_ = p as? S1
+_ = p as? S2
+_ = p as? S3 // expected-error {{no known explicit conversion from &mut P1 to S3}}
+
+var p2: P1 & P2 & Base = Derived()
+_ = p2.f1()
+_ = p2 as? S1 // expected-error {{no known explicit conversion from &mut P1 & P2 & Base to S1}}
+_ = p2 as? S2 // expected-error {{no known explicit conversion from &mut P1 & P2 & Base to S2}}
+_ = p2 as? S3 // expected-error {{no known explicit conversion from &mut P1 & P2 & Base to S3}}
+_ = p2 as? Derived
+_ = p2 as? Base // expected-warning {{conversion is implicit; remove '?'}}

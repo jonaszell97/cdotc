@@ -1,0 +1,87 @@
+
+macro define_infix_op {
+    // With same return type.
+    (def ($fn:tok, $op:tok) for $($tys:tok),*) => { $(
+        @compiletime def infix $op(_ lhs: $tys, _ rhs: $tys) -> $tys {
+            return ${$fn _ $tys}(lhs, rhs)
+        }
+
+        @compiletime def infix ${$op=}(_ lhs: mut ref $tys, _ rhs: $tys) {
+            lhs = ${$fn _ $tys}(lhs, rhs)
+        }
+    )... },
+
+    // With different return type.
+    (def ($fn:tok, $op:tok) -> $ret for $($tys:tok),*) => { $(
+        @compiletime def infix $op(_ lhs: $tys, _ rhs: $tys) -> $ret {
+            return ${$fn _ $tys}(lhs, rhs)
+        }
+    )... }
+}
+
+macro define_prefix_op {
+    (def ($fn:tok, $op:tok) for $($tys:tok),*) => { $(
+        @compiletime def prefix $op(_ val: $tys) -> $tys {
+            return ${$fn _ $tys}(val)
+        }
+    )... }
+}
+
+// Integer operations.
+define_infix_op!{ def (add, +) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (sub, -) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (mul, *) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (div, /) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (rem, %) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+
+define_infix_op!{ def (shl, <<) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (ashr, >>) for i8, i16, i32, i64, i128 }
+define_infix_op!{ def (lshr, >>) for u8, u16, u32, u64, u128 }
+
+define_infix_op!{ def (and, &) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (or, |) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (xor, ^) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+
+define_infix_op!{ def (icmp_eq, ==) -> i1 for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_infix_op!{ def (icmp_ne, !=) -> i1 for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+
+define_infix_op!{ def (icmp_sge, >=) -> i1 for i8, i16, i32, i64, i128 }
+define_infix_op!{ def (icmp_sgt, >) -> i1 for i8, i16, i32, i64, i128 }
+define_infix_op!{ def (icmp_sle, <=) -> i1 for i8, i16, i32, i64, i128 }
+define_infix_op!{ def (icmp_slt, <) -> i1 for i8, i16, i32, i64, i128 }
+
+define_infix_op!{ def (icmp_uge, >=) -> i1 for u8, u16, u32, u64, u128 }
+define_infix_op!{ def (icmp_ugt, >) -> i1 for u8, u16, u32, u64, u128 }
+define_infix_op!{ def (icmp_ule, <=) -> i1 for u8, u16, u32, u64, u128 }
+define_infix_op!{ def (icmp_ult, <) -> i1 for u8, u16, u32, u64, u128 }
+
+define_prefix_op!{ def (id, +) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+define_prefix_op!{ def (neg, -) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+
+define_prefix_op!{ def (not, !) for i1 }
+define_prefix_op!{ def (not, ~) for i8, u8, i16, u16, i32, u32, i64, u64, i128, u128 }
+
+// Floating point operations.
+define_infix_op!{ def (fadd, +) for f32, f64 }
+define_infix_op!{ def (fsub, -) for f32, f64 }
+define_infix_op!{ def (fmul, *) for f32, f64 }
+define_infix_op!{ def (fdiv, /) for f32, f64 }
+define_infix_op!{ def (frem, %) for f32, f64 }
+
+define_infix_op!{ def (fcmp_oeq, ==) -> i1 for f32, f64 }
+define_infix_op!{ def (fcmp_one, !=) -> i1 for f32, f64 }
+define_infix_op!{ def (fcmp_oge, >=) -> i1 for f32, f64 }
+define_infix_op!{ def (fcmp_ogt, >) -> i1 for f32, f64 }
+define_infix_op!{ def (fcmp_ole, <=) -> i1 for f32, f64 }
+define_infix_op!{ def (fcmp_olt, <) -> i1 for f32, f64 }
+
+define_prefix_op!{ def (id, +) for f32, f64 }
+define_prefix_op!{ def (fneg, -) for f32, f64 }
+
+// Pointer operations.
+def infix ==(_ lhs: RawPointer, _ rhs: RawPointer) -> i1 {
+    return icmp_eq_ptr(lhs, rhs)
+}
+def infix !=(_ lhs: RawPointer, _ rhs: RawPointer) -> i1 {
+    return icmp_ne_ptr(lhs, rhs)
+}

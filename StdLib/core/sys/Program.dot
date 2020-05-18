@@ -1,0 +1,75 @@
+
+import fs
+import { self, cstring } from libc
+import posix
+import _sys
+
+/// Execute the program with the given arguments.
+/// \return `true` on success, `false` on failure.
+public def execute(_ program: String,
+                   args: [String],
+                   env: [String]? = none,
+                   redirects: [String?] = Array<Option<String>>(),
+                   memoryLimit: UInt = 0) -> Bool {
+    var (success, pid) = _sys._execute(program, args, env, redirects, memoryLimit)
+    return success
+}
+
+/// Execute the program with the given arguments and wait for it to finish.
+/// \return The exit code of the program, or `-1` on error.
+public def executeAndWait(_ program: String,
+                          args: [String],
+                          secondsToWait: UInt = 0,
+                          env: [String]? = none,
+                          redirects: [String?] = Array<Option<String>>(),
+                          memoryLimit: UInt = 0) -> Int {
+    var (success, pid) = _sys._execute(program, args, env, redirects, memoryLimit)
+    if success {
+        return Int(_cdot_Wait(pid: Int32(truncatingIfNeeded: pid),
+                              secondsToWait: UInt32(secondsToWait),
+                              waitUntilEnd: secondsToWait == 0))
+    }
+
+    return -1
+}
+
+/// Find an executable by name.
+/// \return the path of the executable if found, @code{none} otherwise.
+public def findProgramByName(_ name: String,
+                             inPaths paths: [String] = Array<String>()) -> String? {
+    if name.empty {
+        return none
+    }
+
+    var paths = paths
+
+    // Use the given path verbatim if it contains any slashes; this matches
+    // the behavior of sh(1) and friends.
+    if name.contains(fs.PathSeparator) {
+        return .Some(name)
+    }
+
+    // If no paths are given, use the system paths.
+    if paths.empty {
+        if let systemPaths = getEnvironmentVariable("PATH") {
+            paths = systemPaths.split(at: ':')
+        } 
+    }
+
+    for path in paths {
+        var realPath = path.withAppendedPath(name)
+        var foundIt = fs.canExecute(realPath)
+
+        if foundIt {
+            return .Some(realPath)
+        }
+    }
+
+    return none
+}
+
+/// Implemented in cdotrt
+declare C public def _cdot_Wait(pid: Int32,
+                                secondsToWait: UInt32,
+                                waitUntilEnd: Bool) -> Int
+

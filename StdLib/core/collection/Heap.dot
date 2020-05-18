@@ -1,0 +1,63 @@
+
+module std.collection
+
+/// Get the parent index of a node in a heapified array.
+def parent(of idx: Int) -> Int {
+    return (idx - 1) / 2
+}
+
+/// Get the index of the left child of a node in a heapified array.
+def leftChild(of idx: Int) -> Int {
+    return 2 * idx + 1
+}
+
+/// Get the index of the right child of a node in a heapified array.
+def rightChild(of idx: Int) -> Int {
+    return 2 * idx + 2
+}
+
+/// Turn an array into a heap.
+def heapify<T>(_ arr: UnsafeMutablePtr<T>, count: Int) {
+    var start = parent(of: count - 1)
+    while start >= 0 {
+        siftDown(arr, start, count - 1)
+        start -= 1
+    }
+}
+
+def siftDown<T>(_ arr: UnsafeMutablePtr<T>, _ start: Int, _ end: Int) {
+    var root = start
+    while leftChild(of: root) <= end {
+        var child = leftChild(of: root)
+        var swap = root
+
+        if arr[swap] < arr[child] {
+            swap = child
+        }
+
+        if child + 1 <= end && arr[swap] < arr[child + 1] {
+            swap = child + 1
+        }
+
+        if swap == root {
+            return
+        }
+
+        mem.swap(arr + root, arr + swap)
+        root = swap
+    }
+}
+
+def siftUp<T>(_ arr: UnsafeMutablePtr<T>, _ start: Int, _ end: Int) {
+    var child = end
+    while child > start {
+        var parent = parent(of: child)
+        if arr[parent] < arr[child] {
+            mem.swap(arr + parent, arr + child)
+            child = parent
+        }
+        else {
+            return
+        }
+    }
+}

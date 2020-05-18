@@ -1,0 +1,34 @@
+
+// VERIFY
+
+// Providing a template parameter as an associated type in an extension.
+protocol P {
+    associatedType AT
+}
+
+struct S<T> {}
+extend S with P {
+    alias AT = T
+}
+
+let GV1: Int = S<Int>.AT()
+let GV2: Int = S<String>.AT() // expected-error {{no implicit conversion from 'String' to 'Int64'}}
+
+// Reference associated type from different protocol in constraint.
+protocol P1 {
+    associatedType AT = Int
+}
+
+protocol P2 with P1 {}
+extend P2 where AT is BinaryInteger {
+    def hasExtension() {}
+}
+struct S2 with P2 {}
+_ = S2().hasExtension()
+
+// Referencing decl from extension with unsatisfied constraints
+struct S3 with P2 {
+    alias AT = String
+}
+
+_ = S3().hasExtension() // expected-error {{struct 'S3' does not have a member named 'hasExtension'}}

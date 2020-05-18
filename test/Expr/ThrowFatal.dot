@@ -1,0 +1,7 @@
+
+// RUN
+// CHECK fatal error: 'try!' expression unexpectedly threw an error \(file: '%S', line: 7\)
+// CHECK-EXIT 1
+
+def thrower() throws { throw 0 }
+_ = try! thrower()
