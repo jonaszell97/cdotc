@@ -72,6 +72,21 @@ static AccessSpecifier getAccess(clang::AccessSpecifier AS)
 static FunctionDecl* importFunctionDecl(ImporterImpl& I,
                                         clang::FunctionDecl* ClangFn)
 {
+   StringRef FuncName;
+   if (ClangFn->getDeclName().isIdentifier()) {
+      FuncName = ClangFn->getDeclName().getAsIdentifierInfo()->getName();
+   }
+
+   if (!I.IsCXX && !FuncName.empty()) {
+      auto It = I.CLinkageFuncs.find(FuncName);
+      if (It != I.CLinkageFuncs.end()) {
+         I.CI.getSema().makeDeclAvailable(I.CI.getSema().getDeclContext(),
+                                          It->getValue());
+
+         return It->getValue();
+      }
+   }
+
    auto& Ctx = I.CI.getContext();
    auto RetTy = SourceType(I.getType(ClangFn->getReturnType()));
    if (!RetTy) {
@@ -102,9 +117,19 @@ static FunctionDecl* importFunctionDecl(ImporterImpl& I,
          Label = Name.getIdentifierInfo();
       }
 
+      Expression *DefaultVal = nullptr;
+      if (auto NK = Param->getType()->getNullability(ClangFn->getASTContext())) {
+         if (NK == clang::NullabilityKind::Nullable) {
+            DefaultVal = BuiltinIdentExpr::Create(
+                Ctx, Loc, BuiltinIdentifier::defaultValue);
+            DefaultVal->setExprType(ParamTy);
+            DefaultVal->setSemanticallyChecked(true);
+         }
+      }
+
       auto* P = FuncArgDecl::Create(
           Ctx, Loc, Loc, Name, Label, ArgumentConvention::Borrowed,
-          SourceType(ParamTy), nullptr, false, false, false);
+          SourceType(ParamTy), DefaultVal, false, false, false);
 
       P->setImportedFromClang(true);
       Args.push_back(P);
@@ -123,6 +148,10 @@ static FunctionDecl* importFunctionDecl(ImporterImpl& I,
    I.DeclMap[ClangFn] = F;
    I.CI.getSema().ActOnDecl(&I.CI.getSema().getDeclContext(), F);
    I.importDecls(ClangFn, F);
+
+   if (!I.IsCXX && !FuncName.empty()) {
+      I.CLinkageFuncs[FuncName] = F;
+   }
 
    return F;
 }
@@ -198,9 +227,11 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
 
       Expression* DefaultVal = nullptr;
       if (CI.getSema().hasDefaultValue(FieldTy)) {
-         DefaultVal = BuiltinIdentExpr::Create(Ctx, FieldLoc,
-                                               BuiltinIdentifier::defaultValue);
+         DefaultVal = BuiltinIdentExpr::Create(
+             Ctx, FieldLoc, BuiltinIdentifier::defaultValue);
+
          DefaultVal->setExprType(FieldTy);
+         DefaultVal->setSemanticallyChecked(true);
       }
 
       auto* Field = FieldDecl::Create(

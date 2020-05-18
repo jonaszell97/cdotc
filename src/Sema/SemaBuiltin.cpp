@@ -126,10 +126,12 @@ ExprResult SemaPass::HandleBuiltinCall(CallExpr* C)
    return C;
 }
 
-ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
+ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr,
+                                        ArrayRef<Expression*> DependentTemplateArgs)
 {
-   if (!BuiltinIdentsInitialized)
+   if (!BuiltinIdentsInitialized) {
       initBuiltinIdents();
+   }
 
    if (auto AE = Alias->getAliasExpr()) {
       Expr->setExprType(AE->getExprType());
@@ -148,10 +150,6 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
       return ExprError();
    }
 
-   //   if (ensureDeclared(BuiltinMod)) {
-   //      return ExprError();
-   //   }
-
    auto Name = Alias->getDeclName().getManglingName();
    if (!Name.isSimpleIdentifier()) {
       diagnose(Expr, err_compiler_ns_unknown_entity, Alias->getDeclName(),
@@ -168,9 +166,30 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
       return ExprError();
    }
 
-   //   bool DoCache = true;
-   Expression* ResultExpr = nullptr;
+   QualType TemplateArgType;
+   if (Alias->isInstantiation()) {
+      if (Alias->getTemplateArgs().size() != 1
+      || !Alias->getTemplateArgs().front().isType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+      }
+      else {
+         TemplateArgType = Alias->getTemplateArgs().front().getType();
+      }
+   }
+   else if (!DependentTemplateArgs.empty()) {
+      if (DependentTemplateArgs.size() != 1
+          || !DependentTemplateArgs.front()->getExprType()->isMetaType()) {
+         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
+                  Alias->getSourceRange());
+      }
+      else {
+         TemplateArgType
+             = DependentTemplateArgs.front()->getExprType()->removeMetaType();
+      }
+   }
 
+   Expression* ResultExpr = nullptr;
    if (II == BuiltinIdents[builtin::TokenType]) {
       ResultExpr = new (Context)
           IdentifierRefExpr(Expr->getSourceRange(), IdentifierKind::MetaType,
@@ -182,8 +201,7 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
                             Context.getMetaType(Context.getVoidType()));
    }
    else if ((II == BuiltinIdents[builtin::RawPointer]
-   || II == BuiltinIdents[builtin::MutableRawPointer])
-            && !Alias->isInstantiation()) {
+   || II == BuiltinIdents[builtin::MutableRawPointer]) && !TemplateArgType) {
       QualType PtrTy;
       if (II == BuiltinIdents[builtin::MutableRawPointer]) {
          PtrTy = Context.getMutablePointerType(Context.getVoidType());
@@ -199,20 +217,12 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
    }
    else if (II == BuiltinIdents[builtin::RawPointer]
    || II == BuiltinIdents[builtin::MutableRawPointer]) {
-      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
-          || !Alias->getTemplateArgs().front().isType()) {
-         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
-                  Alias->getSourceRange());
-
-         return ExprError();
-      }
-
       QualType PtrTy;
       if (II == BuiltinIdents[builtin::MutableRawPointer]) {
-         PtrTy = Context.getMutablePointerType(Alias->getTemplateArgs().front().getType());
+         PtrTy = Context.getMutablePointerType(TemplateArgType);
       }
       else {
-         PtrTy = Context.getPointerType(Alias->getTemplateArgs().front().getType());
+         PtrTy = Context.getPointerType(TemplateArgType);
       }
 
       ResultExpr = new (Context)
@@ -242,24 +252,16 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
 #undef CDOT_BUILTIN_TYPE
    else if (II == BuiltinIdents[builtin::undefValue])
    {
-      if (!Alias->isInstantiation() || Alias->getTemplateArgs().size() != 1
-          || !Alias->getTemplateArgs().front().isType()) {
-         diagnose(Expr, err_compiler_ns_bad_def, Alias->getDeclName(),
-                  Alias->getSourceRange());
-
-         return ExprError();
-      }
-
-      QualType Ty = Alias->getTemplateArgs().front().getType();
-      if (Ty->isDependentType()) {
+      if (TemplateArgType->isDependentType()) {
          Expr->setIsTypeDependent(true);
          Expr->setExprType(Context.getUIntTy());
 
          return Expr;
       }
 
-      il::Constant* Val = ILGen->Builder.GetUndefValue(Ty);
-      ResultExpr = StaticExpr::Create(Context, Ty, Expr->getSourceRange(), Val);
+      il::Constant* Val = ILGen->Builder.GetUndefValue(TemplateArgType);
+      ResultExpr = StaticExpr::Create(Context, TemplateArgType,
+                                      Expr->getSourceRange(), Val);
    }
 
    if (!ResultExpr) {
@@ -269,13 +271,7 @@ ExprResult SemaPass::HandleBuiltinAlias(AliasDecl* Alias, Expression* Expr)
       return ExprError();
    }
 
-   auto Res = visitExpr(ResultExpr);
-
-   // FIXME can't cache because of source locations
-   //   if (DoCache)
-   //      ReflectionValues.try_emplace(Alias, Res.get());
-
-   return Res;
+   return visitExpr(ResultExpr);
 }
 
 void SemaPass::SetBuiltinAliasType(AliasDecl* A)

@@ -92,6 +92,9 @@ public:
 
    ExprResult visitBuiltinIdentExpr(BuiltinIdentExpr* Expr)
    {
+      if (Expr->getExprType())
+         return Expr;
+
       assert(Expr->getContextualType() && "invalid builtin ident");
 
       Expr->setExprType(Expr->getContextualType());

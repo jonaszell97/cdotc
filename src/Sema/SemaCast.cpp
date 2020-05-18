@@ -543,8 +543,9 @@ static void FromRecord(SemaPass& SP, CanType from, CanType to,
    }
 
    if (!to->isRecordType()) {
-      if (FromRec->isClass() && to->isPointerType())
+      if (FromRec->isClass() && to->isPointerType()) {
          return Seq.addStep(CastKind::BitCast, to, CastStrength::Force);
+      }
 
       if (FromRec->isRawEnum()) {
          if (to->isPointerType())
@@ -579,8 +580,16 @@ static void FromRecord(SemaPass& SP, CanType from, CanType to,
 
    if (auto FromClass = dyn_cast<ClassDecl>(FromRec)) {
       auto ToClass = dyn_cast<ClassDecl>(ToRec);
-      if (!ToClass)
+      if (!ToClass) {
          return Seq.invalidate();
+      }
+
+      if (SP.QC.PrepareDeclInterface(FromClass)) {
+         return Seq.invalidate();
+      }
+      if (SP.QC.PrepareDeclInterface(ToClass)) {
+         return Seq.invalidate();
+      }
 
       if (ToClass->isBaseClassOf(FromClass))
          return Seq.addStep(CastKind::UpCast, to, CastStrength::Implicit);

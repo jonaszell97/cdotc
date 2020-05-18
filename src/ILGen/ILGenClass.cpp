@@ -891,8 +891,8 @@ void ILGenPass::DefineMemberwiseInitializer(StructDecl* S, bool IsComplete)
       Self = Builder.CreateLoad(Self);
 
    unsigned i = 0;
-   for (auto F : S->getFields()) {
-      if (F->getDefaultVal()) {
+   for (auto *F : S->getStoredFields()) {
+      if (F->getDefaultVal() && !F->isImportedFromClang()) {
          ++i;
          continue;
       }
@@ -1491,7 +1491,8 @@ QueryResult CreateILRecordTypeInfoQuery::run()
             return fail();
          }
 
-         baseClass = ConstantExpr::getAddrOf(BaseTypeInfo);
+         baseClass = ConstantExpr::getAddrOf(BaseTypeInfo->getDeclarationIn(
+             Builder.getModule()));
       }
    }
 
@@ -1510,7 +1511,8 @@ QueryResult CreateILRecordTypeInfoQuery::run()
    if (auto* C = dyn_cast<ClassDecl>(R)) {
       auto* VT = ILGen.GetOrCreateVTable(C);
       if (VT) {
-         vtable = ConstantExpr::getAddrOf(VT);
+         vtable = ConstantExpr::getAddrOf(VT->getDeclarationIn(
+             Builder.getModule()));
       }
    }
 

@@ -1623,7 +1623,9 @@ private:
 public:
    ExprResult HandleReflectionAlias(AliasDecl* Al, Expression* Expr);
 
-   ExprResult HandleBuiltinAlias(AliasDecl* Al, Expression* Expr);
+   ExprResult HandleBuiltinAlias(AliasDecl* Al, Expression* Expr,
+                                 ArrayRef<Expression*> DependentTemplateArgs = {});
+
    void SetBuiltinAliasType(AliasDecl* A);
 
    NamespaceDecl* getPrivateNamespace();

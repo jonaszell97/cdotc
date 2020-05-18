@@ -563,25 +563,6 @@ ExprResult SemaPass::visit(Expression* Expr, bool)
    if (!Expr->isSemanticallyChecked()) {
       Expr->setSemanticallyChecked(true);
       updateStatusFlags(Expr, ExprTy);
-
-      //      if (Expr->isVariadicArgPackExpansion()) {
-      //         if (!inUnboundedTemplate()) {
-      //            diagnose(Expr, err_pack_expansion_cannot_appear,
-      //                     Expr->getEllipsisRange());
-      //         }
-      //         else if (!Expr->containsUnexpandedParameterPack()) {
-      //            diagnose(Expr, err_invalid_pack_expansion,
-      //                     Expr->getEllipsisRange());
-      //            Expr->setEllipsisLoc(SourceLocation());
-      //         }
-      //         else {
-      //            Expr->setContainsUnexpandedParameterPack(false);
-      //         }
-      //      }
-      //      else if (Expr->containsUnexpandedParameterPack()
-      //               && !Bits.AllowUnexpandedParameterPack) {
-      //         diagnose(Expr, err_unexpanded_pack, Expr->getSourceRange());
-      //      }
    }
 
    Expr->setExprType(ApplyCapabilities(ExprTy));
@@ -2524,13 +2505,13 @@ static ExprResult LookupInitializableByDecl(
    }
 
    if (ConformingRec->hasAttribute<_BuiltinAttr>()) {
+      E->setSemanticallyChecked(true);
+      E->setExprType(Ty);
+
       if (Sema.QC.PrepareDeclInterface(ConformingRec)) {
          E->setIsInvalid(true);
          return ExprError();
       }
-
-      E->setExprType(Ty);
-      E->setSemanticallyChecked(true);
 
       return E;
    }

@@ -296,6 +296,10 @@ CallExpr* SemaPass::CreateCall(CallableDecl* C, ASTVector<Expression*>&& Args,
 
 ExprResult SemaPass::visitAnonymousCallExpr(AnonymousCallExpr* Call)
 {
+   if (!Call->getFunctionType()) {
+      return ExprError();
+   }
+
    if (Call->getFunctionType()->throws()) {
       if (TryScopeStack.empty()) {
          diagnose(err_throwing_call_not_in_try, DeclarationName(),
