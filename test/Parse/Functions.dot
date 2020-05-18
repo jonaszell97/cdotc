@@ -1,0 +1,38 @@
+
+// VERIFY
+
+def missingDefault(_ arg1: Int = 3, _ arg2) {} // expected-error {{expecting default value}}
+
+def invalidParam( _ arg: [Int; ?]) {} // expected-error {{array type with inferred size is only allowed with variable declarations}}
+
+def invalidVararg(..., x: Int) {} // expected-error {{vararg arguments must come last in a function signature}}
+// expected-note@-1 {{previous varargs here}}
+// expected-error@-2 {{unexpected token ,; expecting type}}
+
+def mutating mutatingFunc() {} // expected-error {{function cannot be marked mutating}}
+mutating def mutatingFunc2() {} // expected-error {{mutating must appear after 'def'}}
+
+def nonmutating nonmutatingFunc1() {} // expected-error {{function cannot be marked nonmutating}}
+nonmutating def nonmutatingFunc2() {} // expected-error {{nonmutating must appear after 'def'}}
+
+def override overrideFunc1() {} // expected-error {{function cannot be marked override}}
+override def overrideFunc2() {} // expected-error {{override must appear after 'def'}}
+
+def abstract abstractFunc1() {} // expected-error {{function cannot be marked abstract}}
+abstract def abstractFunc2() {} // expected-error {{abstract must appear after 'def'}}
+
+struct S1 {
+    def mutating mutatingMethod1() {} // OK
+    mutating def mutatingMethod2() {} // expected-error {{mutating must appear after 'def'}}
+    def nonmutating nonmutatingMethod1() {} // expected-error {{method cannot be marked nonmutating}}
+
+    def () {} // expected-error {{unexpected token (; expecting identifier}}
+    def +() {} // expected-error {{unexpected token +; expecting identifier}}
+    def @() {} // expected-error {{unexpected token @; expecting identifier}}
+}
+
+def () {} // expected-error {{unexpected token (; expecting identifier}}
+def +() {} // expected-error {{unexpected token +; expecting identifier}}
+def @() {} // expected-error {{unexpected token @; expecting identifier}}
+// expected-error@+1 {{unexpected token <eof>; expecting identifier}}
+def def def // expected-error {{unexpected token def; expecting identifier}}

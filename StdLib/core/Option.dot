@@ -1,0 +1,170 @@
+
+import sys
+
+/// A protocol for types that are expressible with a `none` literal, i.e.
+/// those that have a null-like value.
+public protocol ExpressibleByNoneLiteral {
+    /// The initializer that is called when initializing from a `none` literal.
+    init ()
+}
+
+/// A protocol for values that can be unwrapped.
+public protocol Unwrappable {
+    /// The wrapped type.
+    associatedType Wrapped
+
+    /// Return the unwrapped value, or `none` if unwrapping failed.
+    def mutating tryUnwrap() -> Wrapped?
+}
+
+// A truth value can trivially unwrap to itself.
+extend TruthValue with Unwrappable {
+    /// \inherit
+    default alias Wrapped = Self
+
+    /// \inherit
+    default def mutating tryUnwrap() -> Wrapped? {
+        if self {
+            return .Some(self)
+        }
+
+        return none
+    }
+}
+
+/// Unwrap operator.
+postfix !
+
+/// A type that represents a value of type `T` that may not be present.
+@noDerive(RawRepresentable)
+@_builtin public enum Option<T> {
+    /// Represents the absence of a value.
+    case None
+
+    /// Represents the presence of a value.
+    case Some(T)
+
+    /// C'tor. Initialize with an existing value.
+    @implicit init (_ value: T) {
+        self = .Some(value)
+    }
+
+    /// \return the contained value. Traps if this instance does not contain a value.
+    public def unwrap() -> T {
+        match self {
+        case .Some(let t):
+            return builtin.copy(t)
+        case .None:
+            sys.reportFatalError("unwrapping a none value!")
+        }
+    }
+
+    /// \return the contained value. Reports \param msg as a fatal error 
+    /// if this Option does not contain a value.
+    public def unwrap(orReport msg: String) -> T {
+        match self {
+        case .Some(let t):
+            return builtin.copy(t)
+        case .None:
+            sys.reportFatalError(msg)
+        }
+    }
+
+    /// \return `true` iff this Option contains a value, and it equals \param t.
+    public def holds(_ t: T) -> Bool {
+        match self {
+        case .Some(t):
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// \return the value contained in this Option, or \param defaultVal if it is `none`.
+    public def infix ?? (@autoclosure defaultVal: T) -> T {
+        match self {
+        case .Some(let t): 
+            return t
+        case .None:
+            return defaultVal
+        }
+    }
+
+    /// \see unwrap(_:)
+    public def postfix !() -> T {
+        return self.unwrap()
+    }
+
+    /// \return `true` iff this Option is `none`.
+    public def prefix !() -> Bool {
+        match self {
+        case .Some(let t): 
+            return false
+        case .None:
+            return true
+        }
+    }
+
+    /// \return `true` iff this Option is `none`.
+    prop isNone: Bool {
+        if case .None = self {
+            return true
+        }
+
+        return false 
+    }
+
+    /// \return `false` iff this Option is `none`.
+    prop hasValue: Bool {
+        return !isNone
+    }
+}
+
+extend Option with ExpressibleByNoneLiteral {
+    /// Initializes to `none`.
+    init {
+        self = .None
+    }
+}
+
+// extend Option with ExpressibleByIntegerLiteral where T is ExpressibleByIntegerLiteral {
+//     alias IntegerType = T.IntegerType
+
+//     init (integerLiteral i: IntegerType) {
+//         self = .Some(i)
+//     }
+// }
+
+extend Option with ImplicitlyCopyable where T is ImplicitlyCopyable {
+}
+
+extend Option with ImplicitlyCopyable where T is class {
+}
+
+extend Option with TruthValue {
+    /// \inherit
+    prop truthValue: Bool {
+        return !isNone
+    }
+}
+
+extend Option with Unwrappable {
+    /// \inherit
+    alias Wrapped = T
+
+    /// \inherit
+    def mutating tryUnwrap() -> Wrapped? {
+        return self
+    }
+}
+
+extend Option with StringRepresentable where T is StringRepresentable {
+    def toString() -> String {
+        match self {
+        case .Some(let val):
+            return ".Some($val)"
+        case .None:
+            return ".None"
+        }
+    }
+}

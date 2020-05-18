@@ -1,0 +1,46 @@
+
+// RUN
+
+let v1: Int = 9
+let v2 = 21
+
+assertEqual!(v1 + v2, 30)
+
+var v5 = 0b1
+v5 <<= 4
+assertEqual!(v5, 0b10000)
+
+let a: UInt8 = 0b1_0_11_0_111
+assertEqual!(a, 0b1_0_11_0_111)
+
+let b: Int16 = 183
+assertEqual!(b, 0b1_0_11_0_111)
+
+// FIXME
+// let c: Int16 = -183
+// assertEqual!(c, -183)
+
+let d: Int8 = 127
+assertEqual!(d, 127)
+
+let e: UInt8 = 255
+assertEqual!(e, 255)
+
+assertEqual!(183 as UInt8, 183)
+assertNotEqual!(183 as UInt8, 184)
+
+assertEqual!(Int8(49), 49)
+assertNotEqual!(-Int8(49), 49)
+
+assertEqual!(Int8(1) + 2, 3)
+assertEqual!(Int8(1) - 2, -Int8(1))
+assertEqual!(-Int8(5) + 11, 6)
+assertEqual!(Int8(3) * 4, 12)
+assertEqual!(Int8(4) * -Int8(7), -Int8(28))
+assertEqual!(-Int8(4) * -Int8(7), 28)
+assertEqual!(Int8(5) / 2, 2)
+assertEqual!(Int8(6) / 2, 3)
+assertEqual!(Int8(7) / 2, 3)
+assertEqual!(Int8(5) % 3, 2)
+assertEqual!(Int8(6) % 3, 0)
+assertEqual!(Int8(7) % 3, 1)

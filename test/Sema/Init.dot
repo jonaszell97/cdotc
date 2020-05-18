@@ -1,0 +1,126 @@
+
+// VERIFY-IL
+
+def maybe() -> Bool { __unreachable }
+
+struct MyStruct {
+    var x: Int
+    let y: String
+    let z: Float
+
+    init {}
+    // expected-error@-1 {{property 'x' must be initialized before the end of the constructor}}
+    // expected-note@7 {{declared here}}
+    // expected-error@-3 {{property 'y' must be initialized before the end of the constructor}}
+    // expected-note@8 {{declared here}}
+    // expected-error@-5 {{property 'z' must be initialized before the end of the constructor}}
+    // expected-note@9 {{declared here}}
+
+    init (dummy: Int) { // expected-error {{property 'y' must be initialized before the end of the constructor}}
+                        // expected-note@8 {{declared here}}
+        self.x = 3
+        if maybe() {
+            self.y = "hi"
+        }
+        self.z = 3
+    }
+
+    init (dummy2: Int) {
+        self.x = 12
+        if maybe() {
+            self.y = "jaj"
+        } else {
+            self.y = "ias"
+        }
+        self.z = 3.12
+    }
+
+    init (dummy3: Int) {
+        self.x = 12
+        self.y = "hi"
+        if maybe() {
+            self.y = "Hmm"
+        }
+        self.z = 3.1
+    }
+
+    init (dummy4: Int) { // expected-error {{property 'z' must be initialized before the end of the constructor}}
+                         // expected-note@9 {{declared here}}
+        self.x = 1
+        self.y = "hola"
+        if maybe() {
+            return
+        }
+        self.z = 1
+    }
+}
+
+struct MyStruct2 {
+    var x: Int = 0
+    var y: String
+
+    init {
+        self.y = "hello"
+    }
+
+    init (dummy: Int) { // expected-error {{property 'y' must be initialized before the end of the constructor}}
+                        // expected-note@60 {{declared here}}
+        self.x = 12
+    }
+}
+
+struct MyStruct3 {
+    var x: Int
+    var y: Int
+
+    init? {
+        if maybe() {
+            return none
+        }
+
+        self.x = 0
+        self.y = 0
+    }
+
+    init? (dummy: Int) {
+        self.x = 0
+        if maybe() {
+            return none
+        }
+        self.y = 0
+    }
+}
+
+class Base {
+    let mustInitialize: String
+    init {
+        self.mustInitialize = ""
+    }
+}
+
+class Derived: Base {
+    init {} // expected-error {{property 'mustInitialize' must be initialized before the end of the constructor}}
+            // expected-note@95 {{declared here}}
+
+    init {
+        super.init()
+    }
+}
+
+struct DelegatingInit {
+    let x: Int
+    init {
+        self.x = 12
+    }
+
+    init (_ dummy: Int) {
+        self.x = 3
+        self.init()
+        // expected-error@-1 {{'self' must be fully uninitialized before a call to a delegating initializer}}
+    }
+
+    init (_ dummy2: Int) {
+        print(self.x) // expected-error {{'self' is uninitialized when used here}}
+        self.x = 10
+    }
+}

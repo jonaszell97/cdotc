@@ -1,0 +1,34 @@
+
+// VERIFY
+
+import { u8 } from builtin
+
+struct X {
+    def infix +(rhs: u8) {}
+    def prefix ~() -> Bool { return true }
+    def prefix !() {}
+    def infix -(rhs: u8) {}
+}
+
+def infix *(_ lhs: X, _ rhs: u8) {}
+def infix ^^() {} // expected-error {{undeclared operator 'infix ^^'}}
+
+_ = X() + 3
+_ = X() - 3
+_ = X.infix +(X(), 3)
+_ = X.infix -(X(), 3)
+_ = X().infix +(3)
+
+~X() // expected-warning {{expression result unused}}
+_ = !X()
+_ = X.prefix ~(X())
+_ = X.prefix !(X())
+
+_ = X() * 3
+_ = infix *(X(), 3)
+
+_ = X.infix +(3, 3, 3) // expected-error {{no matching call for function 'infix +' found}}
+// expected-note@7 {{candidate not viable: requires at most 2 arguments, 3 given}}
+
+_ = X() - 3.0 // expected-error {{no matching call for function 'infix -' found}}
+// expected-note@10 {{candidate not viable: no implicit conversion from 'Double' to 'u8' for 1st argument}}

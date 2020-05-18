@@ -1,0 +1,8 @@
+
+public protocol RandomAccessCollection with BidirectionalCollection {
+    /// Require subsequences to also be RandomAccessCollections.
+    associatedType SubSequence: RandomAccessCollection
+
+    /// Require indices to also be RandomAccessCollections.
+    associatedType Indices: RandomAccessCollection
+}

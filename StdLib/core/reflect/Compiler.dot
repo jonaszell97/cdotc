@@ -1,0 +1,243 @@
+
+import builtin
+import libc
+
+@_builtin @compiletime
+struct SourceLocation with Copyable, ImplicitlyCopyable {
+    let line: Int
+    let column: Int
+    let fileName: String
+}
+
+extend SourceLocation with StringRepresentable {
+    def toString() -> String {
+        return "SourceLocation(line: $line, column: $column, file: \"$fileName\")"
+    }
+}
+
+@_builtin @compiletime
+struct RawSourceLocation with Copyable, ImplicitlyCopyable {
+    let line: builtin.i64
+    let column: builtin.i64
+    let fileName: libc.cstring
+}
+
+@_builtin alias line: Int
+@_builtin alias column: Int
+@_builtin alias fileName: String
+@_builtin alias sourceLocation: SourceLocation
+@_builtin alias rawSourceLocation: RawSourceLocation
+
+@_builtin alias function: String
+@_builtin alias mangledFunction: String
+
+@_builtin alias debug: Bool
+
+@_builtin @compiletime
+enum Endianness {
+    case little
+    case big
+}
+
+@_builtin @compiletime
+enum OperatingSystem {
+    case unknownOS,
+        darwin,
+        dragonFly,
+        freeBSD,
+        fuchsia,
+        iOS,
+        kFreeBSD,
+        linux,
+        PS3,
+        macOS,
+        netBSD,
+        openBSD,
+        solaris,
+        windows,
+        PS4,
+        tvOS,
+        watchOS
+
+    prop isWindows: Bool {
+        return self == .windows
+    }
+
+    prop isDarwin: Bool {
+        match self {
+        case .darwin:
+        case .macOS:
+        case .tvOS:
+        case .watchOS:
+        case .iOS:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+@_builtin alias sizeOf<T>: Int
+@_builtin alias alignOf<T>: Int
+@_builtin alias strideOf<T>: Int
+@_builtin alias underlyingType<T> where T is enum
+
+@_builtin alias IsTriviallyCopyable<T>: Bool
+
+@_builtin alias IsDefaultInitializable<T>: Bool
+@_builtin alias defaultValue<T>: T where IsDefaultInitializable<T>
+
+alias pointerSize = sizeOf<UnsafeRawPtr>
+
+@_builtin alias inCTFE: Bool
+
+@_builtin @compiletime
+struct TargetInfo {
+    let pointerSizeInBytes: Int
+    let pointerAlignmentInBytes: Int
+    let endianness: Endianness
+    let operatingSystem: OperatingSystem
+
+    prop bigEndian: Bool {
+        return endianness == .big
+    }
+
+    prop littleEndian: Bool {
+        return endianness == .little
+    }
+}
+
+@_builtin alias targetInfo: TargetInfo
+
+@_builtin @compiletime
+enum AccessSpecifier with StringRepresentable {
+    case `public`, `private`, `protected`,`fileprivate`, `internal`
+
+    def toString() -> String {
+        match self {
+        case .`public`: return "public"
+        case .`private`: return "private"
+        case .`protected`: return "protected"
+        case .`fileprivate`: return "fileprivate"
+        case .`internal`: return "internal"
+        }
+    }
+}
+
+// @_builtin enum Type {
+//     case VoidType
+//     case IntegerType(bitwidth: u64, isUnsigned: Bool)
+//     case FloatType
+//     case DoubleType
+//     case PointerType(pointeeType: Type, mutable: Bool)
+//     case ReferenceType(referencedType: Type, mutable: Bool)
+//     case ArrayType(elementType: Type, elementCount: u64)
+//     case TupleType(ArrayView<Type>)
+//     case FunctionType(returnType: Type, parameterTypes: ArrayView<Type>, thin: Bool)
+//     case RecordType(Record)
+// }
+
+// extend Type with Copyable {
+//     def copy() -> Type {
+//         unreachable!("")
+//     }
+// }
+
+// extend Type with StringRepresentable {
+//     def toString() -> String {
+//         match self {
+//         case .VoidType:
+//             return "Void"
+//         case .IntegerType(let bitwidth, let isUnsigned):
+//             return "${if isUnsigned then "u" else "i"}$bitwidth"
+//         case .FloatType:
+//             return "f32"
+//         case .DoubleType:
+//             return "f64"
+//         case .PointerType(let pointee, let mutable):
+//             return "$pointee*"
+//         case .ReferenceType(let referee, let mutable):
+//             return "ref $referee"
+//         case .ArrayType(let elementType, let numElements):
+//             return "[$elementType; $numElements]"
+//         case .TupleType(let elementTypes):
+//             return elementTypes.toString<'(', ')'>()
+//         case .FunctionType(let returnType, let paramTypes, let thin):
+//             return "${if thin then "@thin " else ""}${paramTypes.toString<'(', ')'>()} -> $returnType"
+//         case .RecordType(let record):
+//             return record.name.toString()
+//         default:
+//             unreachable!("bad type kind!")
+//         }
+//     }
+// }
+
+// @_builtin class NamedDecl {
+//     let access: AccessSpecifier { get }
+//     let name: String { get }
+// }
+
+// extend NamedDecl with StringRepresentable {
+//     def virtual toString() -> String {
+//         return "$access $name"
+//     }
+// }
+
+// @_builtin class VarDecl: NamedDecl {
+//     let type: Type { get }
+//     let isLet: Bool { get }
+// }
+
+// @_builtin class Field: VarDecl {
+    
+// }
+
+// @_builtin class Argument: VarDecl {
+    
+// }
+
+// @_builtin class Function: NamedDecl {
+//     let type: Type { get }
+//     let ptr: UnsafeRawPtr
+
+//     def call<RetTy = Void, ...ArgTys>(args: ArgTys...) -> RetTy {
+//         return (ptr as! @thin (ArgTys...) -> RetTy)(args...)
+//     }
+// }
+
+// extend Function with StringRepresentable {
+//     def override toString() -> String {
+//         return "$access def ${name} : $type"
+//     }
+// }
+
+// @_builtin class Method: Function {
+    
+// }
+
+// @_builtin class Record: NamedDecl {
+//     let methods: ArrayView<Method> { get }
+// }
+
+// @_builtin class Struct: Record {
+//     let fields: ArrayView<Field> { get }
+// }
+
+// @_builtin class Class: Struct {
+//     let baseClass: Class? { get }
+// }
+
+// @_builtin class Union: Struct {
+    
+// }
+
+// @_builtin class EnumCase: NamedDecl {
+//     let caseValues: ArrayView<Argument> { get }
+// }
+
+// @_builtin class Enum: Record {
+//     let rawType: Type { get }
+//     let cases: ArrayView<EnumCase> { get }
+// }
+
+@_builtin alias mirror<T>

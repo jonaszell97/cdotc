@@ -1,0 +1,45 @@
+
+// RUN
+// CHECK 3
+// CHECK-NEXT hi
+// CHECK-NEXT 31
+// CHECK-NEXT hello
+// CHECK-NEXT 3\.141592
+// CHECK-NEXT doinkoink
+// CHECK-NEXT 3121
+// CHECK-NEXT 8300
+// CHECK-NEXT 2\.70
+
+var (v1, v2) = (3, "hi")
+var _ = v1 + 120
+var _ : String = v2
+
+print(v1)
+print(v2)
+
+// Synthesized struct destructure
+struct MyStruct {
+    let x: Int
+    let y: String
+    let z: Float
+}
+
+var (x, y, z) : (Int, String, Float) = MyStruct(x: 31, y: "hello", z: 3.141592)
+print(x)
+print(y)
+print(z.toString(precision: 6))
+
+// Custom destructure
+class MyClass {
+    init {}
+    def destructure() -> (Int, Int) { return (31, 38) }
+    def destructure() -> (Int, String) { return (912, "yoink") }
+    def destructure() -> (Int, Int, Float) { return (1, 2, 3) }
+    def destructure() -> (String, Int, Int, Float) { return ("doink" + "oink", 3121, 8300, 2.7) }
+}
+
+var (a, b, c, d) = MyClass()
+print(a)
+print(b)
+print(c)
+print(d)

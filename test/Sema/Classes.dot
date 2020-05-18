@@ -1,0 +1,58 @@
+
+// VERIFY
+
+class NotAbstract {
+    def abstract isAbstract()
+    // expected-error@-1 {{abstract method can only appear in the body of an abstract class}}
+}
+
+abstract class Base {
+    def abstract mustOverride(_ x: Int) -> Void
+    // expected-note@-1 {{declared here}}
+    // expected-note@-2 {{base method not viable because of incompatible signature}}
+    // expected-note@-3 {{declared here}}
+    // expected-note@-4 {{declared here}}
+    // expected-note@-5 {{declared here}}
+}
+
+class Derived1: Base {} // expected-error {{class 'Derived1' must override abstract method 'mustOverride' of base class 'Base'}}
+
+class Derived2: Base {  // expected-error {{class 'Derived2' must override abstract method 'mustOverride' of base class 'Base'}}
+    def override mustOverride(_ y: Double) -> Void {} // expected-error {{method marked 'override' does not correspond to any declaration in a base class}}
+}
+
+class Derived3: Base {
+    def override mustOverride(_ y: Int) -> Void {} // OK
+}
+
+class Derived4: Base {
+    def mustOverride(_ y: Int) -> Void {} // expected-error {{overriding declaration requires 'override' keyword}}
+}
+
+abstract class Derived5: Base { // OK
+    def virtual mayOverride(x: Double) {}
+    // expected-note@-1 {{declared here}}
+    // expected-note@-2 {{declared here}}
+}
+
+class Derived6: Derived5 {} // expected-error {{class 'Derived6' must override abstract method 'mustOverride' of base class 'Base'}}
+
+class Derived7: Derived5 {
+    def override mustOverride(_ y: Int) -> Void {} // OK
+    def mayOverride(x: Double) {} // expected-error {{overriding declaration requires 'override' keyword}}
+}
+
+class Derived8: Derived5 {
+    def override mustOverride(_ y: Int) -> Void {} // OK
+    def override mayOverride(x: Double) {} // OK
+}
+
+class Derived9: Derived5 {
+    def override mustOverride(_ y: Int) -> Void {} // OK
+    def mayOverride(x: Int) {} // OK
+}
+
+class Derived10: Derived5 {
+    def override mustOverride(_ y: Int) -> Void {} // OK
+    def virtual mayOverride(x: Double) {} // expected-error {{overriding declaration requires 'override' keyword}}
+}

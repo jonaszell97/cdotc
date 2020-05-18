@@ -1,0 +1,148 @@
+
+/// A protocol for types that can create random instances of themselves.
+public protocol Randomizable {
+    /// \return a random instance of this type.
+    static def random() -> Self
+
+    /// \return a random instance of this type, using the given generator.
+    static def random(using: RandomNumberGenerator) -> Self
+}
+
+extend Randomizable {
+    /// \inherit
+    default static def random() -> Self {
+        return random(using: SystemRandomNumberGenerator())
+    }
+}
+
+public protocol RandomNumberGenerator {
+    /// \return the next random number produced by this generator.
+    def nextInt() -> UInt64
+}
+
+extend RandomNumberGenerator {
+    /// \return the next random number produced by this generator, bounded by `upperBound`.
+    def nextInt<T: FixedWidthInteger & UnsignedInteger>(
+        upperBound: T
+    ) -> T {
+        precondition!(upperBound != 0, "upperBound cannot be zero.")
+        return T(truncatingIfNeeded: nextInt()) % upperBound
+    }
+
+    /// \return the next random number produced by this generator, bounded by `upperBound` and `lowerBound`.
+    def nextInt<T: FixedWidthInteger & UnsignedInteger>(
+        lowerBound: T,
+        upperBound: T
+    ) -> T {
+        return lowerBound + T(truncatingIfNeeded: nextInt()) % (upperBound - lowerBound)
+    }
+}
+
+struct MersenneTwister32 with MoveOnly {
+    // Assumes W = 32 (omitting this)
+    alias N: UInt32 = 624
+    alias M: UInt32 = 397
+    alias R: UInt32 = 31
+    alias A: UInt32 = 0x9908B0DF
+
+    alias F: UInt32 = 1812433253
+
+    alias U: UInt32 = 11
+    // Assumes D = 0xFFFFFFFF (omitting this)
+
+    alias S: UInt32 = 7
+    alias B: UInt32 = 0x9D2C5680
+
+    alias T: UInt32 = 15
+    alias C: UInt32 = 0xEFC60000
+
+    alias L: UInt32 = 18
+
+    static let MASK_LOWER: UInt32 = UInt32((1 << R) - 1)
+    static let MASK_UPPER: UInt32 = UInt32(1 << R)
+
+    var mt: UnsafeMutableBufferPtr<UInt32>
+    var index: Int
+
+    /// Initialize using the current system time as seed.
+    init {
+        self.init(usingSeed: Int32(truncatingIfNeeded: Int64(libc.time.time(__nullptr))))
+    }
+
+    /// Initialize with the given seed.
+    init (usingSeed seed: Int32) {
+        self.index = Int(N)
+        self.mt = UnsafeMutableBufferPtr<UInt32>.allocate(Int(N))
+
+        mt[0] = UInt32(bitPattern: seed)
+
+        for i in 1..index {
+            mt[i] = (F &* (mt[i - 1] ^ (mt[i - 1] >> 30)) + (UInt32(i)))
+        }
+    }
+
+    /// Deallocates the used storage.
+    deinit {
+        mt.deallocate()
+    }
+
+    private def mutating twist() {
+        var x: UInt32  = 0
+        var xA: UInt32 = 0
+
+        for i in 0..Int(N) {
+            x = ((mt[i] & MASK_UPPER) + (mt[(i + 1) % Int(N)] & MASK_LOWER))
+            xA = x >> 1
+
+            if x & 0x1 != 0 {
+                xA ^= A
+            }
+
+            mt[i] = mt[(i + Int(M)) % Int(N)] ^ xA
+        }
+
+        index = 0
+    }
+
+    /// \return the next random integer.
+    def mutating nextInt() -> UInt32 {
+        var y: UInt32
+        var i = index
+
+        if index >= Int(N) {
+            twist()
+            i = index
+        }
+
+        y = mt[i]
+        index += 1
+
+        y ^= mt[i] >> U
+        y ^= (y << S) & B
+        y ^= (y << T) & C
+        y ^= y >> L
+
+        return y
+    }
+}
+
+/// The default random number generator.
+public struct SystemRandomNumberGenerator with RandomNumberGenerator {
+    /// Lazily initialized, shared instance used for generating random numbers.
+    static var twister = MersenneTwister32()
+
+    /// Initialize.
+    init {}
+
+    /// \inherit
+    def nextInt() -> UInt64 {
+        var left = UInt64(twister.nextInt())
+        var right = UInt64(twister.nextInt())
+
+        var result: UInt64 = 0
+        result |= left << 32
+        result |= right
+
+        return result
+    }
+}

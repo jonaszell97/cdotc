@@ -1,0 +1,53 @@
+
+// RUN
+
+import { fnv1a_32 } from core.algorithm.hashing
+
+var dict = ["hello": 3]
+dict["hola"] = 17
+
+assertEqual!(dict["hello"], 3)
+assertEqual!(dict["hola"], 17)
+assertEqual!(dict["hallo"], none)
+
+dict["hola"] = 22
+assertEqual!(dict["hola"], 22)
+assertEqual!(dict.toString(), "[hello: 3, hola: 22]")
+
+dict.erase(withKey: "hola")
+assertEqual!(dict["hola"], none)
+
+struct MyString with Hashable {
+    var str: String
+
+    init (_ str: owned String) {
+        self.str = str
+    }
+
+    def hashValue() -> UInt {
+        return UInt(fnv1a_32(str))
+    }
+}
+
+// Known fnv1a (32-bit) collisions from https://softwareengineering.stackexchange.com/questions/49550/which-hashing-algorithm-is-best-for-uniqueness-and-speed
+// costarring collides with liquid
+// declinate collides with macallums
+// altarage collides with zinke
+// altarages collides with zinkes
+
+assertEqual!(fnv1a_32("costarring"), fnv1a_32("liquid"))
+
+var myDict = Dictionary<MyString, Int>()
+myDict[MyString("costarring")] = 32101
+myDict[MyString("liquid")] = 12901
+
+assertEqual!(myDict[MyString("costarring")], 32101)
+assertEqual!(myDict[MyString("liquid")], 12901)
+
+myDict.erase(withKey: MyString("liquid"))
+assertEqual!(myDict[MyString("costarring")], 32101)
+assertEqual!(myDict[MyString("liquid")], none)
+
+myDict.erase(withKey: MyString("costarring"))
+assertEqual!(myDict[MyString("costarring")], none)
+assertEqual!(myDict[MyString("liquid")], none)

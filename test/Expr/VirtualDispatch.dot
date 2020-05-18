@@ -1,0 +1,47 @@
+
+// RUN
+// CHECK Derived
+// CHECK-NEXT Base
+// CHECK-NEXT Derived
+// CHECK-NEXT Derived
+// CHECK-NEXT Base
+// CHECK-NEXT MoreDerived
+
+abstract class Base {
+    def virtual doit() {
+        print("Base")
+    }
+    def virtual doit2() {
+        print("Base")
+    }
+    def abstract doit3()
+}
+
+class Derived: Base {
+    init {
+
+    }
+    def override doit() {
+        print("Derived")
+    }
+    def override doit3() {
+        print("Derived")
+    }
+}
+
+class MoreDerived: Derived {
+    init {}
+    def override doit3() {
+        print("MoreDerived")
+    }
+}
+
+var b : Base = Derived()
+_ = b.doit()
+_ = b.doit2()
+_ = b.doit3()
+
+var m : Base = MoreDerived()
+_ = m.doit()
+_ = m.doit2()
+_ = m.doit3()

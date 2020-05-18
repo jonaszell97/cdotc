@@ -1,0 +1,14 @@
+
+// VERIFY
+
+macro Mac1 {
+    ($x:epxr) => {}, // expected-error {{macro variable kind must be one of 'expr', 'stmt', 'type' or 'decl'}}
+    ($($x:any)) => { $x }, // expected-error {{expected '*', '?' or '+' after repeated macro pattern}}
+    // expected-error@-1 {{macro variable 'x' can only be referenced in an expansion expression of the form '$()...'}}
+    ($($x:any)*) => { $($x)... }, // OK
+    ($($x:any)?) => { $($x)... }, // OK
+    ($($x:any)+) => { $($x)... }, // OK
+    ($($x:any)* <> $($y:any)*) => { $($x $y)... },
+}
+
+macro Mac<> // expected-error {{macro delimiter must be either '()', '{}' or '[]'}}

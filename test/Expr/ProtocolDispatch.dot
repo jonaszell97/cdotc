@@ -1,0 +1,39 @@
+
+// RUN
+// CHECK S1.foo
+// CHECK-NEXT S1.bar
+// CHECK-NEXT S1.foo
+// CHECK-NEXT S1.bar
+// CHECK-NEXT S1.foo
+// CHECK-NEXT S1.foo
+
+protocol Fooable {
+    def foo()
+}
+
+protocol Barable {
+    def bar()
+}
+
+struct S1 with Fooable, Barable {
+    def foo() {
+        print("S1.foo")
+    }
+    def bar() {
+        print("S1.bar")
+    }
+}
+
+var f: Fooable = S1()
+f.foo()
+
+var b: Barable = S1()
+b.bar()
+
+var fb: Fooable & Barable = S1()
+fb.foo()
+fb.bar()
+
+var cpy = fb
+fb.foo()
+cpy.foo()

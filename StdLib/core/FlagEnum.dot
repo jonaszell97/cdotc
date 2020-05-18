@@ -1,0 +1,65 @@
+
+infix ~ : MultiplicationPrecedence
+
+macro flag_enum {
+    ($name:tok /*{*/
+        $(
+            case $caseName:tok
+        )*
+    /*}*/) => {
+        struct $name with RawRepresentable, ImplicitlyCopyable {
+            /// The raw value of this flag enum.
+            var value: UInt
+
+            /// Allow initialization only via the static cases.
+            private memberwise init
+
+            /// The zero case.
+            static let None: Self = Self(value: 1u << counter!(0))
+
+            $(
+                static let $caseName: Self = Self(value: 1u << counter!(0))
+            )...
+
+            /// \inherit
+            alias RawType = UInt
+
+            /// \inherit
+            prop rawValue: UInt {
+                return value
+            }
+
+            /// \inherit
+            init (rawValue: RawType) {
+                self.value = rawValue
+            }
+
+            /// Sets a new option on this instance.
+            def mutating infix |=(rhs: Self) {
+                self.value |= rhs.value
+            }
+
+            /// \return a new value with the given option set.
+            def infix |(rhs: Self) -> Self {
+                var copy = self
+                copy |= rhs
+                return copy
+            }
+
+            /// Sets a new option on this instance.
+            def mutating set(_ rhs: Self) {
+                self |= rhs
+            }
+
+            /// \return `true` if all all of `rhs`'s flags are also set on this instance.
+            def infix ~(rhs: Self) -> Bool {
+                return (self.value & rhs.value) != 0
+            }
+
+            /// \return `true` if all all of `rhs`'s flags are also set on this instance.
+            def isSet(_ rhs: Self) -> Bool {
+                return self ~ rhs
+            }
+        }
+    }
+}

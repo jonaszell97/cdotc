@@ -1,0 +1,96 @@
+
+// RUN
+
+import builtin
+
+def use<T>(_ value: T) {}
+def consume<T>(_ value: owned T) {}
+def takesMutRef<T>(_ value: mut ref T) {}
+def takesRef<T>(_ value: ref T) {}
+def maybe(_ value: Bool) -> Bool { return value }
+
+struct Counter {
+    static var allocs = 0
+    static var deallocs = 0
+}
+
+struct CantCopy with MoveOnly {
+    init {
+        Counter.allocs += 1
+    }
+    deinit {
+        Counter.deallocs += 1
+    }
+}
+
+struct CanCopy with ImplicitlyCopyable {
+    init {
+        Counter.allocs += 1
+    }
+    deinit {
+        Counter.deallocs += 1
+    }
+    def copy() -> Self {
+        return Self()
+    }
+}
+
+// Move only type
+do {
+    var v = CantCopy()
+    use(v)
+    takesMutRef(&v)
+    takesRef(v)
+}
+
+do {
+    var v = CantCopy()
+    var tup = (3, v)
+}
+
+var v = CantCopy()
+consume(v)
+
+_ = CantCopy()
+use(CantCopy())
+consume(CantCopy())
+
+// Copyable type
+do {
+    var v = CanCopy()
+    use(v)
+    takesMutRef(&v)
+    takesRef(v)
+}
+
+do {
+    var v = CanCopy()
+    var tup = (3, v)
+    use(v)
+}
+
+do {
+    var v = CanCopy()
+    consume(v)
+    use(v)
+}
+
+_ = CanCopy()
+use(CanCopy())
+consume(CanCopy())
+
+// Conditional move
+do {
+    var v = CantCopy()
+    if maybe(true) {
+        let mv = v
+    }
+}
+do {
+    var v = CantCopy()
+    if maybe(false) {
+        let mv = v
+    }
+}
+
+assertEqual!(Counter.allocs, Counter.deallocs)

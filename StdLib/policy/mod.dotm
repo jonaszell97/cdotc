@@ -1,0 +1,11 @@
+
+module policy {
+    sourceFiles = [
+        "Basic.dot",
+        "Operators.dot",
+        "Protocols.dot"
+    ]
+
+    defaultAccess = public
+    implicitExports = *
+}

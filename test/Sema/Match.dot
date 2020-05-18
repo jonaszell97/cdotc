@@ -1,0 +1,89 @@
+
+// VERIFY
+
+match 3 { // expected-error {{match statements must be exhaustive}}
+}
+
+match 3 + 12 {
+case 712:
+case 3.0: // expected-error {{cannot match values of types Int64 and Double}}
+    break
+default:
+    break
+}
+
+// enum matching
+enum MyOption<T> {
+    case Some(T)
+    case None
+}
+
+var v1: MyOption<Int> = .Some(21)
+match v1 { // expected-error {{match statements must be exhaustive}}
+case .Some(21): // expected-note@17 {{case 'Some' is either missing or contains expression checks}}
+    break
+case .None:
+    break
+}
+
+match v1 {
+case .Some(let x):
+    var _ : Int = x
+    break
+case .None:
+    break
+}
+
+// struct matching
+struct MyStruct {
+    let x: Int = default
+    let y: String = default
+    let z: Float = default
+}
+
+match MyStruct() {
+case MyStruct(let x, let y, let z):
+    _ = x + 3
+    _ = y + "hi"
+    _ = z + 21.0
+    break
+}
+
+match MyStruct() { // expected-error {{match statements must be exhaustive}}
+case MyStruct(3, let y, let z):
+    _ = y + "hi"
+    _ = z + 21.0
+    break
+}
+
+// tuple matching
+match (3, "hello", 3.0) {
+case (let x, let y, let z):
+    _ = x + 3
+    _ = y + "hi"
+    _ = z + 21.0
+    break
+}
+
+match (3, "hello", 3.0) { // expected-error {{match statements must be exhaustive}}
+case (let x, "hello", let z):
+    _ = x + 3
+    _ = z + 21.0
+    break
+}
+
+// custom match operator
+match 312 { // expected-error {{match statements must be exhaustive}}
+case 0..10:
+    break
+case 10..100:
+    break
+case 17:
+    break
+}
+
+match 21129 {
+case 1..1000000:
+default:
+    break
+}

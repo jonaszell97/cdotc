@@ -1,0 +1,141 @@
+
+module icu {
+    sourceFiles = ["ICU.dot"]
+
+    // This module does not contain any code, so just export the declarations.
+    declarationsOnly = true
+
+    // Implicitly import the `builtin.ops` module to make builtin operators visible.
+    implicitImports = [builtin.ops]
+
+    // Make declarations accessible by default.
+    defaultAccess = public
+
+    module utypes {
+        include_system = ["unicode/utypes.h"?]
+    }
+
+    module ustring {
+        include_system = ["unicode/ustring.h"?]
+    }
+
+    module utf8 {
+        include_system = ["unicode/utf8.h"?]
+    }
+
+    module utf16 {
+        include_system = ["unicode/utf16.h"?]
+    }
+
+    module uchar {
+        include_system = ["unicode/uchar.h"?]
+    }
+
+    module uscript {
+        include_system = ["unicode/uscript.h"?]
+    }
+
+    module uset {
+        include_system = ["unicode/uset.h"?]
+    }
+
+    module ucnv {
+        include_system = ["unicode/ucnv.h"?]
+    }
+
+    module ucnvsel {
+        include_system = ["unicode/ucnvsel.h"?]
+    }
+
+    module ucsdet {
+        include_system = ["unicode/ucsdet.h"?]
+    }
+
+    module uloc {
+        include_system = ["unicode/uloc.h"?]
+    }
+
+    module ures {
+        include_system = ["unicode/ures.h"?]
+    }
+
+    module unorm2 {
+        include_system = ["unicode/unorm2.h"?]
+    }
+
+    module ucal {
+        include_system = ["unicode/ucal.h"?]
+    }
+
+    module udat {
+        include_system = ["unicode/udat.h"?]
+    }
+
+    module umsg {
+        include_system = ["unicode/umsg.h"?]
+    }
+
+    module unumberformatter {
+        include_system = ["unicode/unumberformatter.h"?]
+    }
+
+    module unum {
+        include_system = ["unicode/unum.h"?]
+    }
+
+    module utrans {
+        include_system = ["unicode/utrans.h"?]
+    }
+
+    module ubidi {
+        include_system = ["unicode/ubidi.h"?]
+    }
+
+    module ubiditransform {
+        include_system = ["unicode/ubiditransform.h"?]
+    }
+
+    module ushape {
+        include_system = ["unicode/ushape.h"?]
+    }
+
+    module ucol {
+        include_system = ["unicode/ucol.h"?]
+    }
+
+    module usearch {
+        include_system = ["unicode/usearch.h"?]
+    }
+
+    module ubrk {
+        include_system = ["unicode/ubrk.h"?]
+    }
+
+    module uregex {
+        include_system = ["unicode/uregex.h"?]
+    }
+
+    module usprep {
+        include_system = ["unicode/usprep.h"?]
+    }
+
+    module uidna {
+        include_system = ["unicode/uidna.h"?]
+    }
+
+    module uspoof {
+        include_system = ["unicode/uspoof.h"?]
+    }
+
+    module utmscale {
+        include_system = ["unicode/utmscale.h"?]
+    }
+
+    module loengine {
+        // include_system = ["unicode/loengine.h"?]
+    }
+
+    module ustdio {
+        include_system = ["unicode/ustdio.h"?]
+    }
+}

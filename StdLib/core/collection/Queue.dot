@@ -1,0 +1,45 @@
+
+@version(None)
+module std.collection
+
+public struct Queue<T> {
+    /// The container used for the queue.
+    var buf: RingBuffer<T>
+
+    /// Initialize with space for at least \param minCapacity elements.
+    init (withInitialCapacity minCapacity: UInt) {
+        self.buf = RingBuffer<T>(withInitialCapacity: minCapacity)
+    }
+
+    /// Initialize with space for at least 16 elements.
+    init {
+        self.buf = RingBuffer<T>()
+    }
+
+    /// Pushes an element to the end of the queue.
+    /// \param el the element to enqueue.
+    public def push(_ el: owned T) {
+        if buf.full {
+            buf.grow()
+        }
+
+        buf.push(el)
+    }
+
+    /// Pops an element from the queue and returns it.
+    /// \return the element that was enqueued first.
+    public def pop() -> T {
+        return buf.pop()
+    }
+
+    /// Returns the next element in the queue without popping it.
+    /// \return the next element in the queue.
+    public prop front: T {
+        return buf.front
+    }
+
+    /// \return `true` iff the queue is empty.
+    public prop empty: Bool {
+        return buf.empty
+    }
+}

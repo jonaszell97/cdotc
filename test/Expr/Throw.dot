@@ -1,0 +1,187 @@
+
+// RUN
+// CHECK I am an error
+// CHECK-NEXT caught!
+// CHECK-NEXT caught!
+// CHECK-NEXT 4
+// CHECK-NEXT 3
+// CHECK-NEXT 2
+// CHECK-NEXT 1
+// CHECK-NEXT 0
+// CHECK-NEXT I am an error
+
+struct Counter {
+    static var allocs = 0
+    static var deallocs = 0
+}
+
+struct CantCopy with MoveOnly {
+    init {
+        Counter.allocs += 1
+    }
+    deinit {
+        Counter.deallocs += 1
+    }
+}
+
+struct CanCopy with ImplicitlyCopyable {
+    init {
+        Counter.allocs += 1
+    }
+    deinit {
+        Counter.deallocs += 1
+    }
+    def copy() -> Self {
+        return Self()
+    }
+}
+
+def thrower() throws -> Int {
+    throw "I am an error"
+}
+
+def thrower2() throws -> Int {
+    throw CanCopy()
+}
+
+def thrower3() throws -> Int {
+    throw CantCopy()
+}
+
+def nonthrower() throws -> Int {
+    return 0
+}
+
+def nonthrower2() throws -> CanCopy {
+    return CanCopy()
+}
+
+do {
+    var _ = try? nonthrower2()
+    var _ = try! nonthrower2()
+
+    var v1 = try? nonthrower()
+    assertEqual!(v1, 0)
+
+    var v2 = try! nonthrower()
+    assertEqual!(v2, 0)
+
+    var v3 = try? thrower()
+    assertEqual!(v3, none)
+
+    var c = CanCopy()
+    do {
+        _ = try thrower()
+    } catch _ {
+        
+    }
+
+    do {
+        _ = try thrower()
+    } catch s: String {
+        print(s)
+    } catch a: Any {
+
+    }
+}
+
+def tryMe() throws {
+    do {
+        var _ = try? nonthrower2()
+        var _ = try! nonthrower2()
+
+        var v1 = try? nonthrower()
+        assertEqual!(v1, 0)
+
+        var v2 = try! nonthrower()
+        assertEqual!(v2, 0)
+
+        var v3 = try? thrower()
+        assertEqual!(v3, none)
+
+        var c = CanCopy()
+        do {
+            _ = try thrower()
+        } catch _ {
+            
+        }
+
+        do {
+            _ = try thrower()
+        } catch s: String {
+            print(s)
+        } catch a: Any {
+
+        }
+    }
+}
+
+def canthrow() throws {
+    var cleanMeUp = CanCopy()
+    do {
+        do {
+            var cleanMeUp2 = CanCopy()
+            _ = try thrower2()
+        } catch i: Int {
+
+        }
+    } catch c: CanCopy {
+        print("caught!")
+    }
+}
+
+def canthrow2() throws {
+    var cleanMeUp = CantCopy()
+    do {
+        do {
+            var cleanMeUp2 = CantCopy()
+            _ = try thrower3()
+        } catch i: Int {
+
+        }
+    } catch c: CantCopy {
+        print("caught!")
+    }
+}
+
+do {
+    _ = try! canthrow()
+    _ = try! canthrow2()
+}
+
+struct Ordered {
+    static var n: Int = 0
+    let value: Int
+
+    init {
+        self.value = n
+        n += 1
+    }
+
+    deinit {
+        print(self.value)
+    }
+}
+
+def testDeinitializationOrder() {
+    var _0 = Ordered()
+    do {
+        var _1 = Ordered()
+        do {
+            var _2 = Ordered()
+            do {
+                var _3 = Ordered()
+                do {
+                    var _4 = Ordered()
+                    _ = try thrower()
+                }
+            }
+        }
+    } catch _ {
+    }
+}
+
+testDeinitializationOrder()
+_ = try! tryMe()
+
+assertEqual!(Counter.allocs, Counter.deallocs)

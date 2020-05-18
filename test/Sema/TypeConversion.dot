@@ -1,0 +1,172 @@
+
+// VERIFY
+
+import { i64, i8, u8, RawPointer } from builtin
+
+let v1: Int = "hello" // expected-error {{incompatible types String and Int64}}
+let v2: Int8 = 17 // OK
+let v3: Int = v2 // expected-error {{incompatible types Int8 and Int64}}
+
+let v4 = 3 as String // expected-error {{integer literal cannot produce value of type 'String'}}
+let v5 = 3
+let v6 = v5 as String // expected-error {{no known explicit conversion from &Int64 to String}}
+
+class Base {}
+class Derived: Base {
+    init {}
+}
+class MoreDerived: Derived {}
+
+let v7 = Derived()
+let v8: Base = v7 // OK
+let v9: MoreDerived = v7 // expected-error {{cast between 'MoreDerived' and 'Derived' requires 'as?' operator}}
+let v10 = v7 as? MoreDerived // OK
+let v11 = v7 as! MoreDerived // OK
+let v12 = v7 as MoreDerived // expected-error {{cast between 'Derived' and 'MoreDerived' requires 'as?' operator}}
+
+let v13: i8 = 13
+let v14: i64 = v13 // OK
+let v15: u8 = v13 // expected-error {{cast between 'u8' and 'i8' requires 'as' operator}}
+let v16 = v13 as? u8 // expected-error {{cast between 'i8' and 'u8' requires 'as' operator}}
+let v17 = v13 as u8 // OK
+
+protocol P1 {}
+protocol P2 {}
+struct S1 with P1 {}
+struct S2 {}
+struct S3 with P1, P2 {}
+
+let v18: P1 = S1()
+let v19: P1 = S2() // expected-error {{no implicit conversion from 'S2' to 'P1'}}
+let v20: P1 & P2 = S1() // expected-error {{no implicit conversion from 'S1' to 'P1 & P2'}}
+let v21: P1 & P2 = S3() // OK
+let v22: P1 & P2 & Any = S3() // expected-warning {{using 'Any' in existential type is redundant}}
+
+let v23: (i64, i64) = (3, 3)
+let v24: (i8, i8) = v23 // expected-error {{cast between '(i8, i8)' and '(i64, i64)' requires 'as' operator}}
+let v25 = v23 as (i8, i8) // OK
+
+def returnsInt() -> Int {
+    return "" // expected-error {{incompatible types String and Int64}}
+}
+
+def returnsInt() -> Int { return 0 }
+
+def returnsString() -> String {
+    if true {
+        return 0 // expected-error {{incompatible types Int64 and String}}
+    } else {
+        return ""
+    }
+}
+
+struct MyBool with TruthValue {
+    prop truthValue: Bool => true
+}
+
+if 0 {} // expected-error {{value used in conditional statement must conform to 'TruthValue'}}
+while "true" {} // expected-error {{value used in conditional statement must conform to 'TruthValue'}}
+for var i = 0; i; i += 1 {} // expected-error {{value used in conditional statement must conform to 'TruthValue'}}
+
+if MyBool() {} // OK
+else if 3 == 4 {} // OK
+while MyBool() {} // OK
+
+struct MyUnwrappable<T> with Unwrappable {
+    alias Wrapped = T
+    def tryUnwrap() -> T? { __unreachable }
+}
+
+if let x = MyUnwrappable<Int>() {
+    _ = x + 3
+}
+
+if let x = 3 {} // expected-error {{value used in binding statement must conform to 'Unwrappable'}}
+
+while let x = MyUnwrappable<String>() {
+    _ = x.rawBytes
+}
+
+struct NotAnIterator {}
+struct MyIterable {
+    def getIterator() -> NotAnIterator { return NotAnIterator() }
+}
+
+struct MyIterator1 {
+    def next() -> Int { return 0 }
+}
+struct MyIterable1 {
+    def getIterator() -> MyIterator1 { return MyIterator1() }
+}
+
+struct MyIterator2 {
+    def next() -> Int? { return 0 }
+}
+struct MyIterable2 {
+    def getIterator() -> MyIterator2 { return MyIterator2() }
+}
+
+for x in 3 {} // expected-error {{struct 'Int64' does not have a member named 'getIterator'}}
+for x in 0..1 {} // OK
+
+for x in MyIterable() {} // expected-error {{struct 'NotAnIterator' does not have a member named 'next'}}
+for x in MyIterable1() {} // expected-error {{'next' function used in for-in must return an 'Option' type}}
+for x in MyIterable2() {
+    var _ : Int = x
+}
+
+struct NotHashable {}
+enum MyEnum(NotHashable) {} // expected-error {{enum raw type must conform to 'Hashable'; 'NotHashable' given}}
+
+struct MyHashable with Hashable {}
+enum MyEnum2(MyHashable) {}
+
+var _ = __nullptr // expected-error {{'__nullptr' requires a contextual type}}
+var _ = none // expected-error {{'none' requires a contextual type}}
+var _ : RawPointer = __nullptr
+var _ : Int? = none
+
+struct Factory {
+    static def create() -> Self { __unreachable }
+    static def createInt() -> Int { return 0 }
+}
+
+var _ = .create() // expected-error {{member lookup with leading period requires a contextual type}}
+var _ : Factory = .create()
+var _ : Factory = .createInt() // expected-error {{no implicit conversion from 'Int64' to 'Factory'}}
+
+enum MyGenericEnum<T> {
+    case One
+    case Two(T)
+    case Three(T, T)
+}
+
+var _ = .One // expected-error {{reference to member 'One' cannot be resolved without a contextual type}}
+var _ : MyGenericEnum = .One // expected-error {{incompatible template arguments for enum MyGenericEnum}}
+// expected-note@138 {{candidate not viable: could not infer template argument T}}
+
+var _ : MyGenericEnum<Int> = .Two(3)
+var _ : MyGenericEnum<String> = .Three("", 3) // expected-error {{no matching call for function 'Three' found}}
+// expected-note@141 {{candidate not viable: no implicit conversion from 'Int64' to 'String' for 2nd argument}}
+
+struct NotStringRepresentable {}
+_ = "${NotStringRepresentable()}" // expected-error {{type 'NotStringRepresentable' does not conform to protocol StringRepresentable}}
+
+struct NotSubscriptable {}
+_ = NotSubscriptable()[3] // expected-error {{struct 'NotSubscriptable' does not have a member named 'subscript'}}
+_ = NotSubscriptable()() // expected-error {{cannot call type NotSubscriptable}}
+
+struct X {
+    def notMutating() {
+        self = X() // expected-error {{mutable reference type expected}}
+        3 = 3 // expected-error {{cannot assign to rvalue of type Int64}}
+    }
+    def mutating isMutating() {
+        self = X()
+    }
+}
+
+let c = 21
+c = 22 // expected-error {{cannot reassign 'let' constant}}
+
+var _ : NotStringRepresentable = "hello" // expected-error {{incompatible types String and NotStringRepresentable}}

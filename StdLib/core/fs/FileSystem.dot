@@ -1,0 +1,206 @@
+
+import io
+import libc
+import rt
+import _sys
+
+alias FileDescriptor = _sys.FileDescriptor
+
+public flag_enum! OpenFlags {
+    /// Open the file for read.
+    case R
+
+    /// Open the file for read and write.
+    case RW
+
+    /// Forces the opening to fail if the file already exists.
+    case Excl
+
+    /// When opening a file, if it already exists append to the
+    /// existing file instead of returning an error.
+    case Append
+
+    /// The file should be opened in text mode on platforms that make this
+    /// distinction.
+    case Text
+}
+
+public enum SeekOrigin {
+    /// Beginning of file.
+    case SEEK_SET = 0
+
+    /// Current position of the file pointer.
+    case SEEK_CUR = 1
+
+    /// End of file.
+    case SEEK_END = 2
+}
+
+public flag_enum! AccessMode {
+    /// Test for execute or search permission.
+    case Execute
+
+    /// Test for write permission.
+    case Write
+
+    /// Test for read permission.
+    case Read
+}
+
+extend AccessMode {
+    /// Test for existence of file.
+    static let Exists: AccessMode = AccessMode(rawValue: 0)
+}
+
+/// \return the timestamp (in milliseconds) when this file was last modified.
+public def getLastModifiedTime(of fileName: String) -> Int {
+    var fileName = fileName
+    fileName.ensureNullTerminated()
+
+    return Int(rt._cdot_GetLastModifiedTime(fileName.unsafeCString.raw as! libc.cstring))
+}
+
+/// Attempt to delete the file with the given name.
+/// \return `true` iff the file was deleted.
+@discardableResult
+public def deleteFile(_ fileName: String) -> Bool {
+    return _sys.deleteFile(fileName)
+}
+
+/// Check whether or not a file with the given name exists.
+/// \return `true` if the file exists and has the specified permissions,`false` otherwise
+public def fileExists(_ fileName: String, _ kind: AccessMode = .Exists) -> Bool {
+    return _sys.fileExists(fileName, kind)
+}
+
+/// Check whether or not a file exists and is executable.
+/// \return `true` if the file exists and has the specified permissions,
+///         `false` otherwise
+public def canExecute(_ fileName: String) -> Bool {
+    return _sys.fileExists(fileName, .Execute)
+}
+
+/// System directory for temporary files.
+public def tempDir() -> String {
+    return _sys.tempDir()
+}
+
+/// Open the file with the given name for reading. Returns a FileDescriptor describing
+/// the file on success, or InvalidFD on error.
+public def openFileForRead(_ fileName: String) -> FileDescriptor {
+    return _sys.openFileForRead(fileName)
+}
+
+/// Open the file with the given name for writing. Returns a FileDescriptor describing
+/// the file on success, or InvalidFD on error.
+public def openFileForWrite(_ fileName: String,
+                            flags: OpenFlags,
+                            mode: Int = 0666) -> FileDescriptor {
+    return _sys.openFileForWrite(fileName, flags, mode)
+}
+
+/// Attempt to close the file described by the file descriptor.
+/// \return `true` on success, and `false` on error.
+@discardableResult
+public def closeFile(_ fd: FileDescriptor) -> Bool {
+    return _sys.closeFile(fd)
+}
+
+/// \return the size of the file described by the given file descriptor, or 0 if it cannot be determined.
+public def getFileSize(_ fd: FileDescriptor) -> Int {
+    var size = _sys.getFileSize(fd)
+    if size == -1 {
+        return 0
+    }
+
+    return size
+}
+
+/// Write `n` bytes from `str` to the end of the file described by `fd`.
+@discardableResult
+public def writeToFile(_ fd: FileDescriptor,
+                       buffer str: UnsafeBufferPtr<Byte>,
+                       numBytes n: Int) {
+    _ = _sys.writeToFile(fd, str.cstring, n)
+}
+
+
+/// Write `n` bytes from `str` at position `pos` to the file described by `fd`.
+@discardableResult
+public def writeToFileAtPosition(_ fd: FileDescriptor,
+                                 buffer str: UnsafeBufferPtr<Byte>,
+                                 numBytes n: Int,
+                                 toPosition pos: Int) {
+    _ = _sys.writeToFileAtPosition(fd, str.cstring, n, pos)
+}
+
+/// Read a maximum of `n` bytes from the end of the file described by `fd`.
+@discardableResult
+public def readFromFile(_ fd: FileDescriptor,
+                        buffer: UnsafeBufferPtr<Byte>,
+                        numBytes n: Int) -> Int {
+    return _sys.readFromFile(fd, buffer.cstring, n)
+}
+
+/// Read a maximum of `n` bytes at position `pos` in the file described by `fd`.
+@discardableResult
+public def readFromFileAtPosition(_ fd: FileDescriptor,
+                                  buffer: UnsafeBufferPtr<Byte>,
+                                  numBytes n: Int,
+                                  at pos: Int) -> Int {
+    return _sys.readFromFileAtPosition(fd, buffer.cstring, n, pos)
+}
+
+/// Returns the current offset of the handle in the file.
+@discardableResult
+public def currentPosition(_ fd: FileDescriptor) -> Int {
+    return _sys.currentPosition(fd)
+}
+
+/// Generate a random temporary file name.
+public def createTempFileName(withFormat template: String = "%%%%%%%%%.tmp") -> String {
+    var str = template
+    for i in 0..str.size {
+        if str[i] == '%' {
+            str[i] = Character.randomAlphaNumeric()
+        }
+    }
+
+    return template
+}
+
+/// Open a new temporary file for writing.
+public def openTemporaryFile(withPrefix prefix: String = "",
+                             withSuffix suffix: String = "tmp") -> io.FileOutputStream? {
+    var path = tempDir()
+    path.append(path: createTempFileName(withFormat: "$prefix-%%%%%%%%%.$suffix"))
+
+    if fileExists(path) {
+        return openTemporaryFile(withPrefix: prefix, withSuffix: suffix)
+    }
+
+    return io.FileOutputStream(path)
+}
+
+/// Systemwide separator for paths.
+public let PathSeparator = _sys.PathSeparator
+
+extend String {
+    /// Append to a path name.
+    public def mutating append(path: String) {
+        if !empty && last! != PathSeparator {
+            self += PathSeparator
+        }
+
+        self += path
+    }
+
+    /// Append to a path name.
+    /// \return a new string with the path `path` appended to it.
+    public def withAppendedPath(_ path: String) -> String {
+        var str = self.copy()
+        str.append(path: path)
+
+        return str
+    }
+}

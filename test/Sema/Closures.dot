@@ -1,0 +1,21 @@
+
+// VERIFY
+
+def takesClosure<Ret>(_ fn: () -> Ret) -> Ret { return fn() }
+def takesSingleArgClosure<Arg>(_ fn: (Arg) -> Void) {}
+
+var _ : Int = takesClosure { return 0 }
+var _ : String = takesClosure { return takesClosure { return "hi" } }
+
+var _ = takesClosure { return $0 } // expected-error {{no matching call for function 'takesClosure' found}}
+// FIXME bad diagnostic
+// expected-note@4 {{candidate not viable: no implicit conversion from '(T1) -> T2' to '() -> T0' for 1st argument}}
+
+var _ = takesSingleArgClosure<Int> { _ = $0 }
+var _ = takesSingleArgClosure<Int> { return 0 } // expected-error {{no matching call for function 'takesSingleArgClosure<Int64>' found}}
+// expected-note@5 {{candidate not viable: no implicit conversion from '() -> Int64' to '(borrow Int64) -> ()' for 1st argument}}
+
+var _ : Void = takesSingleArgClosure { return $0 }
+
+// FIXME bad diagnostic
+// var _ = takesSingleArgClosure { _ = $0 }

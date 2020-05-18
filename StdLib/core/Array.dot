@@ -1,0 +1,129 @@
+
+import { CowBuffer } from collection
+
+public alias DefaultArrayLiteralType<T> = Array<T>
+
+public protocol ExpressibleByArrayLiteral {
+    associatedType Element
+    init (arrayLiteral: [Element])
+}
+
+public struct Array<T> {
+    /// The copy-on-write buffer.
+    internal var buffer: CowBuffer<T>
+
+    /// Memberwise initializer.
+    internal memberwise init
+
+    /// Initialize from a static array. This is only called by the compiler
+    /// when the lifetime of the array is guaranteed to exceed the lifetime of
+    /// this array.
+    private init (staticBuffer bytes: UnsafePtr<T>, size: Int) {
+        self.buffer = CowBuffer<T>(staticBuffer: bytes, size)
+    }
+
+    /// C'tor. Initialize with an initial capacity of bytes.
+    public init(withInitialCapacity capacity: Int) {
+        self.init()
+        buffer.grow(byAtLeast: capacity)
+    }
+
+    /// D'tor.
+    deinit {
+
+    }
+
+    /// \return a pointer to the beginning of this arrays buffer.
+    prop unsafeBuffer: UnsafePtr<T> {
+        return buffer.bytes
+    }
+}
+
+extend Array with RangeReplaceableCollection {
+    /// \inherit
+    alias Element = T
+
+    /// \inherit
+    alias Index = Int
+
+    /// \inherit
+    alias SubSequence = Self
+
+    /// Empty C'tor. Initializes an empty array.
+    init {
+        self.buffer = CowBuffer<T>()
+    }
+
+    /// \inherit
+    prop size: Int => buffer.bufferSize
+
+    /// \inherit
+    prop capacity: Int => buffer.bufferCapacity
+
+    /// \inherit
+    prop startIndex: Index => 0
+
+    /// \inherit
+    prop endIndex: Index => buffer.bufferSize
+
+    /// \inherit
+    subscript (idx: Index) -> Element {
+        get {
+            _checkIndex(idx)
+            return buffer.bytes[idx]
+        }
+        set {
+            _checkIndex(idx)
+            buffer.bytes[idx] = newVal
+        }
+    }
+
+    /// \inherit
+    subscript (_ range: Range<Index>) -> SubSequence {
+        get {
+            return Self(buffer: CowBuffer<T>(&self.buffer, range.startIndex, range.size))
+        }
+        set {
+            replaceSubrange(range, with: newVal)
+        }
+    }
+
+    /// \inherit
+    def mutating replaceSubrange<C: Collection>(
+        _ subRange: Range<Index>, with newElements: C
+    ) where C.Element == Element {
+        _string_precondition!(subRange.startIndex >= self.startIndex && subRange.endIndex <= self.endIndex, 
+                              "invalid indices passed to String.replaceSubrange")
+
+        var result = Self()
+
+        if subRange.startIndex > 0 {
+            result += self[0..subRange.startIndex]
+        }
+
+        result += newElements
+
+        if subRange.endIndex < self.endIndex {
+            result += self[subRange.endIndex..self.endIndex]
+        }
+
+        self = result
+    }
+
+    /// \inherit
+    def mutating append(_ newElement: owned T) {
+        buffer.insert(newElement, at: buffer.bufferSize)
+    }
+}
+
+extend Array {
+    /// Execute the given closure with a pointer to the beginning of this array's buffer.
+    def withUnsafeBufferPtr<U>(_ closure: (UnsafeBufferPtr<T>) -> U) -> U {
+        return closure(self.buffer.bytes)
+    }
+
+    /// Execute the given closure with a pointer to the beginning of this array's buffer.
+    def mutating withUnsafeMutableBufferPtr<U>(_ closure: (UnsafeMutableBufferPtr<T>) -> U) -> U {
+        return closure(self.buffer.bytes)
+    }
+}
