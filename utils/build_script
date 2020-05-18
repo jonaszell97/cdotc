@@ -43,14 +43,23 @@ def parse_args():
         "clean": False,
     }
 
+    skip = False
     for i in range(0, len(sys.argv)):
-        if i == 0:
+        if i == 0 or skip:
+            skip = False
             continue
 
-        if sys.argv[i] == "--test":
+        arg = sys.argv[i]
+        if arg == "--test":
             opts["run_tests"] = True
-        elif sys.argv[i] == "--clean":
+        elif arg == "--clean":
             opts["clean"] = True
+        elif arg == "--use-llvm":
+            if i == len(sys.argv) - 1:
+                print("expected path after --use-llvm")
+            else:
+                opts["llvm_dir"] = sys.argv[i + 1]
+                skip = True
         else:
             print("unknown option '%s'" % (sys.argv[i]))
 
@@ -67,20 +76,6 @@ def try_build_tblgen(build_dir):
     ], check=True)
 
     return sys_bin_dir + "/tblgen"
-
-def set_tblgen_dir():
-    if not os.getenv("TblGen_DIR") is None:
-        return
-
-    tblgen = os.path.realpath(shutil.which("tblgen"))
-    os.environ["TblGen_DIR"] = tblgen + "/../cmake"
-
-def set_llvm_dir():
-    if not os.getenv("LLVM_DIR") is None:
-        return
-
-    llc = os.path.realpath(shutil.which("llc"))
-    os.environ["LLVM_DIR"] = llc + "/../cmake"
 
 def build_tblgen_libs(cmake, build_dir):
     subprocess.run([
@@ -287,8 +282,30 @@ def main():
 
     os.makedirs(build_dir, exist_ok=True)
 
+    # Verify that LLVM 10.0.0 is installed.
+    if not "llvm_dir" in opts:
+        llvm_cfg = find_executable("llvm-config")
+    else:
+        llvm_cfg = opts["llvm_dir"]
+
+    if llvm_cfg is None:
+        require_executable("llvm")
+    else:
+        llvm_ver = subprocess.check_output([llvm_cfg, "--version"])
+        if not "10.0.0" in llvm_ver:
+            print("LLVM version 10.0.0 required; you can pass a custom llvm install with the '--use-llvm' option")
+            return 1
+
     # Find LLVM and clang
     clang = require_executable("clang++")
+
+    # Find or build TblGen
+    tblgen = find_executable("tblgen")
+    if tblgen is None:
+        try:
+            tblgen = try_build_tblgen(build_dir)
+        except:
+            return 1
 
     # Find CMake
     cmake = require_executable("cmake")
@@ -299,21 +316,11 @@ def main():
                 os.path.realpath(build_dir + "/.."),
                 "-DCMAKE_BUILD_TYPE=Release",
                 "-DCMAKE_CXX_COMPILER=" + clang,
+                "-DLLVM_DIR=" + os.path.realpath(os.path.dirname(llvm_cfg) + "/../cmake"),
+                "-DTblGen_DIR=" + os.path.realpath(os.path.dirname(tblgen) + "/../cmake"),
             ], check=True, cwd=build_dir)
         except:
             return 1
-
-    # Find or build TblGen
-    tblgen = find_executable("tblgen")
-    if tblgen is None:
-        try:
-            tblgen = try_build_tblgen(build_dir)
-        except:
-            return 1
-
-    # Make sure TBLGEN_DIR and LLVM_DIR are set
-    set_tblgen_dir()
-    set_llvm_dir()
 
     # Build TblGen backend
     try:
