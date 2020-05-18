@@ -231,15 +231,15 @@ def clean(inc_dir, build_dir, bin_dir):
     except:
         pass
     try:
-        os.rmdir(inc_dir + "/Query/Inc")
+        shutil.rmtree(inc_dir + "/Query/Inc")
     except:
         pass
     try:
-        os.rmdir(build_dir)
+        shutil.rmtree(build_dir)
     except:
         pass
     try:
-        os.rmdir(bin_dir)
+        shutil.rmtree(bin_dir)
     except:
         pass
 
@@ -291,7 +291,7 @@ def main():
     if llvm_cfg is None:
         require_executable("llvm")
     else:
-        llvm_ver = subprocess.check_output([llvm_cfg, "--version"])
+        llvm_ver = str(subprocess.check_output([llvm_cfg, "--version"]))
         if not "10.0.0" in llvm_ver:
             print("LLVM version 10.0.0 required; you can pass a custom llvm install with the '--use-llvm' option")
             return 1
