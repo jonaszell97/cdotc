@@ -9,6 +9,8 @@
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <iostream>
+
 using namespace tblgen;
 using namespace tblgen::support;
 
@@ -395,13 +397,14 @@ void AttrClassEmitter::emitAttrDecl(Record* Attr, Class* Base)
       auto TypeName = getCXXType(ArgVal);
       auto GetterTypeName = getCXXGetterType(ArgVal);
       auto ArgTypeName = getCXXArgType(ArgVal);
+      std::string EnumName;
 
       // enum argument, introduce new enum
       if (TypeName.empty()) {
          if (NumEnumArgs++ != 0)
             EnumStr << "\n\n";
 
-         std::string EnumName(1, ::toupper(Name.front()));
+         EnumName = std::string(1, ::toupper(Name.front()));
          EnumName += Name.substr(1);
          EnumName += "Kind";
 

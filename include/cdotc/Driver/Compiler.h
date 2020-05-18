@@ -142,6 +142,7 @@ public:
    llvm::StringRef EmitILPath;
    llvm::StringRef EmitIRPath;
    llvm::StringRef EmitAsmPath;
+   llvm::StringRef EmitModulePath;
 
    llvm::StringRef getCommandLineArguments() const
    {

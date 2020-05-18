@@ -107,10 +107,11 @@ static cl::OptionCategory OutputCat("Output Options",
                                     " produced.");
 
 /// If given, module files will be emitted.
-static cl::opt<bool> EmitModules("emit-modules",
-                                 cl::desc("emit module files for"
-                                          " the compilation"),
-                                 cl::cat(OutputCat));
+static cl::opt<string> EmitModules("emit-modules",
+                                   cl::desc("emit module files for"
+                                            " the compilation"),
+                                   cl::cat(OutputCat), cl::ValueOptional,
+                                   cl::init("-"));
 
 /// If given, intermediate IL files will be emitted.
 static cl::opt<string> EmitIL("emit-il",
@@ -292,11 +293,13 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    }
 
    if (FoundModule) {
-      EmitModules = true;
+      if (EmitModules == "-") {
+         EmitModules = "";
+      }
    }
-   else if (EmitModules) {
+   else if (EmitModules != "-") {
       Sema->diagnose(err_no_module_file);
-      EmitModules = false;
+      EmitModules = "-";
    }
 
    for (auto& LI : LinkedLibraries) {
@@ -358,9 +361,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    if (IsStdLib) {
       options.setFlag(CompilerOptions::F_IsStdLib, true);
    }
-   if (EmitModules) {
+   if (EmitModules != "-") {
       options.setFlag(CompilerOptions::F_EmitModules, true);
       options.Output = OutputKind::Module;
+      options.EmitModulePath = EmitModules;
    }
    if (TextOutputOnly) {
       options.setFlag(CompilerOptions::F_TextOutputOnly, true);

@@ -607,8 +607,11 @@ QueryResult RunTestModuleQuery::run()
        "cdotc", QC.CI.getCompilerBinaryPath().drop_back(STR_LEN("cdotc")));
 
    if (!cdotcOrError) {
-      QC.Sema->diagnose(err_executable_not_found, "cdotc");
-      return fail();
+      cdotcOrError = llvm::sys::findProgramByName("cdotc");
+      if (!cdotcOrError) {
+         QC.Sema->diagnose(err_executable_not_found, "cdotc");
+         return fail();
+      }
    }
 
    auto& cdotc = cdotcOrError.get();
