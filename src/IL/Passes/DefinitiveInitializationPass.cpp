@@ -621,7 +621,7 @@ void DefinitiveInitializationPass::run()
             // 'self' may not be partially initialized before a 'self.init' call.
             if (!IsBaseInit) {
                auto *CalledFn = Call->getCalledFunction();
-               if (auto Init = dyn_cast<Initializer>(CalledFn)) {
+               if (auto Init = dyn_cast_or_null<Initializer>(CalledFn)) {
                   if (Init->getCtorKind() == ConstructorKind::Base) {
                      auto State = SelfVal->getInitializationState(MustGen, MayGen);
                      if (State != LocalVariable::NotInitialized) {

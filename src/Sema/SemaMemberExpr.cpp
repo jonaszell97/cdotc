@@ -954,7 +954,7 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
          return result;
       }
       if (isInBuiltinModule(Alias) && !Ident->allowIncompleteTemplateArgs()) {
-         return HandleBuiltinAlias(Alias, Ident);
+         return HandleBuiltinAlias(Alias, Ident, TemplateArgs);
       }
 
       break;
@@ -1612,6 +1612,10 @@ AliasDecl* SemaPass::checkAliasReference(IdentifierRefExpr* E, AliasDecl* Alias,
          return nullptr;
       }
 
+      if (isInBuiltinModule(Alias)) {
+         return Alias;
+      }
+
       if (Alias->getType()->isMetaType()) {
          E->setExprType(Context.getMetaType(Context.getDependentTypedefType(
              Alias, FinalTemplateArgumentList::Create(Context, ArgList))));
@@ -2256,6 +2260,13 @@ void SemaPass::diagnoseMemberNotFound(DeclContext* Ctx, StmtOrDecl Subject,
          case Decl::UnionDeclID:
          case Decl::ProtocolDeclID: {
             auto ND = cast<NamedDecl>(Ctx);
+            diagnose(Subject, err_member_not_found, SR, ND, ND->getDeclName(),
+                     memberName, false);
+
+            return;
+         }
+         case Decl::ImportDeclID: {
+            auto ND = cast<ImportDecl>(Ctx)->getImportedModule()->getDecl();
             diagnose(Subject, err_member_not_found, SR, ND, ND->getDeclName(),
                      memberName, false);
 

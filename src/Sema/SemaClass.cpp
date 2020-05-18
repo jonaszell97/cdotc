@@ -10,6 +10,7 @@
 #include "cdotc/Serialization/ModuleFile.h"
 #include "cdotc/Support/Casting.h"
 
+#include <cdotc/Sema/Builtin.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -130,7 +131,7 @@ QueryResult DeclareMemberwiseInitQuery::run()
 {
    SmallVector<FuncArgDecl*, 4> args;
    for (auto F : S->getFields()) {
-      if (!F->isStatic() && !F->getDefaultVal()) {
+      if (!F->isStatic() && (!F->getDefaultVal() || F->isImportedFromClang())) {
          SourceType T;
          if (QC.PrepareDeclInterface(F)) {
             T = QC.Context.getErrorTy();
@@ -142,7 +143,8 @@ QueryResult DeclareMemberwiseInitQuery::run()
          auto* Lbl = F->getDeclName().getIdentifierInfo();
          auto arg = FuncArgDecl::Create(
              QC.Context, S->getSourceLoc(), S->getSourceLoc(), Lbl, Lbl,
-             ArgumentConvention::Owned, T, nullptr, F->isVariadic());
+             ArgumentConvention::Owned, T,
+             F->getDefaultVal(), F->isVariadic());
 
          args.push_back(arg);
       }
@@ -422,16 +424,18 @@ QueryResult PrepareEnumInterfaceQuery::run()
    llvm::DenseMap<int64_t, EnumCaseDecl*> caseVals;
 
    for (const auto& Case : D->getCases()) {
-      if (auto expr = Case->getRawValExpr()) {
-         expr->setContextualType(CaseValTy);
-
-         (void)SP.getAsOrCast(D, expr, CaseValTy);
-         if (expr->isInvalid())
+      if (auto *Expr = Case->getRawValExpr()) {
+         auto Result = QC.Sema->typecheckExpr(Expr->getExpr(), CaseValTy, D);
+         if (!Result) {
             continue;
+         }
 
-         auto res = SP.evalStaticExpr(D, expr);
-         if (!res)
+         Expr->setExpr(Result.get());
+
+         auto res = SP.evalStaticExpr(D, Expr);
+         if (!res) {
             continue;
+         }
 
          Case->setRawValue(NextCaseVal);
       }
@@ -1225,6 +1229,10 @@ bool SemaPass::checkIfAbstractMethodsOverridden(ClassDecl* R)
    bool error = false;
    auto* Base = R->getParentClass();
    while (Base) {
+      if (auto *ModFile = Base->getModFile()) {
+         ModFile->LoadAllDecls(*Base);
+      }
+
       for (auto* M : Base->getDecls<MethodDecl>()) {
          if (!M->isAbstract())
             continue;

@@ -324,11 +324,11 @@ void ILGenPass::FinalizeGlobalDeinitFn()
       Builder.SetDebugLoc(GV->getSourceLoc());
 
       if (auto Flag = GV->getInitializedFlag()) {
-         auto flag = Builder.CreateLoad(Flag);
+         auto flag = Builder.CreateLoad(Flag, MemoryOrder::Acquire);
          auto DeinitBB = Builder.CreateBasicBlock("glob.deinit");
          auto MergeBB = Builder.CreateBasicBlock("glob.init.merge");
 
-         Builder.CreateCondBr(flag, DeinitBB, MergeBB);
+         Builder.CreateCondBr(Builder.CreateIsZero(flag), MergeBB, DeinitBB);
 
          Builder.SetInsertPoint(DeinitBB);
          DefaultCleanup(GV).Emit(*this);
@@ -794,7 +794,7 @@ il::Value* ILGenPass::getCStyleArray(cdot::Type* Ty,
           reinterpret_cast<il::Constant* const*>(elements.data()),
           elements.size());
 
-      Val = Builder.GetConstantArray(Constants);
+      Val = Builder.GetConstantArray(ArrTy->getElementType(), Constants);
    }
    else {
       auto alloc = Builder.CreateAlloca(ArrTy, 0, onHeap);
@@ -3230,8 +3230,8 @@ void ILGenPass::DefineLazyGlobal(il::GlobalVariable* glob,
    Str += "_CIF";
    Str += GlobalName.drop_front(2);
 
-   auto Flag = Builder.CreateGlobalVariable(Builder.GetFalse(), false, Str,
-                                            glob->getSourceLoc());
+   auto Flag = Builder.CreateGlobalVariable(Builder.GetConstantInt(Context.getUInt8Ty(), 0),
+                                            false, Str, glob->getSourceLoc());
 
    Flag->setLinkage(glob->getLinkage());
    glob->setInitializedFlag(Flag);
@@ -3262,7 +3262,8 @@ void ILGenPass::DefineLazyGlobal(il::GlobalVariable* glob,
    }
 
    Builder.CreateInit(val, glob);
-   Builder.CreateStore(Builder.GetTrue(), Flag);
+   Builder.CreateStore(Builder.GetConstantInt(Context.getUInt8Ty(), 1),
+                       Flag, MemoryOrder::Release);
    Builder.CreateRetVoid();
 
    glob->setIsLazilyInitialized();
@@ -3701,8 +3702,10 @@ il::Value* ILGenPass::visitDeclRefExpr(DeclRefExpr* Expr)
          GV = GV->getDeclarationIn(Builder.getModule());
       }
 
-      if (auto *Val = Var->getValue()) {
-         DefineLazyGlobal(GV, Val);
+      if (!Var->isExternal()) {
+         if (auto* Val = Var->getValue()) {
+            DefineLazyGlobal(GV, Val);
+         }
       }
 
       if (inCTFE()) {
@@ -3710,11 +3713,13 @@ il::Value* ILGenPass::visitDeclRefExpr(DeclRefExpr* Expr)
       }
 
       if (GV->isLazilyInitialized()) {
-         auto flag = Builder.CreateLoad(GV->getInitializedFlag());
+         auto flag = Builder.CreateLoad(
+             GV->getInitializedFlag(), MemoryOrder::Acquire);
+
          auto InitBB = Builder.CreateBasicBlock("glob.init");
          auto MergeBB = Builder.CreateBasicBlock("glob.init.merge");
 
-         Builder.CreateCondBr(flag, MergeBB, InitBB);
+         Builder.CreateCondBr(Builder.CreateIsZero(flag), InitBB, MergeBB);
 
          Builder.SetInsertPoint(InitBB);
          Builder.CreateCall(GV->getInitFn(), {});
@@ -3797,8 +3802,10 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr* Expr)
             GV = GV->getDeclarationIn(Builder.getModule());
          }
 
-         if (auto *Val = F->getValue()) {
-            DefineLazyGlobal(GV, Val);
+         if (!F->isExternal()) {
+            if (auto* Val = F->getValue()) {
+               DefineLazyGlobal(GV, Val);
+            }
          }
 
          if (inCTFE()) {
@@ -3806,11 +3813,13 @@ il::Value* ILGenPass::visitMemberRefExpr(MemberRefExpr* Expr)
          }
 
          if (GV->isLazilyInitialized()) {
-            auto flag = Builder.CreateLoad(GV->getInitializedFlag());
+            auto flag = Builder.CreateLoad(
+                GV->getInitializedFlag(), MemoryOrder::Acquire);
+
             auto InitBB = Builder.CreateBasicBlock("glob.init");
             auto MergeBB = Builder.CreateBasicBlock("glob.init.merge");
 
-            Builder.CreateCondBr(flag, MergeBB, InitBB);
+            Builder.CreateCondBr(Builder.CreateIsZero(flag), InitBB, MergeBB);
 
             Builder.SetInsertPoint(InitBB);
             Builder.CreateCall(GV->getInitFn(), {});
@@ -4320,7 +4329,6 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
    }
    case CallKind::InitializerCall: {
       auto method = cast<InitDecl>(MaybeSpecialize(CalledFn));
-
       auto R = method->getRecord();
       if (Expr->isDotInit()) {
          if (method->isFallibleInit()) {
@@ -4330,9 +4338,16 @@ il::Value* ILGenPass::visitCallExpr(CallExpr* Expr, il::Value* GenericArgs)
          V = CreateCall(method, args, Expr);
       }
       else if (auto* E = dyn_cast<EnumDecl>(R)) {
-         auto* Alloc = Builder.CreateLoad(Builder.CreateAlloca(E->getType()));
-         args.insert(args.begin(), Alloc);
+         Value *Alloc;
+         if (method->isFallibleInit()) {
+            Alloc = Builder.CreateLoad(Builder.CreateAlloca(
+                getFunc(method)->getEntryBlock()->getArgs().front().getType()));
+         }
+         else {
+            Alloc = Builder.CreateLoad(Builder.CreateAlloca(E->getType()));
+         }
 
+         args.insert(args.begin(), Alloc);
          CreateCall(method, args, Expr);
 
          V = Alloc;

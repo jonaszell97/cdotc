@@ -907,9 +907,9 @@ public:
    {
       auto pointee = Ty->getPointeeType();
       if (pointee->isVoidType())
-         OS << "builtin.RawMutablePointer";
+         OS << "builtin.MutableRawPointer";
       else
-         OS << "builtin.RawMutablePointer<" << pointee << ">";
+         OS << "builtin.MutableRawPointer<" << pointee << ">";
    }
 
    void visitReferenceType(const ReferenceType* Ty)

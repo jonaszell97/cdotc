@@ -197,6 +197,13 @@ public:
 
             Result = visitIdentifierRefExpr(Ident);
          }
+         else if (auto *ArgExpr = dyn_cast<TemplateArgListExpr>(Val)) {
+            if (auto *Ident = dyn_cast<IdentifierRefExpr>(ArgExpr->getParentExpr())) {
+               Ident->setCalled(true);
+            }
+
+            Result = visitExpr(Val);
+         }
          else {
             Result = visitExpr(Val);
          }

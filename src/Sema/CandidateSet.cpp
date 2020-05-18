@@ -300,7 +300,7 @@ static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
 {
    bool IncludesSelf = false;
    if (!Cand.isAnonymousCandidate()) {
-      IncludesSelf = shouldUseSelfArgument(
+      IncludesSelf = !args.empty() && shouldUseSelfArgument(
           Cand.getFunc(), args.front(), args.drop_front(1));
    }
 

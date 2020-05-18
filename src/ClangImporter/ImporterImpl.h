@@ -31,6 +31,7 @@ namespace ast {
    class Decl;
    class EnumDecl;
    class Expression;
+   class FunctionDecl;
    class GlobalVarDecl;
    class Statement;
    class StructDecl;
@@ -61,6 +62,9 @@ public:
 
    /// Map from clang decls to translated ones.
    llvm::DenseMap<clang::Decl*, ast::Decl*> DeclMap;
+
+   /// Map from names to imported functions with C linkage.
+   llvm::StringMap<ast::FunctionDecl*> CLinkageFuncs;
 
    /// The source ID of the file we're currently importing.
    unsigned SourceID = 0;

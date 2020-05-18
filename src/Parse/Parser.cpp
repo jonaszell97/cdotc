@@ -6370,7 +6370,7 @@ void Parser::parseMainFile()
             break;
          }
 
-         auto nextStmt = parseNextStmt(false);
+         auto nextStmt = parseNextStmt(true);
          if (nextStmt.holdsStatement()) {
             FoundNonImportDecl = true;
             Stmts.push_back(nextStmt.getStatement());

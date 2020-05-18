@@ -99,6 +99,14 @@ static bool matchingLabels(SemaPass& Sema, CandidateSet& CandSet,
                DeclArgMap[ArgDecl].push_back(ArgVal);
                break;
             }
+
+            // Allow specifying optional labels for clang-imported functions.
+            if (ArgDecl->isImportedFromClang()
+            && ArgDecl->getDeclName().getIdentifierInfo() == Label) {
+               FoundLabel = true;
+               DeclArgMap[ArgDecl].push_back(ArgVal);
+               break;
+            }
          }
 
          if (!FoundLabel) {
