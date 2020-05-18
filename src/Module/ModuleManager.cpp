@@ -202,14 +202,17 @@ void ModuleManager::EmitModules()
 void ModuleManager::EmitModule(Module* Mod)
 {
    std::error_code EC;
+
+   string OutPath = CI.getOptions().EmitModulePath;
+   if (OutPath.empty()) {
+      OutPath = fs::getLibraryDir();
+   }
+
    SmallString<128> OutFile;
+   fs::appendToPath(OutFile, StringRef(OutPath));
 
-   fs::appendToPath(OutFile, fs::getLibraryDir());
-   if (OutFile.back() != fs::PathSeperator)
-      OutFile += fs::PathSeperator;
-
-   OutFile += Mod->getName()->getIdentifier();
-   OutFile += ".cdotm";
+   fs::createDirectories(OutFile);
+   fs::appendToPath(OutFile, Mod->getName()->getIdentifier() + ".cdotm");
 
    if (fs::fileExists(OutFile)) {
       fs::deleteFile(OutFile);
@@ -247,9 +250,10 @@ void ModuleManager::EmitModule(Module* Mod)
       IRGen->emitStaticLibrary(TmpFile, Mod->getILModule()->getLLVMModule());
    }
    else if (EmitLib) {
-      SmallString<56> LibDir = fs::getLibraryDir();
-      fs::appendToPath(LibDir, "libcdot" + Mod->getName()->getIdentifier() + "."
-                                   + fs::getDynamicLibraryExtension());
+      string LibDir = OutPath;
+      fs::appendToPath(LibDir,
+          "libcdot" + Mod->getName()->getIdentifier() + "."
+          + fs::getDynamicLibraryExtension());
 
       IRGen->emitDynamicLibrary(LibDir, Mod->getILModule()->getLLVMModule());
    }

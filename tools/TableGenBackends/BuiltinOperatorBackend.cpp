@@ -7,6 +7,8 @@
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <iostream>
+
 using namespace tblgen;
 using namespace tblgen::support;
 
