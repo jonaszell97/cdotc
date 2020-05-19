@@ -1,28 +1,28 @@
 
-#include "CTFEEngine.h"
+#include "cdotc/CTFE/CTFEEngine.h"
 
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "Basic/CastKind.h"
-#include "Basic/FileManager.h"
-#include "IL/Context.h"
-#include "IL/Constants.h"
-#include "IL/Function.h"
-#include "IL/Module.h"
-#include "IL/Passes/VerifierPass.h"
-#include "ILGen/ILGenPass.h"
-#include "Message/Diagnostics.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
-#include "Sema/Builtin.h"
-#include "Serialization/ModuleFile.h"
-#include "Support/Format.h"
-#include "Support/StringSwitch.h"
-#include "Support/Various.h"
-#include "Value.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/CastKind.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/CTFE/Value.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IL/Passes/VerifierPass.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/Builtin.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ModuleFile.h"
+#include "cdotc/Support/Format.h"
+#include "cdotc/Support/StringSwitch.h"
+#include "cdotc/Support/Various.h"
 
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Allocator.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <cmath>
 #include <cstring>
@@ -31,7 +31,7 @@
 #include <stack>
 
 #ifndef _WIN32
-#  include <unistd.h>
+#include <unistd.h>
 #endif
 
 using std::string;
@@ -45,19 +45,16 @@ namespace ctfe {
 
 class EngineImpl {
 public:
-   explicit EngineImpl(ast::SemaPass &SP)
-      : SP(SP), TI(SP.getCompilationUnit(),
-                   llvm::Triple(llvm::sys::getDefaultTargetTriple()))
-   {}
+   explicit EngineImpl(ast::SemaPass& SP)
+       : SP(SP), TI(SP.getCompilerInstance(),
+                    llvm::Triple(llvm::sys::getDefaultTargetTriple()))
+   {
+   }
 
-   Value visitFunction(il::Function const& F,
-                       llvm::ArrayRef<ctfe::Value> args,
+   Value visitFunction(il::Function const& F, llvm::ArrayRef<ctfe::Value> args,
                        SourceLocation callerLoc);
 
-   bool hadError() const
-   {
-      return HadError;
-   }
+   bool hadError() const { return HadError; }
 
    void reset()
    {
@@ -68,28 +65,24 @@ public:
    void printStackTrace(bool includeFirst = false);
    void printCallChain(SourceLocation Loc);
 
-   llvm::BumpPtrAllocator &getAllocator()
-   {
-      return Allocator;
-   }
+   llvm::BumpPtrAllocator& getAllocator() { return Allocator; }
 
-   void *Allocate(size_t size, size_t alignment = 8) const
+   void* Allocate(size_t size, size_t alignment = 8) const
    {
       return Allocator.Allocate(size, alignment);
    }
 
-   template <typename T>
-   T *Allocate(size_t Num = 1) const
+   template<typename T> T* Allocate(size_t Num = 1) const
    {
-      return static_cast<T *>(Allocate(Num * sizeof(T), alignof(T)));
+      return static_cast<T*>(Allocate(Num * sizeof(T), alignof(T)));
    }
 
-   void Deallocate(void *Ptr) const {}
+   void Deallocate(void* Ptr) const {}
 
    friend class CTFEEngine;
 
 private:
-   ast::SemaPass &SP;
+   ast::SemaPass& SP;
    TargetInfo TI;
    mutable llvm::BumpPtrAllocator Allocator;
 
@@ -116,10 +109,7 @@ private:
       return thrownException.thrownType != nullptr;
    }
 
-   void resetException()
-   {
-      thrownException.thrownType = nullptr;
-   }
+   void resetException() { thrownException.thrownType = nullptr; }
 
    Exception thrownException;
 
@@ -127,47 +117,45 @@ private:
    bool NeedsStructReturn(CanType Ty);
 
    ctfe::Value getStruct(QualType ty, llvm::ArrayRef<Value> fieldValues);
-   ctfe::Value getClass(QualType ty,
-                        il::GlobalVariable *TI,
+   ctfe::Value getClass(QualType ty, il::GlobalVariable* TI,
                         llvm::ArrayRef<Value> fieldValues);
 
    ctfe::Value getArray(QualType ty, llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getTuple(QualType ty, llvm::ArrayRef<Value> fieldValues);
    ctfe::Value getUnion(QualType ty, QualType initTy, Value Initializer);
-   ctfe::Value getEnum(QualType ty, IdentifierInfo *caseName,
+   ctfe::Value getEnum(QualType ty, IdentifierInfo* caseName,
                        llvm::ArrayRef<Value> fieldValues);
-   ctfe::Value getEnum(QualType ty, EnumCaseDecl *Case,
+   ctfe::Value getEnum(QualType ty, EnumCaseDecl* Case,
                        llvm::ArrayRef<Value> fieldValues);
 
    ctfe::Value getLambda(il::Function const* F,
                          llvm::ArrayRef<std::pair<QualType, Value>> captures);
 
-   ctfe::Value getCtfeValue(il::Value const *V);
+   ctfe::Value getCtfeValue(il::Value const* V);
    ctfe::Value getConstantVal(il::Constant const* C);
 
-   void buildConstantClass(llvm::SmallVectorImpl<Value> &Vec,
-                           const ConstantClass *Class);
+   void buildConstantClass(llvm::SmallVectorImpl<Value>& Vec,
+                           const ConstantClass* Class);
 
-   ctfe::Value getStructElement(ctfe::Value &Val,
-                                QualType ty,
+   ctfe::Value getStructElement(ctfe::Value& Val, QualType ty,
                                 DeclarationName fieldName);
 
-   ctfe::Value getStructElement(ctfe::Value &Val, QualType ty, size_t idx);
+   ctfe::Value getStructElement(ctfe::Value& Val, QualType ty, size_t idx);
 
-   ctfe::Value getArrayElement(ctfe::Value &Val, QualType ty, size_t idx);
-   ctfe::Value getTupleElement(ctfe::Value &Val, QualType ty, size_t idx);
+   ctfe::Value getArrayElement(ctfe::Value& Val, QualType ty, size_t idx);
+   ctfe::Value getTupleElement(ctfe::Value& Val, QualType ty, size_t idx);
 
-   ctfe::Value getElementPtr(ctfe::Value &Val, QualType ty, size_t idx);
+   ctfe::Value getElementPtr(ctfe::Value& Val, QualType ty, size_t idx);
 
-   ctfe::Value getLambdaEnvironment(ctfe::Value &Val);
-   il::Function *getLambdaFuncPtr(ctfe::Value &Val);
+   ctfe::Value getLambdaEnvironment(ctfe::Value& Val);
+   il::Function* getLambdaFuncPtr(ctfe::Value& Val);
 
-   ctfe::Value getEnumRawValue(ctfe::Value &Val, QualType type);
-   ctfe::Value getEnumCaseValue(ctfe::Value &Val, QualType ty,
-                                IdentifierInfo *caseName, size_t idx);
+   ctfe::Value getEnumRawValue(ctfe::Value& Val, QualType type);
+   ctfe::Value getEnumCaseValue(ctfe::Value& Val, QualType ty,
+                                IdentifierInfo* caseName, size_t idx);
 
-   ctfe::Value getEnumCaseValue(ctfe::Value &Val, QualType ty,
-                                EnumCaseDecl *Case, size_t idx);
+   ctfe::Value getEnumCaseValue(ctfe::Value& Val, QualType ty,
+                                EnumCaseDecl* Case, size_t idx);
 
    void storeValue(ctfe::Value dst, ctfe::Value src, QualType Ty);
    ctfe::Value loadValue(ctfe::Value Val, QualType T);
@@ -175,7 +163,7 @@ private:
    std::string toString(ctfe::Value Val, QualType Ty);
 
    Variant toVariant(ctfe::Value Val, QualType Ty);
-   il::Constant *toConstant(ctfe::Value Val, QualType Ty);
+   il::Constant* toConstant(ctfe::Value Val, QualType Ty);
 
    std::pair<bool, Value> checkBuiltinCall(il::Function const& F,
                                            llvm::ArrayRef<ctfe::Value> args,
@@ -191,40 +179,38 @@ private:
 
    ctfe::Value tryCatchException();
 
-
    ctfe::Value visit(Instruction const& I)
    {
       switch (I.getTypeID()) {
-#     define CDOT_INSTRUCTION(Name)                            \
-         case il::Value::Name##ID:                             \
-            return visit##Name(static_cast<Name const&>(I));
+#define CDOT_INSTRUCTION(Name)                                                 \
+   case il::Value::Name##ID:                                                   \
+      return visit##Name(static_cast<Name const&>(I));
 
-#     include "IL/Instructions.def"
+#include "cdotc/IL/Instructions.def"
 
       default:
-            llvm_unreachable("bad instruction kind");
+         llvm_unreachable("bad instruction kind");
       }
    }
 
    ctfe::Value visitBasicBlock(BasicBlock const& B,
-                                llvm::ArrayRef<ctfe::Value> args = {},
-                                bool skipBranches = false);
+                               llvm::ArrayRef<ctfe::Value> args = {},
+                               bool skipBranches = false);
 
    ctfe::Value visitBasicBlock(BasicBlock const& B,
-                                llvm::ArrayRef<il::Value*> args,
-                                bool skipBranches = false) {
+                               llvm::ArrayRef<il::Value*> args,
+                               bool skipBranches = false)
+   {
       llvm::SmallVector<ctfe::Value, 8> ctfeArgs;
-      for (auto &arg : args)
+      for (auto& arg : args)
          ctfeArgs.push_back(getCtfeValue(arg));
 
       return visitBasicBlock(B, ctfeArgs, skipBranches);
    }
 
-   void diagnoseNoDefinition(il::GlobalVariable const *G)
+   void diagnoseNoDefinition(il::GlobalVariable const* G)
    {
-      err(err_generic_error, G->getSourceLoc(),
-          "global variable with no definition cannot be evaluated at compile "
-          "time");
+      err(err_global_var_without_definition, G->getName(), G->getSourceLoc());
    }
 
    il::Function const* getFunctionDefinition(il::Function const& F)
@@ -243,44 +229,32 @@ private:
       return G.getParent()->getContext().getGlobalDefinition(G.getName());
    }
 
-   ctfe::Value applyBinaryOp(unsigned OpCode,
-                             QualType Ty,
-                             ctfe::Value LHS,
+   ctfe::Value applyBinaryOp(unsigned OpCode, QualType Ty, ctfe::Value LHS,
                              ctfe::Value RHS);
 
    ctfe::Value getNullValue(QualType Ty);
 
-#  define CDOT_INSTRUCTION(Name)                \
-   ctfe::Value visit##Name(Name const& I);
-#  include "IL/Instructions.def"
+#define CDOT_INSTRUCTION(Name) ctfe::Value visit##Name(Name const& I);
+#include "cdotc/IL/Instructions.def"
 
-#  define CDOT_BINARY_INST(Name)                \
-   ctfe::Value visitLarge##Name(Name const& I);
-#  include "IL/Instructions.def"
+#define CDOT_BINARY_INST(Name) ctfe::Value visitLarge##Name(Name const& I);
+#include "cdotc/IL/Instructions.def"
 
-#  define CDOT_UNARY_INST(Name)                 \
-   ctfe::Value visitLarge##Name(Name const& I);
-#  include "IL/Instructions.def"
-
+#define CDOT_UNARY_INST(Name) ctfe::Value visitLarge##Name(Name const& I);
+#include "cdotc/IL/Instructions.def"
 
    struct StackGuard {
-      StackGuard(EngineImpl &E) : E(E)
-      {
-         E.ValueStack.emplace();
-      }
+      StackGuard(EngineImpl& E) : E(E) { E.ValueStack.emplace(); }
 
-      ~StackGuard()
-      {
-         E.ValueStack.pop();
-      }
+      ~StackGuard() { E.ValueStack.pop(); }
 
    private:
-      EngineImpl &E;
+      EngineImpl& E;
    };
 
    struct CallScopeRAII {
-      CallScopeRAII(EngineImpl &E, il::Function const &F, SourceLocation L)
-         : E(E)
+      CallScopeRAII(EngineImpl& E, il::Function const& F, SourceLocation L)
+          : E(E)
       {
          ++E.recursionDepth;
          E.branchStack.emplace(0);
@@ -295,11 +269,10 @@ private:
       }
 
    private:
-      EngineImpl &E;
+      EngineImpl& E;
    };
 
-   template<class ...Args>
-   void err(Args&&... args)
+   template<class... Args> void err(Args&&... args)
    {
       HadError = true;
       SP.diagnose(std::forward<Args&&>(args)...);
@@ -309,23 +282,27 @@ private:
 } // namespace ctfe
 } // namespace cdot
 
-inline void *operator new(size_t size, ::cdot::ctfe::EngineImpl const& E,
-                          size_t alignment = 8) {
+inline void* operator new(size_t size, ::cdot::ctfe::EngineImpl const& E,
+                          size_t alignment = 8)
+{
    return E.Allocate(size, alignment);
 }
 
-inline void operator delete(void *ptr, ::cdot::ctfe::EngineImpl const& E,
-                            size_t) {
+inline void operator delete(void* ptr, ::cdot::ctfe::EngineImpl const& E,
+                            size_t)
+{
    return E.Deallocate(ptr);
 }
 
-inline void *operator new[](size_t size, ::cdot::ctfe::EngineImpl const& E,
-                            size_t alignment = 8) {
+inline void* operator new[](size_t size, ::cdot::ctfe::EngineImpl const& E,
+                            size_t alignment = 8)
+{
    return E.Allocate(size, alignment);
 }
 
-inline void operator delete[](void *ptr, ::cdot::ctfe::EngineImpl const& E,
-                              size_t) {
+inline void operator delete[](void* ptr, ::cdot::ctfe::EngineImpl const& E,
+                              size_t)
+{
    return E.Deallocate(ptr);
 }
 
@@ -339,7 +316,7 @@ bool EngineImpl::IsSmallStruct(CanType Ty)
    case Type::TupleTypeID:
       return !NeedsStructReturn(Ty);
    case Type::RecordTypeID: {
-      auto *R = Ty->getRecord();
+      auto* R = Ty->getRecord();
       switch (R->getKind()) {
       case Decl::StructDeclID:
          return !NeedsStructReturn(Ty);
@@ -373,7 +350,7 @@ void EngineImpl::printStackTrace(bool includeFirst)
 {
    size_t i = 0;
    for (auto it = CallStack.rbegin(); it != CallStack.rend(); ++it) {
-      auto &CS = *it;
+      auto& CS = *it;
 
       string s;
       if (includeFirst || i > 0) {
@@ -401,7 +378,7 @@ void EngineImpl::printCallChain(SourceLocation Loc)
          s += " -> ";
       }
 
-      auto &CS = *it;
+      auto& CS = *it;
       auto CD = SP.getILGen().getCallableDecl(CS.first);
       if (!CD)
          continue;
@@ -413,14 +390,15 @@ void EngineImpl::printCallChain(SourceLocation Loc)
       SP.diagnose(note_call_chain, Loc, s);
 }
 
-ctfe::Value EngineImpl::visitFunction(il::Function const &F,
+ctfe::Value EngineImpl::visitFunction(il::Function const& F,
                                       llvm::ArrayRef<ctfe::Value> args,
-                                      SourceLocation callerLoc) {
+                                      SourceLocation callerLoc)
+{
    if (recursionDepth > 256) {
       HadError = true;
 
       std::string Name;
-      if (auto *C = SP.getILGen().getCallableDecl(&F)) {
+      if (auto* C = SP.getILGen().getCallableDecl(&F)) {
          Name = C->getFullName();
       }
       else {
@@ -438,18 +416,18 @@ ctfe::Value EngineImpl::visitFunction(il::Function const &F,
    StackGuard guard(*this);
    CallScopeRAII scope(*this, F, callerLoc);
 
-   return visitBasicBlock(*getFunctionDefinition(F)->getEntryBlock(),
-                          args);
+   return visitBasicBlock(*getFunctionDefinition(F)->getEntryBlock(), args);
 }
 
-ctfe::Value EngineImpl::visitBasicBlock(BasicBlock const &B,
+ctfe::Value EngineImpl::visitBasicBlock(BasicBlock const& B,
                                         llvm::ArrayRef<ctfe::Value> args,
-                                        bool skipBranches) {
+                                        bool skipBranches)
+{
    if (branchStack.top()++ > 1024) {
       HadError = true;
 
       std::string Name;
-      if (auto *C = SP.getILGen().getCallableDecl(B.getParent())) {
+      if (auto* C = SP.getILGen().getCallableDecl(B.getParent())) {
          Name = C->getFullName();
       }
       else {
@@ -461,12 +439,12 @@ ctfe::Value EngineImpl::visitBasicBlock(BasicBlock const &B,
    }
 
    auto arg_it = B.arg_begin();
-   for (auto &arg : args) {
+   for (auto& arg : args) {
       ValueStack.top()[&*arg_it] = arg;
       ++arg_it;
    }
 
-   for (auto &I : B.getInstructions()) {
+   for (auto& I : B.getInstructions()) {
       if (isa<TerminatorInst>(I)) {
          if (skipBranches)
             return {};
@@ -489,7 +467,7 @@ ctfe::Value EngineImpl::visitBasicBlock(BasicBlock const &B,
    llvm_unreachable("basic block has no terminator!");
 }
 
-ctfe::Value EngineImpl::getCtfeValue(il::Value const *V)
+ctfe::Value EngineImpl::getCtfeValue(il::Value const* V)
 {
    if (auto C = dyn_cast<Constant>(V))
       return getConstantVal(C);
@@ -500,24 +478,25 @@ ctfe::Value EngineImpl::getCtfeValue(il::Value const *V)
    return it->second;
 }
 
-void EngineImpl::buildConstantClass(llvm::SmallVectorImpl<Value> &Vec,
-                                    const ConstantClass *Class) {
+void EngineImpl::buildConstantClass(llvm::SmallVectorImpl<Value>& Vec,
+                                    const ConstantClass* Class)
+{
    if (auto Base = Class->getBase())
       buildConstantClass(Vec, Base);
 
-   for (const auto &el : Class->getElements())
+   for (const auto& el : Class->getElements())
       Vec.push_back(getConstantVal(el));
 }
 
-ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
+ctfe::Value EngineImpl::getConstantVal(il::Constant const* C)
 {
    if (auto Int = dyn_cast<ConstantInt>(C)) {
       if (Int->isCTFE())
          return Value::getInt(uint64_t(true));
 
       if (Int->getType()->getBitwidth() > 64) {
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(Int->getValue()));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(Int->getValue()));
       }
 
       return Value::getInt(Int->getZExtValue());
@@ -541,7 +520,7 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
       size_t i = 0;
       llvm::SmallVector<ctfe::Value, 8> fields;
 
-      for (auto &El : Els) {
+      for (auto& El : Els) {
          fields.push_back(getConstantVal(El));
          ++i;
       }
@@ -555,7 +534,7 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
       size_t i = 0;
       llvm::SmallVector<ctfe::Value, 8> fields;
 
-      for (auto &El : Els) {
+      for (auto& El : Els) {
          fields.push_back(getConstantVal(El));
          ++i;
       }
@@ -620,8 +599,8 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
          return it->getSecond();
 
       auto GlobalTy = G->getType()->getReferencedType();
-      auto Alloc = Allocate(TI.getSizeOfType(GlobalTy),
-                            TI.getAlignOfType(GlobalTy));
+      auto Alloc
+          = Allocate(TI.getSizeOfType(GlobalTy), TI.getAlignOfType(GlobalTy));
 
       if (auto Init = G->getInitializer()) {
          storeValue(Alloc, getConstantVal(Init), GlobalTy);
@@ -633,12 +612,12 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
 
    if (auto BC = dyn_cast<ConstantBitCastInst>(C)) {
       return Value::getPreallocated(
-         getConstantVal(BC->getTarget()).getBuffer());
+          getConstantVal(BC->getTarget()).getBuffer());
    }
 
    if (auto AddrOf = dyn_cast<ConstantAddrOfInst>(C)) {
       return Value::getPreallocated(
-         getConstantVal(AddrOf->getTarget()).getBuffer());
+          getConstantVal(AddrOf->getTarget()).getBuffer());
    }
 
    if (auto Op = dyn_cast<ConstantOperatorInst>(C)) {
@@ -679,23 +658,21 @@ ctfe::Value EngineImpl::getConstantVal(il::Constant const *C)
    if (auto Magic = dyn_cast<MagicConstant>(C)) {
       switch (Magic->getMagicConstantKind()) {
       case MagicConstant::__ctfe:
-         return Value(
-            !CallStack.empty()
-            && CallStack.back().first->getName().substr(0, 9) != "__ctfe_fn");
+         return Value(!CallStack.empty()
+                      && CallStack.back().first->getName().substr(0, 9)
+                             != "__ctfe_fn");
       }
    }
 
    llvm_unreachable("bad constant kind");
 }
 
-
 Value EngineImpl::getNullValue(QualType ty)
 {
    if (ty->isIntegerType()) {
       if (ty->getBitwidth() > 64) {
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(llvm::APInt(ty->getBitwidth(), 0),
-                                    ty->isUnsigned()));
+         return Value::getPreallocated(new (*this) llvm::APSInt(
+             llvm::APInt(ty->getBitwidth(), 0), ty->isUnsigned()));
       }
 
       return Value::getInt(0);
@@ -706,8 +683,7 @@ Value EngineImpl::getNullValue(QualType ty)
    if (ty->isDoubleTy()) {
       return Value::getDouble(0.0);
    }
-   if (ty->isPointerType() || ty->isThinFunctionTy()
-       || ty->isReferenceType()) {
+   if (ty->isPointerType() || ty->isThinFunctionTy() || ty->isReferenceType()) {
       return Value::getConstPtr(nullptr);
    }
 
@@ -733,8 +709,9 @@ Value EngineImpl::getStruct(QualType ty, llvm::ArrayRef<Value> fieldValues)
    return V;
 }
 
-ctfe::Value EngineImpl::getClass(QualType ty, GlobalVariable *TIVal,
-                                 llvm::ArrayRef<Value> fieldValues) {
+ctfe::Value EngineImpl::getClass(QualType ty, GlobalVariable* TIVal,
+                                 llvm::ArrayRef<Value> fieldValues)
+{
    auto S = cast<ClassDecl>(ty->getRecord());
    auto V = getNullValue(ty);
    auto ptr = V.getBuffer();
@@ -784,17 +761,18 @@ Value EngineImpl::getUnion(QualType unionTy, QualType initTy, Value Initializer)
    return V;
 }
 
-Value EngineImpl::getEnum(QualType ty, IdentifierInfo *caseName,
-                          llvm::ArrayRef<Value> fieldValues) {
+Value EngineImpl::getEnum(QualType ty, IdentifierInfo* caseName,
+                          llvm::ArrayRef<Value> fieldValues)
+{
    auto E = cast<EnumDecl>(ty->getRecord());
    auto C = E->hasCase(caseName);
 
    return getEnum(ty, C, fieldValues);
 }
 
-Value EngineImpl::getEnum(QualType ty,
-                          EnumCaseDecl *Case,
-                          llvm::ArrayRef<Value> CaseVals) {
+Value EngineImpl::getEnum(QualType ty, EnumCaseDecl* Case,
+                          llvm::ArrayRef<Value> CaseVals)
+{
    auto E = cast<EnumDecl>(ty->getRecord());
    if (E->getMaxAssociatedValues() == 0)
       return getCtfeValue(Case->getILValue());
@@ -820,7 +798,7 @@ Value EngineImpl::getEnum(QualType ty,
    assert(Case->getArgs().size() == CaseVals.size() && "bad argument count!");
 
    unsigned i = 0;
-   for (auto &Arg : Case->getArgs()) {
+   for (auto& Arg : Case->getArgs()) {
       auto val = CaseVals[i];
       storeValue(StoreDst, val, Arg->getType());
 
@@ -842,7 +820,7 @@ Value EngineImpl::getTuple(QualType ty, llvm::ArrayRef<Value> fieldValues)
    size_t i = 0;
    auto ptr = V.getBuffer();
 
-   for (auto &cont : Tup->getContainedTypes()) {
+   for (auto& cont : Tup->getContainedTypes()) {
       storeValue(Value(ptr), fieldValues[i], cont);
 
       ptr += TI.getSizeOfType(cont);
@@ -852,15 +830,16 @@ Value EngineImpl::getTuple(QualType ty, llvm::ArrayRef<Value> fieldValues)
    return V;
 }
 
-Value EngineImpl::getLambda(il::Function const *F,
-                          llvm::ArrayRef<std::pair<QualType, Value>> captures) {
+Value EngineImpl::getLambda(il::Function const* F,
+                            llvm::ArrayRef<std::pair<QualType, Value>> captures)
+{
    auto buffer = Allocator.Allocate(2 * sizeof(void*), alignof(void*));
    auto env = (char*)Allocator.Allocate(captures.size() * sizeof(void*), 1);
 
    *reinterpret_cast<il::Function const**>(buffer) = F;
 
    auto ptr = env;
-   for (auto &capt : captures) {
+   for (auto& capt : captures) {
       storeValue(Value(ptr), capt.second, capt.first);
       ptr += sizeof(void*);
    }
@@ -871,8 +850,9 @@ Value EngineImpl::getLambda(il::Function const *F,
    return Value::getPreallocated(buffer);
 }
 
-Value EngineImpl::getStructElement(ctfe::Value &Val, QualType type,
-                                   DeclarationName fieldName) {
+Value EngineImpl::getStructElement(ctfe::Value& Val, QualType type,
+                                   DeclarationName fieldName)
+{
    auto S = cast<StructDecl>(type->getRecord());
    auto ptr = Val.getBuffer();
 
@@ -890,9 +870,9 @@ Value EngineImpl::getStructElement(ctfe::Value &Val, QualType type,
    return Value(ptr);
 }
 
-Value EngineImpl::getStructElement(ctfe::Value &Val, QualType type, size_t idx)
+Value EngineImpl::getStructElement(ctfe::Value& Val, QualType type, size_t idx)
 {
-   auto S =cast<StructDecl>(type->getRecord());
+   auto S = cast<StructDecl>(type->getRecord());
    auto ptr = Val.getBuffer();
 
    if (isa<ClassDecl>(S))
@@ -911,7 +891,7 @@ Value EngineImpl::getStructElement(ctfe::Value &Val, QualType type, size_t idx)
    return Value(ptr);
 }
 
-Value EngineImpl::getElementPtr(ctfe::Value &Val, QualType type, size_t idx)
+Value EngineImpl::getElementPtr(ctfe::Value& Val, QualType type, size_t idx)
 {
    auto size = TI.getSizeOfType(type->getPointeeType());
    auto ptr = Val.getBuffer() + size * idx;
@@ -919,7 +899,7 @@ Value EngineImpl::getElementPtr(ctfe::Value &Val, QualType type, size_t idx)
    return Value(ptr);
 }
 
-Value EngineImpl::getArrayElement(ctfe::Value &Val, QualType type, size_t idx)
+Value EngineImpl::getArrayElement(ctfe::Value& Val, QualType type, size_t idx)
 {
    auto A = type->asArrayType();
    auto memberSize = TI.getSizeOfType(A->getElementType());
@@ -928,7 +908,7 @@ Value EngineImpl::getArrayElement(ctfe::Value &Val, QualType type, size_t idx)
    return Value(ptr);
 }
 
-Value EngineImpl::getTupleElement(ctfe::Value &Val, QualType type, size_t idx)
+Value EngineImpl::getTupleElement(ctfe::Value& Val, QualType type, size_t idx)
 {
    auto T = type->asTupleType();
    auto Tys = T->getContainedTypes();
@@ -941,18 +921,18 @@ Value EngineImpl::getTupleElement(ctfe::Value &Val, QualType type, size_t idx)
    return Value(ptr);
 }
 
-il::Function* EngineImpl::getLambdaFuncPtr(ctfe::Value &Val)
+il::Function* EngineImpl::getLambdaFuncPtr(ctfe::Value& Val)
 {
    return *reinterpret_cast<il::Function**>(Val.getBuffer());
 }
 
-Value EngineImpl::getLambdaEnvironment(ctfe::Value &Val)
+Value EngineImpl::getLambdaEnvironment(ctfe::Value& Val)
 {
    auto env = reinterpret_cast<char**>(Val.getBuffer()) + 1;
    return Value::getPreallocated(env);
 }
 
-Value EngineImpl::getEnumRawValue(ctfe::Value &Val, QualType type)
+Value EngineImpl::getEnumRawValue(ctfe::Value& Val, QualType type)
 {
    auto rawType = cast<EnumDecl>(type->getRecord())->getRawType();
    auto bw = rawType->getBitwidth();
@@ -1001,20 +981,22 @@ Value EngineImpl::getEnumRawValue(ctfe::Value &Val, QualType type)
    return Value::getInt(caseVal);
 }
 
-Value EngineImpl::getEnumCaseValue(ctfe::Value &Val, QualType type,
-                                   IdentifierInfo *caseName, size_t idx) {
-   return getEnumCaseValue(Val, type,
-                           cast<EnumDecl>(type->getRecord())->hasCase(caseName),
-                           idx);
+Value EngineImpl::getEnumCaseValue(ctfe::Value& Val, QualType type,
+                                   IdentifierInfo* caseName, size_t idx)
+{
+   return getEnumCaseValue(
+       Val, type, cast<EnumDecl>(type->getRecord())->hasCase(caseName), idx);
 }
 
-Value EngineImpl::getEnumCaseValue(ctfe::Value &Val, QualType type,
-                                   EnumCaseDecl *Case, size_t idx) {
+Value EngineImpl::getEnumCaseValue(ctfe::Value& Val, QualType type,
+                                   EnumCaseDecl* Case, size_t idx)
+{
    assert(getEnumRawValue(Val, type).getU64() == Case->getRawValue());
    assert(idx < Case->getArgs().size());
 
-   ctfe::Value BeginPtr = Val.getBuffer()
-      + TI.getSizeOfType(cast<EnumDecl>(Case->getRecord())->getRawType());
+   ctfe::Value BeginPtr
+       = Val.getBuffer()
+         + TI.getSizeOfType(cast<EnumDecl>(Case->getRecord())->getRawType());
 
    if (Case->isIndirect()) {
       BeginPtr = loadValue(BeginPtr, SP.getContext().getUInt8PtrTy());
@@ -1085,10 +1067,11 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
    }
    else if (type->isFunctionType()) {
       std::ostringstream s;
-      s << "Lambda(" << std::setbase(16) << buffer << std::setbase(10)
-        << ", "
-        << reinterpret_cast<il::Function*>(
-           reinterpret_cast<uintptr_t *>(buffer) + 1)->getName().str()
+      s << "Lambda(" << std::setbase(16) << buffer << std::setbase(10) << ", "
+        << reinterpret_cast<il::Function*>(reinterpret_cast<uintptr_t*>(buffer)
+                                           + 1)
+               ->getName()
+               .str()
         << ")";
 
       return s.str();
@@ -1098,7 +1081,9 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
       auto elementTy = ArrTy->getElementType();
 
       for (size_t i = 0; i < ArrTy->getNumElements(); ++i) {
-         if (i != 0) { s += ", "; }
+         if (i != 0) {
+            s += ", ";
+         }
          auto V = getArrayElement(Val, type, i);
          s += toString(loadValue(V, elementTy), elementTy);
       }
@@ -1108,11 +1093,13 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
    }
    else if (auto TupleTy = type->asTupleType()) {
       string s = "(";
-      char *ptr = buffer;
+      char* ptr = buffer;
       auto elements = TupleTy->getContainedTypes();
 
       for (size_t i = 0; i < elements.size(); ++i) {
-         if (i != 0) { s += ", "; }
+         if (i != 0) {
+            s += ", ";
+         }
 
          auto V = getTupleElement(Val, type, i);
          auto ty = *elements[i];
@@ -1128,18 +1115,19 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
       auto R = Obj->getRecord();
       if (auto S = dyn_cast<StructDecl>(R)) {
          string s = "{ ";
-         char *ptr = buffer;
+         char* ptr = buffer;
          size_t i = 0;
 
          for (auto F : S->getFields()) {
-            if (i != 0) { s += ", "; }
+            if (i != 0) {
+               s += ", ";
+            }
 
             s += F->getName();
             s += ": ";
 
             auto V = getStructElement(Val, type, i);
-            s += toString(loadValue(V, F->getType()),
-                          F->getType());
+            s += toString(loadValue(V, F->getType()), F->getType());
 
             ptr += TI.getSizeOfType(F->getType());
             ++i;
@@ -1153,13 +1141,14 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
          size_t i = 0;
 
          for (auto F : U->getFields()) {
-            if (i != 0) { s += ", "; }
+            if (i != 0) {
+               s += ", ";
+            }
 
             s += F->getName();
             s += ": ";
 
-            s += toString(Value::getPreallocated(buffer),
-                          F->getType());
+            s += toString(Value::getPreallocated(buffer), F->getType());
 
             ++i;
          }
@@ -1179,12 +1168,11 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
                size_t i = 0;
                s += "(";
 
-               for (auto &V : C->getArgs()) {
+               for (auto& V : C->getArgs()) {
                   auto val = getEnumCaseValue(
-                     Val, type, C->getDeclName().getIdentifierInfo(), i);
+                      Val, type, C->getDeclName().getIdentifierInfo(), i);
 
-                  s += toString(loadValue(val, V->getType()),
-                                V->getType());
+                  s += toString(loadValue(val, V->getType()), V->getType());
 
                   i++;
                }
@@ -1205,7 +1193,7 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
    llvm_unreachable("bad value type");
 }
 
-static bool isStdArray(SemaPass &SP, QualType Ty)
+static bool isStdArray(SemaPass& SP, QualType Ty)
 {
    if (!Ty->isRecordType())
       return false;
@@ -1215,7 +1203,7 @@ static bool isStdArray(SemaPass &SP, QualType Ty)
           && R->getSpecializedTemplate() == SP.getArrayDecl();
 }
 
-static bool isStdString(SemaPass &SP, QualType Ty)
+static bool isStdString(SemaPass& SP, QualType Ty)
 {
    return Ty->isRecordType() && Ty->getRecord() == SP.getStringDecl();
 }
@@ -1227,8 +1215,8 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
 
    auto buffer = Val.getBuffer();
    if (type->isLargeInteger()) {
-      return Variant(llvm::APSInt(
-         *reinterpret_cast<llvm::APSInt*>(Val.getBuffer())));
+      return Variant(
+          llvm::APSInt(*reinterpret_cast<llvm::APSInt*>(Val.getBuffer())));
    }
 
    if (type->isIntegerType()) {
@@ -1237,8 +1225,8 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
    }
 
    if (type->isLargeFP()) {
-      return Variant(llvm::APFloat(
-         *reinterpret_cast<llvm::APFloat*>(Val.getBuffer())));
+      return Variant(
+          llvm::APFloat(*reinterpret_cast<llvm::APFloat*>(Val.getBuffer())));
    }
 
    if (type->isFloatTy()) {
@@ -1306,14 +1294,14 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
       auto ElementPtr = SP.getContext().getPointerType(ElementTy);
 
       auto beginPtr = loadValue(getStructElement(Val, type, 3), ElementPtr);
-      auto endPtr   = loadValue(getStructElement(Val, type, 4), ElementPtr);
+      auto endPtr = loadValue(getStructElement(Val, type, 4), ElementPtr);
 
       auto opaqueBegin = beginPtr.getU64();
-      auto opaqueEnd   = endPtr.getU64();
+      auto opaqueEnd = endPtr.getU64();
 
       auto ElementSize = TI.getSizeOfType(ElementTy);
       auto size = (opaqueEnd - opaqueBegin) / ElementSize;
-      char *ptr  = beginPtr.getBuffer();
+      char* ptr = beginPtr.getBuffer();
 
       std::vector<Variant> vec;
 
@@ -1342,8 +1330,8 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
 
          for (auto F : Fields) {
             auto V = getStructElement(Val, type, i);
-            vec.emplace_back(toVariant(loadValue(V, F->getType()),
-                                       F->getType()));
+            vec.emplace_back(
+                toVariant(loadValue(V, F->getType()), F->getType()));
 
             ++i;
          }
@@ -1354,7 +1342,7 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
          std::vector<Variant> vec;
          size_t i = 0;
 
-         U->forEach<FieldDecl>([&](FieldDecl *F) {
+         U->forEach<FieldDecl>([&](FieldDecl* F) {
             if (F->isStatic())
                return;
 
@@ -1368,17 +1356,17 @@ Variant EngineImpl::toVariant(ctfe::Value Val, QualType type)
          uint64_t caseVal = getEnumRawValue(Val, type).getU64();
 
          std::vector<Variant> vec;
-         E->forEach<EnumCaseDecl>([&](EnumCaseDecl *C) {
+         E->forEach<EnumCaseDecl>([&](EnumCaseDecl* C) {
             if (C->getRawValue() != caseVal)
                return;
 
             if (!C->getArgs().empty()) {
                size_t i = 0;
-               for (auto &V : C->getArgs()) {
+               for (auto& V : C->getArgs()) {
                   auto val = getEnumCaseValue(
-                     Val, type, C->getDeclName().getIdentifierInfo(), i);
-                  vec.push_back(toVariant(loadValue(val, V->getType()),
-                                          V->getType()));
+                      Val, type, C->getDeclName().getIdentifierInfo(), i);
+                  vec.push_back(
+                      toVariant(loadValue(val, V->getType()), V->getType()));
 
                   i++;
                }
@@ -1397,18 +1385,18 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
    if (type->isVoidType())
       return nullptr;
 
-   auto &ILCtx = SP.getCompilationUnit().getILCtx();
+   auto& ILCtx = SP.getCompilerInstance().getILCtx();
    auto buffer = Val.getBuffer();
    ValueType ValTy(ILCtx, type);
 
-   auto &Builder = SP.getILGen().Builder;
-   Builder.SetModule(SP.getCompilationUnit().getCompilationModule()
-                       ->getILModule());
+   auto& Builder = SP.getILGen().Builder;
+   Builder.SetModule(
+       SP.getCompilerInstance().getCompilationModule()->getILModule());
 
    if (type->isLargeInteger()) {
       return ConstantInt::get(
-         ValTy,
-         llvm::APSInt(*reinterpret_cast<llvm::APSInt*>(Val.getBuffer())));
+          ValTy,
+          llvm::APSInt(*reinterpret_cast<llvm::APSInt*>(Val.getBuffer())));
    }
 
    if (type->isIntegerType()) {
@@ -1419,8 +1407,8 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
 
    if (type->isLargeFP()) {
       return ConstantFloat::get(
-         ValTy,
-         llvm::APFloat(*reinterpret_cast<llvm::APFloat*>(Val.getBuffer())));
+          ValTy,
+          llvm::APFloat(*reinterpret_cast<llvm::APFloat*>(Val.getBuffer())));
    }
 
    if (type->isFloatTy()) {
@@ -1439,9 +1427,9 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       llvm::APInt Int(sizeof(void*) * 8,
                       reinterpret_cast<unsigned long long>(buffer));
 
-      auto ILVal = ConstantInt::get(ValueType(ILCtx,
-                                              SP.getContext().getUIntTy()),
-                                    llvm::APSInt(move(Int), true));
+      auto ILVal
+          = ConstantInt::get(ValueType(ILCtx, SP.getContext().getUIntTy()),
+                             llvm::APSInt(move(Int), true));
 
       return ConstantExpr::getIntToPtr(ILVal, type);
    }
@@ -1469,7 +1457,7 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
    if (auto TupleTy = type->asTupleType()) {
       unsigned i = 0;
       llvm::SmallVector<il::Constant*, 8> vec;
-      for (auto &Ty : TupleTy->getContainedTypes()) {
+      for (auto& Ty : TupleTy->getContainedTypes()) {
          auto V = getTupleElement(Val, type, i++);
          vec.push_back(toConstant(loadValue(V, Ty), Ty));
       }
@@ -1479,19 +1467,21 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
 
    if (isStdString(SP, type)) {
       enum : uint64_t {
-         SmallFlag      = 1llu << 63u,
-         SmallShift     = 63llu - 7u,
-         SmallSizeMask  = 0b0111'1111llu << SmallShift
+         SmallFlag = 1llu << 63u,
+         SmallShift = 63llu - 7u,
+         SmallSizeMask = 0b0111'1111llu << SmallShift
       };
 
       auto chars = loadValue(getStructElement(Val, type, 0),
-         SP.getContext().getUInt8PtrTy());
+                             SP.getContext().getUInt8PtrTy());
 
       auto size = loadValue(getStructElement(Val, type, 1),
-         SP.getContext().getUIntTy()).getU64();
+                            SP.getContext().getUIntTy())
+                      .getU64();
 
       auto cap = loadValue(getStructElement(Val, type, 2),
-         SP.getContext().getUIntTy()).getU64();
+                           SP.getContext().getUIntTy())
+                     .getU64();
 
       // check if the string is in SSO mode
       if ((cap & SmallFlag) != 0) {
@@ -1500,14 +1490,14 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
          size = (cap & SmallSizeMask) >> SmallShift;
       }
 
-      auto Str =  ConstantString::get(ILCtx,
-                                      llvm::StringRef(chars.getBuffer(), size));
-      auto Size = ConstantInt::get(ValueType(ILCtx,
-                                            SP.getContext().getUIntTy()), size);
+      auto Str = ConstantString::get(ILCtx,
+                                     llvm::StringRef(chars.getBuffer(), size));
+      auto Size = ConstantInt::get(
+          ValueType(ILCtx, SP.getContext().getUIntTy()), size);
 
       return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
                                       SP.getILGen().GetOrCreateTypeInfo(type),
-                                      { Str, Size, Size });
+                                      {Str, Size, Size});
    }
 
    if (isStdArray(SP, type)) {
@@ -1516,14 +1506,14 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       auto ElementPtr = SP.getContext().getPointerType(ElementTy);
 
       auto beginPtr = loadValue(getStructElement(Val, type, 0), ElementPtr);
-      auto endPtr   = loadValue(getStructElement(Val, type, 1), ElementPtr);
+      auto endPtr = loadValue(getStructElement(Val, type, 1), ElementPtr);
 
       auto opaqueBegin = beginPtr.getU64();
-      auto opaqueEnd   = endPtr.getU64();
+      auto opaqueEnd = endPtr.getU64();
 
       auto ElementSize = TI.getSizeOfType(ElementTy);
       auto size = (opaqueEnd - opaqueBegin) / ElementSize;
-      char *ptr  = beginPtr.getBuffer();
+      char* ptr = beginPtr.getBuffer();
 
       llvm::SmallVector<il::Constant*, 8> vec;
       for (size_t i = 0; i < size; ++i) {
@@ -1537,7 +1527,7 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
 
       ValTy = SP.getContext().getArrayType(ElementTy, vec.size());
 
-      auto &Builder = SP.getILGen().Builder;
+      auto& Builder = SP.getILGen().Builder;
 
       auto ArrVal = ConstantArray::get(ValTy, vec);
       auto GV = Builder.CreateGlobalVariable(ArrVal);
@@ -1546,22 +1536,22 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       auto PtrAsInt = ConstantExpr::getPtrToInt(FstElementPtr,
                                                 SP.getContext().getUIntTy());
 
-      auto SizeVal = Builder.GetConstantInt(SP.getContext().getUIntTy(),
-                                            vec.size());
+      auto SizeVal
+          = Builder.GetConstantInt(SP.getContext().getUIntTy(), vec.size());
 
       auto EndPtrAsInt = ConstantExpr::getAdd(PtrAsInt, SizeVal);
       auto EndPtr = ConstantExpr::getIntToPtr(EndPtrAsInt, ElementPtr);
 
       return Builder.GetConstantClass(cast<ClassDecl>(type->getRecord()),
                                       SP.getILGen().GetOrCreateTypeInfo(type),
-                                      { FstElementPtr, EndPtr, EndPtr });
+                                      {FstElementPtr, EndPtr, EndPtr});
    }
 
    if (auto Obj = type->asRecordType()) {
       auto R = Obj->getRecord();
       if (auto U = dyn_cast<UnionDecl>(R)) {
          return ConstantUnion::get(
-            ValTy, toConstant(Val, U->getFields().front()->getType()));
+             ValTy, toConstant(Val, U->getFields().front()->getType()));
       }
 
       if (auto C = dyn_cast<ClassDecl>(R)) {
@@ -1572,21 +1562,23 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
          }
 
          unsigned i = 0;
-         ConstantClass *Curr = nullptr;
+         ConstantClass* Curr = nullptr;
          llvm::SmallVector<il::Constant*, 8> vec;
 
-         for (auto it = Bases.rbegin(), end_it = Bases.rend();
-               it != end_it; ++it) {
+         for (auto it = Bases.rbegin(), end_it = Bases.rend(); it != end_it;
+              ++it) {
             llvm::ArrayRef<FieldDecl*> Fields = (*it)->getFields();
             for (auto F : Fields.drop_front(i)) {
                auto V = getStructElement(Val, type, i++);
-               vec.emplace_back(toConstant(loadValue(V, F->getType()), F->getType()));
+               vec.emplace_back(
+                   toConstant(loadValue(V, F->getType()), F->getType()));
             }
 
             ValueType Ty(ILCtx, SP.getContext().getRecordType(*it));
 
             auto S = ConstantStruct::get(Ty, vec);
-            Curr = ConstantClass::get(S, SP.getILGen().GetOrCreateTypeInfo(Ty), Curr);
+            Curr = ConstantClass::get(S, SP.getILGen().GetOrCreateTypeInfo(Ty),
+                                      Curr);
 
             vec.clear();
          }
@@ -1601,7 +1593,8 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
          auto Fields = S->getFields();
          for (auto F : Fields) {
             auto V = getStructElement(Val, type, i);
-            vec.emplace_back(toConstant(loadValue(V, F->getType()), F->getType()));
+            vec.emplace_back(
+                toConstant(loadValue(V, F->getType()), F->getType()));
             ++i;
          }
 
@@ -1617,7 +1610,7 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
       if (auto E = dyn_cast<EnumDecl>(R)) {
          uint64_t caseVal = getEnumRawValue(Val, type).getU64();
 
-         EnumCaseDecl *Case = nullptr;
+         EnumCaseDecl* Case = nullptr;
          std::vector<il::Constant*> vec;
          for (auto C : E->getCases()) {
             if (C->getRawValue() != caseVal)
@@ -1627,11 +1620,11 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
 
             if (!C->getArgs().empty()) {
                unsigned i = 0;
-               for (auto &V : C->getArgs()) {
+               for (auto& V : C->getArgs()) {
                   auto val = getEnumCaseValue(
-                     Val, type, C->getDeclName().getIdentifierInfo(), i);
-                  vec.push_back(toConstant(loadValue(val, V->getType()),
-                                           V->getType()));
+                      Val, type, C->getDeclName().getIdentifierInfo(), i);
+                  vec.push_back(
+                      toConstant(loadValue(val, V->getType()), V->getType()));
 
                   i++;
                }
@@ -1649,8 +1642,8 @@ il::Constant* EngineImpl::toConstant(ctfe::Value Val, QualType type)
    llvm_unreachable("bad value type");
 }
 
-void EngineImpl::storeValue(ctfe::Value dst, ctfe::Value src,
-                            QualType ty) {
+void EngineImpl::storeValue(ctfe::Value dst, ctfe::Value src, QualType ty)
+{
    if (ty->isIntegerType()) {
       switch (ty->getBitwidth()) {
       case 1:
@@ -1715,8 +1708,10 @@ ctfe::Value EngineImpl::tryCatchException()
 }
 
 string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
-                                  SourceLocation loc) {
-   if (args.empty()) return "";
+                                  SourceLocation loc)
+{
+   if (args.empty())
+      return "";
 
    string formatString(args.front().getBuffer());
 
@@ -1750,9 +1745,21 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       }
 
       enum Kind {
-         Invalid, Int, Unsigned, Octal, Hex, HexUpper, Scientific,
+         Invalid,
+         Int,
+         Unsigned,
+         Octal,
+         Hex,
+         HexUpper,
+         Scientific,
          ScientificUpper,
-         Double, HexFP, HexFPUpper, DoubleUpper, String, Pointer, Char,
+         Double,
+         HexFP,
+         HexFPUpper,
+         DoubleUpper,
+         String,
+         Pointer,
+         Char,
 
          WrittenCharsPtr,
       };
@@ -1761,42 +1768,42 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       char encounteredLs = 0;
 
       bool leftJustify = false; // -
-      bool forceSign   = false; // +
-      bool space       = false; // ' '
-      bool prefix      = false; // #
-      bool zeroPad     = false; // 0
+      bool forceSign = false;   // +
+      bool space = false;       // ' '
+      bool prefix = false;      // #
+      bool zeroPad = false;     // 0
 
-      int  minWidth    = -1;
-      bool widthAsArg  = false;
+      int minWidth = -1;
+      bool widthAsArg = false;
 
-      int  prec        = -1;
-      bool precAsArg   = false;
+      int prec = -1;
+      bool precAsArg = false;
 
       // Parse flags
       while (1) {
          switch (next) {
-            case '-':
-               leftJustify = true;
-               next = formatString[++i];
-               continue;
-            case '+':
-               forceSign = true;
-               next = formatString[++i];
-               continue;
-            case ' ':
-               space = true;
-               next = formatString[++i];
-               continue;
-            case '#':
-               prefix = true;
-               next = formatString[++i];
-               continue;
-            case '0':
-               zeroPad = true;
-               next = formatString[++i];
-               continue;
-            default:
-               break;
+         case '-':
+            leftJustify = true;
+            next = formatString[++i];
+            continue;
+         case '+':
+            forceSign = true;
+            next = formatString[++i];
+            continue;
+         case ' ':
+            space = true;
+            next = formatString[++i];
+            continue;
+         case '#':
+            prefix = true;
+            next = formatString[++i];
+            continue;
+         case '0':
+            zeroPad = true;
+            next = formatString[++i];
+            continue;
+         default:
+            break;
          }
 
          break;
@@ -1837,12 +1844,12 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       // Parse (optional) length
       while (1) {
          switch (next) {
-            case 'l':
-               ++encounteredLs;
-               next = formatString[++i];
-               continue;
-            default:
-               break;
+         case 'l':
+            ++encounteredLs;
+            next = formatString[++i];
+            continue;
+         default:
+            break;
          }
 
          break;
@@ -1851,51 +1858,51 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       // Parse modifier
       while (1) {
          switch (next) {
-            case 'f':
-               kind = Double;
-               break;
-            case 'u':
-               kind = Unsigned;
-               break;
-            case 'i':
-            case 'd':
-               kind = Int;
-               break;
-            case 's':
-               kind = String;
-               break;
-            case 'p':
-               kind = Pointer;
-               break;
-            case 'c':
-               kind = Char;
-               break;
-            case 'o':
-               kind = Octal;
-               break;
-            case 'x':
-               kind = Hex;
-               break;
-            case 'X':
-               kind = HexUpper;
-               break;
-            case 'e':
-               kind = Scientific;
-               break;
-            case 'E':
-               kind = ScientificUpper;
-               break;
-            case 'a':
-               kind = HexFP;
-               break;
-            case 'A':
-               kind = HexFPUpper;
-               break;
-            case 'n':
-               kind = WrittenCharsPtr;
-               break;
-            default:
-               break;
+         case 'f':
+            kind = Double;
+            break;
+         case 'u':
+            kind = Unsigned;
+            break;
+         case 'i':
+         case 'd':
+            kind = Int;
+            break;
+         case 's':
+            kind = String;
+            break;
+         case 'p':
+            kind = Pointer;
+            break;
+         case 'c':
+            kind = Char;
+            break;
+         case 'o':
+            kind = Octal;
+            break;
+         case 'x':
+            kind = Hex;
+            break;
+         case 'X':
+            kind = HexUpper;
+            break;
+         case 'e':
+            kind = Scientific;
+            break;
+         case 'E':
+            kind = ScientificUpper;
+            break;
+         case 'a':
+            kind = HexFP;
+            break;
+         case 'A':
+            kind = HexFPUpper;
+            break;
+         case 'n':
+            kind = WrittenCharsPtr;
+            break;
+         default:
+            break;
          }
 
          break;
@@ -1933,96 +1940,84 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
       }
 
       switch (kind) {
-         case Invalid:
-            SP.diagnose(note_generic_note, loc,
-                        "invalid printf format specifier " + string(1, next));
+      case Invalid:
+         SP.diagnose(note_generic_note, loc,
+                     "invalid printf format specifier " + string(1, next));
 
-            resultString << next;
+         resultString << next;
+         break;
+      case Double:
+         resultString << arg.getDouble();
+         break;
+      case Int:
+         switch (encounteredLs) {
+         case 0:
+            resultString << arg.getInt();
             break;
-         case Double:
-            resultString << arg.getDouble();
-            break;
-         case Int:
-            switch (encounteredLs) {
-               case 0:
-                  resultString << arg.getInt();
-                  break;
-               case 1:
-                  resultString << arg.getLong();
-                  break;
-               default:
-                  resultString << arg.getLongLong();
-                  break;
-            }
-
-            break;
-         case Octal:
-            resultString
-               << std::oct << arg.getUnsigned() << std::dec;
-            break;
-         case Hex:
-            resultString
-               << std::hex << arg.getUnsigned() << std::dec;
-            break;
-         case HexUpper:
-            resultString
-               << std::uppercase << std::hex
-               << arg.getUnsigned()
-               << std::nouppercase << std::dec;
-            break;
-         case Unsigned:
-            switch (encounteredLs) {
-               case 0:
-                  resultString << arg.getUnsigned();
-                  break;
-               case 1:
-                  resultString << arg.getULong();
-                  break;
-               default:
-                  resultString << arg.getULongLong();
-                  break;
-            }
-
-            break;
-         case Char: {
-            auto unesc = support::unescape_char(arg.getChar());
-            if (unesc != arg.getChar())
-               resultString << '\\' << unesc;
-            else
-               resultString << arg.getChar();
-
-            break;
-         }
-         case String:
-            resultString << arg.getBuffer();
-            break;
-         case Pointer:
-            resultString
-               << std::hex << arg.getValuePtr() << std::dec;
-            break;
-         case Scientific:
-            resultString
-               << std::scientific << arg.getDouble() << std::fixed;
-            break;
-         case ScientificUpper:
-            resultString
-               << std::scientific << std::uppercase
-               << arg.getDouble()
-               << std::fixed << std::nouppercase;
-            break;
-         case HexFP:
-            resultString
-               << std::hex << arg.getDouble()
-               << std::dec;
-            break;
-         case HexFPUpper:
-            resultString
-               << std::hex << std::uppercase
-               << arg.getDouble()
-               << std::dec << std::nouppercase;
+         case 1:
+            resultString << arg.getLong();
             break;
          default:
-            llvm_unreachable("bad format string kind");
+            resultString << arg.getLongLong();
+            break;
+         }
+
+         break;
+      case Octal:
+         resultString << std::oct << arg.getUnsigned() << std::dec;
+         break;
+      case Hex:
+         resultString << std::hex << arg.getUnsigned() << std::dec;
+         break;
+      case HexUpper:
+         resultString << std::uppercase << std::hex << arg.getUnsigned()
+                      << std::nouppercase << std::dec;
+         break;
+      case Unsigned:
+         switch (encounteredLs) {
+         case 0:
+            resultString << arg.getUnsigned();
+            break;
+         case 1:
+            resultString << arg.getULong();
+            break;
+         default:
+            resultString << arg.getULongLong();
+            break;
+         }
+
+         break;
+      case Char: {
+         auto unesc = support::unescape_char(arg.getChar());
+         if (unesc != arg.getChar())
+            resultString << '\\' << unesc;
+         else
+            resultString << arg.getChar();
+
+         break;
+      }
+      case String:
+         resultString << arg.getBuffer();
+         break;
+      case Pointer:
+         resultString << std::hex << arg.getValuePtr() << std::dec;
+         break;
+      case Scientific:
+         resultString << std::scientific << arg.getDouble() << std::fixed;
+         break;
+      case ScientificUpper:
+         resultString << std::scientific << std::uppercase << arg.getDouble()
+                      << std::fixed << std::nouppercase;
+         break;
+      case HexFP:
+         resultString << std::hex << arg.getDouble() << std::dec;
+         break;
+      case HexFPUpper:
+         resultString << std::hex << std::uppercase << arg.getDouble()
+                      << std::dec << std::nouppercase;
+         break;
+      default:
+         llvm_unreachable("bad format string kind");
       }
 
       resultString.flags(savedFlags);
@@ -2033,14 +2028,15 @@ string EngineImpl::simulatePrintf(llvm::ArrayRef<ctfe::Value> args,
 }
 
 std::pair<bool, ctfe::Value>
-EngineImpl::checkBuiltinCall(il::Function const &F,
+EngineImpl::checkBuiltinCall(il::Function const& F,
                              llvm::ArrayRef<ctfe::Value> args,
-                             SourceLocation callerLoc) {
+                             SourceLocation callerLoc)
+{
    Value V;
    switch (F.getKnownFnKind()) {
    case KnownFunction::None:
    case KnownFunction::Unchecked:
-      return { false, {} };
+      return {false, {}};
    case KnownFunction::Malloc: {
       auto size = args.front().getU64();
       V = Value::getUntyped(size, Allocator);
@@ -2070,19 +2066,19 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
    }
    case KnownFunction::PutChar: {
       V = putchar(args[0].getChar());
-      return { true, V };
+      return {true, V};
    }
    case KnownFunction::Exit: {
       err(err_fn_called_during_ctfe, callerLoc, "exit", 0);
-      return { true, {} };
+      return {true, {}};
    }
    case KnownFunction::Abort: {
       err(err_fn_called_during_ctfe, callerLoc, "abort", 0);
-      return { true, {} };
+      return {true, {}};
    }
    case KnownFunction::System: {
       err(err_fn_called_during_ctfe, callerLoc, "system", 1);
-      return { true, {} };
+      return {true, {}};
    }
    case KnownFunction::Srand: {
       ::srand(args[0].getU32());
@@ -2093,16 +2089,16 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
       break;
    }
    case KnownFunction::Time: {
-      V = Value::getInt((uint64_t)::time(
-         reinterpret_cast<time_t*>(args[0].getBuffer())));
+      V = Value::getInt(
+          (uint64_t)::time(reinterpret_cast<time_t*>(args[0].getBuffer())));
       break;
    }
    case KnownFunction::Sleep: {
-#  ifdef _WIN32
+#ifdef _WIN32
       llvm_unreachable("sleep should not be detected on windows");
-#  else
+#else
       V = Value::getInt(::sleep(args[0].getU32()));
-#  endif
+#endif
 
       break;
    }
@@ -2125,20 +2121,16 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
       V = Value::getDouble(std::sqrt(args.front().getDouble()));
       break;
    case KnownFunction::llvm_powi_f32:
-      V = Value::getFloat(support::pow(args[0].getFloat(),
-                                       args[1].getI32()));
+      V = Value::getFloat(support::pow(args[0].getFloat(), args[1].getI32()));
       break;
    case KnownFunction::llvm_powi_f64:
-      V = Value::getDouble(support::pow(args[0].getDouble(),
-                                        args[1].getI32()));
+      V = Value::getDouble(support::pow(args[0].getDouble(), args[1].getI32()));
       break;
    case KnownFunction::llvm_pow_f32:
-      V = Value::getFloat(std::pow(args[0].getFloat(),
-                                   args[1].getFloat()));
+      V = Value::getFloat(std::pow(args[0].getFloat(), args[1].getFloat()));
       break;
    case KnownFunction::llvm_pow_f64:
-      V = Value::getDouble(std::pow(args[0].getDouble(),
-                                    args[1].getDouble()));
+      V = Value::getDouble(std::pow(args[0].getDouble(), args[1].getDouble()));
       break;
    case KnownFunction::llvm_log10_f64:
       V = Value::getDouble(std::log10(args[0].getDouble()));
@@ -2218,7 +2210,7 @@ EngineImpl::checkBuiltinCall(il::Function const &F,
       llvm_unreachable("not yet");
    }
 
-   return { true, V };
+   return {true, V};
 }
 
 ctfe::Value EngineImpl::visitAllocaInst(AllocaInst const& I)
@@ -2228,7 +2220,7 @@ ctfe::Value EngineImpl::visitAllocaInst(AllocaInst const& I)
 
    if (!NeedsStructReturn(Ty)) {
       auto ptrAlloc = Allocator.Allocate(sizeof(void*), alignof(void*));
-      auto lvalue  = Value::getPreallocated(ptrAlloc);
+      auto lvalue = Value::getPreallocated(ptrAlloc);
 
       storeValue(lvalue, NV, Ty);
 
@@ -2238,14 +2230,14 @@ ctfe::Value EngineImpl::visitAllocaInst(AllocaInst const& I)
    return NV;
 }
 
-Value EngineImpl::visitAllocBoxInst(const AllocBoxInst &I)
+Value EngineImpl::visitAllocBoxInst(const AllocBoxInst& I)
 {
    auto Ty = I.getType()->getReferencedType();
    auto NV = getNullValue(Ty);
 
    if (!NeedsStructReturn(Ty)) {
       auto ptrAlloc = Allocator.Allocate(sizeof(void*), alignof(void*));
-      auto lvalue  = Value::getPreallocated(ptrAlloc);
+      auto lvalue = Value::getPreallocated(ptrAlloc);
 
       storeValue(lvalue, NV, Ty);
 
@@ -2253,19 +2245,16 @@ Value EngineImpl::visitAllocBoxInst(const AllocBoxInst &I)
    }
 
    auto Box = Allocate(sizeof(void*) * 3);
-   *reinterpret_cast<uintptr_t*>(Box)         = 1;            // strong refcount
-   *(reinterpret_cast<uintptr_t*>(Box) + 1)   = 0;            // weak refcount
+   *reinterpret_cast<uintptr_t*>(Box) = 1;       // strong refcount
+   *(reinterpret_cast<uintptr_t*>(Box) + 1) = 0; // weak refcount
    *(reinterpret_cast<const char**>(Box) + 2) = NV.getBuffer(); // data
 
    return Value(Box);
 }
 
-Value EngineImpl::visitDeallocInst(const DeallocInst &I)
-{
-   return Value();
-}
+Value EngineImpl::visitDeallocInst(const DeallocInst& I) { return Value(); }
 
-Value EngineImpl::visitDeallocBoxInst(const DeallocBoxInst &I)
+Value EngineImpl::visitDeallocBoxInst(const DeallocBoxInst& I)
 {
    return Value();
 }
@@ -2280,7 +2269,7 @@ ctfe::Value EngineImpl::visitLambdaInitInst(LambdaInitInst const& I)
    return getLambda(I.getFunction(), captures);
 }
 
-Value EngineImpl::visitAssignInst(const AssignInst &I)
+Value EngineImpl::visitAssignInst(const AssignInst& I)
 {
    llvm_unreachable("didn't replace assign with store or init!");
 }
@@ -2295,7 +2284,7 @@ ctfe::Value EngineImpl::visitStoreInst(StoreInst const& I)
    return {};
 }
 
-Value EngineImpl::visitInitInst(const InitInst &I)
+Value EngineImpl::visitInitInst(const InitInst& I)
 {
    auto src = getCtfeValue(I.getSrc());
    auto dst = getCtfeValue(I.getDst());
@@ -2305,40 +2294,37 @@ Value EngineImpl::visitInitInst(const InitInst &I)
    return {};
 }
 
-Value EngineImpl::visitStrongRetainInst(const il::StrongRetainInst &I)
+Value EngineImpl::visitStrongRetainInst(const il::StrongRetainInst& I)
 {
    return Value();
 }
 
-Value EngineImpl::visitStrongReleaseInst(const il::StrongReleaseInst &I)
+Value EngineImpl::visitStrongReleaseInst(const il::StrongReleaseInst& I)
 {
    return Value();
 }
 
-Value EngineImpl::visitWeakRetainInst(const il::WeakRetainInst &I)
+Value EngineImpl::visitWeakRetainInst(const il::WeakRetainInst& I)
 {
    return Value();
 }
 
-Value EngineImpl::visitWeakReleaseInst(const il::WeakReleaseInst &I)
+Value EngineImpl::visitWeakReleaseInst(const il::WeakReleaseInst& I)
 {
    return Value();
 }
 
-Value EngineImpl::visitMoveInst(const MoveInst &I)
+Value EngineImpl::visitMoveInst(const MoveInst& I)
 {
    return getCtfeValue(I.getOperand(0));
 }
 
-Value EngineImpl::visitBeginBorrowInst(const BeginBorrowInst &I)
+Value EngineImpl::visitBeginBorrowInst(const BeginBorrowInst& I)
 {
    return getCtfeValue(I.getOperand(0));
 }
 
-Value EngineImpl::visitEndBorrowInst(const EndBorrowInst &I)
-{
-   return Value();
-}
+Value EngineImpl::visitEndBorrowInst(const EndBorrowInst& I) { return Value(); }
 
 ctfe::Value EngineImpl::visitGEPInst(GEPInst const& I)
 {
@@ -2359,7 +2345,7 @@ ctfe::Value EngineImpl::visitGEPInst(GEPInst const& I)
    llvm_unreachable("bad gep operand");
 }
 
-ctfe::Value EngineImpl::visitCaptureExtractInst(const CaptureExtractInst &I)
+ctfe::Value EngineImpl::visitCaptureExtractInst(const CaptureExtractInst& I)
 {
    auto ptr = (char**)LambdaEnvStack.top().getBuffer();
    ptr += I.getIdx()->getZExtValue();
@@ -2370,8 +2356,7 @@ ctfe::Value EngineImpl::visitCaptureExtractInst(const CaptureExtractInst &I)
 ctfe::Value EngineImpl::visitFieldRefInst(FieldRefInst const& I)
 {
    auto val = getCtfeValue(I.getOperand(0));
-   return getStructElement(val, I.getOperand(0)->getType(),
-                           I.getFieldName());
+   return getStructElement(val, I.getOperand(0)->getType(), I.getFieldName());
 }
 
 ctfe::Value EngineImpl::visitTupleExtractInst(TupleExtractInst const& I)
@@ -2382,7 +2367,7 @@ ctfe::Value EngineImpl::visitTupleExtractInst(TupleExtractInst const& I)
    return getTupleElement(val, I.getOperand(0)->getType(), idx.getU64());
 }
 
-ctfe::Value EngineImpl::visitEnumExtractInst(const EnumExtractInst &I)
+ctfe::Value EngineImpl::visitEnumExtractInst(const EnumExtractInst& I)
 {
    auto val = getCtfeValue(I.getOperand(0));
    auto idx = getCtfeValue(I.getCaseVal()).getU64();
@@ -2412,7 +2397,7 @@ ctfe::Value EngineImpl::visitAddrOfInst(AddrOfInst const& I)
    return getCtfeValue(I.getOperand(0));
 }
 
-ctfe::Value EngineImpl::visitPtrToLvalueInst(const PtrToLvalueInst &I)
+ctfe::Value EngineImpl::visitPtrToLvalueInst(const PtrToLvalueInst& I)
 {
    return getCtfeValue(I.getOperand(0));
 }
@@ -2427,7 +2412,7 @@ ctfe::Value EngineImpl::visitRetInst(RetInst const& I)
    return {};
 }
 
-Value EngineImpl::visitYieldInst(const YieldInst &I)
+Value EngineImpl::visitYieldInst(const YieldInst& I)
 {
    llvm_unreachable("nah");
 }
@@ -2441,7 +2426,7 @@ ctfe::Value EngineImpl::visitThrowInst(ThrowInst const& I)
    return {};
 }
 
-Value EngineImpl::visitRethrowInst(const RethrowInst &I)
+Value EngineImpl::visitRethrowInst(const RethrowInst& I)
 {
    thrownException.thrownVal = getCtfeValue(I.getThrownValue());
    thrownException.thrownType = I.getThrownValue()->getType();
@@ -2475,9 +2460,9 @@ ctfe::Value EngineImpl::visitBrInst(BrInst const& I)
 ctfe::Value EngineImpl::visitSwitchInst(SwitchInst const& I)
 {
    auto V = getCtfeValue(I.getSwitchVal());
-   il::BasicBlock &defaultBB = *I.getDefault();
+   il::BasicBlock& defaultBB = *I.getDefault();
 
-   for (auto &C : I.getCases()) {
+   for (auto& C : I.getCases()) {
       if (V.getU64() == C.first->getZExtValue())
          return visitBasicBlock(*C.second);
    }
@@ -2490,7 +2475,7 @@ ctfe::Value EngineImpl::visitInvokeInst(InvokeInst const& I)
    llvm_unreachable("not yet");
 }
 
-Value EngineImpl::visitVirtualInvokeInst(const VirtualInvokeInst &I)
+Value EngineImpl::visitVirtualInvokeInst(const VirtualInvokeInst& I)
 {
    llvm_unreachable("not yet");
 }
@@ -2553,7 +2538,7 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::vtable_ref: {
       auto val = getCtfeValue(I.getArgs()[0]);
       auto TI = loadValue(getStructElement(val, I.getArgs()[0]->getType(), 2),
-         SP.getContext().getInt8PtrTy());
+                          SP.getContext().getInt8PtrTy());
 
       auto VTOffset = sizeof(void*) * 2;
       auto VT = Value(TI.getBuffer() + VTOffset);
@@ -2579,7 +2564,7 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    case Intrinsic::virtual_method: {
       auto val = getCtfeValue(I.getArgs()[0]);
       auto TI = loadValue(getStructElement(val, I.getArgs()[0]->getType(), 2),
-         SP.getContext().getInt8PtrTy());
+                          SP.getContext().getInt8PtrTy());
 
       auto VTOffset = sizeof(void*) * 2;
       auto VT = Value(TI.getBuffer() + VTOffset);
@@ -2599,22 +2584,23 @@ ctfe::Value EngineImpl::visitIntrinsicCallInst(IntrinsicCallInst const& I)
    }
 }
 
-Value EngineImpl::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
+Value EngineImpl::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst& I)
 {
    enum IntrinsicKind {
       Unknown,
 
-#  define CDOT_LLVM_INTRINSIC(STR, NAME) NAME,
-#  include "IRGen/LLVMIntrinsics.def"
+#define CDOT_LLVM_INTRINSIC(STR, NAME) NAME,
+#include "cdotc/IRGen/LLVMIntrinsics.def"
    };
 
-   auto Kind = StringSwitch<IntrinsicKind>(I.getIntrinsicName()->getIdentifier())
-#  define CDOT_LLVM_INTRINSIC(STR, NAME) .Case(STR, NAME)
-#  include "IRGen/LLVMIntrinsics.def"
-      .Default(Unknown);
+   auto Kind
+       = StringSwitch<IntrinsicKind>(I.getIntrinsicName()->getIdentifier())
+#define CDOT_LLVM_INTRINSIC(STR, NAME) .Case(STR, NAME)
+#include "cdotc/IRGen/LLVMIntrinsics.def"
+             .Default(Unknown);
 
    SmallVector<Value, 4> args;
-   for (auto &Arg : I.getArgs())
+   for (auto& Arg : I.getArgs())
       args.push_back(getCtfeValue(Arg));
 
    Value V;
@@ -2626,20 +2612,16 @@ Value EngineImpl::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
       V = Value::getDouble(std::sqrt(args.front().getDouble()));
       break;
    case llvm_powi_f32:
-      V = Value::getFloat(support::pow(args[0].getFloat(),
-                                       args[1].getI32()));
+      V = Value::getFloat(support::pow(args[0].getFloat(), args[1].getI32()));
       break;
    case llvm_powi_f64:
-      V = Value::getDouble(support::pow(args[0].getDouble(),
-                                        args[1].getI32()));
+      V = Value::getDouble(support::pow(args[0].getDouble(), args[1].getI32()));
       break;
    case llvm_pow_f32:
-      V = Value::getFloat(std::pow(args[0].getFloat(),
-                                   args[1].getFloat()));
+      V = Value::getFloat(std::pow(args[0].getFloat(), args[1].getFloat()));
       break;
    case llvm_pow_f64:
-      V = Value::getDouble(std::pow(args[0].getDouble(),
-                                    args[1].getDouble()));
+      V = Value::getDouble(std::pow(args[0].getDouble(), args[1].getDouble()));
       break;
    case llvm_log10_f64:
       V = Value::getDouble(std::log10(args[0].getDouble()));
@@ -2725,13 +2707,12 @@ Value EngineImpl::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst &I)
 ctfe::Value EngineImpl::visitCallInst(CallInst const& I)
 {
    llvm::SmallVector<ctfe::Value, 8> args;
-   for (auto &arg : I.getArgs())
+   for (auto& arg : I.getArgs())
       args.push_back(getCtfeValue(arg));
 
    auto fn = getFunctionDefinition(*I.getCalledFunction());
    if (!fn) {
-      auto B = checkBuiltinCall(*I.getCalledFunction(), args,
-                                I.getSourceLoc());
+      auto B = checkBuiltinCall(*I.getCalledFunction(), args, I.getSourceLoc());
       if (B.first)
          return B.second;
 
@@ -2747,7 +2728,7 @@ ctfe::Value EngineImpl::visitVirtualCallInst(VirtualCallInst const& I)
    auto fn = val.getFuncPtr();
 
    llvm::SmallVector<ctfe::Value, 8> args;
-   for (auto &arg : I.getArgs())
+   for (auto& arg : I.getArgs())
       args.push_back(getCtfeValue(arg));
 
    auto def = getFunctionDefinition(*fn);
@@ -2764,14 +2745,14 @@ ctfe::Value EngineImpl::visitVirtualCallInst(VirtualCallInst const& I)
 
 ctfe::Value EngineImpl::visitLambdaCallInst(LambdaCallInst const& I)
 {
-   llvm::outs()<<"FIXME!\n";
+   llvm::outs() << "FIXME!\n";
    return ctfe::Value();
    auto lambda = getCtfeValue(I.getLambda());
    auto fn = getLambdaFuncPtr(lambda);
    auto env = getLambdaEnvironment(lambda);
 
    llvm::SmallVector<ctfe::Value, 8> args;
-   for (auto &arg : I.getArgs())
+   for (auto& arg : I.getArgs())
       args.push_back(getCtfeValue(arg));
 
    auto def = getFunctionDefinition(*fn);
@@ -2788,20 +2769,20 @@ ctfe::Value EngineImpl::visitStructInitInst(StructInitInst const& I)
    auto Val = getNullValue(I.getType()->removeReference());
    ctfe::Value ArgVal = Val;
 
-//   if (I.getType()->removeReference()->isClass()) {
-//      Value Ref(Allocate(sizeof(void*), alignof(void*)));
-//      storeValue(Ref, Val, I.getType()->removeReference());
-//
-//      ArgVal = Ref;
-//   }
+   //   if (I.getType()->removeReference()->isClass()) {
+   //      Value Ref(Allocate(sizeof(void*), alignof(void*)));
+   //      storeValue(Ref, Val, I.getType()->removeReference());
+   //
+   //      ArgVal = Ref;
+   //   }
 
    auto ptrAlloc = Allocator.Allocate(sizeof(void*), alignof(void*));
-   auto lvalue  = Value::getPreallocated(ptrAlloc);
+   auto lvalue = Value::getPreallocated(ptrAlloc);
 
    storeValue(lvalue, ArgVal, I.getType());
 
-   SmallVector<ctfe::Value, 8> args{ lvalue };
-   for (auto &arg : I.getArgs()) {
+   SmallVector<ctfe::Value, 8> args{lvalue};
+   for (auto& arg : I.getArgs()) {
       args.push_back(getCtfeValue(arg));
    }
 
@@ -2827,7 +2808,7 @@ ctfe::Value EngineImpl::visitEnumInitInst(EnumInitInst const& I)
    }
 
    llvm::SmallVector<ctfe::Value, 8> values;
-   for (auto &arg : I.getArgs())
+   for (auto& arg : I.getArgs())
       values.push_back(getCtfeValue(arg));
 
    return getEnum(I.getType(), I.getCase(), values);
@@ -2835,7 +2816,7 @@ ctfe::Value EngineImpl::visitEnumInitInst(EnumInitInst const& I)
 
 namespace {
 
-uint64_t getUnsignedValue(QualType const &ty, ctfe::Value &V)
+uint64_t getUnsignedValue(QualType const& ty, ctfe::Value& V)
 {
    if (ty->isPointerType())
       return V.getU64();
@@ -2856,7 +2837,7 @@ uint64_t getUnsignedValue(QualType const &ty, ctfe::Value &V)
    }
 }
 
-int64_t getSignedValue(QualType const &ty, ctfe::Value &V)
+int64_t getSignedValue(QualType const& ty, ctfe::Value& V)
 {
    assert(!ty->isUnsigned());
    switch (ty->getBitwidth()) {
@@ -2876,35 +2857,34 @@ int64_t getSignedValue(QualType const &ty, ctfe::Value &V)
 
 } // anonymous namespace
 
-ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
-                                      QualType ty,
-                                      Value lhs,
-                                      Value rhs) {
+ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode, QualType ty, Value lhs,
+                                      Value rhs)
+{
    using OP = BinaryOperatorInst::OpCode;
    switch ((OP)OpCode) {
    case OP::Add:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt + RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt + RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) + getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 + getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) + getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 + getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
-         return Value::getPreallocated(
-            new(*this) llvm::APFloat(LhsFP + RhsFP));
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         return Value::getPreallocated(new (*this)
+                                           llvm::APFloat(LhsFP + RhsFP));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(lhs.getFloat() + rhs.getFloat());
@@ -2916,27 +2896,27 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
       llvm_unreachable("bad operand types");
    case OP::Sub:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt - RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt - RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) - getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 - getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) - getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 - getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
-         return Value::getPreallocated(
-            new(*this) llvm::APFloat(LhsFP - RhsFP));
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         return Value::getPreallocated(new (*this)
+                                           llvm::APFloat(LhsFP - RhsFP));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(lhs.getFloat() - rhs.getFloat());
@@ -2948,27 +2928,27 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
       llvm_unreachable("bad operand types");
    case OP::Mul:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt * RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt * RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) * getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 * getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) * getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 * getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
-         return Value::getPreallocated(
-            new(*this) llvm::APFloat(LhsFP * RhsFP));
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         return Value::getPreallocated(new (*this)
+                                           llvm::APFloat(LhsFP * RhsFP));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(lhs.getFloat() * rhs.getFloat());
@@ -2980,27 +2960,27 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
       llvm_unreachable("bad operand types");
    case OP::Div:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt / RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt / RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) / getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 / getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) / getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 / getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
-         return Value::getPreallocated(
-            new(*this) llvm::APFloat(LhsFP / RhsFP));
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         return Value::getPreallocated(new (*this)
+                                           llvm::APFloat(LhsFP / RhsFP));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(lhs.getFloat() / rhs.getFloat());
@@ -3012,29 +2992,29 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
       llvm_unreachable("bad operand types");
    case OP::Mod:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt % RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt % RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) % getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 % getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) % getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 % getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
          auto LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          LhsFP.remainder(RhsFP);
 
-         return Value::getPreallocated(new(*this) llvm::APFloat(LhsFP));
+         return Value::getPreallocated(new (*this) llvm::APFloat(LhsFP));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(::fmod(lhs.getFloat(), rhs.getFloat()));
@@ -3046,15 +3026,14 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
       llvm_unreachable("bad operand types");
    case OP::Exp:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(
-               llvm::APInt(ty->getBitwidth(),
-                           support::pow(LhsInt.getZExtValue(),
-                                        RhsInt.getZExtValue())),
-               ty->isUnsigned()));
+         return Value::getPreallocated(new (*this) llvm::APSInt(
+             llvm::APInt(
+                 ty->getBitwidth(),
+                 support::pow(LhsInt.getZExtValue(), RhsInt.getZExtValue())),
+             ty->isUnsigned()));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
@@ -3065,11 +3044,11 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          auto pow = std::pow(LhsFP.convertToDouble(), RhsFP.convertToDouble());
-         return Value::getPreallocated(new(*this) llvm::APFloat(pow));
+         return Value::getPreallocated(new (*this) llvm::APFloat(pow));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(std::pow(lhs.getFloat(), rhs.getFloat()));
@@ -3081,120 +3060,120 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
       llvm_unreachable("bad operand types");
    case OP::And:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt & RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt & RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) & getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 & getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) & getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 & getSignedValue(ty, rhs));
          }
       }
 
       llvm_unreachable("bad operand types");
    case OP::Or:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt | RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt | RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) | getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 | getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) | getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 | getSignedValue(ty, rhs));
          }
       }
 
       llvm_unreachable("bad operand types");
    case OP::Xor:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt ^ RhsInt));
+         return Value::getPreallocated(new (*this)
+                                           llvm::APSInt(LhsInt ^ RhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) ^ getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 ^ getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) ^ getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 ^ getSignedValue(ty, rhs));
          }
       }
 
       llvm_unreachable("bad operand types");
    case OP::Shl:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt.shl(RhsInt), LhsInt.isUnsigned()));
+             new (*this) llvm::APSInt(LhsInt.shl(RhsInt), LhsInt.isUnsigned()));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) << getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 << getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) << getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 << getSignedValue(ty, rhs));
          }
       }
 
       llvm_unreachable("bad operand types");
    case OP::LShr:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt.lshr(RhsInt), LhsInt.isUnsigned()));
+         return Value::getPreallocated(new (*this) llvm::APSInt(
+             LhsInt.lshr(RhsInt), LhsInt.isUnsigned()));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) >> getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 >> getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) >> getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 >> getSignedValue(ty, rhs));
          }
       }
 
       llvm_unreachable("bad operand types");
    case OP::AShr:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(LhsInt.ashr(RhsInt), LhsInt.isUnsigned()));
+         return Value::getPreallocated(new (*this) llvm::APSInt(
+             LhsInt.ashr(RhsInt), LhsInt.isUnsigned()));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
-            return Value::getInt(
-               getUnsignedValue(ty, lhs) >> getUnsignedValue(ty, rhs));
+            return Value::getInt(getUnsignedValue(ty, lhs)
+                                 >> getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getInt(
-               getSignedValue(ty, lhs) >> getSignedValue(ty, rhs));
+            return Value::getInt(getSignedValue(ty, lhs)
+                                 >> getSignedValue(ty, rhs));
          }
       }
 
@@ -3202,16 +3181,16 @@ ctfe::Value EngineImpl::applyBinaryOp(unsigned OpCode,
    }
 }
 
-Value EngineImpl::visitBinaryOperatorInst(const BinaryOperatorInst &I)
+Value EngineImpl::visitBinaryOperatorInst(const BinaryOperatorInst& I)
 {
    auto lhs = getCtfeValue(I.getOperand(0));
    auto rhs = getCtfeValue(I.getOperand(1));
    auto ty = I.getOperand(0)->getType();
-   
+
    return applyBinaryOp(I.getOpCode(), ty, lhs, rhs);
 }
 
-Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst &I)
+Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst& I)
 {
    auto val = getCtfeValue(I.getOperand(0));
    auto ty = I.getOperand(0)->getType();
@@ -3219,9 +3198,8 @@ Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst &I)
    switch (I.getOpCode()) {
    case UnaryOperatorInst::Neg:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(~LhsInt));
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+         return Value::getPreallocated(new (*this) llvm::APSInt(~LhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
@@ -3235,9 +3213,8 @@ Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst &I)
       llvm_unreachable("bad operand types");
    case UnaryOperatorInst::Min:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(-LhsInt));
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+         return Value::getPreallocated(new (*this) llvm::APSInt(-LhsInt));
       }
       else if (ty->isIntegerType()) {
          if (ty->isUnsigned()) {
@@ -3251,7 +3228,7 @@ Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst &I)
          auto LhsFP = *reinterpret_cast<llvm::APFloat*>(val.getBuffer());
          LhsFP.changeSign();
 
-         return Value::getPreallocated(new(*this) llvm::APFloat(LhsFP));
+         return Value::getPreallocated(new (*this) llvm::APFloat(LhsFP));
       }
       else if (ty->isFloatTy()) {
          return Value::getFloat(-val.getFloat());
@@ -3264,7 +3241,7 @@ Value EngineImpl::visitUnaryOperatorInst(const UnaryOperatorInst &I)
    }
 }
 
-Value EngineImpl::visitCompInst(const CompInst &I)
+Value EngineImpl::visitCompInst(const CompInst& I)
 {
    using OP = CompInst::OpCode;
 
@@ -3275,26 +3252,26 @@ Value EngineImpl::visitCompInst(const CompInst &I)
    switch (I.getOpCode()) {
    case OP::CompEQ:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getBool(LhsInt == RhsInt);
       }
       else if (ty->isIntegerType() || ty->isPointerType()
                || ty->isThinFunctionTy()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
-            return Value::getBool(
-               getUnsignedValue(ty, lhs) == getUnsignedValue(ty, rhs));
+            return Value::getBool(getUnsignedValue(ty, lhs)
+                                  == getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getBool(
-               getSignedValue(ty, lhs) == getSignedValue(ty, rhs));
+            return Value::getBool(getSignedValue(ty, lhs)
+                                  == getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
-         
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+
          auto cmp = LhsFP.compare(RhsFP);
          return Value::getBool(cmp == llvm::APFloat::cmpEqual);
       }
@@ -3308,25 +3285,25 @@ Value EngineImpl::visitCompInst(const CompInst &I)
       llvm_unreachable("bad operand types");
    case OP::CompNE:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getBool(LhsInt != RhsInt);
       }
       else if (ty->isIntegerType() || ty->isPointerType()
                || ty->isThinFunctionTy()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
-            return Value::getBool(
-               getUnsignedValue(ty, lhs) != getUnsignedValue(ty, rhs));
+            return Value::getBool(getUnsignedValue(ty, lhs)
+                                  != getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getBool(
-               getSignedValue(ty, lhs) != getSignedValue(ty, rhs));
+            return Value::getBool(getSignedValue(ty, lhs)
+                                  != getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          auto cmp = LhsFP.compare(RhsFP);
          return Value::getBool(cmp != llvm::APFloat::cmpEqual);
@@ -3341,24 +3318,24 @@ Value EngineImpl::visitCompInst(const CompInst &I)
       llvm_unreachable("bad operand types");
    case OP::CompLT:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getBool(LhsInt < RhsInt);
       }
       else if (ty->isIntegerType() || ty->isPointerType()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
-            return Value::getBool(
-               getUnsignedValue(ty, lhs) < getUnsignedValue(ty, rhs));
+            return Value::getBool(getUnsignedValue(ty, lhs)
+                                  < getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getBool(
-               getSignedValue(ty, lhs) < getSignedValue(ty, rhs));
+            return Value::getBool(getSignedValue(ty, lhs)
+                                  < getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          auto cmp = LhsFP.compare(RhsFP);
          return Value::getBool(cmp == llvm::APFloat::cmpLessThan);
@@ -3373,24 +3350,24 @@ Value EngineImpl::visitCompInst(const CompInst &I)
       llvm_unreachable("bad operand types");
    case OP::CompLE:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getBool(LhsInt <= RhsInt);
       }
       else if (ty->isIntegerType() || ty->isPointerType()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
-            return Value::getBool(
-               getUnsignedValue(ty, lhs) <= getUnsignedValue(ty, rhs));
+            return Value::getBool(getUnsignedValue(ty, lhs)
+                                  <= getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getBool(
-               getSignedValue(ty, lhs) <= getSignedValue(ty, rhs));
+            return Value::getBool(getSignedValue(ty, lhs)
+                                  <= getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          auto cmp = LhsFP.compare(RhsFP);
          return Value::getBool(cmp == llvm::APFloat::cmpEqual
@@ -3406,24 +3383,24 @@ Value EngineImpl::visitCompInst(const CompInst &I)
       llvm_unreachable("bad operand types");
    case OP::CompGT:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getBool(LhsInt > RhsInt);
       }
       else if (ty->isIntegerType() || ty->isPointerType()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
-            return Value::getBool(
-               getUnsignedValue(ty, lhs) > getUnsignedValue(ty, rhs));
+            return Value::getBool(getUnsignedValue(ty, lhs)
+                                  > getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getBool(
-               getSignedValue(ty, lhs) > getSignedValue(ty, rhs));
+            return Value::getBool(getSignedValue(ty, lhs)
+                                  > getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          auto cmp = LhsFP.compare(RhsFP);
          return Value::getBool(cmp == llvm::APFloat::cmpGreaterThan);
@@ -3438,24 +3415,24 @@ Value EngineImpl::visitCompInst(const CompInst &I)
       llvm_unreachable("bad operand types");
    case OP::CompGE:
       if (ty->isLargeInteger()) {
-         auto &LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
-         auto &RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
+         auto& LhsInt = *reinterpret_cast<llvm::APSInt*>(lhs.getBuffer());
+         auto& RhsInt = *reinterpret_cast<llvm::APSInt*>(rhs.getBuffer());
 
          return Value::getBool(LhsInt >= RhsInt);
       }
       else if (ty->isIntegerType() || ty->isPointerType()) {
          if (ty->isPointerType() || ty->isUnsigned()) {
-            return Value::getBool(
-               getUnsignedValue(ty, lhs) >= getUnsignedValue(ty, rhs));
+            return Value::getBool(getUnsignedValue(ty, lhs)
+                                  >= getUnsignedValue(ty, rhs));
          }
          else {
-            return Value::getBool(
-               getSignedValue(ty, lhs) >= getSignedValue(ty, rhs));
+            return Value::getBool(getSignedValue(ty, lhs)
+                                  >= getSignedValue(ty, rhs));
          }
       }
       else if (ty->isLargeFP()) {
-         auto &LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
-         auto &RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
+         auto& LhsFP = *reinterpret_cast<llvm::APFloat*>(lhs.getBuffer());
+         auto& RhsFP = *reinterpret_cast<llvm::APFloat*>(rhs.getBuffer());
 
          auto cmp = LhsFP.compare(RhsFP);
          return Value::getBool(cmp == llvm::APFloat::cmpEqual
@@ -3478,13 +3455,14 @@ ctfe::Value EngineImpl::visitBitCastInst(BitCastInst const& I)
 }
 
 ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
-                                       QualType toTy, ctfe::Value val) {
+                                       QualType toTy, ctfe::Value val)
+{
    switch (Kind) {
    case CastKind::IntToFP:
       if (fromTy->isLargeInteger()) {
-         auto &API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
+         auto& API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
          if (toTy->isLargeFP()) {
-            auto APF = new(*this) llvm::APFloat(llvm::APFloat::IEEEdouble());
+            auto APF = new (*this) llvm::APFloat(llvm::APFloat::IEEEdouble());
             APF->convertFromAPInt(API, !fromTy->isUnsigned(),
                                   llvm::APFloat::rmNearestTiesToEven);
 
@@ -3500,8 +3478,8 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
       }
 
       if (toTy->isLargeFP()) {
-         auto APF = new(*this) llvm::APFloat(llvm::APFloat::IEEEdouble(),
-                                             val.getU64());
+         auto APF = new (*this)
+             llvm::APFloat(llvm::APFloat::IEEEdouble(), val.getU64());
 
          return Value::getPreallocated(APF);
       }
@@ -3516,7 +3494,7 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
       llvm::APFloat APF((llvm::APFloat::IEEEdouble()));
 
       if (fromTy->isLargeFP()) {
-         APF = *reinterpret_cast<llvm::APFloat *>(val.getBuffer());
+         APF = *reinterpret_cast<llvm::APFloat*>(val.getBuffer());
       }
       else if (fromTy->isFloatTy()) {
          APF = llvm::APFloat(val.getFloat());
@@ -3526,11 +3504,10 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
       }
 
       llvm::APSInt APS;
-      APF.convertToInteger(APS, llvm::APFloat::rmNearestTiesToEven,
-                           nullptr);
+      APF.convertToInteger(APS, llvm::APFloat::rmNearestTiesToEven, nullptr);
 
       if (toTy->isLargeInteger()) {
-         return Value::getPreallocated(new(*this) llvm::APSInt(move(APS)));
+         return Value::getPreallocated(new (*this) llvm::APSInt(move(APS)));
       }
 
       if (toTy->isUnsigned()) {
@@ -3549,10 +3526,10 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
       return val;
    case CastKind::PtrToInt:
       if (toTy->isLargeInteger()) {
-         auto APS = new(*this)
-            llvm::APSInt(llvm::APInt(toTy->getBitwidth(), val.getU64(),
-                                     !toTy->isUnsigned()),
-                         toTy->isUnsigned());
+         auto APS = new (*this)
+             llvm::APSInt(llvm::APInt(toTy->getBitwidth(), val.getU64(),
+                                      !toTy->isUnsigned()),
+                          toTy->isUnsigned());
 
          return Value::getPreallocated(APS);
       }
@@ -3568,8 +3545,7 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
          From = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
       }
       else {
-         From = llvm::APSInt(llvm::APInt(fromTy->getBitwidth(),
-                                         val.getU64(),
+         From = llvm::APSInt(llvm::APInt(fromTy->getBitwidth(), val.getU64(),
                                          !fromTy->isUnsigned()),
                              fromTy->isUnsigned());
       }
@@ -3584,8 +3560,7 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
       To.setIsUnsigned(toTy->isUnsigned());
 
       if (toTy->isLargeInteger()) {
-         return Value::getPreallocated(
-            new(*this) llvm::APSInt(move(To)));
+         return Value::getPreallocated(new (*this) llvm::APSInt(move(To)));
       }
 
       return Value::getInt(To.getZExtValue());
@@ -3595,7 +3570,7 @@ ctfe::Value EngineImpl::getIntegerCast(CastKind Kind, QualType fromTy,
          auto API = *reinterpret_cast<llvm::APSInt*>(val.getBuffer());
          API.setIsUnsigned(toTy->isUnsigned());
 
-         return Value::getPreallocated(new(*this) llvm::APSInt(move(API)));
+         return Value::getPreallocated(new (*this) llvm::APSInt(move(API)));
       }
 
       // also a noop
@@ -3616,15 +3591,16 @@ ctfe::Value EngineImpl::visitIntegerCastInst(IntegerCastInst const& I)
    return getIntegerCast(I.getKind(), fromTy, toTy, val);
 }
 
-ctfe::Value EngineImpl::getFPCast(CastKind Kind, QualType From,
-                                  QualType To, ctfe::Value Val) {
+ctfe::Value EngineImpl::getFPCast(CastKind Kind, QualType From, QualType To,
+                                  ctfe::Value Val)
+{
    switch (Kind) {
    case CastKind::FPTrunc:
    case CastKind::FPExt: {
       if (From->isLargeFP()) {
-         auto &APF = *reinterpret_cast<llvm::APFloat*>(Val.getBuffer());
+         auto& APF = *reinterpret_cast<llvm::APFloat*>(Val.getBuffer());
          if (To->isLargeFP()) {
-            return Value::getPreallocated(new(*this) llvm::APFloat(APF));
+            return Value::getPreallocated(new (*this) llvm::APFloat(APF));
          }
 
          if (To->isFloatTy()) {
@@ -3636,7 +3612,7 @@ ctfe::Value EngineImpl::getFPCast(CastKind Kind, QualType From,
 
       if (From->isFloatTy()) {
          if (To->isLargeFP()) {
-            auto *APF = new(*this) llvm::APFloat(Val.getFloat());
+            auto* APF = new (*this) llvm::APFloat(Val.getFloat());
             return Value::getPreallocated(APF);
          }
          if (To->isDoubleTy()) {
@@ -3648,7 +3624,7 @@ ctfe::Value EngineImpl::getFPCast(CastKind Kind, QualType From,
 
       if (From->isDoubleTy()) {
          if (To->isLargeFP()) {
-            auto *APF = new(*this) llvm::APFloat(Val.getDouble());
+            auto* APF = new (*this) llvm::APFloat(Val.getDouble());
             return Value::getPreallocated(APF);
          }
          if (To->isFloatTy()) {
@@ -3682,7 +3658,7 @@ ctfe::Value EngineImpl::visitExistentialInitInst(ExistentialInitInst const& I)
    llvm_unreachable("not yet");
 }
 
-Value EngineImpl::visitGenericInitInst(const GenericInitInst &I)
+Value EngineImpl::visitGenericInitInst(const GenericInitInst& I)
 {
    llvm_unreachable("not yet");
 }
@@ -3692,35 +3668,29 @@ ctfe::Value EngineImpl::visitExceptionCastInst(ExceptionCastInst const& I)
    llvm_unreachable("not yet");
 }
 
-ctfe::Value EngineImpl::visitDynamicCastInst(const DynamicCastInst &I)
+ctfe::Value EngineImpl::visitDynamicCastInst(const DynamicCastInst& I)
 {
    llvm_unreachable("not yet");
 }
 
-Value EngineImpl::visitExistentialCastInst(const ExistentialCastInst &I)
+Value EngineImpl::visitExistentialCastInst(const ExistentialCastInst& I)
 {
    llvm_unreachable("not yet");
 }
 
-Value EngineImpl::visitDebugLocInst(const DebugLocInst &I)
+Value EngineImpl::visitDebugLocInst(const DebugLocInst& I) { return Value(); }
+
+Value EngineImpl::visitDebugLocalInst(const DebugLocalInst& I)
 {
    return Value();
 }
 
-Value EngineImpl::visitDebugLocalInst(const DebugLocalInst &I)
-{
-   return Value();
-}
+CTFEEngine::CTFEEngine(ast::SemaPass& SP) : pImpl(new EngineImpl(SP)) {}
 
-CTFEEngine::CTFEEngine(ast::SemaPass &SP)
-   : pImpl(new EngineImpl(SP))
-{
-
-}
-
-CTFEResult CTFEEngine::evaluateFunction(il::Function *F,
+CTFEResult CTFEEngine::evaluateFunction(il::Function* F,
                                         llvm::ArrayRef<Value> args,
-                                        SourceLocation loc) {
+                                        SourceLocation loc)
+{
    ILGenPass::ModuleRAII MR(pImpl->SP.getILGen(),
                             pImpl->SP.getILGen().getCtfeModule());
 
@@ -3732,23 +3702,20 @@ CTFEResult CTFEEngine::evaluateFunction(il::Function *F,
    return CTFEResult(pImpl->toConstant(val, F->getReturnType()));
 }
 
-CTFEEngine::~CTFEEngine()
-{
-   delete pImpl;
-}
+CTFEEngine::~CTFEEngine() { delete pImpl; }
 
-Value CTFEEngine::CTFEValueFromVariant(Variant const &V, const QualType &Ty)
+Value CTFEEngine::CTFEValueFromVariant(Variant const& V, const QualType& Ty)
 {
-   auto &Alloc = pImpl->getAllocator();
+   auto& Alloc = pImpl->getAllocator();
    switch (Ty->getTypeID()) {
    case Type::BuiltinTypeID: {
       if (Ty->isLargeInteger())
-         return Value::getPreallocated(
-            new(*pImpl) llvm::APSInt(V.getAPSInt()));
+         return Value::getPreallocated(new (*pImpl)
+                                           llvm::APSInt(V.getAPSInt()));
 
       if (Ty->isLargeFP())
-         return Value::getPreallocated(
-            new(*pImpl) llvm::APFloat(V.getAPFloat()));
+         return Value::getPreallocated(new (*pImpl)
+                                           llvm::APFloat(V.getAPFloat()));
 
       if (Ty->isIntegerType())
          return Value::getInt(V.getZExtValue());
@@ -3766,22 +3733,21 @@ Value CTFEEngine::CTFEValueFromVariant(Variant const &V, const QualType &Ty)
       return Value::getPtr((void*)V.getZExtValue(), Alloc);
    }
    case Type::ArrayTypeID: {
-      ArrayType *ArrTy = Ty->asArrayType();
+      ArrayType* ArrTy = Ty->asArrayType();
       std::vector<Value> vals;
-      for (auto &val : V)
+      for (auto& val : V)
          vals.push_back(CTFEValueFromVariant(val, ArrTy->getElementType()));
 
       return pImpl->getArray(ArrTy, vals);
    }
    case Type::RecordTypeID: {
       if (Ty->getRecord()->isStruct()) {
-         auto *S = cast<ast::StructDecl>(Ty->getRecord());
+         auto* S = cast<ast::StructDecl>(Ty->getRecord());
          std::vector<Value> vals;
 
          auto field_it = S->stored_field_begin();
-         for (auto &val : V) {
-            vals.push_back(CTFEValueFromVariant(val,
-                                                (*field_it++)->getType()));
+         for (auto& val : V) {
+            vals.push_back(CTFEValueFromVariant(val, (*field_it++)->getType()));
          }
 
          return pImpl->getStruct(Ty, vals);

@@ -1,6 +1,11 @@
 
-module cdot_policy {
-    sourceFiles = ["Policy.dot"]
-    declarationsOnly = true
+module policy {
+    sourceFiles = [
+        "Basic.dot",
+        "Operators.dot",
+        "Protocols.dot"
+    ]
+
     defaultAccess = public
+    implicitExports = *
 }

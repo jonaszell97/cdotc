@@ -1,15 +1,10 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
+#include "cdotc/IL/Analysis/AccessPathDescriptor.h"
 
-#include "AccessPathDescriptor.h"
-
-#include "AST/Decl.h"
-#include "IL/Constants.h"
-#include "IL/GlobalVariable.h"
-#include "IL/Instructions.h"
-#include "IL/Passes/InstructionVisitor.h"
-#include "ILGen/ILGenPass.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/GlobalVariable.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Passes/InstructionVisitor.h"
+#include "cdotc/ILGen/ILGenPass.h"
 
 #include <llvm/Support/raw_ostream.h>
 
@@ -19,43 +14,44 @@ namespace cdot {
 namespace il {
 namespace {
 
-class AccessPathBuilder: public InstructionVisitor<AccessPathBuilder> {
-   ast::ILGenPass &ILGen;
-   llvm::raw_ostream &OS;
+class AccessPathBuilder : public InstructionVisitor<AccessPathBuilder> {
+   ast::ILGenPass& ILGen;
+   llvm::raw_ostream& OS;
 
 public:
-   AccessPathBuilder(ast::ILGenPass &ILGen, llvm::raw_ostream &OS)
-      : ILGen(ILGen), OS(OS)
-   {}
+   AccessPathBuilder(ast::ILGenPass& ILGen, llvm::raw_ostream& OS)
+       : ILGen(ILGen), OS(OS)
+   {
+   }
 
    // final memory locations
-   void visitGlobalVariable(const GlobalVariable &GV);
-   void visitAllocaInst(const AllocaInst &I);
-   void visitArgument(const Argument &A);
+   void visitGlobalVariable(const GlobalVariable& GV);
+   void visitAllocaInst(const AllocaInst& I);
+   void visitArgument(const Argument& A);
 
    // memory access path instructions
-   void visitLoadInst(const LoadInst &I);
-   void visitMoveInst(const MoveInst &I);
-   void visitBitCastInst(const BitCastInst &I);
+   void visitLoadInst(const LoadInst& I);
+   void visitMoveInst(const MoveInst& I);
+   void visitBitCastInst(const BitCastInst& I);
 
-   void visitGEPInst(const GEPInst &I);
-   void visitFieldRefInst(const FieldRefInst &I);
-   void visitTupleExtractInst(const TupleExtractInst &I);
+   void visitGEPInst(const GEPInst& I);
+   void visitFieldRefInst(const FieldRefInst& I);
+   void visitTupleExtractInst(const TupleExtractInst& I);
 };
 
 } // anonymous namespace
 
-void AccessPathBuilder::visitGlobalVariable(const il::GlobalVariable &GV)
+void AccessPathBuilder::visitGlobalVariable(const il::GlobalVariable& GV)
 {
    if (auto Decl = ILGen.getDeclForValue(&GV)) {
       OS << Decl->getDeclName();
    }
-   else{
+   else {
       OS << "<unknown>";
    }
 }
 
-void AccessPathBuilder::visitAllocaInst(const il::AllocaInst &I)
+void AccessPathBuilder::visitAllocaInst(const il::AllocaInst& I)
 {
    if (auto Decl = ILGen.getDeclForValue(&I)) {
       OS << Decl->getDeclName();
@@ -72,7 +68,7 @@ void AccessPathBuilder::visitAllocaInst(const il::AllocaInst &I)
    OS << "<unknown>";
 }
 
-void AccessPathBuilder::visitArgument(const il::Argument &A)
+void AccessPathBuilder::visitArgument(const il::Argument& A)
 {
    if (A.isSelf()) {
       OS << "self";
@@ -85,43 +81,44 @@ void AccessPathBuilder::visitArgument(const il::Argument &A)
    }
 }
 
-void AccessPathBuilder::visitLoadInst(const il::LoadInst &I)
+void AccessPathBuilder::visitLoadInst(const il::LoadInst& I)
 {
    visit(I.getTarget());
 }
 
-void AccessPathBuilder::visitMoveInst(const il::MoveInst &I)
+void AccessPathBuilder::visitMoveInst(const il::MoveInst& I)
 {
    visit(I.getOperand(0));
 }
 
-void AccessPathBuilder::visitBitCastInst(const il::BitCastInst &I)
+void AccessPathBuilder::visitBitCastInst(const il::BitCastInst& I)
 {
    if (I.getType()->isReferenceType()
        && I.getOperand(0)->getType()->isReferenceType())
       return visit(I.getOperand(0));
 }
 
-void AccessPathBuilder::visitGEPInst(const il::GEPInst &I)
+void AccessPathBuilder::visitGEPInst(const il::GEPInst& I)
 {
-   auto CI = dyn_cast<ConstantInt>(I.getIndex());
-   if (!CI) {
+   visit(I.getOperand(0));
+
+   if (auto *IntVal = I.getIndex()->getConstantIntegerValue()) {
+      OS << "[" << *IntVal << "]";
+   }
+   else {
       // otherwise we need to be conservative - assume that the entire
       // location so far is accessed
-      return;
+      OS << "[?]";
    }
-
-   visit(I.getOperand(0));
-   OS << "[" << CI->getValue() << "]";
 }
 
-void AccessPathBuilder::visitFieldRefInst(const il::FieldRefInst &I)
+void AccessPathBuilder::visitFieldRefInst(const il::FieldRefInst& I)
 {
    visit(I.getOperand(0));
    OS << "." << I.getFieldName();
 }
 
-void AccessPathBuilder::visitTupleExtractInst(const il::TupleExtractInst &I)
+void AccessPathBuilder::visitTupleExtractInst(const il::TupleExtractInst& I)
 {
    auto CI = dyn_cast<ConstantInt>(I.getIndex());
    if (!CI) {
@@ -132,14 +129,14 @@ void AccessPathBuilder::visitTupleExtractInst(const il::TupleExtractInst &I)
    OS << "." << CI->getValue();
 }
 
-std::string getAccessPathDescriptor(ast::ILGenPass &ILGen, const Value &I)
+std::string getAccessPathDescriptor(ast::ILGenPass& ILGen, const Value& I)
 {
    std::string str;
    {
       llvm::raw_string_ostream OS(str);
       AccessPathBuilder(ILGen, OS).visit(I);
    }
-   
+
    return str;
 }
 

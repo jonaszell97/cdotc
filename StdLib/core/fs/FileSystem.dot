@@ -1,5 +1,8 @@
 
+import io
 import libc
+import rt
+import _sys
 
 alias FileDescriptor = _sys.FileDescriptor
 
@@ -51,7 +54,10 @@ extend AccessMode {
 
 /// \return the timestamp (in milliseconds) when this file was last modified.
 public def getLastModifiedTime(of fileName: String) -> Int {
-    return Int(rt._cdot_GetLastModifiedTime(fileName.unsafeCString))
+    var fileName = fileName
+    fileName.ensureNullTerminated()
+
+    return Int(rt._cdot_GetLastModifiedTime(fileName.unsafeCString.raw as! libc.cstring))
 }
 
 /// Attempt to delete the file with the given name.
@@ -152,7 +158,7 @@ public def currentPosition(_ fd: FileDescriptor) -> Int {
 }
 
 /// Generate a random temporary file name.
-public def tempFileName(withFormat template: String = "%%%%%%%%%.tmp") -> String {
+public def createTempFileName(withFormat template: String = "%%%%%%%%%.tmp") -> String {
     var str = template
     for i in 0..str.size {
         if str[i] == '%' {
@@ -164,10 +170,14 @@ public def tempFileName(withFormat template: String = "%%%%%%%%%.tmp") -> String
 }
 
 /// Open a new temporary file for writing.
-public def tempFile(withPrefix pref: String = "",
-                    withSuffix suffix: String = ".tmp") -> io.FileOutputStream? {
+public def openTemporaryFile(withPrefix prefix: String = "",
+                             withSuffix suffix: String = "tmp") -> io.FileOutputStream? {
     var path = tempDir()
-    path += tempFileName(withFormat: "$pref-%%%%%%%$suffix")
+    path.append(path: createTempFileName(withFormat: "$prefix-%%%%%%%%%.$suffix"))
+
+    if fileExists(path) {
+        return openTemporaryFile(withPrefix: prefix, withSuffix: suffix)
+    }
 
     return io.FileOutputStream(path)
 }

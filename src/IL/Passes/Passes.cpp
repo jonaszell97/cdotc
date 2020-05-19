@@ -1,23 +1,24 @@
-//
-// Created by Jonas Zell on 23.05.18.
-//
+#include "cdotc/IL/Passes/Passes.h"
 
-#include "Passes.h"
-
-#include "BorrowCheckPass.h"
-#include "Driver/Compiler.h"
-#include "DefinitiveInitializationPass.h"
-#include "FinalizeFunctionPass.h"
-#include "IL/Context.h"
-#include "IL/Analysis/Dominance.h"
-#include "IL/Analysis/EscapeAnalysis.h"
-#include "IL/Analysis/UnsafeAnalysis.h"
-#include "IL/Transforms/StackPromotion.h"
-#include "PassManager.h"
-#include "ReorderBasicBlockPass.h"
-#include "VerifierPass.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Analysis/Dominance.h"
+#include "cdotc/IL/Analysis/UnsafeAnalysis.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Passes/BorrowCheckPass.h"
+#include "cdotc/IL/Passes/DefinitiveInitializationPass.h"
+#include "cdotc/IL/Passes/FinalizeFunctionPass.h"
+#include "cdotc/IL/Passes/PassManager.h"
+#include "cdotc/IL/Passes/ReorderBasicBlockPass.h"
+#include "cdotc/IL/Passes/VerifierPass.h"
+#include "cdotc/IL/Transforms/StackPromotion.h"
 
 #include <llvm/Support/CommandLine.h>
+
+#ifndef NDEBUG
+#define DEFAULT_VERIFY true
+#else
+#define DEFAULT_VERIFY false
+#endif
 
 namespace cl = llvm::cl;
 
@@ -25,47 +26,44 @@ static cl::opt<bool> VerifyILFunctions("verify-il",
                                        cl::desc("Verify IL functions (for "
                                                 "compiler debugging purposes "
                                                 "only)"),
-                                       cl::init(false));
+                                       cl::init(DEFAULT_VERIFY));
 
 namespace cdot {
 namespace il {
 
-BorrowCheckPass *createBorrowCheckPass(PassManager &PM)
+BorrowCheckPass* createBorrowCheckPass(PassManager& PM)
 {
-   return new BorrowCheckPass(PM.getModule()->getContext().getCompilation()
-                              .getILGen());
+   return new BorrowCheckPass(
+       PM.getModule()->getContext().getCompilation().getILGen());
 }
 
 DefinitiveInitializationPass*
-createDefinitiveInitializationPass(PassManager &PM)
+createDefinitiveInitializationPass(PassManager& PM)
 {
    return new DefinitiveInitializationPass(
-      PM.getModule()->getContext().getCompilation().getILGen());
+       PM.getModule()->getContext().getCompilation().getILGen());
 }
 
-ReorderBasicBlockPass *createReorderBasicBlockPass(PassManager &PM)
+ReorderBasicBlockPass* createReorderBasicBlockPass(PassManager& PM)
 {
    return new ReorderBasicBlockPass();
 }
 
-FinalizeFunctionPass *createFinalizeFunctionPass(PassManager &PM)
+FinalizeFunctionPass* createFinalizeFunctionPass(PassManager& PM)
 {
    return new FinalizeFunctionPass(
-      PM.getModule()->getContext().getCompilation().getILGen());
+       PM.getModule()->getContext().getCompilation().getILGen());
 }
 
-VerifierPass *createVerifierPass(PassManager&)
-{
-   return new VerifierPass;
-}
+VerifierPass* createVerifierPass(PassManager&) { return new VerifierPass; }
 
-StackPromotion *createStackPromotion(PassManager &PM)
+StackPromotion* createStackPromotion(PassManager& PM)
 {
    return new StackPromotion(
-      PM.getModule()->getContext().getCompilation().getILGen());
+       PM.getModule()->getContext().getCompilation().getILGen());
 }
 
-void addMandatoryPasses(PassManager &PM)
+void addMandatoryPasses(PassManager& PM)
 {
    if (VerifyILFunctions) {
       PM.addPass(PassKind::VerifierPassID);
@@ -83,17 +81,15 @@ void addMandatoryPasses(PassManager &PM)
    PM.isMandatoryPipeline = true;
 }
 
-void addOptimizationPasses(CompilerOptions &Opts, PassManager &PM)
+void addOptimizationPasses(CompilerOptions& Opts, PassManager& PM)
 {
    auto Lvl = Opts.optimizationLevelAsNumber();
    if (Lvl >= 1) {
       PM.addPass(PassKind::StackPromotionID);
    }
    if (Lvl >= 2) {
-
    }
    if (Lvl == 3) {
-
    }
 
    PM.initializeAnalyses();

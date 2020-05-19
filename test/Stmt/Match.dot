@@ -1,0 +1,118 @@
+
+// RUN
+// CHECK 21
+// CHECK-NEXT 0
+// CHECK-NEXT hola
+// CHECK-NEXT 9.81
+// CHECK-NEXT gotcha!
+// CHECK-NEXT 3
+// CHECK-NEXT hello
+// CHECK-NEXT 3.00
+// CHECK-NEXT gotcha again!
+// CHECK-NEXT this right here
+// CHECK-NEXT large range
+
+struct Counter with Equatable {
+    static var allocs = 0
+    static var deallocs = 0
+
+    init {
+        allocs += 1
+    }
+    deinit {
+        deallocs += 1
+    }
+}
+
+// enum matching
+enum MyOption<T> {
+    case Some(T)
+    case None
+}
+
+var v1: MyOption<Int> = .Some(21)
+match v1 {
+case .Some(let x):
+    print(x)
+    break
+case .None:
+    break
+}
+
+// struct matching
+struct MyStruct {
+    let x: Int = 0
+    let y: String = "hola"
+    let z: Float = 9.81
+}
+
+match MyStruct() {
+case MyStruct(let x, let y, let z):
+    print(x)
+    print(y)
+    print(z)
+    break
+}
+
+match MyStruct() {
+case MyStruct(0, let y, let z):
+    print("gotcha!")
+    break
+default:
+    break
+}
+
+// tuple matching
+match (3, "hello", 3.0) {
+case (let x, let y, let z):
+    print(x)
+    print(y)
+    print(z)
+    break
+}
+
+match (3, "hello", 3.0) {
+case (let x, "Hmm", let z):
+    print("do not gotcha...")
+    break
+case (let x, "hello", let z):
+    print("gotcha again!")
+    break
+default:
+    break
+}
+
+// custom match operator
+match 312 {
+case 0..10:
+    break
+case 10..100:
+    break
+case 100..1000:
+    print("this right here")
+    break
+default:
+    break
+}
+
+match 21129 {
+case 1..1000000:
+    print("large range")
+default:
+    break
+}
+
+// deinitialization
+do {
+    match (3, Counter(), 7) {
+    case (let x, let y, let z):
+        break
+    }
+
+    var some: Counter? = .Some(Counter())
+    if let x = some {
+
+    }
+}
+
+assertEqual!(Counter.allocs, Counter.deallocs)

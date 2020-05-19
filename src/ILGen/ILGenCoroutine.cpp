@@ -1,28 +1,24 @@
-//
-// Created by Jonas Zell on 02.07.18.
-//
+#include "cdotc/ILGen/ILGenPass.h"
 
-#include "ILGenPass.h"
-
-#include "IL/Constants.h"
-#include "IL/Instructions.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::il;
 using namespace cdot::support;
 
-il::Value* ILGenPass::visitAwaitExpr(AwaitExpr *Expr)
+il::Value* ILGenPass::visitAwaitExpr(AwaitExpr* Expr)
 {
-   auto *Awaiter = visit(Expr->getExpr());
+   auto* Awaiter = visit(Expr->getExpr());
    if (Expr->isImmediateReturn())
       return Awaiter;
 
    return EmitCoroutineAwait(Awaiter);
 }
 
-void ILGenPass::CreateEndCleanupBlocks(CoroutineInfo &Info)
+void ILGenPass::CreateEndCleanupBlocks(CoroutineInfo& Info)
 {
    auto IP = Builder.saveIP();
 
@@ -47,62 +43,61 @@ void ILGenPass::CreateEndCleanupBlocks(CoroutineInfo &Info)
    Builder.restoreIP(IP);
 }
 
-il::Value *ILGenPass::EmitCoroutineAwait(il::Value *Awaitable)
+il::Value* ILGenPass::EmitCoroutineAwait(il::Value* Awaitable)
 {
-   auto *Fn = getCurrentFn();
-   auto &Info = SP.getCoroutineInfo(Awaitable->getType());
-   auto &CoroInfo = CoroInfoMap[Fn];
+   auto* Fn = getCurrentFn();
+   auto& Info = SP.getCoroutineInfo(Awaitable->getType());
+   auto& CoroInfo = CoroInfoMap[Fn];
 
    // Basic block to resume the current coroutine at.
-   auto *ResumeBB = Builder.CreateBasicBlock("await.resume");
+   auto* ResumeBB = Builder.CreateBasicBlock("await.resume");
 
    // Block in which we suspend the current coroutine.
-   auto *SuspendBB = Builder.CreateBasicBlock("await.suspend");
+   auto* SuspendBB = Builder.CreateBasicBlock("await.suspend");
 
    // Get the Awaiter from the Awaitable.
-   auto *Awaiter = Builder.CreateCall(getFunc(Info.AwaitableGetAwaiter),
-                                      {Awaitable});
+   auto* Awaiter
+       = Builder.CreateCall(getFunc(Info.AwaitableGetAwaiter), {Awaitable});
 
    // Cleanup the awaiter at the end of the coroutine.
    pushDefaultCleanup(Awaiter);
 
    // Check whether the value is ready immediately.
-   auto *Ready = Builder.CreateCall(getFunc(Info.AwaitReady), Awaiter);
+   auto* Ready = Builder.CreateCall(getFunc(Info.AwaitReady), Awaiter);
    Builder.CreateCondBr(Ready, ResumeBB, SuspendBB);
 
    // Save the coroutine state.
    Builder.SetInsertPoint(SuspendBB);
 
-   auto *HandlePtr = CoroInfo.Handle;
-   auto *Save = Builder.CreateIntrinsicCall(Intrinsic::coro_save, HandlePtr);
+   auto* HandlePtr = CoroInfo.Handle;
+   auto* Save = Builder.CreateIntrinsicCall(Intrinsic::coro_save, HandlePtr);
 
    // Create the coroutine handle to pass the awaiter.
-   auto *Handle = Builder.CreateStructInit(
-      cast<StructDecl>(Info.CoroHandleInit->getRecord()),
-      getFunc(Info.CoroHandleInit),
-      HandlePtr);
+   auto* Handle = Builder.CreateStructInit(
+       cast<StructDecl>(Info.CoroHandleInit->getRecord()),
+       getFunc(Info.CoroHandleInit), HandlePtr);
 
    Ready = Builder.CreateCall(getFunc(Info.AwaitSuspend), {Awaiter, Handle});
-   auto *SuspendRealBB = Builder.CreateBasicBlock("await.suspend");
+   auto* SuspendRealBB = Builder.CreateBasicBlock("await.suspend");
 
    Builder.CreateCondBr(Ready, ResumeBB, SuspendRealBB);
 
    // Suspend the current coroutine.
    Builder.SetInsertPoint(SuspendRealBB);
-   auto *Discrim = Builder.CreateIntrinsicCall(Intrinsic::coro_suspend,
+   auto* Discrim = Builder.CreateIntrinsicCall(Intrinsic::coro_suspend,
                                                {Save, Builder.GetFalse()});
 
    // Default means the coroutine was suspended.
-   auto *EndBB = CoroInfo.EndBB;
+   auto* EndBB = CoroInfo.EndBB;
 
    // 0 means the coroutine was resumed.
-   BasicBlock *ResumeDst = ResumeBB;
+   BasicBlock* ResumeDst = ResumeBB;
 
    // 1 means the coroutine has ended.
-   auto *CleanupBB = CoroInfo.CleanupBB;
+   auto* CleanupBB = CoroInfo.CleanupBB;
 
    // Act according to the value returned by suspend.
-   auto *Switch = Builder.CreateSwitch(Discrim, EndBB);
+   auto* Switch = Builder.CreateSwitch(Discrim, EndBB);
    Switch->addCase(Builder.GetConstantInt(Discrim->getType(), 0), ResumeDst);
    Switch->addCase(Builder.GetConstantInt(Discrim->getType(), 1), CleanupBB);
 
@@ -111,32 +106,31 @@ il::Value *ILGenPass::EmitCoroutineAwait(il::Value *Awaitable)
    return Builder.CreateCall(getFunc(Info.AwaitResume), {Awaiter});
 }
 
-il::Value* ILGenPass::EmitCoroutineReturn(il::Value *Value)
+il::Value* ILGenPass::EmitCoroutineReturn(il::Value* Value)
 {
-   auto *Fn = getCurrentFn();
-   auto &Info = SP.getCoroutineInfo(cast<CallableDecl>(getDeclForValue(Fn)));
-   auto &CoroInfo = CoroInfoMap[Fn];
+   auto* Fn = getCurrentFn();
+   auto& Info = SP.getCoroutineInfo(cast<CallableDecl>(getDeclForValue(Fn)));
+   auto& CoroInfo = CoroInfoMap[Fn];
 
    // Resolve the awaitable with the returned value.
-   il::Value *Awaitable = Builder.CreateLoad(CoroInfo.Awaitable);
-   Builder.CreateCall(getFunc(Info.AwaitableResolve),{Awaitable, Value});
+   il::Value* Awaitable = Builder.CreateLoad(CoroInfo.Awaitable);
+   Builder.CreateCall(getFunc(Info.AwaitableResolve), {Awaitable, Value});
 
    // Suspend the coroutine one final time.
-   auto *Discrim = Builder.CreateIntrinsicCall(
-      Intrinsic::coro_suspend,
-      {Builder.GetTokenNone(), Builder.GetTrue()});
+   auto* Discrim = Builder.CreateIntrinsicCall(
+       Intrinsic::coro_suspend, {Builder.GetTokenNone(), Builder.GetTrue()});
 
    // Default means the coroutine was suspended.
-   auto *EndBB = CoroInfo.EndBB;
+   auto* EndBB = CoroInfo.EndBB;
 
    // 0 means the coroutine was resumed.
-   BasicBlock *ResumeDst = makeUnreachableBB();
+   BasicBlock* ResumeDst = makeUnreachableBB();
 
    // 1 means the coroutine has ended.
-   auto *CleanupBB = CoroInfo.CleanupBB;
+   auto* CleanupBB = CoroInfo.CleanupBB;
 
    // Act according to the value returned by suspend.
-   auto *Switch = Builder.CreateSwitch(Discrim, EndBB);
+   auto* Switch = Builder.CreateSwitch(Discrim, EndBB);
    Switch->addCase(Builder.GetConstantInt(Discrim->getType(), 0), ResumeDst);
    Switch->addCase(Builder.GetConstantInt(Discrim->getType(), 1), CleanupBB);
 
@@ -144,27 +138,27 @@ il::Value* ILGenPass::EmitCoroutineReturn(il::Value *Value)
    return nullptr;
 }
 
-void ILGenPass::EmitCoroutinePrelude(CallableDecl *C, il::Function &F)
+void ILGenPass::EmitCoroutinePrelude(CallableDecl* C, il::Function& F)
 {
-   auto &Info = SP.getCoroutineInfo(C);
-   auto &CoroInfo = CoroInfoMap[getCurrentFn()];
+   auto& Info = SP.getCoroutineInfo(C);
+   auto& CoroInfo = CoroInfoMap[getCurrentFn()];
 
    // Allocate the coroutine awaitable.
-   auto *Awaitable = Builder.CreateStructInit(
-      cast<StructDecl>(Info.AwaitableType->getRecord()),
-      getFunc(Info.AwaitableInit), {});
+   auto* Awaitable = Builder.CreateStructInit(
+       cast<StructDecl>(Info.AwaitableType->getRecord()),
+       getFunc(Info.AwaitableInit), {});
 
-   auto *AwaitableAlloc = Builder.CreateAlloca(Info.AwaitableType);
+   auto* AwaitableAlloc = Builder.CreateAlloca(Info.AwaitableType);
    Builder.CreateInit(Awaitable, AwaitableAlloc);
 
    // Get the coroutine ID.
-   auto *ID = Builder.CreateIntrinsicCall(Intrinsic::coro_id, AwaitableAlloc);
+   auto* ID = Builder.CreateIntrinsicCall(Intrinsic::coro_id, AwaitableAlloc);
 
    // Check whether we need to allocate space for the coroutine.
-   auto *NeedAlloc = Builder.CreateIntrinsicCall(Intrinsic::coro_alloc, ID);
-   auto *NeedAllocBB = Builder.CreateBasicBlock("coro.alloc");
+   auto* NeedAlloc = Builder.CreateIntrinsicCall(Intrinsic::coro_alloc, ID);
+   auto* NeedAllocBB = Builder.CreateBasicBlock("coro.alloc");
 
-   auto *MergeBB = Builder.CreateBasicBlock("coro.merge");
+   auto* MergeBB = Builder.CreateBasicBlock("coro.merge");
    MergeBB->addBlockArg(UInt8PtrTy, "mem");
 
    Builder.CreateCondBr(NeedAlloc, NeedAllocBB, MergeBB, {},
@@ -173,16 +167,16 @@ void ILGenPass::EmitCoroutinePrelude(CallableDecl *C, il::Function &F)
    Builder.SetInsertPoint(NeedAllocBB);
 
    // Heap allocate memory for the coroutine.
-   auto *CoroSize = Builder.CreateIntrinsicCall(Intrinsic::coro_size);
-   auto *Mem = Builder.CreateAlloca(SP.getContext().getUInt8Ty(), CoroSize, 1,
+   auto* CoroSize = Builder.CreateIntrinsicCall(Intrinsic::coro_size);
+   auto* Mem = Builder.CreateAlloca(SP.getContext().getUInt8Ty(), CoroSize, 1,
                                     true, true);
 
    Builder.CreateBr(MergeBB, Builder.CreateAddrOf(Mem));
    Builder.SetInsertPoint(MergeBB);
 
    // Begin the coroutine.
-   auto *Handle = Builder.CreateIntrinsicCall(Intrinsic::coro_begin,
-                                              { ID, MergeBB->getBlockArg(0) });
+   auto* Handle = Builder.CreateIntrinsicCall(Intrinsic::coro_begin,
+                                              {ID, MergeBB->getBlockArg(0)});
 
    // Remember the promise and coroutine handle.
    CoroInfo.ID = ID;

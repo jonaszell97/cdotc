@@ -22,11 +22,19 @@ public protocol RandomNumberGenerator {
 
 extend RandomNumberGenerator {
     /// \return the next random number produced by this generator, bounded by `upperBound`.
-    def mutating nextInt<T: FixedWidthInteger & UnsignedInteger>(
+    def nextInt<T: FixedWidthInteger & UnsignedInteger>(
         upperBound: T
     ) -> T {
         precondition!(upperBound != 0, "upperBound cannot be zero.")
-        return T(truncatingIfNeeded: nextInt() % upperBound)
+        return T(truncatingIfNeeded: nextInt()) % upperBound
+    }
+
+    /// \return the next random number produced by this generator, bounded by `upperBound` and `lowerBound`.
+    def nextInt<T: FixedWidthInteger & UnsignedInteger>(
+        lowerBound: T,
+        upperBound: T
+    ) -> T {
+        return lowerBound + T(truncatingIfNeeded: nextInt()) % (upperBound - lowerBound)
     }
 }
 
@@ -50,8 +58,8 @@ struct MersenneTwister32 with MoveOnly {
 
     alias L: UInt32 = 18
 
-    alias MASK_LOWER: UInt32 = (1 << R) - 1
-    alias MASK_UPPER: UInt32 = (1 << R)
+    static let MASK_LOWER: UInt32 = UInt32((1 << R) - 1)
+    static let MASK_UPPER: UInt32 = UInt32(1 << R)
 
     var mt: UnsafeMutableBufferPtr<UInt32>
     var index: Int
@@ -69,7 +77,7 @@ struct MersenneTwister32 with MoveOnly {
         mt[0] = UInt32(bitPattern: seed)
 
         for i in 1..index {
-            mt[i] = (F * (mt[i - 1] ^ (mt[i - 1] >> 30)) + (UInt32(i)))
+            mt[i] = (F &* (mt[i - 1] ^ (mt[i - 1] >> 30)) + (UInt32(i)))
         }
     }
 

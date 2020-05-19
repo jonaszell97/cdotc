@@ -1,32 +1,28 @@
-//
-// Created by Jonas Zell on 23.05.18.
-//
+#include "cdotc/IL/Analysis/Analysis.h"
 
-#include "Analysis.h"
-
-#include "Dominance.h"
-#include "EscapeAnalysis.h"
-#include "UnsafeAnalysis.h"
+#include "cdotc/IL/Analysis/Dominance.h"
+#include "cdotc/IL/Analysis/EscapeAnalysis.h"
+#include "cdotc/IL/Analysis/UnsafeAnalysis.h"
 
 namespace cdot {
 namespace il {
 
-DominanceAnalysis *createDominanceAnalysis(PassManager&)
+DominanceAnalysis* createDominanceAnalysis(PassManager&)
 {
    return new DominanceAnalysis;
 }
 
-PostDominanceAnalysis *createPostDominanceAnalysis(PassManager&)
+PostDominanceAnalysis* createPostDominanceAnalysis(PassManager&)
 {
    return new PostDominanceAnalysis;
 }
 
-EscapeAnalysis *createEscapeAnalysis(PassManager&)
+EscapeAnalysis* createEscapeAnalysis(PassManager&)
 {
    return new EscapeAnalysis;
 }
 
-UnsafeAnalysis *createUnsafeAnalysis(PassManager&)
+UnsafeAnalysis* createUnsafeAnalysis(PassManager&)
 {
    return new UnsafeAnalysis;
 }

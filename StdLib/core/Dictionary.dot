@@ -1,0 +1,379 @@
+
+import builtin
+import mem
+
+public alias DefaultDictionaryLiteralType<K: Hashable, V> = Dictionary<K, V>
+
+public protocol ExpressibleByDictionaryLiteral {
+    associatedType Key: Hashable
+    associatedType Value
+
+    init (dictionaryLiteral: [Key: Value])
+}
+
+public struct DictionaryEntry<K: Hashable, V> {
+    /// The stored key.
+    var key: K
+
+    /// The stored value.
+    var value: V
+
+    /// The computed hash code, or 0 if this entry is unoccupied.
+    fileprivate var hash: Int = 0
+
+    /// Whether or not this entry is occupied.
+    fileprivate prop empty: Bool => hash == 0
+}
+
+public class Dictionary<K: Hashable, V> {
+    /// The entry type.
+    alias Entry = DictionaryEntry<K, V>
+
+    /// A linear array of buckets, each one has space for one entry.
+    var buckets: UnsafeMutableBufferPtr<Entry>
+
+    /// The current number of occupied buckets.
+    var size: Int
+
+    /// The capacity of the bucket array.
+    var capacity: Int
+
+    /// The size we will grow our buffer when reached.
+    var resizeTreshold: Int
+
+    /// The mask to turn a hash into a valid index into the buffer.
+    prop mask: Int => capacity - 1
+
+    /// The maximum acceptable load factor before we resize.
+    private static let MaxLoadFactorInPercent: Int = 90
+
+    /// The number of initially allocated buckets.
+    private static let InitialCapacity: Int        = 64
+
+    /// The index type.
+    alias Index = Int
+
+    /// Value used to indicate an invalid index.
+    private static let SentinelIndex: Index = -1
+
+    /// Initialize an empty dictionary with a capacity of \ref InitialCapacity
+    init {
+        buckets = .null
+        size = 0
+        capacity = InitialCapacity
+        resizeTreshold = 0
+
+        reallocate()
+    }
+
+    /// Deinitialize the storage and all entries in the dictionary.
+    deinit {
+        for i in 0..capacity {
+            var b = &buckets[i]
+            if b.empty { continue }
+            builtin.deinit(&b)
+        }
+
+        buckets.deallocate()
+    }
+
+    /// Get the hash value for a key.
+    private def getHashFor(_ key: K) -> Int {
+        var hashVal = Int(bitPattern: key.hashValue())
+
+        // Never return 0 as a hash value because we use it to mark empty slots.
+        hashVal |= Int((hashVal == 0).value as builtin.i64)
+
+        return hashVal
+    }
+
+    /// \return the index into the bucket array for a calculated hash.
+    private def getIndexForPosition(_ hash: Int) -> Index {
+        return getIndexForPosition(hash, capacity)
+    }
+
+    /// \return the distance that an entry is away from its desired spot.
+    private def getProbeDistanceFor(_ hash: Int, _ slotIndex: Int) -> Int {
+        return getProbeDistanceFor(hash, slotIndex, capacity)
+    }
+
+    /// \return the index into the bucket array for a calculated hash.
+    private static def getIndexForPosition(_ hash: Int, _ capacity: Int) -> Index {
+        return hash & (capacity - 1)
+    }
+
+    /// \return the distance that an entry is away from its desired spot.
+    private static def getProbeDistanceFor(_ hash: Int, _ slotIndex: Int,
+                                           _ capacity: Int) -> Int {
+        return getIndexForPosition(
+            slotIndex + capacity - getIndexForPosition(hash, capacity), capacity)
+    }
+
+    /// Insert a new entry with the key \param key and value \param val into the dictionary.
+    private def insertAtIndex(_ idx: Int, _ hash: Int, _ key: owned K, _ val: owned V) {
+        var bucket = &buckets[idx]
+        if bucket.empty {
+            // If this bucket is uninitialized, we can't simply store the new values 
+            // as that would try to deinitialize the old (non-existant) values.
+            mem.replace(&bucket.hash, with: hash)
+            mem.replace(&bucket.key, with: builtin.move(key))
+            mem.replace(&bucket.value, with: builtin.move(val))
+        }
+        else {
+            bucket.hash  = hash
+            bucket.key   = builtin.move(key)
+            bucket.value = builtin.move(val)
+        }
+    }
+
+    /// Grow the capacity of the bucket array.
+    private def reallocate() {
+        buckets = mem.allocate<Entry>(capacity)
+
+        // mark all buckets as unoccupied
+        buckets.write(size: capacity, 0)
+
+        resizeTreshold = (capacity * MaxLoadFactorInPercent) / 100
+    }
+
+    /// Increase the capacity by a factor of two.
+    private def increaseCapacity() {
+        capacity <<= 1
+    }
+
+    /// Grow the capacity of the bucket array.
+    private def grow() {
+        var oldBuckets = buckets.copy()
+        var oldCapacity = capacity
+
+        increaseCapacity()
+        reallocate()
+
+        // copy over previous elements
+        for i in 0..oldCapacity {
+            unsafe {
+                oldBuckets.withReference(i) {
+                    if !$0.empty {
+                        insertInternal($0.hash, $0.key, $0.value)
+                    }
+                }
+            }
+        }
+
+        oldBuckets.deallocate()
+    }
+
+    /// Internal insertion routine.
+    @discardableResult
+    private def insertInternal(_ hash: Int, _ key: owned K, _ val: owned V) -> Index {
+        var insertPos = getIndexForPosition(hash)
+        var dist = 0
+        var hash = hash
+        var key = builtin.move(key)
+        var val = builtin.move(val)
+
+        loop {
+            // If we found an empty bucket, fill it.
+            if buckets[insertPos].empty {
+                insertAtIndex(insertPos, hash, builtin.move(key), builtin.move(val))
+                return insertPos
+            }
+
+            // Robin hood hashing - if we are further from the desired distance 
+            // than the existing element, swap them and reinsert the existing element instead
+            let existingElementDist = getProbeDistanceFor(buckets[dist].hash, insertPos)
+            if dist > existingElementDist {
+                mem.swap(&hash, &buckets[dist].hash)
+                mem.swap(&key, &buckets[dist].key)
+                mem.swap(&val, &buckets[dist].value)
+
+                dist = existingElementDist
+            }
+
+            insertPos = getIndexForPosition(insertPos + 1)
+            dist += 1
+        }
+
+        unreachable!("bad dictionary layout!")
+    }
+
+    /// Lookup a key in the dictionary.
+    /// \return the index of the key if found, \ref endIndex otherwise.
+    private def lookupKey(_ key: K) -> Index {
+        let hash = getHashFor(key)
+        var desiredPos = getIndexForPosition(hash)
+        var dist = 0
+
+        loop {
+            var cap = capacity
+            let entry = &buckets[desiredPos]
+
+            if entry.empty {
+                return -1 as! Index
+            }
+            if dist > getProbeDistanceFor(hash, desiredPos, cap) {
+                return -1 as! Index
+            }
+            if entry.key == key {
+                return desiredPos
+            }
+
+            desiredPos = getIndexForPosition(desiredPos + 1, cap)
+            dist += 1
+        }
+
+        unreachable!("bad dictionary layout!")
+    }
+
+    /// Lookup a key in the dictionary.
+    /// \return the index of the key if found, `none` otherwise.
+    def find(key: K) -> Index? {
+        let idx = lookupKey(key)
+        if idx == SentinelIndex {
+            return none
+        }
+
+        return .Some(idx)
+    }
+
+    /// Insert \param value into the dictionary with the key \param key.
+    /// \return a tuple of the index where the value is located, and whether or not
+    ///         it was newly inserted or already existed in the dictionary. 
+    @discardableResult
+    def insert(key: owned K, value: owned V) -> (Index, Bool) {
+        var Idx = lookupKey(key)
+        if Idx != SentinelIndex {
+            return (Idx, false)
+        }
+
+        size += 1
+        if size > resizeTreshold {
+            grow()
+        }
+
+        let hash = getHashFor(key)
+        return (insertInternal(hash, builtin.move(key), builtin.move(value)), true)
+    }
+
+    @discardableResult
+    def erase(withKey key: K) -> Bool {
+        let pos = lookupKey(key)
+        if pos == SentinelIndex {
+            return false
+        }
+
+        // Deinitialize bucket value
+        unsafe {
+            builtin.deinit(&buckets[pos])
+        }
+
+        // move forward until we find an empty bucket, or one with a DIB of 0
+        var stopPos = pos
+        while stopPos < capacity {
+            var bucket = &buckets[stopPos + 1]
+            if bucket.empty {
+                break
+            }
+            if getProbeDistanceFor(bucket.hash, stopPos + 1, capacity) == 0 {
+                break
+            }
+
+            stopPos += 1
+        }
+
+        if stopPos != pos {
+            // shift buckets from stop bucket backwards over the deleted one
+            mem.move(to: buckets.offset(by: pos), from: buckets.offset(by: stopPos),
+                     stopPos - pos)
+        }
+
+        // mark last shifted bucket as empty
+        buckets[stopPos].hash = 0
+        return true
+    }
+
+    subscript (key: K) -> V? {
+        get {
+            let found = lookupKey(key)
+            if found != SentinelIndex {
+                return .Some(buckets[found].value.copy())
+            }
+
+            return none
+        }
+    }
+
+    subscript (key: K) -> V {
+        set {
+            self.erase(withKey: key)
+            self.insert(key: key.copy(), value: newVal)
+        }
+    }
+}
+
+extend Dictionary with ExpressibleByDictionaryLiteral {
+    alias Key = K
+    alias Value = V
+
+    init (dictionaryLiteral: [Key: Value]) {
+        unimplemented!()
+    }
+}
+
+struct DictionaryIterator<K: Hashable, V> with IteratorProtocol {
+    private let dict: Dictionary<K, V>
+    private var idx: Int = 0
+
+    alias Element = DictionaryEntry<K, V>
+
+    def mutating next() -> Element? {
+        if idx == dict.capacity {
+            return none
+        }
+
+        while dict.buckets[idx].empty {
+            idx += 1
+            if idx == dict.capacity {
+                return none
+            }
+        }
+
+        var result: Element? = .Some(dict.buckets[idx].copy())
+        idx += 1
+
+        return result
+    }
+}
+
+extend Dictionary with Iterable {
+    alias Element = Entry
+    alias It = DictionaryIterator<K, V>
+
+    def getIterator() -> It {
+        return DictionaryIterator(dict: self)
+    }
+}
+
+extend Dictionary with StringRepresentable
+    where K is StringRepresentable
+    where V is StringRepresentable
+{
+    def toString() -> String {
+        var s = "["
+
+        var i = 0
+        for keyValuePair in self {
+            if i != 0 {
+                s += ", "
+            }
+
+            s += keyValuePair.key.toString()
+            s += ": "
+            s += keyValuePair.value.toString()
+            i += 1
+        }
+
+        s += "]"
+        return s
+    }
+}

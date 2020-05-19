@@ -1,0 +1,24 @@
+
+// VERIFY
+
+protocol UsableAsDeclType {}
+
+alias NotAType = 3
+def fn1(_ x: NotAType) {} // expected-error {{expression of non-meta type 'Int64' cannot be used as a type}}
+def fn2(_ x: (NotAType, Int32)) {} // expected-error {{expression of non-meta type 'Int64' cannot be used as a type}}
+def fn3(_ x: [NotAType; 3]) {} // expected-error {{expression of non-meta type 'Int64' cannot be used as a type}}
+
+_ = 3 as NotAType // expected-error {{expression of non-meta type 'Int64' cannot be used as a type}}
+_ = 3 as 3 // expected-error {{expression of non-meta type 'Int64' cannot be used as a type}}
+
+var _ : Int & UsableAsDeclType // expected-error {{cannot apply type-union operator to non-existential type 'Int64'}}
+var _ : UsableAsDeclType & Int // expected-error {{cannot apply type-union operator to non-existential type 'Int64'}}
+var _ : Any & UsableAsDeclType // expected-warning {{using 'Any' in existential type is redundant}}
+var _ : StringRepresentable & UsableAsDeclType & StringRepresentable // expected-warning {{duplicate type 'StringRepresentable' in existential type}}
+
+protocol NotUsableAsDeclType {
+    associatedType A
+}
+
+var _ : UsableAsDeclType
+var _ : NotUsableAsDeclType // expected-error {{protocol 'NotUsableAsDeclType' with associated type constraints can only be used as a generic constraint}}

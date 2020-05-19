@@ -1,4 +1,7 @@
 
+import builtin
+import libc
+
 @_builtin @compiletime
 struct SourceLocation with Copyable, ImplicitlyCopyable {
     let line: Int
@@ -12,10 +15,18 @@ extend SourceLocation with StringRepresentable {
     }
 }
 
+@_builtin @compiletime
+struct RawSourceLocation with Copyable, ImplicitlyCopyable {
+    let line: builtin.i64
+    let column: builtin.i64
+    let fileName: libc.cstring
+}
+
 @_builtin alias line: Int
 @_builtin alias column: Int
 @_builtin alias fileName: String
 @_builtin alias sourceLocation: SourceLocation
+@_builtin alias rawSourceLocation: RawSourceLocation
 
 @_builtin alias function: String
 @_builtin alias mangledFunction: String

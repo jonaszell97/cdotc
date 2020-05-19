@@ -1,11 +1,7 @@
-//
-// Created by Jonas Zell on 25.08.18.
-//
+#include "cdotc/Query/Query.h"
 
-#include "Query.h"
-
-#include "Basic/FileUtils.h"
-#include "QueryContext.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Query/QueryContext.h"
 
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -20,9 +16,7 @@ QueryResult OpenTmpFileQuery::run()
    auto FileName = fs::getTmpFileName(Extension);
    std::error_code EC;
 
-   auto OS = std::make_unique<llvm::raw_fd_ostream>(FileName, EC,
-                                                    llvm::sys::fs::F_RW);
-
+   auto OS = std::make_unique<llvm::raw_fd_ostream>(FileName, EC);
    if (EC) {
       return fail();
    }

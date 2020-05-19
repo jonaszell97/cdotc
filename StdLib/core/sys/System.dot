@@ -1,18 +1,21 @@
 
+import builtin
 import libc
 import posix
+import _sys
 
-@_builtin internal var argc: Int = 0
-@_builtin internal var argv: UnsafeBufferPtr<libc.cstring> = .null
+@externallyInitialized internal var argc: Int
+@externallyInitialized internal var argv: UnsafeBufferPtr<libc.cstring>
+@externallyInitialized internal var stackBegin: builtin.RawPointer
 
-internal var programArgs = [String]()
+internal var programArgs = Array<String>()
 
 /// Get the command line arguments the program was called with.
 public def getProgramArguments() -> [String] {
     if argc != programArgs.size {
         programArgs.reserveCapacity(argc)
         for i in 0..argc {
-            programArgs.append(String(cstring: argv[i]))
+            programArgs.append(String(cstring: UnsafeMutableBufferPtr<Byte>(rawPointer: argv[i])))
         }
     }
 
@@ -21,8 +24,12 @@ public def getProgramArguments() -> [String] {
 
 /// \return the value of the environment variable `name` if it exists, `none` otherwise.
 public def getEnvironmentVariable(_ name: String) -> String? {
+    // We need a copy here because unsafeCString is mutating.
+    var name = name
+    name.ensureNullTerminated()
+
     var val = libc.stdlib.getenv(name.unsafeCString)
-    if UnsafeRawPtr(rawPointer: val) {
+    if val {
         return .Some(String(cstring: val))
     }
 
@@ -33,16 +40,19 @@ public def getEnvironmentVariable(_ name: String) -> String? {
 enum ExitCode(Int32) {
     case EXIT_SUCCESS = 0
     case EXIT_FAILURE = 1
+    case NOT_EXECUTABLE = 126
 }
 
 @compiletime
 public def exit(_ exitCode: ExitCode = .EXIT_SUCCESS) -> Never {
     libc.stdlib.exit(exitCode.rawValue.value)
+    __unreachable
 }
 
 @compiletime
 public def terminate() -> Never {
     libc.stdlib.exit(ExitCode.EXIT_FAILURE.rawValue.value)
+    __unreachable
 }
 
 @compiletime
@@ -63,7 +73,7 @@ enum Signal(builtin.i32) {
         SIGILL = 4,
         SIGINT = 2,
         SIGSEGV = 11,
-        SIGKILL = 9
+        SIGKILL = 9,
 }
 
 public def raiseSignal(_ sig: Signal) {
@@ -73,4 +83,29 @@ public def raiseSignal(_ sig: Signal) {
 public def setSignalHandler(forSignal sig: Signal, _ handler: @thin (Int32) -> Void) {
     _ = libc.signal.signal(sig.rawValue, 
                            handler as! builtin.RawPointer as! @thin (builtin.i32) -> Void)
+}
+
+public def printStackTrace(maxEntries n: Int = 20) {
+    // int backtrace (void **buffer, int size)
+    let buffer = UnsafeMutableBufferPtr<builtin.MutableRawPointer>.allocate(n)
+    let actualSize = libc.execinfo.backtrace(buffer, n.value as libc.int)
+    let strings = UnsafeMutableBufferPtr<UnsafeBufferPtr<UInt8>>(rawPointer: 
+        libc.execinfo.backtrace_symbols(buffer, actualSize).rawPointer)
+
+    for i in 0..Int(actualSize) {
+        _ = libc.stdio.printf("%s\n", strings[i])
+    }
+}
+
+public def _isPointerOnStack(_ ptr: builtin.RawPointer) -> Bool {
+    let value = 0
+    let currentStackAddr = builtin.addressOf(value)
+
+    // Stack grows downwards
+    return (Bool(builtin.icmp_ult_u64(ptr as! builtin.u64, stackBegin as! builtin.u64))
+        && Bool(builtin.icmp_ugt_u64(ptr as! builtin.u64, currentStackAddr as! builtin.u64)))
+}
+
+public def getPageSize() -> Int {
+    return _sys.getPageSize()
 }

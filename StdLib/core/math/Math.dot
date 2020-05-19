@@ -3,6 +3,23 @@ public alias π  = 3.141592653589793238463
 public alias pi = π
 public alias e  = 2.71828182845904
 
+public def max<T: Comparable>(_ v1: T, _ v2: T) -> T {
+    return if v1 > v2 then v1 else v2
+}
+
+public def max<T: Comparable>(_ v1: T, _ v2: T, _ v3: T) -> T {
+    return if v1 > v2 then max(v1, v3) else max(v2, v3)
+}
+
+public def min<T: Comparable>(_ v1: T, _ v2: T) -> T {
+    return if v1 < v2 then v1 else v2
+}
+
+public def min<T: Comparable>(_ v1: T, _ v2: T, _ v3: T) -> T {
+    return if v1 < v2 then min(v1, v3) else min(v2, v3)
+}
+
+/*
 /// \return the maximum of all passed values.
 def max<T: Comparable>(currentMax: T) -> T {
     return currentMax
@@ -34,11 +51,7 @@ def min<T: Comparable, ...Rest: Comparable>(_ value: T, _ rest: Rest..., current
 public def min<T: Comparable, ...Rest: Comparable>(_ lhs: T, _ rest: Rest...) -> T {
     return min(rest..., currentMin: lhs)
 }
-
-/// \return the absolute of the given value.
-public def abs<T: BinaryInteger>(_ i: T) -> T {
-    return i.magnitude
-}
+*/
 
 fileprivate macro floating_point_op {
     (def ($name:tok -> $ret:tok) for $(($type:tok, $builtinType:tok)),*) => { $(
@@ -59,10 +72,18 @@ floating_point_op!{ def (log10 -> Double) for (Double, f64) }
 floating_point_op!{ def (log2 -> Double) for (Double, f64) }
 floating_point_op!{ def (log -> Double) for (Double, f64) }
 
-public def closestPowerOfTwo<T: BinaryInteger>(_ num: T) -> T {
+public def closestPowerOfTwo<T: FixedWidthInteger>(roundingDown num: T) -> T {
     if num < 2 {
         return num
     }
 
-    return T(T(1) << (num.bitWidth - num.trailingZeroBitCount - 1))
+    return T(T(1) << (T.bitWidth - num.leadingZeroBitCount - 1))
+}
+
+public def closestPowerOfTwo<T: FixedWidthInteger>(roundingUp num: T) -> T {
+    if num < 2 {
+        return num
+    }
+
+    return T(T(1) << (T.bitWidth - num.leadingZeroBitCount))
 }

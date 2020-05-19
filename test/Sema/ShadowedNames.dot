@@ -1,0 +1,22 @@
+
+// VERIFY
+
+// Function argument shadows field
+struct S {
+    var m: Int
+    init (_ m: Int) {
+        self.m = m
+    }
+}
+
+// Shadowed local variable
+def takesDouble(_ double: Double) {}
+
+var local = 3
+if true {
+    var local = 3.0
+    takesDouble(local)
+}
+
+takesDouble(local) // expected-error {{no matching call for function 'takesDouble' found}}
+// expected-note@13 {{candidate not viable: no implicit conversion from '&mut Int64' to 'Double' for 1st argument}}

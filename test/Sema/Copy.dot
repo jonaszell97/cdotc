@@ -1,0 +1,35 @@
+
+// VERIFY
+
+def takesMutRef<T>(_ value: mut ref T) {}
+def takesRef<T>(_ value: ref T) {}
+
+struct CantCopy with MoveOnly {}
+struct CanCopy {}
+struct ImplicitCopy with ImplicitlyCopyable {}
+
+@noDerive(Copyable)
+struct CantCopy2 {}
+
+_ = CantCopy().copy() // expected-error {{struct 'CantCopy' does not have a member named 'copy'}}
+_ = CantCopy2().copy() // expected-error {{struct 'CantCopy2' does not have a member named 'copy'}}
+_ = CanCopy().copy() // OK
+_ = ImplicitCopy().copy() // OK
+
+let v1 = 3
+takesMutRef(v1) // expected-error {{no matching call for function 'takesMutRef' found}}
+// expected-note@4 {{mut ref argument must be explicitly marked with '&'}}
+takesMutRef(&v1) // expected-error {{cannot mutably borrow value of type '&Int64'}}
+takesRef(v1) // OK
+
+var v2 = 3
+takesMutRef(v2) // expected-error {{no matching call for function 'takesMutRef' found}}
+// expected-note@4 {{mut ref argument must be explicitly marked with '&'}}
+takesMutRef(&v2) // OK
+takesRef(v2) // OK
+
+takesMutRef("hi") // expected-error {{no matching call for function 'takesMutRef' found}}
+// expected-note@4 {{mut ref argument must be explicitly marked with '&'}}
+
+// FIXME
+// takesRef(3)

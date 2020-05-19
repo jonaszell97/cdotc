@@ -13,35 +13,53 @@ public struct Slice<Base: Collection> with _Slice {
     internal var _endIndex: Base.Index
 
     /// Memberwise C'tor.
-    public init (_ base: Base, bounds: Range<Base.Index>) {
-        self.base = base
+    public init (_ base: owned Base, bounds: Range<Base.Index>) {
+        self.base = builtin.move(base)
         self._startIndex = bounds.startIndex
         self._endIndex = bounds.endIndex
     }
 }
 
+extend Slice with MutableCollection where Base is MutableCollection {
+    /// \inherit
+    subscript (idx: Index) -> Element {
+        get {
+            return base[idx]
+        }
+        set {
+            base[idx] = newVal
+        }
+    }
+
+    /// \return a subsequence of this collection with the specified range.
+    subscript (bounds: Range<Index>) -> SubSequence {
+        get {
+            return Slice(self.base, bounds)
+        }
+        set {
+            base[bounds] = newVal
+        }
+    }
+}
+
 extend Slice with Collection {
     /// \inherit
-    associatedType Element = Base.Element
+    alias Element = Base.Element
 
     /// \inherit
-    associatedType Index = Base.Index
+    alias Index = Base.Index
 
     /// \inherit
-    associatedType Indices = Base.Indices
+    alias Indices = Base.Indices
 
     /// \inherit
-    associatedType SubSequence = Self
+    alias SubSequence = Self
 
     /// \inherit
-    prop startIndex: Index {
-        return _startIndex
-    }
+    prop startIndex: Index => _startIndex
 
     /// \inherit
-    prop endIndex: Index {
-        return _endIndex
-    }
+    prop endIndex: Index => _endIndex
 
     /// \inherit
     subscript (idx: Index) -> Element {
@@ -71,28 +89,6 @@ extend Slice with BidirectionalCollection where Base is BidirectionalCollection 
     }
 }
 
-extend Slice with MutableCollection where Base is MutableCollection {
-    /// \inherit
-    subscript (idx: Index) -> Element {
-        get {
-            return base[idx]
-        }
-        set {
-            base[idx] = newVal
-        }
-    }
-
-    /// \return a subsequence of this collection with the specified range.
-    subscript (bounds: Range<Index>) -> SubSequence {
-        get {
-            return Slice(self.base, bounds)
-        }
-        set {
-            base[bounds] = newVal
-        }
-    }
-}
-
 extend Slice with RandomAccessCollection where Base is RandomAccessCollection {
 }
 
@@ -113,14 +109,14 @@ extend Slice with RangeReplaceableCollection where Base is RangeReplaceableColle
 
     /// \inherit
     def mutating replaceSubrange<C: Collection>(
-        _ subRange: Range<Index>, with newElements: C
+        _ subRange: Range<Index>, with newElements: owned C
     ) where C.Element == Base.Element {
         let sliceOffset =
             base.distance(from: base.startIndex, to: _startIndex)
         let newSliceCount =
-            base.distance(from: _startIndex, to: subRange.lowerBound)
+            (base.distance(from: _startIndex, to: subRange.lowerBound)
                 + base.distance(from: subRange.upperBound, to: _endIndex)
-                + (numericCast(newElements.count) as Int)
+                + (numericCast(newElements.size) as Int))
 
         base.replaceSubrange(subRange, with: newElements)
         _startIndex = base.index(base.startIndex, advancedBy: sliceOffset)

@@ -1,25 +1,24 @@
-//
-// Created by Jonas Zell on 24.08.18.
-//
+#include "cdotc/Query/Query.h"
 
-#include "Query.h"
-
-#include "AST/Decl.h"
-#include "Basic/FileUtils.h"
-#include "ClangImporter/ClangImporter.h"
-#include "IL/Module.h"
-#include "IL/Writer/ModuleWriter.h"
-#include "ILGen/ILGenPass.h"
-#include "IRGen/IRGen.h"
-#include "Lex/Lexer.h"
-#include "Module/ModuleManager.h"
-#include "Parse/Parser.h"
-#include "Sema/SemaPass.h"
-#include "Support/Timer.h"
-#include "Support/Various.h"
-#include "QueryContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/ClangImporter/ClangImporter.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IL/Writer/ModuleWriter.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/IRGen/IRGen.h"
+#include "cdotc/Lex/Lexer.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Parse/Parser.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Log.h"
+#include "cdotc/Support/SaveAndRestore.h"
+#include "cdotc/Support/Timer.h"
+#include "cdotc/Support/Various.h"
 
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/FileSystem.h>
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -30,19 +29,31 @@ using namespace cdot::support;
 
 QueryResult CompileModuleQuery::run()
 {
-   StringRef ModuleFile = QC.CI.getOptions()
-                            .getInputFiles(InputKind::ModuleFile).front();
+   StringRef ModuleFile
+       = QC.CI.getOptions().getInputFiles(InputKind::ModuleFile).front();
 
    // Parse the module file.
-   Module *Mod;
+   Module* Mod;
    if (auto Err = QC.ParseModuleFile(Mod, ModuleFile)) {
       return Query::finish(Err);
    }
 
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
+   if (Mod->isTestModule()) {
+      return finish(QC.RunTestModule(Mod));
+   }
+
    // Create the LLVM module.
-   llvm::Module *LLVMMod;
+   llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
+   }
+
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish();
    }
 
    // Emit the module.
@@ -54,8 +65,7 @@ QueryResult ParseModuleFileQuery::run()
 {
    auto File = QC.CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {
-      QC.Sema->diagnose(diag::err_generic_error,
-                        "could not open file " + FileName);
+      QC.Sema->diagnose(diag::err_cannot_open_file, FileName, false);
 
       return fail();
    }
@@ -63,24 +73,32 @@ QueryResult ParseModuleFileQuery::run()
    SourceLocation Start(File.BaseOffset);
    QC.CI.setMainFileLoc(Start);
 
-   Lexer lex(QC.Context.getIdentifiers(), QC.Sema->getDiags(),
-             File.Buf, File.SourceId, File.BaseOffset);
+   Lexer lex(QC.Context.getIdentifiers(), QC.Sema->getDiags(), File.Buf,
+             File.SourceId, File.BaseOffset);
 
    Parser parser(QC.Context, &lex, *QC.Sema);
-   auto *Mod = parser.parseModuleFile();
-
+   auto* Mod = parser.parseModuleFile(nullptr, true);
    if (!Mod) {
       return fail();
    }
 
+   Mod->setModulePath(&QC.Context.getIdentifiers().get(FileName));
    QC.CI.setCompilationModule(Mod);
 
-   // If the user asked not to import core, import cdot_policy so operators
+   // If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
-   auto &Opts = QC.CI.getOptions();
-   if (Opts.noPrelude() && !Opts.isStdLib()) {
-      QC.CI.getModuleMgr().LookupModule(
-         Start, Start, QC.Sema->getIdentifier("cdot_policy"));
+   auto& Opts = QC.CI.getOptions();
+   if (Opts.noPrelude() || Opts.isStdLib()) {
+      auto* policy = QC.CI.getModuleMgr().LookupModule(
+          Start, Start, QC.Sema->getIdentifier("policy"));
+
+      if (policy && policy != Mod) {
+         Mod->getDecl()->addImportedModule(policy);
+         Mod->addImport(policy);
+      }
+   }
+   else {
+      QC.CI.getModuleMgr().ImportPrelude(Mod);
    }
 
    return finish(Mod);
@@ -93,24 +111,23 @@ QueryResult CreateDefaultModuleQuery::run()
 
    auto File = QC.CI.getFileMgr().openFile(MainFile);
    if (!File.Buf) {
-      QC.Sema->diagnose(diag::err_generic_error,
-                        "error opening file " + MainFile);
+      QC.Sema->diagnose(diag::err_cannot_open_file, MainFile, false);
 
       return fail();
    }
 
    std::string ModName = support::toCamelCase(fs::getFileName(MainFile));
 
-   auto *DefaultModuleName = &QC.Context.getIdentifiers().get(ModName);
-   auto *Mod = QC.CI.getModuleMgr().CreateModule(
-      SourceLocation(File.BaseOffset), DefaultModuleName);
+   auto* DefaultModuleName = &QC.Context.getIdentifiers().get(ModName);
+   auto* Mod = QC.CI.getModuleMgr().CreateModule(
+       SourceLocation(File.BaseOffset), DefaultModuleName);
 
    Module::SourceFileInfo MainInfo;
    MainInfo.Lang = Module::SourceFileLang::CDot;
    MainInfo.IsMainFile = true;
    Mod->addSourceFile(MainFile, MainInfo);
 
-   for (auto &File : Inputs.drop_front(1)) {
+   for (auto& File : Inputs.drop_front(1)) {
       Mod->addSourceFile(File, {});
    }
 
@@ -120,19 +137,18 @@ QueryResult CreateDefaultModuleQuery::run()
 
 QueryResult ParseSourceFileQuery::run()
 {
-   auto &CI = QC.CI;
-   auto &Sema = CI.getSema();
-   auto &Context = CI.getContext();
-   auto &Idents = Context.getIdentifiers();
-   auto &DeclNames = Context.getDeclNameTable();
+   auto& CI = QC.CI;
+   auto& Sema = CI.getSema();
+   auto& Context = CI.getContext();
+   auto& Idents = Context.getIdentifiers();
+   auto& DeclNames = Context.getDeclNameTable();
 
-   auto AbsolutePath = fs::findFileInDirectories(
-      FileName, CI.getOptions().getIncludeDirs());
+   auto AbsolutePath
+       = fs::findFileInDirectories(FileName, CI.getOptions().getIncludeDirs());
 
    auto File = CI.getFileMgr().openFile(AbsolutePath);
    if (!File.Buf) {
-      Sema.diagnose(diag::err_generic_error,
-                    "error opening file " + FileName);
+      Sema.diagnose(diag::err_cannot_open_file, FileName, false);
 
       return fail();
    }
@@ -142,32 +158,45 @@ QueryResult ParseSourceFileQuery::run()
    SourceRange FileRange(Start, End);
 
    auto FileNameDN = DeclNames.getNormalIdentifier(Idents.get(FileName));
-   auto *FileDecl = SourceFileDecl::Create(Context, FileRange, FileNameDN);
+   auto* FileDecl = SourceFileDecl::Create(Context, FileRange, FileNameDN);
 
    QC.Sema->ActOnDecl(Mod->getDecl(), FileDecl);
    FileDecl->setParentCtx(Mod->getDecl());
 
    SemaPass::DeclScopeRAII DSR(*QC.Sema, FileDecl);
-   Lexer lex(Context.getIdentifiers(), Sema.getDiags(),
-             File.Buf, File.SourceId, File.BaseOffset);
-   Parser parser(Context, &lex, Sema);
+   Lexer lex(Context.getIdentifiers(), Sema.getDiags(), File.Buf, File.SourceId,
+             File.BaseOffset);
 
+   if (auto *Consumer = CI.getCommentConsumer()) {
+      auto SAR = support::saveAndRestore(lex.commentConsumer, Consumer);
+      lex.findComments();
+   }
+
+   Parser parser(Context, &lex, Sema);
    parser.parse();
+
+   if (QC.Sema->getDiags().getNumErrors()) {
+      QC.Sema->setEncounteredError(true);
+   }
+
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
    return finish(FileDecl);
 }
 
 QueryResult ParseMainSourceFileQuery::run()
 {
-   auto &CI = QC.CI;
-   auto &Sema = CI.getSema();
-   auto &Context = CI.getContext();
-   auto &Idents = Context.getIdentifiers();
-   auto &DeclNames = Context.getDeclNameTable();
+   auto& CI = QC.CI;
+   auto& Sema = CI.getSema();
+   auto& Context = CI.getContext();
+   auto& Idents = Context.getIdentifiers();
+   auto& DeclNames = Context.getDeclNameTable();
 
    auto File = CI.getFileMgr().openFile(FileName);
    if (!File.Buf) {
-      Sema.diagnose(diag::err_generic_error,
-                    "error opening file " + FileName);
+      Sema.diagnose(diag::err_cannot_open_file, FileName, false);
 
       return fail();
    }
@@ -175,28 +204,68 @@ QueryResult ParseMainSourceFileQuery::run()
    SourceLocation Start(File.BaseOffset);
    CI.setMainFileLoc(Start);
 
-   /// If the user asked not to import core, import cdot_policy so operators
+   /// If the user asked not to import core, import policy so operators
    // and precedence groups are still available.
-   auto &Opts = QC.CI.getOptions();
-   if (Opts.noPrelude() && !Opts.isStdLib()) {
-      QC.CI.getModuleMgr().LookupModule(
-         Start, Start, QC.Sema->getIdentifier("cdot_policy"));
+   auto& Opts = QC.CI.getOptions();
+   if (Opts.noPrelude()) {
+      auto* policy = QC.CI.getModuleMgr().LookupModule(
+          Start, Start, QC.Sema->getIdentifier("policy"));
+
+      if (policy && policy != Mod) {
+         Mod->getDecl()->addImportedModule(policy);
+         Mod->addImport(policy);
+      }
+   }
+   else {
+      QC.CI.getModuleMgr().ImportPrelude(Mod);
    }
 
    SourceLocation End(File.BaseOffset + File.Buf->getBufferSize());
    SourceRange FileRange(Start, End);
 
    auto FileNameDN = DeclNames.getNormalIdentifier(Idents.get(FileName));
-   auto *FileDecl = SourceFileDecl::Create(Context, FileRange, FileNameDN);
+   auto* FileDecl = SourceFileDecl::Create(Context, FileRange, FileNameDN);
 
    QC.Sema->ActOnDecl(Mod->getDecl(), FileDecl);
    SemaPass::DeclScopeRAII DSR(*QC.Sema, FileDecl);
 
-   Lexer lex(Context.getIdentifiers(), Sema.getDiags(),
-             File.Buf, File.SourceId, File.BaseOffset);
-   Parser parser(Context, &lex, Sema);
+   Lexer lex(Context.getIdentifiers(), Sema.getDiags(), File.Buf, File.SourceId,
+             File.BaseOffset, '$', false);
 
+   if (CI.getOptions().emitTokens()) {
+      if (CI.getOptions().EmitTokensPath.empty()) {
+         lex.lexAndEmitTokens(llvm::outs());
+      }
+      else {
+         std::error_code EC;
+         llvm::raw_fd_ostream OS(CI.getOptions().EmitTokensPath, EC);
+         if (EC) {
+            llvm::report_fatal_error("Opening output file failed!");
+         }
+
+         lex.lexAndEmitTokens(OS);
+      }
+
+      return finish(FileDecl);
+   }
+
+   if (auto *Consumer = CI.getCommentConsumer()) {
+      auto SAR = support::saveAndRestore(lex.commentConsumer, Consumer);
+      lex.findComments();
+   }
+
+   Parser parser(Context, &lex, Sema);
+   lex.advance(false, true);
    parser.parseMainFile();
+
+   if (QC.Sema->getDiags().getNumErrors()) {
+      QC.Sema->setEncounteredError(true);
+   }
+
+   if (QC.Sema->encounteredError()) {
+      return fail();
+   }
+
    return finish(FileDecl);
 }
 
@@ -209,19 +278,19 @@ QueryResult ParseSourceFilesQuery::run()
 
    unsigned i = 0;
    while (i < Worklist.size()) {
-      auto *Mod = Worklist[i++];
-      auto *ModDecl = Mod->getDecl();
+      auto* Mod = Worklist[i++];
+      auto* ModDecl = Mod->getDecl();
 
       Worklist.append(Mod->getSubModules().begin(), Mod->getSubModules().end());
 
       SemaPass::DeclScopeRAII DSR(*QC.Sema, ModDecl);
-      for (auto &SF : Mod->getSourceFiles()) {
+      for (auto& SF : Mod->getSourceFiles()) {
          switch (SF.getValue().Lang) {
          case Module::CDot: {
-            SourceFileDecl *FileDecl;
+            SourceFileDecl* FileDecl;
             if (SF.getValue().IsMainFile) {
-               if (auto Err = QC.ParseMainSourceFile(FileDecl, Mod,
-                                                     SF.getKey())) {
+               if (auto Err
+                   = QC.ParseMainSourceFile(FileDecl, Mod, SF.getKey())) {
                   QueryResult::update(RK, Err.K);
                }
             }
@@ -251,9 +320,9 @@ QueryResult ParseSourceFilesQuery::run()
                llvm_unreachable("handled elsewhere");
             }
 
-            if (auto Err = QC.ImportExternalSourceFile(SF.getKey(), K, ModDecl,
-                                                       Mod->getSourceLoc(),
-                                                       SF.getValue().Optional)){
+            if (auto Err = QC.ImportExternalSourceFile(
+                    SF.getKey(), K, ModDecl, Mod->getSourceLoc(),
+                    SF.getValue().Optional)) {
                QueryResult::update(RK, Err.K);
             }
 
@@ -268,7 +337,7 @@ QueryResult ParseSourceFilesQuery::run()
 
 QueryResult ImportExternalSourceFileQuery::run()
 {
-   auto &Importer = QC.CI.getClangImporter();
+   auto& Importer = QC.CI.getClangImporter();
    switch (Kind) {
    case C:
       if (Importer.importCModule(FileName, DC, Loc)) {
@@ -295,42 +364,104 @@ QueryResult ImportExternalSourceFileQuery::run()
 
 QueryResult SetupIRGenQuery::run()
 {
-   return finish(
-      std::make_unique<il::IRGen>(QC.CI, QC.CI.getLLVMCtx(),
-                                  QC.CI.getOptions().emitDebugInfo()));
+   return finish(std::make_unique<il::IRGen>(
+       QC.CI, QC.CI.getLLVMCtx(), QC.CI.getOptions().emitDebugInfo()));
 }
 
 QueryResult CreateLLVMModuleQuery::run()
 {
    // Create the IL module.
-   il::Module *ILMod;
+   il::Module* ILMod;
    if (QC.CreateILModule(ILMod, Mod)) {
       return fail();
    }
 
-   il::IRGen *IRGen;
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish(nullptr);
+   }
+
+   il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
    }
 
-   IRGen->visitModule(*ILMod);
+   {
+      START_TIMER("Generating IR");
+      IRGen->visitModule(*ILMod);
+   }
+
+   auto &options = QC.CI.getOptions();
+   if (options.emitIR()) {
+      finish(ILMod->getLLVMModule());
+
+      SmallString<128> Dir;
+      if (!options.EmitIRPath.empty()) {
+         Dir = options.EmitIRPath;
+      }
+      else {
+         Dir = "./IR/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += Mod->getName()->getIdentifier();
+      Dir += ".ll";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC);
+
+      if (EC) {
+         QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());
+      }
+      else {
+         QC.EmitIR(OS);
+      }
+   }
+
+   if (options.emitASM()) {
+      finish(ILMod->getLLVMModule());
+
+      SmallString<128> Dir;
+      if (!options.EmitAsmPath.empty()) {
+         Dir = options.EmitAsmPath;
+      }
+      else {
+         Dir = "./ASM/";
+      }
+
+      fs::createDirectories(Dir);
+
+      Dir += Mod->getName()->getIdentifier();
+      Dir += ".s";
+
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Dir, EC);
+
+      if (EC) {
+         QC.Sema->diagnose(err_cannot_open_file, Dir.str(), true, EC.message());
+      }
+      else {
+         IRGen->emitAsmFile(OS, ILMod->getLLVMModule());
+      }
+   }
+
    return finish(ILMod->getLLVMModule());
 }
 
 QueryResult CreateObjectQuery::run()
 {
    // Create a default module for the compilation.
-   Module *Mod;
+   Module* Mod;
    if (auto Err = QC.CreateDefaultModule(Mod)) {
       return Query::finish(Err);
    }
 
-   llvm::Module *LLVMMod;
+   llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
-   il::IRGen *IRGen;
+   il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
    }
@@ -342,17 +473,17 @@ QueryResult CreateObjectQuery::run()
 QueryResult CreateStaticLibQuery::run()
 {
    // Create a default module for the compilation.
-   Module *Mod;
+   Module* Mod;
    if (auto Err = QC.CreateDefaultModule(Mod)) {
       return Query::finish(Err);
    }
 
-   llvm::Module *LLVMMod;
+   llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
-   il::IRGen *IRGen;
+   il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
    }
@@ -364,17 +495,17 @@ QueryResult CreateStaticLibQuery::run()
 QueryResult CreateDynamicLibQuery::run()
 {
    // Create a default module for the compilation.
-   Module *Mod;
+   Module* Mod;
    if (auto Err = QC.CreateDefaultModule(Mod)) {
       return Query::finish(Err);
    }
 
-   llvm::Module *LLVMMod;
+   llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
-   il::IRGen *IRGen;
+   il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
    }
@@ -386,17 +517,21 @@ QueryResult CreateDynamicLibQuery::run()
 QueryResult CreateExecutableQuery::run()
 {
    // Create a default module for the compilation.
-   Module *Mod;
+   Module* Mod;
    if (auto Err = QC.CreateDefaultModule(Mod)) {
       return Query::finish(Err);
    }
 
-   llvm::Module *LLVMMod;
+   llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
 
-   il::IRGen *IRGen;
+   if (QC.CI.getOptions().syntaxOnly()) {
+      return finish();
+   }
+
+   il::IRGen* IRGen;
    if (QC.SetupIRGen(IRGen)) {
       return fail();
    }
@@ -407,26 +542,31 @@ QueryResult CreateExecutableQuery::run()
    return finish();
 }
 
+QueryResult VerifyModuleQuery::run()
+{
+   return finish();
+}
+
 QueryResult EmitILQuery::run()
 {
-   Module *Mod = QC.CI.getCompilationModule();
+   Module* Mod = QC.CI.getCompilationModule();
    assert(Mod && "no module declared!");
 
    // Create the IL module.
-   il::Module *ILMod;
+   il::Module* ILMod;
    if (QC.CreateILModule(ILMod, Mod)) {
       return fail();
    }
 
    class SemaNameProvider : public il::NameProvider {
-      ILGenPass &ILGen;
+      ILGenPass& ILGen;
 
    public:
-      explicit SemaNameProvider(ILGenPass &ILGen) : ILGen(ILGen) {}
+      explicit SemaNameProvider(ILGenPass& ILGen) : ILGen(ILGen) {}
 
-      std::string getUnmangledName(const il::GlobalObject *obj) override
+      std::string getUnmangledName(const il::GlobalObject* obj) override
       {
-         auto *decl = ILGen.getDeclForValue(obj);
+         auto* decl = ILGen.getDeclForValue(obj);
          if (decl) {
             return decl->getFullName();
          }
@@ -443,10 +583,10 @@ QueryResult EmitILQuery::run()
 
 QueryResult EmitIRQuery::run()
 {
-   Module *Mod = QC.CI.getCompilationModule();
+   Module* Mod = QC.CI.getCompilationModule();
    assert(Mod && "no module declared!");
 
-   llvm::Module *LLVMMod;
+   llvm::Module* LLVMMod;
    if (QC.CreateLLVMModule(LLVMMod, Mod)) {
       return fail();
    }
@@ -457,14 +597,11 @@ QueryResult EmitIRQuery::run()
 
 QueryResult PrintUsedMemoryQuery::run()
 {
-   llvm::errs() << "***\n";
-   llvm::errs() << "allocated "
-                << QC.CI.getContext().getAllocator().getBytesAllocated()
-                << " bytes in the ASTContext.\n";
-
-   llvm::errs() << "allocated "
-                << QC.Allocator.getBytesAllocated()
-                << " bytes in the QueryContext.\n";
+   LOG(AllocatedMemory, "***\nallocated ",
+       QC.CI.getContext().getAllocator().getBytesAllocated(),
+       " bytes in the ASTContext.\n",
+       "allocated ", QC.Allocator.getBytesAllocated(),
+       " bytes in the QueryContext.\n");
 
    return finish();
 }
@@ -472,16 +609,16 @@ QueryResult PrintUsedMemoryQuery::run()
 QueryResult MeasureExecutionTimeQuery::run()
 {
    auto Now = std::chrono::high_resolution_clock().now().time_since_epoch();
-   auto StartTime =
-      std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
+   auto StartTime
+       = std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
 
    if (Q->run()) {
       return fail();
    }
 
    Now = std::chrono::high_resolution_clock().now().time_since_epoch();
-   auto EndTime =
-      std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
+   auto EndTime
+       = std::chrono::duration_cast<std::chrono::milliseconds>(Now).count();
 
    return finish(EndTime - StartTime);
 }

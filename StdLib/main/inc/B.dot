@@ -1,8 +1,0 @@
-
-module inc.b
-
-def B() {
-    _ = a.A()
-}
-
-internal let x = e.Template<Int>()

@@ -1,6 +1,6 @@
 
 @version(POSIX)
-public let newline = "\n"
+public let newline: String = "\n"
 
 @version(Windows)
-public let newline = "\r\n"
+public let newline: String = "\r\n"

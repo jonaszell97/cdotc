@@ -9,7 +9,7 @@ public struct CollectionOfOne<T> {
 
 extend CollectionOfOne with Collection {
     /// \inherit
-    associatedType Element = T
+    alias Element = T
 
     /// \inherit
     prop startIndex: Int {
@@ -38,12 +38,12 @@ extend CollectionOfOne with Collection {
     }
 }
 
-public struct EmptyCollection {
+public struct EmptyCollection<T> {
 }
 
 extend EmptyCollection with Collection {
     /// \inherit
-    associatedType Element = Void
+    alias Element = T
 
     /// \inherit
     prop startIndex: Int {
@@ -66,7 +66,7 @@ extend EmptyCollection with Collection {
     }
 
     /// \inherit
-    subscript (position: Index) -> T {
+    subscript (position: Index) -> Element {
         _checkIndex(position)
         unreachable!("EmptyCollection does not have a valid index!")
     }

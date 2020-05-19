@@ -1,0 +1,6 @@
+
+/// An unpopulated enum to use as a return type of noreturn-functions.
+public enum Never {}
+
+/// The type that is returned by functions that do not specify a return type. 
+public alias Void: ().Type = default

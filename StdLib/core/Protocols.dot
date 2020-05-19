@@ -14,6 +14,11 @@ extend Equatable {
     }
 }
 
+/// Provide matching for Equatable values.
+public def infix ~= <T: Equatable>(_ lhs: T, _ rhs: T) -> Bool {
+    return lhs == rhs
+}
+
 public protocol Comparable with Equatable {
     /// \return `0` if the two values are equal, a value bigger than zero if `self > rhs`,
     /// a value smaller than zero otherwise.
@@ -75,14 +80,6 @@ public protocol Hashable with Equatable {
     def hashValue() -> UInt64
 }
 
-public protocol Copyable {
-    /// \return a deep copy of this value.
-    def copy() -> Self
-}
-
-public protocol ImplicitlyCopyable: Copyable {}
-public protocol MoveOnly {}
-
 public protocol Strideable with Comparable {
     /// \return the value advance by `by`.
     def advanced(by: Int) -> Self
@@ -122,4 +119,22 @@ public protocol Dereferenceable {
 
     /// \return the dereferenced value.
     prop deref: DereferencedType { read }
+}
+
+public protocol Proxy {
+    /// The type of the proxied value.
+    associatedType ProxiedType
+
+    /// \return The proxied value.
+    prop proxiedValue: ProxiedType { get }
+
+    /// \return The proxy itself.
+    prop _self: Self { get }
+}
+
+extend Proxy {
+    /// \inherit
+    default prop _self: Self {
+        return self
+    }
 }

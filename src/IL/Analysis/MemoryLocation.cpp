@@ -1,14 +1,10 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
+#include "cdotc/IL/Analysis/MemoryLocation.h"
 
-#include "MemoryLocation.h"
-
-#include "IL/Constants.h"
-#include "IL/Function.h"
-#include "IL/Instructions.h"
-#include "IL/Passes/InstructionVisitor.h"
-#include "Support/Various.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Passes/InstructionVisitor.h"
+#include "cdotc/Support/Various.h"
 
 using namespace cdot::support;
 
@@ -16,71 +12,68 @@ namespace cdot {
 namespace il {
 namespace {
 
-class MemLocBuilder: public InstructionVisitor<MemLocBuilder> {
-   uintptr_t &HashVal;
+class MemLocBuilder : public InstructionVisitor<MemLocBuilder> {
+   uintptr_t& HashVal;
    bool Exact;
    bool LookThroughMove;
 
 public:
-   explicit MemLocBuilder(uintptr_t &HashVal, bool Exact, bool LookThroughMove)
-      : HashVal(HashVal), Exact(Exact), LookThroughMove(LookThroughMove)
-   {}
+   explicit MemLocBuilder(uintptr_t& HashVal, bool Exact, bool LookThroughMove)
+       : HashVal(HashVal), Exact(Exact), LookThroughMove(LookThroughMove)
+   {
+   }
 
-   void AddPointer(const void *Ptr)
+   void AddPointer(const void* Ptr)
    {
       hash_combine(HashVal, reinterpret_cast<uintptr_t>(Ptr));
    }
 
-   template<class T>
-   void AddInteger(T val)
-   {
-      hash_combine(HashVal, val);
-   }
+   template<class T> void AddInteger(T val) { hash_combine(HashVal, val); }
 
    // final memory locations
-   void visitGlobalVariable(const GlobalVariable &GV);
-   void visitAllocaInst(const AllocaInst &I);
-   void visitArgument(const Argument &A);
+   void visitGlobalVariable(const GlobalVariable& GV);
+   void visitAllocaInst(const AllocaInst& I);
+   void visitArgument(const Argument& A);
 
    // memory access path instructions
-   void visitLoadInst(const LoadInst &I);
-   void visitMoveInst(const MoveInst &I);
-   void visitBitCastInst(const BitCastInst &I);
+   void visitLoadInst(const LoadInst& I);
+   void visitMoveInst(const MoveInst& I);
+   void visitBitCastInst(const BitCastInst& I);
 
-   void visitGEPInst(const GEPInst &I);
-   void visitFieldRefInst(const FieldRefInst &I);
-   void visitTupleExtractInst(const TupleExtractInst &I);
-   void visitEnumExtractInst(const EnumExtractInst &I);
+   void visitGEPInst(const GEPInst& I);
+   void visitFieldRefInst(const FieldRefInst& I);
+   void visitTupleExtractInst(const TupleExtractInst& I);
+   void visitEnumExtractInst(const EnumExtractInst& I);
 };
 
 } // anonymous namespace
 
-void MemLocBuilder::visitGlobalVariable(const il::GlobalVariable &GV)
+void MemLocBuilder::visitGlobalVariable(const il::GlobalVariable& GV)
 {
    // we've reached a final memory location, finalize the hash and stop
    HashVal = reinterpret_cast<uintptr_t>(&GV);
 }
 
-void MemLocBuilder::visitAllocaInst(const il::AllocaInst &I)
+void MemLocBuilder::visitAllocaInst(const il::AllocaInst& I)
 {
    // we've reached a final memory location, finalize the hash and stop
    HashVal = reinterpret_cast<uintptr_t>(&I);
 }
 
-void MemLocBuilder::visitArgument(const il::Argument &A)
+void MemLocBuilder::visitArgument(const il::Argument& A)
 {
    // we've reached a final memory location, finalize the hash and stop
    HashVal = reinterpret_cast<uintptr_t>(&A);
 }
 
-void MemLocBuilder::visitLoadInst(const il::LoadInst &I)
+void MemLocBuilder::visitLoadInst(const il::LoadInst& I)
 {
    // lvalues along the access path always need to be loaded, so we just look
    // through loads
    visit(I.getTarget());
 }
 
-void MemLocBuilder::visitMoveInst(const il::MoveInst &I)
+void MemLocBuilder::visitMoveInst(const il::MoveInst& I)
 {
    if (!LookThroughMove)
       return AddPointer(&I);
@@ -91,19 +84,21 @@ void MemLocBuilder::visitMoveInst(const il::MoveInst &I)
    visit(I.getOperand(0));
 }
 
-void MemLocBuilder::visitBitCastInst(const il::BitCastInst &I)
+void MemLocBuilder::visitBitCastInst(const il::BitCastInst& I)
 {
    if (I.getType()->isReferenceType()
-         && I.getOperand(0)->getType()->isReferenceType())
+       && I.getOperand(0)->getType()->isReferenceType())
       return visit(I.getOperand(0));
 }
 
-void MemLocBuilder::visitGEPInst(const il::GEPInst &I)
+void MemLocBuilder::visitGEPInst(const il::GEPInst& I)
 {
    visit(I.getOperand(0));
 
-   auto CI = dyn_cast<ConstantInt>(I.getIndex());
-   if (!CI) {
+   if (auto *IntVal = I.getIndex()->getConstantIntegerValue()) {
+      AddInteger(IntVal->getZExtValue());
+   }
+   else {
       // if we need an exact memory loc, we can't reason about a non-constant
       // GEP index
       if (Exact) {
@@ -114,18 +109,15 @@ void MemLocBuilder::visitGEPInst(const il::GEPInst &I)
       // otherwise we need to be conservative - assume that the entire
       // location so far is accessed
    }
-   else {
-      AddInteger(CI->getZExtValue());
-   }
 }
 
-void MemLocBuilder::visitFieldRefInst(const il::FieldRefInst &I)
+void MemLocBuilder::visitFieldRefInst(const il::FieldRefInst& I)
 {
    visit(I.getOperand(0));
    AddPointer(I.getFieldName().getIdentifierInfo());
 }
 
-void MemLocBuilder::visitTupleExtractInst(const il::TupleExtractInst &I)
+void MemLocBuilder::visitTupleExtractInst(const il::TupleExtractInst& I)
 {
    visit(I.getOperand(0));
 
@@ -135,18 +127,16 @@ void MemLocBuilder::visitTupleExtractInst(const il::TupleExtractInst &I)
    AddInteger(CI->getZExtValue());
 }
 
-void MemLocBuilder::visitEnumExtractInst(const il::EnumExtractInst &I)
+void MemLocBuilder::visitEnumExtractInst(const il::EnumExtractInst& I)
 {
    HashVal = reinterpret_cast<uintptr_t>(&I);
 }
 
-MemoryLocation MemoryLocation::get()
-{
-   return MemoryLocation();
-}
+MemoryLocation MemoryLocation::get() { return MemoryLocation(); }
 
-MemoryLocation MemoryLocation::getImpl(il::Value *V, bool Exact,
-                                       bool LookThroughMove) {
+MemoryLocation MemoryLocation::getImpl(il::Value* V, bool Exact,
+                                       bool LookThroughMove)
+{
    // a global variable is a memory location, no need to look further
    if (auto GV = dyn_cast<GlobalVariable>(V))
       return MemoryLocation(reinterpret_cast<uintptr_t>(GV));
@@ -163,8 +153,9 @@ MemoryLocation MemoryLocation::getImpl(il::Value *V, bool Exact,
    return MemoryLocation();
 }
 
-MemoryLocation MemoryLocation::getImpl(il::Instruction *I, bool Exact,
-                                       bool LookThroughMove) {
+MemoryLocation MemoryLocation::getImpl(il::Instruction* I, bool Exact,
+                                       bool LookThroughMove)
+{
    uintptr_t HashVal = 0;
    MemLocBuilder(HashVal, Exact, LookThroughMove).visit(I);
 
@@ -172,7 +163,8 @@ MemoryLocation MemoryLocation::getImpl(il::Instruction *I, bool Exact,
 }
 
 MemoryLocation MemoryLocation::getTupleField(il::MemoryLocation Tup,
-                                             unsigned Idx) {
+                                             unsigned Idx)
+{
    uintptr_t HashVal = Tup.OpaqueValue;
    hash_combine(HashVal, Idx);
 
@@ -180,7 +172,8 @@ MemoryLocation MemoryLocation::getTupleField(il::MemoryLocation Tup,
 }
 
 MemoryLocation MemoryLocation::getStructField(il::MemoryLocation S,
-                                              DeclarationName FieldName) {
+                                              DeclarationName FieldName)
+{
    uintptr_t HashVal = S.OpaqueValue;
    hash_combine(HashVal,
                 reinterpret_cast<uintptr_t>(FieldName.getIdentifierInfo()));

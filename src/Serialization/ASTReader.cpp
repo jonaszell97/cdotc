@@ -1,26 +1,23 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
+#include "cdotc/Serialization/ASTReader.h"
 
-#include "ASTReader.h"
-
-#include "ASTReaderInternals.h"
-#include "Basic/FileManager.h"
-#include "Basic/NestedNameSpecifier.h"
-#include "BitCodes.h"
-#include "ILReader.h"
-#include "IL/Module.h"
-#include "IncrementalCompilation.h"
-#include "ModuleFile.h"
-#include "ModuleReader.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Query/QueryContext.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Basic/NestedNameSpecifier.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ASTReaderInternals.h"
+#include "cdotc/Serialization/BitCodes.h"
+#include "cdotc/Serialization/ILReader.h"
+#include "cdotc/Serialization/IncrementalCompilation.h"
+#include "cdotc/Serialization/ModuleFile.h"
+#include "cdotc/Serialization/ModuleReader.h"
+#include "cdotc/Support/Format.h"
 
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/Support/DJB.h>
 #include <llvm/Support/SaveAndRestore.h>
-#include <Support/Format.h>
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -29,7 +26,7 @@ using namespace cdot::support;
 using namespace cdot::serial::reader;
 
 std::pair<unsigned, unsigned>
-ASTDeclContextNameLookupTrait::ReadKeyDataLength(const unsigned char *&d)
+ASTDeclContextNameLookupTrait::ReadKeyDataLength(const unsigned char*& d)
 {
    using namespace llvm::support;
 
@@ -39,14 +36,14 @@ ASTDeclContextNameLookupTrait::ReadKeyDataLength(const unsigned char *&d)
 }
 
 ASTDeclContextNameLookupTrait::internal_key_type
-ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
+ASTDeclContextNameLookupTrait::ReadKey(const unsigned char* d, unsigned)
 {
    using namespace llvm::support;
 
    auto Kind = (DeclarationName::DeclarationKind)*d++;
 
    DeclarationName Result;
-   auto &Tbl = Reader.getContext().getDeclNameTable();
+   auto& Tbl = Reader.getContext().getDeclNameTable();
 
    switch (Kind) {
    case DeclarationName::NormalIdentifier:
@@ -54,8 +51,8 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
    case DeclarationName::PrefixOperatorName:
    case DeclarationName::PostfixOperatorName:
    case DeclarationName::MacroName: {
-      auto *II = Reader.getLocalIdentifier(
-         endian::readNext<uint32_t, little, unaligned>(d));
+      auto* II = Reader.getLocalIdentifier(
+          endian::readNext<uint32_t, little, unaligned>(d));
 
       Result = Tbl.getIdentifiedName(Kind, *II);
       break;
@@ -65,8 +62,8 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
       break;
    }
    case DeclarationName::LocalVarName: {
-      auto *II = Reader.getLocalIdentifier(
-         endian::readNext<uint32_t, little, unaligned>(d));
+      auto* II = Reader.getLocalIdentifier(
+          endian::readNext<uint32_t, little, unaligned>(d));
       auto ScopeID = endian::readNext<uint32_t, little, unaligned>(d);
 
       Result = Tbl.getLocalVarName(II, ScopeID);
@@ -74,10 +71,10 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
    }
    case DeclarationName::OperatorDeclName: {
       auto Kind = (DeclarationName::DeclarationKind)
-         endian::readNext<uint8_t, little, unaligned>(d);
+          endian::readNext<uint8_t, little, unaligned>(d);
 
-      auto &II = *Reader.getLocalIdentifier(
-         endian::readNext<uint32_t, little, unaligned>(d));
+      auto& II = *Reader.getLocalIdentifier(
+          endian::readNext<uint32_t, little, unaligned>(d));
 
       switch (Kind) {
       case DeclarationName::InfixOperatorName:
@@ -101,24 +98,24 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
    case DeclarationName::BaseConstructorName:
    case DeclarationName::DestructorName: {
       QualType Ty = Reader.getLocalType(
-         endian::readNext<uint32_t, little, unaligned>(d));
+          endian::readNext<uint32_t, little, unaligned>(d));
 
       Result = Tbl.getTypedName(Kind, Ty);
       break;
    }
    case DeclarationName::PackExpansionName: {
-      auto *II = Reader.getLocalIdentifier(
-         endian::readNext<uint32_t, little, unaligned>(d));
+      auto* II = Reader.getLocalIdentifier(
+          endian::readNext<uint32_t, little, unaligned>(d));
       auto Idx = endian::readNext<uint32_t, little, unaligned>(d);
 
       Result = Tbl.getPackExpansionName(II, Idx);
       break;
    }
    case DeclarationName::AccessorName: {
-      auto *II = Reader.getLocalIdentifier(
-         endian::readNext<uint32_t, little, unaligned>(d));
+      auto* II = Reader.getLocalIdentifier(
+          endian::readNext<uint32_t, little, unaligned>(d));
       auto AccKind = static_cast<DeclarationName::AccessorKind>(
-         endian::readNext<uint8_t, little, unaligned>(d));
+          endian::readNext<uint8_t, little, unaligned>(d));
 
       Result = Tbl.getAccessorName(*II, AccKind);
       break;
@@ -133,8 +130,8 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
       Result = Tbl.getErrorName();
       break;
    case DeclarationName::SubscriptName: {
-      auto SubKind = static_cast<DeclarationName::SubscriptKind >(
-         endian::readNext<uint8_t, little, unaligned>(d));
+      auto SubKind = static_cast<DeclarationName::SubscriptKind>(
+          endian::readNext<uint8_t, little, unaligned>(d));
 
       Result = Tbl.getSubscriptName(SubKind);
       break;
@@ -152,9 +149,10 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned)
 }
 
 void ASTDeclContextNameLookupTrait::ReadDataInto(internal_key_type,
-                                                 const unsigned char *d,
+                                                 const unsigned char* d,
                                                  unsigned DataLen,
-                                                 data_type_builder &Val) {
+                                                 data_type_builder& Val)
+{
    using namespace llvm::support;
 
    for (unsigned NumDecls = DataLen / 4; NumDecls; --NumDecls) {
@@ -163,19 +161,30 @@ void ASTDeclContextNameLookupTrait::ReadDataInto(internal_key_type,
    }
 }
 
-bool ASTReader::ReadLexicalDeclContextStorage(uint64_t Offset, DeclContext *DC)
+bool ASTReader::ReadLexicalDeclContextStorage(uint64_t Offset, DeclContext* DC)
 {
    assert(Offset != 0);
 
    SavedStreamPosition SavedPosition(DeclsCursor);
-   DeclsCursor.JumpToBit(Offset);
+   auto Err = DeclsCursor.JumpToBit(Offset);
+   (void) Err; assert(!Err && "invalid jump offset");
 
    RecordData Record;
    StringRef Blob;
 
-   unsigned Code = DeclsCursor.ReadCode();
-   unsigned RecCode = DeclsCursor.readRecord(Code, Record, &Blob);
+   auto CodeOrErr = DeclsCursor.ReadCode();
+   if (!CodeOrErr) {
+      Reader.Error("error reading code");
+   }
 
+   unsigned Code = CodeOrErr.get();
+
+   auto RecCodeOrError = DeclsCursor.readRecord(Code, Record, &Blob);
+   if (!RecCodeOrError) {
+      Reader.Error("error reading code");
+   }
+
+   unsigned RecCode = RecCodeOrError.get();
    if (RecCode != DECL_CONTEXT_LEXICAL) {
       Error("Expected lexical block");
       return true;
@@ -187,7 +196,7 @@ bool ASTReader::ReadLexicalDeclContextStorage(uint64_t Offset, DeclContext *DC)
    for (unsigned i = 0; i < NumDecls; ++i) {
       auto NextDeclID = *IDs++;
       if (IsDeclLoaded(NextDeclID)) {
-         auto *D = GetDecl(NextDeclID);
+         auto* D = GetDecl(NextDeclID);
          if (!D)
             continue;
 
@@ -202,8 +211,8 @@ bool ASTReader::ReadLexicalDeclContextStorage(uint64_t Offset, DeclContext *DC)
 }
 
 bool ASTReader::ReadVisibleDeclContextStorage(uint64_t Offset,
-                                              ast::DeclContext *DC,
-                                              unsigned ID) {
+                                              ast::DeclContext* DC, unsigned ID)
+{
    assert(Offset != 0);
 
    if (!DC->isPrimaryCtx()) {
@@ -214,28 +223,38 @@ bool ASTReader::ReadVisibleDeclContextStorage(uint64_t Offset,
    assert(!DC->getModFile() && "duplicate module file");
 
    SavedStreamPosition SavedPosition(DeclsCursor);
-   DeclsCursor.JumpToBit(Offset);
+   (void) DeclsCursor.JumpToBit(Offset);
 
    RecordData Record;
    StringRef Blob;
 
-   unsigned Code = DeclsCursor.ReadCode();
-   unsigned RecCode = DeclsCursor.readRecord(Code, Record, &Blob);
+   auto CodeOrErr = DeclsCursor.ReadCode();
+   if (!CodeOrErr) {
+      Reader.Error("error reading code");
+   }
 
+   unsigned Code = CodeOrErr.get();
+
+   auto RecCodeOrError = DeclsCursor.readRecord(Code, Record, &Blob);
+   if (!RecCodeOrError) {
+      Reader.Error("error reading code");
+   }
+
+   unsigned RecCode = RecCodeOrError.get();
    if (RecCode != DECL_CONTEXT_VISIBLE) {
       Error("Expected visible lookup table block");
       return true;
    }
 
    auto TblOffset = Record[0];
-   auto *Data = (const unsigned char*)Blob.data();
+   auto* Data = (const unsigned char*)Blob.data();
 
    auto Buckets = Data + TblOffset;
-   auto *Tbl = HashTable::Create(Buckets, Data + 1, Data,
+   auto* Tbl = HashTable::Create(Buckets, Data + 1, Data,
                                  ASTDeclContextNameLookupTrait(*this));
 
    Lookups[DC].Table = Tbl;
-   DC->setModFile(new(Sema.getContext()) ModuleFile(Reader, Tbl));
+   DC->setModFile(new (Sema.getContext()) ModuleFile(Reader, Tbl));
 
    if (DC == Reader.Mod->getDecl()) {
       Reader.ModTbl = Tbl;
@@ -250,7 +269,8 @@ void ASTReader::Error(llvm::StringRef Msg) const
 }
 
 void ASTReader::Error(unsigned DiagID, llvm::StringRef Arg1,
-                      llvm::StringRef Arg2) const {
+                      llvm::StringRef Arg2) const
+{
    Sema.diagnose((diag::MessageKind)DiagID, Arg1, Arg2);
 }
 
@@ -271,13 +291,19 @@ QualType ASTReader::readTypeRecord(unsigned ID)
    ReadingKindTracker ReadingKind(Read_Type, *this);
 
    unsigned Idx = 0;
-   DeclsCursor.JumpToBit(Loc);
+   (void) DeclsCursor.JumpToBit(Loc);
 
-   auto &Context = Reader.CI.getContext();
+   auto& Context = Reader.CI.getContext();
    RecordData Record;
-   unsigned Code = DeclsCursor.ReadCode();
 
-   auto TypeID = (Type::TypeID)DeclsCursor.readRecord(Code, Record);
+   auto CodeOrErr = DeclsCursor.ReadCode();
+   if (!CodeOrErr) {
+      Reader.Error("error reading code");
+   }
+
+   unsigned Code = CodeOrErr.get();
+
+   auto TypeID = (Type::TypeID)DeclsCursor.readRecord(Code, Record).get();
    switch (TypeID) {
    case Type::ArrayTypeID: {
       if (Record.size() != 2) {
@@ -296,11 +322,10 @@ QualType ASTReader::readTypeRecord(unsigned ID)
          return QualType();
       }
 
-      auto *AD = ReadDeclAs<AssociatedTypeDecl>(Record, Idx);
+      auto* AD = ReadDeclAs<AssociatedTypeDecl>(Record, Idx);
       auto OuterAT = readType(Record, Idx);
 
-      return Context.getAssociatedType(
-         AD, cast_or_null<AssociatedType>(OuterAT.getBuiltinTy()));
+      return Context.getAssociatedType(AD, OuterAT);
    }
    case Type::BoxTypeID: {
       if (Record.size() != 1) {
@@ -333,28 +358,28 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       return Context.getBuiltinType(Kind);
    }
    case Type::DependentRecordTypeID: {
-      auto *R = ReadDeclAs<RecordDecl>(Record, Idx);
-      auto *Args = ReadTemplateArgumentList(Record, Idx);
+      auto* R = ReadDeclAs<RecordDecl>(Record, Idx);
+      auto* Args = ReadTemplateArgumentList(Record, Idx);
       auto Parent = readType(Record, Idx);
 
       return Context.getDependentRecordType(R, Args, Parent);
    }
    case Type::DependentSizeArrayTypeID: {
-      auto *SizeExpr = ReadExpr();
+      auto* SizeExpr = ReadExpr();
       QualType ElementTy = readType(Record, Idx);
 
-      return Context.getValueDependentSizedArrayType(ElementTy,
-                                                     cast<StaticExpr>(SizeExpr));
+      return Context.getValueDependentSizedArrayType(
+          ElementTy, cast<StaticExpr>(SizeExpr));
    }
    case Type::DependentTypedefTypeID: {
-      auto *Alias = ReadDeclAs<AliasDecl>(Record, Idx);
-      auto *Args = ReadTemplateArgumentList(Record, Idx);
+      auto* Alias = ReadDeclAs<AliasDecl>(Record, Idx);
+      auto* Args = ReadTemplateArgumentList(Record, Idx);
       auto Parent = readType(Record, Idx);
 
       return Context.getDependentTypedefType(Alias, Args, Parent);
    }
    case Type::DependentNameTypeID: {
-      auto *NameSpec = ReadNestedNameSpecWithLoc(Record, Idx);
+      auto* NameSpec = ReadNestedNameSpecWithLoc(Record, Idx);
       return Context.getDependentNameType(NameSpec);
    }
    case Type::FunctionTypeID:
@@ -380,7 +405,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
          return QualType();
       }
 
-      auto *PD = ReadDeclAs<TemplateParamDecl>(Record, Idx);
+      auto* PD = ReadDeclAs<TemplateParamDecl>(Record, Idx);
       return Context.getTemplateArgType(PD);
    }
    case Type::InferredSizeArrayTypeID: {
@@ -400,15 +425,6 @@ QualType ASTReader::readTypeRecord(unsigned ID)
 
       auto Ty = readType(Record, Idx);
       return Context.getMetaType(Ty);
-   }
-   case Type::MutableBorrowTypeID: {
-      if (Record.size() != 1) {
-         Error("bad reference type encoding");
-         return QualType();
-      }
-
-      auto Ty = readType(Record, Idx);
-      return Context.getMutableBorrowType(Ty);
    }
    case Type::MutableReferenceTypeID: {
       if (Record.size() != 1) {
@@ -443,7 +459,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
          return QualType();
       }
 
-      auto *RD = ReadDeclAs<RecordDecl>(Record, Idx);
+      auto* RD = ReadDeclAs<RecordDecl>(Record, Idx);
       if (!RD)
          return QualType();
 
@@ -474,9 +490,10 @@ QualType ASTReader::readTypeRecord(unsigned ID)
          return QualType();
       }
 
-      auto *RD = ReadDeclAs<AliasDecl>(Record, Idx);
+      auto* RD = ReadDeclAs<AliasDecl>(Record, Idx);
       auto Ty = Context.getTypedefType(RD);
-      Ty->setCanonicalType(RD->getType()->asMetaType()->getUnderlyingType());
+//      Ty->setCanonicalType(RD->getType()->asMetaType()->getUnderlyingType()
+//         ->getCanonicalType());
 
       return Ty;
    }
@@ -493,7 +510,7 @@ QualType ASTReader::GetType(unsigned ID)
       return QualType();
 
    unsigned Index = ID - BaseTypeIndex;
-   QualType &Ty = TypesLoaded[Index];
+   QualType& Ty = TypesLoaded[Index];
    if (Ty.isNull()) {
       Ty = readTypeRecord(ID);
    }
@@ -501,13 +518,11 @@ QualType ASTReader::GetType(unsigned ID)
    return Ty;
 }
 
-QualType ASTReader::getLocalType(unsigned LocalID)
-{
-   return GetType(LocalID);
-}
+QualType ASTReader::getLocalType(unsigned LocalID) { return GetType(LocalID); }
 
-IdentifierInfo* ASTReader::GetIdentifierInfo(const RecordData &Record,
-                                             unsigned &Idx) {
+IdentifierInfo* ASTReader::GetIdentifierInfo(const RecordData& Record,
+                                             unsigned& Idx)
+{
    return Reader.GetIdentifierInfo(Record, Idx);
 }
 
@@ -524,7 +539,7 @@ Scope* ASTReader::getScope(unsigned ID)
    if (ID + 1 > LoadedScopes.size())
       LoadedScopes.resize(ID + 1);
 
-   auto &S = LoadedScopes[ID];
+   auto& S = LoadedScopes[ID];
    if (!S) {
       S = ReadScopeRecord(ID);
    }
@@ -532,7 +547,7 @@ Scope* ASTReader::getScope(unsigned ID)
    return S;
 }
 
-lex::Token ASTReader::ReadToken(const RecordDataImpl &Record, unsigned &Idx)
+lex::Token ASTReader::ReadToken(const RecordDataImpl& Record, unsigned& Idx)
 {
    using namespace cdot::lex;
 
@@ -544,7 +559,7 @@ lex::Token ASTReader::ReadToken(const RecordDataImpl &Record, unsigned &Idx)
    case tok::op_ident:
    case tok::dollar_ident:
    case tok::macro_name: {
-      auto *II = getLocalIdentifier(Record[Idx++]);
+      auto* II = getLocalIdentifier(Record[Idx++]);
       return Token(II, Loc, Kind);
    }
    case tok::space: {
@@ -555,75 +570,175 @@ lex::Token ASTReader::ReadToken(const RecordDataImpl &Record, unsigned &Idx)
    case tok::stringliteral:
    case tok::fpliteral:
    case tok::integerliteral: {
-      auto Size = Record[Idx++];
-      char *Ptr = static_cast<char*>(Context.Allocate(Size, 1));
+      auto Str = ReadString(Record, Idx);
+      char* Ptr = static_cast<char*>(Context.Allocate(Str.size(), 1));
+      std::memcpy(Ptr, Str.data(), Str.size());
 
-      for (unsigned i = 0; i < Size; ++i) {
-         *Ptr++ = static_cast<char>(Record[Idx++]);
-      }
-
-      return Token(Ptr, Size, Kind, Loc);
+      return Token(Ptr, Str.size(), Kind, Loc);
    }
    default:
       return Token(Kind, Loc);
    }
 }
 
+ConstraintSet*
+ASTReader::ReadConstraintSet(const RecordDataImpl &Record, unsigned int &Idx)
+{
+   auto NumDeclConstraints = Record[Idx++];
+   if (!NumDeclConstraints)
+      return ConstraintSet::Create(Context, {});
+
+   std::vector<DeclConstraint*> declConstraints;
+   declConstraints.reserve(NumDeclConstraints);
+
+   while (NumDeclConstraints--) {
+      declConstraints.push_back(ReadConstraint(Record, Idx));
+   }
+
+   return ConstraintSet::Create(Context, declConstraints);
+}
+
+DeclConstraint*
+ASTReader::ReadConstraint(const RecordDataImpl &Record, unsigned int &Idx)
+{
+   auto Kind = (DeclConstraint::Kind)Record[Idx++];
+   auto constrainedType = GetType(Record[Idx++]);
+
+   switch (Kind) {
+   case DeclConstraint::Concept: {
+      auto* Concept = cast<AliasDecl>(GetDecl(Record[Idx++]));
+      return DeclConstraint::Create(Context, constrainedType,
+                                    Concept);
+   }
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated: {
+      QualType Ty = GetType(Record[Idx++]);
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    Ty);
+   }
+   default:
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    QualType());
+   }
+}
+
+ConstraintSet*
+ASTReader::ReadConstraintSet(const char *&data)
+{
+   using namespace llvm::support;
+
+   auto NumDeclConstraints = endian::readNext<uint64_t, little, unaligned>(data);
+   if (!NumDeclConstraints)
+      return ConstraintSet::Create(Context, {});
+
+   std::vector<DeclConstraint*> declConstraints;
+   declConstraints.reserve(NumDeclConstraints);
+
+   while (NumDeclConstraints--) {
+      declConstraints.push_back(ReadConstraint(data));
+   }
+
+   return ConstraintSet::Create(Context, declConstraints);
+}
+
+DeclConstraint*
+ASTReader::ReadConstraint(const char *&data)
+{
+   using namespace llvm::support;
+
+   auto Kind = (DeclConstraint::Kind)endian::readNext<uint8_t, little, unaligned>(data);
+   auto constrainedType = GetType(endian::readNext<uint32_t, little, unaligned>(data));
+
+   switch (Kind) {
+   case DeclConstraint::Concept: {
+      auto* Concept = cast<AliasDecl>(GetDecl(
+          endian::readNext<uint32_t, little, unaligned>(data)));
+      return DeclConstraint::Create(Context, constrainedType,
+                                    Concept);
+   }
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality:
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated: {
+      QualType Ty = GetType(endian::readNext<uint32_t, little, unaligned>(data));
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    Ty);
+   }
+   default:
+      return DeclConstraint::Create(Context, Kind, constrainedType,
+                                    QualType());
+   }
+}
+
 ConformanceLookupTrait::internal_key_type
-ConformanceLookupTrait::ReadKey(const unsigned char *d, unsigned n)
+ConformanceLookupTrait::ReadKey(const unsigned char* d, unsigned n)
 {
    using namespace llvm::support;
    return endian::readNext<uint32_t, little, unaligned>(d);
 }
 
 ConformanceLookupTrait::data_type
-ConformanceLookupTrait::ReadData(const internal_key_type &key,
-                                 const unsigned char *d,
-                                 unsigned) {
+ConformanceLookupTrait::ReadData(const internal_key_type& key,
+                                 const unsigned char* d, unsigned)
+{
    using namespace llvm::support;
 
-   auto *R = cast<RecordDecl>(Reader.GetDecl(key));
+   auto* R = cast<RecordDecl>(Reader.GetDecl(key));
    auto Offset = endian::readNext<uint32_t, little, unaligned>(d);
 
    assert(Offset < Reader.ConformanceData.size() && "offset out of bounds!");
-   auto *data = Reader.ConformanceData.data() + Offset;
+   auto* data = Reader.ConformanceData.data() + Offset;
 
-   auto &Ctx = Reader.Reader.getCompilerInstance().getContext();
-   auto &ConfTable = Ctx.getConformanceTable();
+   auto& Sema = Reader.Reader.getCompilerInstance().getSema();
+   auto& Ctx = Reader.Reader.getCompilerInstance().getContext();
+   auto& ConfTable = Ctx.getConformanceTable();
 
    auto NumConformances = endian::readNext<uint32_t, little, unaligned>(data);
    for (unsigned i = 0; i < NumConformances; ++i) {
-      auto Kind = (ConformanceKind)endian::readNext<uint8_t, little, unaligned>(
-         data);
-      auto *Proto = cast<ProtocolDecl>(Reader.GetDecl(
-         endian::readNext<uint32_t, little, unaligned>(data)));
+      auto Kind
+          = (ConformanceKind)endian::readNext<uint8_t, little, unaligned>(data);
+      auto* Proto = cast<ProtocolDecl>(
+          Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data)));
+      auto *Decl = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
+      auto *DC = cast_or_null<DeclContext>(Decl);
+      auto Depth = endian::readNext<uint8_t, little, unaligned>(data);
+      auto *CS = Reader.ReadConstraintSet(data);
 
-      switch (Kind) {
-      case ConformanceKind::Explicit:
-         ConfTable.addExplicitConformance(Ctx, R, Proto);
-         break;
-      case ConformanceKind::Implicit:
-         ConfTable.addImplicitConformance(Ctx, R, Proto);
-         break;
-      case ConformanceKind::Inherited:
-         ConfTable.addInheritedConformance(Ctx, R, Proto);
-         break;
-      default:
-         llvm_unreachable("bad conformance kind");
+      ConfTable.addConformance(Ctx, Kind, R, Proto, DC, CS, Depth);
+   }
+
+   auto NumImpls = endian::readNext<uint32_t, little, unaligned>(data);
+   for (unsigned i = 0; i < NumImpls; ++i) {
+      auto *Req = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
+      auto *Impl = Reader.GetDecl(endian::readNext<uint32_t, little, unaligned>(data));
+
+      Ctx.addProtocolImpl(R, cast<NamedDecl>(Req), cast<NamedDecl>(Impl));
+
+      if (auto *AT = dyn_cast<AssociatedTypeDecl>(Req)) {
+         Sema.registerAssociatedTypeImpl(R, AT, cast<AliasDecl>(Impl));
       }
+   }
+
+   // Make sure 'Self' is deserialized.
+   if (!isa<ProtocolDecl>(R)) {
+      auto* Self = R->lookupSingle<AliasDecl>(&Ctx.getIdentifiers().get("Self"));
+      Sema.registerAssociatedTypeImpl(R, cast<AliasDecl>(Self));
    }
 }
 
-ReadResult ASTReader::ReadConformanceTable(RecordDataImpl &Record,
-                                           StringRef Blob) {
+ReadResult ASTReader::ReadConformanceTable(RecordDataImpl& Record,
+                                           StringRef Blob)
+{
    auto TblOffset = Record[0];
-   auto *Data = (const unsigned char*)Blob.data();
+   auto* Data = (const unsigned char*)Blob.data();
 
    auto Buckets = Data + TblOffset;
 
    using Table = llvm::OnDiskChainedHashTable<ConformanceLookupTrait>;
-   ConformanceTable = Table::Create(Buckets, Data,
-                                    ConformanceLookupTrait(*this));
+   ConformanceTable
+       = Table::Create(Buckets, Data, ConformanceLookupTrait(*this));
 
    return Success;
 }
@@ -634,7 +749,7 @@ void ASTReader::ReadConformances(unsigned ID)
       return;
 
    using Table = llvm::OnDiskChainedHashTable<ConformanceLookupTrait>;
-   auto *Tbl = reinterpret_cast<Table*>(ConformanceTable);
+   auto* Tbl = reinterpret_cast<Table*>(ConformanceTable);
 
    auto It = Tbl->find(ID);
    if (It == Tbl->end())
@@ -644,7 +759,7 @@ void ASTReader::ReadConformances(unsigned ID)
    Trait.ReadData(ID, It.getDataPtr(), It.getDataLen());
 }
 
-ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor &Stream)
+ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor& Stream)
 {
    if (Reader.ReadBlockAbbrevs(Stream, CONFORMANCE_BLOCK_ID)) {
       Error("malformed block record in module file");
@@ -655,7 +770,7 @@ ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor &Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -680,11 +795,11 @@ ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor &Stream)
       Record.clear();
       StringRef Blob;
 
-      auto RecordType =
-         (ConformanceRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType
+          = (ConformanceRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
-      default:  // Default behavior: ignore.
+      default: // Default behavior: ignore.
          break;
       case CONFORMANCE_DATA: {
          ConformanceData = Blob;
@@ -701,15 +816,14 @@ ReadResult ASTReader::ReadConformanceBlock(llvm::BitstreamCursor &Stream)
    }
 }
 
-
 InstantiationTableLookupTrait::hash_value_type
-InstantiationTableLookupTrait::ComputeHash(const internal_key_type &a)
+InstantiationTableLookupTrait::ComputeHash(const internal_key_type& a)
 {
-   return llvm::HashString(a);
+   return llvm::djbHash(a);
 }
 
 std::pair<unsigned, unsigned>
-InstantiationTableLookupTrait::ReadKeyDataLength(const unsigned char *&d)
+InstantiationTableLookupTrait::ReadKeyDataLength(const unsigned char*& d)
 {
    using namespace llvm::support;
 
@@ -720,38 +834,39 @@ InstantiationTableLookupTrait::ReadKeyDataLength(const unsigned char *&d)
 }
 
 InstantiationTableLookupTrait::internal_key_type
-InstantiationTableLookupTrait::ReadKey(const unsigned char *d,
-                                       unsigned n) {
-   assert(n >= 2 && d[n-1] == '\0');
-   return StringRef((const char*) d, n-1);
+InstantiationTableLookupTrait::ReadKey(const unsigned char* d, unsigned n)
+{
+   assert(n >= 2 && d[n - 1] == '\0');
+   return StringRef((const char*)d, n - 1);
 }
 
 InstantiationTableLookupTrait::data_type
-InstantiationTableLookupTrait::ReadData(const internal_key_type &k,
-                                        const unsigned char *d,
-                                        unsigned) {
+InstantiationTableLookupTrait::ReadData(const internal_key_type& k,
+                                        const unsigned char* d, unsigned)
+{
    using namespace llvm::support;
 
    uint32_t ID = endian::readNext<uint32_t, little, unaligned>(d);
    return cast<NamedDecl>(Reader.GetDecl(ID));
 }
 
-ReadResult ASTReader::ReadInstantiationTable(RecordDataImpl &Record,
-                                             StringRef Blob) {
+ReadResult ASTReader::ReadInstantiationTable(RecordDataImpl& Record,
+                                             StringRef Blob)
+{
    auto TblOffset = Record[0];
-   auto *Data = (const unsigned char*)Blob.data();
+   auto* Data = (const unsigned char*)Blob.data();
 
    auto Buckets = Data + TblOffset;
 
-   using Table =
-      llvm::OnDiskIterableChainedHashTable<InstantiationTableLookupTrait>;
+   using Table
+       = llvm::OnDiskIterableChainedHashTable<InstantiationTableLookupTrait>;
    InstantiationTable = Table::Create(Buckets, Data + 1, Data,
                                       InstantiationTableLookupTrait(*this));
 
    return Success;
 }
 
-ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
+ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor& Stream)
 {
    if (ModuleReader::ReadBlockAbbrevs(Stream, AST_BLOCK_ID)) {
       Error("malformed block record in AST file");
@@ -762,7 +877,7 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -774,13 +889,14 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
          switch (Entry.ID) {
          case DECL_TYPES_BLOCK_ID:
             // We lazily load the decls block, but we want to set up the
-            // F->DeclsCursor cursor to point into it.  Clone our current bitcode
-            // cursor to it, enter the block and read the abbrevs in that block.
-            // With the main cursor, we just skip over it.
+            // F->DeclsCursor cursor to point into it.  Clone our current
+            // bitcode cursor to it, enter the block and read the abbrevs in
+            // that block. With the main cursor, we just skip over it.
             DeclsCursor = Stream;
-            if (Stream.SkipBlock() ||  // Skip with the main cursor.
-                // Read the abbrevs.
-                ModuleReader::ReadBlockAbbrevs(DeclsCursor,DECL_TYPES_BLOCK_ID)){
+            if (Stream.SkipBlock() || // Skip with the main cursor.
+                                      // Read the abbrevs.
+                ModuleReader::ReadBlockAbbrevs(DeclsCursor,
+                                               DECL_TYPES_BLOCK_ID)) {
                Error("malformed block record in AST file");
                return Failure;
             }
@@ -804,11 +920,11 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
       Record.clear();
       StringRef Blob;
 
-      auto RecordType =
-         (ASTRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType
+          = (ASTRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
-      default:  // Default behavior: ignore.
+      default: // Default behavior: ignore.
          break;
       case GLOBAL_DECL_CONTEXT: {
          MainModuleID = (unsigned)Record[0];
@@ -816,13 +932,14 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
       }
       case CACHE_LOOKUP_TABLE: {
          auto TblOffset = Record[0];
-         auto *Data = (const unsigned char*)Blob.data();
+         auto* Data = (const unsigned char*)Blob.data();
 
          auto Buckets = Data + TblOffset;
-         auto *Tbl = HashTable::Create(Buckets, Data + 1, Data,
+         auto* Tbl = HashTable::Create(Buckets, Data + 1, Data,
                                        ASTDeclContextNameLookupTrait(*this));
 
-//         Reader.Mod->setModFile(new(Sema.getContext()) ModuleFile(Reader, Tbl));
+         //         Reader.Mod->setModFile(new(Sema.getContext())
+         //         ModuleFile(Reader, Tbl));
          Reader.ModTbl = Tbl;
 
          break;
@@ -847,15 +964,15 @@ ReadResult ASTReader::ReadASTBlock(llvm::BitstreamCursor &Stream)
 void ASTReader::ReadDeclsEager(ArrayRef<unsigned> Decls)
 {
    for (auto ID : Decls) {
-      auto *NextDecl = GetDecl(ID);
+      auto* NextDecl = GetDecl(ID);
       if (auto Op = dyn_cast<OperatorDecl>(NextDecl)) {
          Sema.ActOnOperatorDecl(&Sema.getDeclContext(), Op);
       }
       else if (auto PG = dyn_cast<PrecedenceGroupDecl>(NextDecl)) {
          Sema.ActOnPrecedenceGroupDecl(&Sema.getDeclContext(), PG);
       }
-      else if (auto *DC = dyn_cast<DeclContext>(NextDecl)) {
-         auto *MF = DC->getModFile();
+      else if (auto* DC = dyn_cast<DeclContext>(NextDecl)) {
+         auto* MF = DC->getModFile();
          if (MF) {
             MF->LoadAllDecls(*DC, true);
             DC->setModFile(nullptr);
@@ -864,7 +981,7 @@ void ASTReader::ReadDeclsEager(ArrayRef<unsigned> Decls)
    }
 
    while (!LazyFnInfos.empty()) {
-      auto &&Next = LazyFnInfos.front();
+      auto&& Next = LazyFnInfos.front();
       LazyFnInfos.pop();
 
       Next.second->loadBody(Next.first);
@@ -875,7 +992,7 @@ void ASTReader::ReadOperatorPrecedenceGroups()
 {
    SemaPass::DeclScopeRAII DSR(Sema, Reader.Mod->getDecl());
    while (NumOperatorPrecedenceDecls--) {
-      auto *NextDecl = GetDecl(*OpPrecedenceData++);
+      auto* NextDecl = GetDecl(*OpPrecedenceData++);
       NextDecl->setDeclared(false);
 
       if (auto Op = dyn_cast<OperatorDecl>(NextDecl)) {
@@ -894,10 +1011,10 @@ void ASTReader::ReadOperatorPrecedenceGroups()
 /// cursor into the start of the given block ID, returning false on success and
 /// true on failure.
 LLVM_ATTRIBUTE_UNUSED
-static bool SkipCursorToBlock(llvm::BitstreamCursor &Cursor, unsigned BlockID)
+static bool SkipCursorToBlock(llvm::BitstreamCursor& Cursor, unsigned BlockID)
 {
    while (true) {
-      llvm::BitstreamEntry Entry = Cursor.advance();
+      llvm::BitstreamEntry Entry = Cursor.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::EndBlock:
@@ -905,7 +1022,7 @@ static bool SkipCursorToBlock(llvm::BitstreamCursor &Cursor, unsigned BlockID)
 
       case llvm::BitstreamEntry::Record:
          // Ignore top-level records.
-         Cursor.skipRecord(Entry.ID);
+         (void) Cursor.skipRecord(Entry.ID);
          break;
 
       case llvm::BitstreamEntry::SubBlock:
@@ -922,7 +1039,7 @@ static bool SkipCursorToBlock(llvm::BitstreamCursor &Cursor, unsigned BlockID)
    }
 }
 
-Decl *ASTReader::GetDecl(unsigned ID)
+Decl* ASTReader::GetDecl(unsigned ID)
 {
    if (!ID)
       return nullptr;
@@ -940,7 +1057,7 @@ Decl *ASTReader::GetDecl(unsigned ID)
    return DeclsLoaded[Index];
 }
 
-unsigned ASTReader::ReadDeclID(const RecordData &Record, unsigned &Idx)
+unsigned ASTReader::ReadDeclID(const RecordData& Record, unsigned& Idx)
 {
    if (Idx >= Record.size()) {
       Error("Corrupted AST file");
@@ -970,13 +1087,10 @@ bool ASTReader::IsDeclLoaded(unsigned ID)
 il::Constant* ASTRecordReader::readILConstant()
 {
    return cast_or_null<il::Constant>(
-      Reader->Reader.ILReader.GetValue(readInt()));
+       Reader->Reader.ILReader.GetValue(readInt()));
 }
 
-Scope* ASTRecordReader::ReadScope()
-{
-   return Reader->ReadScope(Record, Idx);
-}
+Scope* ASTRecordReader::ReadScope() { return Reader->ReadScope(Record, Idx); }
 
 Module* ASTRecordReader::readModule()
 {
@@ -992,11 +1106,11 @@ Module* ASTRecordReader::readModule()
       ModuleName.push_back(getIdentifierInfo());
    }
 
-   return Reader->getReader().getCompilerInstance().getModuleMgr()
-                .GetModule(ModuleName);
+   return Reader->getReader().getCompilerInstance().getModuleMgr().GetModule(
+       ModuleName);
 }
 
-Scope* ASTReader::ReadScope(const RecordDataImpl &Record, unsigned &Idx)
+Scope* ASTReader::ReadScope(const RecordDataImpl& Record, unsigned& Idx)
 {
    return getScope(Record[Idx++]);
 }
@@ -1009,8 +1123,9 @@ Module* ASTReader::GetModule(unsigned ID)
    return It->getSecond();
 }
 
-bool ASTReader::FindExternalVisibleDeclsByName(const DeclContext *DC,
-                                               DeclarationName Name) {
+bool ASTReader::FindExternalVisibleDeclsByName(const DeclContext* DC,
+                                               DeclarationName Name)
+{
    if (!Name)
       return false;
 
@@ -1019,9 +1134,9 @@ bool ASTReader::FindExternalVisibleDeclsByName(const DeclContext *DC,
       return false;
 
    // Load the list of declarations.
-   SmallVector<NamedDecl *, 64> Decls;
+   SmallVector<NamedDecl*, 64> Decls;
    for (unsigned ID : *It->second.Table->find(Name)) {
-      NamedDecl *ND = cast<NamedDecl>(GetDecl(ID));
+      NamedDecl* ND = cast<NamedDecl>(GetDecl(ID));
       if (ND->getDeclName() == Name)
          Decls.push_back(ND);
    }
@@ -1029,8 +1144,9 @@ bool ASTReader::FindExternalVisibleDeclsByName(const DeclContext *DC,
    return !Decls.empty();
 }
 
-DeclarationName ASTReader::ReadDeclarationName(const RecordData &Record,
-                                               unsigned &Idx) {
+DeclarationName ASTReader::ReadDeclarationName(const RecordData& Record,
+                                               unsigned& Idx)
+{
    auto Kind = static_cast<DeclarationName::DeclarationKind>(Record[Idx++]);
    switch (Kind) {
    case DeclarationName::NormalIdentifier:
@@ -1038,12 +1154,12 @@ DeclarationName ASTReader::ReadDeclarationName(const RecordData &Record,
    case DeclarationName::PrefixOperatorName:
    case DeclarationName::PostfixOperatorName:
    case DeclarationName::MacroName: {
-      auto *II = GetIdentifierInfo(Record, Idx);
+      auto* II = GetIdentifierInfo(Record, Idx);
       return Context.getDeclNameTable().getIdentifiedName(Kind, *II);
    }
    case DeclarationName::OperatorDeclName:
       return Context.getDeclNameTable().getOperatorDeclName(
-         ReadDeclarationName(Record, Idx));
+          ReadDeclarationName(Record, Idx));
    case DeclarationName::ConversionOperatorName:
    case DeclarationName::ExtensionName:
    case DeclarationName::ConstructorName:
@@ -1066,7 +1182,7 @@ DeclarationName ASTReader::ReadDeclarationName(const RecordData &Record,
    }
    case DeclarationName::AccessorName: {
       auto AccKind = static_cast<DeclarationName::AccessorKind>(Record[Idx++]);
-      auto *II = GetIdentifierInfo(Record, Idx);
+      auto* II = GetIdentifierInfo(Record, Idx);
 
       return Context.getDeclNameTable().getAccessorName(*II, AccKind);
    }
@@ -1093,18 +1209,19 @@ DeclarationName ASTReader::ReadDeclarationName(const RecordData &Record,
    }
 }
 
-NestedNameSpecifier *ASTReader::ReadNestedNameSpec(const RecordData &Record,
-                                                   unsigned &Idx) {
+NestedNameSpecifier* ASTReader::ReadNestedNameSpec(const RecordData& Record,
+                                                   unsigned& Idx)
+{
    bool HasPrev = Record[Idx++] != 0;
-   NestedNameSpecifier *Previous = nullptr;
+   NestedNameSpecifier* Previous = nullptr;
    if (HasPrev) {
       Previous = ReadNestedNameSpec(Record, Idx);
    }
 
-   auto &Tbl = Context.getDeclNameTable();
+   auto& Tbl = Context.getDeclNameTable();
    auto Kind = (NestedNameSpecifier::Kind)Record[Idx++];
 
-   NestedNameSpecifier *Name;
+   NestedNameSpecifier* Name;
    switch (Kind) {
    case NestedNameSpecifier::Type:
       Name = NestedNameSpecifier::Create(Tbl, readType(Record, Idx), Previous);
@@ -1116,23 +1233,23 @@ NestedNameSpecifier *ASTReader::ReadNestedNameSpec(const RecordData &Record,
       break;
    case NestedNameSpecifier::Namespace:
       Name = NestedNameSpecifier::Create(
-         Tbl, ReadDeclAs<NamespaceDecl>(Record, Idx), Previous);
+          Tbl, ReadDeclAs<NamespaceDecl>(Record, Idx), Previous);
       break;
    case NestedNameSpecifier::TemplateParam:
       Name = NestedNameSpecifier::Create(
-         Tbl, ReadDeclAs<TemplateParamDecl>(Record, Idx), Previous);
+          Tbl, ReadDeclAs<TemplateParamDecl>(Record, Idx), Previous);
       break;
    case NestedNameSpecifier::AssociatedType:
       Name = NestedNameSpecifier::Create(
-         Tbl, ReadDeclAs<AssociatedTypeDecl>(Record, Idx), Previous);
+          Tbl, ReadDeclAs<AssociatedTypeDecl>(Record, Idx), Previous);
       break;
    case NestedNameSpecifier::Alias:
       Name = NestedNameSpecifier::Create(
-         Tbl, ReadDeclAs<AliasDecl>(Record, Idx), Previous);
+          Tbl, ReadDeclAs<AliasDecl>(Record, Idx), Previous);
       break;
    case NestedNameSpecifier::TemplateArgList:
       Name = NestedNameSpecifier::Create(
-         Tbl, ReadTemplateArgumentList(Record, Idx), Previous);
+          Tbl, ReadTemplateArgumentList(Record, Idx), Previous);
       break;
    case NestedNameSpecifier::Module:
       Name = NestedNameSpecifier::Create(Tbl, GetModule(Record[Idx++]),
@@ -1145,9 +1262,9 @@ NestedNameSpecifier *ASTReader::ReadNestedNameSpec(const RecordData &Record,
 }
 
 NestedNameSpecifierWithLoc*
-ASTReader::ReadNestedNameSpecWithLoc(const RecordData &Record, unsigned &Idx)
+ASTReader::ReadNestedNameSpecWithLoc(const RecordData& Record, unsigned& Idx)
 {
-   auto *Name = ReadNestedNameSpec(Record, Idx);
+   auto* Name = ReadNestedNameSpec(Record, Idx);
    auto NumLocs = Record[Idx++];
 
    SmallVector<SourceRange, 4> Locs;
@@ -1156,19 +1273,19 @@ ASTReader::ReadNestedNameSpecWithLoc(const RecordData &Record, unsigned &Idx)
    while (NumLocs--)
       Locs.push_back(ReadSourceRange(Record, Idx));
 
-   return NestedNameSpecifierWithLoc::Create(Context.getDeclNameTable(),
-                                             Name, Locs);
+   return NestedNameSpecifierWithLoc::Create(Context.getDeclNameTable(), Name,
+                                             Locs);
 }
 
-sema::TemplateArgument
-ASTReader::ReadTemplateArgument(const RecordData &Record, unsigned &Idx)
+sema::TemplateArgument ASTReader::ReadTemplateArgument(const RecordData& Record,
+                                                       unsigned& Idx)
 {
    bool IsNull = Record[Idx++] != 0;
    bool IsType = Record[Idx++] != 0;
    bool IsVariadic = Record[Idx++] != 0;
 
    SourceLocation Loc = ReadSourceLocation(Record, Idx);
-   auto *Param = ReadDeclAs<TemplateParamDecl>(Record, Idx);
+   auto* Param = ReadDeclAs<TemplateParamDecl>(Record, Idx);
 
    if (IsNull) {
       if (IsVariadic) {
@@ -1198,12 +1315,12 @@ ASTReader::ReadTemplateArgument(const RecordData &Record, unsigned &Idx)
       return sema::TemplateArgument(Param, Ty, Loc);
    }
 
-   auto *SE = cast_or_null<StaticExpr>(ReadExpr());
+   auto* SE = cast_or_null<StaticExpr>(ReadExpr());
    return sema::TemplateArgument(Param, SE, Loc);
 }
 
 sema::FinalTemplateArgumentList*
-ASTReader::ReadTemplateArgumentList(const RecordData &Record, unsigned &Idx)
+ASTReader::ReadTemplateArgumentList(const RecordData& Record, unsigned& Idx)
 {
    llvm::SmallVector<sema::TemplateArgument, 0> Args;
    auto NumArgs = Record[Idx++];
@@ -1215,8 +1332,9 @@ ASTReader::ReadTemplateArgumentList(const RecordData &Record, unsigned &Idx)
    return sema::FinalTemplateArgumentList::Create(Context, Args, false);
 }
 
-SourceLocation ASTReader::ReadSourceLocation(const RecordDataImpl &Record,
-                                             unsigned &Idx) {
+SourceLocation ASTReader::ReadSourceLocation(const RecordDataImpl& Record,
+                                             unsigned& Idx)
+{
    uint64_t Val = Record[Idx++];
 
    auto SourceID = static_cast<uint32_t>(Val);
@@ -1236,8 +1354,8 @@ SourceLocation ASTReader::ReadSourceLocation(const RecordDataImpl &Record,
    return SourceLocation(Offset);
 }
 
-SourceRange ASTReader::ReadSourceRange(const RecordData &Record,
-                                       unsigned &Idx) {
+SourceRange ASTReader::ReadSourceRange(const RecordData& Record, unsigned& Idx)
+{
    SourceLocation beg = ReadSourceLocation(Record, Idx);
    SourceLocation end = ReadSourceLocation(Record, Idx);
 
@@ -1245,7 +1363,7 @@ SourceRange ASTReader::ReadSourceRange(const RecordData &Record,
 }
 
 /// Read an integral value
-llvm::APInt ASTReader::ReadAPInt(const RecordData &Record, unsigned &Idx)
+llvm::APInt ASTReader::ReadAPInt(const RecordData& Record, unsigned& Idx)
 {
    unsigned BitWidth = Record[Idx++];
    unsigned NumWords = llvm::APInt::getNumWords(BitWidth);
@@ -1255,60 +1373,74 @@ llvm::APInt ASTReader::ReadAPInt(const RecordData &Record, unsigned &Idx)
 }
 
 /// Read a signed integral value
-llvm::APSInt ASTReader::ReadAPSInt(const RecordData &Record, unsigned &Idx)
+llvm::APSInt ASTReader::ReadAPSInt(const RecordData& Record, unsigned& Idx)
 {
    bool isUnsigned = Record[Idx++];
    return llvm::APSInt(ReadAPInt(Record, Idx), isUnsigned);
 }
 
 /// Read a floating-point value
-llvm::APFloat ASTReader::ReadAPFloat(const RecordData &Record,
-                                     const llvm::fltSemantics &Sem,
-                                     unsigned &Idx) {
+llvm::APFloat ASTReader::ReadAPFloat(const RecordData& Record,
+                                     const llvm::fltSemantics& Sem,
+                                     unsigned& Idx)
+{
    return llvm::APFloat(Sem, ReadAPInt(Record, Idx));
 }
 
-// Read a string
-std::string ASTReader::ReadString(const RecordData &Record, unsigned &Idx)
+std::string ASTReader::ReadString(const RecordDataImpl& Record, unsigned& Idx)
 {
-   unsigned Len = Record[Idx++];
-   std::string Result(Record.data() + Idx, Record.data() + Idx + Len);
-   Idx += Len;
-   return Result;
+   uint64_t NumBytes = Record[Idx++];
+
+   std::string str;
+   str.resize(NumBytes);
+
+   for (unsigned i = 0; i < NumBytes; i += 8) {
+      uint64_t Value = Record[Idx++];
+      for (unsigned j = 0; j < 8 && i + j < NumBytes; ++j) {
+         char c = (char)(Value >> (j * 8));
+         str[i + j] = c;
+      }
+   }
+
+   return str;
 }
 
-ASTReader::ASTReader(ModuleReader &Reader)
-   : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
-     FileMgr(*Sema.getDiags().getFileMgr()),
-     CurrentImportLoc(Reader.ImportLoc)
+ASTReader::ASTReader(ModuleReader& Reader)
+    : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
+      FileMgr(*Sema.getDiags().getFileMgr()), CurrentImportLoc(Reader.ImportLoc)
 {
-
 }
 
-ASTReader::ASTReader(ModuleReader &Reader, ASTReader &DeclReader)
-   : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
-     FileMgr(*Sema.getDiags().getFileMgr()), DeclReader(&DeclReader),
-     CurrentImportLoc(Reader.ImportLoc)
+ASTReader::ASTReader(ModuleReader& Reader, ASTReader& DeclReader)
+    : Reader(Reader), Sema(Reader.CI.getSema()), Context(Sema.getContext()),
+      FileMgr(*Sema.getDiags().getFileMgr()), DeclReader(&DeclReader),
+      CurrentImportLoc(Reader.ImportLoc)
 {
-
 }
 
 ASTReader::~ASTReader()
 {
-   for (auto &Tbl : Lookups)
+   for (auto& Tbl : Lookups)
       delete Tbl.getSecond().Table;
 
-   using InstTable =
-      llvm::OnDiskIterableChainedHashTable<InstantiationTableLookupTrait>;
+   using InstTable
+       = llvm::OnDiskIterableChainedHashTable<InstantiationTableLookupTrait>;
    using ConfTable = llvm::OnDiskChainedHashTable<ConformanceLookupTrait>;
 
    delete reinterpret_cast<InstTable*>(InstantiationTable);
    delete reinterpret_cast<ConfTable*>(ConformanceTable);
 }
 
-unsigned ASTRecordReader::readRecord(llvm::BitstreamCursor &Cursor,
-                                     unsigned AbbrevID) {
+unsigned ASTRecordReader::readRecord(llvm::BitstreamCursor& Cursor,
+                                     unsigned AbbrevID)
+{
    Idx = 0;
    Record.clear();
-   return Cursor.readRecord(AbbrevID, Record);
+
+   auto CodeOrErr = Cursor.readRecord(AbbrevID, Record);
+   if (!CodeOrErr) {
+      Reader->Reader.Error("error reading record");
+   }
+
+   return CodeOrErr.get();
 }

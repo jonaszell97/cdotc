@@ -55,13 +55,14 @@ public abstract class InputStream {
 
     /// Utility methods for reading into references.
     @discardableResult
-    public def infix >> <T: StringInitializable>(t: mut ref T) -> Self {
+    public def infix >> <T: StringInitializable>(t: mut ref T) -> Bool {
         var maybeVal = read<T>()
         if var val = maybeVal {
             t = val
+            return true
         }
 
-        return self
+        return false
     }
 
     /// Returns true if the end of the stream has been reached.
@@ -105,7 +106,7 @@ extend InputStream with Iterable {
         memberwise init
 
         /// The elemnt type.
-        associatedType Element = T
+        alias Element = T
 
         /// Returns the next value, or none if the end is reached.
         public def next() -> Element? {
@@ -118,10 +119,10 @@ extend InputStream with Iterable {
     }
 
     /// The element type.
-    associatedType Element = Byte
+    alias Element = Byte
 
     /// The default iterator type.
-    associatedType It = Iterator<Byte>
+    alias It = Iterator<Byte>
 
     /// Create a new iterator for this stream.
     def getIterator() -> It {
@@ -142,10 +143,10 @@ public abstract class BufferedInputStream: InputStream {
     protected var bufferStart: UnsafeBufferPtr<Byte> { get }
 
     /// Pointer to the end of the streamed memory.
-    protected var bufferEnd: UnsafeBufferPtr<Byte> { get }
+    protected var bufferEnd: UnsafePtr<Byte> { get }
 
     /// Pointer to the current position in the stream.
-    protected var bufferCur: UnsafeBufferPtr<Byte> { get }
+    protected var bufferCur: UnsafePtr<Byte> { get }
 
     /// Default buffer size to use for a buffered stream.
     public alias DefaultBufferSize = 1024
@@ -179,8 +180,8 @@ public abstract class BufferedInputStream: InputStream {
             self.buffered = true
 
             self.bufferStart = UnsafeBufferPtr<Byte>.allocate(DefaultBufferSize)
-            self.bufferEnd   = self.bufferStart
-            self.bufferCur   = self.bufferStart
+            self.bufferEnd   = UnsafePtr<Byte>(self.bufferStart)
+            self.bufferCur   = UnsafePtr<Byte>(self.bufferStart)
         }
     }
 

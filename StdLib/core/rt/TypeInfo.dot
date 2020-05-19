@@ -1,11 +1,15 @@
 
+import { RawPointer, Void } from builtin
+import mem
+import sys
+
 public struct ValueWitnessTable with MoveOnly {
     /// Function that copies an existential value.
-    let copy: @thin (UnsafeMutableRawPtr, UnsafeRawPtr) -> Void
+    let copy: @thin (RawPointer, RawPointer) -> Void
 
     /// Function that deinitializes an existential value.
     /// For classes, this is a reference to _cdot_Release, not the actual deinitializer.
-    let deinit: @thin (UnsafeMutableRawPtr) -> Void
+    let deinitialize: @thin (RawPointer) -> Void
 }
 
 public struct ProtocolConformance {
@@ -29,7 +33,7 @@ public struct TypeInfo {
     let vtable: UnsafePtr<UnsafeRawPtr>
 
     /// Pointer to the deinitializer of this type.
-    let deinit: @thin (UnsafeMutableRawPtr) -> Void
+    let deinitialize: @thin (RawPointer) -> Void
 
     /// NUL-terminated cstring containing the type name.
     let name: UnsafePtr<Byte>
@@ -56,7 +60,7 @@ public struct TypeInfo {
         }
 
         var i = 0
-        var conformances = conformances
+        var conformances = conformances.copy()
         var conf = conformances + i
 
         while conf->typeInfo {
@@ -86,7 +90,7 @@ public struct ClassHeader {
 
 /// \return pointer to the type-info object of a class.
 @extern(C) public def _cdot_GetTypeInfo(_ ptr: UnsafePtr<ClassHeader>) -> UnsafePtr<TypeInfo> {
-    return ptr->typeInfo
+    return ptr->typeInfo.copy()
 }
 
 @extern(C) public def _cdot_GetConformance(_ typeInfo: UnsafePtr<TypeInfo>,
@@ -95,9 +99,10 @@ public struct ClassHeader {
     return typeInfo->getConformance(protocolTypeInfo)
 }
 
-@extern(C) public def _cdot_GetProtocolVTable(_ container: UnsafePtr<ExistentialContainer>,
-                                              _ protocolTypeInfo: UnsafePtr<TypeInfo>)
-                                                 -> UnsafePtr<UnsafeRawPtr> {
+@extern(C) public def _cdot_GetProtocolVTable(
+    _ container: UnsafePtr<ExistentialContainer>,
+    _ protocolTypeInfo: UnsafePtr<TypeInfo>) -> UnsafePtr<UnsafeRawPtr>
+{
     var conformance: UnsafePtr<ProtocolConformance>
 
     // Fast-path if this existential only stores one conformance.
@@ -109,20 +114,20 @@ public struct ClassHeader {
         conformance = container->typeInfo->getConformance(protocolTypeInfo)
     }
 
-    return conformance->vtable
+    return conformance->vtable.copy()
 }
 
 /// Compare two type-info objects for compatibility.
 /// \return `true` iff they're compatible.
 @extern(C) public def _cdot_TypeInfoCmp(_ lhs: UnsafePtr<TypeInfo>,
                                         _ rhs: UnsafePtr<TypeInfo>) -> Bool {
-    var curr = lhs
+    var curr = lhs.copy()
     while curr {
         if curr == rhs {
             return true
         }
 
-        curr = curr->baseClass
+        curr = curr->baseClass.copy()
     }
 
     var conf = lhs->getConformance(rhs)
@@ -134,7 +139,7 @@ public struct ClassHeader {
 }
 
 struct AnyOption<T> {
-    var discriminator: Int8
+    var discriminator: Int64
     var object: T
 }
 
@@ -143,15 +148,17 @@ struct AnyOption<T> {
 @extern(C) public def _cdot_DynamicDownCast(_ object: UnsafePtr<ClassHeader>,
                                             _ rhs: UnsafePtr<TypeInfo>,
                                             _ result: mut ref AnyOption<UnsafeRawPtr>) {
-    var curr = object->typeInfo
+    var curr = object->typeInfo.copy()
     while curr {
         if curr == rhs {
-            result = AnyOption<UnsafeRawPtr>(discriminator: 1,
-                                             object: UnsafeRawPtr(object))
+            var ptr = UnsafeMutablePtr<AtomicRefcounted>(bitPattern: object.rawValue)
+            _cdot_AtomicRetain(ptr)
+
+            result = AnyOption<UnsafeRawPtr>(discriminator: 1, object: UnsafeRawPtr(object))
             return
         }
 
-        curr = curr->baseClass
+        curr = curr->baseClass.copy()
     }
 
     result = AnyOption<UnsafeRawPtr>(discriminator: 0, object: .null)
@@ -168,7 +175,7 @@ def _cdot_CopyClass(_ result: UnsafeMutableRawPtr, _ value: UnsafeRawPtr) {
 
     // Set the new value to point to the retained class.
     var resultRef = result.reinterpretCast<UnsafeRawPtr>()
-    resultRef.store(value)
+    resultRef.store(value.copy())
 }
 
 public struct ExistentialContainer {
@@ -193,7 +200,8 @@ public struct ExistentialContainer {
 }
 
 public def _isClass(_ typeInfo: UnsafePtr<TypeInfo>) -> Bool {
-    return UnsafeRawPtr(typeInfo->valueWitnessTable->copy) == UnsafeRawPtr(_cdot_CopyClass)
+    return (UnsafeRawPtr(rawPointer: typeInfo->valueWitnessTable->copy as! builtin.RawPointer) 
+        == UnsafeRawPtr(rawPointer: _cdot_CopyClass as! builtin.RawPointer))
 }
 
 /// Initialize an existential container for a protocol value.
@@ -221,7 +229,7 @@ public def _cdot_InitializeExistential(_ value: UnsafeRawPtr,
     var conformance = valueTypeInfo->getConformance(protocolTypeInfo)
 
     // Initialize the existential container.
-    result = ExistentialContainer(value: alloc, typeInfo: valueTypeInfo, conformance)
+    result = ExistentialContainer(value: alloc, typeInfo: valueTypeInfo.copy(), conformance)
 }
 
 /// Initialize an existential container for a protocol value.
@@ -236,7 +244,7 @@ public def _cdot_InitializeExistentialPreallocated(_ value: UnsafeRawPtr,
 
     // Initialize the existential container.
     result = ExistentialContainer(value: UnsafeMutableRawPtr(bitPattern: value.rawValue),
-                                  typeInfo: valueTypeInfo,
+                                  typeInfo: valueTypeInfo.copy(),
                                   conformance)
 }
 
@@ -244,7 +252,7 @@ public def _cdot_InitializeExistentialPreallocated(_ value: UnsafeRawPtr,
 @extern(C)
 public def _cdot_DeinitializeExistential(_ container: mut ref ExistentialContainer) {
     // Call the deinitializer of the existential value.
-    container.typeInfo->valueWitnessTable->deinit(container.value)
+    container.typeInfo->valueWitnessTable->deinitialize(container.value.raw)
 
     // Free the memory allocated for the value.
     if !_isClass(container.typeInfo) {
@@ -258,8 +266,8 @@ public def _cdot_CopyExistential(_ container: mut ref ExistentialContainer,
                                  _ result: mut ref ExistentialContainer) {
     var alloc: UnsafeMutableRawPtr
     if _isClass(container.typeInfo) {
-        _cdot_AtomicRetain(UnsafeMutablePtr<AtomicRefcounted>(container.value))
-        alloc = UnsafeMutableRawPtr(bitPattern: container.value.rawValue)
+        _cdot_AtomicRetain(UnsafeMutablePtr<AtomicRefcounted>(rawValue: container.value.rawValue))
+        alloc = UnsafeMutableRawPtr(container.value)
     }
     else {
         // Heap-allocate space for the existential value.
@@ -267,8 +275,7 @@ public def _cdot_CopyExistential(_ container: mut ref ExistentialContainer,
                              alignTo: container.typeInfo->alignment)
 
         // Call the witness copy function to create a copy of the value.
-        container.typeInfo->valueWitnessTable->copy(alloc,
-                                                    UnsafeRawPtr(container.value))
+        container.typeInfo->valueWitnessTable->copy(alloc.raw, container.value.raw)
     }
 
     // Initialize the existential container with the copied value.
@@ -328,8 +335,7 @@ public def _cdot_ExistentialUnwrap(_ container: mut ref ExistentialContainer,
     }
 
     // Call the witness copy function to create a copy of the value.
-    container.typeInfo->valueWitnessTable->copy(result,
-                                                UnsafeRawPtr(container.value))
+    container.typeInfo->valueWitnessTable->copy(result.raw, container.value.raw)
 }
 
 @_builtin @extern(C)
@@ -346,8 +352,8 @@ public def _cdot_ExistentialUnwrapFallible(_ container: mut ref ExistentialConta
     }
 
     // Call the witness copy function to create a copy of the value.
-    container.typeInfo->valueWitnessTable->copy(result.object,
-                                                UnsafeRawPtr(container.value))
+    var ref = builtin.addressOf(&result.object)
+    container.typeInfo->valueWitnessTable->copy(ref, container.value.raw)
 
     result.discriminator = 1
 }
@@ -392,7 +398,7 @@ public struct GenericEnvironment {
 
     /// \return a generic argument with the name \param name, or `null` if it doesn't exist.
     def getGenericArgument(withName name: UnsafePtr<Byte>) -> UnsafePtr<GenericArgument> {
-        var ptr = genericArguments
+        var ptr = genericArguments.copy()
         if !ptr {
             return .null
         }
@@ -417,16 +423,16 @@ public struct GenericEnvironment {
 public def _cdot_GetGenericArgument(_ environment: UnsafePtr<GenericEnvironment>,
                                     _ depth: Int,
                                     _ index: Int) -> UnsafePtr<GenericArgument> {
-    var environment = environment
+    var environment = environment.copy()
     var depth = depth
     var index = index
 
     while depth > 0 {
-        environment = environment->enclosingEnvironment
+        environment = environment->enclosingEnvironment.copy()
         depth -= 1
     }
 
-    var ptr = environment->genericArguments
+    var ptr = environment->genericArguments.copy()
     while index > 0 {
         ptr += 1
         index -= 1

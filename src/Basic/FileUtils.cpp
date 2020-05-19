@@ -1,13 +1,9 @@
-//
-// Created by Jonas Zell on 13.10.17.
-//
+#include "cdotc/Basic/FileUtils.h"
 
-#include "FileUtils.h"
+#include "cdotc/Support/LLVM.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/Program.h>
 
@@ -15,12 +11,12 @@
 #include <system_error>
 
 #if defined(__APPLE__)
-#  include <pwd.h>
-#  include <unistd.h>
+#include <pwd.h>
+#include <unistd.h>
 #endif
 
 #ifdef _WIN32
-#  include <direct.h>
+#include <direct.h>
 #endif
 
 using std::string;
@@ -155,25 +151,21 @@ std::vector<string> getAllFilesInDirectoryImpl(llvm::StringRef dirName)
 
    iterator it(dirName, ec);
    while (!ec) {
-      auto &entry = *it;
+      auto& entry = *it;
 
       auto errOrStatus = entry.status();
       if (!errOrStatus)
          break;
 
-      auto &st = errOrStatus.get();
-      auto err = entry.status();
-      if (err)
-         break;
-
+      auto& st = errOrStatus.get();
       switch (st.type()) {
-         case Kind::regular_file:
-         case Kind::symlink_file:
-         case Kind::character_file:
-            files.push_back(entry.path());
-            break;
-         default:
-            break;
+      case Kind::regular_file:
+      case Kind::symlink_file:
+      case Kind::character_file:
+         files.push_back(entry.path());
+         break;
+      default:
+         break;
       }
 
       it.increment(ec);
@@ -185,7 +177,8 @@ std::vector<string> getAllFilesInDirectoryImpl(llvm::StringRef dirName)
 } // anonymous namespace
 
 std::vector<string> getAllFilesInDirectory(llvm::StringRef dirName,
-                                           bool recursive) {
+                                           bool recursive)
+{
    using llvm::sys::fs::recursive_directory_iterator;
    using llvm::sys::fs::directory_iterator;
 
@@ -196,7 +189,8 @@ std::vector<string> getAllFilesInDirectory(llvm::StringRef dirName,
 }
 
 string findFileInDirectories(llvm::StringRef fileName,
-                             llvm::ArrayRef<std::string> directories) {
+                             llvm::ArrayRef<std::string> directories)
+{
    if (fileName.front() == fs::PathSeperator) {
       if (fileExists(fileName))
          return fileName;
@@ -226,23 +220,25 @@ string findFileInDirectories(llvm::StringRef fileName,
 
       iterator it(dirName, ec);
       while (it != end_it) {
-         auto &entry = *it;
+         auto& entry = *it;
 
          auto errOrStatus = entry.status();
-         if (!errOrStatus)
-            break;
+         if (!errOrStatus) {
+            it.increment(ec);
+            continue;
+         }
 
-         auto &st = errOrStatus.get();
+         auto& st = errOrStatus.get();
          switch (st.type()) {
-            case Kind::regular_file:
-            case Kind::symlink_file:
-            case Kind::character_file:
-               if (getFileNameAndExtension(entry.path()) == fileName.str())
-                  return entry.path();
+         case Kind::regular_file:
+         case Kind::symlink_file:
+         case Kind::character_file:
+            if (getFileNameAndExtension(entry.path()) == fileName.str())
+               return entry.path();
 
-               break;
-            default:
-               break;
+            break;
+         default:
+            break;
          }
 
          it.increment(ec);
@@ -256,17 +252,14 @@ string findFileInDirectories(llvm::StringRef fileName,
 
 int executeCommand(llvm::StringRef Program, llvm::ArrayRef<string> args)
 {
-   std::unique_ptr<const char*> argArray(new const char*[args.size() + 1]);
-   size_t i = 0;
+   SmallVector<StringRef, 2> ArgVec;
+   ArgVec.reserve(args.size());
 
-   while (i < args.size()) {
-      argArray.get()[i] = args[i].c_str();
-      ++i;
+   for (auto &arg : args) {
+      ArgVec.emplace_back(arg);
    }
 
-   argArray.get()[i] = nullptr;
-
-   return llvm::sys::ExecuteAndWait(Program, argArray.get());
+   return llvm::sys::ExecuteAndWait(Program, ArgVec);
 }
 
 long long getLastModifiedTime(llvm::Twine const& pathToFile)
@@ -277,12 +270,13 @@ long long getLastModifiedTime(llvm::Twine const& pathToFile)
       return -1ll;
 
    return std::chrono::duration_cast<std::chrono::milliseconds>(
-      stat.getLastModificationTime().time_since_epoch()).count();
+              stat.getLastModificationTime().time_since_epoch())
+       .count();
 }
 
 namespace {
 
-template <class iterator = llvm::sys::fs::directory_iterator, class Handler>
+template<class iterator = llvm::sys::fs::directory_iterator, class Handler>
 void iterateOverFilesInDirectory(llvm::StringRef dir, Handler const& H)
 {
    using Kind = llvm::sys::fs::file_type;
@@ -292,21 +286,23 @@ void iterateOverFilesInDirectory(llvm::StringRef dir, Handler const& H)
    iterator end_it;
 
    while (it != end_it) {
-      auto &entry = *it;
+      auto& entry = *it;
 
       auto errOrStatus = entry.status();
-      if (!errOrStatus)
-         break;
+      if (!errOrStatus) {
+         it.increment(ec);
+         continue;
+      }
 
-      auto &st = errOrStatus.get();
+      auto& st = errOrStatus.get();
       switch (st.type()) {
-         case Kind::regular_file:
-         case Kind::symlink_file:
-         case Kind::character_file:
-            H(entry.path());
-            break;
-         default:
-            break;
+      case Kind::regular_file:
+      case Kind::symlink_file:
+      case Kind::character_file:
+         H(entry.path());
+         break;
+      default:
+         break;
       }
 
       it.increment(ec);
@@ -316,7 +312,8 @@ void iterateOverFilesInDirectory(llvm::StringRef dir, Handler const& H)
 } // anonymous namespace
 
 void getAllMatchingFiles(llvm::StringRef fileName,
-                         llvm::SmallVectorImpl<std::string> &Out) {
+                         llvm::SmallVectorImpl<std::string>& Out)
+{
    auto ext = getExtension(fileName);
    auto file = getFileName(fileName);
 
@@ -325,18 +322,15 @@ void getAllMatchingFiles(llvm::StringRef fileName,
 
       // /foo/bar/* matches all files in directory, non recursively
       if (ext.empty()) {
-         iterateOverFilesInDirectory(path,
-                                     [&Out](string const& s) {
-                                        Out.push_back(s);
-                                     });
+         iterateOverFilesInDirectory(
+             path, [&Out](string const& s) { Out.push_back(s); });
       }
       // /foo/bar/*.baz matches only files that match the extension
       else {
-         iterateOverFilesInDirectory(path,
-                                     [&Out, &ext](string const& s) {
-                                         if (getExtension(s) == ext)
-                                            Out.push_back(s);
-                                     });
+         iterateOverFilesInDirectory(path, [&Out, &ext](string const& s) {
+            if (getExtension(s) == ext)
+               Out.push_back(s);
+         });
       }
    }
    else if (file == "**") {
@@ -345,18 +339,15 @@ void getAllMatchingFiles(llvm::StringRef fileName,
 
       // /foo/bar/** matches all files in directory, recursively
       if (ext.empty()) {
-         iterateOverFilesInDirectory<it>(path,
-                                         [&Out](string const& s) {
-                                            Out.push_back(s);
-                                         });
+         iterateOverFilesInDirectory<it>(
+             path, [&Out](string const& s) { Out.push_back(s); });
       }
       // /foo/bar/**.baz matches only files that match the extension
       else {
-         iterateOverFilesInDirectory<it>(path,
-                                         [&Out, &ext](string const& s) {
-                                            if (getExtension(s) == ext)
-                                               Out.push_back(s);
-                                         });
+         iterateOverFilesInDirectory<it>(path, [&Out, &ext](string const& s) {
+            if (getExtension(s) == ext)
+               Out.push_back(s);
+         });
       }
    }
    else {
@@ -364,34 +355,39 @@ void getAllMatchingFiles(llvm::StringRef fileName,
    }
 }
 
-void deleteAllFilesInDirectory(const llvm::Twine &Dir)
+void deleteAllFilesInDirectory(const llvm::Twine& Dir)
 {
    using it = llvm::sys::fs::recursive_directory_iterator;
 
    llvm::SmallVector<string, 4> FilesToDelete;
-   iterateOverFilesInDirectory<it>(Dir.str(), [&](const string &file) {
-      FilesToDelete.push_back(file);
-   });
+   iterateOverFilesInDirectory<it>(
+       Dir.str(), [&](const string& file) { FilesToDelete.push_back(file); });
 
-   for (auto &File : FilesToDelete)
+   for (auto& File : FilesToDelete)
       deleteFile(File);
 }
 
-std::error_code makeAbsolute(llvm::SmallVectorImpl<char> &Buf)
+std::error_code makeAbsolute(llvm::SmallVectorImpl<char>& Buf)
 {
    return llvm::sys::fs::make_absolute(Buf);
 }
 
 llvm::StringRef getLibraryDir()
 {
-   // FIXME
+#ifndef _WIN32
    return "/usr/local/lib";
+#else
+   return "C:\\Windows\\System32";
+#endif
 }
 
 llvm::StringRef getIncludeDir()
 {
-   // FIXME
+#ifndef _WIN32
    return "/usr/local/include";
+#else
+   return "C:\\Windows\\System32";
+#endif
 }
 
 #pragma clang diagnostic push
@@ -402,12 +398,12 @@ std::string getApplicationDir()
 #ifdef _WIN32
    return getenv("APPDATA");
 #elif defined(__APPLE__)
-   const char *homeDir = getenv("HOME");
+   const char* homeDir = getenv("HOME");
 
    if (!homeDir) {
       struct passwd* pwd = getpwuid(getuid());
       if (pwd)
-      homeDir = pwd->pw_dir;
+         homeDir = pwd->pw_dir;
    }
 
    std::string str(homeDir);
@@ -417,7 +413,7 @@ std::string getApplicationDir()
 #elif defined(__linux__)
    return "~/.config/cdotc"
 #else
-#  error "unsupported platform"
+#error "unsupported platform"
 #endif
 }
 
@@ -434,7 +430,7 @@ llvm::StringRef getDynamicLibraryExtension()
 #endif
 }
 
-void appendToPath(llvm::SmallVectorImpl<char> &Path, llvm::StringRef Append)
+void appendToPath(llvm::SmallVectorImpl<char>& Path, llvm::StringRef Append)
 {
    if (Path.empty() || Path.back() != PathSeperator)
       Path.push_back(PathSeperator);
@@ -442,12 +438,12 @@ void appendToPath(llvm::SmallVectorImpl<char> &Path, llvm::StringRef Append)
    Path.append(Append.begin(), Append.end());
 }
 
-void appendToPath(llvm::SmallVectorImpl<char> &Path, const llvm::Twine &Append)
+void appendToPath(llvm::SmallVectorImpl<char>& Path, const llvm::Twine& Append)
 {
    appendToPath(Path, llvm::StringRef(Append.str()));
 }
 
-void appendToPath(std::string &Path, const llvm::Twine &Append)
+void appendToPath(std::string& Path, const llvm::Twine& Append)
 {
    if (Path.empty() || Path.back() != PathSeperator)
       Path.push_back(PathSeperator);
@@ -456,24 +452,39 @@ void appendToPath(std::string &Path, const llvm::Twine &Append)
    Path.insert(Path.end(), append.begin(), append.end());
 }
 
-std::string getTmpFileName(llvm::StringRef Ext)
+std::unique_ptr<llvm::raw_fd_ostream>
+openTmpFile(StringRef Ext, std::string *FileName)
 {
-   llvm::SmallString<128> TmpFile;
-   auto EC = llvm::sys::fs::createUniqueFile("cdot-tmp-%%%%%%%%." + Ext,
-                                             TmpFile);
+   using namespace llvm::sys::fs;
 
+   int FD;
+   llvm::SmallString<128> TmpFile;
+
+   auto EC = createTemporaryFile("cdot-tmp-%%%%%%%%", Ext, FD, TmpFile);
+   if (EC) {
+      return nullptr;
+   }
+
+   if (FileName)
+      *FileName = TmpFile.str();
+
+   return std::make_unique<llvm::raw_fd_ostream>(FD, true);
+}
+
+std::string getTmpFileName(StringRef Ext)
+{
+   using namespace llvm::sys::fs;
+
+   llvm::SmallString<128> TmpFile;
+   auto EC = getPotentiallyUniqueTempFileName("cdot-tmp-%%%%%%%%", Ext, TmpFile);
    if (EC) {
       llvm::report_fatal_error(EC.message());
    }
 
-   llvm::SmallString<56> TmpDir;
-   llvm::sys::path::system_temp_directory(true, TmpDir);
-
-   TmpFile.insert(TmpFile.begin(), TmpDir.begin(), TmpDir.end());
-   return TmpFile.str();
+   return TmpFile.str().str();
 }
 
-std::string exec(const std::string &cmd)
+std::string exec(const std::string& cmd)
 {
    std::array<char, 128> buffer{};
    std::string result;

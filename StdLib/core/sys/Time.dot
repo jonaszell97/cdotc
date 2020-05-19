@@ -1,15 +1,82 @@
 
-enum TimeUnit {
-    case Seconds, Millis, Nanos
+import { i64, i32 } from builtin
+import libc
+
+/// Time unit used for various system functions.
+public enum TimeUnit {
+    case Seconds
+    case Millis
+    case Nanos
 }
 
-def currentTime() -> Int {
-    return libc.time(0 as! UnsafeMutableRawPtr) as Int
+/// Struct that represents a point in time.
+public struct DateTime {
+    /// Internal value representing the unix timestamp.
+    internal let timestamp: UInt64
+
+    /// Initialize from a unix timestamp.
+    init (timestamp: UInt64) {
+        self.timestamp = timestamp
+    }
 }
 
+/// Represents a time span.
+public struct TimeSpan {
+    /// Passed time in milliseconds.
+    internal let value: UInt64
+
+    /// Initialize from a millisecond timespan.
+    init (milliseconds: UInt64) {
+        self.value = milliseconds
+    }
+
+    /// Initialize from a second timespan.
+    init (seconds: Double) {
+        self.value = UInt64(seconds * 1000.0)
+    }
+
+    /// Initialize from a minute timespan.
+    init (minutes: Double) {
+        self.value = UInt64(minutes * 60.0 * 1000.0)
+    }
+
+    /// \return The time in milliseconds.
+    public prop millis: UInt64 => value
+
+    /// \return The time in seconds, rounding down.
+    public prop seconds: UInt64 => value / 1000
+
+    /// \return The exact time in seconds.
+    public prop exactSeconds: Double => Double(value) / 1000.0
+
+    /// \return The time in minutes, rounding down.
+    public prop minutes: UInt64 => seconds / 60
+
+    /// \return The exact time in minutes.
+    public prop exactMinutes: Double => exactSeconds / 60.0
+
+    /// \return The time in hours, rounding down.
+    public prop hours: UInt64 => minutes / 60
+
+    /// \return The exact time in hours.
+    public prop exactHours: Double => exactMinutes / 60.0
+
+    /// \return The time in days, rounding down.
+    public prop days: UInt64 => hours / 24
+
+    /// \return The exact time in hours.
+    public prop exactDays: Double => exactHours / 24.0
+}
+
+/// Return a timestamp representing the current time.
+public def currentTime() -> DateTime {
+    return DateTime(timestamp: UInt64(libc.time.time(__nullptr)))
+}
+
+/*
 internal struct timeval {
-    let tv_sec: i64     /* seconds */
-    let tv_usec: i32    /* microseconds */
+    let tv_sec: i64     // seconds
+    let tv_usec: i32    // microseconds
 }
 
 def highResolutionClock() -> Int {
@@ -84,4 +151,4 @@ macro benchmark {
         var duration = endTimer(timer)
         print("benchmark took ${duration}ms to complete")
     }}
-}
+}*/

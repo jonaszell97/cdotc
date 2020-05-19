@@ -1,5 +1,0 @@
-
-; Module ID: /Users/Jonas/CDot/StdLib/policy/mod.dotm
-$"cdot_policy.<private name>.ProtocolConformance" = struct { %typeInfo: UnsafePtr<$"cdot_policy.<private name>.TypeInfo">, %vtable: UnsafePtr<UnsafeRawPtr> }
-$"cdot_policy.<private name>.TypeInfo" = struct { %baseClass: UnsafePtr<$"cdot_policy.<private name>.TypeInfo">, %vtable: UnsafePtr<UnsafeRawPtr>, %deinit: $(UnsafeMutableRawPtr) -> void, %name: UnsafePtr<u8>, %valueWitnessTable: UnsafePtr<$"cdot_policy.<private name>.ValueWitnessTable">, %conformances: UnsafePtr<$"cdot_policy.<private name>.ProtocolConformance">, %size: u64, %alignment: u64, %stride: u64 }
-$"cdot_policy.<private name>.ExistentialContainer" = struct { %value: UnsafeMutableRawPtr, %typeInfo: UnsafePtr<$"cdot_policy.<private name>.TypeInfo">, %conformance: UnsafePtr<$"cdot_policy.<private name>.ProtocolConformance"> }

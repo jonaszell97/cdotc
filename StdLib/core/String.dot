@@ -1,6 +1,10 @@
 
 import builtin
+
 using atomic.Atomic
+
+/// The default string type used by the compiler for string literals.
+public alias DefaultStringLiteralType = String
 
 public protocol StringRepresentable {
     def toString() -> String
@@ -14,6 +18,30 @@ public protocol ExpressibleByStringLiteral {
     init (stringLiteral s: String)
 }
 
+// Since the default assert macro uses strings, we can't use it to report failures in String itself.
+private macro _string_assert(
+    ($cond:any, $msg:expr) => {
+        static if reflect.debug {
+            if !($cond) {
+                _ = libc.stdio.printf("[21;31massertion failed:%s\n", stringify!($cond) as libc.cstring)
+            }
+        }
+    }
+)
+
+private macro _string_precondition(
+    ($cond:any, $msg:expr) => {
+        if !($cond) {
+            _ = libc.stdio.printf("[21;31mprecondition failed:%s\n", stringify!($cond) as libc.cstring)
+        }
+    },
+    ($cond:any) => {
+        if !($cond) {
+            _ = libc.stdio.printf("[21;31mprecondition failure%s\n")
+        }
+    }
+)
+
 @_builtin @compiletime
 fileprivate struct StringBuffer {
     var _owner: UnsafeMutablePtr<StringBuffer> = .null
@@ -23,27 +51,27 @@ fileprivate struct StringBuffer {
 
     /// This buffers reference count.
     /// If it is zero, the buffer is not currently shared.
-    var atomicRefCount: Atomic<UInt32> = 0
+    var atomicRefCount: Atomic<UInt32> = Atomic<UInt32>()
 
     /// Flag that is set when this string contains only ASCII characters.
-    alias ASCIIFlag = 1 << 61
+    static let ASCIIFlag = 1 << 61
 
     /// Flag that is currently unused.
-    alias UnusedFlag = 1 << 62
+    static let UnusedFlag = 1 << 62
 
     /// Flag that is set when this String buffer owns its memory.
-    alias OwnedFlag = 1 << 63
+    static let OwnedFlag = 1 << 63
 
     /// Mask to get the capacity from the raw value.
-    alias CapacityMask = ~(OwnedFlag | UnusedFlag | ASCIIFlag)
+    static let CapacityMask = ~(OwnedFlag | UnusedFlag | ASCIIFlag)
 
     /// Default capacity to allocate when growing from zero.
-    alias DefaultCapacity = 32
+    static let DefaultCapacity = 32
 
     /// Memberwise C'tor.
     fileprivate memberwise init
 
-    /// Default C'tor. Initializes an isOwned, small string buffer.
+    /// Default C'tor. Initializes an owned, small string buffer.
     init {
         self._owner = .null
         self._chars = .null
@@ -51,13 +79,13 @@ fileprivate struct StringBuffer {
         self._capacity = 0
     }
 
-    /// C'tor. Initialize from an unisOwned external buffer.
-    @_builtin("StringBuffer.init(unisOwnedBuffer:size:")
+    /// C'tor. Initialize from an unowned external buffer.
+    @_builtin("StringBuffer.init(unownedBuffer:size:)")
     init (unownedBuffer bytes: UnsafeMutableBufferPtr<Byte>, size: Int) {
         self.init()
         self.isOwned = false
 
-        uncheckedInsert(bytes, size, at: byteSize)
+        uncheckedInsert(UnsafeBufferPtr<Byte>(rawPointer: bytes.rawPointer), size, at: byteSize)
     }
 
     /// Initialize from a static string. This is only called by the compiler
@@ -69,13 +97,15 @@ fileprivate struct StringBuffer {
         self.isOwned = false
         self._chars = bytes
         self._size = size
+        self.isAscii = true
 
         checkASCII(bytes, size)
     }
 
     /// Initialize a substring.
     init (owner: UnsafeMutablePtr<StringBuffer>, bounds: Range<Int>) {
-        _owner->retain()
+        owner->ensureRefcounted()
+        owner->retain()
 
         self._owner = owner
         self._chars = owner->_chars + bounds.startIndex
@@ -86,13 +116,18 @@ fileprivate struct StringBuffer {
         self.isAscii = owner->isAscii
     }
 
-    /// D'tor. Frees the memory if this buffer owns it.
+    /// D'tor. Only called via UnsafePtr.deinitialize
     deinit {
-        if isOwned {
-            self._chars.deallocate()
-        }
-        else if _owner {
+        self._chars.deallocate()
+    }
+
+    /// Called by StringStorage.
+    def mutating deinitialize() {
+        if _owner {
             _owner->release()
+        }
+        else if isOwned {
+            self._chars.deallocate()
         }
     }
 
@@ -138,12 +173,13 @@ fileprivate struct StringBuffer {
 
     /// \return this buffers current reference count.
     prop refcount: UInt32 {
+         _string_assert!(refcounted, "StringBuffer is not refcounted!")
         return atomicRefCount.load()
     }
 
     /// \return true iff this buffer is currently refcounted.
     prop refcounted: Bool {
-        return refcount != 0
+        return !atomicRefCount.isNull
     }
 
     /// \return this strings current size in bytes.
@@ -162,7 +198,7 @@ fileprivate struct StringBuffer {
             return _capacity & CapacityMask
         }
         set {
-            assert!(newVal & ~CapacityMask == 0, "capacity too large!")
+             _string_assert!(newVal & ~CapacityMask == 0, "capacity too large!")
 
             _capacity &= ~CapacityMask
             _capacity |= newVal
@@ -171,23 +207,41 @@ fileprivate struct StringBuffer {
 
     /// Increments this buffer's reference count by one.
     def mutating retain() {
+        _string_assert!(refcounted, "StringBuffer is not refcounted!")
         atomicRefCount += 1
     }
 
     /// Decrements this buffer's reference count by one.
     def mutating release() {
+        _string_assert!(refcounted, "StringBuffer is not refcounted!")
         atomicRefCount -= 1
 
-        var rfc = atomicRefCount
-        if rfc == 0 {
+        if atomicRefCount.load() == 0 {
             // Controlled self destruction.
+            self._owner = .null
             UnsafeMutablePtr<Self>(rawPointer: builtin.addressOf(self)).deinitialize()
+            atomicRefCount.deinitialize()
         }
+    }
+
+    /// Turn this into a refcounted buffer.
+    def mutating ensureRefcounted() {
+        if !atomicRefCount.isNull {
+            return
+        }
+
+        if !isOwned {
+            makeOwned()
+        }
+
+        self.atomicRefCount = Atomic<UInt32>(allocatingMemory: 0)
+        self._owner = UnsafeMutablePtr<Self>(rawPointer: builtin.addressOf(self))
+        self.retain()
     }
 
     /// Check whether the given bytes contain non-ascii characters and change
     /// the ASCII flag accordingly.
-    def mutating checkASCII(_ bytes: UnsafeMutableBufferPtr<Byte>, size: Int) {
+    def mutating checkASCII(_ bytes: UnsafeBufferPtr<Byte>, size: Int) {
         if !isAscii {
             return
         }
@@ -213,7 +267,7 @@ fileprivate struct StringBuffer {
 
         var minCapacity = minCapacity
         if minCapacity == 0 {
-            minCapacity = math.max(DefaultCapacity, math.closestPowerOfTwo(byteSize))
+            minCapacity = math.max(DefaultCapacity, math.closestPowerOfTwo(roundingUp: byteSize))
         }
 
         // Allocate storage.
@@ -234,7 +288,7 @@ fileprivate struct StringBuffer {
 
     /// Insert the given raw bytes into the buffer at the specified position,
     /// these must be valid UTF8.
-    def mutating uncheckedInsert(_ bytes: UnsafeMutableBufferPtr<Byte>,
+    def mutating uncheckedInsert(_ bytes: UnsafeBufferPtr<Byte>,
                                  _ size: Int,
                                  at position: Int) {
         var neededCapacity = byteSize + size
@@ -255,7 +309,7 @@ fileprivate struct StringBuffer {
 
     /// Remove \param n bytes following \param position.
     def mutating remove(count n: Int, at position: Int) {
-        assert!(position + n < byteSize, "removing more bytes than exist")
+         _string_assert!(position + n < byteSize, "removing more bytes than exist")
 
         /// Copy all following bytes behind by n bytes.
         mem.move(to: self._chars + position,
@@ -279,7 +333,7 @@ fileprivate struct StringBuffer {
             return
         }
 
-        var growTo = math.closestPowerOfTwo(n)
+        var growTo = math.closestPowerOfTwo(roundingUp: n)
         if !isOwned {
             return makeOwned(ensuringCapacity: growTo)
         }
@@ -300,7 +354,6 @@ extend StringBuffer with Copyable {
     public def copy() -> Self {
         var copy = StringBuffer(_chars, _size, _capacity)
         copy.isOwned = false
-
         return copy
     }
 }
@@ -308,13 +361,11 @@ extend StringBuffer with Copyable {
 extend StringBuffer {
     def _dump() {
         var s = "StringBuffer ${UnsafePtr(referencing: self)} {\n"
-        s += "   small = $small,\n"
-        s += "   ascii = $ascii,\n"
         s += "   isOwned = $isOwned,\n"
         s += "   refcount = $refcount,\n"
         s += "   byteSize = $byteSize,\n"
         s += "   byteCapacity = $byteCapacity,\n"
-        s += "   bytes = '${String(cstring: _chars, byteSize)}'\n"
+        s += "   bytes = '${String(cstring: _chars, size: byteSize)}'\n"
         s += "}"
 
         print(s)
@@ -349,19 +400,19 @@ extend StringBuffer {
 
 @_builtin struct StringStorage {
     /// Flag that is set when the String is purely ASCII.
-    alias ASCIIFlag: Byte = 0b1000_0000
+    static let ASCIIFlag: Byte = 0b1000_0000
 
     /// Flag that is set when this String is using a small, inline representation.
-    alias SmallFlag: Byte = 0b0100_0000
+    static let SmallFlag: Byte = 0b0100_0000
 
     /// This bit is currently unused.
-    alias UnusedBit: Byte = 0b0010_0000
+    static let UnusedBit: Byte = 0b0010_0000
 
     /// Mask to extract the 5-bit size from a byte.
-    alias SmallSizeMask: Byte = 0b0001_1111
+    static let SmallSizeMask: Byte = 0b0001_1111
 
     /// Number of inline bytes that fit into the small representation.
-    alias SmallCapacity = 2 * reflect.sizeOf<Int> - 1
+    static let SmallCapacity = 2 * reflect.sizeOf<Int> - 1
 
     /// The raw opaque storage of this string.
     var storage: (Int, Int)
@@ -369,8 +420,8 @@ extend StringBuffer {
     /// Initializes a small, empty string.
     init {
         self.storage = (0, 0)
-        self.isAscii = true
         self.isSmall = true
+        self.isAscii = true
     }
 
     /// Memberwise initializer.
@@ -380,17 +431,21 @@ extend StringBuffer {
     init (_ buffer: UnsafeMutablePtr<StringBuffer>) {
         self.init()
 
+        buffer->ensureRefcounted()
         buffer->retain()
         self.buffer = buffer
     }
 
     /// Initialize a substring.
     init (_ storage: borrow StringStorage, bounds: Range<Int>) {
-        var buffer = mem.new<StringBuffer>(owner: UnsafeMutablePtr<StringStorage>(rawPointer:
-                                                builtin.addressOf(storage)),
-                                           bounds: bounds)
-
-        self.init(buffer)
+        if storage.isSmall {
+            self.init()
+            self.uncheckedInsert(storage.rawBytes, storage.byteSize, at: 0)
+        }
+        else {
+            var buffer = mem.new(StringBuffer(owner: storage.buffer, bounds: bounds))
+            self.init(buffer)
+        }
     }
 
     /// Initialize from a static string. This is only called by the compiler
@@ -398,18 +453,31 @@ extend StringBuffer {
     /// this string.
     init (staticString bytes: libc.cstring, size: Int) {
         self.init()
-        self.uncheckedInsert(bytes, size, at: 0)
+
+        var buf = mem.new(StringBuffer(staticString: UnsafeMutableBufferPtr<Byte>(rawPointer: bytes), size))
+        self.buffer = buf
     }
 
     /// Initialize from externally allocated bytes whose lifetime must exceed the lifetime
     /// of this string.
-    init (cstring bytes: libc.cstring, size: Int = -1) {
+    init (cstring bytes: UnsafeMutableBufferPtr<Byte>, size: Int = -1) {
         var size = size
+        var rawBytes = bytes.rawPointer as! libc.cstring
+
         if size == -1 {
-            size = Int(builtin.signcast(libc.string.strlen(bytes)))
+            size = Int(builtin.signcast(libc.string.strlen(rawBytes)))
         }
 
-        self.init(staticString: bytes, size)
+        self.init(staticString: rawBytes, size)
+    }
+
+    /// D'tor.
+    deinit {
+        if isSmall {
+            return
+        }
+
+        buffer->deinitialize()
     }
 
     /// \return the flags of this StringBuffer.
@@ -418,6 +486,7 @@ extend StringBuffer {
             return Byte(truncatingIfNeeded: storage.1 >> 56)
         }
         set {
+            storage.1 &= -1 >> 8
             storage.1 |= (Int(newVal) << 56)
         }
     }
@@ -513,7 +582,7 @@ extend StringBuffer {
     /// \return the buffer pointer.
     prop buffer: UnsafeMutablePtr<StringBuffer> {
         get {
-            assert!(!isSmall, "small string does not have a buffer!")
+             _string_assert!(!isSmall, "small string does not have a buffer!")
             return UnsafeMutablePtr<StringBuffer>(rawValue: storage.0)
         }
         set {
@@ -526,7 +595,7 @@ extend StringBuffer {
     def mutating grow(toAtLeast n: Int = 0) {
         var n = n
         if n == 0 {
-            n = math.closestPowerOfTwo(byteSize + 1)
+            n = math.closestPowerOfTwo(roundingUp: byteSize + 1)
         }
 
         if isSmall {
@@ -536,7 +605,7 @@ extend StringBuffer {
             }
 
             // We need to move to external storage.
-            var buf = mem.new<StringBuffer>(unownedBuffer: rawBytes, size: byteSize)
+            var buf = mem.new(StringBuffer(unownedBuffer: rawBytes, size: byteSize))
             buf->makeOwned()
 
             self.buffer = buf
@@ -548,7 +617,7 @@ extend StringBuffer {
 
     /// Check whether the given bytes contain non-ascii characters and change
     /// the ASCII flag accordingly.
-    def mutating checkASCII(_ bytes: UnsafeMutableBufferPtr<Byte>, size: Int) {
+    def mutating checkASCII(_ bytes: UnsafeBufferPtr<Byte>, size: Int) {
         if !isAscii {
             return
         }
@@ -563,7 +632,7 @@ extend StringBuffer {
 
     /// Insert the given raw bytes into the buffer at the specified position,
     /// these must be valid UTF8.
-    def mutating uncheckedInsert(_ bytes: UnsafeMutableBufferPtr<Byte>,
+    def mutating uncheckedInsert(_ bytes: UnsafeBufferPtr<Byte>,
                                  _ size: Int,
                                  at position: Int) {
         grow(toAtLeast: byteSize + size)
@@ -581,14 +650,14 @@ extend StringBuffer {
     }
 
     /// Replace a subrange with a different byte sequence of the same size.
-    def mutating replace(from index: Int, with bytes: UnsafeMutableBufferPtr<Byte>, size n: Int) {
-        assert!(index + n <= byteSize, "subrange is out of bounds!")
+    def mutating replace(from index: Int, with bytes: UnsafeBufferPtr<Byte>, size n: Int) {
+         _string_assert!(index + n <= byteSize, "subrange is out of bounds!")
         mem.copy(to: self.rawBytes + index, from: bytes, n)
     }
 
     /// Remove \param n bytes following \param position.
     def mutating remove(count n: Int64, at position: Int64) {
-        assert!(position + n < byteSize, "bad remove parameters")
+         _string_assert!(position + n < byteSize, "bad remove parameters")
 
         /// Copy all following bytes behind by n bytes.
         mem.move(to: self.rawBytes + position,
@@ -616,7 +685,7 @@ extend StringBuffer {
     }
 }
 
-extend StringStorage with Copyable {
+extend StringStorage with Copyable, Equatable {
     /// \inherit
     def copy() -> Self {
         if isSmall {
@@ -628,27 +697,35 @@ extend StringStorage with Copyable {
 }
 
 @_builtin @compiletime @testable
-public struct String {
+public struct String with ExpressibleByStringLiteral {
     /// The underlying storage of this string.
     fileprivate var storage: StringStorage
 
     /// Initialize from a static string. This is only called by the compiler
     /// when the lifetime of the buffer is guaranteed to exceed the lifetime of
     /// this string.
-    @_builtin("String.init(staticString:size:")
-    private init (staticString bytes: libc.cstring, size: Int) {
-        self.storage = StringStorage(staticString: bytes, size)
+    @_builtin("String.init(staticString:size:)")
+    private init (staticString bytes: libc.cstring, size: builtin.i64) {
+        self.storage = StringStorage(staticString: bytes, size: Int(size))
+    }
+
+    /// ExpressibleByStringLiteral requirement.
+    init (stringLiteral s: String) {
+        self = s
+    }
+
+    /// Initialize from a single character.
+    init (singleCharacter c: Character) {
+        self.storage = StringStorage()
+
+        var asciiVal = c.ascii
+        storage.uncheckedInsert(UnsafeBufferPtr<UInt8>(referencing: &asciiVal), 1, at: 0)
     }
 
     /// C'tor. Initialize from externally allocated bytes whose lifetime must exceed the lifetime
     /// of this string.
-    @_builtin("String.init(cstring:size:")
-    init (cstring bytes: libc.cstring, size: Int = -1) {
-        var size = size
-        if size == -1 {
-            size = Int(builtin.signcast(libc.string.strlen(bytes)))
-        }
-
+    @_builtin("String.init(cstring:size:)")
+    init (cstring bytes: UnsafeMutableBufferPtr<Byte>, size: Int = -1) {
         self.storage = StringStorage(cstring: bytes, size)
     }
 
@@ -658,9 +735,9 @@ public struct String {
     }
 
     /// Initialize from a meta type.
-    init<T> (metaType meta: MetaType<T>) {
-        self.init(cstring: meta.typeof.name)
-    }
+    // init<T> (metaType meta: MetaType<T>) {
+    //     self.init(cstring: meta.typeof.name)
+    // }
 
     /// Memberwise C'tor.
     private memberwise init
@@ -699,21 +776,22 @@ extend String {
             storage.grow()
         }
 
-        self[byteSize] = '\0'
+        // We can't use String's own subscript here since the index is technically out-of-bounds.
+        storage.rawBytes[byteSize] = '\0'
     }
 
     /// \return a NUL terminated c string of this string.
-    internal prop unsafeCString: libc.cstring {
+    internal prop unsafeCString: UnsafeBufferPtr<Byte> {
         // Since this is not mutating, we need this ugly conversion here.
         var SelfPtr = UnsafeMutablePtr<Self>(rawPointer: builtin.addressOf(self))
         SelfPtr->ensureNullTerminated()
 
-        return builtin.bitcast(rawBytes.rawPointer)
+        return rawBytes
     }
 
     /// Execute the passed closure with a pointer to a NUL-terminated C-String.
     /// \return the return value of the closure.
-    public def mutating withCString<T>(closure: (libc.cstring) -> T) -> T {
+    public def mutating withCString<T>(closure: (UnsafeBufferPtr<Byte>) -> T) -> T {
         return closure(self.unsafeCString)
     }
 }
@@ -733,7 +811,7 @@ extend String {
         }
 
         /// \inherit
-        associatedType Element = Byte
+        alias Element = Byte
 
         /// \inherit
         public def mutating next() -> Byte? {
@@ -748,11 +826,11 @@ extend String {
         }
 
         /// \inherit
-        associatedType It = Self
+        alias It = Self
 
         /// \inherit
         public def getIterator() -> Self {
-            return self
+            return self.copy()
         }
     }
 
@@ -769,13 +847,13 @@ extend String {
 
 extend String with RangeReplaceableCollection {
     /// \inherit
-    associatedType Element = Character
+    alias Element = Character
 
     /// \inherit
-    associatedType Index = Int
+    alias Index = Int
 
     /// \inherit
-    associatedType SubSequence = Self
+    alias SubSequence = Self
 
     /// Empty C'tor. Initializes an empty string.
     init {
@@ -784,7 +862,7 @@ extend String with RangeReplaceableCollection {
 
     /// \inherit
     prop size: Int {
-        if builtin.likely(isAscii) {
+        if likely(isAscii) {
             return byteSize
         }
 
@@ -793,7 +871,7 @@ extend String with RangeReplaceableCollection {
 
     /// \inherit
     prop capacity: Int {
-        if builtin.likely(isAscii) {
+        if likely(isAscii) {
             return byteCapacity
         }
 
@@ -833,7 +911,7 @@ extend String with RangeReplaceableCollection {
     /// \inherit
     subscript (_ range: Range<Index>) -> SubSequence {
         get {
-            return String(StringStorage(storage, bounds: range))
+            return String(storage: StringStorage(storage, bounds: range))
         }
         set {
             if isAscii && newVal.isAscii {
@@ -852,13 +930,28 @@ extend String with RangeReplaceableCollection {
     def mutating replaceSubrange<C: Collection>(
         _ subRange: Range<Index>, with newElements: C
     ) where C.Element == Element {
-        _checkRange(subRange)
+        _string_precondition!(subRange.startIndex >= self.startIndex && subRange.endIndex <= self.endIndex, 
+                              "invalid indices passed to String.replaceSubrange")
 
-        newElements._checkRange(subRange)
+        var result = String()
 
-        for idx in subRange.indices {
-            self[idx] = newElements[idx]
+        if subRange.startIndex > 0 {
+            result += self[0..subRange.startIndex]
         }
+
+        result += newElements
+
+        if subRange.endIndex < self.endIndex {
+            result += self[subRange.endIndex..self.endIndex]
+        }
+
+        self = result
+    }
+
+    /// \inherit
+    def mutating append(_ newElement: owned Character) {
+        var ascii = newElement.ascii
+        storage.uncheckedInsert(UnsafeBufferPtr<Byte>(rawPointer: builtin.addressOf(ascii)), 1, at: storage.byteSize)
     }
 }
 
@@ -899,7 +992,7 @@ extend String with StringInitializable {
 extend String with StringRepresentable {
     /// \inherit
     def toString() -> String {
-        return self
+        return self.copy()
     }
 }
 

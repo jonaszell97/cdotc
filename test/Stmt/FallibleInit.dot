@@ -1,0 +1,71 @@
+
+// RUN
+
+struct Counter {
+    static var allocs = 0
+    static var deallocs = 0
+}
+
+struct CanCopy with ImplicitlyCopyable {
+    init {
+        Counter.allocs += 1
+    }
+    deinit {
+        Counter.deallocs += 1
+    }
+    def copy() -> Self {
+        return Self()
+    }
+}
+
+struct MyStruct {
+    var s1: CanCopy
+    var s2: CanCopy
+    var s3: (CanCopy, CanCopy)
+
+    init? (_ exit: Int) {
+        self.s1 = CanCopy()
+        if exit < 1 {
+            return none
+        }
+        self.s2 = CanCopy()
+        if exit < 2 {
+            return none
+        }
+        self.s3 = (CanCopy(), CanCopy())
+    }
+
+    init? (_ potentialInit: Bool) {
+        if potentialInit {
+            self.s3 = (CanCopy(), CanCopy())
+        }
+
+        return none
+    }
+}
+
+do {
+    _ = MyStruct(0)
+    _ = MyStruct(1)
+    _ = MyStruct(2)
+
+    _ = MyStruct(false)
+    _ = MyStruct(true)
+}
+
+struct Delegating {
+    var s: CanCopy
+    init? {
+        return none
+    }
+    init? (_ dummy: Int) {
+        self.init()
+        self.s = CanCopy()
+    }
+}
+
+do {
+    _ = Delegating(0)
+}
+
+assertEqual!(Counter.allocs, Counter.deallocs)

@@ -1,0 +1,48 @@
+
+// VERIFY
+
+// Tuple destructure
+var (v1, v2) = (3, "hi")
+var _ = v1 + 120
+var _ : String = v2
+
+var (v3, v4, v5) = (1, 2) // expected-error {{type (Int64, Int64) cannot be destructured into 3 values}}
+var (_ , _) : (Int, Int) = (1, 2)
+var (_ , _) : (Int, String) = (1, 2) // expected-error {{type (Int64, Int64) cannot be destructured into type (Int64, String)}}
+var (_, _) = (1, 2, 3) // expected-error {{type (Int64, Int64, Int64) cannot be destructured into 2 values}}
+
+// Synthesized struct destructure
+struct MyStruct {
+    let x: Int = 0
+    let y: String = ""
+    let z: Float = 0.0
+}
+
+var (x, y, z) : (Int, String, Float) = MyStruct()
+_ = x + 3
+_ = z + 21.0
+
+var (_, _) = MyStruct() // expected-error {{type MyStruct cannot be destructured into 2 values}}
+var (_, _, _) = MyStruct()
+
+// Custom destructure
+class MyClass {
+    init {}
+    def destructure() -> (Int, Int) { __unreachable }
+    def destructure() -> (Int, String) { __unreachable }
+    def destructure() -> (Int, Int, Float) { __unreachable }
+    def destructure() -> (String, Int, Int, Float) { __unreachable }
+}
+
+var (_, _) = MyClass() // expected-error {{reference to destructuring operator is ambiguous}}
+// expected-note@31 {{candidate declared here}}
+// expected-note@32 {{candidate declared here}}
+
+var (a, b, c) = MyClass()
+var _ : Int = a
+var _ : Int = b
+var _ : Float = c
+
+var (_, _) : (Int, String) = MyClass()
+var (_, _, _, _) = MyClass()
+var (_, _, _, _, _) = MyClass() // expected-error {{type MyClass cannot be destructured into 5 values}}

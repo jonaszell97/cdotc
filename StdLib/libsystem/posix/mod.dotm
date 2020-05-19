@@ -1,6 +1,5 @@
 
 module posix {
-    declarationsOnly = true
     defaultAccess = public
 
     // Implicitly import the `builtin.ops` module to make builtin operators visible.

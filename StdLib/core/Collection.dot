@@ -7,18 +7,18 @@ struct IndexingIterator<Base: Collection> {
     var index: Base.Index
 
     /// Initialize from any collection.
-    init (_ base: Base) {
-        self.base = base
+    init (_ base: owned Base) {
+        self.base = builtin.move(base)
         self.index = self.base.startIndex
     }
 }
 
 extend IndexingIterator with IteratorProtocol {
     /// The element type of the collection.
-    associatedType Element = Base.Element
+    alias Element = Base.Element
 
     /// \return the next element in the collection.
-    def next() -> Element? {
+    def mutating next() -> Element? {
         if self.index >= base.endIndex {
             return none
         }
@@ -43,35 +43,38 @@ struct DefaultIndices<Base: Collection> with _DefaultIndices {
     var _endIndex: Base.Index
 
     /// Initialize from any collection.
-    init (_ base: Base) {
-        self.base = base
+    init (_ base: owned Base) {
+        self.base = builtin.move(base)
         self._startIndex = self.base.startIndex
         self._endIndex = self.base.endIndex
+    }
+
+    /// Initialize from any collection.
+    init (_ base: owned Base, from _startIndex: Index, to _endIndex: Index) {
+        self.base = builtin.move(base)
+        self._startIndex = _startIndex
+        self._endIndex = _endIndex
     }
 }
 
 extend DefaultIndices with Collection {
     /// \inherit
-    associatedType Element = Base.Index
+    alias Element = Base.Index
 
     /// \inherit
-    associatedType Index = Base.Index
+    alias Index = Base.Index
 
     /// \inherit
-    associatedType Indices = Self
+    alias Indices = Self
 
     /// \inherit
-    associatedType SubSequence = Self
+    alias SubSequence = Self
 
     /// \inherit
-    prop startIndex: Index {
-        return _startIndex
-    }
+    prop startIndex: Index => _startIndex
 
     /// \inherit
-    prop endIndex: Index {
-        return _endIndex
-    }
+    prop endIndex: Index => _endIndex
 
     /// \inherit
     subscript (position: Index) -> Element {
@@ -80,13 +83,11 @@ extend DefaultIndices with Collection {
 
     /// \inherit
     subscript (bounds: Range<Index>) -> SubSequence {
-        return Self(base: base, _startIndex: bounds.startIndex, _endIndex: bounds.endIndex)
+        return Self(base, from: bounds.startIndex, to: bounds.endIndex)
     }
 
     /// \inherit
-    prop indices: Indices {
-        return self.copy()
-    }
+    prop indices: Indices => self
 }
 
 extend DefaultIndices with BidirectionalCollection where Base is BidirectionalCollection {
@@ -104,13 +105,13 @@ protocol Collection with Iterable {
     associatedType Element
 
     /// The type of indices of this collection.
-    associatedType Index: Comparable
+    associatedType Index: Comparable = Int
 
     /// The type of sub-sequences of this collection.
     associatedType SubSequence: Collection = Slice<Self>
         where SubSequence.Element == Element
         where SubSequence.Index == Index
-        // where SubSequence.SubSequence == SubSequence
+        where SubSequence.SubSequence == SubSequence
 
     /// \return the position of the first element in a nonempty collection.
     ///
@@ -199,16 +200,11 @@ extend Collection {
     }
 
     /// \inherit
-    default def index(after idx: Index) -> Index {
-        return index(idx, advancedBy: 1)
-    }
-
-    /// \inherit
     default def index(_ idx: Index, advancedBy n: Int) -> Index {
         precondition!(idx >= 0, "Negative offset only allowed on BidirectionalCollection!")
 
         var idx = idx
-        for _ in 0..n {
+        for var i = 0; i < n; i += 1 {
             idx = index(after: idx)
         }
 
@@ -220,7 +216,7 @@ extend Collection {
         precondition!(idx >= 0, "Negative offset only allowed on BidirectionalCollection!")
 
         var idx = idx
-        for _ in 0..n {
+        for var i = 0; i < n; i += 1 {
             idx = index(after: idx)
 
             if idx > limitedBy {
@@ -247,8 +243,7 @@ extend Collection {
 
     /// \inherit
     default def _checkIndex(_ index: Index) {
-        __debug
-        precondition!(index < endIndex, "collection index out of bounds!")
+        precondition!(index < endIndex, "collection index out of bounds! ($index >= $endIndex)")
     }
 
     /// \inherit
@@ -271,19 +266,42 @@ extend Collection {
     }
 }
 
+extend Collection where Index is Strideable {
+    /// \inherit
+    default def index(after idx: Index) -> Index {
+        return idx.next()
+    }
+
+    /// \inherit
+    default def index(_ idx: Index, advancedBy n: Int) -> Index {
+        return idx.advanced(by: n)
+    }
+
+    /// \inherit
+    default def index(_ idx: Index, advancedBy n: Int, limitedBy: Index) -> Index? {
+        var newIdx = idx.advanced(by: n)
+        if newIdx > limitedBy {
+            return none
+        }
+
+        return newIdx
+    }
+}
+
 extend Collection {
     /// Provide a default iterator using the collection's indices.
-    default associatedType It = IndexingIterator<Self>
+    default alias It = IndexingIterator<Self>
 }
 
 extend Collection where It == IndexingIterator<Self> {
     /// \inherit
     default def getIterator() -> It {
-        return IndexingIterator(self)
+        return IndexingIterator(self.copy())
     }
 }
 
 extend Collection where Self !is _Slice
+                  where Self !is _DefaultIndices
                   where SubSequence == Slice<Self> {
     /// \inherit
     default subscript (bounds: Range<Index>) -> SubSequence {
@@ -292,6 +310,7 @@ extend Collection where Self !is _Slice
 }
 
 extend Collection where Self !is _DefaultIndices
+                  where Self !is _Slice
                   where Indices == DefaultIndices<Self> {
     /// \inherit
     default prop indices: Indices {
@@ -321,7 +340,8 @@ extend Collection {
     // }
 }
 
-extend Collection with Equatable where Element is Equatable {
+extend Collection with Equatable where Element is Equatable
+                                 where It.Element is Equatable {
     /// \inherit
     default def infix ==(rhs: Self) -> Bool {
         if self.size != rhs.size {
@@ -355,26 +375,30 @@ extend Collection with Equatable where Element is Equatable {
     }
 
     /// \return an array containing subsequenes delimited by `delimiter`.
-    // def split(at delimiter: Element) -> [SubSequence] {
-    //     var idx = startIndex
-    //     var curStart = startIndex
-    //     var arr = [SubSequence]()
+    def split(at delimiter: Element, omittingEmptySequences: Bool = true) -> [SubSequence] {
+        var idx = startIndex
+        var curStart = startIndex
+        var arr = Array<SubSequence>()
 
-    //     while idx != endIndex {
-    //         var el = self[idx]
-    //         if el == delimiter {
-    //             arr.append(self[curStart..idx])
-    //             curStart = idx
-    //         }
+        while idx != endIndex {
+            var el = self[idx]
+            if el == delimiter {
+                if !omittingEmptySequences || curStart != idx {
+                    arr.append(self[curStart..idx])
+                }
 
-    //         idx = index(after: idx)
-    //     }
+                curStart = idx
+            }
 
-    //     return arr
-    // }
+            idx = index(after: idx)
+        }
+
+        return arr
+    }
 }
 
-extend Collection with Comparable where Element is Comparable {
+extend Collection with Comparable where Element is Comparable
+                                  where It.Element is Comparable {
     /// \inherit
     default def infix <=>(rhs: Self) -> Int {
         var sizeMatch = self.size <=> rhs.size

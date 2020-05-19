@@ -19,12 +19,12 @@ public protocol ExpressibleByASCIILiteral {
 
     /// Default C'tor. Initializes to ascii `'\0'`.
     init {
-        self.value = 0
+        self._value = 0
     }
 
     /// C'tor. Initialize an ascii character.
     init (ascii: Byte) {
-        self.value = UInt32(ascii)
+        self._value = UInt32(ascii)
     }
 
     /// \return `true` iff this character is ascii representable.
@@ -45,6 +45,12 @@ public protocol ExpressibleByASCIILiteral {
     }
 }
 
+extend Character with ExpressibleByASCIILiteral {
+    init (asciiLiteral c: UInt8) {
+        self.init(ascii: c)
+    }
+}
+
 extend Character with ExpressibleByCharacterLiteral {
     /// \inherit
     init (characterLiteral value: Character) {
@@ -55,16 +61,12 @@ extend Character with ExpressibleByCharacterLiteral {
 /// Characters are trivially copyable.
 extend Character with Copyable, ImplicitlyCopyable {}
 
-// extend Character with StringRepresentable {
-//     /// \inherit
-//     def toString() -> String {
-//         if isAscii {
-//             return String(ascii: ascii)
-//         }
-
-//         unreachable!("nah")
-//     }
-// }
+extend Character with StringRepresentable {
+    /// \inherit
+    def toString() -> String {
+        return String(singleCharacter: self)
+    }
+}
 
 extend Character with Comparable {
     /// \inherit

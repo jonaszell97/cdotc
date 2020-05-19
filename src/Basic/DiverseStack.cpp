@@ -1,12 +1,9 @@
-//
-// Created by Jonas Zell on 27.04.18.
-//
-
-#include "DiverseStack.h"
+#include "cdotc/Basic/DiverseStack.h"
 
 namespace cdot {
 
-void DiverseStackBase::pushNewStorageSlow(std::size_t needed) {
+void DiverseStackBase::pushNewStorageSlow(std::size_t needed)
+{
    bool wasInline = isAllocatedInline();
 
    std::size_t capacity = End - Allocated;
@@ -17,9 +14,9 @@ void DiverseStackBase::pushNewStorageSlow(std::size_t needed) {
 
    assert(capacity % 16 == 0 && "not allocating multiple of alignment");
 
-   char *oldAllocation = Allocated;
-   char *oldBegin = Begin;
-   std::size_t oldSize = (std::size_t) (End - oldBegin);
+   char* oldAllocation = Allocated;
+   char* oldBegin = Begin;
+   std::size_t oldSize = (std::size_t)(End - oldBegin);
 
    Allocated = new char[capacity];
    End = Allocated + capacity;
@@ -28,7 +25,8 @@ void DiverseStackBase::pushNewStorageSlow(std::size_t needed) {
 
    Begin -= needed;
 
-   if (!wasInline) delete[] oldAllocation;
+   if (!wasInline)
+      delete[] oldAllocation;
 }
 
 } // namespace cdot

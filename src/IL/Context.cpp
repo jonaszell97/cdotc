@@ -1,28 +1,20 @@
-//
-// Created by Jonas Zell on 17.11.17.
-//
+#include "cdotc/IL/Context.h"
 
-#include "Context.h"
-
-#include "Driver/Compiler.h"
-#include "Module.h"
-#include "IL/Constants.h"
-#include "IL/Function.h"
-#include "IL/ValueSymbolTable.h"
-#include "Serialization/ModuleFile.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IL/ValueSymbolTable.h"
+#include "cdotc/Serialization/ModuleFile.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-Context::Context(CompilerInstance &CI) : CI(CI)
-{
+Context::Context(CompilerInstance& CI) : CI(CI) {}
 
-}
-
-template<class T>
-void destroyFoldingSet(llvm::FoldingSet<T> &Set)
+template<class T> void destroyFoldingSet(llvm::FoldingSet<T>& Set)
 {
    // The nodes themselves are iterators, so be careful not to access the
    // next pointer after freeing.
@@ -40,7 +32,7 @@ Context::~Context()
    // Modules remove themselves when deleted, so be careful not to invalidate
    // iterators.
    SmallVector<Module*, 4> Mods(Modules.begin(), Modules.end());
-   for (auto *Mod : Mods) {
+   for (auto* Mod : Mods) {
       delete Mod;
    }
 
@@ -61,17 +53,14 @@ Context::~Context()
    destroyFoldingSet(GEPConstants);
 }
 
-void Context::registerModule(Module *M) { Modules.insert(M); }
-void Context::removeModule(Module *M) { Modules.erase(M); }
+void Context::registerModule(Module* M) { Modules.insert(M); }
+void Context::removeModule(Module* M) { Modules.erase(M); }
 
-ast::ASTContext& Context::getASTCtx() const
-{
-   return CI.getContext();
-}
+ast::ASTContext& Context::getASTCtx() const { return CI.getContext(); }
 
-Function *Context::getFunction(llvm::StringRef name)
+Function* Context::getFunction(llvm::StringRef name)
 {
-   for (const auto &M : Modules) {
+   for (const auto& M : Modules) {
       auto fun = M->getOwnFunction(name);
       if (fun)
          return fun;
@@ -80,9 +69,9 @@ Function *Context::getFunction(llvm::StringRef name)
    return nullptr;
 }
 
-Function *Context::getFunctionDefinition(llvm::StringRef name)
+Function* Context::getFunctionDefinition(llvm::StringRef name)
 {
-   for (const auto &M : Modules) {
+   for (const auto& M : Modules) {
       auto fun = M->getOwnFunction(name);
       if (fun) {
          if (auto Inf = fun->getLazyFnInfo())
@@ -96,9 +85,9 @@ Function *Context::getFunctionDefinition(llvm::StringRef name)
    return nullptr;
 }
 
-GlobalVariable *Context::getGlobal(llvm::StringRef name)
+GlobalVariable* Context::getGlobal(llvm::StringRef name)
 {
-   for (const auto &M : Modules) {
+   for (const auto& M : Modules) {
       auto glob = M->getOwnGlobal(name);
       if (glob) {
          return glob;
@@ -108,9 +97,9 @@ GlobalVariable *Context::getGlobal(llvm::StringRef name)
    return nullptr;
 }
 
-GlobalVariable *Context::getGlobalDefinition(llvm::StringRef name)
+GlobalVariable* Context::getGlobalDefinition(llvm::StringRef name)
 {
-   for (const auto &M : Modules) {
+   for (const auto& M : Modules) {
       auto glob = M->getOwnGlobal(name);
       if (glob) {
          if (auto Inf = glob->getLazyGlobalInfo())

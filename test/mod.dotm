@@ -1,0 +1,10 @@
+
+module std {
+    isTestModule = true
+
+    /// Verify diagnostics in test files.
+    verify = true
+
+    /// Use the directory layout as module structure.
+    useDirectoryLayout = true
+}

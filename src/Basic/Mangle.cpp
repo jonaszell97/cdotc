@@ -1,17 +1,13 @@
-//
-// Created by Jonas Zell on 05.01.18.
-//
+#include "cdotc/Basic/Mangle.h"
 
-#include "Mangle.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/PrettyPrinter.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/SemaPass.h"
 
-#include "AST/Decl.h"
-#include "AST/PrettyPrinter.h"
-#include "IL/Constants.h"
-#include "Module/Module.h"
-#include "Sema/SemaPass.h"
-
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace cdot::support;
 using namespace cdot::module;
@@ -26,107 +22,107 @@ namespace {
 static const unsigned UnknownArity = ~0U;
 
 class ItaniumLikeMangler {
-   llvm::raw_ostream &OS;
+   llvm::raw_ostream& OS;
    llvm::StringMap<unsigned> ModuleSubstitutions;
 
    unsigned SeqID = 0;
    llvm::DenseMap<uintptr_t, unsigned> Substitutions;
    bool DefaultDeinit = false;
 
-   bool shouldMangle(const NamedDecl *D);
+   bool shouldMangle(const NamedDecl* D);
 
-   void mangleVarDecl(const VarDecl *D);
+   void mangleVarDecl(const VarDecl* D);
 
-   void mangleLocalName(const NamedDecl *D);
-   void mangleTemplateName(const NamedDecl *D);
-   void mangleUnscopedName(const NamedDecl *D);
+   void mangleLocalName(const NamedDecl* D);
+   void mangleTemplateName(const NamedDecl* D);
+   void mangleUnscopedName(const NamedDecl* D);
 
-   void mangleUnqualifiedName(const NamedDecl *D)
+   void mangleUnqualifiedName(const NamedDecl* D)
    {
       mangleUnqualifiedName(D, D->getDeclName().getManglingName(),
                             UnknownArity);
    }
 
-   void mangleUnqualifiedName(const NamedDecl *ND, DeclarationName Name,
+   void mangleUnqualifiedName(const NamedDecl* ND, DeclarationName Name,
                               unsigned KnownArity);
 
-   void mangleUnscopedTemplateName(const NamedDecl *D);
-   void mangleNestedName(const NamedDecl *D, const DeclContext *Ctx,
+   void mangleUnscopedTemplateName(const NamedDecl* D);
+   void mangleNestedName(const NamedDecl* D, const DeclContext* Ctx,
                          bool NoFunction = false);
 
-   void mangleNestedName(const NamedDecl *D,
-                         const FinalTemplateArgumentList *templateArgs);
+   void mangleNestedName(const NamedDecl* D,
+                         const FinalTemplateArgumentList* templateArgs);
 
-   void mangleTemplatePrefix(const NamedDecl *ND, bool NoFunction = false);
+   void mangleTemplatePrefix(const NamedDecl* ND, bool NoFunction = false);
 
-   void mangleTemplateArgs(const NamedDecl *D);
-   void mangleTemplateArgs(const FinalTemplateArgumentList &list);
-   void mangleTemplateArg(const TemplateArgument &Arg);
+   void mangleTemplateArgs(const NamedDecl* D);
+   void mangleTemplateArgs(const FinalTemplateArgumentList& list);
+   void mangleTemplateArg(const TemplateArgument& Arg);
 
-   void mangleModuleName(const ModuleDecl *M);
+   void mangleModuleName(const ModuleDecl* M);
    void mangleModuleNamePrefix(llvm::StringRef Name);
 
-   void mangleSourceName(const IdentifierInfo *II);
+   void mangleSourceName(const IdentifierInfo* II);
 
-   void mangleInitType(const InitDecl *D);
-   void mangleDeinitType(const DeinitDecl *D);
+   void mangleInitType(const InitDecl* D);
+   void mangleDeinitType(const DeinitDecl* D);
 
    void mangleTemplateParameter(unsigned Idx);
 
    void mangleOperatorName(DeclarationName DN, unsigned Arity);
 
    void mangleQualifiers(Qualifiers Quals);
-   void mangleExpression(const Expression *E);
+   void mangleExpression(const Expression* E);
 
-   bool mangleSubstitution(const NamedDecl *ND);
+   bool mangleSubstitution(const NamedDecl* ND);
    bool mangleSubstitution(QualType T);
    bool mangleSubstitution(uintptr_t Ptr);
 
-   void addSubstitution(const NamedDecl *D);
+   void addSubstitution(const NamedDecl* D);
    void addSubstitution(QualType T);
    void addSubstitution(uintptr_t Ptr);
 
-#  define CDOT_TYPE(Name, Parent)    \
-   void mangleType(const Name *T);
-#  include "AST/Types.def"
+#define CDOT_TYPE(Name, Parent) void mangleType(const Name* T);
+#include "cdotc/AST/Types.def"
 
 public:
-   explicit ItaniumLikeMangler(llvm::raw_ostream &OS,
+   explicit ItaniumLikeMangler(llvm::raw_ostream& OS,
                                bool DefaultDeinit = false)
-      : OS(OS), DefaultDeinit(DefaultDeinit)
-   {}
+       : OS(OS), DefaultDeinit(DefaultDeinit)
+   {
+   }
 
-   void mangle(const NamedDecl *D);
+   void mangle(const NamedDecl* D);
    void mangleCallOffset(int64_t NonVirtual, int64_t Virtual);
-   void mangleNumber(const llvm::APSInt &Value);
+   void mangleNumber(const llvm::APSInt& Value);
    void mangleNumber(int64_t Number);
-   void mangleFloat(const llvm::APFloat &F);
-   void mangleFunctionEncoding(const CallableDecl *D);
+   void mangleFloat(const llvm::APFloat& F);
+   void mangleFunctionEncoding(const CallableDecl* D);
    void mangleSeqID(unsigned SeqID);
-   void mangleName(const NamedDecl *D);
+   void mangleName(const NamedDecl* D);
    void mangleType(CanType T);
 
-   void manglePrefix(const DeclContext *DC, bool NoFunction = false);
-   void manglePrefix(const DeclContext *DC,
-                     const FinalTemplateArgumentList &TemplateArgs);
+   void manglePrefix(const DeclContext* DC, bool NoFunction = false);
+   void manglePrefix(const DeclContext* DC,
+                     const FinalTemplateArgumentList& TemplateArgs);
 
-   void mangleBareFunctionType(const CallableDecl *D);
-   void mangleBareFunctionType(const FunctionType *FT, bool MangleReturnType,
-                               const CallableDecl *C = nullptr);
+   void mangleBareFunctionType(const CallableDecl* D);
+   void mangleBareFunctionType(const FunctionType* FT, bool MangleReturnType,
+                               const CallableDecl* C = nullptr);
 
-   void mangleBareFunctionType(SemaPass &SP, FunctionType *FT,
-                               bool MangleReturnType, const CallableDecl *C,
-                               const FinalTemplateArgumentList &TemplateArgs);
+   void mangleBareFunctionType(SemaPass& SP, FunctionType* FT,
+                               bool MangleReturnType, const CallableDecl* C,
+                               const FinalTemplateArgumentList& TemplateArgs);
 };
 
 } // anonymous namespace
 
-bool ItaniumLikeMangler::shouldMangle(const NamedDecl *D)
+bool ItaniumLikeMangler::shouldMangle(const NamedDecl* D)
 {
    return !D->isExternC();
 }
 
-void ItaniumLikeMangler::mangle(const NamedDecl *D)
+void ItaniumLikeMangler::mangle(const NamedDecl* D)
 {
    if (!shouldMangle(D)) {
       OS << D->getDeclName().getManglingName();
@@ -149,39 +145,36 @@ void ItaniumLikeMangler::mangle(const NamedDecl *D)
       mangleVarDecl(cast<VarDecl>(D));
 }
 
-void ItaniumLikeMangler::mangleFunctionEncoding(const CallableDecl *D)
+void ItaniumLikeMangler::mangleFunctionEncoding(const CallableDecl* D)
 {
    // <encoding> ::= <function name> <bare-function-type>
    mangleName(D);
    mangleBareFunctionType(D);
 }
 
-void ItaniumLikeMangler::mangleVarDecl(const VarDecl *D)
-{
-   mangleName(D);
-}
+void ItaniumLikeMangler::mangleVarDecl(const VarDecl* D) { mangleName(D); }
 
-void ItaniumLikeMangler::mangleBareFunctionType(const CallableDecl *D)
+void ItaniumLikeMangler::mangleBareFunctionType(const CallableDecl* D)
 {
    bool mangleReturnType = false;
    if (D->isInstantiation()) {
       if (!isa<InitDecl>(D) && !isa<DeinitDecl>(D))
          mangleReturnType = true;
 
-//      D = D->getSpecializedTemplate();
+      //      D = D->getSpecializedTemplate();
    }
 
    mangleBareFunctionType(D->getFunctionType(), mangleReturnType, D);
 }
 
-static bool isLocalContext(const DeclContext *Ctx)
+static bool isLocalContext(const DeclContext* Ctx)
 {
    return isa<CallableDecl>(Ctx);
 }
 
-static const RecordDecl *GetLocalClassDecl(const Decl *D)
+static const RecordDecl* GetLocalClassDecl(const Decl* D)
 {
-   const DeclContext *DC = D->getNonTransparentDeclContext();
+   const DeclContext* DC = D->getNonTransparentDeclContext();
    while (!isa<NamespaceDecl>(DC) && !isa<ModuleDecl>(DC)) {
       if (isLocalContext(DC))
          return dyn_cast<RecordDecl>(D);
@@ -192,13 +185,13 @@ static const RecordDecl *GetLocalClassDecl(const Decl *D)
    return nullptr;
 }
 
-static bool isStdNamespace(DeclContext *Ctx)
+static bool isStdNamespace(DeclContext* Ctx)
 {
    auto NS = dyn_cast<NamespaceDecl>(Ctx);
    return NS && !NS->isAnonymousNamespace() && NS->getDeclName().isStr("std");
 }
 
-void ItaniumLikeMangler::mangleName(const NamedDecl *D)
+void ItaniumLikeMangler::mangleName(const NamedDecl* D)
 {
    //  <name> ::= [<module-name>] <nested-name>
    //         ::= [<module-name>] <unscoped-name>
@@ -223,7 +216,7 @@ void ItaniumLikeMangler::mangleName(const NamedDecl *D)
    mangleNestedName(D, Ctx);
 }
 
-void ItaniumLikeMangler::mangleModuleName(const ModuleDecl *M)
+void ItaniumLikeMangler::mangleModuleName(const ModuleDecl* M)
 {
    // Implement the C++ Modules TS name mangling proposal; see
    //     https://gcc.gnu.org/wiki/cxx-modules?action=AttachFile
@@ -231,7 +224,7 @@ void ItaniumLikeMangler::mangleModuleName(const ModuleDecl *M)
    //   <module-name> ::= W <unscoped-name>+ E
    //                 ::= W <module-subst> <unscoped-name>* E
    OS << 'W';
-   mangleModuleNamePrefix(M->getFullName());
+   mangleModuleNamePrefix(M->getJoinedName('.', false, false, true));
    OS << 'E';
 }
 
@@ -260,11 +253,11 @@ void ItaniumLikeMangler::mangleModuleNamePrefix(llvm::StringRef Name)
    ModuleSubstitutions.insert({Name, ModuleSubstitutions.size()});
 }
 
-void ItaniumLikeMangler::mangleTemplateName(const NamedDecl *D)
+void ItaniumLikeMangler::mangleTemplateName(const NamedDecl* D)
 {
    if (isa<ModuleDecl>(D->getNonTransparentDeclContext())
-         || (D->isExternCXX()
-             && isStdNamespace(D->getNonTransparentDeclContext()))) {
+       || (D->isExternCXX()
+           && isStdNamespace(D->getNonTransparentDeclContext()))) {
       mangleUnscopedTemplateName(D);
       mangleTemplateArgs(D);
    }
@@ -273,7 +266,7 @@ void ItaniumLikeMangler::mangleTemplateName(const NamedDecl *D)
    }
 }
 
-void ItaniumLikeMangler::mangleUnscopedName(const NamedDecl *D)
+void ItaniumLikeMangler::mangleUnscopedName(const NamedDecl* D)
 {
    //  <unscoped-name> ::= <unqualified-name>
    //                  ::= St <unqualified-name>   # ::std:: in extern(C++)
@@ -284,7 +277,7 @@ void ItaniumLikeMangler::mangleUnscopedName(const NamedDecl *D)
    mangleUnqualifiedName(D);
 }
 
-void ItaniumLikeMangler::mangleUnscopedTemplateName(const NamedDecl *D)
+void ItaniumLikeMangler::mangleUnscopedTemplateName(const NamedDecl* D)
 {
    //     <unscoped-template-name> ::= <unscoped-name>
    //                              ::= <substitution>
@@ -295,7 +288,7 @@ void ItaniumLikeMangler::mangleUnscopedTemplateName(const NamedDecl *D)
    addSubstitution(D);
 }
 
-void ItaniumLikeMangler::mangleFloat(const llvm::APFloat &F)
+void ItaniumLikeMangler::mangleFloat(const llvm::APFloat& F)
 {
    // ABI:
    //   Floating-point literals are encoded using a fixed-length
@@ -328,22 +321,22 @@ void ItaniumLikeMangler::mangleFloat(const llvm::APFloat &F)
       hexDigit &= 0xF;
 
       // Map that over to a lowercase hex digit.
-      static const char charForHex[16] = {
-         '0', '1', '2', '3', '4', '5', '6', '7',
-         '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-      };
+      static const char charForHex[16]
+          = {'0', '1', '2', '3', '4', '5', '6', '7',
+             '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
       buffer[stringIndex] = charForHex[hexDigit];
    }
 
    OS.write(buffer.data(), numCharacters);
 }
 
-void ItaniumLikeMangler::mangleNumber(const llvm::APSInt &Value)
+void ItaniumLikeMangler::mangleNumber(const llvm::APSInt& Value)
 {
    if (Value.isSigned() && Value.isNegative()) {
       OS << 'n';
       Value.abs().print(OS, /*signed*/ false);
-   } else {
+   }
+   else {
       Value.print(OS, /*signed*/ false);
    }
 }
@@ -380,9 +373,10 @@ void ItaniumLikeMangler::mangleCallOffset(int64_t NonVirtual, int64_t Virtual)
    OS << '_';
 }
 
-void ItaniumLikeMangler::mangleUnqualifiedName(const NamedDecl *ND,
+void ItaniumLikeMangler::mangleUnqualifiedName(const NamedDecl* ND,
                                                DeclarationName Name,
-                                               unsigned KnownArity) {
+                                               unsigned KnownArity)
+{
    unsigned Arity = KnownArity;
    //  <unqualified-name> ::= <operator-name>
    //                     ::= <ctor-dtor-name>
@@ -390,7 +384,7 @@ void ItaniumLikeMangler::mangleUnqualifiedName(const NamedDecl *ND,
 
    switch (Name.getKind()) {
    case DeclarationName::NormalIdentifier: {
-      auto *II = Name.getIdentifierInfo();
+      auto* II = Name.getIdentifierInfo();
       if (II) {
          mangleSourceName(II);
       }
@@ -469,7 +463,7 @@ void ItaniumLikeMangler::mangleUnqualifiedName(const NamedDecl *ND,
    }
 }
 
-void ItaniumLikeMangler::mangleSourceName(const IdentifierInfo *II)
+void ItaniumLikeMangler::mangleSourceName(const IdentifierInfo* II)
 {
    // <source-name> ::= <positive length number> <identifier>
    // <number> ::= [n] <non-negative decimal integer>
@@ -477,9 +471,10 @@ void ItaniumLikeMangler::mangleSourceName(const IdentifierInfo *II)
    OS << II->getLength() << II->getIdentifier();
 }
 
-void ItaniumLikeMangler::mangleNestedName(const NamedDecl *D,
-                                          const DeclContext *Ctx,
-                                          bool NoFunction) {
+void ItaniumLikeMangler::mangleNestedName(const NamedDecl* D,
+                                          const DeclContext* Ctx,
+                                          bool NoFunction)
+{
    // <nested-name>
    //   ::= N [<CV-qualifiers>] [<ref-qualifier>] <prefix> <unqualified-name> E
    //   ::= N [<CV-qualifiers>] [<ref-qualifier>] <template-prefix>
@@ -497,8 +492,9 @@ void ItaniumLikeMangler::mangleNestedName(const NamedDecl *D,
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleNestedName(const NamedDecl *D,
-                                          const FinalTemplateArgumentList *) {
+void ItaniumLikeMangler::mangleNestedName(const NamedDecl* D,
+                                          const FinalTemplateArgumentList*)
+{
    // <nested-name> ::= N [<CV-qualifiers>] <template-prefix> <template-args> E
 
    OS << 'N';
@@ -509,7 +505,7 @@ void ItaniumLikeMangler::mangleNestedName(const NamedDecl *D,
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleLocalName(const NamedDecl *D)
+void ItaniumLikeMangler::mangleLocalName(const NamedDecl* D)
 {
    // <local-name> := Z <function encoding> E <entity name> [<discriminator>]
    //              := Z <function encoding> E s [<discriminator>]
@@ -531,11 +527,11 @@ void ItaniumLikeMangler::mangleLocalName(const NamedDecl *D)
    else if (auto RD = GetLocalClassDecl(D)) {
       // Mangle the name relative to the closest enclosing function.
       // equality ok because RD derived from ND above
-      if (D == RD)  {
+      if (D == RD) {
          mangleUnqualifiedName(RD);
       }
       else {
-         const NamedDecl *ND = cast<NamedDecl>(D);
+         const NamedDecl* ND = cast<NamedDecl>(D);
          mangleNestedName(ND, ND->getNonTransparentDeclContext(),
                           true /*NoFunction*/);
       }
@@ -544,18 +540,18 @@ void ItaniumLikeMangler::mangleLocalName(const NamedDecl *D)
       mangleUnqualifiedName(D);
    }
 
-//   if (const NamedDecl *ND = dyn_cast<NamedDecl>(RD ? RD : D)) {
-//      unsigned disc;
-//      if (Context.getNextDiscriminator(ND, disc)) {
-//         if (disc < 10)
-//            Out << '_' << disc;
-//         else
-//            Out << "__" << disc << '_';
-//      }
-//   }
+   //   if (const NamedDecl *ND = dyn_cast<NamedDecl>(RD ? RD : D)) {
+   //      unsigned disc;
+   //      if (Context.getNextDiscriminator(ND, disc)) {
+   //         if (disc < 10)
+   //            Out << '_' << disc;
+   //         else
+   //            Out << "__" << disc << '_';
+   //      }
+   //   }
 }
 
-void ItaniumLikeMangler::manglePrefix(const DeclContext *DC, bool NoFunction)
+void ItaniumLikeMangler::manglePrefix(const DeclContext* DC, bool NoFunction)
 {
    //  <prefix> ::= <prefix> <unqualified-name>
    //           ::= <template-prefix> <template-args>
@@ -574,7 +570,7 @@ void ItaniumLikeMangler::manglePrefix(const DeclContext *DC, bool NoFunction)
    if (NoFunction && isLocalContext(DC))
       return;
 
-   const NamedDecl *ND = cast<NamedDecl>(DC);
+   const NamedDecl* ND = cast<NamedDecl>(DC);
    if (mangleSubstitution(ND))
       return;
 
@@ -582,7 +578,8 @@ void ItaniumLikeMangler::manglePrefix(const DeclContext *DC, bool NoFunction)
    if (ND->isInstantiation()) {
       mangleTemplatePrefix(ND);
       mangleTemplateArgs(ND);
-   } else {
+   }
+   else {
       manglePrefix(ND->getNonTransparentDeclContext(), NoFunction);
       mangleUnqualifiedName(ND);
    }
@@ -590,17 +587,19 @@ void ItaniumLikeMangler::manglePrefix(const DeclContext *DC, bool NoFunction)
    addSubstitution(ND);
 }
 
-void ItaniumLikeMangler::manglePrefix(const DeclContext *DC,
-                                      const FinalTemplateArgumentList &Args) {
-//   assert(!isLocalContext(DC));
+void ItaniumLikeMangler::manglePrefix(const DeclContext* DC,
+                                      const FinalTemplateArgumentList& Args)
+{
+   //   assert(!isLocalContext(DC));
 
-   const NamedDecl *ND = cast<NamedDecl>(DC);
+   const NamedDecl* ND = cast<NamedDecl>(DC);
    mangleTemplatePrefix(ND);
    mangleTemplateArgs(Args);
 }
 
-void ItaniumLikeMangler::mangleTemplatePrefix(const NamedDecl *ND,
-                                              bool NoFunction) {
+void ItaniumLikeMangler::mangleTemplatePrefix(const NamedDecl* ND,
+                                              bool NoFunction)
+{
    // <template-prefix> ::= <prefix> <template unqualified-name>
    //                   ::= <template-param>
    //                   ::= <substitution>
@@ -613,8 +612,8 @@ void ItaniumLikeMangler::mangleTemplatePrefix(const NamedDecl *ND,
    addSubstitution(ND);
 }
 
-void ItaniumLikeMangler::mangleOperatorName(DeclarationName DN,
-                                            unsigned Arity) {
+void ItaniumLikeMangler::mangleOperatorName(DeclarationName DN, unsigned Arity)
+{
    switch (DN.getKind()) {
    case DeclarationName::ConversionOperatorName: {
       // <operator-name> ::= cv <type>    # (cast)
@@ -652,12 +651,12 @@ void ItaniumLikeMangler::mangleQualifiers(Qualifiers)
 
 static bool isTypeSubstitutable(Qualifiers Quals, QualType Ty)
 {
-//   if (Quals)
-//      return true;
-//   if (Ty->isBuiltinType())
-//      return false;
-//
-//   return true;
+   //   if (Quals)
+   //      return true;
+   //   if (Ty->isBuiltinType())
+   //      return false;
+   //
+   //   return true;
    return Ty->getTypeID() != Type::BuiltinTypeID;
 }
 
@@ -668,9 +667,11 @@ void ItaniumLikeMangler::mangleType(CanType T)
       return;
 
    switch (T->getTypeID()) {
-#  define CDOT_TYPE(Name, Parent)                            \
-   case Type::Name##ID: mangleType(cast<Name>(T)); break;
-#  include "AST/Types.def"
+#define CDOT_TYPE(Name, Parent)                                                \
+   case Type::Name##ID:                                                        \
+      mangleType(cast<Name>(T));                                               \
+      break;
+#include "cdotc/AST/Types.def"
    }
 
    // Add the substitution.
@@ -678,7 +679,7 @@ void ItaniumLikeMangler::mangleType(CanType T)
       addSubstitution(T);
 }
 
-void ItaniumLikeMangler::mangleType(const BuiltinType *T)
+void ItaniumLikeMangler::mangleType(const BuiltinType* T)
 {
    //  <type>         ::= <builtin-type>
    //  <builtin-type> ::= v  # void
@@ -705,7 +706,8 @@ void ItaniumLikeMangler::mangleType(const BuiltinType *T)
    // UNSUPPORTED:    ::= De # IEEE 754r decimal floating point (128 bits)
    // UNSUPPORTED:    ::= Df # IEEE 754r decimal floating point (32 bits)
    //                 ::= Dh # IEEE 754r half-precision floating point (16 bits)
-   //                 ::= DF <number> _ # ISO/IEC TS 18661 binary floating point type _FloatN (N bits);
+   //                 ::= DF <number> _ # ISO/IEC TS 18661 binary floating point
+   //                 type _FloatN (N bits);
    //                 ::= Di # char32_t
    //                 ::= Ds # char16_t
    //                 ::= Dn # std::nullptr_t (i.e., decltype(nullptr))
@@ -763,12 +765,15 @@ void ItaniumLikeMangler::mangleType(const BuiltinType *T)
    case BuiltinType::f128:
       OS << 'g';
       break;
+   case BuiltinType::Error:
+      OS << "ERROR";
+      break;
    default:
       llvm_unreachable("bad builtin type kind!");
    }
 }
 
-void ItaniumLikeMangler::mangleType(const FunctionType *T)
+void ItaniumLikeMangler::mangleType(const FunctionType* T)
 {
    // <type>          ::= <function-type>
    // <function-type> ::= [<CV-qualifiers>] F [Y]
@@ -783,9 +788,10 @@ void ItaniumLikeMangler::mangleType(const FunctionType *T)
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
+void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType* FT,
                                                 bool MangleReturnType,
-                                                const CallableDecl *CD) {
+                                                const CallableDecl* CD)
+{
    // <bare-function-type> ::= <signature type>+
    if (MangleReturnType) {
       mangleType(FT->getReturnType());
@@ -798,7 +804,7 @@ void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
    }
 
    unsigned NumParams = 0;
-   for (auto &Param : FT->getParamTypes()) {
+   for (auto& Param : FT->getParamTypes()) {
       mangleType(Param);
       ++NumParams;
    }
@@ -806,7 +812,7 @@ void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
    if (CD && !CD->isExternC() && !CD->isExternCXX()) {
       auto Args = CD->getArgs();
       for (unsigned i = 0; i < NumParams; ++i) {
-         IdentifierInfo *Label;
+         IdentifierInfo* Label;
          if (i < Args.size()) {
             Label = Args[i]->getLabel();
          }
@@ -828,28 +834,27 @@ void ItaniumLikeMangler::mangleBareFunctionType(const FunctionType *FT,
       OS << 'z';
 }
 
-void ItaniumLikeMangler::mangleBareFunctionType(SemaPass &SP,
-                                                FunctionType *FT,
-                                                bool MangleReturnType,
-                                                const CallableDecl *C,
-                                                const FinalTemplateArgumentList &TemplateArgs) {
+void ItaniumLikeMangler::mangleBareFunctionType(
+    SemaPass& SP, FunctionType* FT, bool MangleReturnType,
+    const CallableDecl* C, const FinalTemplateArgumentList& TemplateArgs)
+{
    llvm_unreachable("needed?");
-//   MultiLevelFinalTemplateArgList Args(TemplateArgs);
-//
-//   QualType Ty;
-//   if (SP.QC.Subs)
-//   auto *Ty = cast<FunctionType>(
-//      SP.resolveDependencies(FT, Args, const_cast<CallableDecl*>(C)));
-//
-//   return mangleBareFunctionType(Ty, MangleReturnType, C);
+   //   MultiLevelFinalTemplateArgList Args(TemplateArgs);
+   //
+   //   QualType Ty;
+   //   if (SP.QC.Subs)
+   //   auto *Ty = cast<FunctionType>(
+   //      SP.resolveDependencies(FT, Args, const_cast<CallableDecl*>(C)));
+   //
+   //   return mangleBareFunctionType(Ty, MangleReturnType, C);
 }
 
-void ItaniumLikeMangler::mangleType(const RecordType *T)
+void ItaniumLikeMangler::mangleType(const RecordType* T)
 {
    mangleName(T->getRecord());
 }
 
-void ItaniumLikeMangler::mangleType(const DependentRecordType *T)
+void ItaniumLikeMangler::mangleType(const DependentRecordType* T)
 {
    OS << 'N';
    mangleTemplatePrefix(T->getRecord());
@@ -857,7 +862,7 @@ void ItaniumLikeMangler::mangleType(const DependentRecordType *T)
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleType(const DependentTypedefType *T)
+void ItaniumLikeMangler::mangleType(const DependentTypedefType* T)
 {
    OS << 'T';
    mangleTemplatePrefix(T->getTypedef());
@@ -865,7 +870,7 @@ void ItaniumLikeMangler::mangleType(const DependentTypedefType *T)
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleType(const ArrayType *T)
+void ItaniumLikeMangler::mangleType(const ArrayType* T)
 {
    // <type>       ::= <array-type>
    // <array-type> ::= A <positive dimension number> _ <element type>
@@ -874,7 +879,7 @@ void ItaniumLikeMangler::mangleType(const ArrayType *T)
    mangleType(T->getElementType());
 }
 
-void ItaniumLikeMangler::mangleType(const DependentSizeArrayType *T)
+void ItaniumLikeMangler::mangleType(const DependentSizeArrayType* T)
 {
    OS << 'A';
    mangleExpression(T->getSizeExpr());
@@ -882,13 +887,13 @@ void ItaniumLikeMangler::mangleType(const DependentSizeArrayType *T)
    mangleType(T->getElementType());
 }
 
-void ItaniumLikeMangler::mangleType(const InferredSizeArrayType *T)
+void ItaniumLikeMangler::mangleType(const InferredSizeArrayType* T)
 {
    OS << "A_";
    mangleType(T->getElementType());
 }
 
-void ItaniumLikeMangler::mangleType(const DependentNameType *T)
+void ItaniumLikeMangler::mangleType(const DependentNameType* T)
 {
    std::string str;
    {
@@ -899,53 +904,46 @@ void ItaniumLikeMangler::mangleType(const DependentNameType *T)
    this->OS << "Dt" << str.size() << str;
 }
 
-void ItaniumLikeMangler::mangleType(const TypeVariableType *)
+void ItaniumLikeMangler::mangleType(const TypeVariableType*)
 {
    llvm_unreachable("should never be mangled!");
 }
 
-void ItaniumLikeMangler::mangleType(const PointerType *T)
+void ItaniumLikeMangler::mangleType(const PointerType* T)
 {
    // <type> ::= P <type>   # pointer-to
    OS << "KP";
    mangleType(T->getPointeeType());
 }
 
-void ItaniumLikeMangler::mangleType(const MutablePointerType *T)
+void ItaniumLikeMangler::mangleType(const MutablePointerType* T)
 {
    // <type> ::= P <type>   # pointer-to
    OS << 'P';
    mangleType(T->getPointeeType());
 }
 
-void ItaniumLikeMangler::mangleType(const ReferenceType *T)
+void ItaniumLikeMangler::mangleType(const ReferenceType* T)
 {
    // <type> ::= R <type>   # reference-to
    OS << "KR";
    mangleType(T->getReferencedType());
 }
 
-void ItaniumLikeMangler::mangleType(const MutableReferenceType *T)
+void ItaniumLikeMangler::mangleType(const MutableReferenceType* T)
 {
    // <type> ::= R <type>   # reference-to
    OS << 'R';
    mangleType(T->getReferencedType());
 }
 
-void ItaniumLikeMangler::mangleType(const MutableBorrowType *T)
-{
-   // <type> ::= R <type>   # reference-to
-   OS << 'R';
-   mangleType(T->getBorrowedType());
-}
-
-void ItaniumLikeMangler::mangleType(const BoxType *T)
+void ItaniumLikeMangler::mangleType(const BoxType* T)
 {
    OS << 'X';
    mangleType(T->getBoxedType());
 }
 
-void ItaniumLikeMangler::mangleType(const cdot::ExistentialType *T)
+void ItaniumLikeMangler::mangleType(const cdot::ExistentialType* T)
 {
    OS << "Ex";
    if (T->getExistentials().size() == 0) {
@@ -954,22 +952,19 @@ void ItaniumLikeMangler::mangleType(const cdot::ExistentialType *T)
       return;
    }
 
-   for (auto &Param : T->getExistentials()) {
+   for (auto& Param : T->getExistentials()) {
       mangleType(Param);
    }
 }
 
-void ItaniumLikeMangler::mangleType(const TokenType*)
-{
-   OS << "To";
-}
+void ItaniumLikeMangler::mangleType(const TokenType*) { OS << "To"; }
 
-void ItaniumLikeMangler::mangleType(const LambdaType *T)
+void ItaniumLikeMangler::mangleType(const LambdaType* T)
 {
    mangleType((FunctionType*)T);
 }
 
-void ItaniumLikeMangler::mangleType(const TemplateParamType *T)
+void ItaniumLikeMangler::mangleType(const TemplateParamType* T)
 {
    OS << 'G';
    mangleTemplateParameter(T->getIndex());
@@ -978,17 +973,12 @@ void ItaniumLikeMangler::mangleType(const TemplateParamType *T)
       OS << 'z';
 }
 
-void ItaniumLikeMangler::mangleType(const AssociatedType *T)
+void ItaniumLikeMangler::mangleType(const AssociatedType* T)
 {
-   if (T->getDecl()->isImplementation()) {
-      mangleType(T->getActualType());
-   }
-   else {
-      llvm_unreachable("should not be mangled");
-   }
+   llvm_unreachable("should not be mangled");
 }
 
-void ItaniumLikeMangler::mangleType(const TupleType *T)
+void ItaniumLikeMangler::mangleType(const TupleType* T)
 {
    OS << 'T';
 
@@ -998,24 +988,24 @@ void ItaniumLikeMangler::mangleType(const TupleType *T)
       return;
    }
 
-   for (auto &Param : T->getContainedTypes()) {
+   for (auto& Param : T->getContainedTypes()) {
       mangleType(Param);
    }
 }
 
-void ItaniumLikeMangler::mangleType(const MetaType *T)
+void ItaniumLikeMangler::mangleType(const MetaType* T)
 {
    OS << 'M';
    mangleType(T->getUnderlyingType());
 }
 
-void ItaniumLikeMangler::mangleType(const TypedefType *T)
+void ItaniumLikeMangler::mangleType(const TypedefType* T)
 {
    OS << 'Y';
    mangleName(T->getTypedef());
 }
 
-void ItaniumLikeMangler::mangleExpression(const Expression *E)
+void ItaniumLikeMangler::mangleExpression(const Expression* E)
 {
    string constraintString;
    llvm::raw_string_ostream sout(constraintString);
@@ -1023,7 +1013,7 @@ void ItaniumLikeMangler::mangleExpression(const Expression *E)
    printer.print(const_cast<Expression*>(E));
 }
 
-void ItaniumLikeMangler::mangleInitType(const InitDecl *Decl)
+void ItaniumLikeMangler::mangleInitType(const InitDecl* Decl)
 {
    // <ctor-dtor-name> ::= C1  # complete object constructor
    //                  ::= C2  # base object constructor
@@ -1041,7 +1031,7 @@ void ItaniumLikeMangler::mangleInitType(const InitDecl *Decl)
    }
 }
 
-void ItaniumLikeMangler::mangleDeinitType(const DeinitDecl *)
+void ItaniumLikeMangler::mangleDeinitType(const DeinitDecl*)
 {
    // <ctor-dtor-name> ::= D0  # deleting destructor
    //                  ::= D1  # complete object destructor
@@ -1055,22 +1045,23 @@ void ItaniumLikeMangler::mangleDeinitType(const DeinitDecl *)
    }
 }
 
-void ItaniumLikeMangler::mangleTemplateArgs(const NamedDecl *D)
+void ItaniumLikeMangler::mangleTemplateArgs(const NamedDecl* D)
 {
    // <template-args> ::= I <template-arg>+ E
    mangleTemplateArgs(D->getTemplateArgs());
 }
 
-void ItaniumLikeMangler::mangleTemplateArgs(const FinalTemplateArgumentList &list)
+void ItaniumLikeMangler::mangleTemplateArgs(
+    const FinalTemplateArgumentList& list)
 {
    OS << 'I';
-   for (auto &Arg : list)
+   for (auto& Arg : list)
       mangleTemplateArg(Arg);
 
    OS << 'E';
 }
 
-void ItaniumLikeMangler::mangleTemplateArg(const TemplateArgument &Arg)
+void ItaniumLikeMangler::mangleTemplateArg(const TemplateArgument& Arg)
 {
    // <template-arg> ::= <type>              # type or template
    //                ::= X <expression> E    # expression
@@ -1079,7 +1070,7 @@ void ItaniumLikeMangler::mangleTemplateArg(const TemplateArgument &Arg)
 
    if (Arg.isVariadic()) {
       OS << 'J';
-      for (auto &VA : Arg.getVariadicArgs())
+      for (auto& VA : Arg.getVariadicArgs())
          mangleTemplateArg(VA);
       OS << 'E';
    }
@@ -1125,20 +1116,19 @@ void ItaniumLikeMangler::mangleSeqID(unsigned SeqID)
 
 // <substitution> ::= S <seq-id> _
 //                ::= S_
-bool ItaniumLikeMangler::mangleSubstitution(const NamedDecl *ND)
+bool ItaniumLikeMangler::mangleSubstitution(const NamedDecl* ND)
 {
    return mangleSubstitution(reinterpret_cast<uintptr_t>(ND));
 }
 
 bool ItaniumLikeMangler::mangleSubstitution(QualType T)
 {
-   if (const RecordType *RT = T->asRecordType())
+   if (const RecordType* RT = T->asRecordType())
       return mangleSubstitution(RT->getRecord());
-   if (const TypedefType *TT = T->asTypedefType())
+   if (const TypedefType* TT = T->asTypedefType())
       return mangleSubstitution(TT->getTypedef());
 
-   return mangleSubstitution(
-      reinterpret_cast<uintptr_t>(T.getAsOpaquePtr()));
+   return mangleSubstitution(reinterpret_cast<uintptr_t>(T.getAsOpaquePtr()));
 }
 
 bool ItaniumLikeMangler::mangleSubstitution(uintptr_t Ptr)
@@ -1160,7 +1150,7 @@ void ItaniumLikeMangler::addSubstitution(QualType T)
    addSubstitution(TypePtr);
 }
 
-void ItaniumLikeMangler::addSubstitution(const NamedDecl *D)
+void ItaniumLikeMangler::addSubstitution(const NamedDecl* D)
 {
    uintptr_t TypePtr = reinterpret_cast<uintptr_t>(D);
    addSubstitution(TypePtr);
@@ -1171,8 +1161,8 @@ void ItaniumLikeMangler::addSubstitution(uintptr_t Ptr)
    Substitutions[Ptr] = SeqID++;
 }
 
-void SymbolMangler::mangle(const NamedDecl *ND,
-                           llvm::raw_ostream &OS) const {
+void SymbolMangler::mangle(const NamedDecl* ND, llvm::raw_ostream& OS) const
+{
    (void)SP;
 
    auto it = Cache.find(ND);
@@ -1191,15 +1181,16 @@ void SymbolMangler::mangle(const NamedDecl *ND,
    Cache.try_emplace(ND, move(str));
 }
 
-void SymbolMangler::manglePrefix(const DeclContext *DC,
-                                 llvm::raw_ostream &OS) const {
+void SymbolMangler::manglePrefix(const DeclContext* DC,
+                                 llvm::raw_ostream& OS) const
+{
    auto it = PrefixCache.find(DC);
    if (it != PrefixCache.end()) {
       OS << it->getSecond();
       return;
    }
 
-   auto *ND = cast<NamedDecl>(const_cast<DeclContext*>(DC));
+   auto* ND = cast<NamedDecl>(const_cast<DeclContext*>(DC));
    std::string str;
    {
       llvm::raw_string_ostream SS(str);
@@ -1211,18 +1202,19 @@ void SymbolMangler::manglePrefix(const DeclContext *DC,
    PrefixCache.try_emplace(DC, move(str));
 }
 
-void SymbolMangler::manglePrefix(const DeclContext *DC,
-                                 const FinalTemplateArgumentList &TemplateArgs,
-                                 llvm::raw_ostream &OS) const {
+void SymbolMangler::manglePrefix(const DeclContext* DC,
+                                 const FinalTemplateArgumentList& TemplateArgs,
+                                 llvm::raw_ostream& OS) const
+{
    ItaniumLikeMangler Mangler(OS);
    Mangler.manglePrefix(DC, TemplateArgs);
 
-   if (auto *CD = dyn_cast<CallableDecl>(DC)) {
+   if (auto* CD = dyn_cast<CallableDecl>(DC)) {
       Mangler.mangleBareFunctionType(CD);
    }
 }
 
-llvm::StringRef SymbolMangler::getPrefix(const DeclContext *DC) const
+llvm::StringRef SymbolMangler::getPrefix(const DeclContext* DC) const
 {
    assert(isa<NamedDecl>(DC) && cast<NamedDecl>(DC)->isInstantiation());
 
@@ -1240,17 +1232,18 @@ llvm::StringRef SymbolMangler::getPrefix(const DeclContext *DC) const
    return PrefixCache[DC];
 }
 
-void SymbolMangler::mangleVTable(const RecordDecl *R,
-                                 llvm::raw_ostream &OS) const {
+void SymbolMangler::mangleVTable(const RecordDecl* R,
+                                 llvm::raw_ostream& OS) const
+{
    // <special-name> ::= TV <type>  # virtual table
    ItaniumLikeMangler Mangler(OS);
    OS << "_CTV";
    Mangler.mangleName(R);
 }
 
-void SymbolMangler::manglePTable(const RecordDecl *R,
-                                 const ProtocolDecl *P,
-                                 llvm::raw_ostream &OS) const {
+void SymbolMangler::manglePTable(const RecordDecl* R, const ProtocolDecl* P,
+                                 llvm::raw_ostream& OS) const
+{
    // <special-name> ::= TP <type> <protocol>  # protocol virtual table
    ItaniumLikeMangler Mangler(OS);
    OS << "_CTP";
@@ -1258,29 +1251,33 @@ void SymbolMangler::manglePTable(const RecordDecl *R,
    Mangler.mangleName(P);
 }
 
-void SymbolMangler::mangleProtocolStub(const cdot::ast::NamedDecl *D,
-                                       std::string &Buf) const {
+void SymbolMangler::mangleProtocolStub(const cdot::ast::NamedDecl* D,
+                                       std::string& Buf) const
+{
    // Replace _C with _CPs
    assert(Buf[0] == '_' && Buf[1] == 'C');
    Buf.insert(2, "Ps");
 }
 
-void SymbolMangler::mangleTypeInfo(const QualType &T,
-                                   llvm::raw_ostream &OS) const {
+void SymbolMangler::mangleTypeInfo(const QualType& T,
+                                   llvm::raw_ostream& OS) const
+{
    // <special-name> ::= TI <type>  # typeinfo structure
    ItaniumLikeMangler Mangler(OS);
    OS << "_CTI";
    Mangler.mangleType(T);
 }
 
-void SymbolMangler::mangleTypeName(const QualType &T,
-                                   llvm::raw_ostream &OS) const {
+void SymbolMangler::mangleTypeName(const QualType& T,
+                                   llvm::raw_ostream& OS) const
+{
    ItaniumLikeMangler Mangler(OS);
    Mangler.mangleType(T);
 }
 
-void SymbolMangler::mangleDefaultDeinitializer(RecordDecl *R,
-                                               llvm::raw_ostream &OS) const {
+void SymbolMangler::mangleDefaultDeinitializer(RecordDecl* R,
+                                               llvm::raw_ostream& OS) const
+{
    std::string str;
    llvm::raw_string_ostream SS(str);
 

@@ -1,11 +1,7 @@
-//
-// Created by Jonas Zell on 22.11.17.
-//
+#include "cdotc/IL/Use.h"
 
-#include "Use.h"
-
-#include <llvm/ADT/SmallPtrSet.h>
 #include <list>
+#include <llvm/ADT/SmallPtrSet.h>
 
 namespace cdot {
 namespace il {
@@ -14,7 +10,7 @@ namespace il {
 
 void Use::verify()
 {
-   Use *U = this;
+   Use* U = this;
    while (U->Prev) {
       U = U->Prev;
    }
@@ -24,7 +20,7 @@ void Use::verify()
    while (U->Next) {
       assert(Uses.insert(U).second && "duplicate use!");
 
-      Use *Next = U->Next;
+      Use* Next = U->Next;
       assert(Next->Prev == U);
 
       U = Next;

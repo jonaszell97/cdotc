@@ -1,20 +1,46 @@
-//
-// Created by Jonas Zell on 2018-11-15.
-//
+#include "cdotc/Parse/Parser.h"
 
-#include "Parser.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/SaveAndRestore.h"
 
-#include "Driver/Compiler.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Sema/SemaPass.h"
+#include <llvm/Support/FileSystem.h>
 
 using namespace cdot;
 using namespace cdot::diag;
 using namespace cdot::lex;
 using namespace cdot::parse;
 
-Module *Parser::parseModuleFile(Module *ParentMod)
+template<class CallbackFn>
+void IterateFilesInDirectory(StringRef dirName, const CallbackFn &Fn)
+{
+   using iterator = llvm::sys::fs::directory_iterator;
+
+   std::error_code ec;
+   iterator it(dirName, ec);
+   iterator end_it;
+
+   while (!ec && it != end_it) {
+      ec.clear();
+
+      auto& entry = *it;
+      auto errOrStatus = entry.status();
+      if (!errOrStatus) {
+         it.increment(ec);
+         continue;
+      }
+
+      auto& st = errOrStatus.get();
+
+      Fn(st, entry.path());
+      it.increment(ec);
+   }
+}
+
+Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
 {
    skipWhitespace();
 
@@ -30,7 +56,7 @@ Module *Parser::parseModuleFile(Module *ParentMod)
       return nullptr;
    }
 
-   auto *Name = currentTok().getIdentifierInfo();
+   auto* Name = currentTok().getIdentifierInfo();
 
    advance();
    if (!expectToken(tok::open_brace)) {
@@ -39,8 +65,8 @@ Module *Parser::parseModuleFile(Module *ParentMod)
 
    advance();
 
-   auto &Mgr = SP.getCompilationUnit().getModuleMgr();
-   Module *Mod;
+   auto& Mgr = SP.getCompilerInstance().getModuleMgr();
+   Module* Mod;
 
    if (ParentMod) {
       Mod = Mgr.CreateSubModule(Loc, Name, ParentMod);
@@ -49,12 +75,46 @@ Module *Parser::parseModuleFile(Module *ParentMod)
       Mod = Mgr.CreateModule(Loc, Name);
    }
 
-   while (true) {
+   if (IsMainModule) {
+      SP.getCompilerInstance().setCompilationModule(Mod);
+   }
+
+   auto parseBool = [&](bool &result) {
+     advance();
+     if (!expectToken(tok::equals)) {
+        return true;
+     }
+
+     advance();
+
+     if (!currentTok().oneOf(tok::kw_true, tok::kw_false)) {
+        SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                    currentTok().toString(), "true or false");
+
+        return true;
+     }
+
+     result = currentTok().is(tok::kw_true);
+     return false;
+   };
+
+   Module::TestInfo testInfo;
+   bool isTestModule = false;
+
+   bool useDirectoryLayout = false;
+   SourceLocation useDirectoryLayoutLoc;
+
+   bool done = false;
+   SmallVector<std::string, 2> SourceFileCache;
+
+   while (!done) {
       switch (currentTok().getKind()) {
-      case tok::close_brace:
-         return Mod;
+      case tok::close_brace: {
+         done = true;
+         break;
+      }
       case tok::ident: {
-         auto *II = currentTok().getIdentifierInfo();
+         auto* II = currentTok().getIdentifierInfo();
          if (II->isStr("sourceFiles")) {
             advance();
             if (!expectToken(tok::equals)) {
@@ -82,16 +142,27 @@ Module *Parser::parseModuleFile(Module *ParentMod)
                Module::SourceFileInfo Info;
                Info.Lang = Module::CDot;
 
-               Mod->addSourceFile(currentTok().getText(), Info);
-               advance();
+               SourceFileCache.clear();
+               fs::getAllMatchingFiles(currentTok().getText(), SourceFileCache);
 
+               if (SourceFileCache.empty()) {
+                  SP.diagnose(warn_generic_warn,
+                      "pattern does not match any files",
+                      currentTok().getSourceLoc());
+               }
+
+               for (auto &File : SourceFileCache) {
+                  Mod->addSourceFile(File, Info);
+               }
+
+               advance();
                if (currentTok().is(tok::comma)) {
                   advance();
                }
             }
          }
          else if (II->isStr("include_system") || II->isStr("include_c")
-              || II->isStr("include_cxx")) {
+                  || II->isStr("include_cxx")) {
             advance();
             if (!expectToken(tok::equals)) {
                return nullptr;
@@ -141,38 +212,20 @@ Module *Parser::parseModuleFile(Module *ParentMod)
             }
          }
          else if (II->isStr("declarationsOnly")) {
-            advance();
-            if (!expectToken(tok::equals)) {
+            bool declarationsOnly;
+            if (parseBool(declarationsOnly)) {
                return nullptr;
             }
 
-            advance();
-
-            if (!currentTok().oneOf(tok::kw_true, tok::kw_false)) {
-               SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                           currentTok().toString(), "true or false");
-
-               return nullptr;
-            }
-
-            Mod->setDeclarationsOnly(currentTok().is(tok::kw_true));
+            Mod->setDeclarationsOnly(declarationsOnly);
          }
          else if (II->isStr("compiletime")) {
-            advance();
-            if (!expectToken(tok::equals)) {
+            bool compiletime;
+            if (parseBool(compiletime)) {
                return nullptr;
             }
 
-            advance();
-
-            if (!currentTok().oneOf(tok::kw_true, tok::kw_false)) {
-               SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                           currentTok().toString(), "true or false");
-
-               return nullptr;
-            }
-
-            Mod->setCompileTimeByDefault(currentTok().is(tok::kw_true));
+            Mod->setCompileTimeByDefault(compiletime);
          }
          else if (II->isStr("defaultAccess")) {
             advance();
@@ -251,8 +304,8 @@ Module *Parser::parseModuleFile(Module *ParentMod)
                   }
                }
 
-               auto *IM = SP.getCompilationUnit().getModuleMgr()
-                             .GetModule(moduleName);
+               auto* IM = SP.getCompilerInstance().getModuleMgr().GetModule(
+                   moduleName);
 
                if (IM) {
                   Mod->addImplicitlyImportedModule(IM);
@@ -263,6 +316,27 @@ Module *Parser::parseModuleFile(Module *ParentMod)
                if (currentTok().is(tok::comma)) {
                   advance();
                }
+            }
+         }
+         else if (II->isStr("isTestModule")) {
+            if (parseBool(isTestModule)) {
+               return nullptr;
+            }
+         }
+         else if (II->isStr("verify")) {
+            if (!isTestModule) {
+               SP.diagnose(warn_generic_warn, currentTok().getSourceLoc(),
+                           "'verify' is ignored in non-test modules");
+            }
+
+            if (parseBool(testInfo.Verify)) {
+               return nullptr;
+            }
+         }
+         else if (II->isStr("useDirectoryLayout")) {
+            useDirectoryLayoutLoc = currentTok().getSourceLoc();
+            if (parseBool(useDirectoryLayout)) {
+               return nullptr;
             }
          }
          else {
@@ -282,7 +356,7 @@ Module *Parser::parseModuleFile(Module *ParentMod)
 
          break;
       case tok::eof:
-         SP.diagnose(err_unexpected_eof, currentTok().getSourceLoc());
+         SP.diagnose(err_unexpected_eof, true, currentTok().getSourceLoc());
          return nullptr;
       default:
          errorUnexpectedToken(currentTok(), tok::kw_module);
@@ -290,6 +364,60 @@ Module *Parser::parseModuleFile(Module *ParentMod)
       }
       }
 
+      if (done)
+         break;
+
       advance();
    }
+
+   while (useDirectoryLayout) {
+      if (!Mod->getSourceFiles().empty() || !Mod->getSubModules().empty()) {
+         SP.diagnose(warn_generic_warn,
+                     "'useDirectoryLayout' option is ignored if 'sourceFiles' "
+                     "or submodule declarations are present",
+                     useDirectoryLayoutLoc);
+
+         break;
+      }
+
+      auto File = SP.getCompilerInstance().getFileMgr().getOpenedFile(Loc);
+      auto BasePath = fs::getPath(File.FileName);
+
+      Module *CurrentMod = Mod;
+      std::function<void(const llvm::sys::fs::basic_file_status &st, StringRef path)> Fn =
+          [&](const llvm::sys::fs::basic_file_status &st, StringRef path)
+      {
+         using Kind = llvm::sys::fs::file_type;
+         switch (st.type()) {
+         case Kind::regular_file:
+         case Kind::symlink_file:
+         case Kind::character_file:
+            if (!path.endswith(".dot")) {
+               break;
+            }
+
+            CurrentMod->addSourceFile(path, Module::SourceFileInfo{Module::CDot});
+            break;
+         case Kind::directory_file: {
+            auto SubModName = &Idents.get(fs::getFileName(path));
+            auto *SubMod = Mgr.CreateSubModule(Loc, SubModName, CurrentMod);
+            auto SAR = support::saveAndRestore(CurrentMod, SubMod);
+
+            IterateFilesInDirectory(path, Fn);
+            break;
+         }
+         default:
+            break;
+         }
+      };
+
+      IterateFilesInDirectory(BasePath, Fn);
+      break;
+   }
+
+   if (isTestModule) {
+      Mod->setTestInfo(move(testInfo));
+   }
+
+   return Mod;
 }

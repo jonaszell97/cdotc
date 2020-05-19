@@ -1,30 +1,25 @@
-//
-// Created by Jonas Zell on 13.06.17.
-//
+#include "cdotc/Parse/Parser.h"
 
-#include "Parser.h"
-
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "AST/Expression.h"
-#include "AST/Statement.h"
-#include "Basic/FileManager.h"
-#include "Basic/IdentifierInfo.h"
-#include "Basic/Variant.h"
-#include "Lex/Lexer.h"
-#include "Message/Diagnostics.h"
-#include "Module/ModuleManager.h"
-#include "Sema/SemaPass.h"
-#include "Sema/Builtin.h"
-#include "Support/Casting.h"
-#include "Support/Format.h"
-#include "Support/LiteralParser.h"
-#include "Support/SaveAndRestore.h"
-#include "Support/StringSwitch.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Expression.h"
+#include "cdotc/AST/Statement.h"
+#include "cdotc/Basic/IdentifierInfo.h"
+#include "cdotc/Basic/Variant.h"
+#include "cdotc/Lex/Lexer.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Sema/Builtin.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Casting.h"
+#include "cdotc/Support/Format.h"
+#include "cdotc/Support/LiteralParser.h"
+#include "cdotc/Support/SaveAndRestore.h"
+#include "cdotc/Support/StringSwitch.h"
 
 #include <cassert>
-#include <vector>
 #include <string>
+#include <vector>
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/PrettyStackTrace.h>
@@ -33,84 +28,66 @@ using namespace cdot::diag;
 using namespace cdot::support;
 using namespace cdot::lex;
 
+using std::string;
+
 namespace cdot {
 namespace parse {
 
-Parser::Parser(ASTContext& Context,
-               lex::Lexer *lexer,
-               SemaPass &SP,
+Parser::Parser(ASTContext& Context, lex::Lexer* lexer, SemaPass& SP,
                bool isModuleParser)
-   : Context(Context),
-     source_id(lexer->getSourceId()),
-     UnboundedByDefault(!Context.CI.getOptions().runtimeGenerics()),
-     lexer(lexer),
-     SP(SP),
-     Idents(lexer->getIdents()),
-     Ident_self(&Idents.get("self")),
-     Ident_Self(&Idents.get("Self")),
-     Ident_super(&Idents.get("super")),
-     Ident_in(&Idents.get("in")),
-     Ident_as(&Idents.get("as")),
-     Ident_is(&Idents.get("is")),
-     Ident_do(&Idents.get("do")),
-     Ident_then(&Idents.get("then")),
-     Ident_where(&Idents.get("where")),
-     Ident_prefix(&Idents.get("prefix")),
-     Ident_postfix(&Idents.get("postfix")),
-     Ident_infix(&Idents.get("infix")),
-     Ident_default(&Idents.get("default")),
-     Ident_deinit(&Idents.get("deinit")),
-     Ident_typename(&Idents.get("typename")),
-     Ident_sizeof(&Idents.get("sizeof")),
-     Ident_decltype(&Idents.get("decltype")),
-     Ident_subscript(&Idents.get("subscript")),
-     Ident_memberwise(&Idents.get("memberwise")),
-     Ident_get(&Idents.get("get")),
-     Ident_set(&Idents.get("set")),
-     Ident_virtual(&Idents.get("virtual")),
-     Ident_override(&Idents.get("override")),
-     Ident_with(&Idents.get("with")),
-     Ident_throws(&Idents.get("throws")),
-     Ident_async(&Idents.get("async")),
-     Ident_unsafe(&Idents.get("unsafe")),
-     Ident_precedenceGroup(&Idents.get("precedenceGroup")),
-     Ident_higherThan(&Idents.get("higherThan")),
-     Ident_lowerThan(&Idents.get("lowerThan")),
-     Ident_associativity(&Idents.get("associativity")),
-     Ident_assignment(&Idents.get("assignment")),
-     Ident_macro(&Idents.get("macro")),
-     Ident_owned(&Idents.get("owned")),
-     Ident_borrow(&Idents.get("borrow")),
-     Ident_ref(&Idents.get("ref")),
-     Ident_mut(&Idents.get("mut")),
-     Ident_from(&Idents.get("from")),
-     Ident_unittest(&Idents.get("unittest")),
-     Ident___traits(&Idents.get("__traits")),
-     Ident___nullptr(&Idents.get("__nullptr")),
-     Ident___builtin_void(&Idents.get("__builtin_void")),
-     Ident___mangled_func(&Idents.get("__mangled_func")),
-     Ident___ctfe(&Idents.get("__ctfe")),
-#define CDOT_SOFT_KEYWORD(NAME)                             \
-     Ident_##NAME(&Idents.get(#NAME)),
-#include "Lex/Tokens.def"
-     CurDeclAttrs()
+    : Context(Context), source_id(lexer->getSourceId()),
+      UnboundedByDefault(!Context.CI.getOptions().runtimeGenerics()),
+      lexer(lexer), SP(SP), Idents(lexer->getIdents()),
+      Ident_self(&Idents.get("self")), Ident_Self(&Idents.get("Self")),
+      Ident_super(&Idents.get("super")), Ident_in(&Idents.get("in")),
+      Ident_as(&Idents.get("as")), Ident_is(&Idents.get("is")),
+      Ident_do(&Idents.get("do")), Ident_then(&Idents.get("then")),
+      Ident_where(&Idents.get("where")), Ident_prefix(&Idents.get("prefix")),
+      Ident_postfix(&Idents.get("postfix")), Ident_infix(&Idents.get("infix")),
+      Ident_default(&Idents.get("default")),
+      Ident_deinit(&Idents.get("deinit")),
+      Ident_typename(&Idents.get("typename")),
+      Ident_sizeof(&Idents.get("sizeof")),
+      Ident_decltype(&Idents.get("decltype")),
+      Ident_subscript(&Idents.get("subscript")),
+      Ident_memberwise(&Idents.get("memberwise")),
+      Ident_get(&Idents.get("get")), Ident_set(&Idents.get("set")),
+      Ident_virtual(&Idents.get("virtual")),
+      Ident_override(&Idents.get("override")), Ident_with(&Idents.get("with")),
+      Ident_throws(&Idents.get("throws")), Ident_async(&Idents.get("async")),
+      Ident_unsafe(&Idents.get("unsafe")),
+      Ident_precedenceGroup(&Idents.get("precedenceGroup")),
+      Ident_higherThan(&Idents.get("higherThan")),
+      Ident_lowerThan(&Idents.get("lowerThan")),
+      Ident_associativity(&Idents.get("associativity")),
+      Ident_assignment(&Idents.get("assignment")),
+      Ident_macro(&Idents.get("macro")), Ident_owned(&Idents.get("owned")),
+      Ident_borrow(&Idents.get("borrow")), Ident_ref(&Idents.get("ref")),
+      Ident_mut(&Idents.get("mut")), Ident_from(&Idents.get("from")),
+      Ident_unittest(&Idents.get("unittest")),
+      Ident___traits(&Idents.get("__traits")),
+      Ident___nullptr(&Idents.get("__nullptr")),
+      Ident___builtin_void(&Idents.get("__builtin_void")),
+      Ident___mangled_func(&Idents.get("__mangled_func")),
+      Ident___ctfe(&Idents.get("__ctfe")),
+#define CDOT_SOFT_KEYWORD(NAME) Ident_##NAME(&Idents.get(#NAME)),
+#include "cdotc/Lex/Tokens.def"
+      CurDeclAttrs()
 {
    AllowTrailingClosureStack.push(true);
-   Context.getIdentifiers().addKeywords();
 }
 
 Parser::~Parser() = default;
 
 namespace {
 
-class ParseDeclPrettyStackTraceEntry: public llvm::PrettyStackTraceEntry {
-   DeclContext *D;
+class ParseDeclPrettyStackTraceEntry : public llvm::PrettyStackTraceEntry {
+   DeclContext* D;
 
 public:
-   ParseDeclPrettyStackTraceEntry(DeclContext *D) : D(D)
-   {}
+   ParseDeclPrettyStackTraceEntry(DeclContext* D) : D(D) {}
 
-   void print(llvm::raw_ostream &OS) const override
+   void print(llvm::raw_ostream& OS) const override
    {
       if (auto ND = dyn_cast<NamedDecl>(D))
          OS << "while parsing '" << ND->getDeclName() << "'\n";
@@ -119,17 +96,17 @@ public:
 
 } // anonymous namespace
 
-Parser::DeclContextRAII::DeclContextRAII(Parser &P, DeclContext *Ctx)
-   : P(P), PrevInRecordDecl(P.InRecordScope)
+Parser::DeclContextRAII::DeclContextRAII(Parser& P, DeclContext* Ctx)
+    : P(P), PrevInRecordDecl(P.InRecordScope)
 {
    static_assert(sizeof(StackTraceEntry)
-                    == sizeof(ParseDeclPrettyStackTraceEntry),
+                     == sizeof(ParseDeclPrettyStackTraceEntry),
                  "insufficient storage!");
 
    Ctx->setParentCtx(&P.SP.getDeclContext());
    P.SP.pushDeclContext(Ctx);
 
-   new(StackTraceEntry) ParseDeclPrettyStackTraceEntry(Ctx);
+   new (StackTraceEntry) ParseDeclPrettyStackTraceEntry(Ctx);
 
    switch (Ctx->getDeclKind()) {
    case Decl::StructDeclID:
@@ -150,10 +127,9 @@ Parser::DeclContextRAII::DeclContextRAII(Parser &P, DeclContext *Ctx)
    }
 }
 
-Parser::DeclContextRAII::DeclContextRAII(DeclContextRAII &&Other) noexcept
-   : P(Other.P), PrevInRecordDecl(P.InRecordScope)
+Parser::DeclContextRAII::DeclContextRAII(DeclContextRAII&& Other) noexcept
+    : P(Other.P), PrevInRecordDecl(P.InRecordScope)
 {
-
 }
 
 Parser::DeclContextRAII::~DeclContextRAII()
@@ -161,18 +137,18 @@ Parser::DeclContextRAII::~DeclContextRAII()
    P.InRecordScope = PrevInRecordDecl;
    P.SP.popDeclContext();
    reinterpret_cast<ParseDeclPrettyStackTraceEntry*>(StackTraceEntry)
-      ->~ParseDeclPrettyStackTraceEntry();
+       ->~ParseDeclPrettyStackTraceEntry();
 }
 
-Parser::StateSaveRAII::StateSaveRAII(Parser &P)
-   : P(P), enabled(true), SavedCurTok(P.currentTok()),
-     SavedLastTok(P.lexer->getLastTok())
+Parser::StateSaveRAII::StateSaveRAII(Parser& P)
+    : P(P), enabled(true), SavedCurTok(P.currentTok()),
+      SavedLastTok(P.lexer->getLastTok())
 {
-
 }
 
 void Parser::StateSaveRAII::advance(bool ignoreNewline,
-                                    bool significantWhitespace) {
+                                    bool significantWhitespace)
+{
    P.advance(ignoreNewline, significantWhitespace);
    Tokens.push_back(P.currentTok());
 }
@@ -186,7 +162,7 @@ Parser::StateSaveRAII::~StateSaveRAII()
    }
 }
 
-ParseResult Parser::ActOnDecl(Decl *D)
+ParseResult Parser::ActOnDecl(Decl* D)
 {
    if (DiscardDecls)
       return ParseError();
@@ -198,7 +174,7 @@ ParseResult Parser::ActOnDecl(Decl *D)
 void Parser::skipWhitespace()
 {
    while (currentTok().oneOf(tok::semicolon, tok::newline, tok::space)
-      && !lookahead().is(tok::eof)) {
+          && !lookahead().is(tok::eof)) {
       advance();
    }
 }
@@ -216,13 +192,9 @@ Token Parser::lookahead(bool ignoreNewline, bool sw)
 void Parser::advance(bool ignoreNewline, bool sw)
 {
    lexer->advance(ignoreNewline, sw);
-//   llvm::outs()<<lexer->currentTok().toString();
 }
 
-const lex::Token& Parser::currentTok() const
-{
-   return lexer->currentTok();
-}
+const lex::Token& Parser::currentTok() const { return lexer->currentTok(); }
 
 bool Parser::expectToken(cdot::lex::tok::TokenType expected)
 {
@@ -233,15 +205,15 @@ bool Parser::expectToken(cdot::lex::tok::TokenType expected)
    return false;
 }
 
-void Parser::errorUnexpectedToken(const lex::Token &given,
-                                  tok::TokenType expected) {
-   SP.diagnose(err_unexpected_token, given.getSourceLoc(),
-               given.toString(), true,
-               tok::tokenTypeToString(expected));
+void Parser::errorUnexpectedToken(const lex::Token& given,
+                                  tok::TokenType expected)
+{
+   SP.diagnose(err_unexpected_token, given.getSourceLoc(), given.toString(),
+               true, tok::tokenTypeToString(expected));
 }
 
-void Parser::maybeParseConvention(ArgumentConvention &Conv,
-                                  SourceLocation &Loc) {
+void Parser::maybeParseConvention(ArgumentConvention& Conv, SourceLocation& Loc)
+{
    Conv = ArgumentConvention::Default;
    if (currentTok().is(Ident_owned)) {
       Conv = ArgumentConvention::Owned;
@@ -280,10 +252,10 @@ AccessSpecifier Parser::tokenToAccessSpec(tok::TokenType kind)
    }
 }
 
-FixKind Parser::tokenToFix(const lex::Token &Tok)
+FixKind Parser::tokenToFix(const lex::Token& Tok)
 {
    assert(Tok.getKind() == tok::ident && "not a fix token");
-   auto *II = Tok.getIdentifierInfo();
+   auto* II = Tok.getIdentifierInfo();
    if (II == Ident_prefix) {
       return FixKind::Prefix;
    }
@@ -299,9 +271,10 @@ bool Parser::validOperatorFollows()
 {
    assert(currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix));
    switch (lookahead().getKind()) {
-   case tok::ident: case tok::op_ident:
-#  define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
-#  include "Lex/Tokens.def"
+   case tok::ident:
+   case tok::op_ident:
+#define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
       return true;
    case tok::open_paren: {
       if (!currentTok().is(Ident_postfix)) {
@@ -355,8 +328,7 @@ bool Parser::skipUntilNextDecl()
       case tok::kw_fileprivate:
          return true;
       case tok::ident:
-         if (currentTok().oneOf(Ident_using, Ident_infix, Ident_prefix,
-                                Ident_postfix)) {
+         if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)) {
             return true;
          }
 
@@ -408,8 +380,7 @@ bool Parser::skipUntilNextDeclOrClosingBrace()
       case tok::kw_fileprivate:
          return true;
       case tok::ident:
-         if (currentTok().oneOf(Ident_using, Ident_infix, Ident_prefix,
-                                Ident_postfix)) {
+         if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)) {
             return true;
          }
 
@@ -437,9 +408,14 @@ bool Parser::skipUntilNextDeclOrClosingBrace()
 
 ParseResult Parser::skipUntilProbableEndOfStmt()
 {
+   if (currentTok().is(tok::eof)) {
+      lexer->backtrack();
+      return ParseError();
+   }
+
    while (!lookahead().oneOf(tok::newline, tok::semicolon, tok::eof,
-                              tok::open_brace, tok::close_paren,
-                              tok::close_square, tok::close_brace)
+                             tok::open_brace, tok::close_paren,
+                             tok::close_square, tok::close_brace)
           && !lookahead().is_keyword())
       advance(false);
 
@@ -448,9 +424,14 @@ ParseResult Parser::skipUntilProbableEndOfStmt()
 
 ParseResult Parser::skipUntilProbableEndOfStmt(cdot::lex::tok::TokenType kind)
 {
+   if (currentTok().is(tok::eof)) {
+      lexer->backtrack();
+      return ParseError();
+   }
+
    while (!lookahead().oneOf(kind, tok::newline, tok::semicolon, tok::eof,
-                              tok::open_brace, tok::close_paren,
-                              tok::close_square, tok::close_brace)
+                             tok::open_brace, tok::close_paren,
+                             tok::close_square, tok::close_brace)
           && !lookahead().is_keyword())
       advance(false);
 
@@ -460,8 +441,8 @@ ParseResult Parser::skipUntilProbableEndOfStmt(cdot::lex::tok::TokenType kind)
 ParseResult Parser::skipUntilProbableEndOfExpr()
 {
    while (!lookahead().oneOf(tok::newline, tok::semicolon, tok::eof,
-                              tok::open_brace, tok::close_paren,
-                              tok::close_square, tok::close_brace)
+                             tok::open_brace, tok::close_paren,
+                             tok::close_square, tok::close_brace)
           && !lookahead().is_keyword())
       advance(false);
 
@@ -472,11 +453,20 @@ ParseResult Parser::skipUntilEven(tok::TokenType openTok, unsigned int open)
 {
    tok::TokenType closeTok;
    switch (openTok) {
-   case tok::open_paren: closeTok = tok::close_paren; break;
-   case tok::open_brace: closeTok = tok::close_brace; break;
-   case tok::open_square: closeTok = tok::close_square; break;
-   case tok::smaller: closeTok = tok::greater; break;
-   default: llvm_unreachable("not a paren token!");
+   case tok::open_paren:
+      closeTok = tok::close_paren;
+      break;
+   case tok::open_brace:
+      closeTok = tok::close_brace;
+      break;
+   case tok::open_square:
+      closeTok = tok::close_square;
+      break;
+   case tok::smaller:
+      closeTok = tok::greater;
+      break;
+   default:
+      llvm_unreachable("not a paren token!");
    }
 
    unsigned closed = 0;
@@ -516,7 +506,7 @@ bool Parser::findTokOnLine(tok::TokenType kind)
    return false;
 }
 
-bool Parser::findTokOnLine(IdentifierInfo *Id)
+bool Parser::findTokOnLine(IdentifierInfo* Id)
 {
    StateSaveRAII raii(*this);
 
@@ -532,9 +522,31 @@ bool Parser::findTokOnLine(IdentifierInfo *Id)
    return false;
 }
 
+std::pair<DeclarationName, SourceRange>
+Parser::parseDeclName(bool allowUnderscore, bool emitDiagnostics)
+{
+   if (currentTok().is(tok::underscore)) {
+      if (allowUnderscore) {
+         SourceRange SR(currentTok().getSourceLoc(), currentTok().getEndLoc());
+         return {Context.getDeclNameTable().getErrorName(), SR};
+      }
+   }
+   else if (currentTok().is(tok::ident)) {
+      SourceRange SR(currentTok().getSourceLoc(), currentTok().getEndLoc());
+      return {currentTok().getIdentifierInfo(), SR};
+   }
+
+   if (emitDiagnostics) {
+      errorUnexpectedToken(currentTok(), tok::ident);
+   }
+
+   return {Context.getDeclNameTable().getErrorName(), SourceRange()};
+}
+
 ParseTypeResult Parser::parseType(bool allowInferredArraySize,
                                   bool InTypePosition,
-                                  bool AllowMissingTemplateArguments) {
+                                  bool AllowMissingTemplateArguments)
+{
    if (currentTok().is(tok::at)) {
       return parseAttributedType();
    }
@@ -555,8 +567,8 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
             advance();
 
             auto PtrTy = PointerTypeExpr::Create(
-               Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
-               typeref, /*meta=*/!InTypePosition);
+                Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
+                typeref, /*meta=*/!InTypePosition);
 
             typeref = SourceType(PtrTy);
             break;
@@ -565,14 +577,14 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
             advance();
 
             auto PtrTy = PointerTypeExpr::Create(
-               Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
-               typeref, /*meta=*/!InTypePosition);
+                Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
+                typeref, /*meta=*/!InTypePosition);
 
             typeref = SourceType(PtrTy);
 
             PtrTy = PointerTypeExpr::Create(
-               Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
-               typeref, /*meta=*/!InTypePosition);
+                Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
+                typeref, /*meta=*/!InTypePosition);
 
             typeref = SourceType(PtrTy);
             break;
@@ -585,8 +597,8 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
             advance();
             for (size_t i = 0; i < op.size(); ++i) {
                auto PtrTy = PointerTypeExpr::Create(
-                  Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
-                  typeref, /*meta=*/!InTypePosition);
+                   Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
+                   typeref, /*meta=*/!InTypePosition);
 
                typeref = SourceType(PtrTy);
             }
@@ -598,14 +610,17 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
          SourceRange SR(SourceLocation(BeginLoc.getOffset()),
                         currentTok().getSourceLoc());
 
-         auto *II = &Context.getIdentifiers().get("Option");
-
-         auto OptTy = new(Context) IdentifierRefExpr(SR, II);
+         auto* II = &Context.getIdentifiers().get("Option");
+         auto OptTy = new (Context) IdentifierRefExpr(SR, II);
          auto TAs = TemplateArgListExpr::Create(Context, SR, OptTy,
                                                 typeref.getTypeExpr());
 
          OptTy->setIsSynthesized(true);
          typeref = SourceType(TAs);
+      }
+      else if (next.is(tok::period)) {
+         auto subExpr = maybeParseSubExpr(typeref.getTypeExpr(), true);
+         typeref = SourceType(subExpr.tryGetExpr());
       }
       else {
          break;
@@ -616,7 +631,7 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
 
    // Existential type union
    if (next.is(tok::op_and)) {
-      SmallVector<SourceType, 2> Types{ typeref };
+      SmallVector<SourceType, 2> Types{typeref};
 
       while (next.is(tok::op_and)) {
          advance();
@@ -633,31 +648,37 @@ ParseTypeResult Parser::parseType(bool allowInferredArraySize,
       }
 
       SourceRange SR(BeginLoc, currentTok().getEndLoc());
-      auto *Expr = ExistentialTypeExpr::Create(Context, SR,
-                                               Types, !InTypePosition);
+      auto* Expr
+          = ExistentialTypeExpr::Create(Context, SR, Types, !InTypePosition);
 
       typeref = SourceType(Expr);
    }
 
-   // as a special case, allow a '...' with a space after a function type to
+   // As a special case, allow a '...' with a space after a function type to
    // apply to the function type itself, without a space it would always
    // apply to the return type
    if (isa<FunctionTypeExpr>(typeref.getTypeExpr())
-         && lookahead().is(tok::triple_period)) {
+       && lookahead().is(tok::triple_period)) {
       advance();
-      typeref.getTypeExpr()->setEllipsisLoc(currentTok().getSourceLoc());
+
+      typeref.setTypeExpr(VariadicExpansionExpr::Create(
+          Context, currentTok().getSourceLoc(), typeref.getTypeExpr()));
    }
    else if (lookahead(false, true).is(tok::triple_period)) {
       advance(false, true);
-      typeref.getTypeExpr()->setEllipsisLoc(currentTok().getSourceLoc());
+
+      typeref.setTypeExpr(VariadicExpansionExpr::Create(
+          Context, currentTok().getSourceLoc(), typeref.getTypeExpr()));
    }
 
+   typeref.getTypeExpr()->setIsInTypePosition(InTypePosition);
    return typeref;
 }
 
 ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
                                       bool InTypePosition,
-                                      bool AllowMissingTemplateArguments) {
+                                      bool AllowMissingTemplateArguments)
+{
    auto BeginLoc = currentTok().getSourceLoc();
 
    if (currentTok().getIdentifierInfo() == Ident_decltype) {
@@ -675,10 +696,9 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
       }
 
       expect(tok::close_paren);
-      return SourceType(
-         DeclTypeExpr::Create(Context,
-                              SourceRange(BeginLoc, currentTok().getSourceLoc()),
-                              expr.getExpr(), /*meta=*/!InTypePosition));
+      return SourceType(DeclTypeExpr::Create(
+          Context, SourceRange(BeginLoc, currentTok().getSourceLoc()),
+          expr.getExpr(), /*meta=*/!InTypePosition));
    }
 
    // collection type
@@ -705,20 +725,18 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
          advance();
 
          if (!currentTok().is(tok::close_square)) {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                         currentTok().toString(), true, "']'");
          }
-
 
          SourceRange SR(SourceLocation(BeginLoc.getOffset()),
                         currentTok().getSourceLoc());
 
-         auto *II = &Context.getIdentifiers().get("Dictionary");
-         auto Expr = new(Context) IdentifierRefExpr(SR, II);
-         auto TAs = TemplateArgListExpr::Create(Context, SR, Expr, {
-                                                   elType.get().getTypeExpr(),
-                                                   valType.get().getTypeExpr()
-                                                });
+         auto* II = &Context.getIdentifiers().get("Dictionary");
+         auto Expr = new (Context) IdentifierRefExpr(SR, II);
+         auto TAs = TemplateArgListExpr::Create(
+             Context, SR, Expr,
+             {elType.get().getTypeExpr(), valType.get().getTypeExpr()});
 
          Expr->setIsSynthesized(true);
          return SourceType(TAs);
@@ -728,7 +746,7 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
       if (currentTok().is(tok::semicolon)) {
          advance();
 
-         StaticExpr *SizeExpr;
+         StaticExpr* SizeExpr;
          if (currentTok().is(tok::question)) {
             if (!allowInferredArraySize)
                SP.diagnose(err_inferred_arr_size_not_allowed,
@@ -748,23 +766,22 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
 
          expect(tok::close_square);
 
-         return SourceType(
-            ArrayTypeExpr::Create(Context,
-                                  { BeginLoc, currentTok().getSourceLoc() },
-                                  elType.get(), SizeExpr,
-                                  /*meta=*/!InTypePosition));
+         return SourceType(ArrayTypeExpr::Create(
+             Context, {BeginLoc, currentTok().getSourceLoc()}, elType.get(),
+             SizeExpr,
+             /*meta=*/!InTypePosition));
       }
 
       if (!currentTok().is(tok::close_square)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "']'");
       }
 
       SourceRange SR(SourceLocation(BeginLoc.getOffset()),
                      currentTok().getSourceLoc());
 
-      auto *II = &Context.getIdentifiers().get("Array");
-      auto Expr = new(Context) IdentifierRefExpr(SR, II);
+      auto* II = &Context.getIdentifiers().get("Array");
+      auto Expr = new (Context) IdentifierRefExpr(SR, II);
       auto TAs = TemplateArgListExpr::Create(Context, SR, Expr,
                                              elType.get().getTypeExpr());
 
@@ -784,9 +801,10 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
 
       unsigned i = 0;
       while (!currentTok().is(tok::close_paren)) {
-         IdentifierInfo *label = nullptr;
+         IdentifierInfo* label = nullptr;
 
-         if (currentTok().getKind() == tok::ident && lookahead().is(tok::colon)) {
+         if (currentTok().getKind() == tok::ident
+             && lookahead().is(tok::colon)) {
             label = currentTok().getIdentifierInfo();
             advance();
             advance();
@@ -826,13 +844,13 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
             break;
          }
          else {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                         currentTok().toString(), true, "')'");
          }
       }
 
       assert((Labels.empty() || Labels.size() == TupleTypes.size())
-         && "wrong number of labels!");
+             && "wrong number of labels!");
 
       // tuple type
       if (!lookahead().oneOf(tok::arrow_single, Ident_throws, Ident_async,
@@ -843,8 +861,8 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
          }
 
          return SourceType(TupleTypeExpr::Create(
-            Context, { BeginLoc, currentTok().getSourceLoc() }, TupleTypes,
-            /*meta=*/!InTypePosition));
+             Context, {BeginLoc, currentTok().getSourceLoc()}, TupleTypes,
+             /*meta=*/!InTypePosition));
       }
 
       advance();
@@ -898,11 +916,10 @@ ParseTypeResult Parser::parseFunctionType()
    return parseFunctionType(BeginLoc, TupleTypes, ParamInfo, false);
 }
 
-ParseTypeResult
-Parser::parseFunctionType(SourceLocation BeginLoc,
-                          ArrayRef<SourceType> ParamTys,
-                          ArrayRef<FunctionType::ParamInfo> ParamInfo,
-                          bool InTypePosition) {
+ParseTypeResult Parser::parseFunctionType(
+    SourceLocation BeginLoc, ArrayRef<SourceType> ParamTys,
+    ArrayRef<FunctionType::ParamInfo> ParamInfo, bool InTypePosition)
+{
    bool Thin = false;
    bool Throws = false;
    bool Async = false;
@@ -933,19 +950,17 @@ Parser::parseFunctionType(SourceLocation BeginLoc,
       return ParseTypeResult();
    }
 
-   SourceRange SR(BeginLoc, returnType.get().getTypeExpr()
-                                      ->getSourceRange().getEnd());
+   SourceRange SR(BeginLoc,
+                  returnType.get().getTypeExpr()->getSourceRange().getEnd());
 
-   return SourceType(FunctionTypeExpr::Create(Context, SR, returnType.get(),
-                                              ParamTys, ParamInfo,
-                                              /*IsMeta=*/ !InTypePosition,
-                                              Thin, Throws, Async, Unsafe));
+   return SourceType(FunctionTypeExpr::Create(
+       Context, SR, returnType.get(), ParamTys, ParamInfo,
+       /*IsMeta=*/!InTypePosition, Thin, Throws, Async, Unsafe));
 }
 
-void
-Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
+void Parser::parseDeclConstraints(std::vector<ParsedConstraint>& Constraints)
 {
-   SmallVector<IdentifierInfo*, 2> NameQualifier;
+   std::vector<IdentifierInfo*> NameQualifier;
    while (currentTok().is(Ident_where)) {
       SourceLocation BeginLoc = consumeToken();
 
@@ -969,12 +984,12 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
          }
       }
 
-      DeclConstraint *DC = nullptr;
+      bool addedConstraint = false;
       if (currentTok().is(tok::smaller)) {
-         IdentifierRefExpr *ParentExpr = nullptr;
-         for (auto &Name : NameQualifier) {
-            ParentExpr = new(Context) IdentifierRefExpr(BeginLoc, ParentExpr,
-                                                        Name);
+         IdentifierRefExpr* ParentExpr = nullptr;
+         for (auto& Name : NameQualifier) {
+            ParentExpr
+                = new (Context) IdentifierRefExpr(BeginLoc, ParentExpr, Name);
          }
 
          // Parse the associated type constrained by this concept.
@@ -1006,8 +1021,11 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
          }
 
          SourceLocation EndLoc = currentTok().getEndLoc();
-         DC = DeclConstraint::Create(Context, SourceRange(BeginLoc, EndLoc),
-                                     NameQualifier, ParentExpr);
+         Constraints.emplace_back(DeclConstraint::Concept,
+                                  SourceRange(BeginLoc, EndLoc),
+                                  move(NameQualifier), ParentExpr);
+
+         addedConstraint = true;
       }
       else {
          DeclConstraint::Kind K;
@@ -1025,25 +1043,31 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
                advance();
 
                SourceLocation EndLoc = currentTok().getEndLoc();
-               DC = DeclConstraint::Create(Context, DeclConstraint::Class,
-                                           SourceRange(BeginLoc, EndLoc),
-                                           NameQualifier);
+               Constraints.emplace_back(DeclConstraint::Class,
+                                        SourceRange(BeginLoc, EndLoc),
+                                        move(NameQualifier), nullptr);
+
+               addedConstraint = true;
             }
             else if (lookahead().is(tok::kw_enum)) {
                advance();
 
                SourceLocation EndLoc = currentTok().getEndLoc();
-               DC = DeclConstraint::Create(Context, DeclConstraint::Enum,
-                                           SourceRange(BeginLoc, EndLoc),
-                                           NameQualifier);
+               Constraints.emplace_back(DeclConstraint::Enum,
+                                        SourceRange(BeginLoc, EndLoc),
+                                        move(NameQualifier), nullptr);
+
+               addedConstraint = true;
             }
             else if (lookahead().is(tok::kw_struct)) {
                advance();
 
                SourceLocation EndLoc = currentTok().getEndLoc();
-               DC = DeclConstraint::Create(Context, DeclConstraint::Struct,
-                                           SourceRange(BeginLoc, EndLoc),
-                                           NameQualifier);
+               Constraints.emplace_back(DeclConstraint::Struct,
+                                        SourceRange(BeginLoc, EndLoc),
+                                        move(NameQualifier), nullptr);
+
+               addedConstraint = true;
             }
 
             K = DeclConstraint::TypePredicate;
@@ -1053,18 +1077,16 @@ Parser::parseDeclConstraints(SmallVectorImpl<DeclConstraint*> &Constraints)
             break;
          }
 
-         if (!DC) {
+         if (!addedConstraint) {
             advance();
             auto Type = parseType();
 
             SourceLocation EndLoc = currentTok().getEndLoc();
-            DC = DeclConstraint::Create(Context, K,
-                                        SourceRange(BeginLoc, EndLoc),
-                                        NameQualifier, Type.tryGet());
+            Constraints.emplace_back(K, SourceRange(BeginLoc, EndLoc),
+                                     move(NameQualifier),
+                                     Type.tryGet().getTypeExpr());
          }
       }
-
-      Constraints.push_back(DC);
 
       if (!lookahead().is(Ident_where))
          break;
@@ -1109,7 +1131,7 @@ ParseResult Parser::parseAlias()
 {
    auto AliasLoc = consumeToken(tok::kw_alias);
    if (!currentTok().is(tok::ident)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       return ParseError();
@@ -1119,7 +1141,7 @@ ParseResult Parser::parseAlias()
    auto params = tryParseTemplateParameters();
 
    // Alias template parameters are unbounded by default.
-   for (auto *P : params) {
+   for (auto* P : params) {
       if (P->getCovariance().isResolved()) {
          assert(P->getCovariance()->isAutoType());
          P->setUnbounded(true);
@@ -1145,7 +1167,7 @@ ParseResult Parser::parseAlias()
       Type.setResolvedType(Context.getAutoType());
    }
 
-   StaticExpr *aliasExpr = nullptr;
+   StaticExpr* aliasExpr = nullptr;
    if (lookahead().is(tok::equals)) {
       advance();
       advance();
@@ -1158,29 +1180,22 @@ ParseResult Parser::parseAlias()
       aliasExpr = StaticExpr::Create(Context, ExprRes.getExpr());
    }
 
-   std::vector<StaticExpr*> constraints;
-   while (lookahead().is(Ident_where)) {
+   std::vector<ParsedConstraint> Constraints;
+   if (lookahead().is(Ident_where)) {
       advance();
-      advance();
-
-      auto expr = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure);
-      if (expr)
-         constraints.push_back(StaticExpr::Create(Context, expr.getExpr()));
-      else
-         skipUntilProbableEndOfExpr();
+      parseDeclConstraints(Constraints);
    }
 
    auto aliasDecl = AliasDecl::Create(Context, AliasLoc, CurDeclAttrs.Access,
                                       Name, Type, aliasExpr, params);
 
    if (ParsingProtocol) {
-      SP.diagnose(aliasDecl, err_may_not_appear_in_protocol,
-                  aliasDecl->getSpecifierForDiagnostic(),
+      SP.diagnose(aliasDecl, err_may_not_appear_in_protocol, aliasDecl,
                   currentTok().getSourceLoc());
    }
 
    aliasDecl->setAccessLoc(CurDeclAttrs.AccessLoc);
-   Context.setConstraints(aliasDecl, constraints);
+   Context.setParsedConstraints(aliasDecl, move(Constraints));
 
    return ActOnDecl(aliasDecl);
 }
@@ -1202,8 +1217,8 @@ ParseResult Parser::parsePrecedenceGroup()
 
    Associativity Assoc = Associativity::Left;
    bool IsAssignment = false;
-   const IdentifierInfo *HigherThan = nullptr;
-   const IdentifierInfo *LowerThan = nullptr;
+   const IdentifierInfo* HigherThan = nullptr;
+   const IdentifierInfo* LowerThan = nullptr;
 
    if (lookahead().is(tok::open_brace)) {
       advance();
@@ -1213,7 +1228,7 @@ ParseResult Parser::parsePrecedenceGroup()
          if (currentTok().is(Ident_higherThan)) {
             if (HigherThan) {
                SP.diagnose(err_prec_prop_already_defined,
-                           currentTok().getSourceLoc(), /*higherThan*/0);
+                           currentTok().getSourceLoc(), /*higherThan*/ 0);
             }
 
             expect(tok::colon);
@@ -1231,7 +1246,7 @@ ParseResult Parser::parsePrecedenceGroup()
          else if (currentTok().is(Ident_lowerThan)) {
             if (LowerThan) {
                SP.diagnose(err_prec_prop_already_defined,
-                           currentTok().getSourceLoc(), /*lowerThan*/1);
+                           currentTok().getSourceLoc(), /*lowerThan*/ 1);
             }
 
             expect(tok::colon);
@@ -1249,7 +1264,7 @@ ParseResult Parser::parsePrecedenceGroup()
          else if (currentTok().is(Ident_associativity)) {
             if (AssociativityDefined) {
                SP.diagnose(err_prec_prop_already_defined,
-                           currentTok().getSourceLoc(), /*associativity*/2);
+                           currentTok().getSourceLoc(), /*associativity*/ 2);
             }
 
             expect(tok::colon);
@@ -1277,7 +1292,7 @@ ParseResult Parser::parsePrecedenceGroup()
          else if (currentTok().is(Ident_assignment)) {
             if (SawAssignment) {
                SP.diagnose(err_prec_prop_already_defined,
-                           currentTok().getSourceLoc(), /*assignment*/3);
+                           currentTok().getSourceLoc(), /*assignment*/ 3);
             }
 
             SawAssignment = true;
@@ -1309,8 +1324,8 @@ ParseResult Parser::parsePrecedenceGroup()
 
    SourceRange SR(KeywordLoc, currentTok().getEndLoc());
    auto PG = PrecedenceGroupDecl::Create(Context, SR, CurDeclAttrs.Access, Name,
-                                         Assoc,
-                                         HigherThan, LowerThan, IsAssignment);
+                                         Assoc, HigherThan, LowerThan,
+                                         IsAssignment);
 
    PG->setAccessLoc(CurDeclAttrs.AccessLoc);
    return ActOnDecl(PG);
@@ -1328,7 +1343,7 @@ ParseResult Parser::parseOperatorDecl()
    if (!Name)
       Name = Context.getDeclNameTable().getErrorName();
 
-   const IdentifierInfo *PrecedenceGroup = nullptr;
+   const IdentifierInfo* PrecedenceGroup = nullptr;
    if (lookahead().is(tok::colon)) {
       advance();
       advance();
@@ -1345,17 +1360,17 @@ ParseResult Parser::parseOperatorDecl()
 
    SourceRange SR(KeywordLoc, currentTok().getEndLoc());
 
-   auto Decl = OperatorDecl::Create(Context, SR, CurDeclAttrs.Access,
-                                    Name, PrecedenceGroup);
+   auto Decl = OperatorDecl::Create(Context, SR, CurDeclAttrs.Access, Name,
+                                    PrecedenceGroup);
 
    Decl->setAccessLoc(CurDeclAttrs.AccessLoc);
    return ActOnDecl(Decl);
 }
 
-ParseResult Parser::parseIdentifierExpr(bool parsingType,
-                                        bool parseSubExpr,
+ParseResult Parser::parseIdentifierExpr(bool parsingType, bool parseSubExpr,
                                         DeclarationName Ident,
-                                        SourceLocation BeginLoc) {
+                                        SourceLocation BeginLoc)
+{
    if (!Ident) {
       BeginLoc = currentTok().getSourceLoc();
       if (!currentTok().is(tok::ident)) {
@@ -1365,24 +1380,27 @@ ParseResult Parser::parseIdentifierExpr(bool parsingType,
 
          return ParseError();
       }
-      
+
       Ident = currentTok().getIdentifierInfo();
    }
 
-   if (Ident == Ident___nullptr)
+   if (Ident == Ident___nullptr) {
       return BuiltinIdentExpr::Create(Context, BeginLoc,
                                       BuiltinIdentifier::NULLPTR);
-   if (Ident == Ident___builtin_void)
+   }
+
+   if (Ident == Ident___builtin_void) {
       return BuiltinIdentExpr::Create(Context, BeginLoc,
                                       BuiltinIdentifier::__builtin_void);
+   }
 
-   Expression *IdentExpr;
+   Expression* IdentExpr;
    if (Ident == Ident_Self) {
       IdentExpr = SelfExpr::Create(Context, currentTok().getSourceLoc(), true);
    }
    else {
-      IdentExpr = new(Context) IdentifierRefExpr(BeginLoc, Ident,
-                                                 nullptr, parsingType);
+      IdentExpr = new (Context)
+          IdentifierRefExpr(BeginLoc, Ident, nullptr, parsingType);
    }
 
    if (!parseSubExpr)
@@ -1391,15 +1409,15 @@ ParseResult Parser::parseIdentifierExpr(bool parsingType,
    return maybeParseSubExpr(IdentExpr, parsingType);
 }
 
-ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
+ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType,
+                                      bool parsingStmt)
 {
    // pack expansions must immediately follow their operand without any
    // whitespace
    if (lookahead(false, true).is(tok::triple_period)) {
       advance(false, true);
-
-      ParentExpr->setEllipsisLoc(currentTok().getSourceLoc());
-      return maybeParseSubExpr(ParentExpr);
+      return maybeParseSubExpr(VariadicExpansionExpr::Create(
+          Context, currentTok().getSourceLoc(), ParentExpr));
    }
 
    /// The '<' in a template argument list must immediately follow it's
@@ -1424,7 +1442,7 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
 
       // Operator function reference
       if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
-            && validOperatorFollows()) {
+          && validOperatorFollows()) {
          if (ParentExpr) {
             ParentExpr->setAllowNamespaceRef(true);
          }
@@ -1437,8 +1455,8 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
          bool IsConvOp;
          auto OpName = parseOperatorName(Fix, IsConvOp);
 
-         auto Expr = new(Context) IdentifierRefExpr(Loc, ParentExpr, OpName,
-                                                    pointerAccess);
+         auto Expr = new (Context)
+             IdentifierRefExpr(Loc, ParentExpr, OpName, pointerAccess);
 
          return maybeParseSubExpr(Expr, parsingType);
       }
@@ -1446,8 +1464,8 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       // tuple access
       if (currentTok().is(tok::integerliteral) && !parsingType) {
          unsigned index = unsigned(std::stoul(currentTok().getText()));
-         auto tupleExpr = new(Context) TupleMemberExpr(
-            currentTok().getSourceLoc(), ParentExpr, index, pointerAccess);
+         auto tupleExpr = new (Context) TupleMemberExpr(
+             currentTok().getSourceLoc(), ParentExpr, index, pointerAccess);
 
          return maybeParseSubExpr(tupleExpr, parsingType);
       }
@@ -1457,7 +1475,7 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
           && lookahead().is(tok::open_paren) && !parsingType) {
          auto Call = parseFunctionCall(false, ParentExpr, pointerAccess);
 
-         Expression *Expr;
+         Expression* Expr;
          if (Call) {
             Expr = Call.getExpr();
          }
@@ -1475,6 +1493,10 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
             ParentExpr->setAllowNamespaceRef(true);
          }
 
+         if (parsingStmt) {
+            return parseMacroExpansionStmt(ParentExpr);
+         }
+
          return parseMacroExpansionExpr(ParentExpr);
       }
 
@@ -1490,11 +1512,11 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
          ParentExpr->setAllowNamespaceRef(true);
       }
 
-      Expression *Expr;
+      Expression* Expr;
 
       // Trailing closure
       if (AllowBraceClosure() && !parsingType
-            && lookahead(false).is(tok::open_brace)) {
+          && lookahead(false).is(tok::open_brace)) {
          auto IdentLoc = currentTok().getSourceLoc();
          auto Ident = currentTok().getIdentifierInfo();
 
@@ -1505,11 +1527,11 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
             return ParentExpr;
 
          auto Closure = Result.getExpr();
-         auto *IdentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr,
-                                                          Ident);
+         auto* IdentExpr
+             = new (Context) IdentifierRefExpr(IdentLoc, ParentExpr, Ident);
 
-         Expr = AnonymousCallExpr::Create(Context, IdentLoc, IdentExpr,
-                                          Closure, {});
+         Expr = AnonymousCallExpr::Create(Context, IdentLoc, IdentExpr, Closure,
+                                          {});
 
          return maybeParseSubExpr(Expr, parsingType);
       }
@@ -1518,7 +1540,7 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       DeclarationName Name = currentTok().getIdentifierInfo();
 
       // If a template argument list follows, parse that first.
-      TemplateArgListExpr *TAs = nullptr;
+      TemplateArgListExpr* TAs = nullptr;
       if (lookahead(false, true).is(tok::smaller)) {
          advance();
 
@@ -1554,8 +1576,8 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       }
       // Member ref expression
       else {
-         Expr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr, Name,
-                                               pointerAccess);
+         Expr = new (Context)
+             IdentifierRefExpr(IdentLoc, ParentExpr, Name, pointerAccess);
 
          if (TAs) {
             TAs->setParentExpr(Expr);
@@ -1563,7 +1585,7 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
          }
       }
 
-      return maybeParseSubExpr(Expr, parsingType);
+      return maybeParseSubExpr(Expr, parsingType, parsingStmt);
    }
 
    // Anonymous call
@@ -1589,7 +1611,7 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       auto call = AnonymousCallExpr::Create(Context, Parens, ParentExpr,
                                             args.args, args.labels);
 
-      return maybeParseSubExpr(call, parsingType);
+      return maybeParseSubExpr(call, parsingType, parsingStmt);
    }
 
    // Subscript expression
@@ -1613,15 +1635,20 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       }
 
       SourceRange SquareRange(start, currentTok().getSourceLoc());
-      ParentExpr = SubscriptExpr::Create(Context, SquareRange, ParentExpr,
-                                         indices);
+      ParentExpr
+          = SubscriptExpr::Create(Context, SquareRange, ParentExpr, indices);
 
-      return maybeParseSubExpr(ParentExpr, parsingType);
+      return maybeParseSubExpr(ParentExpr, parsingType, parsingStmt);
    }
 
    // macro expansion
    if (Next.is(tok::macro_name)) {
       advance();
+
+      if (parsingStmt) {
+         return parseMacroExpansionStmt(ParentExpr);
+      }
+
       return parseMacroExpansionExpr(ParentExpr);
    }
 
@@ -1641,22 +1668,24 @@ ParseResult Parser::maybeParseSubExpr(Expression *ParentExpr, bool parsingType)
       SourceRange SR;
       auto CE = rhs.getExpr<ConstraintExpr>();
       if (CE->getKind() == ConstraintExpr::Type) {
-         SR = SourceRange(BeginLoc, CE->getTypeConstraint().getTypeExpr()
-                                      ->getSourceRange().getEnd());
+         SR = SourceRange(
+             BeginLoc,
+             CE->getTypeConstraint().getTypeExpr()->getSourceRange().getEnd());
       }
       else {
          SR = SourceRange(BeginLoc, currentTok().getSourceLoc());
       }
 
-      return TypePredicateExpr::Create(Context, IsLoc, SR,
-                                       ParentExpr, CE, Negate);
+      return TypePredicateExpr::Create(Context, IsLoc, SR, ParentExpr, CE,
+                                       Negate);
    }
 
    return ParentExpr;
 }
 
-ParseResult Parser::parseTemplateArgListExpr(Expression *ParentExpr,
-                                             bool parsingType) {
+ParseResult Parser::parseTemplateArgListExpr(Expression* ParentExpr,
+                                             bool parsingType)
+{
    Lexer::ModeRAII MR(*lexer, Lexer::Mode::ParsingTemplateArgs);
    assert(currentTok().is(tok::smaller) && "not a template argument list!");
 
@@ -1667,11 +1696,11 @@ ParseResult Parser::parseTemplateArgListExpr(Expression *ParentExpr,
       auto NextExpr = parseExprSequence(DefaultFlags | F_StopAtGreater);
 
       if (NextExpr) {
-         auto *E = NextExpr.getExpr();
-         if (auto *Ty = dyn_cast<TypeExpr>(E)) {
+         auto* E = NextExpr.getExpr();
+         if (auto* Ty = dyn_cast<TypeExpr>(E)) {
             Ty->setIsMeta(false);
          }
-         else if (auto *Ident = dyn_cast<IdentifierRefExpr>(E)) {
+         else if (auto* Ident = dyn_cast<IdentifierRefExpr>(E)) {
             Ident->setInTypePos(true);
          }
 
@@ -1708,7 +1737,7 @@ ParseResult Parser::parseCollectionLiteral()
 
    while (!currentTok().is(tok::close_square)) {
       if (currentTok().is(tok::eof)) {
-         SP.diagnose(err_unexpected_eof, currentTok().getSourceLoc(),  true,
+         SP.diagnose(err_unexpected_eof, currentTok().getSourceLoc(), true,
                      "']'");
          return ParseExprError();
       }
@@ -1718,9 +1747,8 @@ ParseResult Parser::parseCollectionLiteral()
          break;
       }
 
-      if (AllowPattern
-            && currentTok().oneOf(Ident_is, tok::kw_var, tok::kw_let)
-            && !isDictionary) {
+      if (AllowPattern && currentTok().oneOf(Ident_is, tok::kw_var, tok::kw_let)
+          && !isDictionary) {
          return parseArrayPattern(LSquareLoc, values);
       }
 
@@ -1736,7 +1764,7 @@ ParseResult Parser::parseCollectionLiteral()
       if (first && currentTok().is(tok::semicolon)) {
          advance();
 
-         Expression *Size = nullptr;
+         Expression* Size = nullptr;
          auto SizeRes = parseExprSequence();
          if (SizeRes)
             Size = SizeRes.getExpr();
@@ -1768,7 +1796,7 @@ ParseResult Parser::parseCollectionLiteral()
       }
       else {
          if (isDictionary) {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                         currentTok().toString(), true, "':'");
          }
 
@@ -1793,8 +1821,7 @@ ParseResult Parser::parseCollectionLiteral()
 
    SourceRange SquareRange(LSquareLoc, currentTok().getSourceLoc());
    if (isDictionary)
-      return DictionaryLiteral::Create(Context, SquareRange, keys,
-                                       values);
+      return DictionaryLiteral::Create(Context, SquareRange, keys, values);
 
    return ArrayLiteral::Create(Context, SquareRange, values);
 }
@@ -1804,7 +1831,7 @@ string Parser::prepareStringLiteral(Token const& tok)
    llvm::SmallString<128> str;
    bool escaped = false;
 
-   const char *ptr  = tok.getText().data();
+   const char* ptr = tok.getText().data();
    unsigned Len = (unsigned)tok.getText().size();
 
    for (unsigned i = 0; i < Len; ++ptr, ++i) {
@@ -1828,7 +1855,7 @@ string Parser::prepareStringLiteral(Token const& tok)
    return str.str();
 }
 
-ParseResult Parser::parseUnaryExpr()
+ParseResult Parser::parseUnaryExpr(bool parsingStmt)
 {
    ParseResult Expr;
 
@@ -1848,7 +1875,10 @@ ParseResult Parser::parseUnaryExpr()
    }
    else if (currentTok().oneOf(tok::macro_statement, tok::macro_declaration)) {
       enum DiagKind {
-         Expression, Statement, Type, Decl,
+         Expression,
+         Statement,
+         Type,
+         Decl,
       };
 
       SP.diagnose(err_bad_macro_variable_kind, currentTok().getSourceLoc(),
@@ -1875,13 +1905,13 @@ ParseResult Parser::parseUnaryExpr()
 
       advance();
 
-      Expression *E = parseExprSequence().tryGetExpr();
+      Expression* E = parseExprSequence().tryGetExpr();
       Expr = TryExpr::Create(Context, TryLoc, Kind, E);
    }
    else if (currentTok().is(tok::kw_await)) {
       SourceLocation AwaitLoc = consumeToken();
 
-      Expression *E = parseExprSequence().tryGetExpr();
+      Expression* E = parseExprSequence().tryGetExpr();
       Expr = AwaitExpr::Create(Context, AwaitLoc, E);
    }
    else if (currentTok().getIdentifierInfo() == Ident___traits) {
@@ -1930,9 +1960,10 @@ ParseResult Parser::parseUnaryExpr()
          }
 
          if (Call) {
-            auto *E = Call.getExpr();
-            if (auto *CE = dyn_cast<AnonymousCallExpr>(E)) {
-               cast<IdentifierRefExpr>(CE->getParentExpr())->setLeadingDot(true);
+            auto* E = Call.getExpr();
+            if (auto* CE = dyn_cast<AnonymousCallExpr>(E)) {
+               cast<IdentifierRefExpr>(CE->getParentExpr())
+                   ->setLeadingDot(true);
             }
             else {
                cast<CasePattern>(E)->setLeadingDot(true);
@@ -1943,27 +1974,25 @@ ParseResult Parser::parseUnaryExpr()
       }
       else {
          SourceRange SR(currentTok().getSourceLoc());
-         auto *Ident = currentTok().getIdentifierInfo();
+         auto* Ident = currentTok().getIdentifierInfo();
 
-         auto *IE = new(Context) IdentifierRefExpr(SR, Ident);
+         auto* IE = new (Context) IdentifierRefExpr(SR, Ident);
          IE->setLeadingDot(true);
 
          Expr = IE;
       }
    }
    else if (currentTok().is(tok::kw_self)) {
-      Expr = maybeParseSubExpr(SelfExpr::Create(Context,
-                                                currentTok().getSourceLoc(),
-                                                false));
+      Expr = maybeParseSubExpr(
+          SelfExpr::Create(Context, currentTok().getSourceLoc(), false));
    }
    else if (currentTok().is(Ident_Self)) {
-      Expr = maybeParseSubExpr(SelfExpr::Create(Context,
-                                                currentTok().getSourceLoc(),
-                                                true));
+      Expr = maybeParseSubExpr(
+          SelfExpr::Create(Context, currentTok().getSourceLoc(), true));
    }
    else if (currentTok().is(tok::kw_super)) {
-      Expr = maybeParseSubExpr(SuperExpr::Create(Context,
-                                                 currentTok().getSourceLoc()));
+      Expr = maybeParseSubExpr(
+          SuperExpr::Create(Context, currentTok().getSourceLoc()));
    }
    else if (currentTok().is(tok::closure_arg)) {
       if (UnnamedClosureArgumentStack.empty()) {
@@ -1984,11 +2013,11 @@ ParseResult Parser::parseUnaryExpr()
          UnnamedClosureArgumentStack.top().NumArgs = Idx + 1;
 
       UnnamedClosureArgumentStack.top().ArgLocs[Idx]
-         = currentTok().getSourceLoc();
+          = currentTok().getSourceLoc();
 
       auto DeclName = Context.getDeclNameTable().getClosureArgumentName(Idx);
-      Expr = new(Context) IdentifierRefExpr(currentTok().getSourceLoc(),
-                                            DeclName);
+      Expr = new (Context)
+          IdentifierRefExpr(currentTok().getSourceLoc(), DeclName);
    }
    else if (currentTok().oneOf(tok::kw_init, Ident_deinit)
             && lookahead().is(tok::open_paren)) {
@@ -2026,19 +2055,34 @@ ParseResult Parser::parseUnaryExpr()
          advance();
          advance();
 
-         Statement *body = parseNextStmt().tryGetStatement();
+         Statement* body = parseNextStmt().tryGetStatement();
          if (auto E = dyn_cast_or_null<Expression>(body))
             body = ReturnStmt::Create(Context, body->getSourceLoc(), E);
 
          Expr = LambdaExpr::Create(Context, SourceRange(ArgLoc, ArgLoc),
-                                   ArrowLoc, AutoTy, { arg }, body);
+                                   ArrowLoc, AutoTy, {arg}, body);
       }
 
       SourceLocation IdentLoc = currentTok().getSourceLoc();
       DeclarationName Ident = currentTok().getIdentifierInfo();
 
-      Expression *IdentExpr = new(Context) IdentifierRefExpr(IdentLoc, nullptr,
-                                                             Ident);
+      Expression *IdentExpr;
+      if (Ident == Ident___nullptr) {
+         IdentExpr = BuiltinIdentExpr::Create(
+             Context, IdentLoc, BuiltinIdentifier::NULLPTR);
+      }
+      else if (Ident == Ident___builtin_void) {
+         IdentExpr =  BuiltinIdentExpr::Create(
+             Context, IdentLoc, BuiltinIdentifier::__builtin_void);
+      }
+      else if (Ident == Ident_Self) {
+         IdentExpr = SelfExpr::Create(
+             Context, currentTok().getSourceLoc(), true);
+      }
+      else {
+         IdentExpr = new (Context)
+             IdentifierRefExpr(IdentLoc, nullptr, Ident);
+      }
 
       // If a template argument list follows, parse that first.
       if (lookahead(false, true).is(tok::smaller)) {
@@ -2075,8 +2119,8 @@ ParseResult Parser::parseUnaryExpr()
             return Expr;
 
          auto Closure = Result.getExpr();
-         Expr = AnonymousCallExpr::Create(Context, IdentLoc, IdentExpr,
-                                          Closure, {});
+         Expr = AnonymousCallExpr::Create(Context, IdentLoc, IdentExpr, Closure,
+                                          {});
       }
       else {
          Expr = IdentExpr;
@@ -2129,13 +2173,13 @@ ParseResult Parser::parseUnaryExpr()
       auto Alloc = (char*)Context.Allocate(str.size());
       std::copy(str.begin(), str.end(), Alloc);
 
-      auto strLiteral = StringLiteral::Create(Context, SR,
-                                              StringRef(Alloc, str.size()));
+      auto strLiteral
+          = StringLiteral::Create(Context, SR, StringRef(Alloc, str.size()));
 
       advance();
       assert(currentTok().is(tok::expr_begin) && "not an interpolation");
 
-      SmallVector<Expression*, 4> strings{ strLiteral };
+      SmallVector<Expression*, 4> strings{strLiteral};
       while (1) {
          advance();
 
@@ -2157,16 +2201,16 @@ ParseResult Parser::parseUnaryExpr()
          advance();
 
          Offset = currentTok().getSourceLoc().getOffset();
-         SR = SourceRange(SourceLocation(Offset - 1),
-                          SourceLocation(Offset + currentTok().getText()
-                                                                   .size()));
+         SR = SourceRange(
+             SourceLocation(Offset - 1),
+             SourceLocation(Offset + currentTok().getText().size()));
 
          str = prepareStringLiteral(currentTok());
          Alloc = (char*)Context.Allocate(str.size());
          std::copy(str.begin(), str.end(), Alloc);
 
-         auto lit = StringLiteral::Create(Context, SR,
-                                          StringRef(Alloc, str.size()));
+         auto lit
+             = StringLiteral::Create(Context, SR, StringRef(Alloc, str.size()));
 
          strings.push_back(lit);
 
@@ -2194,7 +2238,7 @@ ParseResult Parser::parseUnaryExpr()
       advance();
 
       if (currentTok().getIdentifierInfo() != Ident_then)
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "'then'");
 
       advance();
@@ -2213,7 +2257,7 @@ ParseResult Parser::parseUnaryExpr()
                             Rhs.getExpr());
    }
    else {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "expression");
 
       return ParseExprError();
@@ -2222,7 +2266,7 @@ ParseResult Parser::parseUnaryExpr()
    if (!Expr)
       return ParseError();
 
-   return maybeParseSubExpr(Expr.getExpr(), false);
+   return maybeParseSubExpr(Expr.getExpr(), false, parsingStmt);
 }
 
 bool Parser::modifierFollows(char c)
@@ -2261,7 +2305,7 @@ Expression* Parser::parseIntegerLiteral()
    SourceRange Loc(SourceLocation(Offset),
                    SourceLocation(Offset + text.size() - 1));
 
-   cdot::Type *Ty = Context.getIntTy();
+   cdot::Type* Ty = Context.getIntTy();
 
    using Suffix = IntegerLiteral::Suffix;
    Suffix suffix = Suffix::None;
@@ -2270,23 +2314,27 @@ Expression* Parser::parseIntegerLiteral()
    if (next.is(tok::ident)) {
       auto modifier = next.getIdentifier();
       suffix = StringSwitch<Suffix>(modifier)
-         .Case("u", Suffix::u).Case("i", Suffix::i)
-#        define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
-         .Case(#Name, Suffix::Name)
-#        include "Basic/BuiltinTypes.def"
-         .Default(Suffix::None);
+                   .Case("u", Suffix::u)
+                   .Case("i", Suffix::i)
+#define CDOT_BUILTIN_INT(Name, BW, Unsigned) .Case(#Name, Suffix::Name)
+#include "cdotc/Basic/BuiltinTypes.def"
+                   .Default(Suffix::None);
 
       if (suffix != Suffix::None) {
          advance(false, true);
 
          switch (suffix) {
-#        define CDOT_BUILTIN_INT(Name, BW, Unsigned)           \
-         case Suffix::Name:                                    \
-            Ty = Context.getBuiltinType(BuiltinType::Name);    \
+#define CDOT_BUILTIN_INT(Name, BW, Unsigned)                                   \
+   case Suffix::Name:                                                          \
+      Ty = Context.getBuiltinType(BuiltinType::Name);                          \
+      break;
+#include "cdotc/Basic/BuiltinTypes.def"
+         case Suffix::u:
+            Ty = Context.getUIntTy();
             break;
-#        include "Basic/BuiltinTypes.def"
-         case Suffix::u: Ty = Context.getUIntTy(); break;
-         case Suffix::i: Ty = Context.getIntTy(); break;
+         case Suffix::i:
+            Ty = Context.getIntTy();
+            break;
          default:
             llvm_unreachable("bad suffix!");
          }
@@ -2308,9 +2356,19 @@ Expression* Parser::parseFloatingPointLiteral()
                    SourceLocation(Offset + text.size()));
 
    llvm::APFloat APF(0.0);
-   (void)APF.convertFromString(text, llvm::APFloat::rmNearestTiesToEven);
+   auto StatusOrErr = APF.convertFromString(text, llvm::APFloat::rmNearestTiesToEven);
+   if (!StatusOrErr) {
+      SP.diagnose(warn_inexact_fp, currentTok().getSourceLoc());
+   }
+   else {
+      auto Status = StatusOrErr.get();
+      if ((Status & llvm::APFloat::opOverflow) != 0
+          || (Status & llvm::APFloat::opUnderflow) != 0) {
+         SP.diagnose(warn_inexact_fp, currentTok().getSourceLoc());
+      }
+   }
 
-   cdot::Type *Ty;
+   cdot::Type* Ty;
    FPLiteral::Suffix suffix = FPLiteral::Suffix::None;
 
    if (modifierFollows('f')) {
@@ -2340,13 +2398,11 @@ Expression* Parser::parseCharacterLiteral()
    auto Result = Parser.parseCharacter();
 
    if (Result.Char > 255) {
-      return CharLiteral::Create(Context, Loc,
-                                 Context.getCharTy(),
+      return CharLiteral::Create(Context, Loc, Context.getCharTy(),
                                  Result.Char);
    }
 
-   return CharLiteral::Create(Context, Loc,
-                              Context.getCharTy(),
+   return CharLiteral::Create(Context, Loc, Context.getCharTy(),
                               static_cast<char>(Result.Char));
 }
 
@@ -2368,7 +2424,7 @@ Parser::ParenExprKind Parser::getParenExprKind()
 
    unsigned OpenParens = 1;
    unsigned OpenSquare = 0;
-   unsigned OpenBrace  = 0;
+   unsigned OpenBrace = 0;
 
    while (OpenParens) {
       switch (currentTok().getKind()) {
@@ -2394,8 +2450,8 @@ Parser::ParenExprKind Parser::getParenExprKind()
          IsTuple |= (!OpenBrace && !OpenSquare && OpenParens == 1);
          break;
       case tok::eof:
-         SP.diagnose(err_unexpected_eof, currentTok().getSourceLoc(),
-                     true, "')'");
+         SP.diagnose(err_unexpected_eof, currentTok().getSourceLoc(), true,
+                     "')'");
          SP.diagnose(note_to_match_this, begin);
 
          return ParenExprKind::Error;
@@ -2452,7 +2508,7 @@ ParseResult Parser::parseParenExpr()
             errorUnexpectedToken(currentTok(), tok::close_paren);
          }
 
-         auto *E = ExprRes.getExpr();
+         auto* E = ExprRes.getExpr();
 
          // An expression of the form (x...) is also a tuple.
          if (E->isVariadicArgPackExpansion()) {
@@ -2484,7 +2540,8 @@ Parser::ParseArtefactKind Parser::getNextArtefactKind()
    Lexer::LookaheadRAII L(*lexer);
    if (currentTok().is(tok::at)) {
       while (currentTok().is(tok::at)) {
-         L.advance(); L.advance();
+         L.advance();
+         L.advance();
 
          if (currentTok().is(tok::open_paren)) {
             L.advance();
@@ -2514,23 +2571,35 @@ Parser::ParseArtefactKind Parser::getNextArtefactKind()
 
    switch (currentTok().getKind()) {
    case tok::kw_def:
-   case tok::kw_alias: case tok::kw_typedef: case tok::kw_namespace:
-   case tok::kw_struct: case tok::kw_class: case tok::kw_union:
-   case tok::kw_enum: case tok::kw_protocol: case tok::kw_extend:
-   case tok::kw_public: case tok::kw_private: case tok::kw_fileprivate:
-   case tok::kw_internal: case tok::kw_protected: case tok::kw_static:
-   case tok::kw_abstract: case tok::kw_prop: case tok::kw_init:
+   case tok::kw_alias:
+   case tok::kw_typedef:
+   case tok::kw_namespace:
+   case tok::kw_struct:
+   case tok::kw_class:
+   case tok::kw_union:
+   case tok::kw_enum:
+   case tok::kw_protocol:
+   case tok::kw_extend:
+   case tok::kw_public:
+   case tok::kw_private:
+   case tok::kw_fileprivate:
+   case tok::kw_internal:
+   case tok::kw_protected:
+   case tok::kw_static:
+   case tok::kw_abstract:
+   case tok::kw_prop:
+   case tok::kw_init:
    case tok::kw_associatedType:
-   case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
+   case tok::kw_mutating:
+   case tok::kw_declare:
+   case tok::kw_module:
    case tok::kw_import:
-   case tok::kw_static_assert: case tok::kw_static_print:
+   case tok::kw_static_assert:
+   case tok::kw_static_print:
       return K_Decl;
    case tok::ident:
-      if (currentTok().is(Ident_using)) {
-         return K_Decl;
-      }
       if ((currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
-            && validOperatorFollows())) {
+           && validOperatorFollows())) {
          return K_Decl;
       }
 
@@ -2546,7 +2615,8 @@ bool Parser::moduleDeclFollows()
    Lexer::LookaheadRAII L(*lexer);
    if (currentTok().is(tok::at)) {
       while (currentTok().is(tok::at)) {
-         L.advance(); L.advance();
+         L.advance();
+         L.advance();
 
          if (currentTok().is(tok::open_paren)) {
             L.advance();
@@ -2587,8 +2657,7 @@ ParseResult Parser::parseTupleLiteral()
    while (!currentTok().is(tok::close_paren)) {
       string label;
 
-      if (currentTok().getKind() == tok::ident
-          && lookahead().is(tok::colon)) {
+      if (currentTok().getKind() == tok::ident && lookahead().is(tok::colon)) {
          label = lexer->getCurrentIdentifier();
          advance();
       }
@@ -2606,7 +2675,7 @@ ParseResult Parser::parseTupleLiteral()
          advance();
       }
       else if (!currentTok().is(tok::close_paren)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "')' or ','");
 
          break;
@@ -2614,7 +2683,7 @@ ParseResult Parser::parseTupleLiteral()
    }
 
    if (!currentTok().is(tok::close_paren)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "')'");
    }
 
@@ -2626,26 +2695,25 @@ ParseResult Parser::parseTupleLiteral()
 
 namespace {
 
-Expression *getExpression(SemaPass &SP,
-                          SourceLocation loc,
-                          SequenceElement &El) {
+Expression* getExpression(SemaPass& SP, SourceLocation loc, SequenceElement& El)
+{
    switch (El.getKind()) {
-      case SequenceElement::EF_Operator: {
-         auto *II = &SP.getContext().getIdentifiers().get(
-            op::toString(El.getOperatorKind()));
+   case SequenceElement::EF_Operator: {
+      auto* II = &SP.getContext().getIdentifiers().get(
+          op::toString(El.getOperatorKind()));
 
-         return new(SP.getContext()) IdentifierRefExpr(loc, II);
-      }
-      case SequenceElement::EF_Expression:
-         return El.getExpr();
-      case SequenceElement::EF_PossibleOperator:
-         return new(SP.getContext()) IdentifierRefExpr(loc, move(El.getOp()));
+      return new (SP.getContext()) IdentifierRefExpr(loc, II);
+   }
+   case SequenceElement::EF_Expression:
+      return El.getExpr();
+   case SequenceElement::EF_PossibleOperator:
+      return new (SP.getContext()) IdentifierRefExpr(loc, move(El.getOp()));
    }
 }
 
 } // anonymous namespace
 
-static IdentifierRefExpr *getSimpleIdentifier(Expression *Expr)
+static IdentifierRefExpr* getSimpleIdentifier(Expression* Expr)
 {
    auto Ident = dyn_cast<IdentifierRefExpr>(Expr);
    if (!Ident || Ident->isVariadicArgPackExpansion() || Ident->getParentExpr())
@@ -2666,7 +2734,7 @@ ParseResult Parser::parseExprSequence(int Flags)
       uint8_t whitespace = SequenceElement::None;
       if (currentTok().is(tok::space)) {
          whitespace |= SequenceElement::Left;
-         advance();
+         advance((Flags & F_StopAtNewline) == 0);
       }
 
       switch (currentTok().getKind()) {
@@ -2720,7 +2788,7 @@ ParseResult Parser::parseExprSequence(int Flags)
             break;
          }
 
-         auto expr = parseUnaryExpr();
+         auto expr = parseUnaryExpr((Flags & F_ParsingStatement) != 0 && frags.empty());
          if (!expr) {
             break;
          }
@@ -2729,12 +2797,20 @@ ParseResult Parser::parseExprSequence(int Flags)
             whitespace |= SequenceElement::Right;
          }
 
-         if (auto Ident = getSimpleIdentifier(expr.getExpr())) {
+         auto *Stmt = expr.getStatement();
+         auto *E = dyn_cast<Expression>(Stmt);
+
+         if (!E) {
+            assert(frags.empty());
+            return Stmt;
+         }
+
+         if (auto Ident = getSimpleIdentifier(E)) {
             frags.emplace_back(Ident->getIdentInfo(), whitespace,
                                Ident->getSourceLoc());
          }
          else {
-            frags.emplace_back(expr.getExpr());
+            frags.emplace_back(E);
          }
 
          break;
@@ -2748,9 +2824,9 @@ ParseResult Parser::parseExprSequence(int Flags)
                             currentTok().getSourceLoc());
 
          break;
-#  define CDOT_OPERATOR_TOKEN(Name, Spelling)                              \
-      case tok::Name:
-#  include "Lex/Tokens.def"
+#define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
+      {
          if (currentTok().is(tok::colon) && (Flags & F_StopAtColon) != 0) {
             lexer->backtrack();
             done = true;
@@ -2771,46 +2847,111 @@ ParseResult Parser::parseExprSequence(int Flags)
             whitespace |= SequenceElement::Right;
          }
 
-         frags.emplace_back(op::fromString(currentTok().toString()),
-                            whitespace,
-                            currentTok().getSourceLoc());
+         auto OpKind = op::fromToken(currentTok().getKind());
+         if (OpKind != op::UnknownOp) {
+            frags.emplace_back(OpKind, whitespace,
+                               currentTok().getSourceLoc());
+         }
+         else {
+            StringRef OpStr;
+            switch (currentTok().getKind()) {
+            case tok::colon:
+               OpStr = ":";
+               break;
+            case tok::question:
+               OpStr = "?";
+               break;
+            case tok::exclaim:
+               OpStr = "!";
+               break;
+            case tok::triple_period:
+               OpStr = "...";
+               break;
+            case tok::exclaim_is:
+               OpStr = "!is";
+               break;
+            case tok::plus_plus:
+               OpStr = "++";
+               break;
+            case tok::minus_minus:
+               OpStr = "--";
+               break;
+            default:
+               llvm_unreachable("bad operator token!");
+            }
+
+            auto* II = &Context.getIdentifiers().get(OpStr);
+            frags.emplace_back(II, whitespace, currentTok().getSourceLoc());
+         }
 
          break;
+      }
       case tok::underscore:
          if (frags.empty()) {
             if (lookahead(false, true).isWhitespace()) {
                whitespace |= SequenceElement::Right;
             }
 
-            auto *II = &Context.getIdentifiers().get("_");
+            auto* II = &Context.getIdentifiers().get("_");
             frags.emplace_back(II, whitespace, currentTok().getSourceLoc());
             break;
          }
 
          LLVM_FALLTHROUGH;
-      case tok::comma: case tok::semicolon: case tok::close_paren:
-      case tok::newline: case tok::eof: case tok::sentinel:
-      case tok::close_brace: case tok::close_square:
-      case tok::arrow_double: case tok::arrow_single:
-      case tok::kw_def: case tok::kw_let:
-      case tok::kw_var: case tok::kw_return: case tok::kw_else:
-      case tok::kw_while: case tok::kw_loop: case tok::kw_match:
-      case tok::kw_for: case tok::kw_case: case tok::kw_throw:
-      case tok::kw_catch: case tok::kw_finally:
-      case tok::kw_alias: case tok::kw_typedef: case tok::kw_namespace:
-      case tok::kw_struct: case tok::kw_class: case tok::kw_union:
-      case tok::kw_enum: case tok::kw_protocol: case tok::kw_extend:
-      case tok::kw_public: case tok::kw_private:
-      case tok::kw_protected: case tok::kw_static: case tok::kw_abstract:
+      case tok::comma:
+      case tok::semicolon:
+      case tok::close_paren:
+      case tok::newline:
+      case tok::eof:
+      case tok::sentinel:
+      case tok::close_brace:
+      case tok::close_square:
+      case tok::arrow_double:
+      case tok::arrow_single:
+      case tok::kw_def:
+      case tok::kw_let:
+      case tok::kw_var:
+      case tok::kw_return:
+      case tok::kw_else:
+      case tok::kw_while:
+      case tok::kw_loop:
+      case tok::kw_match:
+      case tok::kw_for:
+      case tok::kw_case:
+      case tok::kw_throw:
+      case tok::kw_catch:
+      case tok::kw_finally:
+      case tok::kw_alias:
+      case tok::kw_typedef:
+      case tok::kw_namespace:
+      case tok::kw_struct:
+      case tok::kw_class:
+      case tok::kw_union:
+      case tok::kw_enum:
+      case tok::kw_protocol:
+      case tok::kw_extend:
+      case tok::kw_public:
+      case tok::kw_private:
+      case tok::kw_protected:
+      case tok::kw_static:
+      case tok::kw_abstract:
       case tok::kw_prop:
-      case tok::kw_continue: case tok::kw_init:
-      case tok::kw_associatedType: case tok::kw_break:
-      case tok::kw_mutating: case tok::kw_declare: case tok::kw_module:
+      case tok::kw_continue:
+      case tok::kw_init:
+      case tok::kw_associatedType:
+      case tok::kw_break:
+      case tok::kw_mutating:
+      case tok::kw_declare:
+      case tok::kw_module:
       case tok::kw_import:
-      case tok::kw_static_if: case tok::kw_static_for:
-      case tok::kw_static_assert: case tok::kw_static_print:
-      case tok::kw___debug: case tok::kw___unreachable:
-      case tok::interpolation_end: case tok::expr_begin:
+      case tok::kw_static_if:
+      case tok::kw_static_for:
+      case tok::kw_static_assert:
+      case tok::kw_static_print:
+      case tok::kw___debug:
+      case tok::kw___unreachable:
+      case tok::interpolation_end:
+      case tok::expr_begin:
          if (!frags.empty())
             lexer->backtrack();
 
@@ -2833,7 +2974,7 @@ ParseResult Parser::parseExprSequence(int Flags)
 
          goto case_unary_expr;
       default:
-      case_unary_expr: {
+      case_unary_expr : {
          auto seqResult = parseUnaryExpr();
          if (!seqResult) {
             return ParseError();
@@ -2857,7 +2998,7 @@ ParseResult Parser::parseExprSequence(int Flags)
       if (!lookahead().is(tok::eof))
          advance();
 
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "expression");
 
       return ParseError();
@@ -2872,37 +3013,37 @@ ParseResult Parser::parseConstraintExpr()
    ConstraintExpr::Kind kind;
 
    switch (currentTok().getKind()) {
-      case tok::kw_class:
-         kind = ConstraintExpr::Class;
+   case tok::kw_class:
+      kind = ConstraintExpr::Class;
+      break;
+   case tok::kw_struct:
+      kind = ConstraintExpr::Struct;
+      break;
+   case tok::kw_enum:
+      kind = ConstraintExpr::Enum;
+      break;
+   case tok::kw_union:
+      kind = ConstraintExpr::Union;
+      break;
+   case tok::kw_def:
+      kind = ConstraintExpr::Function;
+      break;
+   case tok::times:
+      kind = ConstraintExpr::Pointer;
+      break;
+   case tok::ident:
+      if (currentTok().getIdentifierInfo() == Ident_default) {
+         kind = ConstraintExpr::DefaultConstructible;
          break;
-      case tok::kw_struct:
-         kind = ConstraintExpr::Struct;
-         break;
-      case tok::kw_enum:
-         kind = ConstraintExpr::Enum;
-         break;
-      case tok::kw_union:
-         kind = ConstraintExpr::Union;
-         break;
-      case tok::kw_def:
-         kind = ConstraintExpr::Function;
-         break;
-      case tok::times:
-         kind = ConstraintExpr::Pointer;
-         break;
-      case tok::ident:
-         if (currentTok().getIdentifierInfo() == Ident_default) {
-            kind = ConstraintExpr::DefaultConstructible;
-            break;
-         }
-         LLVM_FALLTHROUGH;
-      default: {
-         auto Ty = parseType();
-         if (!Ty)
-            return ParseError();
-
-         return ConstraintExpr::Create(Context, Loc, Ty.get());
       }
+      LLVM_FALLTHROUGH;
+   default: {
+      auto Ty = parseType();
+      if (!Ty)
+         return ParseError();
+
+      return ConstraintExpr::Create(Context, Loc, Ty.get());
+   }
    }
 
    return ConstraintExpr::Create(Context, Loc, kind);
@@ -2911,19 +3052,13 @@ ParseResult Parser::parseConstraintExpr()
 namespace {
 
 struct TraitArguments {
-   enum Kind : unsigned char {
-      None,
-      Expr,
-      Stmt,
-      Type,
-      String,
-      Identifier
-   };
+   enum Kind : unsigned char { None, Expr, Stmt, Type, String, Identifier };
 
-   TraitArguments(Kind arg1 = None, Kind arg2 = None,
-                  Kind arg3 = None, Kind arg4 = None)
-      : args{ arg1, arg2, arg3, arg4 }
-   { }
+   TraitArguments(Kind arg1 = None, Kind arg2 = None, Kind arg3 = None,
+                  Kind arg4 = None)
+       : args{arg1, arg2, arg3, arg4}
+   {
+   }
 
    Kind args[4];
 };
@@ -2931,22 +3066,22 @@ struct TraitArguments {
 using Kind = TraitArguments::Kind;
 
 TraitArguments traitArgs[] = {
-   { Kind::Stmt },               // Compiles
-   { Kind::Stmt },               // CompileErrors
-   { Kind::Type, Kind::String }, // HasMember
-   { Kind::Type, Kind::String }, // HasProperty
-   { Kind::Type, Kind::String }, // HasStaticMember
-   { Kind::Type, Kind::String }, // HasStaticProperty
-   { Kind::Type, Kind::String }, // HasMethod
-   { Kind::Type, Kind::String }, // HasStaticMethod,
-   { Kind::Identifier },         // ValidIdentifier
-   { Kind::Identifier },         // ValidFunction
-   { Kind::Type },               // IsInteger
-   { Kind::Type },               // IsFloat
-   { Kind::Type },               // IntegerBitwidth
-   { Kind::Type },               // IsUnsigned
-   { Kind::Type },               // FPPrecision
-   { Kind::Expr },               // Arity
+    {Kind::Stmt},               // Compiles
+    {Kind::Stmt},               // CompileErrors
+    {Kind::Type, Kind::String}, // HasMember
+    {Kind::Type, Kind::String}, // HasProperty
+    {Kind::Type, Kind::String}, // HasStaticMember
+    {Kind::Type, Kind::String}, // HasStaticProperty
+    {Kind::Type, Kind::String}, // HasMethod
+    {Kind::Type, Kind::String}, // HasStaticMethod,
+    {Kind::Identifier},         // ValidIdentifier
+    {Kind::Identifier},         // ValidFunction
+    {Kind::Type},               // IsInteger
+    {Kind::Type},               // IsFloat
+    {Kind::Type},               // IntegerBitwidth
+    {Kind::Type},               // IsUnsigned
+    {Kind::Type},               // FPPrecision
+    {Kind::Expr},               // Arity
 };
 
 } // anonymous namespace
@@ -2965,31 +3100,31 @@ ParseResult Parser::parseTraitsExpr()
 
    auto str = currentTok().getIdentifierInfo()->getIdentifier();
    auto kind = StringSwitch<TraitsExpr::Kind>(str)
-      .Case("compiles", TraitsExpr::Compiles)
-      .Case("compile_errors", TraitsExpr::CompileErrors)
-      .Case("has_member", TraitsExpr::HasMember)
-      .Case("has_static_member", TraitsExpr::HasStaticMember)
-      .Case("has_property", TraitsExpr::HasProperty)
-      .Case("has_static_property", TraitsExpr::HasStaticProperty)
-      .Case("has_method", TraitsExpr::HasMethod)
-      .Case("has_static_method", TraitsExpr::HasStaticMethod)
-      .Case("valid_identifier", TraitsExpr::ValidIdentifier)
-      .Case("valid_function", TraitsExpr::ValidFunction)
-      .Case("is_integral", TraitsExpr::IsInteger)
-      .Case("is_floating_point", TraitsExpr::IsFloat)
-      .Case("bitwidth_of", TraitsExpr::IntegerBitwidth)
-      .Case("is_unsigned", TraitsExpr::IsUnsigned)
-      .Case("fp_precision", TraitsExpr::FPPrecision)
-      .Case("arity", TraitsExpr::Arity)
-      .Default(TraitsExpr::Invalid);
+                   .Case("compiles", TraitsExpr::Compiles)
+                   .Case("compile_errors", TraitsExpr::CompileErrors)
+                   .Case("has_member", TraitsExpr::HasMember)
+                   .Case("has_static_member", TraitsExpr::HasStaticMember)
+                   .Case("has_property", TraitsExpr::HasProperty)
+                   .Case("has_static_property", TraitsExpr::HasStaticProperty)
+                   .Case("has_method", TraitsExpr::HasMethod)
+                   .Case("has_static_method", TraitsExpr::HasStaticMethod)
+                   .Case("valid_identifier", TraitsExpr::ValidIdentifier)
+                   .Case("valid_function", TraitsExpr::ValidFunction)
+                   .Case("is_integral", TraitsExpr::IsInteger)
+                   .Case("is_floating_point", TraitsExpr::IsFloat)
+                   .Case("bitwidth_of", TraitsExpr::IntegerBitwidth)
+                   .Case("is_unsigned", TraitsExpr::IsUnsigned)
+                   .Case("fp_precision", TraitsExpr::FPPrecision)
+                   .Case("arity", TraitsExpr::Arity)
+                   .Default(TraitsExpr::Invalid);
 
    if (kind == TraitsExpr::Invalid) {
-      SP.diagnose(err_invalid_traits, currentTok().getSourceLoc(),  str);
+      SP.diagnose(err_invalid_traits, currentTok().getSourceLoc(), str);
       return skipUntilEven(tok::open_paren);
    }
 
    std::vector<TraitsArgument> args;
-   auto &argKinds = traitArgs[kind];
+   auto& argKinds = traitArgs[kind];
 
    size_t i = 0;
    while (argKinds.args[i] != TraitArguments::None) {
@@ -2998,61 +3133,60 @@ ParseResult Parser::parseTraitsExpr()
          advance();
 
       switch (argKinds.args[i]) {
-         case TraitArguments::Expr: {
-            auto expr = parseExprSequence();
-            if (!expr) {
-               skipUntilProbableEndOfExpr();
-               break;
-            }
-
-            args.emplace_back(expr.getExpr());
+      case TraitArguments::Expr: {
+         auto expr = parseExprSequence();
+         if (!expr) {
+            skipUntilProbableEndOfExpr();
             break;
          }
-         case TraitArguments::Stmt: {
-            auto stmt = parseNextStmt();
-            if (!stmt) {
-               skipUntilProbableEndOfStmt();
-               break;
-            }
 
-            args.emplace_back(stmt.getStatement());
+         args.emplace_back(expr.getExpr());
+         break;
+      }
+      case TraitArguments::Stmt: {
+         auto stmt = parseNextStmt();
+         if (!stmt) {
+            skipUntilProbableEndOfStmt();
             break;
          }
-         case TraitArguments::Type: {
-            auto typeResult = parseType();
-            if (!typeResult) {
-               skipUntilProbableEndOfExpr();
-               break;
-            }
 
-            args.emplace_back(typeResult.get());
+         args.emplace_back(stmt.getStatement());
+         break;
+      }
+      case TraitArguments::Type: {
+         auto typeResult = parseType();
+         if (!typeResult) {
+            skipUntilProbableEndOfExpr();
             break;
          }
-         case TraitArguments::Identifier:
-            if (!currentTok().is(tok::ident)) {
-               SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                           currentTok().toString(), true, "identifier");
 
-               skipUntilProbableEndOfExpr();
-               break;
-            }
+         args.emplace_back(typeResult.get());
+         break;
+      }
+      case TraitArguments::Identifier:
+         if (!currentTok().is(tok::ident)) {
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                        currentTok().toString(), true, "identifier");
 
-            args.emplace_back(currentTok().getIdentifierInfo()
-                                          ->getIdentifier());
+            skipUntilProbableEndOfExpr();
             break;
-         case TraitArguments::String:
-            if (!currentTok().is(tok::stringliteral)) {
-               SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                           currentTok().toString(), true, "string literal");
+         }
 
-               skipUntilProbableEndOfExpr();
-               break;
-            }
+         args.emplace_back(currentTok().getIdentifierInfo()->getIdentifier());
+         break;
+      case TraitArguments::String:
+         if (!currentTok().is(tok::stringliteral)) {
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
+                        currentTok().toString(), true, "string literal");
 
-            args.emplace_back(currentTok().getText());
+            skipUntilProbableEndOfExpr();
             break;
-         default:
-            llvm_unreachable("bad arg kind");
+         }
+
+         args.emplace_back(currentTok().getText());
+         break;
+      default:
+         llvm_unreachable("bad arg kind");
       }
 
       ++i;
@@ -3064,7 +3198,8 @@ ParseResult Parser::parseTraitsExpr()
    return TraitsExpr::Create(Context, TraitsLoc, Parens, kind, args);
 }
 
-ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
+ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords,
+                                 bool ignoreDeclAttrs)
 {
    bool isLet = false;
    SourceLocation VarOrLetLoc;
@@ -3076,20 +3211,20 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
       VarOrLetLoc = consumeToken(tok::kw_var, tok::kw_let);
 
       if (currentTok().is(tok::open_paren))
-         return parseDestructuringDecl(isLet);
+         return parseDestructuringDecl(isLet, false, allowTrailingClosure);
    }
 
-   if (!currentTok().is(tok::ident)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+   if (!currentTok().oneOf(tok::ident, tok::underscore)) {
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       return skipUntilProbableEndOfStmt();
    }
 
-   auto Name = currentTok().getIdentifierInfo();
+   auto NameAndLoc = parseDeclName();
 
    SourceType type;
-   Expression *value = nullptr;
+   Expression* value = nullptr;
    SourceLocation ColonLoc;
 
    if (lookahead().is(tok::colon)) {
@@ -3126,7 +3261,8 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
 
    if (!InRecordScope && !InFunctionScope) {
       auto G = GlobalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
-                                     ColonLoc, isLet, Name, type, value);
+                                     ColonLoc, isLet, NameAndLoc.first,
+                                     type, value);
 
       G->setAccessLoc(CurDeclAttrs.AccessLoc);
       G->setEqualsLoc(EqualsLoc);
@@ -3134,8 +3270,14 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
       return ActOnDecl(G);
    }
 
-   auto L = LocalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
-                                 ColonLoc, isLet, Name, type, value);
+   if (!ignoreDeclAttrs && CurDeclAttrs.AccessLoc) {
+      SP.diagnose(err_access_not_allowed_here,
+                  CurDeclAttrs.AccessLoc);
+   }
+
+   auto L = LocalVarDecl::Create(Context, AccessSpecifier::Public, VarOrLetLoc,
+                                 ColonLoc, isLet, NameAndLoc.first, type,
+                                 value);
 
    L->setAccessLoc(CurDeclAttrs.AccessLoc);
    L->setEqualsLoc(EqualsLoc);
@@ -3144,38 +3286,33 @@ ParseResult Parser::parseVarDecl(bool allowTrailingClosure, bool skipKeywords)
    return L;
 }
 
-ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
+ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn,
+                                           bool allowTrailingClosure)
 {
    assert(currentTok().is(tok::open_paren) && "should not be called otherwise");
 
-   SmallVector<VarDecl *, 8> decls;
+   SmallVector<VarDecl*, 8> decls;
    bool global = SP.getDeclContext().isGlobalDeclContext();
    SourceLocation VarOrLetLoc = currentTok().getSourceLoc();
 
    advance();
 
    while (!currentTok().is(tok::close_paren)) {
-      if (!currentTok().is(tok::ident)) {
-         errorUnexpectedToken(currentTok(), tok::ident);
-         skipUntilNextDecl();
-
-         return ParseError();
-      }
-
-      auto loc = currentTok().getSourceLoc();
-      auto Name = currentTok().getIdentifierInfo();
+      auto NameAndLoc = parseDeclName();
       if (global) {
-         auto G = GlobalVarDecl::Create(Context, CurDeclAttrs.Access,
-                                        VarOrLetLoc, loc, isLet, Name,
-                                        SourceType(), nullptr);
+         auto G
+             = GlobalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
+                                     NameAndLoc.second.getStart(), isLet,
+                                     NameAndLoc.first, SourceType(), nullptr);
 
          ActOnDecl(G);
          decls.push_back(G);
       }
       else {
-         auto L = LocalVarDecl::Create(Context, CurDeclAttrs.Access,
-                                       VarOrLetLoc, loc, isLet, Name,
-                                       SourceType(), nullptr);
+         auto L
+             = LocalVarDecl::Create(Context, CurDeclAttrs.Access, VarOrLetLoc,
+                                    NameAndLoc.second.getStart(), isLet,
+                                    NameAndLoc.first, SourceType(), nullptr);
 
          L->setLexicalContext(&SP.getDeclContext());
          decls.push_back(L);
@@ -3187,7 +3324,7 @@ ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
    }
 
    SourceType type;
-   Expression *value = nullptr;
+   Expression* value = nullptr;
 
    if (lookahead().is(tok::colon) && !isForIn) {
       advance();
@@ -3207,11 +3344,16 @@ ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
       advance();
       advance();
 
-      value = parseExprSequence().tryGetExpr();
+      auto flags = DefaultFlags;
+      if (!allowTrailingClosure) {
+         flags &= ~F_AllowBraceClosure;
+      }
+
+      value = parseExprSequence(flags).tryGetExpr();
    }
 
    SourceRange SR(VarOrLetLoc, currentTok().getSourceLoc());
-   auto *D = DestructuringDecl::Create(Context, SR, decls, type, value);
+   auto* D = DestructuringDecl::Create(Context, SR, decls, type, value);
 
    if (isForIn) {
       D->setLexicalContext(&SP.getDeclContext());
@@ -3221,18 +3363,19 @@ ParseResult Parser::parseDestructuringDecl(bool isLet, bool isForIn)
    return ActOnDecl(D);
 }
 
-
-SmallVector<FuncArgDecl*, 2> Parser::parseFuncArgs(SourceLocation &varargLoc,
-                                                   bool ImplicitUnderscores) {
+SmallVector<FuncArgDecl*, 2> Parser::parseFuncArgs(SourceLocation& varargLoc,
+                                                   bool ImplicitUnderscores)
+{
    SmallVector<FuncArgDecl*, 2> args;
    parseFuncArgs(varargLoc, args, ImplicitUnderscores);
 
    return args;
 }
 
-void Parser::parseFuncArgs(SourceLocation &varargLoc,
-                           SmallVectorImpl<FuncArgDecl*> &args,
-                           bool ImplicitUnderscores) {
+void Parser::parseFuncArgs(SourceLocation& varargLoc,
+                           SmallVectorImpl<FuncArgDecl*>& args,
+                           bool ImplicitUnderscores)
+{
    if (!currentTok().is(tok::open_paren)) {
       lexer->backtrack();
       return;
@@ -3263,7 +3406,7 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
       SourceLocation NameLoc;
 
       DeclarationName ArgName;
-      IdentifierInfo *ArgLabel = nullptr;
+      IdentifierInfo* ArgLabel = nullptr;
 
       // C-Style vararg
       if (currentTok().is(tok::triple_period)) {
@@ -3296,6 +3439,7 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
          }
          // Type
          else {
+            NameLoc = currentTok().getSourceLoc();
             ArgName = DeclarationName();
             lexer->backtrack();
          }
@@ -3324,8 +3468,9 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
       maybeParseConvention(Conv, OwnershipLoc);
 
       auto typeResult = parseType();
-      if (typeResult)
+      if (typeResult) {
          argType = typeResult.get();
+      }
       else {
          argType = SourceType(Context.getAutoType());
          skipUntilProbableEndOfExpr();
@@ -3336,6 +3481,7 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
       if (argType.getTypeExpr()
           && argType.getTypeExpr()->isVariadicArgPackExpansion()) {
          templateArgExpansion = true;
+         argType.getTypeExpr()->setEllipsisLoc({});
       }
 
       // optional default value
@@ -3356,7 +3502,6 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
 
          foundDefault = true;
          advance();
-
       }
       else if (foundDefault) {
          SP.diagnose(err_expected_default_value, currentTok().getSourceLoc());
@@ -3364,7 +3509,7 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
 
       // Fake up a name corresponding to the argument #
       if (!ArgName) {
-         IdentifierInfo *II;
+         IdentifierInfo* II;
          if (i < 9) {
             char c = '0' + (char)i;
             II = &Context.getIdentifiers().get(llvm::StringRef(&c, 1));
@@ -3376,10 +3521,14 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
          ArgName = Context.getDeclNameTable().getNormalIdentifier(*II);
       }
 
-      auto argDecl = FuncArgDecl::Create(Context, OwnershipLoc, NameLoc,
+      if (!ColonLoc) {
+         ColonLoc = NameLoc;
+      }
+
+      auto argDecl = FuncArgDecl::Create(Context, OwnershipLoc, ColonLoc,
                                          ArgName, ArgLabel, Conv, argType,
                                          defaultVal, templateArgExpansion,
-                                         /*cstyleVararg=*/ false);
+                                         /*cstyleVararg=*/false);
 
       Context.setAttributes(argDecl, Attrs);
       Attrs.clear();
@@ -3391,7 +3540,7 @@ void Parser::parseFuncArgs(SourceLocation &varargLoc,
          advance();
       }
       else if (!currentTok().is(tok::close_paren)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "')'");
 
          break;
@@ -3405,6 +3554,27 @@ ParseResult Parser::parseFunctionDecl()
 {
    auto DefLoc = currentTok().getSourceLoc();
    advance();
+
+   if (currentTok().oneOf(tok::kw_mutating)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 0,
+          currentTok().getSourceLoc());
+      advance();
+   }
+   else if (currentTok().oneOf(Ident_nonmutating)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 1,
+          currentTok().getSourceLoc());
+      advance();
+   }
+   else if (currentTok().oneOf(tok::kw_abstract)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 2,
+          currentTok().getSourceLoc());
+      advance();
+   }
+   else if (currentTok().oneOf(Ident_override)) {
+      SP.diagnose(err_invalid_function_attr, Decl::FunctionDeclID, 3,
+          currentTok().getSourceLoc());
+      advance();
+   }
 
    bool IsOperator = false;
 
@@ -3424,12 +3594,12 @@ ParseResult Parser::parseFunctionDecl()
       funcName = parseOperatorName(Fix, isCastOp);
    }
    else {
-      if (!expectToken(tok::ident)) {
-         if (!findTokOnLine(tok::ident))
-            return skipUntilProbableEndOfStmt();
+      if (expectToken(tok::ident)) {
+         funcName = currentTok().getIdentifierInfo();
       }
-
-      funcName = currentTok().getIdentifierInfo();
+      else if (currentTok().oneOf(tok::open_paren, tok::eof)) {
+         lexer->backtrack();
+      }
    }
 
    auto templateParams = tryParseTemplateParameters();
@@ -3474,21 +3644,15 @@ ParseResult Parser::parseFunctionDecl()
       returnType = SourceType(Context.getAutoType());
    }
 
-   std::vector<StaticExpr*> constraints;
-   while (lookahead().is(Ident_where)) {
+   std::vector<ParsedConstraint> Constraints;
+   if (lookahead().is(Ident_where)) {
       advance();
-      advance();
-
-      auto constraintResult = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure);
-      if (constraintResult) {
-         constraints.push_back(StaticExpr::Create(Context,
-                                                  constraintResult.getExpr()));
-      }
+      parseDeclConstraints(Constraints);
    }
 
-   auto funcDecl = FunctionDecl::Create(Context, CurDeclAttrs.Access, DefLoc,
-                                        funcName, args, returnType,
-                                        nullptr, move(templateParams));
+   auto funcDecl
+       = FunctionDecl::Create(Context, CurDeclAttrs.Access, DefLoc, funcName,
+                              args, returnType, nullptr, move(templateParams));
 
    CompoundStmt* body = nullptr;
    if (lookahead().is(tok::open_brace)) {
@@ -3505,7 +3669,7 @@ ParseResult Parser::parseFunctionDecl()
    funcDecl->setUnsafe(Unsafe);
    funcDecl->setBody(body);
 
-   Context.setConstraints(funcDecl, constraints);
+   Context.setParsedConstraints(funcDecl, move(Constraints));
    return ActOnDecl(funcDecl);
 }
 
@@ -3566,21 +3730,22 @@ ParseResult Parser::parseLambdaExpr()
 }
 
 ParseResult Parser::parseLambdaExpr(SourceLocation LParenLoc,
-                                    SmallVectorImpl<FuncArgDecl*> &args) {
+                                    SmallVectorImpl<FuncArgDecl*>& args)
+{
    if (currentTok().is(tok::open_paren)) {
       consumeToken(tok::open_paren);
 
       while (!currentTok().is(tok::close_paren)) {
          if (!currentTok().is(tok::ident)) {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                         currentTok().toString(), true, "identifier");
 
             advance();
             continue;
          }
 
-         IdentifierInfo *ArgName = nullptr;
-         IdentifierInfo *ArgLabel = nullptr;
+         IdentifierInfo* ArgName = nullptr;
+         IdentifierInfo* ArgLabel = nullptr;
          SourceLocation ColonLoc = currentTok().getSourceLoc();
 
          ArgName = currentTok().getIdentifierInfo();
@@ -3602,9 +3767,9 @@ ParseResult Parser::parseLambdaExpr(SourceLocation LParenLoc,
          if (!argType)
             argType = SourceType(Context.getAutoType());
 
-         args.emplace_back(FuncArgDecl::Create(Context, OwnershipLoc,
-                                               ColonLoc, ArgName, ArgLabel, Conv,
-                                               argType, nullptr, false, true));
+         args.emplace_back(FuncArgDecl::Create(Context, OwnershipLoc, ColonLoc,
+                                               ArgName, ArgLabel, Conv, argType,
+                                               nullptr, false, true));
 
          if (currentTok().is(tok::comma))
             advance();
@@ -3614,12 +3779,11 @@ ParseResult Parser::parseLambdaExpr(SourceLocation LParenLoc,
       assert(currentTok().is(tok::ident) && "not begin of lambda expr!");
 
       SourceLocation Loc = currentTok().getSourceLoc();
-      IdentifierInfo *Name = currentTok().getIdentifierInfo();
+      IdentifierInfo* Name = currentTok().getIdentifierInfo();
 
-      args.emplace_back(FuncArgDecl::Create(Context, {}, Loc, Name, nullptr,
-                                            ArgumentConvention::Default,
-                                            SourceType(Context.getAutoType()),
-                                            nullptr, false, true));
+      args.emplace_back(FuncArgDecl::Create(
+          Context, {}, Loc, Name, nullptr, ArgumentConvention::Default,
+          SourceType(Context.getAutoType()), nullptr, false, true));
    }
 
    SourceRange Parens(LParenLoc, currentTok().getSourceLoc());
@@ -3656,10 +3820,10 @@ ParseResult Parser::parseLambdaExpr(SourceLocation LParenLoc,
    if (auto E = dyn_cast_or_null<Expression>(body))
       body = ReturnStmt::Create(Context, body->getSourceLoc(), E);
 
-   auto Expr = LambdaExpr::Create(Context, Parens, ArrowLoc, retType,
-                                  args, body);
+   auto Expr
+       = LambdaExpr::Create(Context, Parens, ArrowLoc, retType, args, body);
 
-   auto *II = &Context.getIdentifiers().get("__anonymous_lambda");
+   auto* II = &Context.getIdentifiers().get("__anonymous_lambda");
    auto Fun = FunctionDecl::Create(Context, AccessSpecifier::Private,
                                    Expr->getSourceLoc(), II, Expr->getArgs(),
                                    Expr->getReturnType(), Expr->getBody(), {});
@@ -3681,20 +3845,21 @@ ParseResult Parser::parseTrailingClosure(bool ParseSubExpr)
    ClosureRAII closureRAII(*this);
    assert(currentTok().is(tok::open_brace) && "shouldn't be called otherwise");
 
-   auto &DNT = Context.getDeclNameTable();
+   auto& DNT = Context.getDeclNameTable();
    SourceLocation Loc = currentTok().getSourceLoc();
 
    EnterFunctionScope EF(*this);
    auto Block = parseCompoundStmt(false, true).tryGetStatement<CompoundStmt>();
 
    llvm::SmallVector<FuncArgDecl*, 4> Args;
-   auto &Scope = UnnamedClosureArgumentStack.top();
+   auto& Scope = UnnamedClosureArgumentStack.top();
 
    for (unsigned i = 0; i < Scope.NumArgs; ++i) {
       auto ArgName = DNT.getClosureArgumentName(i);
       auto ArgLoc = Scope.ArgLocs[i];
-      if (!ArgLoc)
+      if (!ArgLoc) {
          ArgLoc = Loc;
+      }
 
       auto FuncArg = FuncArgDecl::Create(Context, ArgLoc, ArgLoc, ArgName,
                                          nullptr, ArgumentConvention::Default,
@@ -3704,11 +3869,11 @@ ParseResult Parser::parseTrailingClosure(bool ParseSubExpr)
       Args.push_back(FuncArg);
    }
 
-   auto Expr = LambdaExpr::Create(Context, SourceRange(Loc),
-                                  Loc, SourceType(Context.getAutoType()),
-                                  Args, Block);
+   auto Expr
+       = LambdaExpr::Create(Context, SourceRange(Loc), {},
+                            SourceType(Context.getAutoType()), Args, Block);
 
-   auto *II = &Context.getIdentifiers().get("__anonymous_lambda");
+   auto* II = &Context.getIdentifiers().get("__anonymous_lambda");
    auto Fun = FunctionDecl::Create(Context, AccessSpecifier::Private,
                                    Expr->getSourceLoc(), II, Expr->getArgs(),
                                    Expr->getReturnType(), Expr->getBody(), {});
@@ -3768,7 +3933,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
       }
 
       if (currentTok().getKind() != tok::ident) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "identifier");
 
          if (findTokOnLine(tok::comma, tok::close_square))
@@ -3845,8 +4010,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
                   }
                }
 
-               if (lookahead().is(tok::comma)
-                   || lookahead().is(tok::greater)) {
+               if (lookahead().is(tok::comma) || lookahead().is(tok::greater)) {
                   break;
                }
 
@@ -3873,7 +4037,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
 
       advance();
 
-      Expression *defaultValue = nullptr;
+      Expression* defaultValue = nullptr;
       if (currentTok().is(tok::equals)) {
          advance();
 
@@ -3896,18 +4060,18 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
 
       unsigned idx = (unsigned)params.size();
       if (isTypeName) {
-         params.push_back(
-            TemplateParamDecl::Create(Context, Name, covariance,
-                                      contravariance, defaultValue, idx,
-                                      TypeNameOrValueLoc, NameLoc,
-                                      EllipsisLoc, Unbounded), Context);
+         params.push_back(TemplateParamDecl::Create(
+                              Context, Name, covariance, contravariance,
+                              defaultValue, idx, TypeNameOrValueLoc, NameLoc,
+                              EllipsisLoc, Unbounded),
+                          Context);
       }
       else {
-         params.push_back(
-            TemplateParamDecl::Create(Context, Name, covariance,
-                                      defaultValue, idx, TypeNameOrValueLoc,
-                                      NameLoc, EllipsisLoc,
-                                      Unbounded), Context);
+         params.push_back(TemplateParamDecl::Create(Context, Name, covariance,
+                                                    defaultValue, idx,
+                                                    TypeNameOrValueLoc, NameLoc,
+                                                    EllipsisLoc, Unbounded),
+                          Context);
       }
 
       if (currentTok().is(tok::comma)) {
@@ -3918,15 +4082,31 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
    return params;
 }
 
-void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
-                               tok::TokenType StopAt) {
+void Parser::parseIfConditions(SmallVectorImpl<IfCondition>& Conditions,
+                               tok::TokenType StopAt)
+{
    bool expectNewline = StopAt == tok::newline;
    while (!currentTok().is(StopAt)) {
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
-         auto *VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
+         LocalVarDecl *VD = nullptr;
+         if (auto* Decl = parseVarDecl(false, false, true).tryGetDecl()) {
+            bool hasValue = false;
+            if (auto* LV = dyn_cast<LocalVarDecl>(Decl)) {
+               hasValue = LV->getValue() != nullptr;
+               VD = LV;
+            }
+            else if (auto* D = dyn_cast<DestructuringDecl>(Decl)) {
+               SP.diagnose(err_generic_error,
+                   "destructuring cannot be used in a conditional statement",
+                   D->getSourceLoc());
 
-         if (VD && !VD->getValue()) {
-            SP.diagnose(err_if_let_must_have_value, VD->getSourceLoc());
+               hasValue = true;
+               VD = cast<LocalVarDecl>(D->getDecls().front());
+            }
+
+            if (!hasValue) {
+               SP.diagnose(err_if_let_must_have_value, Decl->getSourceLoc());
+            }
          }
 
          Conditions.emplace_back(VD, nullptr);
@@ -3934,20 +4114,21 @@ void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
       else if (currentTok().is(tok::kw_case)) {
          advance();
 
-         auto *Pat = parsePattern(DefaultFlags | F_StopAtEquals)
-            .tryGetExpr<PatternExpr>();
+         auto* Pat = parsePattern(DefaultFlags | F_StopAtEquals)
+                         .tryGetExpr<PatternExpr>();
 
          expect(tok::equals);
          advance();
 
-         auto *CaseVal = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
-            .tryGetExpr();
+         auto* CaseVal = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
+                             .tryGetExpr();
 
          Conditions.emplace_back(Pat, CaseVal);
       }
       else {
          Conditions.emplace_back(
-            parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
+             parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
+                 .tryGetExpr());
       }
 
       advance(!expectNewline);
@@ -3960,7 +4141,7 @@ void Parser::parseIfConditions(SmallVectorImpl<IfCondition> &Conditions,
    }
 }
 
-ParseResult Parser::parseIfStmt(IdentifierInfo *Label)
+ParseResult Parser::parseIfStmt(IdentifierInfo* Label)
 {
    auto IfLoc = currentTok().getSourceLoc();
    advance();
@@ -3997,8 +4178,9 @@ ParseResult Parser::parseStaticIf()
    auto IfLoc = currentTok().getSourceLoc();
    advance(); // if
 
-   auto cond = StaticExpr::Create(Context,
-      parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
+   auto cond = StaticExpr::Create(
+       Context,
+       parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
 
    advance();
 
@@ -4034,17 +4216,17 @@ ParseResult Parser::parseStaticIfDecl()
    advance(); // static
    advance(); // if
 
-   auto cond = StaticExpr::Create(Context,
-      parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
+   auto cond = StaticExpr::Create(
+       Context,
+       parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
 
    advance();
 
-   CompoundDecl *IfDecl = CompoundDecl::Create(Context,
-                                               currentTok().getSourceLoc(),
-                                               false);
+   CompoundDecl* IfDecl
+       = CompoundDecl::Create(Context, currentTok().getSourceLoc(), false);
 
    if (!currentTok().is(tok::open_brace)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'{'");
    }
    else {
@@ -4071,18 +4253,18 @@ ParseResult Parser::parseStaticIfDecl()
       RBRaceLoc = currentTok().getSourceLoc();
    }
 
-   CompoundDecl *ElseDecl = nullptr;
+   CompoundDecl* ElseDecl = nullptr;
    if (lookahead().is(tok::kw_else)) {
       advance();
       advance();
 
       if (!currentTok().is(tok::open_brace)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "'{'");
       }
       else {
-         ElseDecl = CompoundDecl::Create(Context,
-                                         currentTok().getSourceLoc(), false);
+         ElseDecl = CompoundDecl::Create(Context, currentTok().getSourceLoc(),
+                                         false);
 
          DeclContextRAII declContextRAII(*this, ElseDecl);
          advance();
@@ -4112,24 +4294,34 @@ ParseResult Parser::parseStaticIfDecl()
    auto Decl = StaticIfDecl::Create(Context, StaticLoc, RBRaceLoc, cond, IfDecl,
                                     ElseDecl);
 
-
    return ActOnDecl(Decl);
 }
 
-ParseResult Parser::parseStaticFor()
+ParseResult Parser::parseStaticFor(bool variadic)
 {
-   if (inGlobalDeclContext())
-      return parseStaticForDecl();
+   if (inGlobalDeclContext()) {
+      return parseStaticForDecl(variadic);
+   }
 
-   auto StaticLoc = currentTok().getSourceLoc();
-   advance(); // static
+   SourceLocation StaticLoc = currentTok().getSourceLoc();
+   SourceLocation ForLoc = lookahead().getSourceLoc();
 
-   auto ForLoc = currentTok().getSourceLoc();
-   advance(); // for
+   if (variadic) {
+      advance(); // for
 
-   IdentifierInfo *ident = nullptr;
+      // Will already be diagnosed if not present.
+      if (currentTok().is(tok::triple_period)) {
+         advance(); // ...
+      }
+   }
+   else {
+      advance(); // static
+      advance(); // for
+   }
+
+   IdentifierInfo* ident = nullptr;
    if (!currentTok().is(tok::ident)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       if (!findTokOnLine(Ident_in)) {
@@ -4146,7 +4338,7 @@ ParseResult Parser::parseStaticFor()
    }
 
    if (currentTok().getIdentifierInfo() != Ident_in) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'in'");
 
       if (!findTokOnLine(Ident_in)) {
@@ -4160,8 +4352,9 @@ ParseResult Parser::parseStaticFor()
 
    advance();
 
-   auto range = StaticExpr::Create(Context,
-      parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
+   auto* rangeExpr
+       = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr();
+   auto range = StaticExpr::Create(Context, rangeExpr);
 
    advance();
 
@@ -4170,20 +4363,34 @@ ParseResult Parser::parseStaticFor()
       Compound->setPreserveScope(true);
    }
 
-   return StaticForStmt::Create(Context, StaticLoc, ForLoc, ident, range, body);
+   auto* Stmt
+       = StaticForStmt::Create(Context, StaticLoc, ForLoc, ident, range, body);
+   Stmt->setVariadic(variadic);
+
+   return Stmt;
 }
 
-ParseResult Parser::parseStaticForDecl()
+ParseResult Parser::parseStaticForDecl(bool variadic)
 {
    SourceLocation StaticLoc = currentTok().getSourceLoc();
    SourceLocation RBRaceLoc;
 
-   advance(); // static
-   advance(); // for
+   if (variadic) {
+      advance(); // for
 
-   IdentifierInfo *ident = nullptr;
+      // Will already be diagnosed if not present.
+      if (currentTok().is(tok::triple_period)) {
+         advance(); // ...
+      }
+   }
+   else {
+      advance(); // static
+      advance(); // for
+   }
+
+   IdentifierInfo* ident = nullptr;
    if (!currentTok().is(tok::ident)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "identifier");
 
       if (!findTokOnLine(Ident_in)) {
@@ -4201,21 +4408,21 @@ ParseResult Parser::parseStaticForDecl()
    }
 
    if (currentTok().getIdentifierInfo() != Ident_in)
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'in'");
 
    advance();
 
-   auto range = StaticExpr::Create(Context,
-      parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
+   auto range = StaticExpr::Create(
+       Context,
+       parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr());
    advance();
 
-   CompoundDecl *BodyDecl = CompoundDecl::Create(Context,
-                                                 currentTok().getSourceLoc(),
-                                                 false);
+   CompoundDecl* BodyDecl
+       = CompoundDecl::Create(Context, currentTok().getSourceLoc(), true);
 
    if (!currentTok().is(tok::open_brace)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'{'");
    }
    else {
@@ -4245,7 +4452,7 @@ ParseResult Parser::parseStaticForDecl()
    auto Decl = StaticForDecl::Create(Context, StaticLoc, RBRaceLoc, ident,
                                      range, BodyDecl);
 
-
+   Decl->setVariadic(variadic);
    return ActOnDecl(Decl);
 }
 
@@ -4268,7 +4475,7 @@ ParseResult Parser::parseStaticAssert()
       auto StringLit = parseUnaryExpr();
       if (StringLit) {
          if (!isa<StringLiteral>(StringLit.getExpr()))
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                         currentTok().toString(), true, "string literal");
          else
             msg = cast<StringLiteral>(StringLit.getExpr())->getValue();
@@ -4279,7 +4486,7 @@ ParseResult Parser::parseStaticAssert()
 
    SourceRange Parens(LParenLoc, currentTok().getSourceLoc());
 
-   char *Alloc = (char*)Context.Allocate(msg.size());
+   char* Alloc = (char*)Context.Allocate(msg.size());
    std::copy(msg.begin(), msg.end(), Alloc);
 
    auto Assert = StaticAssertDecl::Create(Context, Loc, Parens, expr,
@@ -4320,33 +4527,35 @@ ParseResult Parser::parsePattern(int ExprFlags)
       return IsPattern::Create(Context, SR, TypeRes.get());
    }
 
-   auto AllowPattern = support::saveAndRestore(this->AllowPattern, true);
+   auto SAR = support::saveAndRestore(this->AllowPattern, true);
    auto ExprRes = parseExprSequence(ExprFlags);
-   if (!ExprRes)
+   if (!ExprRes) {
       return ParseError();
+   }
 
-   if (isa<PatternExpr>(ExprRes.getExpr()))
+   if (isa<PatternExpr>(ExprRes.getExpr())) {
       return ExprRes;
+   }
 
    return ExpressionPattern::Create(Context, lookahead().getSourceLoc(),
                                     ExprRes.getExpr());
 }
 
-void Parser::parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases)
+void Parser::parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*>& Cases)
 {
-   ContinueStmt *Fallthrough = nullptr;
+   ContinueStmt* Fallthrough = nullptr;
 
    while (!currentTok().is(tok::close_brace)) {
       auto CaseLoc = currentTok().getSourceLoc();
-      PatternExpr *patternExpr = nullptr;
+      PatternExpr* patternExpr = nullptr;
 
       if (currentTok().is(tok::kw_case)) {
          advance();
          patternExpr = parsePattern(DefaultFlags | F_StopAtColon)
-            .tryGetExpr<PatternExpr>();
+                           .tryGetExpr<PatternExpr>();
       }
       else if (!currentTok().is(Ident_default)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                      currentTok().toString(), true, "'case' or 'default'");
 
          skipUntilEven(tok::open_brace);
@@ -4357,21 +4566,20 @@ void Parser::parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases)
 
       if (lookahead().oneOf(tok::kw_case, Ident_default)) {
          if (!Fallthrough) {
-            Fallthrough = ContinueStmt::Create(Context,
-                                               currentTok().getSourceLoc(),
-                                               nullptr);
+            Fallthrough = ContinueStmt::Create(
+                Context, currentTok().getSourceLoc(), nullptr);
          }
 
-         Cases.push_back(CaseStmt::Create(Context, CaseLoc, patternExpr,
-                                          Fallthrough));
+         Cases.push_back(
+             CaseStmt::Create(Context, CaseLoc, patternExpr, Fallthrough));
 
          advance();
          continue;
       }
 
       SmallVector<Statement*, 2> Stmts;
-      while (!lookahead().oneOf(tok::kw_case, tok::close_brace,
-                                Ident_default)) {
+      while (
+          !lookahead().oneOf(tok::kw_case, tok::close_brace, Ident_default)) {
          advance();
 
          auto nextStmt = parseNextStmt();
@@ -4398,24 +4606,24 @@ void Parser::parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*> &Cases)
                                            Stmts.front()->getSourceLoc(),
                                            currentTok().getSourceLoc());
 
-      Cases.push_back(CaseStmt::Create(Context, CaseLoc, patternExpr,
-                                       Compound));
+      Cases.push_back(
+          CaseStmt::Create(Context, CaseLoc, patternExpr, Compound));
 
       advance();
    }
 }
 
-ParseResult Parser::parseMatchStmt(IdentifierInfo *Label)
+ParseResult Parser::parseMatchStmt(IdentifierInfo* Label)
 {
    auto MatchLoc = currentTok().getSourceLoc();
    advance();
 
    Expression* matchVal
-      = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr();
+       = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr();
 
    advance();
    if (!currentTok().is(tok::open_brace)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'{'");
 
       return ParseStmtError();
@@ -4431,7 +4639,7 @@ ParseResult Parser::parseMatchStmt(IdentifierInfo *Label)
    return MatchStmt::Create(Context, MatchLoc, Braces, matchVal, Cases, Label);
 }
 
-ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
+ParseResult Parser::parseWhileStmt(IdentifierInfo* Label, bool conditionBefore)
 {
    auto WhileLoc = currentTok().getSourceLoc();
    advance();
@@ -4453,23 +4661,31 @@ ParseResult Parser::parseWhileStmt(IdentifierInfo *Label, bool conditionBefore)
                             !conditionBefore);
 }
 
-ParseResult Parser::parseForStmt(IdentifierInfo *Label)
+ParseResult Parser::parseForStmt(IdentifierInfo* Label)
 {
+   if (lookahead().is(tok::triple_period)) {
+      if (Label != nullptr) {
+         SP.diagnose(err_for_ellipsis_labeled,
+                     currentTok().getSourceLoc());
+      }
+
+      return parseStaticFor(true);
+   }
+
    auto ForLoc = currentTok().getSourceLoc();
    advance();
 
    SourceLocation UnderscoreLoc;
    Statement* init = nullptr;
-   class Decl *initDecl = nullptr;
+   class Decl* initDecl = nullptr;
 
    if (!currentTok().is(tok::semicolon)) {
       // for i in 0..5 {}
       if (currentTok().is(tok::ident) && lookahead().is(Ident_in)) {
          auto Loc = currentTok().getSourceLoc();
-         auto *II = currentTok().getIdentifierInfo();
-         initDecl = LocalVarDecl::Create(Context, AccessSpecifier::Public,
-                                         Loc, Loc, true, II, SourceType(),
-                                         nullptr);
+         auto* II = currentTok().getIdentifierInfo();
+         initDecl = LocalVarDecl::Create(Context, AccessSpecifier::Public, Loc,
+                                         Loc, true, II, SourceType(), nullptr);
 
          initDecl->setLexicalContext(&SP.getDeclContext());
       }
@@ -4495,6 +4711,10 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
          }
       }
 
+      if (initDecl) {
+         initDecl->setSynthesized(true);
+      }
+
       advance();
    }
 
@@ -4502,8 +4722,8 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
    if (currentTok().getIdentifierInfo() == Ident_in) {
       advance();
 
-      Expression* range =
-         parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr();
+      Expression* range
+          = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure).tryGetExpr();
 
       advance();
       if (currentTok().is(tok::close_paren)) {
@@ -4519,7 +4739,7 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
    }
 
    if (!currentTok().is(tok::semicolon)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "';'");
    }
 
@@ -4536,7 +4756,7 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
    }
 
    if (!currentTok().is(tok::semicolon)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "';'");
    }
 
@@ -4553,8 +4773,7 @@ ParseResult Parser::parseForStmt(IdentifierInfo *Label)
    }
 
    return ForStmt::Create(Context, ForLoc, init, term, inc,
-                          parseNextStmt().tryGetStatement(),
-                          Label);
+                          parseNextStmt().tryGetStatement(), Label);
 }
 
 ParseResult Parser::parseDeclareStmt()
@@ -4575,7 +4794,7 @@ ParseResult Parser::parseDeclareStmt()
          HasLang = true;
       }
       else {
-         SP.diagnose(err_bad_extern_kind, currentTok().getSourceLoc(),  str);
+         SP.diagnose(err_bad_extern_kind, currentTok().getSourceLoc(), str);
       }
 
       advance();
@@ -4601,7 +4820,7 @@ ParseResult Parser::parseDeclareStmt()
 
                   if (HasLang)
                      if (auto CD = dyn_cast<CallableDecl>(nextDecl))
-                        CD->addAttribute(new(Context) ExternAttr(Lang));
+                        CD->addAttribute(new (Context) ExternAttr(Lang));
 
                   if (nextDecl->hasDefinition())
                      SP.diagnose(nextDecl, err_declared_with_definition,
@@ -4629,7 +4848,7 @@ ParseResult Parser::parseDeclareStmt()
 
             if (HasLang)
                if (auto CD = dyn_cast<CallableDecl>(nextDecl))
-                  CD->addAttribute(new(Context) ExternAttr(Lang));
+                  CD->addAttribute(new (Context) ExternAttr(Lang));
 
             if (nextDecl->hasDefinition())
                SP.diagnose(nextDecl, err_declared_with_definition,
@@ -4645,8 +4864,8 @@ ParseResult Parser::parseDeclareStmt()
 
 ParseResult Parser::parseCompoundDecl(bool TopLevel, bool Transparent)
 {
-   CompoundDecl *CD = CompoundDecl::Create(Context, consumeToken(),
-                                           Transparent);
+   CompoundDecl* CD
+       = CompoundDecl::Create(Context, consumeToken(), Transparent);
 
    {
       DeclContextRAII declContextRAII(*this, CD);
@@ -4668,7 +4887,7 @@ ParseResult Parser::parseCompoundDecl(bool TopLevel, bool Transparent)
    ActOnDecl(CD);
 
    if (CurDeclAttrs.AccessLoc) {
-      for (auto &D : CD->getDecls()) {
+      for (auto& D : CD->getDecls()) {
          if (auto ND = dyn_cast<NamedDecl>(D)) {
             if (ND->getAccess() == AccessSpecifier::Default) {
                ND->setAccessLoc(CurDeclAttrs.AccessLoc);
@@ -4684,7 +4903,7 @@ ParseResult Parser::parseCompoundDecl(bool TopLevel, bool Transparent)
 ParseResult Parser::parseThrowStmt()
 {
    auto ThrowLoc = consumeToken(tok::kw_throw);
-   return new(Context) ThrowStmt(ThrowLoc, parseExprSequence().tryGetExpr());
+   return new (Context) ThrowStmt(ThrowLoc, parseExprSequence().tryGetExpr());
 }
 
 ParseResult Parser::parseReturnStmt()
@@ -4699,9 +4918,14 @@ ParseResult Parser::parseReturnStmt()
       ret = ReturnStmt::Create(Context, RetLoc,
                                parseExprSequence().tryGetExpr());
       break;
-   case tok::comma: case tok::semicolon: case tok::close_paren:
-   case tok::newline: case tok::eof: case tok::sentinel:
-   case tok::close_brace: case tok::close_square:
+   case tok::comma:
+   case tok::semicolon:
+   case tok::close_paren:
+   case tok::newline:
+   case tok::eof:
+   case tok::sentinel:
+   case tok::close_brace:
+   case tok::close_square:
       ret = ReturnStmt::Create(Context, RetLoc);
       break;
    }
@@ -4733,7 +4957,7 @@ ParseResult Parser::parseKeyword()
       return parseForStmt();
    case tok::kw_continue:
    case tok::kw_break: {
-      IdentifierInfo *Label = nullptr;
+      IdentifierInfo* Label = nullptr;
       if (lookahead(false).is(tok::ident)) {
          advance();
          Label = currentTok().getIdentifierInfo();
@@ -4768,9 +4992,9 @@ ParseResult Parser::parseKeyword()
       return MixinStmt::Create(Context, Parens, E);
    }
    case tok::kw___debug:
-      return new(Context) DebugStmt(BeginLoc, false);
+      return new (Context) DebugStmt(BeginLoc, false);
    case tok::kw___unreachable:
-      return new(Context) DebugStmt(BeginLoc, true);
+      return new (Context) DebugStmt(BeginLoc, true);
    case tok::kw_static:
       if (lookahead().is(tok::kw_if)) {
          return parseStaticIf();
@@ -4801,9 +5025,10 @@ ParseResult Parser::parseKeyword()
    case tok::kw_private:
    case tok::kw_internal:
    case tok::kw_abstract:
+   case tok::kw_mutating:
       return parseNextDecl();
    default:
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), false);
       break;
    }
@@ -4814,8 +5039,7 @@ ParseResult Parser::parseKeyword()
 ParseResult Parser::parseTopLevelDecl()
 {
    if (CurDeclAttrs.Default) {
-      SP.diagnose(err_generic_error,
-                  "top-level declarations cannot be marked 'default'",
+      SP.diagnose(err_default_only_in_protocol_extension,
                   CurDeclAttrs.DefaultLoc);
 
       CurDeclAttrs.Default = false;
@@ -4824,11 +5048,13 @@ ParseResult Parser::parseTopLevelDecl()
    if (currentTok().is(tok::at))
       return parseAttributedDecl();
 
-   if (currentTok().is(Ident_deinit))
-      return parseGlobalDtor();
+   if (currentTok().is(tok::ident)) {
+      if (currentTok().is(Ident_deinit))
+         return parseGlobalDtor();
 
-   if (currentTok().is(Ident_unittest))
-      return parseUnittestDecl();
+      if (currentTok().is(Ident_unittest))
+         return parseUnittestDecl();
+   }
 
    auto Tok = currentTok();
    auto kind = Tok.getKind();
@@ -4837,10 +5063,10 @@ ParseResult Parser::parseTopLevelDecl()
    case tok::close_paren:
    case tok::close_square:
    case tok::close_brace: {
-      unsigned idx =
-         kind == tok::close_paren ? 0 : kind == tok::close_brace ? 1 : 2;
+      unsigned idx
+          = kind == tok::close_paren ? 0 : kind == tok::close_brace ? 1 : 2;
 
-      SP.diagnose(err_extraneous_paren, currentTok().getSourceLoc(),  idx);
+      SP.diagnose(err_extraneous_paren, currentTok().getSourceLoc(), idx);
       if (skipUntilNextDecl()) {
          advance();
          return parseNextDecl();
@@ -4859,10 +5085,6 @@ ParseResult Parser::parseTopLevelDecl()
          return parseMacro();
       }
 
-      if (Tok.is(Ident_using)) {
-         return parseUsingDecl();
-      }
-
       if (currentTok().oneOf(Ident_infix, Ident_prefix, Ident_postfix)
           && validOperatorFollows()) {
          return parseOperatorDecl();
@@ -4873,8 +5095,8 @@ ParseResult Parser::parseTopLevelDecl()
          SourceRange SR(Tok.getSourceLoc(), Tok.getEndLoc());
 
          // Create the first expression
-         auto *Ident = new(Context) IdentifierRefExpr(SR,
-                                                      Tok.getIdentifierInfo());
+         auto* Ident
+             = new (Context) IdentifierRefExpr(SR, Tok.getIdentifierInfo());
 
          advance();
          advance();
@@ -4884,12 +5106,15 @@ ParseResult Parser::parseTopLevelDecl()
             SR = SourceRange(Tok.getSourceLoc(), Tok.getEndLoc());
 
             if (Tok.is(tok::ident)) {
-               Ident = new(Context) IdentifierRefExpr(SR, Ident,
-                                                      Tok.getIdentifierInfo());
+               Ident = new (Context)
+                   IdentifierRefExpr(SR, Ident, Tok.getIdentifierInfo());
 
                if (lookahead().is(tok::period)) {
                   advance();
                   advance();
+               }
+               else {
+                  break;
                }
             }
             else if (currentTok().is(tok::macro_name)) {
@@ -4907,13 +5132,15 @@ ParseResult Parser::parseTopLevelDecl()
    case tok::macro_statement:
    case tok::macro_expression: {
       enum DiagKind {
-         Expression, Statement, Type, Decl,
+         Expression,
+         Statement,
+         Type,
+         Decl,
       };
 
-      SP.diagnose(err_bad_macro_variable_kind, currentTok().getSourceLoc(),
-                  currentTok().is(tok::macro_statement) ? Statement
-                                                        : Expression,
-                  Decl);
+      SP.diagnose(
+          err_bad_macro_variable_kind, currentTok().getSourceLoc(),
+          currentTok().is(tok::macro_statement) ? Statement : Expression, Decl);
 
       return ParseError();
    }
@@ -4954,6 +5181,14 @@ ParseResult Parser::parseTopLevelDecl()
       auto MD = MixinDecl::Create(Context, loc, Parens, E);
       return ActOnDecl(MD);
    }
+   case tok::kw_for: {
+      if (!lookahead().is(tok::triple_period)) {
+         SP.diagnose(err_unexpected_kw, "for", true, "for...",
+                     currentTok().getSourceLoc());
+      }
+
+      return parseStaticForDecl(true);
+   }
    case tok::kw_static:
       if (lookahead().is(tok::kw_if)) {
          return parseStaticIf();
@@ -4990,7 +5225,7 @@ ParseResult Parser::parseTopLevelDecl()
       return ParseError();
    default:
    case_bad_token:
-      SP.diagnose(err_expecting_decl, currentTok().getSourceLoc(), 
+      SP.diagnose(err_expecting_decl, currentTok().getSourceLoc(),
                   currentTok().toString(), /*top level*/ true);
 
       if (skipUntilNextDecl()) {
@@ -5004,7 +5239,7 @@ ParseResult Parser::parseTopLevelDecl()
 
 CompoundDecl* Parser::parseDecls(SourceLocation Loc, bool RecordLevel)
 {
-   CompoundDecl *CD = CompoundDecl::Create(Context, Loc, true);
+   CompoundDecl* CD = CompoundDecl::Create(Context, Loc, true);
    skipWhitespace();
 
    {
@@ -5025,7 +5260,7 @@ void Parser::parseDecls(bool RecordLevel)
 
    skipWhitespace();
    while (!currentTok().is(tok::eof)) {
-      (void) parseNextDecl();
+      (void)parseNextDecl();
       advance();
    }
 }
@@ -5060,12 +5295,12 @@ Statement* Parser::parseStmts()
                                SourceLocation());
 }
 
-void Parser::parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
-                                SmallVectorImpl<IdentifierInfo *> &Labels,
-                                bool &OnlyExprs,
-                                tok::TokenType EndTok) {
+void Parser::parsePatternCommon(SmallVectorImpl<IfCondition>& Args,
+                                SmallVectorImpl<IdentifierInfo*>& Labels,
+                                bool& OnlyExprs, tok::TokenType EndTok)
+{
    while (!currentTok().is(EndTok)) {
-      IdentifierInfo *label = nullptr;
+      IdentifierInfo* label = nullptr;
 
       if (currentTok().getKind() == tok::ident && lookahead().is(tok::colon)) {
          label = currentTok().getIdentifierInfo();
@@ -5080,10 +5315,14 @@ void Parser::parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
       }
 
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
-         auto *VD = parseVarDecl(false).tryGetDecl<LocalVarDecl>();
+         auto* VD = parseVarDecl(false, false, true).tryGetDecl<LocalVarDecl>();
 
          OnlyExprs = false;
          Args.emplace_back(VD, nullptr);
+      }
+      else if (currentTok().is(tok::underscore)) {
+         OnlyExprs = false;
+         Args.emplace_back((LocalVarDecl*)nullptr);
       }
       else if (currentTok().is(Ident_is)) {
          auto Loc = currentTok().getSourceLoc();
@@ -5097,8 +5336,8 @@ void Parser::parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
          Args.emplace_back(IsPattern::Create(Context, SR, TypeRes.get()));
       }
       else {
-         auto *E = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
-            .tryGetExpr();
+         auto* E = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
+                       .tryGetExpr();
          if (E && isa<PatternExpr>(E)) {
             Args.emplace_back(cast<PatternExpr>(E));
             OnlyExprs = false;
@@ -5130,10 +5369,9 @@ void Parser::parsePatternCommon(SmallVectorImpl<IfCondition> &Args,
    }
 }
 
-ParseResult Parser::parseCallPattern(bool skipName,
-                                     Expression *ParentExpr,
-                                     bool pointerAccess,
-                                     DeclarationName Name) {
+ParseResult Parser::parseCallPattern(bool skipName, Expression* ParentExpr,
+                                     bool pointerAccess, DeclarationName Name)
+{
    auto IdentLoc = currentTok().getSourceLoc();
    bool IsInit = currentTok().is(tok::kw_init);
    bool IsDeinit = currentTok().is(Ident_deinit);
@@ -5175,29 +5413,30 @@ ParseResult Parser::parseCallPattern(bool skipName,
       }
 
       if (!skipName) {
-         ParentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr, Name,
-                                                     pointerAccess);
+         ParentExpr = new (Context)
+             IdentifierRefExpr(IdentLoc, ParentExpr, Name, pointerAccess);
       }
 
       SmallVector<Expression*, 2> ArgVec;
       ArgVec.reserve(Args.size());
 
-      for (auto &Arg : Args) {
+      for (auto& Arg : Args) {
          ArgVec.push_back(Arg.ExprData.Expr);
       }
 
-      return AnonymousCallExpr::Create(Context, IdentLoc, ParentExpr,
-                                       ArgVec, Labels);
+      return AnonymousCallExpr::Create(Context, IdentLoc, ParentExpr, ArgVec,
+                                       Labels);
    }
 
    if (!skipName) {
-      ParentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr, Name,
-                                                  pointerAccess);
+      //      ParentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr,
+      //      Name,
+      //                                                  pointerAccess);
    }
 
    return CasePattern::Create(Context, SourceRange(IdentLoc, Parens.getEnd()),
-                              CasePattern::K_EnumOrStruct,
-                              ParentExpr, Name.getIdentifierInfo(), Args);
+                              CasePattern::K_EnumOrStruct, ParentExpr,
+                              Name.getIdentifierInfo(), Args);
 }
 
 ParseResult Parser::parseTuplePattern()
@@ -5227,7 +5466,7 @@ ParseResult Parser::parseTuplePattern()
       SmallVector<Expression*, 4> ArgVec;
       ArgVec.reserve(Args.size());
 
-      for (auto &Arg : Args) {
+      for (auto& Arg : Args) {
          ArgVec.push_back(Arg.ExprData.Expr);
       }
 
@@ -5239,12 +5478,13 @@ ParseResult Parser::parseTuplePattern()
 }
 
 ParseResult Parser::parseArrayPattern(SourceLocation LSquareLoc,
-                                      ArrayRef<Expression*> ExprsSoFar) {
+                                      ArrayRef<Expression*> ExprsSoFar)
+{
    bool OnlyExprs = true;
    SmallVector<IfCondition, 4> Args;
    SmallVector<IdentifierInfo*, 4> Labels;
 
-   for (auto *E : ExprsSoFar) {
+   for (auto* E : ExprsSoFar) {
       Args.emplace_back(E);
       Labels.push_back(nullptr);
    }
@@ -5256,7 +5496,7 @@ ParseResult Parser::parseArrayPattern(SourceLocation LSquareLoc,
       SmallVector<Expression*, 4> ArgVec;
       ArgVec.reserve(Args.size());
 
-      for (auto &Arg : Args) {
+      for (auto& Arg : Args) {
          ArgVec.push_back(Arg.ExprData.Expr);
       }
 
@@ -5267,10 +5507,9 @@ ParseResult Parser::parseArrayPattern(SourceLocation LSquareLoc,
                               nullptr, nullptr, Args);
 }
 
-ParseResult Parser::parseFunctionCall(bool skipName,
-                                      Expression *ParentExpr,
-                                      bool pointerAccess,
-                                      DeclarationName Name) {
+ParseResult Parser::parseFunctionCall(bool skipName, Expression* ParentExpr,
+                                      bool pointerAccess, DeclarationName Name)
+{
    auto IdentLoc = currentTok().getSourceLoc();
    bool IsInit = currentTok().is(tok::kw_init);
    bool IsDeinit = currentTok().is(Ident_deinit);
@@ -5306,34 +5545,12 @@ ParseResult Parser::parseFunctionCall(bool skipName,
    }
 
    if (!skipName) {
-      ParentExpr = new(Context) IdentifierRefExpr(IdentLoc, ParentExpr, Name,
-                                                  pointerAccess);
+      ParentExpr = new (Context)
+          IdentifierRefExpr(IdentLoc, ParentExpr, Name, pointerAccess);
    }
 
    return AnonymousCallExpr::Create(Context, Parens, ParentExpr, args.args,
                                     args.labels);
-}
-
-ParseResult Parser::parseEnumCaseExpr()
-{
-   auto PeriodLoc = currentTok().getSourceLoc();
-   if (!expect(tok::ident)) {
-      return ParseExprError();
-   }
-
-   auto ident = currentTok().getIdentifierInfo();
-
-   EnumCaseExpr* expr;
-   if (lookahead().is(tok::open_paren)) {
-      advance();
-      expr = new(Context) EnumCaseExpr(PeriodLoc, ident,
-                                       parseCallArguments().args);
-   }
-   else {
-      expr = new(Context) EnumCaseExpr(PeriodLoc, ident);
-   }
-
-   return expr;
 }
 
 Parser::ArgumentList Parser::parseCallArguments()
@@ -5342,7 +5559,7 @@ Parser::ArgumentList Parser::parseCallArguments()
    consumeToken(tok::open_paren);
 
    while (!currentTok().is(tok::close_paren)) {
-      IdentifierInfo *label = nullptr;
+      IdentifierInfo* label = nullptr;
 
       if (currentTok().getKind() == tok::ident && lookahead().is(tok::colon)) {
          label = currentTok().getIdentifierInfo();
@@ -5350,7 +5567,7 @@ Parser::ArgumentList Parser::parseCallArguments()
          advance();
       }
       else if (currentTok().getKind() == tok::underscore
-            && lookahead().is(tok::colon)) {
+               && lookahead().is(tok::colon)) {
          label = SP.getIdentifier("_");
          advance();
          advance();
@@ -5433,7 +5650,7 @@ ParseResult Parser::parseCompoundStmt(bool preserveTopLevel, bool noOpenBrace)
    }
 
    if (!currentTok().is(tok::close_brace)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'}'");
    }
 
@@ -5441,7 +5658,7 @@ ParseResult Parser::parseCompoundStmt(bool preserveTopLevel, bool noOpenBrace)
                                currentTok().getSourceLoc());
 }
 
-ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
+ParseResult Parser::parseDoStmt(IdentifierInfo* Label)
 {
    assert(currentTok().is(Ident_do) && "not a do stmt!");
    auto DoLoc = currentTok().getSourceLoc();
@@ -5465,7 +5682,7 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
       }
 
       if (currentTok().getKind() == tok::eof
-         || currentTok().is(tok::close_brace)) {
+          || currentTok().is(tok::close_brace)) {
          break;
       }
 
@@ -5494,10 +5711,6 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
    auto CS = CompoundStmt::Create(Context, Stmts, false, LBraceLoc,
                                   currentTok().getSourceLoc());
 
-   if (!lookahead().is(tok::kw_catch)) {
-      return CS;
-   }
-
    SourceLocation CatchAllLoc;
    SmallVector<CatchBlock, 2> CatchBlocks;
 
@@ -5506,6 +5719,11 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
       advance();
 
       if (currentTok().is(tok::underscore)) {
+         if (CatchAllLoc.isValid()) {
+            SP.diagnose(err_catch_all_must_be_alone, currentTok().getSourceLoc());
+            SP.diagnose(note_previous_catch, CatchAllLoc);
+         }
+
          CatchAllLoc = currentTok().getSourceLoc();
          advance();
 
@@ -5516,7 +5734,6 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
       }
 
       SourceLocation VarOrLetLoc = currentTok().getSourceLoc();
-      AccessSpecifier access = AccessSpecifier::Default;
       bool isLet = true;
 
       if (!currentTok().is(tok::ident)) {
@@ -5536,28 +5753,31 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
          advance();
 
          auto typeResult = parseType(true);
-         if (typeResult)
+         if (typeResult) {
             type = typeResult.get();
-         else
+         }
+         else {
             skipUntilProbableEndOfExpr();
+         }
       }
       else {
          SP.diagnose(err_generic_error, currentTok().getSourceLoc(),
                      "catch must have a defined type");
       }
 
-      auto L = LocalVarDecl::Create(Context, access, VarOrLetLoc,
-                                    ColonLoc, isLet, Name, type, nullptr);
+      auto L = LocalVarDecl::Create(Context, AccessSpecifier::Public,
+                                    VarOrLetLoc, ColonLoc,
+                                    isLet, Name, type, nullptr);
 
       L->setLexicalContext(&SP.getDeclContext());
 
       advance();
 
-      Expression *Cond = nullptr;
+      Expression* Cond = nullptr;
       if (currentTok().is(Ident_where)) {
          advance();
          Cond = parseExprSequence(DefaultFlags & ~F_AllowBraceClosure)
-            .tryGetExpr();
+                    .tryGetExpr();
 
          advance();
       }
@@ -5566,11 +5786,11 @@ ParseResult Parser::parseDoStmt(IdentifierInfo *Label)
       CatchBlocks.emplace_back(CatchBlock(L, body, Cond));
    }
 
-   if (CatchAllLoc.isValid() && CatchBlocks.size() != 1) {
-      SP.diagnose(err_catch_all_must_be_alone, CatchAllLoc);
+   if (CatchAllLoc.isValid() && CatchBlocks.back().varDecl) {
+      SP.diagnose(err_catch_all_must_be_last, CatchAllLoc);
    }
 
-   return new(Context) DoStmt(SourceRange(DoLoc), CS, CatchBlocks, Label);
+   return DoStmt::Create(Context, SourceRange(DoLoc), CS, CatchBlocks, Label);
 }
 
 Parser::DeclAttrs Parser::pushDeclAttrs()
@@ -5586,11 +5806,12 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
       case tok::kw_private:
       case tok::kw_internal:
       case tok::kw_protected:
+         if (CurDeclAttrs.Access != AccessSpecifier::Default) {
+            SP.diagnose(err_duplicate_access_spec, currentTok().getSourceLoc());
+         }
+
          CurDeclAttrs.Access = tokenToAccessSpec(currentTok().getKind());
          CurDeclAttrs.AccessLoc = currentTok().getSourceLoc();
-         break;
-      case tok::kw_abstract:
-         CurDeclAttrs.Abstract = true;
          break;
       case tok::kw_static:
          if (lookahead().oneOf(tok::kw_if, tok::kw_for)) {
@@ -5600,11 +5821,24 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
 
          CurDeclAttrs.StaticLoc = currentTok().getSourceLoc();
          break;
+      case tok::kw_mutating:
+         SP.diagnose(err_keyword_after_def, 0, currentTok().getSourceLoc());
+         break;
+      case tok::kw_abstract:
+         CurDeclAttrs.Abstract = true;
+         break;
       case tok::ident: {
-         auto *II = currentTok().getIdentifierInfo();
+         auto* II = currentTok().getIdentifierInfo();
          if (II == Ident_default) {
             CurDeclAttrs.Default = true;
             CurDeclAttrs.DefaultLoc = currentTok().getSourceLoc();
+         }
+         else if (II == Ident_nonmutating) {
+            SP.diagnose(err_keyword_after_def, 1, currentTok().getSourceLoc());
+         }
+         else if (II == Ident_override) {
+            SP.diagnose(err_keyword_after_def, 3,
+                        currentTok().getSourceLoc());
          }
          else {
             done = true;
@@ -5623,6 +5857,7 @@ Parser::DeclAttrs Parser::pushDeclAttrs()
       advance();
    }
 
+   assert((int)CurDeclAttrs.Access <= 5 && "bad access specifier");
    return Prev;
 }
 
@@ -5638,7 +5873,16 @@ ParseResult Parser::parseNextDecl()
       Result = parseTopLevelDecl();
    }
 
+   if (Result.isValid() && !isa<ImportDecl>(Result.getDecl())) {
+      FoundNonImportDecl = true;
+   }
+   if (CurDeclAttrs.Abstract && Result.isValid() && !isa<ClassDecl>(Result.getDecl())) {
+      SP.diagnose(err_keyword_after_def, 2, currentTok().getSourceLoc());
+   }
+
+   assert((int)Prev.Access <= 5 && "bad access specifier");
    popDeclAttrs(Prev);
+
    return Result;
 }
 
@@ -5653,38 +5897,45 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
       return parseAttributedStmt();
    }
 
-   if (currentTok().is(Ident_do) && lookahead(false).is(tok::open_brace))
-      return parseDoStmt();
+   if (currentTok().is(tok::ident)) {
+      if (currentTok().is(Ident_do) && lookahead(false).is(tok::open_brace))
+         return parseDoStmt();
 
-   if (currentTok().is(Ident_unsafe)) {
-      advance();
+      if (currentTok().is(Ident_unsafe)) {
+         advance();
 
-      auto Stmt = parseNextStmt(true);
-      if (Stmt)
-         Stmt.getStatement()->setUnsafe(true);
+         auto Stmt = parseNextStmt(true);
+         if (Stmt)
+            Stmt.getStatement()->setUnsafe(true);
 
-      return Stmt;
+         return Stmt;
+      }
+
+      if (currentTok().is(Ident_macro))
+         return parseMacro();
+
+      if (currentTok().oneOf(Ident_nonmutating, Ident_override,
+                             Ident_precedenceGroup, Ident_infix, Ident_prefix,
+                             Ident_postfix)) {
+         return parseNextDecl();
+      }
    }
-
-   if (currentTok().is(Ident_macro))
-      return parseMacro();
 
    ParseResult stmt;
 
    auto kind = currentTok().getKind();
    switch (kind) {
-#  define CDOT_KEYWORD_TOKEN(Name, Str)   \
-   case tok::Name:
-#  include "Lex/Tokens.def"
+#define CDOT_KEYWORD_TOKEN(Name, Str) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
       stmt = parseKeyword();
       break;
    case tok::close_paren:
    case tok::close_square:
    case tok::close_brace: {
-      unsigned idx =
-         kind == tok::close_paren ? 0 : kind == tok::close_brace ? 1 : 2;
+      unsigned idx
+          = kind == tok::close_paren ? 0 : kind == tok::close_brace ? 1 : 2;
 
-      SP.diagnose(err_extraneous_paren, currentTok().getSourceLoc(),  idx);
+      SP.diagnose(err_extraneous_paren, currentTok().getSourceLoc(), idx);
       return skipUntilProbableEndOfStmt();
    }
    case tok::open_brace:
@@ -5720,7 +5971,7 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
          auto EqualsLoc = currentTok().getSourceLoc();
          advance();
 
-         auto *RHS = parseExprSequence().tryGetExpr();
+         auto* RHS = parseExprSequence().tryGetExpr();
 
          return DiscardAssignStmt::Create(Context, UnderscoreLoc, EqualsLoc,
                                           RHS);
@@ -5731,7 +5982,7 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
    }
    case tok::ident:
       if (lookahead(false, true).is(tok::colon)) {
-         auto *Label = currentTok().getIdentifierInfo();
+         auto* Label = currentTok().getIdentifierInfo();
          advance();
          advance();
 
@@ -5739,9 +5990,12 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
             return parseDoStmt(Label);
 
          switch (currentTok().getKind()) {
-         case tok::kw_if: return parseIfStmt(Label);
-         case tok::kw_for: return parseForStmt(Label);
-         case tok::kw_match: return parseMatchStmt(Label);
+         case tok::kw_if:
+            return parseIfStmt(Label);
+         case tok::kw_for:
+            return parseForStmt(Label);
+         case tok::kw_match:
+            return parseMatchStmt(Label);
          default:
             SP.diagnose(err_generic_error, "expected loop after label",
                         currentTok().getSourceLoc());
@@ -5752,14 +6006,14 @@ ParseResult Parser::parseNextStmt(bool AllowBracedBlock)
 
       LLVM_FALLTHROUGH;
    default:
-      stmt = parseExprSequence();
+      stmt = parseExprSequence(DefaultFlags | F_ParsingStatement);
       break;
    }
 
    return stmt;
 }
 
-void Parser::parseStmts(llvm::SmallVectorImpl<Statement *> &Stmts)
+void Parser::parseStmts(llvm::SmallVectorImpl<Statement*>& Stmts)
 {
    while (currentTok().getKind() != tok::eof) {
       while (currentTok().oneOf(tok::newline, tok::semicolon)) {
@@ -5800,7 +6054,7 @@ ParseResult Parser::parseUnittestDecl()
    assert(currentTok().is(Ident_unittest));
 
    auto KeywordLoc = consumeToken();
-   IdentifierInfo *Name = nullptr;
+   IdentifierInfo* Name = nullptr;
 
    if (currentTok().is(tok::stringliteral)) {
       Name = &Context.getIdentifiers().get(currentTok().getText());
@@ -5814,7 +6068,7 @@ ParseResult Parser::parseUnittestDecl()
       return ParseError();
    }
 
-   if (!SP.getCompilationUnit().getOptions().runUnitTests()) {
+   if (!SP.getCompilerInstance().getOptions().runUnitTests()) {
       advance();
       skipUntilEven(tok::open_brace);
       advance();
@@ -5824,12 +6078,12 @@ ParseResult Parser::parseUnittestDecl()
 
    SourceLocation LBraceLoc = currentTok().getSourceLoc();
 
-   auto *D = UnittestDecl::Create(Context, KeywordLoc, {}, Name, nullptr);
+   auto* D = UnittestDecl::Create(Context, KeywordLoc, {}, Name, nullptr);
    {
       DeclContextRAII DCR(*this, D);
       EnterFunctionScope EF(*this);
 
-      auto *Body = parseCompoundStmt(false, true).tryGetStatement();
+      auto* Body = parseCompoundStmt(false, true).tryGetStatement();
       D->setBody(Body);
 
       SourceRange BraceRange(LBraceLoc, currentTok().getSourceLoc());
@@ -5843,16 +6097,16 @@ ParseResult Parser::parseNamespaceDecl()
 {
    auto Loc = currentTok().getSourceLoc();
 
-   NamespaceDecl *NS = nullptr;
+   NamespaceDecl* NS = nullptr;
    SmallVector<DeclContextRAII*, 2> DCRs;
 
    advance();
    while (currentTok().is(tok::ident)) {
       // return previous namespace if a namespace with this name is already
       // in scope
-      auto *Name = currentTok().getIdentifierInfo();
+      auto* Name = currentTok().getIdentifierInfo();
 
-      NamespaceDecl *NextNS = NamespaceDecl::Create(Context, Loc, {}, Name);
+      NamespaceDecl* NextNS = NamespaceDecl::Create(Context, Loc, {}, Name);
       if (auto Prev = SP.getDeclContext().lookupSingle<NamespaceDecl>(Name)) {
          NextNS->setPrimaryCtx(Prev);
       }
@@ -5869,8 +6123,8 @@ ParseResult Parser::parseNamespaceDecl()
    }
 
    if (DCRs.empty()) {
-      NamespaceDecl *AnonNS = NamespaceDecl::Create(Context, Loc, {},
-                                                    DeclarationName());
+      NamespaceDecl* AnonNS
+          = NamespaceDecl::Create(Context, Loc, {}, DeclarationName());
 
       ActOnDecl(AnonNS);
       DCRs.emplace_back(new DeclContextRAII(*this, AnonNS));
@@ -5879,7 +6133,7 @@ ParseResult Parser::parseNamespaceDecl()
    }
 
    if (!currentTok().is(tok::open_brace)) {
-      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
+      SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
                   currentTok().toString(), true, "'{'");
 
       return ParseError();
@@ -5903,132 +6157,18 @@ ParseResult Parser::parseNamespaceDecl()
 
    SourceRange SR(LBrace, currentTok().getSourceLoc());
    while (!DCRs.empty()) {
-      auto *NextNS = cast<NamespaceDecl>(&SP.getDeclContext());
+      auto* NextNS = cast<NamespaceDecl>(&SP.getDeclContext());
       NextNS->setBraces(SR);
 
       delete DCRs.pop_back_val();
    }
 
    if (ParsingProtocol) {
-      SP.diagnose(NS, err_may_not_appear_in_protocol,
-                  NS->getSpecifierForDiagnostic(),
+      SP.diagnose(NS, err_may_not_appear_in_protocol, NS,
                   currentTok().getSourceLoc());
    }
 
    return NS;
-}
-
-ParseResult Parser::parseUsingDecl()
-{
-   auto UsingLoc = currentTok().getSourceLoc();
-
-   llvm::SmallVector<DeclarationName, 4> declContext;
-   llvm::SmallVector<DeclarationName, 4> importedItems;
-
-   bool First = true;
-   SourceLocation wildCardLoc;
-
-   while (First || lookahead().is(tok::period)) {
-      advance();
-      if (currentTok().is(tok::period))
-         advance();
-
-      if (currentTok().is(tok::open_brace))
-         break;
-
-      if (currentTok().is(tok::times)) {
-         wildCardLoc = currentTok().getSourceLoc();
-         break;
-      }
-      if (!currentTok().is(tok::ident)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(), 
-                     currentTok().toString(), true, "identifier");
-
-         return skipUntilProbableEndOfStmt();
-      }
-
-      declContext.emplace_back(currentTok().getIdentifierInfo());
-      First = false;
-   }
-
-   SourceLocation LBraceLoc;
-   SourceLocation RBraceLoc;
-
-   if (currentTok().is(tok::open_brace)) {
-      LBraceLoc = currentTok().getSourceLoc();
-
-      if (!expect(tok::ident, tok::times)) {
-         return skipUntilProbableEndOfStmt();
-      }
-
-      while (!currentTok().is(tok::close_brace)) {
-         if (currentTok().is(tok::times)) {
-            wildCardLoc = currentTok().getSourceLoc();
-         }
-         else {
-            importedItems.emplace_back(currentTok().getIdentifierInfo());
-         }
-
-         advance();
-
-         if (currentTok().is(tok::comma))
-            advance();
-      }
-
-      RBraceLoc = currentTok().getSourceLoc();
-   }
-
-   DeclarationName Name;
-   if (lookahead().is(Ident_as)) {
-      if (!importedItems.empty() || wildCardLoc.isValid()) {
-         SP.diagnose(err_invalid_using_alias, currentTok().getSourceLoc());
-      }
-
-      advance();
-      advance();
-
-      if (!currentTok().is(tok::ident)) {
-         SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                     currentTok().toString(), true, "identifier");
-      }
-      else {
-         Name = currentTok().getIdentifierInfo();
-      }
-   }
-   else if (!wildCardLoc) {
-      Name = declContext.back();
-   }
-
-   SourceRange SR(UsingLoc, currentTok().getSourceLoc());
-   if (!importedItems.empty()) {
-      if (wildCardLoc.isValid()) {
-         SP.diagnose(err_import_multiple_with_wildcard, wildCardLoc);
-         importedItems.clear();
-      }
-      else {
-         for (auto &Item : importedItems) {
-            declContext.push_back(Item);
-
-            auto D = UsingDecl::Create(Context, SR, CurDeclAttrs.Access, Item,
-                                       declContext, wildCardLoc.isValid());
-
-            D->setAccessLoc(CurDeclAttrs.AccessLoc);
-
-            ActOnDecl(D);
-            declContext.pop_back();
-         }
-
-         return ParseError();
-      }
-   }
-
-   auto D = UsingDecl::Create(Context, SR, CurDeclAttrs.Access, Name,
-                              declContext, wildCardLoc.isValid());
-
-   D->setAccessLoc(CurDeclAttrs.AccessLoc);
-   ActOnDecl(D);
-
-   return D;
 }
 
 ParseResult Parser::parseModuleDecl()
@@ -6057,12 +6197,16 @@ ParseResult Parser::parseModuleDecl()
    }
 
    SourceRange SR(ModuleLoc, currentTok().getSourceLoc());
-   return SP.getCompilationUnit().getModuleMgr()
-            .GetOrCreateModule(SR, moduleName);
+   return SP.getCompilerInstance().getModuleMgr().GetOrCreateModule(SR,
+                                                                   moduleName);
 }
 
 ParseResult Parser::parseImportDecl()
 {
+   if (FoundNonImportDecl) {
+      SP.diagnose(err_import_not_at_begin, currentTok().getSourceLoc());
+   }
+
    bool Wildcard = false;
    auto ImportLoc = consumeToken();
    SmallVector<DeclarationName, 2> ImportedNames;
@@ -6077,17 +6221,17 @@ ParseResult Parser::parseImportDecl()
    else if (currentTok().is(tok::open_brace)) {
       advance();
       while (!currentTok().is(tok::close_brace)) {
-         if (!currentTok().is(tok::ident)) {
-            SP.diagnose(err_unexpected_token, currentTok().getSourceLoc(),
-                        currentTok().toString(), true, "identifier");
-
-            advance();
-            continue;
+         if (currentTok().is(tok::kw_self)) {
+            ImportedNames.push_back(&Idents.get("self"));
+         }
+         else {
+            auto Name = parseDeclName(false);
+            if (Name.first && Name.first.isSimpleIdentifier()) {
+               ImportedNames.push_back(Name.first.getIdentifierInfo());
+            }
          }
 
-         ImportedNames.push_back(currentTok().getIdentifierInfo());
          advance();
-
          if (currentTok().is(tok::comma))
             advance();
       }
@@ -6134,7 +6278,7 @@ ParseResult Parser::parseImportDecl()
    }
 
    unsigned EndOffset = currentTok().getSourceLoc().getOffset()
-      + moduleName.back().getIdentifierInfo()->getLength();
+                        + moduleName.back().getIdentifierInfo()->getLength();
 
    SourceRange SR(ImportLoc, SourceLocation(EndOffset));
    auto D = ImportDecl::Create(Context, SR, CurDeclAttrs.Access, moduleName,
@@ -6144,7 +6288,7 @@ ParseResult Parser::parseImportDecl()
    return ActOnDecl(D);
 }
 
-ModuleDecl *Parser::parseModule(bool &IgnoreSourceFile)
+ModuleDecl* Parser::parseModule(bool& IgnoreSourceFile)
 {
    IgnoreSourceFile = false;
 
@@ -6160,8 +6304,8 @@ ModuleDecl *Parser::parseModule(bool &IgnoreSourceFile)
       parseAttributes(Attrs, AttrClass::Decl, &FoundVersionAttr);
 
       VersionDeclAttr::VersionKind V = VersionDeclAttr::Windows;
-      for (auto *A : Attrs) {
-         if (auto *VA = dyn_cast<VersionDeclAttr>(A)) {
+      for (auto* A : Attrs) {
+         if (auto* VA = dyn_cast<VersionDeclAttr>(A)) {
             V = VA->getVersion();
             break;
          }
@@ -6211,14 +6355,13 @@ void Parser::parseMainFile()
 {
    EnterFunctionScope EF(*this);
 
-   SourceLocation Loc = SP.getCompilationUnit().getMainFileLoc();
-   auto *II = &Context.getIdentifiers().get("_start");
-   auto *Fn = FunctionDecl::Create(Context, AccessSpecifier::Private, Loc,
-                                   DeclarationName(II), {},
-                                   SourceType(Context.getVoidType()),
-                                   nullptr, {});
+   SourceLocation Loc = SP.getCompilerInstance().getMainFileLoc();
+   auto* II = &Context.getIdentifiers().get("_start");
+   auto* Fn = FunctionDecl::Create(
+       Context, AccessSpecifier::Private, Loc, DeclarationName(II), {},
+       SourceType(Context.getVoidType()), nullptr, {});
 
-   SmallVector<Statement *, 8> Stmts;
+   SmallVector<Statement*, 8> Stmts;
    {
       DeclContextRAII DCR(*this, Fn);
       while (true) {
@@ -6229,14 +6372,20 @@ void Parser::parseMainFile()
             break;
          }
 
-         auto nextStmt = parseNextStmt(false);
+         auto nextStmt = parseNextStmt(true);
          if (nextStmt.holdsStatement()) {
+            FoundNonImportDecl = true;
             Stmts.push_back(nextStmt.getStatement());
          }
          else if (nextStmt.holdsExpr()) {
+            FoundNonImportDecl = true;
             Stmts.push_back(nextStmt.getExpr());
          }
          else if (nextStmt.holdsDecl()) {
+            if (!isa<ImportDecl>(nextStmt.getDecl())) {
+               FoundNonImportDecl = true;
+            }
+
             Stmts.push_back(DeclStmt::Create(Context, nextStmt.getDecl()));
          }
          else {
@@ -6247,15 +6396,15 @@ void Parser::parseMainFile()
       }
    }
 
-   auto *CS = CompoundStmt::Create(Context, Stmts, false, Loc,
+   auto* CS = CompoundStmt::Create(Context, Stmts, false, Loc,
                                    currentTok().getSourceLoc());
 
    Fn->setBody(CS);
    Fn->setIsMain(true);
 
-   SP.getCompilationUnit().setMainFn(Fn);
+   SP.getCompilerInstance().setMainFn(Fn);
    ActOnDecl(Fn);
 }
 
-} // namespace Parse
+} // namespace parse
 } // namespace cdot

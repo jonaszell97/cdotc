@@ -1,9 +1,10 @@
 
 import builtin
+import sys
 
 struct ErrorObj {
     let typeInfo: UnsafePtr<TypeInfo>
-    let deinit: @thin (UnsafeMutableRawPtr) -> Void
+    let deinitialize: @thin (UnsafeMutableRawPtr) -> Void
     var objPtr: Byte
 }
 
@@ -14,10 +15,8 @@ public def _cdot_PrintException(_ err: UnsafePtr<ErrorObj>) -> Never {
 
 @extern(C)
 public def _cdot_CleanupException(_ err: UnsafeMutablePtr<ErrorObj>) {
-    if Int(builtin.ptrtoint(err->deinit) as builtin.i64) != 0 {
-        err->withReference {
-            err->deinit(UnsafeMutableRawPtr(rawPointer: builtin.addressOf($0.objPtr)))
-        }
+    if Int(builtin.ptrtoint(err->deinitialize) as builtin.i64) != 0 {
+        err->deinitialize(UnsafeMutableRawPtr(rawPointer: builtin.addressOf(err->objPtr) as! builtin.RawPointer))
     }
 
     err.deallocate()

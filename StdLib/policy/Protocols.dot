@@ -1,0 +1,11 @@
+
+/// The protocol that any type implicitly conforms to.
+public protocol Any {}
+
+public protocol Copyable {
+    /// \return a deep copy of this value.
+    def copy() -> Self
+}
+
+public protocol ImplicitlyCopyable with Copyable {}
+public protocol MoveOnly {}

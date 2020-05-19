@@ -1,5 +1,12 @@
 
-internal protocol BuiltinFloatingPointType {}
+import { _AtomicProtocol } from atomic
+import builtin
+import math
+
+/// Internal protocol used for builtin primitive floating point types.
+internal protocol _BuiltinPrimitiveFloatingPointType {}
+
+internal protocol BuiltinFloatingPointType with ImplicitlyCopyable {}
 
 public protocol ExpressibleByFloatingPointLiteral {
     associatedType FloatingPointType: BuiltinFloatingPointType = Double
@@ -62,7 +69,7 @@ public protocol FloatingPoint with SignedNumeric, Strideable, Hashable {
     prop ulp: Self { get }
 
     /// The unit in the last place of 1.0.
-    prop ulpOfOne: Self { get }
+    static prop ulpOfOne: Self { get }
 
     /// The least positive normal number.
     static prop leastNormalMagnitude: Self { get }
@@ -298,6 +305,13 @@ extend FloatingPoint {
         copy **= rhs
         return copy
     }
+
+    /// \inherit
+    default def infix **(rhs: Int) -> Self {
+        var copy = self
+        copy **= rhs
+        return copy
+    }
 }
 
 /// A radix-2 (binary) floating-point type.
@@ -478,12 +492,12 @@ extend BinaryFloatingPoint {
         from source: Source
     ) -> (value: Self, exact: Bool) {
         if likely(source.isZero) {
-            return (if source.sign == .minus then -0.0 else 0.0, true)
+            return (if source.sign == .minus then Self(-0.0) else 0.0, true)
         }
 
         if likely(!source.isFinite) {
             if source.isInfinite {
-                return (if source.sign == .minus then -.infinity else .infinity, true)
+                return (if source.sign == .minus then -Self.infinity else Self.infinity, true)
             }
             // IEEE 754 requires that any NaN payload be propagated, if possible.
             let payload_ = (
@@ -494,6 +508,7 @@ extend BinaryFloatingPoint {
                 Self.greatestFiniteMagnitude.significandBitPattern &
                     ~(Self.nan.significandBitPattern |
                         Self.signalingNaN.significandBitPattern))
+
             let payload = Self.RawSignificand(truncatingIfNeeded: payload_) & mask
             // Although .signalingNaN.exponentBitPattern == .nan.exponentBitPattern,
             // we do not *need* to rely on this relation, and therefore we do not.
@@ -523,7 +538,7 @@ extend BinaryFloatingPoint {
             exemplar = Self.leastNonzeroMagnitude
             let minExponent = exemplar.exponent
             if exponent + 1 < minExponent {
-                return (source.sign == .minus ? -0.0 : 0, false)
+                return (if source.sign == .minus then Self(-0.0) else 0, false)
             }
             if unlikely(exponent + 1 == minExponent) {
                 // Although the most significant bit (MSB) of a subnormal source
@@ -536,8 +551,8 @@ extend BinaryFloatingPoint {
                 // Therefore, we do not need to adjust our work here for a subnormal
                 // source.
                 return if source.significandWidth == 0
-                    then (source.sign == .minus ? -0.0 : 0, false)
-                    else (source.sign == .minus ? -exemplar : exemplar, false)
+                    then (if source.sign == .minus then Self(-0.0) else 0, false)
+                    else (if source.sign == .minus then -exemplar else exemplar, false)
             }
 
             exponentBitPattern = 0 as Self.RawExponent
@@ -555,7 +570,7 @@ extend BinaryFloatingPoint {
             // The floating-point result is either normal or infinite.
             exemplar = Self.greatestFiniteMagnitude
             if exponent > exemplar.exponent {
-                return (if source.sign == .minus then -.infinity else .infinity, false)
+                return (if source.sign == .minus then -Self.infinity else Self.infinity, false)
             }
 
             exponentBitPattern = if exponent < 0
@@ -608,7 +623,8 @@ extend BinaryFloatingPoint {
 
     /// \inherit
     default init<Source: BinaryFloatingPoint>(_ value: Source) {
-        self = Self._convert(from: value).value
+        let (value_, exact) = Self._convert(from: value)
+        self = value_
     }
 
     /// \inherit
@@ -647,7 +663,7 @@ extend BinaryFloatingPoint where Self.RawSignificand is FixedWidthInteger {
     static def _convert<Source: BinaryInteger>(
         from source: Source
     ) -> (value: Self, exact: Bool) {
-        //    Useful constants:
+        /*//    Useful constants:
         let exponentBias = (1 as Self).exponentBitPattern
         let significandMask = ((1 as RawSignificand) << Self.significandBitCount) &- 1
         //    Zero is really extra simple, and saves us from trying to normalize a
@@ -660,7 +676,7 @@ extend BinaryFloatingPoint where Self.RawSignificand is FixedWidthInteger {
         //    If the exponent would be larger than the largest representable
         //    exponent, the result is just an infinity of the appropriate sign.
         if exponent > Self.greatestFiniteMagnitude.exponent {
-            return (if Source.isSigned && source < 0 then -.infinity else .infinity, false)
+            return (if Source.isSigned && source < 0 then -Self.infinity else Self.infinity, false)
         }
         //    If exponent <= significandBitCount, we don't need to round it to
         //    construct the significand; we just need to left-shift it into place;
@@ -689,7 +705,7 @@ extend BinaryFloatingPoint where Self.RawSignificand is FixedWidthInteger {
             if carry || significand > significandMask {
                 exponent += 1
                 if exponent > Self.greatestFiniteMagnitude.exponent {
-                    return (if Source.isSigned && source < 0 then -.infinity else .infinity, false)
+                    return (if Source.isSigned && source < 0 then -Self.infinity else Self.infinity, false)
                 }
             }
         }
@@ -697,12 +713,14 @@ extend BinaryFloatingPoint where Self.RawSignificand is FixedWidthInteger {
             sign: if Source.isSigned && source < 0 then .minus else .plus,
             exponentBitPattern: exponentBias + RawExponent(exponent),
             significandBitPattern: significand
-        ), fraction == 0)
+        ), fraction == 0)*/
+        unimplemented!()
     }
 
     /// \inherit
     default init<Source: BinaryInteger>(_ value: Source) {
-        self = Self._convert(from: value).value
+        let (value_, exact) = Self._convert(from: value)
+        self = value_
     }
     
     /// \inherit
@@ -710,6 +728,56 @@ extend BinaryFloatingPoint where Self.RawSignificand is FixedWidthInteger {
         let (value_, exact) = Self._convert(from: value)
         if !exact { return none }
         self = value_
+    }
+}
+
+extend BinaryFloatingPoint with StringRepresentable {
+    def toString(precision: Int, padWithZero: Bool = true) -> String {
+        var fp = self
+        var s = ""
+
+        if fp < 0.0 {
+            s += '-'
+            fp = -fp
+        }
+
+        var i = Int(fp * ((10.0 as Self) ** precision))
+        var neededDigits = 0
+        var _i = i
+
+        loop {
+            neededDigits += 1
+            _i /= 10
+
+            if _i == 0 {
+                break
+            }
+        }
+
+        var power = neededDigits - 1
+        loop {
+            if power == precision - 1 {
+                s += '.'
+            }
+
+            var exp = 10 ** power
+            var fits = i / exp
+
+            s += Character(ascii: UInt8(fits) + '0')
+            i -= exp * fits
+
+            if power == 0 || (i <= 0 && !padWithZero) {
+                break
+            }
+
+            power -= 1
+        }
+
+        return s
+    }
+
+    default def toString() -> String {
+        return toString(precision: 2)
     }
 }
 
@@ -848,21 +916,34 @@ macro fp_type {
             }
         }
 
+        extend $Self with _AtomicProtocol {
+            /// \inherit
+            alias _AtomicType = builtin.$BuiltinType
+
+            /// \inherit
+            prop _atomicValue: _AtomicType { return value }
+
+            /// \inherit
+            init (_atomicValue value: _AtomicType) {
+                self.init(value)
+            }
+        }
+
         extend $Self with BinaryFloatingPoint {
             /// \inherit
-            associatedType Magnitude = Self
+            alias Magnitude = Self
 
             /// \inherit
-            associatedType Exponent = Int
+            alias Exponent = Int
 
             /// \inherit
-            associatedType RawExponent = UInt
+            alias RawExponent = UInt
 
             /// \inherit
-            associatedType RawSignificand = ${UInt $SignificandSize}
+            alias RawSignificand = ${UInt $SignificandSize};
 
             /// Unsigned integer type with the same number of bits.
-            internal alias BitPatternType = ${UInt $Bits}
+            internal alias BitPatternType = ${UInt $Bits};
 
             /// \inherit
             static prop exponentBitCount: Int {
@@ -872,23 +953,23 @@ macro fp_type {
             /// \inherit
             static prop significandBitCount: Int {
                 return $SignificandBitCount
-            } 
+            }
 
             //  Implementation details.
             internal static prop _infinityExponent: UInt {
-                return 1 &<< UInt(exponentBitCount) - 1
+                return UInt(1) &<< UInt(exponentBitCount) - UInt(1)
             }
 
             internal static prop _exponentBias: UInt {
-                return _infinityExponent &>> 1
+                return _infinityExponent &>> UInt(1)
             }
 
             internal static prop _significandMask: RawSignificand {
-                return 1 &<< RawSignificand(significandBitCount) - 1
+                return RawSignificand(1) &<< RawSignificand(significandBitCount) - RawSignificand(1)
             }
 
             internal static prop _quietNaNMask: RawSignificand {
-                return 1 &<< RawSignificand(significandBitCount - 1)
+                return RawSignificand(1) &<< (RawSignificand(significandBitCount) - RawSignificand(1))
             }
 
             /// \inherit
@@ -898,7 +979,7 @@ macro fp_type {
 
             /// \inherit
             init (bitPattern: BitPatternType) {
-                self.value = _builtinNumericCast(bitPattern)
+                self.value = _builtinNumericCast(bitPattern.value)
             }
 
             /// \inherit
@@ -946,7 +1027,7 @@ macro fp_type {
             constants!{ $Bits }
 
             /// \inherit
-            prop signalingNaN: Self {
+            static prop signalingNaN: Self {
                 return Self(nan: 0, signaling: true)
             }
 
@@ -958,11 +1039,11 @@ macro fp_type {
 
                 if likely(isNormal) {
                     let bitPattern_ = bitPattern & ${Self}.infinity.bitPattern
-                    return Self(bitPattern: bitPattern_) * 0x1p - SignificandBitCount
+                    return Self(bitPattern: bitPattern_) * 0x1p - $SignificandBitCount
                 }
 
                 // On arm, flush subnormal values to 0.
-                return .leastNormalMagnitude * 0x1p - SignificandBitCount
+                return Self.leastNormalMagnitude * 0x1p - $SignificandBitCount
             }
 
             prop exponent: Int {
@@ -1115,9 +1196,8 @@ macro fp_type {
             }
 
             /// \inherit
-            def mutating infix **=(rhs: UInt) {
-                value = builtin.${powi_ $BuiltinType}(value,
-                             builtin.signcast(builtin.trunc_u64_u32(rhs.value)))
+            def mutating infix **=(rhs: Int) {
+                value = builtin.${powi_ $BuiltinType}(value, builtin.trunc_i64_i32(rhs.value))
             }
 
             /// \inherit
@@ -1129,7 +1209,7 @@ macro fp_type {
 
             /// \inherit
             def mutating formRemainder(dividingBy other: Self) {
-                value = value % other.value
+                value = builtin.${frem_ $BuiltinType}(value, other.value)
             }
 
             /// \inherit
@@ -1213,7 +1293,7 @@ macro fp_type {
                 // For subnormals, we isolate the leading significand bit.
                 let index = significandBitPattern._binaryLogarithm()
                 return Self(sign: sign, exponentBitPattern: 0,
-                            significandBitPattern: 1 &<< index)
+                            significandBitPattern: RawSignificand(1 &<< index))
             }
 
             /// \inherit
@@ -1233,7 +1313,7 @@ macro fp_type {
 
         extend $Self with ExpressibleByFloatingPointLiteral {
             /// \inherit
-            associatedType FloatingPointType = Self
+            alias FloatingPointType = Self
 
             /// \inherit
             init (floatingPointLiteral value: Self) {
@@ -1243,7 +1323,7 @@ macro fp_type {
 
         extend $Self with ExpressibleByIntegerLiteral {
             /// \inherit
-            associatedType IntegerType = Int64
+            alias IntegerType = Int64
 
             /// \inherit
             init (integerLiteral value: Int64) {
@@ -1258,9 +1338,9 @@ macro fp_type {
             }
 
             /// \inherit
-            init <Source: BinaryInteger>(_ value: Source) {
+            init <Source: FixedWidthInteger>(_ value: Source) {
                 // FIXME wordBits
-                if value.bitWidth <= 64 {
+                if Source.bitWidth <= 64 {
                     if Source.isSigned {
                         let asInt = Int(truncatingIfNeeded: value)
                         self.value = builtin.${itofp_i64_f $Bits}(asInt.value)
@@ -1269,7 +1349,8 @@ macro fp_type {
                         self.value = builtin.${itofp_u64_f $Bits}(asUInt.value)
                     }
                 } else {
-                    self = Self._convert(from: value).value
+                    let (value_, exact) = Self._convert(from: value)
+                    self = value_
                 }
             }
         }

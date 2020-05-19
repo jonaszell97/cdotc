@@ -1,18 +1,16 @@
-//
-// Created by Jonas Zell on 24.08.18.
-//
+#include "cdotc/Query/Query.h"
 
-#include "Query.h"
-
-#include "AST/Decl.h"
-#include "Basic/NestedNameSpecifier.h"
-#include "ILGen/ILGenPass.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Parse/Parser.h"
-#include "QueryContext.h"
-#include "Sema/SemaPass.h"
-#include "Support/Log.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Basic/NestedNameSpecifier.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Parse/Parser.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
+#include "cdotc/Support/Log.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -23,8 +21,8 @@ using namespace cdot::support;
 QueryResult GetDefaultTemplateArgQuery::run()
 {
    if (P->isVariadic()) {
-      return finish(TemplateArgument(P, P->isTypeName(), {},
-                                     P->getSourceLoc()));
+      return finish(
+          TemplateArgument(P, P->isTypeName(), {}, P->getSourceLoc()));
    }
    if (P->isTypeName()) {
       return finish(TemplateArgument(P, QC.Sema->Context.getTemplateArgType(P),
@@ -36,22 +34,21 @@ QueryResult GetDefaultTemplateArgQuery::run()
 
 QueryResult CreateSelfArgumentQuery::run()
 {
-   auto &Context = QC.CI.getContext();
-   auto *SelfII = &Context.getIdentifiers().get("self");
-   auto *Arg = FuncArgDecl::Create(Context, SelfLoc, SelfLoc,
-                                   DeclarationName(SelfII),
-                                   nullptr, ArgumentConvention::Default,
-                                   SourceType(Self), nullptr,
-                                   false, false, /*isSelf=*/true);
+   auto& Context = QC.CI.getContext();
+   auto* SelfII = &Context.getIdentifiers().get("self");
+   auto* Arg = FuncArgDecl::Create(
+       Context, SelfLoc, SelfLoc, DeclarationName(SelfII), nullptr,
+       ArgumentConvention::Default, SourceType(Self), nullptr, false, false,
+       /*isSelf=*/true);
 
    return finish(Arg);
 }
 
 QueryResult FindPrecedenceGroupQuery::run()
 {
-   auto *DC = QC.CI.getCompilationModule()->getDecl();
+   auto* DC = QC.CI.getCompilationModule()->getDecl();
 
-   const MultiLevelLookupResult *LookupRes;
+   const MultiLevelLookupResult* LookupRes;
    if (QC.DirectLookup(LookupRes, DC, Name)) {
       return fail();
    }
@@ -65,7 +62,7 @@ QueryResult FindPrecedenceGroupQuery::run()
       return finish(nullptr);
    }
 
-   auto *PG = dyn_cast<PrecedenceGroupDecl>(LookupRes->front().front());
+   auto* PG = dyn_cast<PrecedenceGroupDecl>(LookupRes->front().front());
    if (!PG) {
       return finish(nullptr);
    }
@@ -79,9 +76,9 @@ QueryResult FindPrecedenceGroupQuery::run()
 
 QueryResult FindOperatorQuery::run()
 {
-   auto *DC = QC.CI.getCompilationModule()->getDecl();
+   auto* DC = QC.CI.getCompilationModule()->getDecl();
 
-   const MultiLevelLookupResult *LookupRes;
+   const MultiLevelLookupResult* LookupRes;
    if (QC.DirectLookup(LookupRes, DC, Name)) {
       return fail();
    }
@@ -94,27 +91,26 @@ QueryResult FindOperatorQuery::run()
       return fail();
    }
 
-   auto *Op = cast<OperatorDecl>(LookupRes->front().front());
+   auto* Op = cast<OperatorDecl>(LookupRes->front().front());
    if (auto II = Op->getPrecedenceGroupIdent()) {
-      PrecedenceGroupDecl *PG;
+      PrecedenceGroupDecl* PG;
       if (QC.FindPrecedenceGroup(PG, II)) {
          return fail();
       }
 
       if (!PG) {
          QC.Sema->diagnose(Op, err_precedence_group_does_not_exist,
-                         Op->getSourceLoc(), II->getIdentifier());
+                           Op->getSourceLoc(), II->getIdentifier());
       }
       else {
          Op->setPrecedenceGroup(PG);
       }
 
-      if (Op->getDeclName().getDeclaredOperatorName()
-            .getKind() == DeclarationName::InfixOperatorName) {
-         QC.Sema->Context.setInfixOperatorPrecedence(Op->getDeclName()
-                                                     .getDeclaredOperatorName()
-                                                     .getInfixOperatorName(),
-                                                   PG);
+      if (Op->getDeclName().getDeclaredOperatorName().getKind()
+          == DeclarationName::InfixOperatorName) {
+         QC.Sema->Context.setInfixOperatorPrecedence(
+             Op->getDeclName().getDeclaredOperatorName().getInfixOperatorName(),
+             PG);
       }
    }
 
@@ -128,42 +124,12 @@ QueryResult FindOperatorQuery::run()
 QueryResult ExpandMacrosQuery::run()
 {
    llvm_unreachable("needed?");
-//   // Get the raw AST.
-//   ast::SourceFileDecl *Mod;
-//   if (QC.ParseSourceFile(Mod, SourceFile)) {
-//      return fail();
-//   }
-//
-//   // Iteratively expand all macro declarations.
-//   std::queue<DeclContext*> ContextsToVisit;
-//   ContextsToVisit.push(Mod);
-//
-//   while (!ContextsToVisit.empty()) {
-//      auto *DC = ContextsToVisit.front();
-//      ContextsToVisit.pop();
-//
-//      for (auto *Decl : DC->getDecls()) {
-//         if (auto *InnerDC = dyn_cast<DeclContext>(Decl)) {
-//            ContextsToVisit.push(InnerDC);
-//         }
-//         else if (auto *MD = dyn_cast<MacroExpansionDecl>(Decl)) {
-//            ast::Decl *Expansion;
-//            if (QC.ExpandMacroDecl(Expansion, MD)) {
-//               return fail();
-//            }
-//
-//            // Expansion will be visited as part of the for loop.
-//         }
-//      }
-//   }
-//
-//   return finish();
 }
 
 QueryResult ExpandMacroQuery::run()
 {
-   NamedDecl *LookupRes;
-   if (QC.LookupSingle(LookupRes, DC, Name, LookupOpts::None)) {
+   NamedDecl* LookupRes;
+   if (QC.LookupSingle(LookupRes, DC, Name, LookupOpts::Restricted)) {
       return fail();
    }
 
@@ -171,29 +137,33 @@ QueryResult ExpandMacroQuery::run()
    parse::ParseResult Result;
 
    if (!Macro) {
-      QC.Sema->diagnoseMemberNotFound(DC, SOD, Name,
-                                      err_macro_does_not_exist);
-
+      QC.Sema->diagnoseMemberNotFound(DC, SOD, Name, err_macro_does_not_exist);
       return fail();
    }
    else if (Delim != Macro->getDelim()) {
       llvm::StringRef ExpectedDelim;
       switch (Macro->getDelim()) {
-      case MacroDecl::Paren: ExpectedDelim = "()"; break;
-      case MacroDecl::Brace: ExpectedDelim = "{}"; break;
-      case MacroDecl::Square: ExpectedDelim = "[]"; break;
+      case MacroDecl::Paren:
+         ExpectedDelim = "()";
+         break;
+      case MacroDecl::Brace:
+         ExpectedDelim = "{}";
+         break;
+      case MacroDecl::Square:
+         ExpectedDelim = "[]";
+         break;
       }
 
       QC.Sema->diagnose(SOD, err_macro_expects_delim, SOD.getSourceRange(),
-                      Name, ExpectedDelim);
+                        Name, ExpectedDelim);
    }
 
    if (Macro) {
       LOG(MacroExpansions, "expanding macro ", Name);
 
       Result = parse::Parser::expandMacro(
-         sema(), Macro, SOD, Tokens,
-         (parse::Parser::ExpansionKind) ExpectedKind);
+          sema(), Macro, SOD, Tokens,
+          (parse::Parser::ExpansionKind)ExpectedKind);
    }
 
    if (Result.holdsDecl()) {
@@ -217,8 +187,8 @@ QueryResult ExpandMacroDeclQuery::run()
    if (!QC.Sema->checkNamespaceRef(Decl))
       return fail();
 
-   DeclContext *Ctx = Decl->getDeclContext();
-   if (auto *Ident = cast_or_null<IdentifierRefExpr>(Decl->getParentExpr())) {
+   DeclContext* Ctx = Decl->getDeclContext();
+   if (auto* Ident = cast_or_null<IdentifierRefExpr>(Decl->getParentExpr())) {
       if (Ident->getKind() == IdentifierKind::Namespace) {
          Ctx = Ident->getNamespaceDecl();
       }
@@ -244,80 +214,11 @@ QueryResult ExpandMacroDeclQuery::run()
    return finish(Result.getDecl());
 }
 
-QueryResult ResolveUsingQuery::run()
-{
-   finish();
-
-   const MultiLevelLookupResult *LookupRes;
-   if (QC.NestedNameLookup(LookupRes, U->getDeclContext(),
-                           U->getNestedImportName(),
-                           DefaultLookupOpts | LookupOpts::IssueDiag,
-                           U->getSourceLoc())) {
-      return fail();
-   }
-
-   if (U->isWildcardImport()) {
-      if (LookupRes->size() != 1 || LookupRes->front().size() != 1) {
-         QC.Sema->diagnose(U, err_using_target_ambiguous, U->getSourceRange());
-
-         NamedDecl *Cand1 = LookupRes->front().front();
-         NamedDecl *Cand2;
-
-         if (LookupRes->size() == 1) {
-            Cand2 = LookupRes->front()[1];
-         }
-         else {
-            Cand2 = (*LookupRes)[1].front();
-         }
-
-         QC.Sema->diagnose(note_candidate_here, Cand1->getSourceLoc());
-         QC.Sema->diagnose(note_candidate_here, Cand2->getSourceLoc());
-
-         return finish(DoneWithError);
-      }
-
-      NamedDecl *Target = LookupRes->front().front();
-      if (!isa<DeclContext>(Target)) {
-         QC.Sema->diagnose(U, err_cannot_lookup_member_in,
-                         Target->getSpecifierForDiagnostic(),
-                         Target->getDeclName());
-
-         return finish(DoneWithError);
-      }
-
-      if (auto *I = dyn_cast<ImportDecl>(Target)) {
-         Target = I->getImportedModule()->getDecl();
-      }
-
-      LOG(UsingStatements, "made ", Target->getFullName(), " visible in ",
-          U->getDeclContext()->getNameAsString());
-
-      QC.Sema->makeDeclsAvailableIn(*U->getDeclContext(),
-                                    *cast<DeclContext>(Target));
-   }
-   else {
-      for (NamedDecl *ND : LookupRes->allDecls()) {
-         LOG(UsingStatements, "made ", ND->getFullName(), " visible in ",
-             U->getDeclContext()->getNameAsString());
-
-         QC.Sema->makeDeclAvailable(*U->getDeclContext(), ND);
-
-         if (FoundDecls) {
-            FoundDecls->push_back(ND);
-         }
-      }
-   }
-
-   return finish();
-}
-
 QueryResult ResolveImportQuery::run()
 {
-   finish();
-
    QC.CI.getModuleMgr().ImportModule(I);
 
-   auto *Mod = I->getImportedModule();
+   auto* Mod = I->getImportedModule();
    if (!Mod)
       return fail();
 
@@ -330,33 +231,41 @@ QueryResult ResolveImportQuery::run()
    }
 
    if (I->getNamedImports().empty()) {
-      LOG(ImportStatements, "imported ", Mod->getFullName(),
-          " into ", I->getDeclContext()->getNameAsString());
+      LOG(ImportStatements, "imported ", Mod->getFullName(), " into ",
+          I->getDeclContext()->getNameAsString());
 
       I->addImportedModule(Mod);
       return finish();
    }
 
    bool Valid = true;
-   for (auto &Name : I->getNamedImports()) {
-      const SingleLevelLookupResult *LookupRes;
+   for (auto& Name : I->getNamedImports()) {
+      if (Name.isStr("self")) {
+         I->setName(Mod->getName());
+         I->addImportedModule(Mod);
+         QC.Sema->makeDeclAvailable(*I->getDeclContext(), I, false, true);
+
+         continue;
+      }
+
+      const SingleLevelLookupResult* LookupRes;
       if (QC.LookupFirst(LookupRes, Mod->getDecl(), Name)) {
          return fail();
       }
 
       if (LookupRes->empty()) {
-         QC.Sema->diagnose(I, err_member_not_found, /*module*/ 9, Mod->getName(),
-                         Name, I->getSourceRange());
+         QC.Sema->diagnose(I, err_member_not_found, Decl::ModuleDeclID,
+                           Mod->getName(), Name, I->getSourceRange());
 
          Valid = false;
          continue;
       }
 
-      for (NamedDecl *ND : *LookupRes) {
-         LOG(ImportStatements, "imported ", ND->getFullName(),
-             " into ", I->getDeclContext()->getNameAsString());
+      for (NamedDecl* ND : *LookupRes) {
+         LOG(ImportStatements, "imported ", ND->getFullName(), " into ",
+             I->getDeclContext()->getNameAsString());
 
-         QC.Sema->makeDeclAvailable(*I->getDeclContext(), ND);
+         QC.Sema->makeDeclAvailable(*I->getDeclContext(), ND, false, true);
 
          if (FoundDecls) {
             FoundDecls->push_back(ND);
@@ -382,7 +291,7 @@ QueryResult ResolveStaticIfQuery::run()
    if (!BoolRes) {
       return fail();
    }
-   
+
    bool CondIsTrue = BoolRes.getValue();
    if (auto Template = Decl->getTemplate()) {
       if (Template->isInvalid()) {
@@ -401,16 +310,19 @@ QueryResult ResolveStaticIfQuery::run()
          }
       }
 
-      ast::Decl *Inst;
+      ast::Decl* Inst;
       if (CondIsTrue) {
-         if (auto Err = QC.InstantiateDecl(Inst, Template->getIfDecl(),
-                                           TemplateArgs)) {
-            return Query::finish(Err);
+         Inst = QC.Sema->getInstantiator().InstantiateDecl(Template->getIfDecl(), &TemplateArgs,
+                                                           Template->getSourceLoc());
+         if (!Inst) {
+            return fail();
          }
       }
       else if (auto Else = Template->getElseDecl()) {
-         if (auto Err = QC.InstantiateDecl(Inst, Else, TemplateArgs)) {
-            return Query::finish(Err);
+         Inst = QC.Sema->getInstantiator().InstantiateDecl(Else, &TemplateArgs,
+                                                           Template->getSourceLoc());
+         if (!Inst) {
+            return fail();
          }
       }
       else {
@@ -424,11 +336,11 @@ QueryResult ResolveStaticIfQuery::run()
       return finish(Inst);
    }
 
-   ast::Decl *D;
+   ast::Decl* D;
    if (CondIsTrue) {
       D = Decl->getIfDecl();
    }
-   else if (auto *Else = Decl->getElseDecl()) {
+   else if (auto* Else = Decl->getElseDecl()) {
       D = Else;
    }
    else {
@@ -444,6 +356,15 @@ QueryResult ResolveStaticIfQuery::run()
 
 QueryResult ResolveStaticForQuery::run()
 {
+   if (Decl->isVariadic()) {
+      auto result = QC.Sema->visitVariadicForDecl(Decl);
+      if (!result) {
+         return fail();
+      }
+
+      return finish(result.get());
+   }
+
    llvm_unreachable("TODO!");
 }
 
@@ -497,104 +418,6 @@ QueryResult ResolveStaticPrintQuery::run()
    return finish();
 }
 
-QueryResult GetReferencedAssociatedTypesQuery::run()
-{
-   const IdentifierInfo *LookupIdent;
-   auto NestedName = C->getNameQualifier();
-
-   if (NestedName.front()->isStr("Self")) {
-      if (NestedName.size() == 1) {
-         LookupIdent = NestedName[0];
-      }
-      else {
-         LookupIdent = NestedName[1];
-      }
-   }
-   else {
-      LookupIdent = NestedName[0];
-   }
-
-   // Make sure extensions are resolved.
-   if (QC.PrepareNameLookup(cast<DeclContext>(ConstrainedDecl))) {
-      return fail();
-   }
-
-   auto *DC = cast<DeclContext>(ConstrainedDecl)->lookThroughExtension();
-   const MultiLevelLookupResult *LookupRes;
-
-   if (QC.DirectLookup(LookupRes, DC, LookupIdent, false)) {
-      return fail();
-   }
-
-   if (LookupRes->empty()) {
-      QC.Sema->diagnoseMemberNotFound(DC, ConstrainedDecl, LookupIdent);
-      return fail();
-   }
-   if (LookupRes->size() != 1 || LookupRes->front().size() != 1) {
-      QC.Sema->diagnose(err_ambiguous_reference, LookupIdent);
-
-      for (auto *D : LookupRes->allDecls()) {
-         QC.Sema->diagnose(note_candidate_here, D->getSourceLoc());
-      }
-
-      return fail();
-   }
-
-   auto *Decl = LookupRes->front().front();
-   if (auto *AT = dyn_cast<AssociatedTypeDecl>(Decl)) {
-      return finish({AT});
-   }
-
-   if (isa<TemplateParamDecl>(Decl)) {
-      return finish({}, Done);
-   }
-
-   QC.Sema->diagnose(ConstrainedDecl, err_cannot_be_referenced_in_constraint,
-                   Decl->getSpecifierForDiagnostic(),
-                   Decl->getDeclName(), C->getSourceRange());
-
-   return fail();
-}
-
-QueryResult ReferencedAssociatedTypesReadyQuery::run()
-{
-   RecordDecl *Rec = T->getRecord();
-   DeclContext *Ctx = Rec->lookThroughExtension();
-
-   ArrayRef<ExtensionDecl*> Extensions;
-   if (auto *R = dyn_cast<RecordDecl>(Ctx)) {
-      Extensions = QC.Sema->Context.getExtensions(T);
-   }
-
-   ResultKind RK = Ready;
-
-   auto Constraints = QC.CI.getContext().getExtConstraints(ConstrainedDecl);
-   for (DeclConstraint *C : Constraints) {
-      ArrayRef<AssociatedTypeDecl*> ReferencedATs;
-      if (QC.GetReferencedAssociatedTypes(ReferencedATs, ConstrainedDecl, C)) {
-         return fail();
-      }
-
-      for (auto *AT : ReferencedATs) {
-         // Check if the associated type is already visible.
-         AssociatedTypeDecl *ATImpl;
-         if (QC.GetAssociatedType(ATImpl, Rec, AT->getDeclName(), Extensions)) {
-            return fail();
-         }
-
-         if (!ATImpl) {
-            return finish(NotReady);
-         }
-
-         if (ATImpl->isSelf()) {
-            RK = ReferencesSelf;
-         }
-      }
-   }
-
-   return finish(RK);
-}
-
 QueryResult CheckProtocolExtensionApplicabilityQuery::run()
 {
    using ReadyKind = ReferencedAssociatedTypesReadyQuery::ResultKind;
@@ -603,27 +426,37 @@ QueryResult CheckProtocolExtensionApplicabilityQuery::run()
       return fail();
    }
 
-   auto Constraints = QC.CI.getContext().getExtConstraints(Ext);
-   if (Constraints.empty()) {
-      LOG(ExtensionApplicability, "extension @", Ext->getSourceLocAsString(),
-          " applies to ", T.toDiagString());
+   ConstraintSet* Constraints;
+   if (QC.VerifyConstraints(Constraints, Ext)) {
+      return fail();
+   }
+
+   if (!Constraints || Constraints->empty()) {
+      LOG(ExtensionApplicability, "extension [", Ext->getFullSourceLoc(),
+          "] applies to ", T.toDiagString());
 
       return finish(DoesApply);
    }
 
    ReadyKind IsReady;
-   if (QC.ReferencedAssociatedTypesReady(IsReady, T, Ext)) {
+   if (QC.ReferencedAssociatedTypesReady(IsReady, T, Constraints)) {
       return fail();
    }
 
    if (IsReady == ReadyKind::NotReady) {
+      LOG(ExtensionApplicability, "extension [", Ext->getFullSourceLoc(),
+          "] might apply to ", T.toDiagString(), " (constraints not ready)");
+
       return finish(CantTell);
    }
 
    bool AllSatisfied;
-   for (auto *C : Constraints) {
-      if (auto Err = QC.IsConstraintSatisfied(AllSatisfied, C, T, Ext)) {
+   for (auto* C : *Constraints) {
+      if (auto Err = QC.IsConstraintSatisfied(AllSatisfied, C, T->getRecord(), Ext)) {
          if (Err.isDependent()) {
+            LOG(ExtensionApplicability, "extension [", Ext->getFullSourceLoc(),
+                "] might apply to ", T.toDiagString(), " (dependent)");
+
             return finish(CantTell);
          }
 
@@ -631,226 +464,218 @@ QueryResult CheckProtocolExtensionApplicabilityQuery::run()
       }
 
       if (!AllSatisfied) {
-         LOG(ExtensionApplicability, "extension @", Ext->getSourceLocAsString(),
-             " does not apply to ", T.toDiagString());
+         LOG(ExtensionApplicability, "extension [", Ext->getFullSourceLoc(),
+             "] does not apply to ", T.toDiagString());
 
          return finish(DoesNotApply);
       }
    }
 
-   LOG(ExtensionApplicability, "extension @", Ext->getSourceLocAsString(),
-       " applies to ", T.toDiagString());
+   LOG(ExtensionApplicability, "extension [", Ext->getFullSourceLoc(),
+       "] applies to ", T.toDiagString());
 
    return finish(DoesApply);
 }
 
-static DeclContextLookupResult
-getAssociatedTypeOrTemplateParamImpl(QueryContext &QC,
-                                     DeclContext *DC,
-                                     DeclarationName Name) {
-   auto *AT = DC->lookupSingle<AssociatedTypeDecl>(Name);
-   if (AT && !AT->isImplementation()) {
-      return AT;
+static NamedDecl*
+findInUnconditionalConformances(QueryContext& QC, CanType Self,
+                                ProtocolDecl* proto, IdentifierInfo* name,
+                                SmallPtrSetImpl<ProtocolDecl*>& testSet);
+
+static NamedDecl* findInUnconditionalConformances(
+    QueryContext& QC, QualType Self, MutableArrayRef<SourceType> conformanceTypes,
+    IdentifierInfo* name, SmallPtrSetImpl<ProtocolDecl*>& testSet)
+{
+   ArrayRef<ProtocolDecl*> protocols;
+   if (QC.ResolveConformancesToProtocols(protocols, Self, conformanceTypes)) {
+      return nullptr;
    }
 
-   auto *Param = DC->lookupSingle<TemplateParamDecl>(Name);
-   if (Param) {
-      return Param;
-   }
-
-   auto *R = dyn_cast<RecordDecl>(DC);
-   if (!R) {
-      return DeclContextLookupResult();
-   }
-
-   for (auto *Ext : R->getExtensions()) {
-      auto *AT = Ext->lookupSingle<AssociatedTypeDecl>(Name);
-      if (AT && !AT->isImplementation()) {
-         return AT;
+   for (auto* conformance : protocols) {
+      auto* result = conformance->lookupSingle(name);
+      if (result) {
+         return result;
       }
 
-      auto *Param = Ext->lookupSingle<TemplateParamDecl>(Name);
-      if (Param) {
-         return Param;
+      if ((result = findInUnconditionalConformances(QC, Self, conformance, name,
+                                                    testSet))) {
+         return result;
       }
    }
 
-   auto *P = dyn_cast<ProtocolDecl>(R);
-   if (!P) {
-      return DeclContextLookupResult();
-   }
-
-   // Make sure unconditional conformances are declared.
-   if (QC.ResolveExplicitConformances(QC.Context.getRecordType(P))) {
-      return DeclContextLookupResult();
-   }
-
-   // If this is a protocol, look in conformances.
-   auto Conformances = QC.Context.getConformanceTable().getAllConformances(R);
-   for (auto *Conf : Conformances) {
-      auto *AT = Conf->getProto()->lookupSingle<AssociatedTypeDecl>(Name);
-      if (AT && !AT->isImplementation()) {
-         return AT;
-      }
-
-      auto *Param = Conf->getProto()->lookupSingle<TemplateParamDecl>(Name);
-      if (Param) {
-         return Param;
-      }
-   }
-
-   return DeclContextLookupResult();
+   return nullptr;
 }
 
-static DeclContextLookupResult
-getAssociatedTypeOrTemplateParamImpl(QueryContext &QC,
-                                     QualType T,
-                                     DeclarationName Name) {
-   if (QualType RT = T->asRecordType()) {
-      return getAssociatedTypeOrTemplateParamImpl(QC, RT->getRecord(), Name);
+static NamedDecl*
+findInUnconditionalConformances(QueryContext& QC, CanType Self,
+                                ProtocolDecl* proto, IdentifierInfo* name,
+                                SmallPtrSetImpl<ProtocolDecl*>& testSet)
+{
+   if (!testSet.insert(proto).second) {
+      return nullptr;
    }
 
-   if (auto *Ext = T->asExistentialType()) {
+   if (auto* result = findInUnconditionalConformances(
+           QC, Self, proto->getConformanceTypes(), name, testSet)) {
+      return result;
+   }
+
+   if (QC.FindExtensions(Self)) {
+      return nullptr;
+   }
+
+   auto extensions = QC.Context.getExtensions(Self);
+   for (auto* ext : extensions) {
+      if (!QC.Context.getParsedConstraints(ext).empty()) {
+         continue;
+      }
+
+      if (auto* result = findInUnconditionalConformances(
+              QC, Self, ext->getConformanceTypes(), name, testSet)) {
+         return result;
+      }
+   }
+
+   return nullptr;
+}
+
+static NamedDecl* findInUnconditionalConformances(QueryContext& QC,
+                                                  ProtocolDecl* proto,
+                                                  IdentifierInfo* name)
+{
+   SmallPtrSet<ProtocolDecl*, 4> testSet;
+   QualType Self = QC.Context.getRecordType(proto);
+
+   return findInUnconditionalConformances(QC, Self, proto, name, testSet);
+}
+
+static NamedDecl* findReferencedDecl(QueryContext& QC,
+                                     DeclContext* constrainedDecl,
+                                     IdentifierInfo* name,
+                                     NamedDecl* originalDecl)
+{
+   if (!constrainedDecl) {
+      return nullptr;
+   }
+
+   if (auto* ext = dyn_cast<ExtensionDecl>(constrainedDecl)) {
+      auto* R = ext->getExtendedRecord();
+      if (auto* proto = R->dyn_cast<ProtocolDecl>()) {
+         return findReferencedDecl(QC, proto, name, originalDecl);
+      }
+      else {
+         // If this extension is not of a protocol, the constrained decl must be
+         // a template parameter.
+         return R->lookupSingle(name);
+      }
+   }
+   else if (auto* AT = dyn_cast<AssociatedTypeDecl>(constrainedDecl)) {
+      return findReferencedDecl(QC, AT->getRecord(), name, originalDecl);
+   }
+   else if (auto* proto = dyn_cast<ProtocolDecl>(constrainedDecl)) {
+      // The referenced decl must be a template parameter or an
+      // associated type.
+      auto* result = proto->lookupSingle(name);
+      if (result) {
+         return result;
+      }
+
+      // Only look in unconditional conformances.
+      // Note: We need to manually find the conformances here because they may
+      // not be registered yet.
+      return findInUnconditionalConformances(QC, proto, name);
+   }
+
+   auto* result = constrainedDecl->lookupSingle(name);
+   if (result) {
+      return result;
+   }
+
+   return findReferencedDecl(QC, constrainedDecl->getParentCtx(), name,
+                             originalDecl);
+}
+
+static NamedDecl* findReferencedDecl(QueryContext& QC, CanType T,
+                                     IdentifierInfo* name,
+                                     NamedDecl* originalDecl)
+{
+   if (QualType RT = T->asRecordType()) {
+      return findReferencedDecl(QC, RT->getRecord(), name, originalDecl);
+   }
+   if (auto* Ext = T->asExistentialType()) {
       for (QualType ET : Ext->getExistentials()) {
-         auto Result = getAssociatedTypeOrTemplateParamImpl(QC, ET, Name);
-         if (!Result.empty()) {
+         auto Result = findReferencedDecl(QC, ET, name, originalDecl);
+         if (Result) {
             return Result;
          }
       }
    }
 
-   return DeclContextLookupResult();
+   return nullptr;
 }
 
 QueryResult VerifyConstraintQuery::run()
 {
-   DeclContext *CurCtx;
-   if (auto *DC = dyn_cast<DeclContext>(ConstrainedDecl)) {
-      CurCtx = DC->lookThroughExtension();
+   DeclContext* CurCtx;
+   if (auto* DC = dyn_cast<DeclContext>(ConstrainedDecl)) {
+      CurCtx = DC;
    }
    else {
-      CurCtx = ConstrainedDecl->getDeclContext()->lookThroughExtension();
+      CurCtx = ConstrainedDecl->getDeclContext();
    }
 
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, CurCtx);
-   if (C->getKind() == DeclConstraint::Concept) {
-      auto *ConceptRef = C->getConceptRefExpr();
-      ConceptRef->setAllowIncompleteTemplateArgs(true);
-
-      auto Result = QC.Sema->typecheckExpr(ConceptRef, {}, ConstrainedDecl);
-      if (!Result) {
-         return fail();
-      }
-
-      if (Result.get()->isDependent()) {
-         return finish(Dependent);
-      }
-
-      if (ConceptRef->getKind() != IdentifierKind::Alias) {
-         QC.Sema->diagnose(ConceptRef, err_cannot_be_used_as_concept,
-                         ConceptRef->getNamedDecl()->getSpecifierForDiagnostic(),
-                         ConceptRef->getNamedDecl()->getDeclName(),
-                         ConceptRef->getSourceRange());
-
-         return fail();
-      }
-
-      auto *Concept = ConceptRef->getAlias();
-      auto Params = Concept->getTemplateParams();
-
-      if (Params.size() != 1 || !Params[0]->isTypeName()) {
-         QC.Sema->diagnose(ConceptRef, err_not_a_valid_concept, 1,
-                         ConceptRef->getSourceRange());
-
-         return fail();
-      }
-   }
-   else if (!QC.Sema->visitSourceType(ConstrainedDecl, C->getType())) {
-      return fail();
-   }
-
-   ArrayRef<IdentifierInfo*> NameQual = C->getNameQualifier();
-   unsigned NameQualSize = (unsigned)NameQual.size();
-
-   bool Dependent = false;
-   AssociatedType *CurrAT = nullptr;
-   NestedNameSpecifier *Name = nullptr;
-   auto &Tbl = QC.Context.getDeclNameTable();
-
+   DeclContext* baseCtx = CurCtx;
+   QualType CurrentType;
    QualType LookupTy;
 
    unsigned i = 0;
-   for (auto *Ident : NameQual) {
-      DeclContextLookupResult Result;
+   ArrayRef<IdentifierInfo*> NameQual = C->NameQual;
 
+   for (auto* Ident : NameQual) {
+      NamedDecl* Result;
       if (i == 0) {
-         Result = getAssociatedTypeOrTemplateParamImpl(QC, CurCtx, Ident);
+         Result = findReferencedDecl(QC, CurCtx, Ident, ConstrainedDecl);
       }
       else {
-         Result = getAssociatedTypeOrTemplateParamImpl(QC, LookupTy, Ident);
+         Result = findReferencedDecl(QC, LookupTy, Ident, ConstrainedDecl);
       }
 
       if (!Result) {
          if (i == 0) {
             QC.Sema->diagnose(ConstrainedDecl, err_member_not_found,
-                              cast<NamedDecl>(
-                                 CurCtx)->getSpecifierForDiagnostic(),
+                              cast<NamedDecl>(CurCtx),
                               cast<NamedDecl>(CurCtx)->getDeclName(),
-                              Ident->getIdentifier(), C->getSourceRange());
+                              Ident->getIdentifier(), false, C->SR);
          }
          else {
-            QC.Sema->diagnose(ConstrainedDecl, err_generic_error,
-                              LookupTy.toDiagString()
-                                 + " does not have a member named "
-                                 + Ident->getIdentifier().str(),
-                              C->getSourceRange());
+            QC.Sema->diagnose(ConstrainedDecl, err_member_not_found,
+                              LookupTy.toDiagString(), Ident->getIdentifier(),
+                              false ,C->SR);
          }
 
          return fail();
       }
 
-      if (Result.size() != 1) {
-         QC.Sema->diagnose(ConstrainedDecl, err_ambiguous_reference,
-                         Ident->getIdentifier(), C->getSourceRange());
-
-         for (auto *ND : Result) {
-            QC.Sema->diagnose(note_candidate_here, ND->getSourceLoc());
+      if (auto* AT = Result->dyn_cast<AssociatedTypeDecl>()) {
+         if (QC.PrepareDeclInterface(AT)) {
+            return fail();
          }
 
-         return fail();
-      }
-
-      if (auto *AT = dyn_cast<AssociatedTypeDecl>(Result.front())) {
-         if (auto Err = QC.PrepareDeclInterface(AT)) {
-            return Query::finish(Err);
-         }
-
-         CurrAT = QC.Context.getAssociatedType(AT, CurrAT);
-         Name = NestedNameSpecifier::Create(Tbl, AT, Name);
-
-         if (i == NameQualSize - 1) {
-            break;
-         }
-
+         CurrentType = QC.Context.getAssociatedType(AT, CurrentType);
          LookupTy = AT->getCovariance();
       }
-      else if (auto *P = dyn_cast<TemplateParamDecl>(Result.front())) {
-         if (i == NameQualSize - 1) {
-            C->setConstrainedType(QC.Context.getTemplateArgType(P));
-            return finish();
-         }
+      else if (auto* P = Result->dyn_cast<TemplateParamDecl>()) {
+         if (QC.PrepareTemplateParameters(cast<NamedDecl>(P->getDeclContext())))
+            return fail();
 
-         Dependent = true;
-         Name = NestedNameSpecifier::Create(Tbl, P, Name);
-
+         assert(i == 0 && "should only appear as the first part of the type!");
+         CurrentType = QC.Context.getTemplateArgType(P);
          LookupTy = P->getCovariance();
       }
       else {
          QC.Sema->diagnose(ConstrainedDecl,
-                          err_cannot_be_referenced_in_constraint,
-                          Result.front()->getSpecifierForDiagnostic(),
-                          Result.front()->getDeclName(),
-                          C->getSourceRange());
+                           err_cannot_be_referenced_in_constraint, Result,
+                           Result->getDeclName(), C->SR);
 
          return fail();
       }
@@ -858,88 +683,254 @@ QueryResult VerifyConstraintQuery::run()
       ++i;
    }
 
-   if (Dependent) {
-      while (i < NameQualSize) {
-         Name = NestedNameSpecifier::Create(Tbl, NameQual[i++], Name);
+   // Don't apply capabilities while verifying this constraint because it may
+   // lead to this query being called again.
+   SemaPass::DeclScopeRAII declScope(*QC.Sema, baseCtx);
+   SemaPass::DontApplyCapabilitiesRAII capabilitiesRaii(*QC.Sema);
+
+   AliasDecl* Concept = nullptr;
+   QualType Type;
+
+   switch (C->K) {
+   case DeclConstraint::Concept: {
+      auto* ConceptRef = cast<IdentifierRefExpr>(C->TypeOrConceptExpr);
+      ConceptRef->setAllowIncompleteTemplateArgs(true);
+      ConceptRef->setAllowOverloadRef(true);
+
+      auto semaRes = QC.Sema->visitIdentifierRefExpr(ConceptRef);
+      if (!semaRes) {
+         return fail();
       }
 
-      SmallVector<SourceRange, 2> Locs;
-      Locs.resize(NameQualSize);
+      auto* refExpr = semaRes.get();
 
-      auto *WithLoc = NestedNameSpecifierWithLoc::Create(Tbl, Name, Locs);
-      C->setConstrainedType(QC.Context.getDependentNameType(WithLoc));
+      NamedDecl* referencedDecl = nullptr;
+      if (auto* declRef = dyn_cast<DeclRefExpr>(refExpr)) {
+         referencedDecl = declRef->getDecl();
+      }
+      else if (auto* memberRef = dyn_cast<MemberRefExpr>(refExpr)) {
+         referencedDecl = memberRef->getMemberDecl();
+      }
+      else if (auto* overloadRef = dyn_cast<OverloadedDeclRefExpr>(refExpr)) {
+         referencedDecl = overloadRef->getOverloads().front();
+      }
+      else {
+         llvm_unreachable("should not happen!");
+      }
+
+      Concept = dyn_cast<AliasDecl>(referencedDecl);
+      if (!Concept) {
+         QC.Sema->diagnose(ConceptRef, err_cannot_be_used_as_concept,
+                           ConceptRef->getNamedDecl(),
+                           ConceptRef->getNamedDecl()->getDeclName(),
+                           ConceptRef->getSourceRange());
+
+         return fail();
+      }
+
+      auto Params = Concept->getTemplateParams();
+      if (Params.size() != 1 || !Params[0]->isTypeName()) {
+         QC.Sema->diagnose(ConceptRef, err_not_a_valid_concept, 1,
+                           ConceptRef->getSourceRange());
+
+         return fail();
+      }
+
+      break;
+   }
+   case DeclConstraint::TypePredicate:
+   case DeclConstraint::TypePredicateNegated:
+   case DeclConstraint::TypeEquality:
+   case DeclConstraint::TypeInequality: {
+      SourceType T(C->TypeOrConceptExpr);
+      if (!QC.Sema->visitSourceType(ConstrainedDecl, T)) {
+         return fail();
+      }
+
+      Type = T.getResolvedType();
+      break;
+   }
+   case DeclConstraint::Class:
+   case DeclConstraint::Enum:
+   case DeclConstraint::Struct:
+      break;
+   }
+
+   DeclConstraint* DC;
+   if (Concept) {
+      DC = DeclConstraint::Create(QC.Context, CurrentType, Concept);
    }
    else {
-      C->setConstrainedType(CurrAT);
+      DC = DeclConstraint::Create(QC.Context, C->K, CurrentType, Type);
    }
 
-   return finish();
+   return finish(DC);
+}
+
+QueryResult VerifyConstraintsQuery::run()
+{
+   if (ConstrainedDecl->isExternal()) {
+      return finish(QC.Context.getExtConstraints(ConstrainedDecl));
+   }
+
+   auto parsedConstraints = QC.Context.getParsedConstraints(ConstrainedDecl);
+   if (parsedConstraints.empty()) {
+      return finish(QC.Context.EmptyConstraintSet);
+   }
+
+   SmallVector<DeclConstraint*, 2> constraints;
+   for (auto& PC : parsedConstraints) {
+      DeclConstraint* DC;
+      if (QC.VerifyConstraint(DC, &PC, ConstrainedDecl)) {
+         return finish(QC.Context.EmptyConstraintSet);
+      }
+
+      constraints.push_back(DC);
+   }
+
+   auto* CS = ConstraintSet::Create(QC.Context, constraints);
+   QC.Context.setConstraints(ConstrainedDecl, CS);
+   QC.Context.updateConstraintLocs(ConstrainedDecl, parsedConstraints,
+                                   constraints);
+
+   return finish(CS);
+}
+
+QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT, CanType Self)
+{
+   return ResolveNestedAssociatedType(InnerAT, Self->getRecord());
+}
+
+QualType SemaPass::ResolveNestedAssociatedType(QualType InnerAT,
+                                               DeclContext *currentLookupCtx,
+                                               QualType currentLookupType,
+                                               FinalTemplateArgumentList *TemplateArgs)
+{
+   if (auto *R = dyn_cast_or_null<RecordDecl>(currentLookupCtx)) {
+      currentLookupType = R->getType();
+   }
+
+   QualType currentType = InnerAT;
+   SmallVector<NamedDecl*, 2> decls;
+
+   while (currentType) {
+      if (auto* AT = currentType->asAssociatedType()) {
+         decls.push_back(AT->getDecl());
+         currentType = AT->getOuterAT();
+      }
+      else {
+         decls.push_back(currentType->asTemplateParamType()->getParam());
+         break;
+      }
+   }
+
+   for (auto it = decls.rbegin(), end = decls.rend(); it != end; ++it) {
+      NamedDecl* declToFind = *it;
+
+      if (auto* param = dyn_cast<TemplateParamDecl>(declToFind)) {
+         if (!TemplateArgs) {
+            if (currentLookupType) {
+               TemplateArgs = &currentLookupType->getTemplateArgs();
+            }
+            else {
+               TemplateArgs
+                   = &cast<NamedDecl>(currentLookupCtx)->getTemplateArgs();
+            }
+         }
+
+         auto* impl = TemplateArgs->getArgForParam(param);
+         assert(impl && impl->isType()
+                && "protocol not correctly implemented!");
+
+         currentLookupType = impl->getType();
+         currentLookupCtx = nullptr;
+
+         continue;
+      }
+
+      const MultiLevelLookupResult* result;
+      if (QC.MultiLevelTypeLookup(result, currentLookupType,
+                                  declToFind->getDeclName())) {
+         return QualType();
+      }
+
+      auto* impl = result->front().front();
+      if (QC.PrepareDeclInterface(impl)) {
+         return QualType();
+      }
+
+      QualType nextType;
+      if (auto* AT = dyn_cast<AliasDecl>(impl)) {
+         nextType = AT->getAliasedType();
+      }
+      else {
+         nextType = cast<AssociatedTypeDecl>(impl)->getCovariance();
+      }
+
+      if (auto *DR = currentLookupType->asDependentRecordType()) {
+         if (QC.SubstTemplateParamTypes(nextType, nextType, DR->getTemplateArgs(), SourceRange())) {
+            return QualType();
+         }
+
+         if (QC.SubstAssociatedTypes(nextType, nextType, currentLookupType, SourceRange())) {
+            return QualType();
+         }
+      }
+
+      currentLookupType = nextType;
+   }
+
+   return currentLookupType;
 }
 
 QueryResult GetConstrainedTypeQuery::run()
 {
-   if (QueryResult Err = QC.VerifyConstraint(C, OriginalDecl)) {
-      return Query::finish(Err);
+   auto Ty = QC.Sema->ResolveNestedAssociatedType(
+       C->getConstrainedType(), cast<DeclContext>(ConcreteDecl), QualType(),
+       TemplateArgs);
+
+   if (!Ty) {
+      return fail();
    }
 
-   SourceRange SR = C->getSourceRange();
-   QualType ConstrainedType = C->getConstrainedType();
-
-   if (ConstrainedType->containsAssociatedType()) {
-      if (auto Err = QC.SubstAssociatedTypes(ConstrainedType, ConstrainedType,
-                                             Self, SR)) {
-         return Query::finish(Err);
-      }
-   }
-   if (ConstrainedType->containsTemplateParamType()
-         && Self->isRecordType()
-         && Self->getRecord()->isInstantiation()) {
-      if (auto Err = QC.SubstTemplateParamTypes(ConstrainedType, ConstrainedType,
-                                          Self->getRecord()->getTemplateArgs(),
-                                          SR)) {
-         return Query::finish(Err);
-      }
-   }
-
-   if (ConstrainedType->isDependentType()) {
-      return finish(ConstrainedType, Dependent);
-   }
-
-   return finish(ConstrainedType);
+   return finish(Ty);
 }
 
 QueryResult IsConstraintSatisfiedQuery::run()
 {
    QualType ConstrainedType;
-   if (auto Err = QC.GetConstrainedType(ConstrainedType, C, Self,
-                                        OriginalDecl)) {
+   if (auto Err = QC.GetConstrainedType(ConstrainedType, C, ConcreteDecl,
+                                        OriginalDecl, TemplateArgs)) {
       return Query::finish(Err);
    }
 
-   if (ConstrainedType->isDependentType()
-   || ConstrainedType->containsAssociatedType()) {
-      return finish(true, Dependent);
+   CanType Self;
+   if (auto *R = dyn_cast_or_null<RecordDecl>(ConcreteDecl)) {
+      Self = R->getType();
+   }
+   else if (auto *DC = dyn_cast<RecordDecl>(ConcreteDecl->getDeclContext()
+                                                        ->lookThroughExtension())) {
+      Self = DC->getType();
    }
 
-   auto *Rec = Self->getRecord();
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, Rec);
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, cast<DeclContext>(ConcreteDecl));
 
    CanType Canon = ConstrainedType->getCanonicalType();
-
    switch (C->getKind()) {
    case DeclConstraint::Concept: {
-      IdentifierRefExpr *ConceptRef = C->getConceptRefExpr();
-      AliasDecl *Concept = ConceptRef->getAlias();
+      AliasDecl* Concept = C->getConcept();
+      TemplateArgument Arg(
+          Concept->getTemplateParams().front(), Canon,
+          QC.Context.getConstraintLoc(OriginalDecl, C).getStart());
 
-      TemplateArgument Arg(Concept->getTemplateParams().front(),
-                           Canon, C->getSourceRange().getStart());
+      auto* FinalList
+          = sema::FinalTemplateArgumentList::Create(QC.Context, Arg);
 
-      auto *FinalList = sema::FinalTemplateArgumentList::Create(QC.Context,
-                                                                Arg);
+      AliasDecl* Inst = QC.Sema->getInstantiator().InstantiateAlias(
+         Concept, FinalList,
+         QC.Context.getConstraintLoc(OriginalDecl, C).getStart());
 
-      AliasDecl *Inst;
-      if (QC.InstantiateAlias(Inst, Concept, FinalList,
-                              C->getSourceRange().getStart())) {
+      if (!Inst) {
          return finish(true, DoneWithError);
       }
 
@@ -947,10 +938,16 @@ QueryResult IsConstraintSatisfiedQuery::run()
          return finish(true, DoneWithError);
       }
 
-      if (Inst->getAliasExpr()->getExprType() != QC.Context.getBoolTy()) {
-         QC.Sema->diagnose(Rec, err_concept_must_be_bool,
+      if (Inst->getType() != QC.Context.getBoolTy()
+      && !(Inst->getType()->isRecordType()
+            && Inst->getType()->getRecord() == QC.Sema->getBoolDecl())) {
+         QC.Sema->diagnose(ConcreteDecl, err_concept_must_be_bool,
                            Inst->getDeclName(), Inst->getSourceRange());
 
+         return finish(true, DoneWithError);
+      }
+
+      if (QC.Sema->visitExpr(Inst->getAliasExpr())) {
          return finish(true, DoneWithError);
       }
 
@@ -967,58 +964,68 @@ QueryResult IsConstraintSatisfiedQuery::run()
    case DeclConstraint::TypePredicateNegated: {
       QualType RHSType = C->getType();
       if (RHSType->containsAssociatedType()) {
-         if (QC.SubstAssociatedTypes(RHSType, RHSType, Self,
-                                     C->getSourceRange())) {
+         if (QC.SubstAssociatedTypes(
+                 RHSType, RHSType, Self,
+                 QC.Context.getConstraintLoc(OriginalDecl, C))) {
+            return finish(true, DoneWithError);
+         }
+      }
+      if (RHSType->containsTemplateParamType()) {
+         if (QC.SubstTemplateParamTypes(
+               RHSType, RHSType, Self->getTemplateArgs(),
+               QC.Context.getConstraintLoc(OriginalDecl, C))) {
             return finish(true, DoneWithError);
          }
       }
 
-      if (Canon->isDependentType() || RHSType->isDependentType()) {
-         return finish(true, Dependent);
-      }
-
+      bool Result;
       if (C->getKind() == DeclConstraint::TypeEquality) {
-         return finish(Canon == RHSType.getCanonicalType());
+         Result = Canon == RHSType.getCanonicalType();
       }
-      if (C->getKind() == DeclConstraint::TypeInequality) {
-         return finish(Canon != RHSType.getCanonicalType());
-      }
-
-      ArrayRef<QualType> Types;
-      if (auto *Ext = RHSType->asExistentialType()) {
-         Types = Ext->getExistentials();
+      else if (C->getKind() == DeclConstraint::TypeInequality) {
+         Result = Canon != RHSType.getCanonicalType();
       }
       else {
-         Types = RHSType;
-      }
+         Result = true;
 
-      bool Result;
-      for (QualType ET : Types) {
-         if (ET->isClass()) {
-            if (Canon->isClass()) {
-               auto SelfClass = cast<ClassDecl>(Canon->getRecord());
-               auto OtherClass = cast<ClassDecl>(ET->getRecord());
-
-               Result = OtherClass->isBaseClassOf(SelfClass);
-            }
-            else {
-               Result = false;
-            }
+         ArrayRef<QualType> Types;
+         if (auto *Ext = RHSType->asExistentialType()) {
+            Types = Ext->getExistentials();
          }
          else {
-            if (auto Err = QC.ConformsTo(Result, Canon,
-                                         cast<ProtocolDecl>(ET->getRecord()))) {
-               return Query::finish(Err);
-            }
+            Types = RHSType;
          }
 
-         if (!Result) {
-            break;
+         for (QualType ET : Types) {
+            if (ET->isClass()) {
+               if (Canon->isClass()) {
+                  auto SelfClass = cast<ClassDecl>(Canon->getRecord());
+                  auto OtherClass = cast<ClassDecl>(ET->getRecord());
+
+                  Result = OtherClass->isBaseClassOf(SelfClass);
+               }
+               else {
+                  Result = false;
+               }
+            }
+            else {
+               Result = QC.Sema->ConformsTo(Canon,
+                                            cast<ProtocolDecl>(
+                                               ET->getRecord()));
+            }
+
+            if (!Result) {
+               break;
+            }
          }
       }
 
       if (C->getKind() == DeclConstraint::TypePredicateNegated) {
          Result = !Result;
+      }
+
+      if (!Result && Canon->containsTemplateParamType()) {
+         return finish(true, Dependent);
       }
 
       return finish(Result);
@@ -1035,10 +1042,23 @@ QueryResult IsConstraintSatisfiedQuery::run()
    }
 }
 
+// FIXME 'is RangeReplaceableCollection' is a superset of 'is MutableCollection'
+QueryResult IsSupersetOfQuery::run()
+{
+   assert(C1 && C2 && "should have early-exited!");
+
+   SmallPtrSet<DeclConstraint*, 2> neededConstraints(C2->begin(), C2->end());
+   for (auto* DC : *C1) {
+      neededConstraints.erase(DC);
+   }
+
+   return finish(neededConstraints.empty());
+}
+
 QueryResult IsAccessibleQuery::run()
 {
-//   if (Bits.InUnitTest && IsTestable(ND))
-//      return true;
+   //   if (Bits.InUnitTest && IsTestable(ND))
+   //      return true;
 
    auto AccessSpec = ND->getAccess();
 
@@ -1049,7 +1069,7 @@ QueryResult IsAccessibleQuery::run()
       return finish(true);
    case AccessSpecifier::Private: {
       // only visible within the immediate context the symbol was defined in
-      auto *Ctx = ND->getDeclContext();
+      auto* Ctx = ND->getDeclContext();
 
       // All extensions within the same file can access private declarations.
       bool SameFile = ND->getModule() == DC->getDeclModule();
@@ -1057,7 +1077,7 @@ QueryResult IsAccessibleQuery::run()
       if (SameFile)
          Ctx = Ctx->lookThroughExtension();
 
-      for (auto *Curr = DC; Curr; Curr = Curr->getParentCtx()) {
+      for (auto* Curr = DC; Curr; Curr = Curr->getParentCtx()) {
          if (SameFile && Curr->lookThroughExtension() == Ctx) {
             return finish(true);
          }
@@ -1072,8 +1092,8 @@ QueryResult IsAccessibleQuery::run()
       // only visible within declaration context or subclasses (should have
       // been rejected outside of classes)
       auto C = cast<ClassDecl>(ND->getNonTransparentDeclContext());
-      auto *Ctx = ND->getDeclContext();
-      for (auto *Curr = DC; Curr; Curr = Curr->getParentCtx()) {
+      auto* Ctx = ND->getDeclContext();
+      for (auto* Curr = DC; Curr; Curr = Curr->getParentCtx()) {
          if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
             return finish(true);
 
@@ -1086,23 +1106,24 @@ QueryResult IsAccessibleQuery::run()
    }
    case AccessSpecifier::FilePrivate: {
       // visible within the file it was declared
-      auto &FileMgr = QC.CI.getFileMgr();
+      auto& FileMgr = QC.CI.getFileMgr();
       auto DeclID = FileMgr.getSourceId(ND->getSourceLoc());
       auto CurrID = FileMgr.getSourceId(cast<Decl>(DC)->getSourceLoc());
 
-      return finish(DeclID == CurrID || FileMgr.wasIncludedFrom(CurrID, DeclID));
+      return finish(DeclID == CurrID
+                    || FileMgr.wasIncludedFrom(CurrID, DeclID));
    }
    case AccessSpecifier::Internal: {
       return finish(DC->getDeclModule()->getBaseModule()
-             == ND->getModule()->getBaseModule());
+                    == ND->getModule()->getBaseModule());
    }
    }
 }
 
 QueryResult CheckAccessibilityQuery::run()
 {
-//   if (Bits.InUnitTest && IsTestable(ND))
-//      return;
+   //   if (Bits.InUnitTest && IsTestable(ND))
+   //      return;
 
    auto AccessSpec = ND->getAccess();
 
@@ -1113,7 +1134,7 @@ QueryResult CheckAccessibilityQuery::run()
       return finish();
    case AccessSpecifier::Private: {
       // only visible within the immediate context the symbol was defined in
-      auto *Ctx = ND->getDeclContext();
+      auto* Ctx = ND->getDeclContext();
 
       // All extensions within the same file can access private declarations.
       bool SameFile = ND->getModule() == DC->getDeclModule();
@@ -1121,7 +1142,7 @@ QueryResult CheckAccessibilityQuery::run()
       if (SameFile)
          Ctx = Ctx->lookThroughExtension();
 
-      for (auto *Curr = DC; Curr; Curr = Curr->getParentCtx()) {
+      for (auto* Curr = DC; Curr; Curr = Curr->getParentCtx()) {
          if (SameFile && Curr->lookThroughExtension() == Ctx) {
             return finish();
          }
@@ -1131,8 +1152,7 @@ QueryResult CheckAccessibilityQuery::run()
       }
 
       // declaration is not accessible here
-      QC.Sema->diagnose(err_private_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(), Loc);
+      QC.Sema->diagnose(err_private_access, ND, ND->getDeclName(), Loc);
 
       break;
    }
@@ -1140,8 +1160,8 @@ QueryResult CheckAccessibilityQuery::run()
       // only visible within declaration context or subclasses (should have
       // been rejected outside of classes)
       auto C = cast<ClassDecl>(ND->getNonTransparentDeclContext());
-      auto *Ctx = ND->getDeclContext();
-      for (auto *Curr = DC; Curr; Curr = Curr->getParentCtx()) {
+      auto* Ctx = ND->getDeclContext();
+      for (auto* Curr = DC; Curr; Curr = Curr->getParentCtx()) {
          if (Curr->lookThroughExtension() == Ctx->lookThroughExtension())
             return finish();
 
@@ -1151,14 +1171,14 @@ QueryResult CheckAccessibilityQuery::run()
       }
 
       // declaration is not accessible here
-      QC.Sema->diagnose(err_protected_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(), C->getDeclName(), Loc);
+      QC.Sema->diagnose(err_protected_access, ND, ND->getDeclName(),
+                        C->getDeclName(), Loc);
 
       break;
    }
    case AccessSpecifier::FilePrivate: {
       // visible within the file it was declared
-      auto &FileMgr = QC.CI.getFileMgr();
+      auto& FileMgr = QC.CI.getFileMgr();
       auto DeclID = FileMgr.getSourceId(ND->getSourceLoc());
       auto CurrID = FileMgr.getSourceId(cast<Decl>(DC)->getSourceLoc());
 
@@ -1166,9 +1186,8 @@ QueryResult CheckAccessibilityQuery::run()
          return finish();
 
       // declaration is not accessible here
-      QC.Sema->diagnose(err_fileprivate_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(), FileMgr.getFileName(DeclID),
-                      Loc);
+      QC.Sema->diagnose(err_fileprivate_access, ND, ND->getDeclName(),
+                        FileMgr.getFileName(DeclID), Loc);
 
       break;
    }
@@ -1178,17 +1197,16 @@ QueryResult CheckAccessibilityQuery::run()
          return finish();
       }
 
-      QC.Sema->diagnose(err_internal_access, ND->getSpecifierForDiagnostic(),
-                      ND->getDeclName(),
-                      ND->getModule()->getBaseModule()->getDeclName(),
-                      Loc);
+      QC.Sema->diagnose(err_internal_access, ND, ND->getDeclName(),
+                        ND->getModule()->getBaseModule()->getDeclName(), Loc);
 
       break;
    }
    }
 
-   QC.Sema->diagnose(note_access_spec_here, /*implicitly*/ !ND->getAccessRange(),
-                   (int)AccessSpec, ND->getAccessRange(), ND->getSourceLoc());
+   QC.Sema->diagnose(note_access_spec_here,
+                     /*implicitly*/ !ND->getAccessRange(), (int)AccessSpec,
+                     ND->getAccessRange(), ND->getSourceLoc());
 
    return finish(DoneWithError);
 }
@@ -1204,7 +1222,7 @@ QueryResult EquivalentSignaturesQuery::run()
 
    bool Equivalent;
    if (QC.CheckTypeEquivalence(Equivalent, C1->getReturnType(),
-                               C2->getReturnType(), Self, C1)) {
+                               C2->getReturnType(), Self, C1, C1)) {
       return fail();
    }
 
@@ -1221,19 +1239,24 @@ QueryResult EquivalentSignaturesQuery::run()
    }
 
    for (; i < NumArgs; ++i) {
-      auto &Arg = Args1[i];
-      auto &Other = Args2[i];
+      auto& Arg = Args1[i];
+      auto& Other = Args2[i];
 
       if (QC.CheckTypeEquivalence(Equivalent, Arg->getType(), Other->getType(),
-                                  Self, C1)) {
+                                  Self, C1, C1)) {
          return fail();
       }
 
       if (!Equivalent)
-         return finish(ParamTypeMismatch); // incompatible signature
+         return finish(ParamTypeMismatch);
 
       if (Arg->getLabel() != Other->getLabel())
-         return finish(LabelMismatch); // incompatible labels
+         return finish(LabelMismatch);
+
+      if (!QC.Sema->AreConventionsCompatible(Arg->getConvention(),
+                                             Other->getConvention())) {
+         return finish(ConventionMismatch);
+      }
    }
 
    if (C1->throws())
@@ -1254,7 +1277,7 @@ QueryResult EquivalentSignaturesQuery::run()
 QueryResult PrepareTemplateParametersQuery::run()
 {
    Status St = Done;
-   for (auto &TP : Decl->getTemplateParams()) {
+   for (auto& TP : Decl->getTemplateParams()) {
       if (QC.PrepareTemplateParamInterface(TP)) {
          St = DoneWithError;
       }
@@ -1266,24 +1289,17 @@ QueryResult PrepareTemplateParametersQuery::run()
 namespace {
 
 struct BeingEvaluatedRAII {
-   explicit BeingEvaluatedRAII(Decl *D)
-      : D(D)
-   {
-      D->setBeingEvaluated(true);
-   }
+   explicit BeingEvaluatedRAII(Decl* D) : D(D) { D->setBeingEvaluated(true); }
 
-   ~BeingEvaluatedRAII()
-   {
-      D->setBeingEvaluated(false);
-   }
+   ~BeingEvaluatedRAII() { D->setBeingEvaluated(false); }
 
 private:
-   Decl *D;
+   Decl* D;
 };
 
 } // anonymous namespace
 
-static void setDeclStatus(Decl *D, const QueryResult &Res)
+static void setDeclStatus(Decl* D, const QueryResult& Res)
 {
    switch (Res.K) {
    case QueryResult::Error:
@@ -1304,40 +1320,40 @@ QueryResult PrepareDeclInterfaceQuery::run()
 
    BeingEvaluatedRAII BER(D);
 
-#  define PREPARE_DECL(NAME)                                                         \
-   case Decl::NAME##DeclID:                                                          \
-      if (auto Err = QC.Prepare##NAME##Interface(static_cast<NAME##Decl*>(D))) {     \
-         setDeclStatus(D, Err);                                                      \
-         return Query::finish(Err);                                                  \
-      }                                                                              \
+#define PREPARE_DECL(NAME)                                                     \
+   case Decl::NAME##DeclID:                                                    \
+      if (auto Err                                                             \
+          = QC.Prepare##NAME##Interface(static_cast<NAME##Decl*>(D))) {        \
+         setDeclStatus(D, Err);                                                \
+         return Query::finish(Err);                                            \
+      }                                                                        \
       break;
 
    switch (D->getKind()) {
-   PREPARE_DECL(PrecedenceGroup)
-   PREPARE_DECL(Operator)
-   PREPARE_DECL(GlobalVar)
-   PREPARE_DECL(Function)
-   PREPARE_DECL(Method)
-   PREPARE_DECL(Init)
-   PREPARE_DECL(Deinit)
-   PREPARE_DECL(Struct)
-   PREPARE_DECL(Class)
-   PREPARE_DECL(Enum)
-   PREPARE_DECL(Protocol)
-   PREPARE_DECL(Extension)
-   PREPARE_DECL(FuncArg)
-   PREPARE_DECL(TemplateParam)
-   PREPARE_DECL(AssociatedType)
-   PREPARE_DECL(Alias)
-   PREPARE_DECL(Field)
-   PREPARE_DECL(Prop)
-   PREPARE_DECL(Subscript)
-   PREPARE_DECL(EnumCase)
-   PREPARE_DECL(Namespace)
-   PREPARE_DECL(Compound)
-   PREPARE_DECL(Module)
+      PREPARE_DECL(PrecedenceGroup)
+      PREPARE_DECL(Operator)
+      PREPARE_DECL(GlobalVar)
+      PREPARE_DECL(Function)
+      PREPARE_DECL(Method)
+      PREPARE_DECL(Init)
+      PREPARE_DECL(Deinit)
+      PREPARE_DECL(Struct)
+      PREPARE_DECL(Class)
+      PREPARE_DECL(Enum)
+      PREPARE_DECL(Protocol)
+      PREPARE_DECL(Extension)
+      PREPARE_DECL(FuncArg)
+      PREPARE_DECL(TemplateParam)
+      PREPARE_DECL(AssociatedType)
+      PREPARE_DECL(Alias)
+      PREPARE_DECL(Field)
+      PREPARE_DECL(Prop)
+      PREPARE_DECL(Subscript)
+      PREPARE_DECL(EnumCase)
+      PREPARE_DECL(Namespace)
+      PREPARE_DECL(Compound)
+      PREPARE_DECL(Module)
    case Decl::ImportDeclID:
-   case Decl::UsingDeclID:
    case Decl::LocalVarDeclID:
    case Decl::MacroDeclID:
    case Decl::MacroExpansionDeclID:
@@ -1353,7 +1369,7 @@ QueryResult PrepareDeclInterfaceQuery::run()
       break;
    }
 
-#  undef PREPARE_DECL
+#undef PREPARE_DECL
 
    QC.Sema->checkDeclAttrs(D, Attr::AfterDeclaration);
    return finish();
@@ -1368,35 +1384,35 @@ QueryResult TypecheckDeclQuery::run()
    SemaPass::DeclScopeRAII DSR(*QC.Sema, D->getDeclContext());
    QC.Sema->checkDeclAttrs(D, Attr::BeforeSema);
 
-#  define TYPECHECK_DECL(NAME)                                               \
-   case Decl::NAME##DeclID:                                                  \
-      if (auto Err = QC.Typecheck##NAME(static_cast<NAME##Decl*>(D))) {      \
-         setDeclStatus(D, Err);                                              \
-         return Query::finish(Err);                                          \
-      }                                                                      \
+#define TYPECHECK_DECL(NAME)                                                   \
+   case Decl::NAME##DeclID:                                                    \
+      if (auto Err = QC.Typecheck##NAME(static_cast<NAME##Decl*>(D))) {        \
+         setDeclStatus(D, Err);                                                \
+         return Query::finish(Err);                                            \
+      }                                                                        \
       break;
 
    switch (D->getKind()) {
-   TYPECHECK_DECL(GlobalVar)
-   TYPECHECK_DECL(Function)
-   TYPECHECK_DECL(Method)
-   TYPECHECK_DECL(Init)
-   TYPECHECK_DECL(Deinit)
-   TYPECHECK_DECL(Struct)
-   TYPECHECK_DECL(Class)
-   TYPECHECK_DECL(Enum)
-   TYPECHECK_DECL(Protocol)
-   TYPECHECK_DECL(Extension)
-   TYPECHECK_DECL(FuncArg)
-   TYPECHECK_DECL(TemplateParam)
-   TYPECHECK_DECL(AssociatedType)
-   TYPECHECK_DECL(Alias)
-   TYPECHECK_DECL(Field)
-   TYPECHECK_DECL(Prop)
-   TYPECHECK_DECL(Subscript)
-   TYPECHECK_DECL(Namespace)
-   TYPECHECK_DECL(Compound)
-   TYPECHECK_DECL(Module)
+      TYPECHECK_DECL(GlobalVar)
+      TYPECHECK_DECL(Function)
+      TYPECHECK_DECL(Method)
+      TYPECHECK_DECL(Init)
+      TYPECHECK_DECL(Deinit)
+      TYPECHECK_DECL(Struct)
+      TYPECHECK_DECL(Class)
+      TYPECHECK_DECL(Enum)
+      TYPECHECK_DECL(Protocol)
+      TYPECHECK_DECL(Extension)
+      TYPECHECK_DECL(FuncArg)
+      TYPECHECK_DECL(TemplateParam)
+      TYPECHECK_DECL(AssociatedType)
+      TYPECHECK_DECL(Alias)
+      TYPECHECK_DECL(Field)
+      TYPECHECK_DECL(Prop)
+      TYPECHECK_DECL(Subscript)
+      TYPECHECK_DECL(Namespace)
+      TYPECHECK_DECL(Compound)
+      TYPECHECK_DECL(Module)
    case Decl::LocalVarDeclID:
    case Decl::DestructuringDeclID:
       // Handled in Sema::visitDeclStmt
@@ -1407,7 +1423,7 @@ QueryResult TypecheckDeclQuery::run()
       break;
    }
 
-#  undef TYPECHECK_DECL
+#undef TYPECHECK_DECL
 
    QC.Sema->checkDeclAttrs(D, Attr::AfterSema);
 
@@ -1418,33 +1434,19 @@ QueryResult TypeCheckDeclContextQuery::run()
 {
    SemaPass::DeclScopeRAII DSR(sema(), DC);
 
-   if (QC.PrepareNameLookup(DC)) {
-      return fail();
-   }
-
-   for (auto *D : DC->getDecls()) {
+   for (auto* D : DC->getDecls()) {
       QC.TypecheckDecl(D);
    }
 
    return finish();
 }
 
-QueryResult TypecheckConstraintsQuery::run()
-{
-   SemaPass::DeclScopeRAII DSR(*QC.Sema, cast<DeclContext>(ND));
-
-   auto Constraints = ND->getConstraints();
-   for (auto *C : Constraints) {
-      QC.Sema->typecheckExpr(C, SourceType(), ND);
-   }
-
-   return finish();
-}
+QueryResult TypecheckConstraintsQuery::run() { return finish(); }
 
 QueryResult PreparePrecedenceGroupInterfaceQuery::run()
 {
    if (auto HigherThan = D->getHigherThanIdent()) {
-      PrecedenceGroupDecl *HT;
+      PrecedenceGroupDecl* HT;
       if (QC.FindPrecedenceGroup(HT, HigherThan)) {
          return finish(DoneWithError);
       }
@@ -1453,7 +1455,7 @@ QueryResult PreparePrecedenceGroupInterfaceQuery::run()
    }
 
    if (auto LowerThan = D->getLowerThanIdent()) {
-      PrecedenceGroupDecl *LT;
+      PrecedenceGroupDecl* LT;
       if (QC.FindPrecedenceGroup(LT, LowerThan)) {
          return finish(DoneWithError);
       }
@@ -1472,7 +1474,7 @@ QueryResult TypecheckPrecedenceGroupQuery::run()
 QueryResult PrepareOperatorInterfaceQuery::run()
 {
    if (auto II = D->getPrecedenceGroupIdent()) {
-      PrecedenceGroupDecl *PG;
+      PrecedenceGroupDecl* PG;
       if (QC.FindPrecedenceGroup(PG, II)) {
          return finish(DoneWithError);
       }
@@ -1481,17 +1483,16 @@ QueryResult PrepareOperatorInterfaceQuery::run()
          D->setPrecedenceGroup(PG);
       }
 
-      if (D->getDeclName().getDeclaredOperatorName()
-           .getKind() == DeclarationName::InfixOperatorName) {
-         QC.Sema->Context.setInfixOperatorPrecedence(D->getDeclName()
-                                                    .getDeclaredOperatorName()
-                                                    .getInfixOperatorName(),
-                                                   PG);
+      if (D->getDeclName().getDeclaredOperatorName().getKind()
+          == DeclarationName::InfixOperatorName) {
+         QC.Sema->Context.setInfixOperatorPrecedence(
+             D->getDeclName().getDeclaredOperatorName().getInfixOperatorName(),
+             PG);
       }
    }
 
    if (!D->getPrecedenceGroup()) {
-      PrecedenceGroupDecl *DefaultPG;
+      PrecedenceGroupDecl* DefaultPG;
       if (QC.FindPrecedenceGroup(DefaultPG,
                                  QC.Sema->getIdentifier("DefaultPrecedence"))) {
          return finish(DoneWithError);
@@ -1510,13 +1511,13 @@ QueryResult TypecheckOperatorQuery::run()
 
 QueryResult PrepareGlobalVarInterfaceQuery::run()
 {
-   const SourceType &T = D->getType();
+   const SourceType& T = D->getType();
    auto res = QC.Sema->visitSourceType(D, T);
    if (!res) {
       return fail();
    }
 
-   if (T->isAutoType())  {
+   if (T->isAutoType()) {
       // We need to typecheck the value to know its type.
       finish();
       return QC.TypecheckDecl(D);
@@ -1530,7 +1531,7 @@ QueryResult TypecheckGlobalVarQuery::run()
    auto valid = QC.Sema->visitVarDecl(D);
    if (!valid) {
       D->setIsInvalid(true);
-      D->getType().setResolvedType(QC.Context.getUnknownAnyTy());
+      D->getType().setResolvedType(QC.Context.getErrorTy());
 
       return finish(DoneWithError);
    }
@@ -1539,39 +1540,36 @@ QueryResult TypecheckGlobalVarQuery::run()
       D->getType().setResolvedType(D->getValue()->getExprType());
    }
 
-   QC.Sema->getILGen().DeclareGlobalVariable(D);
    return finish();
 }
 
 QueryResult PrepareFuncArgInterfaceQuery::run()
 {
-   auto &Context = QC.CI.getContext();
+   auto& Context = QC.CI.getContext();
    if (D->isSelf()) {
       auto M = cast<MethodDecl>(D->getDeclContext());
       auto R = M->getRecord();
 
       QC.DeclareSelfAlias(R);
 
-      ArgumentConvention Conv;
-      auto *AT = R->getAssociatedType(QC.Sema->getIdentifier("Self"));
-
       QualType SelfTy;
       if (isa<ProtocolDecl>(R)) {
+         auto* AT = R->getAssociatedType(QC.Sema->getIdentifier("Self"));
          SelfTy = Context.getAssociatedType(AT);
       }
       else {
-         SelfTy = Context.getAssociatedType(AT);
+         auto* AT = R->lookupSingle<AliasDecl>(QC.Sema->getIdentifier("Self"));
+         SelfTy = Context.getTypedefType(AT);
       }
 
-      QC.ApplyCapabilites(SelfTy, SelfTy, D->getDeclContext());
-
+      ArgumentConvention Conv;
       if (M->isStatic() && !M->isBaseInitializer()) {
          SelfTy = Context.getMetaType(SelfTy);
          Conv = ArgumentConvention::Borrowed;
       }
       else {
          if (M->hasMutableSelf()) {
-            SelfTy = Context.getMutableBorrowType(SelfTy);
+            SelfTy = Context.getMutableReferenceType(SelfTy);
             Conv = ArgumentConvention::MutableRef;
          }
          else {
@@ -1590,52 +1588,82 @@ QueryResult PrepareFuncArgInterfaceQuery::run()
       return finish();
    }
 
+   // Allow variadic parameter reference in argument type.
+   auto* typeExpr = D->getType().getTypeExpr();
+   if (typeExpr) {
+      visitSpecificStatement<IdentifierRefExpr>([](Expression *E) {
+         cast<IdentifierRefExpr>(E)->setAllowVariadicRef(true);
+      },  typeExpr);
+   }
+
    auto TypeRes = QC.Sema->visitSourceType(D, D->getType());
    if (!TypeRes || TypeRes.get()->isErrorType()) {
       D->setVariadicArgPackExpansion(false);
       return fail();
    }
 
-   auto &DeclaredArgType = D->getType();
+   auto& DeclaredArgType = D->getType();
    if (DeclaredArgType->isVoidType()) {
       SourceLocation Loc;
-      if (auto *E = D->getType().getTypeExpr()) {
+      if (auto* E = D->getType().getTypeExpr()) {
          Loc = E->getSourceLoc();
       }
       else {
          Loc = D->getSourceLoc();
       }
 
-      QC.Sema->diagnose(D, err_generic_error,
-                      "function arguments may not be of type 'void'",
-                      Loc);
+      QC.Sema->diagnose(D, err_invalid_parameter_type, "void", Loc);
+   }
+
+   // Check if this argument is variadic.
+   if (DeclaredArgType->containsTemplateParamType()) {
+      visitSpecificType<TemplateParamType>([&](TemplateParamType *Param) {
+        if (Param->isVariadic()) {
+           D->setVariadic(true);
+        }
+
+        return true;
+      }, DeclaredArgType);
    }
 
    QC.Sema->checkIfTypeUsableAsDecl(DeclaredArgType, D);
 
    if (D->getConvention() == ArgumentConvention::Default) {
       auto Fn = cast<CallableDecl>(D->getDeclContext());
-      // initializer arguments are owned by default
-      if (isa<InitDecl>(Fn) || isa<EnumCaseDecl>(Fn)) {
+      // Initializer arguments are owned by default
+      if (isa<EnumCaseDecl>(Fn)) {
          D->setConvention(ArgumentConvention::Owned);
       }
-      // otherwise an immutable borrow is the default
+      // Otherwise an immutable borrow is the default.
       else {
          D->setConvention(ArgumentConvention::Borrowed);
       }
    }
 
+   switch (D->getConvention()) {
+   case ArgumentConvention::ImmutableRef:
+      DeclaredArgType.setResolvedType(
+          QC.Sema->Context.getReferenceType(DeclaredArgType->removeReference()));
+      break;
+   case ArgumentConvention::MutableRef:
+      DeclaredArgType.setResolvedType(
+          QC.Sema->Context.getMutableReferenceType(DeclaredArgType->removeReference()));
+      break;
+   default:
+      break;
+   }
+
    return finish();
 }
 
-static void calculateDepth(TemplateParamDecl *P)
+static void calculateDepth(TemplateParamDecl* P)
 {
    unsigned Depth = 0;
-   auto *Ctx = P->getDeclContext();
+   auto* Ctx = P->getDeclContext();
    while (Ctx) {
       Ctx = Ctx->lookThroughExtension();
 
-      if (auto *ND = dyn_cast<NamedDecl>(Ctx)) {
+      if (auto* ND = dyn_cast<NamedDecl>(Ctx)) {
          Depth += ND->isTemplate();
       }
 
@@ -1651,26 +1679,27 @@ QueryResult PrepareTemplateParamInterfaceQuery::run()
    if (D->isSynthesized())
       return finish();
 
-   DeclContext *RealCtx = D->getDeclContext()->getParentCtx();
+   DeclContext* RealCtx = D->getDeclContext()->getParentCtx();
    calculateDepth(D);
 
-   NamedDecl *OtherParam;
-   if (QC.LookupSingle(OtherParam, RealCtx, D->getDeclName())) {
+   NamedDecl* OtherParam;
+   if (QC.LookupSingle(OtherParam, RealCtx, D->getDeclName(),
+                        LookupOpts::Restricted | LookupOpts::IssueDiag)) {
       QC.Sema->diagnose(D, err_template_param_shadow, D->getName(),
-                      D->getSourceRange());
+                        D->getSourceRange());
       QC.Sema->diagnose(note_template_parameter_here,
-                      OtherParam->getSourceRange());
+                        OtherParam->getSourceRange());
    }
 
    SemaPass::DeclScopeRAII DSR(*QC.Sema, RealCtx);
 
-   if (auto &cov = D->getCovariance()) {
+   if (auto& cov = D->getCovariance()) {
       if (!QC.Sema->visitSourceType(D, cov)) {
          return finish();
       }
    }
 
-   if (auto &con = D->getContravariance()) {
+   if (auto& con = D->getContravariance()) {
       if (!QC.Sema->visitSourceType(D, con)) {
          return finish();
       }
@@ -1679,7 +1708,7 @@ QueryResult PrepareTemplateParamInterfaceQuery::run()
    if (D->getCovariance()->isAutoType()) {
       if (D->isTypeName()) {
          // Otherwhise use 'Any' as an upper bound.
-         ProtocolDecl *Any;
+         ProtocolDecl* Any;
          if (QC.GetBuiltinProtocol(Any, GetBuiltinProtocolQuery::Any)) {
             return fail();
          }
@@ -1710,9 +1739,15 @@ QueryResult PrepareTemplateParamInterfaceQuery::run()
 
 QueryResult TypecheckFuncArgQuery::run()
 {
-   const SourceType &DeclaredArgType = D->getType();
-   if (Expression *DefaultVal = D->getDefaultVal()) {
-      SemaPass::DefaultArgumentValueRAII defaultArgumentValueRAII(sema());
+   auto *Fn = dyn_cast<CallableDecl>(D->getDeclContext());
+   if (Fn->isTemplateOrInTemplate()
+       || isa<ProtocolDecl>(Fn->getDeclContext()->lookThroughExtension())) {
+      return finish();
+   }
+
+   const SourceType& DeclaredArgType = D->getType();
+   if (Expression* DefaultVal = D->getDefaultVal()) {
+      SemaPass::InDefaultArgumentValueRAII defaultArgumentValueRAII(*QC.Sema);
 
       auto Result = QC.Sema->typecheckExpr(DefaultVal, DeclaredArgType, D);
       if (Result) {
@@ -1723,23 +1758,20 @@ QueryResult TypecheckFuncArgQuery::run()
    return finish();
 }
 
-QueryResult TypecheckTemplateParamQuery::run()
-{
-   return finish();
-}
+QueryResult TypecheckTemplateParamQuery::run() { return finish(); }
 
-static bool checkCompileTimeEvaluable(SemaPass &SP, DeclContext *Ctx)
+static bool checkCompileTimeEvaluable(SemaPass& SP, DeclContext* Ctx)
 {
    if (Ctx->getDeclModule()->getModule()->isCompileTimeByDefault()) {
       return true;
    }
 
    while (Ctx) {
-      if (auto *D = dyn_cast<Decl>(Ctx)) {
+      if (auto* D = dyn_cast<Decl>(Ctx)) {
          if (D->hasAttribute<CompileTimeAttr>()) {
             return true;
          }
-         if (auto *Ext = dyn_cast<ExtensionDecl>(Ctx)) {
+         if (auto* Ext = dyn_cast<ExtensionDecl>(Ctx)) {
             if (checkCompileTimeEvaluable(SP, Ext->getExtendedRecord())) {
                return true;
             }
@@ -1755,42 +1787,28 @@ static bool checkCompileTimeEvaluable(SemaPass &SP, DeclContext *Ctx)
 QueryResult PrepareAssociatedTypeInterfaceQuery::run()
 {
    Status S = Done;
-   if (auto &Cov = D->getCovariance()) {
-      if (D->isImplementation()) {
-         QC.Sema->diagnose(D, err_generic_error,
-                         "cannot define covariance on an associated type "
-                         "definition",
-                         D->getSourceRange());
-      }
-
+   if (auto& Cov = D->getCovariance()) {
       auto TypeRes = QC.Sema->visitSourceType(D, Cov);
       if (!TypeRes) {
          S = DoneWithError;
       }
    }
-   else if (!D->isImplementation()) {
-      ProtocolDecl *Any = nullptr;
+   else {
+      ProtocolDecl* Any = nullptr;
       QC.GetBuiltinProtocol(Any, GetBuiltinProtocolQuery::Any);
 
       assert(Any && "no Any protocol?");
       D->getCovariance().setResolvedType(QC.Sema->Context.getRecordType(Any));
    }
 
-   if (auto &T = D->getActualType()) {
+   if (auto& T = D->getDefaultType()) {
       auto TypeRes = QC.Sema->visitSourceType(D, T);
       if (!TypeRes)
          return fail();
 
       auto Ty = TypeRes.get();
       if (Ty->isAutoType()) {
-         D->getActualType().setResolvedType(QC.Sema->UnknownAnyTy);
-      }
-
-      if (D->isImplementation()) {
-         // Verify that the AssociatedType instance for this declaration has not
-         // been used yet.
-         assert(QC.Context.getAssociatedType(D)->getCanonicalType()
-            == D->getActualType()->getCanonicalType());
+         D->getDefaultType().setResolvedType(QC.Sema->ErrorTy);
       }
    }
 
@@ -1799,62 +1817,6 @@ QueryResult PrepareAssociatedTypeInterfaceQuery::run()
 
 QueryResult TypecheckAssociatedTypeQuery::run()
 {
-   auto *ATDecl = D;
-   auto Rec = ATDecl->getRecord();
-
-   // must be in a dependent extension decl, ignore for now
-   if (!Rec || Rec->isTemplate())
-      return finish();
-
-   if (ATDecl->getDeclName().isStr("Self"))
-      return finish();
-
-   auto &Context = QC.Sema->Context;
-   if (ATDecl->isImplementation()) {
-      AssociatedTypeDecl* AT = nullptr;
-
-      if (auto *P = dyn_cast<ProtocolDecl>(Rec)) {
-         auto MaybeAT = P->getAssociatedType(ATDecl->getDeclName());
-         if (MaybeAT) {
-            AT = MaybeAT;
-         }
-      }
-
-      if (!AT) {
-         auto Conformances = Context.getConformanceTable().getAllConformances(Rec);
-         for (auto *Conf : Conformances) {
-            auto *CF = Conf->getProto();
-            auto MaybeAT = CF->getAssociatedType(ATDecl->getDeclName());
-            if (MaybeAT) {
-               AT = MaybeAT;
-
-               break;
-            }
-         }
-      }
-
-      if (!AT) {
-         QC.Sema->diagnose(ATDecl, err_no_such_associated_type,
-                         Rec->getSpecifierForDiagnostic(), Rec->getDeclName(),
-                         ATDecl->getDeclName(), ATDecl->getSourceLoc());
-
-         return fail();
-      }
-
-      if (!ATDecl->getActualType()) {
-         if (!AT->getActualType()) {
-            QC.Sema->diagnose(ATDecl, err_associated_type_no_default,
-                            ATDecl->getDeclName(), ATDecl->getSourceLoc());
-
-            return fail();
-         }
-
-         ATDecl->setActualType(AT->getActualType());
-      }
-
-      // Constraints will be checked during protocol conformance checking.
-   }
-
    return finish();
 }
 
@@ -1866,23 +1828,22 @@ QueryResult PrepareCallableInterfaceQuery::run()
    }
 
    // Verify that a template provides a body.
-   if (D->isTemplate()
-         && !D->getBody() && !D->getBodyTemplate()
-         && !D->hasAttribute<_BuiltinAttr>()
-         && !D->isProtocolRequirement()) {
+   if (D->isTemplate() && !D->willHaveDefinition()
+       && !D->hasAttribute<_BuiltinAttr>() && !D->isProtocolRequirement()
+       && !D->isExternal()) {
       QC.Sema->diagnose(D, err_generic_error, D->getSourceLoc(),
                         "template function cannot be declared");
    }
 
    // Lookup program argument declarations.
    if (D->isMain() && !QC.CI.getOptions().noPrelude()) {
-      Module *SysMod;
+      Module* SysMod;
       if (QC.GetBuiltinModule(SysMod, GetBuiltinModuleQuery::Sys)) {
          return fail();
       }
 
       if (SysMod) {
-         NamedDecl *_;
+         NamedDecl* _;
          QC.LookupSingle(_, SysMod->getDecl(), QC.Sema->getIdentifier("argc"));
          QC.LookupSingle(_, SysMod->getDecl(), QC.Sema->getIdentifier("argv"));
       }
@@ -1892,7 +1853,7 @@ QueryResult PrepareCallableInterfaceQuery::run()
    if (D->isExternC()) {
       if (!isa<FunctionDecl>(D)) {
          QC.Sema->diagnose(D, err_generic_error, "methods cannot be @extern(C)",
-                         D->getSourceLoc());
+                           D->getSourceLoc());
       }
 
       if (!D->getDeclName().isSimpleIdentifier()) {
@@ -1900,13 +1861,13 @@ QueryResult PrepareCallableInterfaceQuery::run()
       }
       else if (D->getBody() && !D->isLambda()) {
          auto Ret = QC.ExternCFuncs.try_emplace(
-            D->getDeclName().getIdentifierInfo());
+             D->getDeclName().getIdentifierInfo());
 
          if (!Ret.second) {
             QC.Sema->diagnose(D, err_redeclared_extern_c, D->getSourceLoc(),
-                            D->getDeclName());
+                              D->getDeclName());
 
-            auto *OtherFn = Ret.first->getSecond();
+            auto* OtherFn = Ret.first->getSecond();
             QC.Sema->diagnose(note_previous_decl, OtherFn->getSourceLoc());
          }
       }
@@ -1917,7 +1878,7 @@ QueryResult PrepareCallableInterfaceQuery::run()
       D->setCompileTimeEvaluable(true);
    }
 
-   for (auto &TP : D->getTemplateParams()) {
+   for (auto& TP : D->getTemplateParams()) {
       if (QC.PrepareDeclInterface(TP)) {
          return fail();
       }
@@ -1925,10 +1886,11 @@ QueryResult PrepareCallableInterfaceQuery::run()
       D->copyStatusFlags(TP);
    }
 
-   auto &Context = QC.CI.getContext();
+   auto& Context = QC.CI.getContext();
 
-   SemaPass::DeclScopeRAII declContextRAII(sema(), D);
-   QC.Sema->visitConstraints(D);
+   SemaPass::DeclScopeRAII declContextRAII(*QC.Sema, D);
+   SemaPass::InStaticContextRAII StaticCtx(
+       *QC.Sema, D->isStatic() && !isa<InitDecl>(D));
 
    if (D->isOperator()) {
       auto OpName = D->getDeclName();
@@ -1937,38 +1899,29 @@ QueryResult PrepareCallableInterfaceQuery::run()
 
       auto OpDeclName = Context.getDeclNameTable().getOperatorDeclName(OpName);
 
-      OperatorDecl *Result;
+      OperatorDecl* Result;
       if (QC.FindOperator(Result, OpDeclName, true, D->getSourceRange())) {
          return fail();
       }
 
       if (!Result) {
-         QC.Sema->diagnose(D, err_undeclared_operator, D->getSourceLoc(), OpName);
+         QC.Sema->diagnose(D, err_undeclared_operator, D->getSourceLoc(),
+                           OpName);
       }
       else {
          D->setPrecedenceGroup(Result->getPrecedenceGroup());
       }
    }
 
-   for (FuncArgDecl *ArgDecl : D->getArgs()) {
+   for (FuncArgDecl* ArgDecl : D->getArgs()) {
       if (QC.PrepareFuncArgInterface(ArgDecl)) {
          return fail();
-      }
-
-      if (!ArgDecl->isSelf()
-            && D->isProtocolRequirement()
-            && !D->isProtocolDefaultImpl()) {
-         QualType Type = ArgDecl->getType();
-         if (QC.Sema->ContainsAssociatedTypeConstraint(Type)) {
-            cast<ProtocolDecl>(D->getRecord())
-               ->setHasAssociatedTypeConstraint(true);
-         }
       }
 
       D->copyStatusFlags(ArgDecl);
    }
 
-   auto &Ret = D->getReturnType();
+   auto& Ret = D->getReturnType();
    auto Result = QC.Sema->visitSourceType(D, Ret);
    if (!Result) {
       return fail();
@@ -1988,59 +1941,58 @@ QueryResult PrepareCallableInterfaceQuery::run()
 
    D->setIsNoReturn(NoReturn);
 
-   if (D->isProtocolRequirement() && !D->isProtocolDefaultImpl()) {
-      if (QC.Sema->ContainsAssociatedTypeConstraint(retTy)) {
-         cast<ProtocolDecl>(D->getRecord())
-            ->setHasAssociatedTypeConstraint(true);
-      }
+   // Verify constraints.
+   ConstraintSet *CS;
+   if (auto Err = QC.VerifyConstraints(CS, D)) {
+      return Err;
    }
 
    // Transform the return type into a Future<T>.
-//   while (D->isAsync()) {
-//      auto *AwaitableDecl = getAwaitableDecl();
-//      if (!AwaitableDecl) {
-//         diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
-//         break;
-//      }
-//
-//      QualType RetTy = D->getReturnType();
-//      auto &Conformances = Context.getConformanceTable();
-//
-//      if (!RetTy->isRecordType()
-//          || !Conformances.conformsTo(RetTy->getRecord(), AwaitableDecl)) {
-//         auto *FutureDecl = getFutureDecl();
-//         if (!FutureDecl) {
-//            diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
-//            break;
-//         }
-//
-//         ensureDeclared(FutureDecl);
-//
-//         TemplateArgument Arg(FutureDecl->getTemplateParams().front(),
-//                                 D->getReturnType(), D->getSourceLoc());
-//
-//         bool isNew = false;
-//         auto TemplateArgs = FinalTemplateArgumentList::Create(Context,{ Arg });
-//         auto Inst = Instantiator.InstantiateRecord(D, FutureDecl,
-//                                                    TemplateArgs, &isNew);
-//
-//         if (!Inst)
-//            break;
-//
-//         auto *Fut = Inst.get();
-//         RetTy = Context.getRecordType(Fut);
-//
-//         D->getReturnType().setResolvedType(RetTy);
-//         D->setImplicitFutureReturn(true);
-//      }
-//
-//      collectCoroutineInfo(RetTy, D);
-//      break;
-//   }
+   //   while (D->isAsync()) {
+   //      auto *AwaitableDecl = getAwaitableDecl();
+   //      if (!AwaitableDecl) {
+   //         diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
+   //         break;
+   //      }
+   //
+   //      QualType RetTy = D->getReturnType();
+   //      auto &Conformances = Context.getConformanceTable();
+   //
+   //      if (!RetTy->isRecordType()
+   //          || !Conformances.conformsTo(RetTy->getRecord(), AwaitableDecl)) {
+   //         auto *FutureDecl = getFutureDecl();
+   //         if (!FutureDecl) {
+   //            diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
+   //            break;
+   //         }
+   //
+   //         ensureDeclared(FutureDecl);
+   //
+   //         TemplateArgument Arg(FutureDecl->getTemplateParams().front(),
+   //                                 D->getReturnType(), D->getSourceLoc());
+   //
+   //         bool isNew = false;
+   //         auto TemplateArgs = FinalTemplateArgumentList::Create(Context,{
+   //         Arg }); auto Inst = Instantiator.InstantiateRecord(D, FutureDecl,
+   //                                                    TemplateArgs, &isNew);
+   //
+   //         if (!Inst)
+   //            break;
+   //
+   //         auto *Fut = Inst.get();
+   //         RetTy = Context.getRecordType(Fut);
+   //
+   //         D->getReturnType().setResolvedType(RetTy);
+   //         D->setImplicitFutureReturn(true);
+   //      }
+   //
+   //      collectCoroutineInfo(RetTy, D);
+   //      break;
+   //   }
 
    if (D->isConversionOp()) {
-      auto Name = Context.getDeclNameTable()
-                         .getConversionOperatorName(D->getReturnType());
+      auto Name = Context.getDeclNameTable().getConversionOperatorName(
+          D->getReturnType());
 
       D->setName(Name);
       QC.Sema->makeDeclAvailable(*D->getDeclContext(), D);
@@ -2062,12 +2014,31 @@ QueryResult TypecheckCallableQuery::run()
       return fail();
    }
 
+   if (!D->isExternal() && QC.Sema->PrepareNameLookup(D)) {
+      return fail();
+   }
+
    if (QC.TypeCheckDeclContext(D)) {
       return fail();
    }
 
-   SemaPass::DeclScopeRAII raii(sema(), D);
-   SemaPass::ScopeGuard scope(sema(), D);
+   if (D->isTemplateOrInTemplate()
+   || isa<ProtocolDecl>(D->getDeclContext()->lookThroughExtension())) {
+      return finish();
+   }
+
+   for (FuncArgDecl* ArgDecl : D->getArgs()) {
+      if (QC.TypecheckDecl(ArgDecl)) {
+         return fail();
+      }
+
+      D->copyStatusFlags(ArgDecl);
+   }
+
+   SemaPass::DeclScopeRAII raii(*QC.Sema, D);
+   SemaPass::ScopeGuard scope(*QC.Sema, D);
+   SemaPass::InStaticContextRAII StaticCtx(
+       *QC.Sema, D->isStatic() && !isa<InitDecl>(D));
 
    if (auto Body = D->getBody()) {
       auto res = QC.Sema->visitStmt(D, Body);
@@ -2111,7 +2082,7 @@ QueryResult PrepareModuleInterfaceQuery::run()
 {
    SemaPass::DeclScopeRAII DSR(sema(), D);
 
-   for (auto *InnerDecl : D->getDecls()) {
+   for (auto* InnerDecl : D->getDecls()) {
       if (QC.PrepareDeclInterface(InnerDecl)) {
          return fail();
       }
@@ -2131,7 +2102,7 @@ QueryResult TypecheckModuleQuery::run()
 
 QueryResult PrepareNamespaceInterfaceQuery::run()
 {
-   for (auto *InnerDecl : D->getDecls()) {
+   for (auto* InnerDecl : D->getDecls()) {
       if (QC.PrepareDeclInterface(InnerDecl)) {
          return fail();
       }
@@ -2151,7 +2122,7 @@ QueryResult TypecheckNamespaceQuery::run()
 
 QueryResult PrepareCompoundInterfaceQuery::run()
 {
-   for (auto *InnerDecl : D->getDecls()) {
+   for (auto* InnerDecl : D->getDecls()) {
       if (QC.PrepareDeclInterface(InnerDecl)) {
          return fail();
       }
@@ -2173,35 +2144,52 @@ QueryResult PrepareAliasInterfaceQuery::run()
 {
    SemaPass::DeclScopeRAII DSR(sema(), D);
 
-   auto TypeRes = QC.Sema->visitSourceType(D->getType());
-   if (!TypeRes) {
-      return finish(DoneWithError);
+   if (!D->getType().isResolved()) {
+      auto TypeRes = QC.Sema->visitSourceType(D->getType(), true);
+      if (!TypeRes) {
+         return finish(DoneWithError);
+      }
+
+      TypeRes = TypeRes.get()->removeMetaType();
+      D->setType(TypeRes.get());
    }
 
    if (!D->getAliasExpr()) {
-      if (!D->hasAttribute<_BuiltinAttr>()) {
-         QC.Sema->diagnose(D, err_alias_without_value, D->getSourceRange());
-         return fail();
+      if (D->isImplOfProtocolRequirement()) {
+         return finish();
       }
 
-      QC.Sema->SetBuiltinAliasType(D);
+      if (D->hasAttribute<_BuiltinAttr>()) {
+         QC.Sema->SetBuiltinAliasType(D);
+      }
+      else if (!D->isVariadicForDecl()) {
+         if (!D->isInvalid()) {
+            QC.Sema->diagnose(D, err_alias_without_value, D->getSourceRange());
+         }
+
+         return fail();
+      }
    }
 
    // If the type is inferred, we need to typecheck the expression already.
-   if (!TypeRes.get()->isAutoType() || !D->getAliasExpr()) {
+   if (!D->getType()->isAutoType() || !D->getAliasExpr() || D->isTemplate()) {
       return finish();
    }
+
+   SemaPass::DontApplyCapabilitiesRAII NoCapabilities(*QC.Sema);
 
    // Set status to 'Done' now, since this declaration can be reffered to in
    // the following expression.
    finish(Done);
 
-   auto ExprRes = QC.Sema->typecheckExpr(D->getAliasExpr(), SourceType(), D);
+   StaticExpr* Expr = D->getAliasExpr();
+   auto ExprRes = QC.Sema->typecheckExpr(Expr->getExpr(), SourceType(), D);
    if (!ExprRes) {
       return fail();
    }
 
-   D->setAliasExpr(cast<StaticExpr>(ExprRes.get()));
+   D->getAliasExpr()->setExpr(ExprRes.get());
+   D->getAliasExpr()->copyStatusFlags(ExprRes.get());
 
    QualType valueType = ExprRes.get()->getExprType();
    D->getType().setResolvedType(valueType);
@@ -2211,29 +2199,36 @@ QueryResult PrepareAliasInterfaceQuery::run()
 
 QueryResult TypecheckAliasQuery::run()
 {
+   if (D->isTemplate() && !QC.Sema->isInBuiltinModule(D)
+   && !QC.Sema->isInReflectModule(D)) {
+      return finish();
+   }
+
    if (auto Err = QC.TypecheckConstraints(D)) {
       return Query::finish(Err);
    }
 
-   StaticExpr *Expr = D->getAliasExpr();
+   StaticExpr* Expr = D->getAliasExpr();
    if (!Expr || Expr->isSemanticallyChecked()) {
       return finish();
    }
 
-   SemaPass::DeclScopeRAII DSR(sema(), D);
+   SemaPass::DeclScopeRAII DSR(*QC.Sema, D);
+   SemaPass::DontApplyCapabilitiesRAII NoCapabilities(*QC.Sema);
 
-   auto ExprRes = QC.Sema->typecheckExpr(Expr, D->getType(), D);
+   auto ExprRes = QC.Sema->typecheckExpr(Expr->getExpr(), D->getType(), D);
    if (!ExprRes) {
       return fail();
    }
 
-   Expression *Val = ExprRes.get();
-
+   Expression* Val = ExprRes.get();
    QualType GivenType = Val->getExprType();
-   QC.Sema->checkDeclaredVsGivenType(D, Val, D->getType(),
-                                     D->getType(), GivenType, true,
-                                     D->getSourceLoc());
 
-   D->setAliasExpr(cast<StaticExpr>(Val));
+   QC.Sema->checkDeclaredVsGivenType(D, Val, D->getType(), D->getType(),
+                                     GivenType, true, D->getSourceLoc());
+
+   D->getAliasExpr()->setExpr(Val);
+   D->getAliasExpr()->copyStatusFlags(Val);
+
    return finish();
 }

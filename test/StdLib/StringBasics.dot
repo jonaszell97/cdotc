@@ -1,0 +1,16 @@
+
+// RUN
+
+// Create and modify a string
+var s = "I am a simple string"
+assertFalse!(s.storageIsOwned, "string should not be owned")
+
+// Access internal property
+_ = s.unsafeCString
+
+// Take ownership
+s += " and now I grow"
+assertTrue!(s.storageIsOwned, "string should be owned")
+
+// Test for equality
+assertEqual!(s, "I am a simple string and now I grow")

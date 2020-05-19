@@ -1,26 +1,16 @@
-//
-// Created by Jonas Zell on 19.11.17.
-//
+#include "cdotc/IL/MetaData.h"
 
-#include "MetaData.h"
-#include "Basic/FileManager.h"
-#include "Basic/FileUtils.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Basic/FileUtils.h"
 
 namespace cdot {
 namespace il {
 
-MetaData::MetaData(MDKind kind) : kind(kind)
-{ }
+MetaData::MetaData(MDKind kind) : kind(kind) {}
 
-MDSet::MDSet() : MetaData(MDSetID), ContainedMD{}
-{
+MDSet::MDSet() : MetaData(MDSetID), ContainedMD{} {}
 
-}
-
-void MDSet::setNode(MetaData *MD)
-{
-   ContainedMD[MD->getKind()] = MD;
-}
+void MDSet::setNode(MetaData* MD) { ContainedMD[MD->getKind()] = MD; }
 
 MetaData* MDSet::getNode(MDKind kind) const
 {
@@ -31,10 +21,7 @@ MetaData* MDSet::getNode(MDKind kind) const
    return nullptr;
 }
 
-bool MDSet::hasNode(MDKind kind) const
-{
-   return getNode(kind) != nullptr;
-}
+bool MDSet::hasNode(MDKind kind) const { return getNode(kind) != nullptr; }
 
 void MDSet::removeIfPresent(MDKind kind)
 {

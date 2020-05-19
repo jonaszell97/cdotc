@@ -1,0 +1,44 @@
+
+/// Assert that the given condition is true and print an error message if it is not.
+macro assertTrue(
+    ($cond:any, $msg:expr) => {
+        if !($cond) {
+            print("[21;31massertion failed:[0m '${stringify!($cond)}', ${$msg} (in function '${core.reflect.function}', file '${core.reflect.sourceLocation.fileName}', line: ${core.reflect.sourceLocation.line})")
+        }
+    },
+    ($cond:any) => {
+        if !($cond) {
+            print("[21;31massertion failed:[0m '${stringify!($cond)}' (in function '${core.reflect.function}', file '${core.reflect.sourceLocation.fileName}', line: ${core.reflect.sourceLocation.line})")
+        }
+    },
+)
+
+/// Assert that the given condition is false and print an error message if it is not.
+macro assertFalse(
+    ($cond:any, $msg:expr) => {
+        core.test.assertTrue!(!($cond), $msg)
+    },
+    ($cond:any) => {
+        core.test.assertTrue!(!($cond))
+    },
+)
+
+/// Assert that the two values are equal and print an error message if they are not.
+macro assertEqual(
+    ($v1:any, $v2:any, $msg:expr) => {
+        core.test.assertTrue!($v1 == $v2, $msg)
+    },
+    ($v1:any, $v2:any) => {
+        core.test.assertTrue!($v1 == $v2)
+    },
+)
+
+/// Assert that the two values are not equal and print an error message if they are not.
+macro assertNotEqual(
+    ($v1:any, $v2:any, $msg:expr) => {
+        core.test.assertTrue!($v1 != $v2, $msg)
+    },
+    ($v1:any, $v2:any) => {
+        core.test.assertTrue!($v1 != $v2)
+    },
+)

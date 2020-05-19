@@ -1,29 +1,19 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
+#include "cdotc/IL/Instruction.h"
 
-#include "Instruction.h"
-
-#include "Instructions.h"
-#include "Module.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Module.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-Instruction::Instruction(TypeID id,
-                         ValueType ty,
-                         BasicBlock *parent)
-   : Value(id, ty), parent(parent)
+Instruction::Instruction(TypeID id, ValueType ty, BasicBlock* parent)
+    : Value(id, ty), parent(parent)
 {
-
 }
 
-Instruction::~Instruction()
-{
-
-}
+Instruction::~Instruction() {}
 
 Context& Instruction::getContext() const
 {
@@ -37,12 +27,9 @@ Module* Instruction::getModule() const
    return parent->getParent()->getParent();
 }
 
-BasicBlock *Instruction::getParent() const
-{
-   return parent;
-}
+BasicBlock* Instruction::getParent() const { return parent; }
 
-void Instruction::setParent(BasicBlock *parent)
+void Instruction::setParent(BasicBlock* parent)
 {
    Instruction::parent = parent;
 }
@@ -76,15 +63,17 @@ const MultiOperandInst* Instruction::asMultiOperandInst() const
 MultiOperandInst* Instruction::asMultiOperandInst()
 {
    switch (getTypeID()) {
-#  define CDOT_MULTI_OP_INST(NAME) case NAME##ID: return cast<NAME>(this);
-#  include "Instructions.def"
+#define CDOT_MULTI_OP_INST(NAME)                                               \
+   case NAME##ID:                                                              \
+      return cast<NAME>(this);
+#include "cdotc/IL/Instructions.def"
 
    default:
       return nullptr;
    }
 }
 
-void Instruction::handleReplacement(Value *with)
+void Instruction::handleReplacement(Value* with)
 {
    for (auto it = op_begin(); it != op_end(); ++it) {
       (*it)->replaceUser(this, with);
@@ -101,13 +90,13 @@ void Instruction::handleReplacement(Value *with)
 unsigned Instruction::getNumOperands() const
 {
    switch (id) {
-#  define CDOT_INSTRUCTION(Name) \
-      case Name##ID: \
-         return static_cast<const Name*>(this)->getNumOperandsImpl();
-#  include "Instructions.def"
+#define CDOT_INSTRUCTION(Name)                                                 \
+   case Name##ID:                                                              \
+      return static_cast<const Name*>(this)->getNumOperandsImpl();
+#include "cdotc/IL/Instructions.def"
 
    default:
-         llvm_unreachable("bad inst kind");
+      llvm_unreachable("bad inst kind");
    }
 }
 
@@ -124,7 +113,7 @@ Value* Instruction::getOperand(unsigned idx) const
    return *it;
 }
 
-void Instruction::setOperand(unsigned idx, Value *V)
+void Instruction::setOperand(unsigned idx, Value* V)
 {
    assert(idx < getNumOperands());
    op_begin()[idx] = V;
@@ -133,56 +122,56 @@ void Instruction::setOperand(unsigned idx, Value *V)
 Instruction::op_iterator Instruction::op_begin()
 {
    switch (id) {
-#  define CDOT_INSTRUCTION(Name) \
-      case Name##ID: \
-         return static_cast<Name*>(this)->op_begin_impl();
-#  include "Instructions.def"
+#define CDOT_INSTRUCTION(Name)                                                 \
+   case Name##ID:                                                              \
+      return static_cast<Name*>(this)->op_begin_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
-         llvm_unreachable("bad inst kind");
+      llvm_unreachable("bad inst kind");
    }
 }
 
 Instruction::op_iterator Instruction::op_end()
 {
    switch (id) {
-#  define CDOT_INSTRUCTION(Name) \
-      case Name##ID: \
-         return static_cast<Name*>(this)->op_end_impl();
-#  include "Instructions.def"
+#define CDOT_INSTRUCTION(Name)                                                 \
+   case Name##ID:                                                              \
+      return static_cast<Name*>(this)->op_end_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
-         llvm_unreachable("bad inst kind");
+      llvm_unreachable("bad inst kind");
    }
 }
 
 Instruction::op_const_iterator Instruction::op_begin() const
 {
    switch (id) {
-#  define CDOT_INSTRUCTION(Name) \
-      case Name##ID: \
-         return static_cast<const Name*>(this)->op_begin_impl();
-#  include "Instructions.def"
+#define CDOT_INSTRUCTION(Name)                                                 \
+   case Name##ID:                                                              \
+      return static_cast<const Name*>(this)->op_begin_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
-         llvm_unreachable("bad inst kind");
+      llvm_unreachable("bad inst kind");
    }
 }
 
 Instruction::op_const_iterator Instruction::op_end() const
 {
    switch (id) {
-#  define CDOT_INSTRUCTION(Name) \
-      case Name##ID: \
-         return static_cast<const Name*>(this)->op_end_impl();
-#  include "Instructions.def"
+#define CDOT_INSTRUCTION(Name)                                                 \
+   case Name##ID:                                                              \
+      return static_cast<const Name*>(this)->op_end_impl();
+#include "cdotc/IL/Instructions.def"
 
    default:
-         llvm_unreachable("bad inst kind");
+      llvm_unreachable("bad inst kind");
    }
 }
 
-void Instruction::replaceOperand(Value *Prev, Value *New)
+void Instruction::replaceOperand(Value* Prev, Value* New)
 {
    unsigned idx = 0;
    for (auto it = op_begin(); it != op_end(); ++it, ++idx) {
