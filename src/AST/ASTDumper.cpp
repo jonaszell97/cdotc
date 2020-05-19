@@ -11,6 +11,8 @@
 using namespace cdot::support;
 using namespace cdot::ast;
 
+using std::string;
+
 namespace cdot {
 namespace {
 

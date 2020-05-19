@@ -147,7 +147,7 @@ il::Value* ILGenPass::evaluateAsConstant(Expression* expr)
 {
    switch (expr->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       return visit##Name(cast<Name>(expr));                                    \
       break;
 #include "cdotc/AST/AstNode.def"
@@ -171,11 +171,11 @@ void ILGenPass::visit(Statement* stmt)
 
    switch (stmt->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       visit##Name(cast<Name>(stmt));                                           \
       break;
 #define CDOT_STMT(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       visit##Name(cast<Name>(stmt));                                           \
       break;
 #include "cdotc/AST/AstNode.def"

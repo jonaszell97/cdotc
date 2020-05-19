@@ -6,6 +6,7 @@
 #include "cdotc/Support/Casting.h"
 
 using namespace cdot::support;
+using std::string;
 
 namespace cdot {
 namespace ast {
@@ -1802,6 +1803,37 @@ ConstraintExpr* ConstraintExpr::Create(ASTContext& C, SourceLocation Loc,
                                        SourceType typeConstraint)
 {
    return new (C) ConstraintExpr(Loc, typeConstraint);
+}
+
+void TraitsArgument::destroyValue()
+{
+   switch (kind) {
+   default:
+      break;
+   case String:
+      str.~string();
+      break;
+   }
+}
+
+void TraitsArgument::copyData(TraitsArgument&& other)
+{
+   kind = other.kind;
+
+   switch (kind) {
+   case Expr:
+      expr = other.expr;
+      break;
+   case Stmt:
+      stmt = other.stmt;
+      break;
+   case Type:
+      Ty = other.Ty;
+      break;
+   case String:
+      new (&str) std::string(move(other.str));
+      break;
+   }
 }
 
 TraitsExpr::TraitsExpr(SourceLocation TraitsLoc, SourceRange Parens, Kind kind,

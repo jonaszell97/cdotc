@@ -131,6 +131,11 @@ static cl::opt<string> EmitASM("emit-asm",
                                cl::cat(OutputCat), cl::ValueOptional,
                                cl::init("-"));
 
+/// If true, output a list of lexed tokens.
+static cl::opt<string> EmitTokens("emit-tokens",
+    cl::desc("emit the lexed tokens to the given directory (or stdout)"),
+    cl::cat(OutputCat), cl::ValueOptional, cl::init("-"));
+
 /// Maximum number of errors to emit before aborting.
 static cl::opt<unsigned>
     MaxErrors("error-limit",
@@ -422,6 +427,17 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       options.EmitAsmPath = EmitASM.getValue();
    }
 
+   if (EmitTokens != "-") {
+      options.setFlag(CompilerOptions::F_EmitTokens, true);
+
+      if (!EmitTokens.empty() && EmitTokens.getValue().back() != fs::PathSeperator) {
+         EmitTokens.getValue() += fs::PathSeperator;
+      }
+
+      options.EmitTokensPath = EmitTokens.getValue();
+      options.setFlag(CompilerOptions::F_SyntaxOnly, true);
+   }
+
    if (ClearCaches) {
       serial::IncrementalCompilationManager::clearCaches();
    }
@@ -446,14 +462,13 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
 
    for (auto& inputs : options.inFiles) {
       for (auto& file : inputs.second) {
-         if (file.front() != PathSeperator)
+         if (file.front() != PathSeperator) {
             file = "./" + file;
+         }
       }
    }
 
-   if (!options.textOutputOnly() && !options.runUnitTests()
-       && !options.hasOutputKind(OutputKind::Executable)
-       && !options.emitModules()) {
+   if (options.OutFile.empty() && options.hasOutputKind(OutputKind::Executable)) {
       options.OutFile = "./a.out";
    }
    else if (!options.OutFile.empty()) {

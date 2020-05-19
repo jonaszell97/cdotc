@@ -15,7 +15,6 @@ class DeclContext;
 
 class Statement;
 class Expression;
-class AstNode;
 
 class StaticStmt;
 class VarDecl;

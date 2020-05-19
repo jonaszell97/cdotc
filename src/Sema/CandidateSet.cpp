@@ -14,6 +14,8 @@ using namespace cdot::ast;
 using namespace cdot::diag;
 using namespace cdot::support;
 
+using std::string;
+
 namespace cdot {
 
 CandidateSet::Candidate::Candidate() = default;

@@ -27,7 +27,7 @@ public:
    {
       switch (node->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                   \
       return static_cast<SubClass*>(this)->visit##Name(                        \
           static_cast<Name*>(node), std::forward<ParamTys>(params)...);
 #include "cdotc/AST/AstNode.def"
@@ -41,12 +41,12 @@ public:
    {
       switch (node->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                   \
       static_cast<SubClass*>(this)->visit##Name(                               \
           static_cast<Name*>(node), std::forward<ParamTys>(params)...);        \
       return StmtRetTy();
 #define CDOT_STMT(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                   \
       return static_cast<SubClass*>(this)->visit##Name(                        \
           static_cast<Name*>(node), std::forward<ParamTys>(params)...);
 #include "cdotc/AST/AstNode.def"
@@ -77,7 +77,7 @@ public:
    {
       switch (node->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID: {                                                   \
+   case Statement::Name##ID: {                                                 \
       bool Cont = static_cast<SubClass*>(this)->visit##Name(                   \
           static_cast<Name*>(node), std::forward<ParamTys>(params)...);        \
                                                                                \
@@ -94,7 +94,7 @@ public:
    {
       switch (node->getTypeID()) {
 #define CDOT_STMT(Name)                                                        \
-   case AstNode::Name##ID: {                                                   \
+   case Statement::Name##ID: {                                                 \
       bool Cont = static_cast<SubClass*>(this)->visit##Name(                   \
           static_cast<Name*>(node), std::forward<ParamTys>(params)...);        \
                                                                                \
@@ -1631,7 +1631,7 @@ public:
    {
       switch (E->getTypeID()) {
 #define CDOT_EXPR(NAME)                                                        \
-   case AstNode::NAME##ID:                                                     \
+   case Statement::NAME##ID:                                                   \
       return static_cast<SubClass*>(this)->visit##NAME(static_cast<NAME*>(E));
 #include "cdotc/AST/AstNode.def"
 
@@ -1644,13 +1644,13 @@ public:
    {
       switch (S->getTypeID()) {
 #define CDOT_EXPR(NAME)                                                        \
-   case AstNode::NAME##ID: {                                                   \
+   case Statement::NAME##ID: {                                                 \
       auto Res                                                                 \
           = static_cast<SubClass*>(this)->visit##NAME(static_cast<NAME*>(S));  \
       return Res ? StmtResult(Res.get()) : StmtError();                        \
    }
 #define CDOT_STMT(NAME)                                                        \
-   case AstNode::NAME##ID:                                                     \
+   case Statement::NAME##ID:                                                   \
       return static_cast<SubClass*>(this)->visit##NAME(static_cast<NAME*>(S));
 #include "cdotc/AST/AstNode.def"
 

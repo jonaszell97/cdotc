@@ -181,27 +181,49 @@ void Token::print(llvm::raw_ostream& OS) const
       OS << "<eof>";
       return;
    case tok::expr_begin:
-      OS << "#{";
+      OS << "${";
       return;
    case tok::stringify_begin:
       OS << "##{";
       return;
    case tok::interpolation_begin:
-      OS << "${";
+      OS << "";
       return;
    case tok::interpolation_end:
       OS << "}";
       return;
    case tok::ident:
-   case tok::op_ident:
+   case tok::op_ident: {
+      if (Data)
+         OS << '`';
+
       OS << getIdentifier();
+
+      if (Data)
+         OS << '`';
+
       return;
+   }
    case tok::dollar_ident: {
       OS << "$" << getIdentifier();
       return;
    }
+   case tok::stringliteral: {
+      auto *BeginPtr = reinterpret_cast<const char*>(Ptr) - 1;
+      auto *EndPtr = BeginPtr + Data + 2;
+
+      // Check if this string was introduced by interpolation.
+      if (*BeginPtr != '"') {
+         ++BeginPtr;
+      }
+      if (*(EndPtr-1) != '"') {
+         --EndPtr;
+      }
+
+      OS << llvm::StringRef(BeginPtr, EndPtr - BeginPtr);
+      break;
+   }
    case tok::charliteral:
-   case tok::stringliteral:
       OS << llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1, Data + 2);
       break;
    case tok::fpliteral:
@@ -390,3 +412,13 @@ bool Token::is_literal() const
 
 } // namespace lex
 } // namespace cdot
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, cdot::lex::tok::TokenType Tok)
+{
+   switch (Tok) {
+#  define CDOT_TOKEN(NAME, _) case cdot::lex::tok::NAME: return OS << #NAME;
+#  include "cdotc/Lex/Tokens.def"
+   default:
+      llvm_unreachable("bad token kind!");
+   }
+}

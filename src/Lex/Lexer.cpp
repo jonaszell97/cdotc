@@ -2,7 +2,9 @@
 #include "cdotc/Lex/Lexer.h"
 
 #include "cdotc/Basic/IdentifierInfo.h"
+#include "cdotc/Basic/FileManager.h"
 #include "cdotc/Diagnostics/DiagnosticsEngine.h"
+#include "cdotc/Support/Format.h"
 #include "cdotc/Support/SaveAndRestore.h"
 
 #include <llvm/Support/MemoryBuffer.h>
@@ -74,6 +76,73 @@ void Lexer::lexCompleteFile()
    }
 
    LookaheadIdx = 0;
+}
+
+namespace {
+
+class EmitCommentConsumer: public CommentConsumer {
+   /// The stream to emit comments to.
+   llvm::raw_ostream &OS;
+
+   /// Number of emitted tokens.
+   int &i;
+
+   /// Base offset of the source file.
+   unsigned BaseOffset;
+
+public:
+   explicit EmitCommentConsumer(llvm::raw_ostream &OS, int &i,
+                                unsigned BaseOffset)
+                                 : OS(OS), i(i), BaseOffset(BaseOffset)
+   {}
+
+   void HandleLineComment(llvm::StringRef Txt, SourceRange SR) override
+   {
+      if (i++ != 0)
+         OS << "\n";
+
+      auto LocStart = SR.getStart().getOffset() - BaseOffset;
+      OS << "(" << LocStart << ", line_comment, " << Txt << ")";
+   }
+
+   void HandleBlockComment(llvm::StringRef Txt, SourceRange SR) override
+   {
+      if (i++ != 0)
+         OS << "\n";
+
+      auto LocStart = SR.getStart().getOffset() - BaseOffset;
+      OS << "(" << LocStart << ", block_comment, ";
+
+      for (auto &C : Txt) {
+         support::unescape_char(C, OS);
+      }
+
+      OS << ")";
+   }
+};
+
+} // anonymous namespace
+
+void Lexer::lexAndEmitTokens(llvm::raw_ostream &OS)
+{
+   int i = 0;
+   EmitCommentConsumer CC(OS, i, offset);
+
+   auto SAR = support::saveAndRestore(this->commentConsumer,
+                                      (CommentConsumer*)&CC);
+
+   while (!currentTok().is(tok::eof)) {
+      if (i++ != 0)
+         OS << "\n";
+
+      auto &Tok = currentTok();
+      auto LocStart = Tok.getSourceLoc().getOffset() - offset;
+      OS << "(" << LocStart << ", ";
+      ::operator<<(OS, Tok.getKind());
+      OS << ", " << Tok << ")";
+
+      advance(false, true);
+   }
 }
 
 void Lexer::findComments()
@@ -433,7 +502,7 @@ Token Lexer::lexNextToken()
 
       auto& II = Idents.get({TokBegin, size_t(CurPtr - TokBegin - 1)});
       return Token(&II, SourceLocation(TokBegin - BufStart + offset),
-                   tok::ident);
+                   tok::ident, true);
    }
    default:
       return lexIdentifier();
@@ -780,14 +849,7 @@ void Lexer::lexStringInterpolation()
          }
       }
       else if (*CurPtr == '\\') {
-         //         if (!isModuleLexer) {
-         // normal escape, e.g. "\n"
          ++CurPtr;
-         //         }
-         //         else {
-         //            // hex escape, e.g. "\0A"
-         //            CurPtr += 2;
-         //         }
       }
       else if (*CurPtr == InterpolationBegin && InterpolationBegin != '\0') {
          if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
@@ -1499,6 +1561,8 @@ void Lexer::skipMultiLineComment()
    ++CurPtr;
 
    bool done = false;
+   int open = 1;
+
    while (!done) {
       assert(CurPtr < BufEnd && "file is not zero terminated!");
 
@@ -1507,10 +1571,20 @@ void Lexer::skipMultiLineComment()
          done = true;
          break;
       }
+      case '/': {
+         if (*CurPtr == '*') {
+            ++CurPtr;
+            ++open;
+         }
+
+         break;
+      }
       case '*':
          if (*CurPtr == '/') {
             ++CurPtr;
-            done = true;
+            if (--open == 0) {
+               done = true;
+            }
          }
 
          LLVM_FALLTHROUGH;

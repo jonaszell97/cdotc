@@ -22,6 +22,8 @@ using namespace cdot::support;
 using namespace cdot::diag;
 using namespace cdot::sema;
 
+using std::string;
+
 namespace cdot {
 
 static constexpr uint16_t GenericMask
@@ -276,7 +278,7 @@ private:
       Expression* Inst;
       switch (expr->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       Inst = visit##Name(static_cast<Name*>(expr));                            \
       break;
 #include "cdotc/AST/AstNode.def"
@@ -304,7 +306,7 @@ private:
       Statement* Inst;
       switch (stmt->getTypeID()) {
 #define CDOT_STMT(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       Inst = visit##Name(static_cast<Name*>(stmt));                            \
       break;
 #include "cdotc/AST/AstNode.def"

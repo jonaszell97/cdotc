@@ -232,6 +232,23 @@ QueryResult ParseMainSourceFileQuery::run()
    Lexer lex(Context.getIdentifiers(), Sema.getDiags(), File.Buf, File.SourceId,
              File.BaseOffset, '$', false);
 
+   if (CI.getOptions().emitTokens()) {
+      if (CI.getOptions().EmitTokensPath.empty()) {
+         lex.lexAndEmitTokens(llvm::outs());
+      }
+      else {
+         std::error_code EC;
+         llvm::raw_fd_ostream OS(CI.getOptions().EmitTokensPath, EC);
+         if (EC) {
+            llvm::report_fatal_error("Opening output file failed!");
+         }
+
+         lex.lexAndEmitTokens(OS);
+      }
+
+      return finish(FileDecl);
+   }
+
    if (auto *Consumer = CI.getCommentConsumer()) {
       auto SAR = support::saveAndRestore(lex.commentConsumer, Consumer);
       lex.findComments();

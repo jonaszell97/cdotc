@@ -33,8 +33,9 @@ struct Token {
    }
 
    Token(IdentifierInfo* II, SourceLocation loc,
-         tok::TokenType identifierKind = tok::ident)
-       : kind(identifierKind), loc(loc), Data(0), Ptr(II)
+         tok::TokenType identifierKind = tok::ident,
+         bool wasEscaped = false)
+       : kind(identifierKind), loc(loc), Data((int)wasEscaped), Ptr(II)
    {
    }
 
@@ -151,8 +152,7 @@ struct Token {
 
    IdentifierInfo* getIdentifierInfo() const
    {
-      if (!Ptr || Data)
-         return nullptr;
+      assert((oneOf(tok::ident, tok::op_ident) || is_keyword()) && "not an identifier!");
       return (IdentifierInfo*)(Ptr);
    }
 

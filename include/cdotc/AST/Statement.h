@@ -1,7 +1,6 @@
 #ifndef STATEMENT_H
 #define STATEMENT_H
 
-#include "cdotc/AST/AstNode.h"
 #include "cdotc/AST/SourceType.h"
 #include "cdotc/Basic/DeclarationName.h"
 #include "cdotc/Lex/Token.h"
@@ -11,7 +10,13 @@
 
 namespace cdot {
 
+class Attr;
 class BlockScope;
+enum class AccessSpecifier : unsigned char;
+
+namespace diag {
+class DiagnosticBuilder;
+} // namespace diag
 
 namespace ast {
 
@@ -27,8 +32,52 @@ class Expression;
 class PatternExpr;
 class StaticExpr;
 
-class alignas(sizeof(void*)) Statement : public AstNode {
+class alignas(sizeof(void*)) Statement {
 public:
+   enum NodeType : uint8_t {
+#define CDOT_ASTNODE(Name) Name##ID,
+#define CDOT_ABSTRACT(Name) Name##ID,
+#include "cdotc/AST/AstNode.def"
+   };
+
+   llvm::StringRef getNodeTypeAsString() const
+   {
+      switch (typeID) {
+#define CDOT_ASTNODE(Name)                                                     \
+   case Name##ID:                                                              \
+      return #Name;
+#include "AstNode.def"
+
+      default:
+         llvm_unreachable("bad node kind");
+      }
+   }
+
+   llvm::ArrayRef<Attr*> getAttributes() const;
+
+   template<class T> bool hasAttribute() const
+   {
+      for (auto& Attr : getAttributes())
+         if (support::isa<T>(Attr))
+            return true;
+
+      return false;
+   }
+
+   template<class T> T* getAttribute()
+   {
+      for (auto& Attr : getAttributes())
+         if (auto A = support::dyn_cast<T>(Attr))
+            return A;
+
+      return nullptr;
+   }
+
+   void setContextualType(QualType ty);
+
+   bool needsContextualInformation() const { return false; }
+
+   NodeType getTypeID() const { return typeID; }
    struct EmptyShell {
    };
 
@@ -144,6 +193,10 @@ public:
       return (SubclassData & mask) != 0;
    }
 
+   unsigned getSubclassData() const { return SubclassData; }
+   void setSubclassData(unsigned D) { SubclassData = D; }
+   QualType getContextualType() { return contextualType; }
+
    void copyStatusFlags(Decl* D);
    void copyStatusFlags(Statement* Stmt);
 
@@ -153,11 +206,32 @@ public:
    void print(llvm::raw_ostream& OS) const;
    void dump() const;
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return true; }
 
 protected:
-   explicit Statement(NodeType typeID) : AstNode(typeID) {}
+   explicit Statement(NodeType typeID)
+      : typeID(typeID), SubclassData(0)
+   {}
+
+#ifndef NDEBUG
+   virtual
+#endif
+   ~Statement();
+
+   NodeType typeID : 8;
+   unsigned SubclassData : 24;
+   QualType contextualType;
+
+   void setFlag(unsigned flag, bool set)
+   {
+      if (set)
+         SubclassData |= flag;
+      else
+         SubclassData &= ~flag;
+   }
+
+   bool flagIsSet(unsigned flag) const { return (SubclassData & flag) != 0; }
 };
 
 class DeclStmt : public Statement {
@@ -171,7 +245,7 @@ public:
    SourceRange getSourceRange() const;
 
    static bool classofKind(NodeType kind) { return kind == DeclStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
 private:
    explicit DeclStmt(Decl* D);
@@ -183,7 +257,7 @@ class AttributedStmt final : public Statement,
                              llvm::TrailingObjects<AttributedStmt, Attr*> {
 public:
    static bool classofKind(NodeType kind) { return kind == AttributedStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static AttributedStmt* Create(ASTContext& Ctx, Statement* Stmt,
                                  llvm::ArrayRef<Attr*> Attrs);
@@ -218,7 +292,7 @@ class MixinStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == MixinStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const { return Parens; }
    Expression* getMixinExpr() const { return Expr; }
@@ -250,7 +324,7 @@ private:
 
 public:
    static bool classofKind(NodeType kind) { return kind == DebugStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const
    {
@@ -266,7 +340,7 @@ class NullStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == NullStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static NullStmt* Create(ASTContext& C, SourceLocation Loc);
    NullStmt(EmptyShell Empty);
@@ -324,7 +398,7 @@ public:
    void setContainsDeclStmt(bool V) { ContainsDeclStmt = V; }
 
    static bool classofKind(NodeType kind) { return kind == CompoundStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    friend TrailingObjects;
 
@@ -355,7 +429,7 @@ class BreakStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == BreakStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static BreakStmt* Create(ASTContext& C, SourceLocation Loc,
                             IdentifierInfo* Label);
@@ -377,7 +451,7 @@ class ContinueStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == ContinueStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static ContinueStmt* Create(ASTContext& C, SourceLocation Loc,
                                IdentifierInfo* Label);
@@ -452,7 +526,7 @@ class IfStmt final : public Statement, TrailingObjects<IfStmt, IfCondition> {
 
 public:
    static bool classofKind(NodeType kind) { return kind == IfStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    friend TrailingObjects;
 
@@ -506,7 +580,7 @@ class WhileStmt final : public Statement,
 
 public:
    static bool classofKind(NodeType kind) { return kind == WhileStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    friend TrailingObjects;
 
@@ -556,7 +630,7 @@ class ForStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == ForStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static ForStmt* Create(ASTContext& C, SourceLocation ForLoc, Statement* init,
                           Expression* term, Statement* inc, Statement* body,
@@ -603,7 +677,7 @@ class ForInStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == ForInStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static ForInStmt* Create(ASTContext& C, SourceLocation ForLoc, Decl* decl,
                             Expression* range, Statement* body,
@@ -645,7 +719,7 @@ class CaseStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == CaseStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static CaseStmt* Create(ASTContext& C, SourceLocation CaseLoc,
                            PatternExpr* pattern, Statement* body = nullptr);
@@ -684,7 +758,7 @@ protected:
 
 public:
    static bool classofKind(NodeType kind) { return kind == MatchStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    friend TrailingObjects;
 
@@ -742,7 +816,7 @@ class ReturnStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == ReturnStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static ReturnStmt* Create(ASTContext& C, SourceLocation RetLoc,
                              Expression* val = nullptr);
@@ -782,7 +856,7 @@ public:
    {
       return kind == DiscardAssignStmtID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const;
 
@@ -826,7 +900,7 @@ class DoStmt final : public Statement,
 
 public:
    static bool classofKind(NodeType kind) { return kind == DoStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static DoStmt *Create(ASTContext &C, SourceRange SR,
                          Statement* body, IdentifierInfo* Label);
@@ -869,7 +943,7 @@ class ThrowStmt : public Statement {
 
 public:
    static bool classofKind(NodeType kind) { return kind == ThrowStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    ThrowStmt(SourceLocation ThrowLoc, Expression* thrownVal);
    ThrowStmt(EmptyShell Empty);
@@ -916,7 +990,7 @@ public:
    StaticIfStmt(EmptyShell Empty);
 
    static bool classofKind(NodeType kind) { return kind == StaticIfStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceLocation getStaticLoc() const { return StaticLoc; }
    SourceLocation getIfLoc() const { return IfLoc; }
@@ -959,7 +1033,7 @@ public:
    StaticForStmt(EmptyShell Empty);
 
    static bool classofKind(NodeType kind) { return kind == StaticForStmtID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceLocation getStaticLoc() const { return StaticLoc; }
    SourceLocation getForLoc() const { return ForLoc; }
@@ -1024,7 +1098,7 @@ public:
    {
       return kind == MacroExpansionStmtID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const { return SR; }
    DeclarationName getMacroName() const { return MacroName; }
