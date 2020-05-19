@@ -750,7 +750,7 @@ private:
    ParseResult parseTemplateArgListExpr(Expression* ParentExpr,
                                         bool parsingType);
 
-   string prepareStringLiteral(lex::Token const& tok);
+   std::string prepareStringLiteral(lex::Token const& tok);
    ParseResult parseUnaryExpr(bool parsingStmt = false);
 
    void parseCaseStmts(llvm::SmallVectorImpl<CaseStmt*>& Cases);

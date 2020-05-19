@@ -58,7 +58,7 @@ using TemplateArgVec = std::vector<Expression*>;
 
 class Expression : public Statement {
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind > _firstExprID && kind < _lastExprID;
@@ -135,7 +135,7 @@ public:
       return kind > _firstIdentifiedExprID && kind < _lastIdentifiedExprID;
    }
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
 protected:
    DeclarationName DeclName;
@@ -148,7 +148,7 @@ public:
 
    ParenExpr(EmptyShell Empty);
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == ParenExprID; }
 
 private:
@@ -169,7 +169,7 @@ class TypeExpr : public Expression {
 public:
    SourceRange getSourceRange() const { return Loc; }
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind > _firstTypeExprID && kind < _lastTypeExprID;
@@ -202,7 +202,7 @@ class TupleTypeExpr final : public TypeExpr,
 public:
    friend TrailingObjects;
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == TupleTypeExprID; }
 
    static TupleTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -246,7 +246,7 @@ class FunctionTypeExpr final
 public:
    friend TrailingObjects;
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == FunctionTypeExprID; }
 
    static FunctionTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -293,7 +293,7 @@ class ArrayTypeExpr : public TypeExpr {
    StaticExpr* SizeExpr;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == ArrayTypeExprID; }
 
    static ArrayTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -315,7 +315,7 @@ class DeclTypeExpr : public TypeExpr {
    Expression* TyExpr;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == DeclTypeExprID; }
 
    static DeclTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -333,7 +333,7 @@ class PointerTypeExpr : public TypeExpr {
    SourceType SubType;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == PointerTypeExprID; }
 
    static PointerTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -351,7 +351,7 @@ class ReferenceTypeExpr : public TypeExpr {
    SourceType SubType;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == ReferenceTypeExprID;
@@ -372,7 +372,7 @@ class OptionTypeExpr : public TypeExpr {
    SourceType SubType;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == OptionTypeExprID; }
 
    static OptionTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -395,7 +395,7 @@ class ExistentialTypeExpr final
    unsigned NumExistentials;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType K) { return K == ExistentialTypeExprID; }
 
    static ExistentialTypeExpr* Create(ASTContext& C, SourceRange SR,
@@ -414,7 +414,7 @@ class AttributedExpr final : public Expression,
                              llvm::TrailingObjects<AttributedExpr, Attr*> {
 public:
    static bool classofKind(NodeType kind) { return kind == AttributedExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static AttributedExpr* Create(ASTContext& Ctx, Expression* Expr,
                                  llvm::ArrayRef<Attr*> Attrs);
@@ -449,7 +449,7 @@ public:
    ImplicitCastExpr(EmptyShell Empty);
 
    static bool classofKind(NodeType kind) { return kind == ImplicitCastExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
 private:
    ImplicitCastExpr(Expression* target, const ConversionSequence* ConvSeq);
@@ -560,7 +560,7 @@ public:
    using TrailingObjects::getTrailingObjects;
 
    static bool classofKind(NodeType kind) { return kind == ExprSequenceID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    friend TrailingObjects;
 };
@@ -577,7 +577,7 @@ class UnaryOperator : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == UnaryOperatorID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static UnaryOperator* Create(ASTContext& C, SourceLocation operatorLoc,
                                 op::OperatorKind opKind, FunctionType* FuncTy,
@@ -616,7 +616,7 @@ class BinaryOperator : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == BinaryOperatorID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static BinaryOperator* Create(ASTContext& C, SourceLocation operatorLoc,
                                  op::OperatorKind operatorKind,
@@ -661,7 +661,7 @@ public:
    AssignExpr(EmptyShell Empty);
 
    static bool classofKind(NodeType kind) { return kind == AssignExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const;
    SourceLocation getEqualsLoc() const { return EqualsLoc; }
@@ -698,7 +698,7 @@ public:
    {
       return kind == TypePredicateExprID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static TypePredicateExpr* Create(ASTContext& C, SourceLocation IsLoc,
                                     SourceRange SR, Expression* LHS,
@@ -740,7 +740,7 @@ class CastExpr : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == CastExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static CastExpr* Create(ASTContext& C, SourceLocation AsLoc,
                            CastStrength strength, Expression* target,
@@ -771,7 +771,7 @@ class AddrOfExpr : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == AddrOfExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static AddrOfExpr* Create(ASTContext& C, SourceLocation AmpLoc,
                              Expression* Target);
@@ -799,7 +799,7 @@ class IfExpr : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == IfExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static IfExpr* Create(ASTContext& C, SourceLocation IfLoc, Expression* Cond,
                          Expression* TrueVal, Expression* FalseVal);
@@ -840,7 +840,7 @@ private:
 
 public:
    static bool classofKind(NodeType kind) { return kind == TryExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static TryExpr* Create(ASTContext& C, SourceLocation TryLoc, TryKind Kind,
                           Expression* E);
@@ -867,7 +867,7 @@ class AwaitExpr : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == AwaitExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static AwaitExpr* Create(ASTContext& C, SourceLocation AwaitLoc,
                             Expression* E);
@@ -888,7 +888,7 @@ public:
 
 class PatternExpr : public Expression {
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       switch (kind) {
@@ -924,7 +924,7 @@ public:
    {
       return kind == ExpressionPatternID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static ExpressionPattern* Create(ASTContext& C, SourceLocation ColonLoc,
                                     Expression* E);
@@ -970,7 +970,7 @@ private:
 
 public:
    static bool classofKind(NodeType kind) { return kind == CasePatternID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static CasePattern* Create(ASTContext& C, SourceRange SR, enum Kind Kind,
                               Expression* ParentExpr, IdentifierInfo* caseName,
@@ -1023,7 +1023,7 @@ class IsPattern : public PatternExpr {
 
 public:
    static bool classofKind(NodeType kind) { return kind == IsPatternID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static IsPattern* Create(ASTContext& C, SourceRange SR, SourceType isType);
    IsPattern(EmptyShell Empty);
@@ -1132,7 +1132,7 @@ private:
 
 public:
    static bool classofKind(NodeType kind) { return kind == IntegerLiteralID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static IntegerLiteral* Create(ASTContext& C, SourceRange Loc, QualType type,
                                  const llvm::APSInt& value,
@@ -1176,7 +1176,7 @@ private:
 
 public:
    static bool classofKind(NodeType kind) { return kind == FPLiteralID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static FPLiteral* Create(ASTContext& C, SourceRange Loc, QualType type,
                             const llvm::APFloat& value,
@@ -1218,7 +1218,7 @@ class BoolLiteral : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == BoolLiteralID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static BoolLiteral* Create(ASTContext& C, SourceLocation Loc, QualType type,
                               bool value);
@@ -1261,7 +1261,7 @@ private:
 
 public:
    static bool classofKind(NodeType kind) { return kind == CharLiteralID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static CharLiteral* Create(ASTContext& C, SourceRange Loc, QualType type,
                               char value);
@@ -1295,7 +1295,7 @@ class NoneLiteral : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == NoneLiteralID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static NoneLiteral* Create(ASTContext& C, SourceLocation Loc);
    NoneLiteral(EmptyShell Empty);
@@ -1318,7 +1318,7 @@ class StringLiteral : public Expression {
 
 public:
    static bool classofKind(NodeType kind) { return kind == StringLiteralID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static StringLiteral* Create(ASTContext& C, SourceRange Loc,
                                 std::string&& str);
@@ -1332,7 +1332,7 @@ public:
    bool isCString() const { return cstring; }
    void setCString(bool raw) { cstring = raw; }
 
-   void setValue(string&& value) { StringLiteral::value = move(value); }
+   void setValue(std::string&& value) { StringLiteral::value = move(value); }
 
    InitDecl* getExpressibleByInit() const { return ExpressibleByInit; }
    void setExpressibleByInit(InitDecl* I) { ExpressibleByInit = I; }
@@ -1349,7 +1349,7 @@ class StringInterpolation final
    unsigned NumSegments;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == StringInterpolationID;
@@ -1392,7 +1392,7 @@ protected:
    FunctionDecl* func;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == LambdaExprID; }
 
    static LambdaExpr* Create(ASTContext& C, SourceRange Parens,
@@ -1441,7 +1441,7 @@ public:
 class TupleLiteral final : public Expression,
                            llvm::TrailingObjects<TupleLiteral, Expression*> {
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == TupleLiteralID; }
 
    static TupleLiteral* Create(ASTContext& C, SourceRange Parens,
@@ -1490,7 +1490,7 @@ public:
    SourceRange getSourceRange() const { return SquareRange; }
    void setSquareRange(SourceRange SR) { SquareRange = SR; }
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == ArrayLiteralID; }
 
    friend TrailingObjects;
@@ -1540,7 +1540,7 @@ public:
    InitDecl* getExpressibleByInit() const { return ExpressibleByInit; }
    void setExpressibleByInit(InitDecl* I) { ExpressibleByInit = I; }
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == DictionaryLiteralID;
@@ -1666,7 +1666,7 @@ class IdentifierRefExpr : public IdentifiedExpr {
    size_t captureIndex = 0;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == IdentifierRefExprID;
@@ -1864,7 +1864,7 @@ class DeclRefExpr : public Expression {
    bool AllowModuleRef : 1;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == DeclRefExprID; }
 
    static DeclRefExpr* Create(ASTContext& C, NamedDecl* Decl, SourceRange SR);
@@ -1911,7 +1911,7 @@ class MemberRefExpr : public Expression {
    bool called = false;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == MemberRefExprID; }
 
    static MemberRefExpr* Create(ASTContext& C, Expression* ParentExpr,
@@ -1955,7 +1955,7 @@ class OverloadedDeclRefExpr final
    TemplateArgListExpr *TemplateArgs = nullptr;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == OverloadedDeclRefExprID;
@@ -2009,7 +2009,7 @@ class SelfExpr : public Expression {
    unsigned CaptureIdx = unsigned(-1);
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == SelfExprID; }
 
    static SelfExpr* Create(ASTContext& C, SourceLocation Loc, bool Uppercase);
@@ -2042,7 +2042,7 @@ class SuperExpr : public Expression {
    unsigned CaptureIdx = unsigned(-1);
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == SuperExprID; }
 
    static SuperExpr* Create(ASTContext& C, SourceLocation Loc);
@@ -2071,7 +2071,7 @@ class BuiltinIdentExpr : public Expression {
    BuiltinIdentifier identifierKind;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == BuiltinIdentExprID; }
 
    static BuiltinIdentExpr* Create(ASTContext& C, SourceLocation Loc,
@@ -2095,7 +2095,7 @@ class BuiltinExpr : public Expression {
    SourceRange SR;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == BuiltinExprID; }
 
    static BuiltinExpr* Create(ASTContext& C, QualType Ty);
@@ -2135,7 +2135,7 @@ class TupleMemberExpr : public Expression {
    bool PointerAccess : 1;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == TupleMemberExprID; }
 
    TupleMemberExpr(SourceLocation Loc, Expression* ParentExpr, unsigned Index,
@@ -2219,7 +2219,7 @@ class CallExpr final : public Expression,
    CallableDecl* func = nullptr;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == CallExprID; }
 
    friend TrailingObjects;
@@ -2346,7 +2346,7 @@ class AnonymousCallExpr final
    bool IsPrimitiveInit : 1;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == AnonymousCallExprID;
@@ -2408,7 +2408,7 @@ class SubscriptExpr final : public Expression,
    unsigned NumIndices;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == SubscriptExprID; }
 
    friend TrailingObjects;
@@ -2461,7 +2461,7 @@ class TemplateArgListExpr final
    unsigned NumTemplateArgs;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind)
    {
       return kind == TemplateArgListExprID;
@@ -2517,7 +2517,7 @@ public:
 
    StaticExpr(EmptyShell Empty);
 
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == StaticExprID; }
 
 private:
@@ -2573,7 +2573,7 @@ private:
    SourceType typeConstraint;
 
 public:
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
    static bool classofKind(NodeType kind) { return kind == ConstraintExprID; }
 
    static ConstraintExpr* Create(ASTContext& C, SourceLocation Loc, Kind kind);
@@ -2629,7 +2629,7 @@ struct TraitsArgument {
       return Ty;
    }
 
-   const string& getStr() const
+   const std::string& getStr() const
    {
       assert(kind == String);
       return str;
@@ -2638,7 +2638,7 @@ struct TraitsArgument {
    void setStmt(Statement* S) { stmt = S; }
    void setExpr(Expression* E) { expr = E; }
    void setType(SourceType T) { Ty = T; }
-   void setStr(string&& str) { this->str = move(str); }
+   void setStr(std::string&& str) { this->str = move(str); }
 
 private:
    Kind kind;
@@ -2651,36 +2651,8 @@ private:
 
    SourceType Ty;
 
-   void destroyValue()
-   {
-      switch (kind) {
-      default:
-         break;
-      case String:
-         str.~string();
-         break;
-      }
-   }
-
-   void copyData(TraitsArgument&& other)
-   {
-      kind = other.kind;
-
-      switch (kind) {
-      case Expr:
-         expr = other.expr;
-         break;
-      case Stmt:
-         stmt = other.stmt;
-         break;
-      case Type:
-         Ty = other.Ty;
-         break;
-      case String:
-         new (&str) std::string(move(other.str));
-         break;
-      }
-   }
+   void destroyValue();
+   void copyData(TraitsArgument&& other);
 };
 
 class TraitsExpr final : public Expression,
@@ -2710,7 +2682,7 @@ public:
    };
 
    static bool classofKind(NodeType kind) { return kind == TraitsExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    static TraitsExpr* Create(ASTContext& C, SourceLocation TraitsLoc,
                              SourceRange Parens, Kind kind,
@@ -2772,7 +2744,7 @@ public:
    void setMixinExpr(Expression* E) { Expr = E; }
 
    static bool classofKind(NodeType kind) { return kind == MixinExprID; }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
 private:
    MixinExpr(SourceRange Parens, Expression* Expr);
@@ -2814,7 +2786,7 @@ public:
    {
       return kind == VariadicExpansionExprID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 };
 
 class MacroVariableExpr : public Expression {
@@ -2830,7 +2802,7 @@ public:
    {
       return kind == MacroVariableExprID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const { return E->getSourceRange(); }
    Expression* getExpr() const { return E; }
@@ -2876,7 +2848,7 @@ public:
    {
       return kind == MacroExpansionExprID;
    }
-   static bool classof(AstNode const* T) { return classofKind(T->getTypeID()); }
+   static bool classof(Statement const* T) { return classofKind(T->getTypeID()); }
 
    SourceRange getSourceRange() const { return SR; }
    DeclarationName getMacroName() const { return MacroName; }

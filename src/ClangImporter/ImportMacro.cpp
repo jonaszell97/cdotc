@@ -13,6 +13,7 @@
 using namespace cdot;
 using namespace cdot::ast;
 using namespace cdot::support;
+using std::string;
 
 using ImporterImpl = ClangImporter::ImporterImpl;
 

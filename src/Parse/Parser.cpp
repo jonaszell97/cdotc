@@ -28,6 +28,8 @@ using namespace cdot::diag;
 using namespace cdot::support;
 using namespace cdot::lex;
 
+using std::string;
+
 namespace cdot {
 namespace parse {
 

@@ -11,6 +11,21 @@
 namespace cdot {
 namespace ast {
 
+Statement::~Statement() {}
+
+void Statement::setContextualType(QualType ty) { contextualType = ty; }
+
+llvm::ArrayRef<Attr*> Statement::getAttributes() const
+{
+   if (auto AttrStmt = support::dyn_cast<AttributedStmt>(this))
+      return AttrStmt->getAttributes();
+
+   if (auto AttrExpr = support::dyn_cast<AttributedExpr>(this))
+      return AttrExpr->getAttributes();
+
+   return {};
+}
+
 void Statement::setIsInvalid(bool error)
 {
 #ifndef NDEBUG

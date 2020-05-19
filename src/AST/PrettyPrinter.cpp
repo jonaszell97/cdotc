@@ -9,6 +9,7 @@
 #include "cdotc/Support/WriterBase.h"
 
 using namespace cdot::support;
+using std::string;
 
 namespace cdot {
 namespace ast {

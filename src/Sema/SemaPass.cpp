@@ -527,7 +527,7 @@ ExprResult SemaPass::visit(Expression* Expr, bool)
    ExprResult Res;
    switch (Expr->getTypeID()) {
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       Res = visit##Name(static_cast<Name*>(Expr));                             \
       break;
 #include "cdotc/AST/AstNode.def"
@@ -670,11 +670,11 @@ StmtResult SemaPass::visit(Statement* stmt, bool)
    StmtResult Result;
    switch (stmt->getTypeID()) {
 #define CDOT_STMT(Name)                                                        \
-   case AstNode::Name##ID:                                                     \
+   case Statement::Name##ID:                                                     \
       Result = visit##Name(static_cast<Name*>(stmt));                          \
       break;
 #define CDOT_EXPR(Name)                                                        \
-   case AstNode::Name##ID: {                                                   \
+   case Statement::Name##ID: {                                                   \
       auto E = static_cast<Name*>(stmt);                                       \
       auto res = visit##Name(E);                                               \
       Result = res ? StmtResult(res.get()) : StmtError();                      \

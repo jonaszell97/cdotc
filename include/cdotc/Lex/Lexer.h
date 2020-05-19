@@ -60,6 +60,7 @@ public:
        = default;
 
    void lexCompleteFile();
+   void lexAndEmitTokens(llvm::raw_ostream &OS);
    void reset(llvm::ArrayRef<Token> Tokens);
 
    void lexDiagnostic();

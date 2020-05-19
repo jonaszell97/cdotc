@@ -1,6 +1,10 @@
 #ifndef CDOT_TOKENKINDS_H
 #define CDOT_TOKENKINDS_H
 
+namespace llvm {
+class raw_ostream;
+} // namespace llvm
+
 namespace cdot {
 namespace lex {
 namespace tok {
@@ -16,5 +20,7 @@ enum TokenType : unsigned short {
 } // namespace tok
 } // namespace lex
 } // namespace cdot
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, ::cdot::lex::tok::TokenType);
 
 #endif // CDOT_TOKENKINDS_H

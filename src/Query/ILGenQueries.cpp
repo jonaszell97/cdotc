@@ -23,6 +23,10 @@ QueryResult CreateILModuleQuery::run()
       return Query::finish(Err);
    }
 
+   if (QC.CI.getOptions().emitTokens()) {
+      return finish(nullptr);
+   }
+
    QC.PrintUsedMemory();
 
    if (QC.Sema->encounteredError()) {

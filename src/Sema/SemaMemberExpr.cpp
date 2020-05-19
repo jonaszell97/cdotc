@@ -21,6 +21,8 @@ using namespace cdot::diag;
 using namespace cdot::sema;
 using namespace cdot::support;
 
+using std::string;
+
 void SemaPass::diagnoseCircularlyDependentGlobalVariables(Expression* Expr,
                                                           NamedDecl* globalVar)
 {

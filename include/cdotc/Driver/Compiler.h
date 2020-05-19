@@ -110,6 +110,7 @@ struct CompilerOptions {
       F_VerifyIL = F_Verify << 1,
       F_IsTest = F_VerifyIL << 1,
       F_EmitAsm = F_IsTest << 1,
+      F_EmitTokens = F_EmitAsm << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -142,6 +143,7 @@ public:
    llvm::StringRef EmitILPath;
    llvm::StringRef EmitIRPath;
    llvm::StringRef EmitAsmPath;
+   llvm::StringRef EmitTokensPath;
    llvm::StringRef EmitModulePath;
 
    llvm::StringRef getCommandLineArguments() const
@@ -184,6 +186,7 @@ public:
    bool emitIL() const { return flagIsSet(F_EmitIL); }
    bool emitIR() const { return flagIsSet(F_EmitIR); }
    bool emitASM() const { return flagIsSet(F_EmitAsm); }
+   bool emitTokens() const { return flagIsSet(F_EmitTokens); }
    bool isStdLib() const { return flagIsSet(F_IsStdLib); }
    bool printStats() const { return flagIsSet(F_PrintStats); }
    bool emitStaticModuleLib() const { return flagIsSet(F_StaticModuleLib); }

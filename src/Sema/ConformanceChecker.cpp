@@ -22,6 +22,7 @@ using namespace cdot::diag;
 using namespace cdot::sema;
 using namespace cdot::support;
 
+using std::string;
 using llvm::SmallSetVector;
 
 namespace {

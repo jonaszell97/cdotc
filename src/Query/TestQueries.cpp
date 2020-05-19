@@ -19,6 +19,8 @@ using namespace cdot::diag;
 using namespace cdot::support;
 namespace cl = llvm::cl;
 
+using std::string;
+
 /// Number of threads to use for testing.
 static cl::opt<unsigned>
     ThreadCount("j",
