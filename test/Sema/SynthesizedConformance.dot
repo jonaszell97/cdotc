@@ -1,0 +1,11 @@
+
+// VERIFY
+
+struct MyStruct1 {
+    let x: String
+    let y: Int
+    let z: Double
+}
+
+extend MyStruct1 with Equatable {} // OK
+extend MyStruct1 with StringRepresentable {} // OK

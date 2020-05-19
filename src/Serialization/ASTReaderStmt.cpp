@@ -1,13 +1,9 @@
-//
-// Created by Jonas Zell on 28.05.18.
-//
-
-#include "BitCodes.h"
-#include "ASTReader.h"
-#include "ASTReaderInternals.h"
-#include "AST/ASTVisitor.h"
-#include "ModuleReader.h"
-#include "Sema/Scope/Scope.h"
+#include "cdotc/AST/ASTVisitor.h"
+#include "cdotc/Sema/Scope/Scope.h"
+#include "cdotc/Serialization/ASTReader.h"
+#include "cdotc/Serialization/ASTReaderInternals.h"
+#include "cdotc/Serialization/BitCodes.h"
+#include "cdotc/Serialization/ModuleReader.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -17,39 +13,23 @@ using namespace cdot::serial::reader;
 
 namespace {
 
-class ASTStmtReader: public ASTVisitor<ASTStmtReader> {
-   ASTRecordReader &Record;
-   llvm::BitstreamCursor &DeclsCursor;
+class ASTStmtReader : public ASTVisitor<ASTStmtReader> {
+   ASTRecordReader& Record;
+   llvm::BitstreamCursor& DeclsCursor;
 
-   SourceLocation ReadSourceLocation()
-   {
-      return Record.readSourceLocation();
-   }
+   SourceLocation ReadSourceLocation() { return Record.readSourceLocation(); }
 
-   SourceRange ReadSourceRange()
-   {
-      return Record.readSourceRange();
-   }
+   SourceRange ReadSourceRange() { return Record.readSourceRange(); }
 
-   std::string ReadString()
-   {
-      return Record.readString();
-   }
+   std::string ReadString() { return Record.readString(); }
 
-   Decl *ReadDecl()
-   {
-      return Record.readDecl();
-   }
+   Decl* ReadDecl() { return Record.readDecl(); }
 
-   template<typename T>
-   T *ReadDeclAs()
-   {
-      return Record.readDeclAs<T>();
-   }
+   template<typename T> T* ReadDeclAs() { return Record.readDeclAs<T>(); }
 
 public:
-   ASTStmtReader(ASTRecordReader &Record, llvm::BitstreamCursor &Cursor)
-      : Record(Record), DeclsCursor(Cursor)
+   ASTStmtReader(ASTRecordReader& Record, llvm::BitstreamCursor& Cursor)
+       : Record(Record), DeclsCursor(Cursor)
    {
       (void)DeclsCursor;
    }
@@ -66,28 +46,28 @@ public:
    /// itself.
    static const unsigned NumTypeExprFields = NumExprFields + 3;
 
-   void visitStmt(Statement *S);
-   void visitExpr(Expression *E);
+   void visitStmt(Statement* S);
+   void visitExpr(Expression* E);
 
-   void visitPatternExpr(PatternExpr *E);
-   void visitTypeExpr(TypeExpr *E);
+   void visitPatternExpr(PatternExpr* E);
+   void visitTypeExpr(TypeExpr* E);
 
-   ConversionSequence *ReadConvSeq();
+   ConversionSequence* ReadConvSeq();
    IfCondition ReadIfCondition();
 
-#  define CDOT_STMT(NAME) void visit##NAME(NAME *S);
-#  include "AST/AstNode.def"
+#define CDOT_STMT(NAME) void visit##NAME(NAME* S);
+#include "cdotc/AST/AstNode.def"
 };
 
 } // anonymous namespace
 
-void ASTStmtReader::visitStmt(Statement *S)
+void ASTStmtReader::visitStmt(Statement* S)
 {
    unsigned SubclassData = Record.readInt();
    S->setSubclassData(SubclassData);
 }
 
-void ASTStmtReader::visitExpr(Expression *E)
+void ASTStmtReader::visitExpr(Expression* E)
 {
    visitStmt(E);
 
@@ -100,7 +80,7 @@ void ASTStmtReader::visitExpr(Expression *E)
    E->setIsMagicArgumentValue((Flags & (1 << 2)) != 0);
 }
 
-void ASTStmtReader::visitCompoundStmt(CompoundStmt *S)
+void ASTStmtReader::visitCompoundStmt(CompoundStmt* S)
 {
    visitStmt(S);
 
@@ -120,14 +100,14 @@ void ASTStmtReader::visitCompoundStmt(CompoundStmt *S)
    S->setScopeID(Record.readInt());
 }
 
-void ASTStmtReader::visitDeclStmt(DeclStmt *S)
+void ASTStmtReader::visitDeclStmt(DeclStmt* S)
 {
    visitStmt(S);
 
    S->setDecl(Record.readDecl());
 }
 
-void ASTStmtReader::visitAttributedStmt(AttributedStmt *S)
+void ASTStmtReader::visitAttributedStmt(AttributedStmt* S)
 {
    visitStmt(S);
 
@@ -140,21 +120,21 @@ void ASTStmtReader::visitAttributedStmt(AttributedStmt *S)
    S->setStatement(Record.readSubStmt());
 }
 
-void ASTStmtReader::visitBreakStmt(BreakStmt *S)
+void ASTStmtReader::visitBreakStmt(BreakStmt* S)
 {
    visitStmt(S);
    S->setLoc(Record.readSourceLocation());
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitContinueStmt(ContinueStmt *S)
+void ASTStmtReader::visitContinueStmt(ContinueStmt* S)
 {
    visitStmt(S);
    S->setLoc(Record.readSourceLocation());
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitReturnStmt(ReturnStmt *S)
+void ASTStmtReader::visitReturnStmt(ReturnStmt* S)
 {
    visitStmt(S);
 
@@ -162,7 +142,7 @@ void ASTStmtReader::visitReturnStmt(ReturnStmt *S)
    S->setRetLoc(Record.readSourceLocation());
 }
 
-void ASTStmtReader::visitDiscardAssignStmt(DiscardAssignStmt *S)
+void ASTStmtReader::visitDiscardAssignStmt(DiscardAssignStmt* S)
 {
    visitStmt(S);
 
@@ -171,7 +151,7 @@ void ASTStmtReader::visitDiscardAssignStmt(DiscardAssignStmt *S)
    S->setRHS(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitCaseStmt(CaseStmt *S)
+void ASTStmtReader::visitCaseStmt(CaseStmt* S)
 {
    visitStmt(S);
 
@@ -180,7 +160,7 @@ void ASTStmtReader::visitCaseStmt(CaseStmt *S)
    S->setBody(Record.readSubStmt());
 }
 
-void ASTStmtReader::visitForStmt(ForStmt *S)
+void ASTStmtReader::visitForStmt(ForStmt* S)
 {
    visitStmt(S);
 
@@ -192,11 +172,11 @@ void ASTStmtReader::visitForStmt(ForStmt *S)
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitIfStmt(IfStmt *S)
+void ASTStmtReader::visitIfStmt(IfStmt* S)
 {
    visitStmt(S);
 
-   auto *Ptr = S->getConditions().data();
+   auto* Ptr = S->getConditions().data();
    auto NumConditions = Record.readInt();
    while (NumConditions--) {
       *Ptr++ = ReadIfCondition();
@@ -208,11 +188,11 @@ void ASTStmtReader::visitIfStmt(IfStmt *S)
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitWhileStmt(WhileStmt *S)
+void ASTStmtReader::visitWhileStmt(WhileStmt* S)
 {
    visitStmt(S);
 
-   auto *Ptr = S->getConditions().data();
+   auto* Ptr = S->getConditions().data();
    auto NumConditions = Record.readInt();
    while (NumConditions--) {
       *Ptr++ = ReadIfCondition();
@@ -224,7 +204,7 @@ void ASTStmtReader::visitWhileStmt(WhileStmt *S)
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitForInStmt(ForInStmt *S)
+void ASTStmtReader::visitForInStmt(ForInStmt* S)
 {
    visitStmt(S);
 
@@ -238,7 +218,7 @@ void ASTStmtReader::visitForInStmt(ForInStmt *S)
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitMatchStmt(MatchStmt *S)
+void ASTStmtReader::visitMatchStmt(MatchStmt* S)
 {
    visitStmt(S);
 
@@ -247,7 +227,7 @@ void ASTStmtReader::visitMatchStmt(MatchStmt *S)
    unsigned i = 0;
 
    while (NumCases--) {
-      auto *NextCase = cast<CaseStmt>(Record.readSubStmt());
+      auto* NextCase = cast<CaseStmt>(Record.readSubStmt());
       Cases[i++] = NextCase;
    }
 
@@ -259,16 +239,16 @@ void ASTStmtReader::visitMatchStmt(MatchStmt *S)
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitDoStmt(DoStmt *S)
+void ASTStmtReader::visitDoStmt(DoStmt* S)
 {
    visitStmt(S);
 
-   auto *Ptr = S->getCatchBlocks().begin();
+   auto* Ptr = S->getCatchBlocks().begin();
    auto NumCatchBlocks = Record.readInt();
    while (NumCatchBlocks--) {
-      auto *VD = Record.readDeclAs<LocalVarDecl>();
-      auto *Body = Record.readSubStmt();
-      auto *Cond = Record.readSubExpr();
+      auto* VD = Record.readDeclAs<LocalVarDecl>();
+      auto* Body = Record.readSubStmt();
+      auto* Cond = Record.readSubExpr();
 
       new (Ptr++) CatchBlock(VD, Body, Cond);
    }
@@ -278,7 +258,7 @@ void ASTStmtReader::visitDoStmt(DoStmt *S)
    S->setLabel(Record.getIdentifierInfo());
 }
 
-void ASTStmtReader::visitThrowStmt(ThrowStmt *S)
+void ASTStmtReader::visitThrowStmt(ThrowStmt* S)
 {
    visitStmt(S);
 
@@ -286,19 +266,19 @@ void ASTStmtReader::visitThrowStmt(ThrowStmt *S)
    S->setThrownVal(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitDebugStmt(DebugStmt *S)
+void ASTStmtReader::visitDebugStmt(DebugStmt* S)
 {
    visitStmt(S);
    S->setLoc(Record.readSourceLocation());
 }
 
-void ASTStmtReader::visitNullStmt(NullStmt *S)
+void ASTStmtReader::visitNullStmt(NullStmt* S)
 {
    visitStmt(S);
    S->setLoc(Record.readSourceLocation());
 }
 
-void ASTStmtReader::visitMacroExpansionStmt(MacroExpansionStmt *S)
+void ASTStmtReader::visitMacroExpansionStmt(MacroExpansionStmt* S)
 {
    visitStmt(S);
 
@@ -317,7 +297,7 @@ void ASTStmtReader::visitMacroExpansionStmt(MacroExpansionStmt *S)
    S->setParentExpr(Record.readExpr());
 }
 
-void ASTStmtReader::visitStaticIfStmt(StaticIfStmt *S)
+void ASTStmtReader::visitStaticIfStmt(StaticIfStmt* S)
 {
    visitStmt(S);
 
@@ -328,7 +308,7 @@ void ASTStmtReader::visitStaticIfStmt(StaticIfStmt *S)
    S->setElseBranch(Record.readSubStmt());
 }
 
-void ASTStmtReader::visitStaticForStmt(StaticForStmt *S)
+void ASTStmtReader::visitStaticForStmt(StaticForStmt* S)
 {
    visitStmt(S);
 
@@ -337,9 +317,14 @@ void ASTStmtReader::visitStaticForStmt(StaticForStmt *S)
    S->setElementName(Record.getIdentifierInfo());
    S->setRange(cast<StaticExpr>(Record.readSubExpr()));
    S->setBody(Record.readSubStmt());
+   S->setVariadic(Record.readBool());
+
+   if (S->isVariadic()) {
+      S->setVariadicDecl(ReadDeclAs<NamedDecl>());
+   }
 }
 
-void ASTStmtReader::visitMixinStmt(MixinStmt *S)
+void ASTStmtReader::visitMixinStmt(MixinStmt* S)
 {
    visitStmt(S);
 
@@ -347,7 +332,7 @@ void ASTStmtReader::visitMixinStmt(MixinStmt *S)
    S->setMixinExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitParenExpr(ParenExpr *S)
+void ASTStmtReader::visitParenExpr(ParenExpr* S)
 {
    visitExpr(S);
 
@@ -355,7 +340,7 @@ void ASTStmtReader::visitParenExpr(ParenExpr *S)
    S->setParenthesizedExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitAttributedExpr(AttributedExpr *S)
+void ASTStmtReader::visitAttributedExpr(AttributedExpr* S)
 {
    visitExpr(S);
 
@@ -368,7 +353,7 @@ void ASTStmtReader::visitAttributedExpr(AttributedExpr *S)
    S->setExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitIntegerLiteral(IntegerLiteral *S)
+void ASTStmtReader::visitIntegerLiteral(IntegerLiteral* S)
 {
    visitExpr(S);
 
@@ -379,7 +364,7 @@ void ASTStmtReader::visitIntegerLiteral(IntegerLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitFPLiteral(FPLiteral *S)
+void ASTStmtReader::visitFPLiteral(FPLiteral* S)
 {
    visitExpr(S);
 
@@ -391,7 +376,7 @@ void ASTStmtReader::visitFPLiteral(FPLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitBoolLiteral(BoolLiteral *S)
+void ASTStmtReader::visitBoolLiteral(BoolLiteral* S)
 {
    visitExpr(S);
 
@@ -401,7 +386,7 @@ void ASTStmtReader::visitBoolLiteral(BoolLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitCharLiteral(CharLiteral *S)
+void ASTStmtReader::visitCharLiteral(CharLiteral* S)
 {
    visitExpr(S);
 
@@ -411,13 +396,13 @@ void ASTStmtReader::visitCharLiteral(CharLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitNoneLiteral(NoneLiteral *S)
+void ASTStmtReader::visitNoneLiteral(NoneLiteral* S)
 {
    visitExpr(S);
    S->setSourceRange(Record.readSourceLocation());
 }
 
-void ASTStmtReader::visitStringLiteral(StringLiteral *S)
+void ASTStmtReader::visitStringLiteral(StringLiteral* S)
 {
    visitExpr(S);
 
@@ -426,7 +411,7 @@ void ASTStmtReader::visitStringLiteral(StringLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitStringInterpolation(StringInterpolation *S)
+void ASTStmtReader::visitStringInterpolation(StringInterpolation* S)
 {
    visitExpr(S);
 
@@ -441,11 +426,11 @@ void ASTStmtReader::visitStringInterpolation(StringInterpolation *S)
    S->setSourceRange(Record.readSourceRange());
 }
 
-void ASTStmtReader::visitLambdaExpr(LambdaExpr *S)
+void ASTStmtReader::visitLambdaExpr(LambdaExpr* S)
 {
    visitExpr(S);
 
-   auto *ArgPtr = S->arg_begin();
+   auto* ArgPtr = S->arg_begin();
    auto NumArgs = Record.readInt();
    while (NumArgs--)
       *ArgPtr++ = Record.readDeclAs<FuncArgDecl>();
@@ -462,7 +447,7 @@ void ASTStmtReader::visitLambdaExpr(LambdaExpr *S)
    S->setBody(Record.readSubStmt());
 }
 
-void ASTStmtReader::visitDictionaryLiteral(DictionaryLiteral *S)
+void ASTStmtReader::visitDictionaryLiteral(DictionaryLiteral* S)
 {
    visitExpr(S);
 
@@ -486,7 +471,7 @@ void ASTStmtReader::visitDictionaryLiteral(DictionaryLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitArrayLiteral(ArrayLiteral *S)
+void ASTStmtReader::visitArrayLiteral(ArrayLiteral* S)
 {
    visitExpr(S);
 
@@ -502,7 +487,7 @@ void ASTStmtReader::visitArrayLiteral(ArrayLiteral *S)
    S->setExpressibleByInit(Record.readDeclAs<InitDecl>());
 }
 
-void ASTStmtReader::visitTupleLiteral(TupleLiteral *S)
+void ASTStmtReader::visitTupleLiteral(TupleLiteral* S)
 {
    visitExpr(S);
 
@@ -516,7 +501,7 @@ void ASTStmtReader::visitTupleLiteral(TupleLiteral *S)
    S->setParenRange(Record.readSourceRange());
 }
 
-void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr *S)
+void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr* S)
 {
    visitExpr(S);
 
@@ -539,15 +524,16 @@ void ASTStmtReader::visitIdentifierRefExpr(IdentifierRefExpr *S)
    S->setAllowIncompleteTemplateArgs((Flags & (1 << 7)) != 0);
    S->setAllowNamespaceRef((Flags & (1 << 8)) != 0);
    S->setAllowOverloadRef((Flags & (1 << 9)) != 0);
-   S->setLeadingDot((Flags & (1 << 10)) != 0);
-   S->setCalled((Flags & (1 << 11)) != 0);
+   S->setAllowVariadicRef((Flags & (1 << 10)) != 0);
+   S->setLeadingDot((Flags & (1 << 11)) != 0);
+   S->setCalled((Flags & (1 << 12)) != 0);
 
    S->setCaptureIndex(Record.readInt());
    S->setParentExpr(Record.readSubExpr());
    S->setDeclCtx(Record.readDeclAs<DeclContext>());
 }
 
-void ASTStmtReader::visitDeclRefExpr(DeclRefExpr *S)
+void ASTStmtReader::visitDeclRefExpr(DeclRefExpr* S)
 {
    visitExpr(S);
 
@@ -558,7 +544,7 @@ void ASTStmtReader::visitDeclRefExpr(DeclRefExpr *S)
    S->setAllowModuleRef((Flags & 1) != 0);
 }
 
-void ASTStmtReader::visitMemberRefExpr(MemberRefExpr *S)
+void ASTStmtReader::visitMemberRefExpr(MemberRefExpr* S)
 {
    visitExpr(S);
 
@@ -568,12 +554,12 @@ void ASTStmtReader::visitMemberRefExpr(MemberRefExpr *S)
    S->setCalled(Record.readBool());
 }
 
-void ASTStmtReader::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *S)
+void ASTStmtReader::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* S)
 {
    visitExpr(S);
 
    unsigned NumOverloads = Record.readInt();
-   auto *Ptr = S->getOverloads().data();
+   auto* Ptr = S->getOverloads().data();
 
    while (NumOverloads--) {
       *Ptr++ = Record.readDeclAs<NamedDecl>();
@@ -583,28 +569,11 @@ void ASTStmtReader::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr *S)
    S->setParentExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitEnumCaseExpr(EnumCaseExpr *S)
+void ASTStmtReader::visitCallExpr(CallExpr* S)
 {
    visitExpr(S);
 
-   S->setPeriodLoc(Record.readSourceLocation());
-   S->setIdent(Record.readDeclarationName());
-
-   auto &Args = S->getArgs();
-   auto NumArgs = Record.readInt();
-   Args.reserve(Record.getReader()->getContext(), NumArgs);
-
-   while (NumArgs--)
-      Args.push_back(Record.readSubExpr(), Record.getReader()->getContext());
-
-   S->setCase(Record.readDeclAs<EnumCaseDecl>());
-}
-
-void ASTStmtReader::visitCallExpr(CallExpr *S)
-{
-   visitExpr(S);
-
-   auto *LabelPtr = S->getLabels().data();
+   auto* LabelPtr = S->getLabels().data();
    auto NumLabels = Record.readInt();
 
    while (NumLabels--)
@@ -616,7 +585,7 @@ void ASTStmtReader::visitCallExpr(CallExpr *S)
    S->setIdent(Record.readDeclarationName());
    S->setKind(Record.readEnum<CallKind>());
 
-   auto &Args = S->getArgs();
+   auto& Args = S->getArgs();
    auto NumArgs = Record.readInt();
    Args.reserve(Record.getReader()->getContext(), NumArgs);
 
@@ -642,7 +611,7 @@ void ASTStmtReader::visitCallExpr(CallExpr *S)
    }
 }
 
-void ASTStmtReader::visitAnonymousCallExpr(AnonymousCallExpr *S)
+void ASTStmtReader::visitAnonymousCallExpr(AnonymousCallExpr* S)
 {
    visitExpr(S);
 
@@ -653,7 +622,7 @@ void ASTStmtReader::visitAnonymousCallExpr(AnonymousCallExpr *S)
 
    std::copy(Args.begin(), Args.end(), S->getArgs().data());
 
-   auto *LabelPtr = S->getLabels().data();
+   auto* LabelPtr = S->getLabels().data();
    auto NumLabels = Record.readInt();
 
    while (NumLabels--)
@@ -661,18 +630,19 @@ void ASTStmtReader::visitAnonymousCallExpr(AnonymousCallExpr *S)
 
    S->setParenRange(Record.readSourceRange());
    S->setIsPrimitiveInit(Record.readBool());
-   S->setFunctionType(cast_or_null<FunctionType>(
-      Record.readType().getBuiltinTy()));
+   S->setFunctionType(
+       cast_or_null<FunctionType>(Record.readType().getBuiltinTy()));
 
    S->setParentExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitSubscriptExpr(SubscriptExpr *S)
+void ASTStmtReader::visitSubscriptExpr(SubscriptExpr* S)
 {
    visitExpr(S);
 
    SmallVector<Expression*, 4> Args;
-   auto NumArgs = Record.readInt();
+   auto NumArgs =  Record.readInt();
+
    while (NumArgs--)
       Args.push_back(Record.readSubExpr());
 
@@ -680,9 +650,11 @@ void ASTStmtReader::visitSubscriptExpr(SubscriptExpr *S)
 
    S->setSquareRange(Record.readSourceRange());
    S->setParentExpr(Record.readSubExpr());
+   S->setCallExpr(Record.readSubExpr());
+   S->setSubscriptDecl(Record.readDeclAs<SubscriptDecl>());
 }
 
-void ASTStmtReader::visitTemplateArgListExpr(TemplateArgListExpr *S)
+void ASTStmtReader::visitTemplateArgListExpr(TemplateArgListExpr* S)
 {
    visitExpr(S);
 
@@ -697,12 +669,13 @@ void ASTStmtReader::visitTemplateArgListExpr(TemplateArgListExpr *S)
    S->setParentExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitBuiltinExpr(BuiltinExpr *S)
+void ASTStmtReader::visitBuiltinExpr(BuiltinExpr* S)
 {
    visitExpr(S);
+   S->setType(Record.readSourceType());
 }
 
-void ASTStmtReader::visitTupleMemberExpr(TupleMemberExpr *S)
+void ASTStmtReader::visitTupleMemberExpr(TupleMemberExpr* S)
 {
    visitExpr(S);
 
@@ -712,7 +685,7 @@ void ASTStmtReader::visitTupleMemberExpr(TupleMemberExpr *S)
    S->setParentExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitSelfExpr(SelfExpr *S)
+void ASTStmtReader::visitSelfExpr(SelfExpr* S)
 {
    visitExpr(S);
 
@@ -722,7 +695,7 @@ void ASTStmtReader::visitSelfExpr(SelfExpr *S)
    S->setUppercase(Record.readBool());
 }
 
-void ASTStmtReader::visitSuperExpr(SuperExpr *S)
+void ASTStmtReader::visitSuperExpr(SuperExpr* S)
 {
    visitExpr(S);
 
@@ -731,7 +704,7 @@ void ASTStmtReader::visitSuperExpr(SuperExpr *S)
    S->setCaptureIndex(Record.readInt());
 }
 
-void ASTStmtReader::visitBuiltinIdentExpr(BuiltinIdentExpr *S)
+void ASTStmtReader::visitBuiltinIdentExpr(BuiltinIdentExpr* S)
 {
    visitExpr(S);
 
@@ -739,24 +712,24 @@ void ASTStmtReader::visitBuiltinIdentExpr(BuiltinIdentExpr *S)
    S->setIdentifierKind(Record.readEnum<BuiltinIdentifier>());
 }
 
-void ASTStmtReader::visitPatternExpr(PatternExpr *E)
+void ASTStmtReader::visitPatternExpr(PatternExpr* E)
 {
    visitExpr(E);
    E->setColonLoc(Record.readSourceLocation());
 }
 
-void ASTStmtReader::visitExpressionPattern(ExpressionPattern *S)
+void ASTStmtReader::visitExpressionPattern(ExpressionPattern* S)
 {
    visitPatternExpr(S);
    S->setExpr(Record.readSubExpr());
    S->setComparisonOp(Record.readDeclAs<CallableDecl>());
 }
 
-void ASTStmtReader::visitCasePattern(CasePattern *S)
+void ASTStmtReader::visitCasePattern(CasePattern* S)
 {
    visitExpr(S);
 
-   auto *Ptr = S->getTrailingObjects<IfCondition>();
+   auto* Ptr = S->getTrailingObjects<IfCondition>();
    auto NumArgs = Record.readInt();
    while (NumArgs--) {
       *Ptr++ = ReadIfCondition();
@@ -777,7 +750,7 @@ void ASTStmtReader::visitCasePattern(CasePattern *S)
    S->setCaseDecl(Record.readDeclAs<EnumCaseDecl>());
 }
 
-void ASTStmtReader::visitIsPattern(IsPattern *S)
+void ASTStmtReader::visitIsPattern(IsPattern* S)
 {
    visitPatternExpr(S);
 
@@ -785,11 +758,11 @@ void ASTStmtReader::visitIsPattern(IsPattern *S)
    S->setIsType(Record.readSourceType());
 }
 
-void ASTStmtReader::visitExprSequence(ExprSequence *S)
+void ASTStmtReader::visitExprSequence(ExprSequence* S)
 {
    visitExpr(S);
 
-   SequenceElement *Ptr = S->getTrailingObjects<SequenceElement>();
+   SequenceElement* Ptr = S->getTrailingObjects<SequenceElement>();
    auto NumElements = Record.readInt();
 
    while (NumElements--) {
@@ -803,8 +776,8 @@ void ASTStmtReader::visitExprSequence(ExprSequence *S)
       }
       case SequenceElement::EF_PossibleOperator: {
          uint8_t whitespace = (uint8_t)Record.readInt();
-         new (Ptr++) SequenceElement(Record.getIdentifierInfo(), whitespace,
-                                     SR);
+         new (Ptr++)
+             SequenceElement(Record.getIdentifierInfo(), whitespace, SR);
          break;
       }
       case SequenceElement::EF_Operator: {
@@ -817,7 +790,7 @@ void ASTStmtReader::visitExprSequence(ExprSequence *S)
    }
 }
 
-void ASTStmtReader::visitUnaryOperator(UnaryOperator *S)
+void ASTStmtReader::visitUnaryOperator(UnaryOperator* S)
 {
    visitExpr(S);
 
@@ -828,7 +801,7 @@ void ASTStmtReader::visitUnaryOperator(UnaryOperator *S)
    S->setPrefix(Record.readBool());
 }
 
-void ASTStmtReader::visitBinaryOperator(BinaryOperator *S)
+void ASTStmtReader::visitBinaryOperator(BinaryOperator* S)
 {
    visitExpr(S);
 
@@ -839,7 +812,7 @@ void ASTStmtReader::visitBinaryOperator(BinaryOperator *S)
    S->setRhs(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitAssignExpr(AssignExpr *S)
+void ASTStmtReader::visitAssignExpr(AssignExpr* S)
 {
    visitExpr(S);
 
@@ -864,7 +837,7 @@ ConversionSequence* ASTStmtReader::ReadConvSeq()
 
       auto Kind = Record.readEnum<CastKind>();
       if (Kind == CastKind::ConversionOp) {
-         auto *Op = Record.readDeclAs<CallableDecl>();
+         auto* Op = Record.readDeclAs<CallableDecl>();
          Steps.emplace_back(Op);
       }
       else {
@@ -873,8 +846,8 @@ ConversionSequence* ASTStmtReader::ReadConvSeq()
       }
    }
 
-   return ConversionSequence::Create(Record.getReader()->getContext(),
-                                     Strength, Steps);
+   return ConversionSequence::Create(Record.getReader()->getContext(), Strength,
+                                     Steps);
 }
 
 IfCondition ASTStmtReader::ReadIfCondition()
@@ -884,25 +857,30 @@ IfCondition ASTStmtReader::ReadIfCondition()
    case IfCondition::Expression:
       return IfCondition(Record.readExpr());
    case IfCondition::Binding: {
-      auto *D = Record.readDeclAs<LocalVarDecl>();
+      auto* D = Record.readDeclAs<LocalVarDecl>();
 
-      CallableDecl *Fn = nullptr;
+      CallableDecl* TryUnwrapFn = nullptr;
       if (Record.readBool()) {
-         Fn = Record.readDeclAs<CallableDecl>();
+         TryUnwrapFn = Record.readDeclAs<CallableDecl>();
       }
 
-      return IfCondition(D, Fn);
+      CallableDecl* HasValueFn = nullptr;
+      if (Record.readBool()) {
+         HasValueFn = Record.readDeclAs<CallableDecl>();
+      }
+
+      return IfCondition(D, TryUnwrapFn, HasValueFn);
    }
    case IfCondition::Pattern: {
-      auto *Pat = cast<PatternExpr>(Record.readExpr());
-      auto *E = Record.readExpr();
+      auto* Pat = cast<PatternExpr>(Record.readExpr());
+      auto* E = Record.readExpr();
 
       return IfCondition(Pat, E);
    }
    }
 }
 
-void ASTStmtReader::visitCastExpr(CastExpr *S)
+void ASTStmtReader::visitCastExpr(CastExpr* S)
 {
    visitExpr(S);
 
@@ -913,7 +891,7 @@ void ASTStmtReader::visitCastExpr(CastExpr *S)
    S->setConvSeq(ReadConvSeq());
 }
 
-void ASTStmtReader::visitAddrOfExpr(AddrOfExpr *S)
+void ASTStmtReader::visitAddrOfExpr(AddrOfExpr* S)
 {
    visitExpr(S);
 
@@ -921,7 +899,7 @@ void ASTStmtReader::visitAddrOfExpr(AddrOfExpr *S)
    S->setTarget(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitTypePredicateExpr(TypePredicateExpr *S)
+void ASTStmtReader::visitTypePredicateExpr(TypePredicateExpr* S)
 {
    visitExpr(S);
 
@@ -936,7 +914,7 @@ void ASTStmtReader::visitTypePredicateExpr(TypePredicateExpr *S)
    S->setNegated((Flags & (1 << 2)) != 0);
 }
 
-void ASTStmtReader::visitIfExpr(IfExpr *S)
+void ASTStmtReader::visitIfExpr(IfExpr* S)
 {
    visitExpr(S);
 
@@ -946,7 +924,7 @@ void ASTStmtReader::visitIfExpr(IfExpr *S)
    S->setFalseVal(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitTryExpr(TryExpr *S)
+void ASTStmtReader::visitTryExpr(TryExpr* S)
 {
    visitExpr(S);
 
@@ -955,7 +933,7 @@ void ASTStmtReader::visitTryExpr(TryExpr *S)
    S->setExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitAwaitExpr(AwaitExpr *S)
+void ASTStmtReader::visitAwaitExpr(AwaitExpr* S)
 {
    visitExpr(S);
 
@@ -964,7 +942,7 @@ void ASTStmtReader::visitAwaitExpr(AwaitExpr *S)
    S->setImmediateReturn(Record.readBool());
 }
 
-void ASTStmtReader::visitImplicitCastExpr(ImplicitCastExpr *S)
+void ASTStmtReader::visitImplicitCastExpr(ImplicitCastExpr* S)
 {
    visitExpr(S);
 
@@ -972,7 +950,7 @@ void ASTStmtReader::visitImplicitCastExpr(ImplicitCastExpr *S)
    S->setConvSeq(ReadConvSeq());
 }
 
-void ASTStmtReader::visitStaticExpr(StaticExpr *S)
+void ASTStmtReader::visitStaticExpr(StaticExpr* S)
 {
    visitExpr(S);
 
@@ -981,7 +959,7 @@ void ASTStmtReader::visitStaticExpr(StaticExpr *S)
    S->setEvaluatedExpr(Record.readILConstant());
 }
 
-void ASTStmtReader::visitConstraintExpr(ConstraintExpr *S)
+void ASTStmtReader::visitConstraintExpr(ConstraintExpr* S)
 {
    visitExpr(S);
 
@@ -992,11 +970,11 @@ void ASTStmtReader::visitConstraintExpr(ConstraintExpr *S)
       S->setTypeConstraint(Record.readSourceType());
 }
 
-void ASTStmtReader::visitTraitsExpr(TraitsExpr *S)
+void ASTStmtReader::visitTraitsExpr(TraitsExpr* S)
 {
    visitExpr(S);
 
-   auto *Ptr = S->getTrailingObjects<TraitsArgument>();
+   auto* Ptr = S->getTrailingObjects<TraitsArgument>();
    auto NumArgs = Record.readInt();
 
    while (NumArgs--) {
@@ -1026,7 +1004,7 @@ void ASTStmtReader::visitTraitsExpr(TraitsExpr *S)
    S->setKind(Record.readEnum<TraitsExpr::Kind>());
 }
 
-void ASTStmtReader::visitMixinExpr(MixinExpr *S)
+void ASTStmtReader::visitMixinExpr(MixinExpr* S)
 {
    visitExpr(S);
 
@@ -1034,17 +1012,27 @@ void ASTStmtReader::visitMixinExpr(MixinExpr *S)
    S->setMixinExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitMacroVariableExpr(MacroVariableExpr *S)
+void ASTStmtReader::visitVariadicExpansionExpr(VariadicExpansionExpr* S)
+{
+   visitExpr(S);
+
+   S->setExpr(Record.readSubExpr());
+   S->setEllipsisLoc(ReadSourceLocation());
+   S->setParameterPack(ReadDeclAs<NamedDecl>());
+   S->setElementDecl(ReadDeclAs<NamedDecl>());
+}
+
+void ASTStmtReader::visitMacroVariableExpr(MacroVariableExpr* S)
 {
    visitExpr(S);
    S->setExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitMacroExpansionExpr(MacroExpansionExpr *S)
+void ASTStmtReader::visitMacroExpansionExpr(MacroExpansionExpr* S)
 {
    visitExpr(S);
 
-   auto *Ptr = S->getTrailingObjects<lex::Token>();
+   auto* Ptr = S->getTrailingObjects<lex::Token>();
    auto NumTokens = Record.readInt();
 
    while (NumTokens--) {
@@ -1056,7 +1044,7 @@ void ASTStmtReader::visitMacroExpansionExpr(MacroExpansionExpr *S)
    S->setDelim(Record.readEnum<MacroExpansionExpr::Delimiter>());
 }
 
-void ASTStmtReader::visitTypeExpr(TypeExpr *E)
+void ASTStmtReader::visitTypeExpr(TypeExpr* E)
 {
    visitExpr(E);
 
@@ -1064,11 +1052,11 @@ void ASTStmtReader::visitTypeExpr(TypeExpr *E)
    E->setIsMeta(Record.readBool());
 }
 
-void ASTStmtReader::visitTupleTypeExpr(TupleTypeExpr *S)
+void ASTStmtReader::visitTupleTypeExpr(TupleTypeExpr* S)
 {
    visitTypeExpr(S);
 
-   auto *Ptr = S->getTrailingObjects<SourceType>();
+   auto* Ptr = S->getTrailingObjects<SourceType>();
    auto NumTys = Record.readInt();
 
    while (NumTys--) {
@@ -1076,7 +1064,7 @@ void ASTStmtReader::visitTupleTypeExpr(TupleTypeExpr *S)
    }
 }
 
-void ASTStmtReader::visitArrayTypeExpr(ArrayTypeExpr *S)
+void ASTStmtReader::visitArrayTypeExpr(ArrayTypeExpr* S)
 {
    visitTypeExpr(S);
 
@@ -1084,18 +1072,18 @@ void ASTStmtReader::visitArrayTypeExpr(ArrayTypeExpr *S)
    S->setSizeExpr(cast_or_null<StaticExpr>(Record.readSubExpr()));
 }
 
-void ASTStmtReader::visitFunctionTypeExpr(FunctionTypeExpr *S)
+void ASTStmtReader::visitFunctionTypeExpr(FunctionTypeExpr* S)
 {
    visitTypeExpr(S);
 
-   auto *Ptr = S->getTrailingObjects<SourceType>();
-   auto *InfoPtr = S->getTrailingObjects<FunctionType::ParamInfo>();
+   auto* Ptr = S->getTrailingObjects<SourceType>();
+   auto* InfoPtr = S->getTrailingObjects<FunctionType::ParamInfo>();
    auto NumArgs = Record.readInt();
 
    while (NumArgs--) {
       *Ptr++ = Record.readSourceType();
-      *InfoPtr++ = FunctionType::ParamInfo(
-         Record.readEnum<ArgumentConvention>());
+      *InfoPtr++
+          = FunctionType::ParamInfo(Record.readEnum<ArgumentConvention>());
    }
 
    S->setRetTy(Record.readSourceType());
@@ -1105,11 +1093,11 @@ void ASTStmtReader::visitFunctionTypeExpr(FunctionTypeExpr *S)
    S->setAsync(Record.readBool());
 }
 
-void ASTStmtReader::visitExistentialTypeExpr(ExistentialTypeExpr *S)
+void ASTStmtReader::visitExistentialTypeExpr(ExistentialTypeExpr* S)
 {
    visitTypeExpr(S);
 
-   auto *Ptr = S->getExistentials().data();
+   auto* Ptr = S->getExistentials().data();
    auto NumArgs = Record.readInt();
 
    while (NumArgs--) {
@@ -1117,31 +1105,31 @@ void ASTStmtReader::visitExistentialTypeExpr(ExistentialTypeExpr *S)
    }
 }
 
-void ASTStmtReader::visitDeclTypeExpr(DeclTypeExpr *S)
+void ASTStmtReader::visitDeclTypeExpr(DeclTypeExpr* S)
 {
    visitTypeExpr(S);
    S->setTyExpr(Record.readSubExpr());
 }
 
-void ASTStmtReader::visitPointerTypeExpr(PointerTypeExpr *S)
+void ASTStmtReader::visitPointerTypeExpr(PointerTypeExpr* S)
 {
    visitTypeExpr(S);
    S->setSubType(Record.readSourceType());
 }
 
-void ASTStmtReader::visitReferenceTypeExpr(ReferenceTypeExpr *S)
+void ASTStmtReader::visitReferenceTypeExpr(ReferenceTypeExpr* S)
 {
    visitTypeExpr(S);
    S->setSubType(Record.readSourceType());
 }
 
-void ASTStmtReader::visitOptionTypeExpr(OptionTypeExpr *S)
+void ASTStmtReader::visitOptionTypeExpr(OptionTypeExpr* S)
 {
    visitTypeExpr(S);
    S->setSubType(Record.readSourceType());
 }
 
-Statement *ASTReader::ReadStmt()
+Statement* ASTReader::ReadStmt()
 {
    switch (ReadingKind) {
    case Read_None:
@@ -1157,17 +1145,17 @@ Statement *ASTReader::ReadStmt()
    llvm_unreachable("ReadingKind not set?");
 }
 
-Expression *ASTReader::ReadExpr()
+Expression* ASTReader::ReadExpr()
 {
    return cast_or_null<Expression>(ReadStmt());
 }
 
-Expression *ASTReader::ReadSubExpr()
+Expression* ASTReader::ReadSubExpr()
 {
    return cast_or_null<Expression>(ReadSubStmt());
 }
 
-Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
+Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor& Cursor)
 {
    ReadingKindTracker ReadingKind(Read_Stmt, *this);
 
@@ -1182,10 +1170,10 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
    ASTRecordReader Record(*this);
    ASTStmtReader Reader(Record, Cursor);
    Statement::EmptyShell Empty;
-   ASTContext &C = Context;
+   ASTContext& C = Context;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Cursor.advanceSkippingSubblocks();
+      llvm::BitstreamEntry Entry = Cursor.advanceSkippingSubblocks().get();
       bool Finished = false;
 
       switch (Entry.Kind) {
@@ -1204,7 +1192,7 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
       if (Finished)
          break;
 
-      Statement *S = nullptr;
+      Statement* S = nullptr;
       bool IsStmtReference = false;
 
       switch (Record.readRecord(Cursor, Entry.ID)) {
@@ -1214,8 +1202,8 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
 
       case STMT_REF_PTR:
          IsStmtReference = true;
-         assert(StmtEntries.find(Record[0]) != StmtEntries.end() &&
-                "No stmt was recorded for this offset reference!");
+         assert(StmtEntries.find(Record[0]) != StmtEntries.end()
+                && "No stmt was recorded for this offset reference!");
 
          S = StmtEntries[Record.readInt()];
          break;
@@ -1227,28 +1215,29 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          S = CompoundStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::DeclStmtID:
-         S = new(C) DeclStmt(Empty);
+         S = new (C) DeclStmt(Empty);
          break;
       case Statement::AttributedStmtID:
-         S = AttributedStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
+         S = AttributedStmt::CreateEmpty(C,
+                                         Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::BreakStmtID:
-         S = new(C) BreakStmt(Empty);
+         S = new (C) BreakStmt(Empty);
          break;
       case Statement::ContinueStmtID:
-         S = new(C) ContinueStmt(Empty);
+         S = new (C) ContinueStmt(Empty);
          break;
       case Statement::ReturnStmtID:
-         S = new(C) ReturnStmt(Empty);
+         S = new (C) ReturnStmt(Empty);
          break;
       case Statement::DiscardAssignStmtID:
          S = DiscardAssignStmt::CreateEmpty(C);
          break;
       case Statement::CaseStmtID:
-         S = new(C) CaseStmt(Empty);
+         S = new (C) CaseStmt(Empty);
          break;
       case Statement::ForStmtID:
-         S = new(C) ForStmt(Empty);
+         S = new (C) ForStmt(Empty);
          break;
       case Statement::IfStmtID:
          S = IfStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
@@ -1257,71 +1246,71 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          S = WhileStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::ForInStmtID:
-         S = new(C) ForInStmt(Empty);
+         S = new (C) ForInStmt(Empty);
          break;
       case Statement::MatchStmtID:
          S = MatchStmt::CreateEmpty(C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::DoStmtID:
-         S = new(C) DoStmt(Empty, Record[ASTStmtReader::NumStmtFields]);
+         S = DoStmt::Create(C, Empty, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::ThrowStmtID:
-         S = new(C) ThrowStmt(Empty);
+         S = new (C) ThrowStmt(Empty);
          break;
       case Statement::DebugStmtID:
-         S = new(C) DebugStmt(Empty);
+         S = new (C) DebugStmt(Empty);
          break;
       case Statement::NullStmtID:
-         S = new(C) NullStmt(Empty);
+         S = new (C) NullStmt(Empty);
          break;
       case Statement::MacroExpansionStmtID:
-         S = MacroExpansionStmt::CreateEmpty(C,
-                                          Record[ASTStmtReader::NumStmtFields]);
+         S = MacroExpansionStmt::CreateEmpty(
+             C, Record[ASTStmtReader::NumStmtFields]);
          break;
       case Statement::StaticIfStmtID:
-         S = new(C) StaticIfStmt(Empty);
+         S = new (C) StaticIfStmt(Empty);
          break;
       case Statement::StaticForStmtID:
-         S = new(C) StaticForStmt(Empty);
+         S = new (C) StaticForStmt(Empty);
          break;
       case Statement::MixinStmtID:
-         S = new(C) MixinStmt(Empty);
+         S = new (C) MixinStmt(Empty);
          break;
       case Statement::ParenExprID:
-         S = new(C) ParenExpr(Empty);
+         S = new (C) ParenExpr(Empty);
          break;
       case Statement::AttributedExprID:
          S = AttributedExpr::CreateEmpty(C,
                                          Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::IntegerLiteralID:
-         S = new(C) IntegerLiteral(Empty);
+         S = new (C) IntegerLiteral(Empty);
          break;
       case Statement::FPLiteralID:
-         S = new(C) FPLiteral(Empty);
+         S = new (C) FPLiteral(Empty);
          break;
       case Statement::BoolLiteralID:
-         S = new(C) BoolLiteral(Empty);
+         S = new (C) BoolLiteral(Empty);
          break;
       case Statement::CharLiteralID:
-         S = new(C) CharLiteral(Empty);
+         S = new (C) CharLiteral(Empty);
          break;
       case Statement::NoneLiteralID:
-         S = new(C) NoneLiteral(Empty);
+         S = new (C) NoneLiteral(Empty);
          break;
       case Statement::StringLiteralID:
-         S = new(C) StringLiteral(Empty);
+         S = new (C) StringLiteral(Empty);
          break;
       case Statement::StringInterpolationID:
-         S = StringInterpolation::CreateEmpty(C,
-                                          Record[ASTStmtReader::NumExprFields]);
+         S = StringInterpolation::CreateEmpty(
+             C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::LambdaExprID:
          S = LambdaExpr::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::DictionaryLiteralID:
-         S = DictionaryLiteral::CreateEmpty(C,
-                                          Record[ASTStmtReader::NumExprFields]);
+         S = DictionaryLiteral::CreateEmpty(
+             C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::ArrayLiteralID:
          S = ArrayLiteral::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
@@ -1330,137 +1319,135 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          S = TupleLiteral::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::IdentifierRefExprID:
-         S = new(C) IdentifierRefExpr(Empty);
-         break;
-      case Statement::EnumCaseExprID:
-         S = new(C) EnumCaseExpr(Empty);
+         S = new (C) IdentifierRefExpr(Empty);
          break;
       case Statement::CallExprID:
          S = CallExpr::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::AnonymousCallExprID:
-         S = AnonymousCallExpr::CreateEmpty(C,
-                                          Record[ASTStmtReader::NumExprFields]);
+         S = AnonymousCallExpr::CreateEmpty(
+             C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::SubscriptExprID:
-         S = SubscriptExpr::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
+         S = SubscriptExpr::CreateEmpty(C,
+                                        Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::TemplateArgListExprID:
          S = TemplateArgListExpr::CreateEmpty(
-            C, Record[ASTStmtReader::NumExprFields]);
+             C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::BuiltinExprID:
-         S = new(C) BuiltinExpr(Empty);
+         S = new (C) BuiltinExpr(Empty);
          break;
       case Statement::TupleMemberExprID:
-         S = new(C) TupleMemberExpr(Empty);
+         S = new (C) TupleMemberExpr(Empty);
          break;
       case Statement::DeclRefExprID:
-         S = new(C) DeclRefExpr(Empty);
+         S = new (C) DeclRefExpr(Empty);
          break;
       case Statement::MemberRefExprID:
-         S = new(C) MemberRefExpr(Empty);
+         S = new (C) MemberRefExpr(Empty);
          break;
       case Statement::OverloadedDeclRefExprID:
          S = OverloadedDeclRefExpr::CreateEmpty(
-            Context, Record[ASTStmtReader::NumExprFields]);
+             Context, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::SelfExprID:
-         S = new(C) SelfExpr(Empty);
+         S = new (C) SelfExpr(Empty);
          break;
       case Statement::SuperExprID:
-         S = new(C) SuperExpr(Empty);
+         S = new (C) SuperExpr(Empty);
          break;
       case Statement::BuiltinIdentExprID:
-         S = new(C) BuiltinIdentExpr(Empty);
+         S = new (C) BuiltinIdentExpr(Empty);
          break;
       case Statement::ExpressionPatternID:
-         S = new(C) ExpressionPattern(Empty);
+         S = new (C) ExpressionPattern(Empty);
          break;
       case Statement::CasePatternID:
          S = CasePattern::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::IsPatternID:
-         S = new(C) IsPattern(Empty);
+         S = new (C) IsPattern(Empty);
          break;
       case Statement::ExprSequenceID:
          S = ExprSequence::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::UnaryOperatorID:
-         S = new(C) UnaryOperator(Empty);
+         S = new (C) UnaryOperator(Empty);
          break;
       case Statement::BinaryOperatorID:
-         S = new(C) BinaryOperator(Empty);
+         S = new (C) BinaryOperator(Empty);
          break;
       case Statement::AssignExprID:
-         S = new(C) AssignExpr(Empty);
+         S = new (C) AssignExpr(Empty);
          break;
       case Statement::CastExprID:
-         S = new(C) CastExpr(Empty);
+         S = new (C) CastExpr(Empty);
          break;
       case Statement::AddrOfExprID:
-         S = new(C) AddrOfExpr(Empty);
+         S = new (C) AddrOfExpr(Empty);
          break;
       case Statement::TypePredicateExprID:
-         S = new(C) TypePredicateExpr(Empty);
+         S = new (C) TypePredicateExpr(Empty);
          break;
       case Statement::IfExprID:
-         S = new(C) IfExpr(Empty);
+         S = new (C) IfExpr(Empty);
          break;
       case Statement::TryExprID:
-         S = new(C) TryExpr(Empty);
+         S = new (C) TryExpr(Empty);
          break;
       case Statement::AwaitExprID:
-         S = new(C) AwaitExpr(Empty);
+         S = new (C) AwaitExpr(Empty);
          break;
       case Statement::ImplicitCastExprID:
-         S = new(C) ImplicitCastExpr(Empty);
+         S = new (C) ImplicitCastExpr(Empty);
          break;
       case Statement::StaticExprID:
-         S = new(C) StaticExpr(Empty);
+         S = new (C) StaticExpr(Empty);
          break;
       case Statement::ConstraintExprID:
-         S = new(C) ConstraintExpr(Empty);
+         S = new (C) ConstraintExpr(Empty);
          break;
       case Statement::TraitsExprID:
          S = TraitsExpr::CreateEmpty(C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::MixinExprID:
-         S = new(C) MixinExpr(Empty);
+         S = new (C) MixinExpr(Empty);
          break;
       case Statement::MacroVariableExprID:
-         S = new(C) MacroVariableExpr(Empty);
+         S = new (C) MacroVariableExpr(Empty);
          break;
       case Statement::MacroExpansionExprID:
          S = MacroExpansionExpr::CreateEmpty(
-            C, Record[ASTStmtReader::NumExprFields]);
+             C, Record[ASTStmtReader::NumExprFields]);
          break;
       case Statement::TupleTypeExprID:
          S = TupleTypeExpr::CreateEmpty(
-            C, Record[ASTStmtReader::NumTypeExprFields]);
+             C, Record[ASTStmtReader::NumTypeExprFields]);
          break;
       case Statement::ArrayTypeExprID:
-         S = new(C) ArrayTypeExpr(Empty);
+         S = new (C) ArrayTypeExpr(Empty);
          break;
       case Statement::FunctionTypeExprID:
          S = FunctionTypeExpr::CreateEmpty(
-            C, Record[ASTStmtReader::NumTypeExprFields]);
+             C, Record[ASTStmtReader::NumTypeExprFields]);
          break;
       case Statement::ExistentialTypeExprID:
          S = ExistentialTypeExpr::CreateEmpty(
-            C, Record[ASTStmtReader::NumTypeExprFields]);
+             C, Record[ASTStmtReader::NumTypeExprFields]);
          break;
       case Statement::DeclTypeExprID:
-         S = new(C) DeclTypeExpr(Empty);
+         S = new (C) DeclTypeExpr(Empty);
          break;
       case Statement::PointerTypeExprID:
-         S = new(C) PointerTypeExpr(Empty);
+         S = new (C) PointerTypeExpr(Empty);
          break;
       case Statement::ReferenceTypeExprID:
-         S = new(C) ReferenceTypeExpr(Empty);
+         S = new (C) ReferenceTypeExpr(Empty);
          break;
       case Statement::OptionTypeExprID:
-         S = new(C) OptionTypeExpr(Empty);
+         S = new (C) OptionTypeExpr(Empty);
          break;
       default:
          llvm_unreachable("bad record kind");
@@ -1477,14 +1464,15 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
          StmtEntries[Cursor.GetCurrentBitNo()] = S;
       }
 
-      assert(Record.getIdx() == Record.size() &&
-             "Invalid deserialization of statement");
+      assert(Record.getIdx() == Record.size()
+             && "Invalid deserialization of statement");
 
       StmtStack.push_back(S);
    }
 
    assert(StmtStack.size() > PrevNumStmts && "Read too many sub-stmts!");
-   assert(StmtStack.size() == PrevNumStmts + 1 && "Extra expressions on stack!");
+   assert(StmtStack.size() == PrevNumStmts + 1
+          && "Extra expressions on stack!");
 
    return StmtStack.pop_back_val();
 }
@@ -1492,19 +1480,19 @@ Statement* ASTReader::ReadStmtFromStream(llvm::BitstreamCursor &Cursor)
 namespace {
 
 class ASTScopeReader {
-   ASTRecordReader &Record;
-   ASTContext &Ctx;
+   ASTRecordReader& Record;
+   ASTContext& Ctx;
 
-#  define CDOT_SCOPE(NAME)          \
-   NAME *read##NAME();
-#  include "Sema/Scope/Scopes.def"
+#define CDOT_SCOPE(NAME) NAME* read##NAME();
+#include "cdotc/Sema/Scope/Scopes.def"
 
 public:
-   ASTScopeReader(ASTRecordReader &Record)
-      : Record(Record), Ctx(Record.getReader()->getContext())
-   { }
+   ASTScopeReader(ASTRecordReader& Record)
+       : Record(Record), Ctx(Record.getReader()->getContext())
+   {
+   }
 
-   Scope *readScope(Scope::TypeID Kind);
+   Scope* readScope(Scope::TypeID Kind);
 };
 
 } // anonymous namespace
@@ -1512,85 +1500,83 @@ public:
 Scope* ASTScopeReader::readScope(Scope::TypeID Kind)
 {
    switch (Kind) {
-#  define CDOT_SCOPE(NAME) \
-   case Scope::NAME##ID: return read##NAME();
-#  include "Sema/Scope/Scopes.def"
+#define CDOT_SCOPE(NAME)                                                       \
+   case Scope::NAME##ID:                                                       \
+      return read##NAME();
+#include "cdotc/Sema/Scope/Scopes.def"
    }
 }
 
-BlockScope *ASTScopeReader::readBlockScope()
+BlockScope* ASTScopeReader::readBlockScope()
 {
-   auto *EnclosingScope = Record.ReadScope();
+   auto* EnclosingScope = Record.ReadScope();
    auto HadError = Record.readBool();
    auto UnresolvedStaticCond = Record.readBool();
    auto ID = (unsigned)Record.readInt();
 
-   auto *S = new(Ctx) BlockScope(ID, nullptr, EnclosingScope);
+   auto* S = new (Ctx) BlockScope(ID, nullptr, EnclosingScope);
    S->setHadError(HadError);
    S->setHasUnresolvedStaticCond(UnresolvedStaticCond);
 
    return S;
 }
 
-FunctionScope *ASTScopeReader::readFunctionScope()
+FunctionScope* ASTScopeReader::readFunctionScope()
 {
-   auto *EnclosingScope = Record.ReadScope();
+   auto* EnclosingScope = Record.ReadScope();
    auto HadError = Record.readBool();
    auto UnresolvedStaticCond = Record.readBool();
-   auto *Fn = Record.readDeclAs<CallableDecl>();
+   auto* Fn = Record.readDeclAs<CallableDecl>();
    auto InferrableReturnType = Record.readBool();
 
-   auto *S = new(Ctx) FunctionScope(Fn, InferrableReturnType, EnclosingScope);
+   auto* S = new (Ctx) FunctionScope(Fn, InferrableReturnType, EnclosingScope);
    S->setHadError(HadError);
    S->setHasUnresolvedStaticCond(UnresolvedStaticCond);
 
    return S;
 }
 
-MethodScope *ASTScopeReader::readMethodScope()
+MethodScope* ASTScopeReader::readMethodScope()
 {
-   auto *EnclosingScope = Record.ReadScope();
+   auto* EnclosingScope = Record.ReadScope();
    auto HadError = Record.readBool();
    auto UnresolvedStaticCond = Record.readBool();
-   auto *Fn = Record.readDeclAs<MethodDecl>();
+   auto* Fn = Record.readDeclAs<MethodDecl>();
    auto InferrableReturnType = Record.readBool();
 
-   auto *S = new(Ctx) MethodScope(Fn, InferrableReturnType, EnclosingScope);
+   auto* S = new (Ctx) MethodScope(Fn, InferrableReturnType, EnclosingScope);
    S->setHadError(HadError);
    S->setHasUnresolvedStaticCond(UnresolvedStaticCond);
 
    return S;
 }
 
-LambdaScope *ASTScopeReader::readLambdaScope()
-{
-   llvm_unreachable("nah");
-}
+LambdaScope* ASTScopeReader::readLambdaScope() { llvm_unreachable("nah"); }
 
-LoopScope *ASTScopeReader::readLoopScope()
+LoopScope* ASTScopeReader::readLoopScope()
 {
-   auto *EnclosingScope = Record.ReadScope();
+   auto* EnclosingScope = Record.ReadScope();
    auto HadError = Record.readBool();
    auto UnresolvedStaticCond = Record.readBool();
    auto Flags = Record.readInt();
 
-   auto *S = new(Ctx) LoopScope(Flags & 0x1, Flags & 0x2, Flags & 0x4,
-                                Flags & 0x8, EnclosingScope);
+   auto* S = new (Ctx) LoopScope(Flags & 0x1, Flags & 0x2, Flags & 0x4,
+                                 Flags & 0x8, EnclosingScope);
    S->setHadError(HadError);
    S->setHasUnresolvedStaticCond(UnresolvedStaticCond);
 
    return S;
 }
 
-StaticForScope *ASTScopeReader::readStaticForScope()
+StaticForScope* ASTScopeReader::readStaticForScope()
 {
-   auto *EnclosingScope = Record.ReadScope();
+   auto* EnclosingScope = Record.ReadScope();
    auto HadError = Record.readBool();
    auto UnresolvedStaticCond = Record.readBool();
-   auto *ElementName = Record.getIdentifierInfo();
+   auto* ElementName = Record.getIdentifierInfo();
    auto ElementTy = Record.readType();
 
-   auto *S = new(Ctx) StaticForScope(ElementName, ElementTy, EnclosingScope);
+   auto* S = new (Ctx) StaticForScope(ElementName, ElementTy, EnclosingScope);
    S->setHadError(HadError);
    S->setHasUnresolvedStaticCond(UnresolvedStaticCond);
 
@@ -1605,15 +1591,15 @@ Scope* ASTReader::ReadScopeRecord(unsigned ID)
    // Keep track of where we are in the stream, then jump back there
    // after reading this scope.
    SavedStreamPosition SavedPosition(DeclsCursor);
-   DeclsCursor.JumpToBit(Loc);
+   (void) DeclsCursor.JumpToBit(Loc);
 
    ASTRecordReader Record(*this);
 
-   unsigned Code = DeclsCursor.ReadCode();
+   unsigned Code = DeclsCursor.ReadCode().get();
    auto Kind = Record.readRecord(DeclsCursor, Code);
 
    ASTScopeReader Reader(Record);
-   auto *S = Reader.readScope(static_cast<Scope::TypeID>(Kind));
+   auto* S = Reader.readScope(static_cast<Scope::TypeID>(Kind));
 
    LoadedScopes[Index] = S;
    return S;

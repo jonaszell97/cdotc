@@ -1,0 +1,25 @@
+
+// VERIFY
+
+// Extern
+@extern def f1() {} // expected-error {{attribute @extern expects at least 1 argument, 0 given}}
+@extern(D) def f2() {} // expected-error {{attribute @extern expects one of 'C, CXX' as 1st argument}}
+@extern(C) def f3() {} // OK
+@extern(CXX) def f4() {} // OK
+@extern("CXX") def f5() {} // expected-error {{attribute @extern expects one of 'C, CXX' as 1st argument}}
+@extern(CPP) def f6() {} // OK
+@extern(C, CXX) def f7() {}// expected-error {{attribute @extern expects at most 1 argument, 2 given}}
+@extern(C) alias A1 = Int // expected-error {{attribute @extern is not allowed here}}
+
+// Inline
+@inline(always) def f8() {} // OK
+@inline def f9() {} // OK
+@inline(sometimes) def f10() {} // expected-error {{attribute @inline expects one of 'always, never, hint' as 1st argument}}
+
+// Implicit
+@implicit(3) def f11() {} // expected-error {{attribute @implicit expects at most 0 arguments, 1 given}}
+@implicit def f12() {} // OK
+
+// Thin
+@thin def f13() {} // expected-error {{attribute @thin is not applicable to declarations}}
+def f14(_ arg: @thin () -> Void) {} // OK

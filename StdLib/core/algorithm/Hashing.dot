@@ -1,0 +1,70 @@
+
+// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
+public def fnv1(_ str: String) -> UInt {
+    var bytes = str.rawBytes
+    var hashValue: UInt = 14695981039346656037
+    for i in 0..str.byteSize {
+        hashValue &*= 1099511628211
+        hashValue ^= UInt(bytes[i])
+    }
+
+    return hashValue
+}
+
+// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
+public def fnv1_32(_ str: String) -> UInt32 {
+    var bytes = str.rawBytes
+    var hashValue: UInt32 = 2166136261
+    for i in 0..str.byteSize {
+        hashValue &*= 16777619
+        hashValue ^= UInt32(bytes[i])
+    }
+
+    return hashValue
+}
+
+// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
+public def fnv1a(_ str: String) -> UInt {
+    var bytes = str.rawBytes
+    var hashValue: UInt = 14695981039346656037
+    for i in 0..str.byteSize {
+        hashValue ^= UInt(bytes[i])
+        hashValue &*= 1099511628211
+    }
+
+    return hashValue
+}
+
+// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
+public def fnv1a_32(_ str: String) -> UInt32 {
+    var bytes = str.rawBytes
+    var hashValue: UInt32 = 2166136261
+    for i in 0..str.byteSize {
+        hashValue ^= UInt32(bytes[i])
+        hashValue &*= 16777619
+    }
+
+    return hashValue
+}
+
+/// http://www.cse.yorku.ca/~oz/hash.html
+public def djb2(_ str: String) -> UInt {
+    var bytes = str.rawBytes
+    var hash: UInt = 5381
+    for i in 0..str.byteSize {
+        hash = ((hash &<< 5) &+ hash) &+ UInt(bytes[i])
+    }
+
+    return hash
+}
+
+/// http://www.cse.yorku.ca/~oz/hash.html
+public def djb2_32(_ str: String) -> UInt32 {
+    var bytes = str.rawBytes
+    var hash: UInt32 = 5381
+    for i in 0..str.byteSize {
+        hash = ((hash &<< 5) &+ hash) &+ UInt32(bytes[i])
+    }
+
+    return hash
+}

@@ -1,15 +1,11 @@
-//
-// Created by Jonas Zell on 13.05.18.
-//
+#include "cdotc/IL/Transforms/StackPromotion.h"
 
-#include "StackPromotion.h"
-
-#include "AST/Decl.h"
-#include "IL/Analysis/EscapeAnalysis.h"
-#include "IL/Passes/Passes.h"
-#include "IL/Passes/DataflowProblem.h"
-#include "IL/Passes/InstructionVisitor.h"
-#include "ILGen/ILGenPass.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/Analysis/EscapeAnalysis.h"
+#include "cdotc/IL/Passes/DataflowProblem.h"
+#include "cdotc/IL/Passes/InstructionVisitor.h"
+#include "cdotc/IL/Passes/Passes.h"
+#include "cdotc/ILGen/ILGenPass.h"
 
 #include <llvm/ADT/BitVector.h>
 
@@ -19,20 +15,19 @@ using llvm::BitVector;
 namespace cdot {
 namespace il {
 
-StackPromotion::StackPromotion(cdot::ast::ILGenPass &ILGen)
-   : FunctionPass(PassKind::StackPromotionID),
-     ILGen(ILGen), Builder(ILGen.Builder)
+StackPromotion::StackPromotion(cdot::ast::ILGenPass& ILGen)
+    : FunctionPass(PassKind::StackPromotionID), ILGen(ILGen),
+      Builder(ILGen.Builder)
 {
-
 }
 
-void StackPromotion::removeRelease(Value *V, StructInitInst *Alloc)
+void StackPromotion::removeRelease(Value* V, StructInitInst* Alloc)
 {
    if (auto Val = dyn_cast<ReleaseInst>(V)) {
       Builder.SetInsertPoint(Val->getIterator());
-      Builder.CreateCall(ILGen.getFunc(Alloc->getInitializedType()
-                                            ->getDeinitializer()),
-                         { Alloc });
+      Builder.CreateCall(
+          ILGen.getFunc(Alloc->getInitializedType()->getDeinitializer()),
+          {Alloc});
 
       InstsToDestroy.insert(Val);
       return;
@@ -55,7 +50,7 @@ void StackPromotion::removeRelease(Value *V, StructInitInst *Alloc)
 
 #ifndef NDEBUG
 
-bool verifyNonEscapingUse(Value *Use)
+bool verifyNonEscapingUse(Value* Use)
 {
    assert(!isa<RetainInst>(Use) && "retaining non-escaping value?");
    return true;
@@ -65,8 +60,8 @@ bool verifyNonEscapingUse(Value *Use)
 
 void StackPromotion::run()
 {
-   for (auto &B : *F) {
-      for (auto &I : B) {
+   for (auto& B : *F) {
+      for (auto& I : B) {
          if (auto Init = dyn_cast<StructInitInst>(&I)) {
             if (Init->isHeapAllocated()) {
                HeapAllocs.try_emplace(Init, HeapAllocs.size());
@@ -75,10 +70,10 @@ void StackPromotion::run()
       }
    }
 
-   EscapeAnalysis *EA = PM->getAnalysis<EscapeAnalysis>();
+   EscapeAnalysis* EA = PM->getAnalysis<EscapeAnalysis>();
    auto IP = Builder.saveIP();
 
-   for (auto &Alloc : HeapAllocs) {
+   for (auto& Alloc : HeapAllocs) {
       if (EA->doesEscape(Alloc.getFirst()))
          continue;
 

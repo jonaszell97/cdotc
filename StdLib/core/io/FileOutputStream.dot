@@ -1,6 +1,5 @@
 
-using fs.OpenFlags
-using fs.FileDescriptor
+import { self, OpenFlags, FileDescriptor } from fs
 
 /// The standard output file descriptor.
 public alias STDOUT_FD: FileDescriptor = 1
@@ -52,9 +51,9 @@ public class FileOutputStream: OutputStream {
         assert!(shouldClose, "file is not supposed to be closed")
 
         var result = fs.closeFile(fd)
-        assert!(result != -1, "closing file failed")
+        assert!(result, "closing file failed")
 
-        fd = -1
+        fd = FileDescriptor(-1)
         shouldClose = false
     }
 

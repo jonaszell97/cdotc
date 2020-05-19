@@ -1,0 +1,116 @@
+
+// VERIFY
+
+import builtin // OK
+
+// Duplicate access specifier
+public private struct S1 {} // expected-error {{duplicate access specifier}}
+
+import builtin1 // expected-error {{'import' statements may only appear at the beginning of a file}}
+
+// Inheritance clause on non-class
+struct S2: S1 {} // expected-error {{only classes can have an inheritance clause}}
+
+// Raw type on non-num
+class C1(Int) {} // expected-error {{only enums can define a raw type}}
+class C2: C1: S2 {} // expected-error {{only one inheritance clause is allowed}}
+
+// Nested macro
+struct S3 {
+    macro M1{} // expected-error {{macros cannot be members of a type}}
+}
+namespace N1 {
+    macro M1{} // OK
+}
+
+// Invalid memberwise init.
+extend S1 {
+    memberwise init // expected-error {{'memberwise init' declaration can only appear in a struct body}}
+}
+
+struct S4 {
+    // Undefined initializer
+    init // expected-error {{initializer must be defined}}
+
+    // Synthesized accessor with body
+    let f1: Int {
+        get {} // expected-error {{synthesized field accessor cannot define a body}}
+        set {} // expected-error {{constant member 'f1' cannot have a 'set' accessor}}
+    }
+
+    init {} // OK
+    var f2: Int { get set } // OK
+
+    prop p1: Int {
+        get { __unreachable }
+        set { __unreachable }
+    }
+
+    static alias A1 = Int // expected-error {{alias declaration cannot be static}}
+    static struct Inner {} // expected-error {{inner record declaration cannot be static}}
+    static associatedType AT // expected-error {{associated type declaration cannot be static}}
+    // expected-error@-1 {{'associatedType' declarations may only appear in protocols, implement them with an alias instead}}
+
+    deinit (arg: Int) {} // expected-error {{deinitializers cannot have arguments}}
+
+    def abstract abstractMethod1() {} // expected-error {{abstract method 'abstractMethod1' cannot have a body}}
+}
+
+// Invalid protocol requirements
+protocol P1 {
+    var v1: Int // expected-error {{var is not allowed in protocols; use prop instead}}
+    let v2: Double // expected-error {{let is not allowed in protocols; use prop instead}}
+    alias A1 // expected-error {{alias declaration cannot appear in a protocol}}
+
+    prop p1: Int // expected-error {{property must have a getter or a setter}}
+    prop p2: Int { get } // OK
+    prop p3: Int { set } // OK
+
+    prop p4: Float { read set } // expected-error {{expected 'write' accessor to go along with 'read'}}
+    prop p5: Float { get write } // expected-error {{expected 'read' accessor to go along with 'write'}}
+    prop p6: Float { read } // OK
+    prop p7: Float { write } // OK
+    prop p8: Float { write read } // OK
+
+    prop p9: Int32 { get read } // expected-error {{getter already declared}}
+    // expected-error@-1 {{expected 'write' accessor to go along with 'read'}}
+
+    prop p10 { get } // expected-error {{property must have a defined type}}
+    prop p11 // expected-error {{property must have a defined type}}
+    // expected-error@-1 {{property must have a getter or a setter}}
+}
+
+extend<T> P1 {} // expected-error {{extensions cannot have a template parameter list}}
+
+precedenceGroup PG1 { // expected-error {{precedence group declaration cannot be in a nested scope}}
+    associativity: left
+    associativity: right // expected-error {{associativity already defined}}
+    lowerThan: Nothing
+    lowerThan: Nothing // expected-error {{'lowerThan' relationship already defined}}
+    assignment: true
+    assignment: false // expected-error {{'assignment' already defined}}
+}
+
+infix ^^ // expected-error {{operator declaration cannot be in a nested scope}}
+
+@extern(C) def main() {} // expected-error {{function declared '@extern(C)' cannot be called 'main'}}
+
+struct S5 {} // expected-note {{previous declaration here}}
+struct S5 {} // expected-error {{redeclaration of 'S5'}}
+
+struct S6 {} // expected-note {{previous declaration here}}
+alias S6 // expected-error {{redeclaration of 'S6' as a different kind of symbol}}
+
+def duplicate() {}
+def duplicate() {} // OK
+
+namespace N2 {}
+namespace N2 {} // OK
+
+namespace N3 {} // expected-note {{previous declaration here}}
+def N3() {} // expected-error {{redeclaration of 'N3' as a different kind of symbol}}
+
+if let x {} // expected-error {{'if let' declaration must define a value}}
+if let (x, y) = 0 { // expected-error {{destructuring cannot be used in a conditional statement}}
+
+}

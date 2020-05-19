@@ -1,9 +1,20 @@
 
+import { _AtomicProtocol } from atomic
 import builtin
+import math
+import rand
+import rt
+import sys
+
+/// Internal protocol used for builtin primitive types.
+internal protocol _BuiltinPrimitiveType {}
+
+/// Internal protocol used for builtin primitive integer types.
+internal protocol _BuiltinPrimitiveIntegerType {}
 
 /// Internal protocol intended for marking integer
 /// types that are known to the compiler.
-internal protocol BuiltinIntegerType {}
+internal protocol BuiltinIntegerType with ImplicitlyCopyable {}
 
 /// A type that is representable by a builtin integer literal.
 /// Used by the compiler to create values from integer literals.
@@ -79,10 +90,10 @@ public protocol Numeric with AdditiveArithmetic, ExpressibleByIntegerLiteral {
     def mutating infix *=(rhs: Self)
 
     /// Exponentiates two values.
-    def infix **(rhs: UInt) -> Self
+    def infix **(rhs: Int) -> Self
 
     /// Exponentiates two values and stores the result in the left-hand-side variable.
-    def mutating infix **=(rhs: UInt)
+    def mutating infix **=(rhs: Int)
 }
 
 extend Numeric {
@@ -94,7 +105,7 @@ extend Numeric {
     }
 
     /// \inherit
-    default def infix **(rhs: UInt) -> Self {
+    default def infix **(rhs: Int) -> Self {
         var lhs = self
         lhs **= rhs
         return lhs
@@ -121,7 +132,7 @@ extend SignedNumeric {
 
     /// \inherit
     default def mutating negate() {
-        self = 0 - self
+        self = Self(integerLiteral: 0) - self
     }
 }
 
@@ -135,7 +146,7 @@ public def abs<T: SignedNumeric>(_ x: T) -> T
 
 /// Returns the absolute value of the given number.
 public def abs<T: SignedNumeric & Comparable>(_ x: T) -> T {
-    return if x < (0 as T) then -x else x
+    return if x < 0 then -x else x
 }
 
 extend AdditiveArithmetic {
@@ -263,16 +274,11 @@ extend BinaryInteger {
     }
 
     /// \inherit
-    default def advanced(by value: Int) -> Self {
-        return self + Self(value)
-    }
-
-    /// \inherit
     default prop signum: Self {
-        if self > (0 as Self) {
+        if self > 0 {
             return 1
         }
-        if self < (0 as Self) {
+        if self < 0 {
             return -1
         }
 
@@ -287,12 +293,12 @@ extend BinaryInteger {
 
     /// \inherit
     default def _binaryLogarithm() -> Int {
-        precondition!(self > (0 as Self))
+        precondition!(self > 0)
         var (quotient, remainder) =
-            (bitWidth &- 1).quotientAndRemainder(dividingBy: UInt.bitWidth)
+            (UInt.bitWidth &- 1).quotientAndRemainder(dividingBy: UInt.bitWidth)
 
         remainder = remainder &+ 1
-        var word = UInt(truncatingIfNeeded: self >> (bitWidth &- remainder))
+        var word = UInt(truncatingIfNeeded: self >> (UInt.bitWidth &- remainder))
 
         // If, internally, a variable-width binary integer uses digits of greater
         // bit width than that of Magnitude.Words.Element (i.e., UInt), then it is
@@ -302,13 +308,13 @@ extend BinaryInteger {
         while word == 0 {
             quotient = quotient &- 1
             remainder = remainder &+ UInt.bitWidth
-            word = UInt(truncatingIfNeeded: self >> (bitWidth &- remainder))
+            word = UInt(truncatingIfNeeded: self >> (UInt.bitWidth &- remainder))
         }
 
         // Note that the order of operations below is important to guarantee that
         // we won't overflow.
-        return UInt.bitWidth &* quotient &+
-            (UInt.bitWidth &- (word.leadingZeroBitCount &+ 1))
+        return (UInt.bitWidth &* quotient &+
+            (UInt.bitWidth &- (word.leadingZeroBitCount &+ 1)))
     }
 
     /// \inherit
@@ -373,44 +379,42 @@ extend BinaryInteger {
 }
 
 private let hexDigits:   [builtin.u8; ?] = "0123456789abcdef"
-private let base64igits: [builtin.u8; ?] = "ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+private let base64digits: [builtin.u8; ?] = "ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 /// StringRepresentable conformance.
 extend BinaryInteger {
-    def toString<let Base: UInt>() -> String {
-        var i = self
+    def toString(base: Int, minDigits: Int = 0) -> String {
+        var i = Int(self)
         var s = ""
 
-        static if Self.isSigned {
-            if i < 0 {
-                s += '-'
-                i = -i
-            }
-        }
+        // static if Self is SignedInteger {
+        //     if i < 0 {
+        //         s += '-'
+        //         i = -i
+        //     }
+        // }
 
-        static if Base == 2 {
+        if base == 2 {
             s += "0b"
         }
-        else static if Base == 8 {
+        else if base == 8 {
             s += "0c"
         }
-        else static if Base == 10 {
+        else if base == 10 {
             // no prefix for decimal
         }
-        else static if Base == 16 {
+        else if base == 16 {
             s += "0x"
         }
-        else static if Base == 64 {
+        else if base == 64 {
             // no prefix for base64
         }
         else {
-            static_assert(false, "Base must be one of 2, 8, 10, 16 or 64!")
+            assert!(false, "Base must be one of 2, 8, 10, 16 or 64!")
         }
     
-        var base = Self(Base)
-        var neededDigits = 0u
+        var neededDigits = 0
         var _i = i
-
         loop {
             neededDigits += 1
             _i /= base
@@ -420,16 +424,18 @@ extend BinaryInteger {
             }
         }
 
-        var power = UInt(neededDigits - 1)
+        neededDigits = math.max(neededDigits, minDigits)
+
+        var power = neededDigits - 1
         loop {
             var exp = base ** power
             var fits = i / exp
 
-            static if Base == 64 {
-                s += base64digits[fits]
+            if base == 64 {
+                s += Character(ascii: UInt8(base64digits[UInt(fits).value]))
             }
             else {
-                s += hexDigits[fits]
+                s += Character(ascii: UInt8(hexDigits[UInt(fits).value]))
             }
 
             i -= exp * fits
@@ -445,7 +451,7 @@ extend BinaryInteger {
 
     /// \inherit
     default def toString() -> String {
-        return toString<10>()
+        return toString(base: 10)
     }
 }
 
@@ -487,7 +493,7 @@ extend BinaryInteger {
             } else if (byte < '0') || (byte > '9') {
                 return none
             } else {
-                self += Self((10 ** power) * (byte - '0'))
+                self += Self((10u ** power) * UInt(byte - '0'))
                 power += 1
             }
 
@@ -499,7 +505,12 @@ extend BinaryInteger {
         }
 
         if negative {
-            negate()
+            static if Self is SignedInteger {
+                self.negate()
+            }
+            else {
+                return none
+            }
         }
     }
 }
@@ -509,15 +520,15 @@ extend BinaryInteger {
     /// Returns a value that is offset the specified distance from this value.
     default def advanced(by n: Int) -> Self {
         if !Self.isSigned {
-            return if n < (0 as Int)
+            return if n < 0
                 then self - Self(-n)
                 else self + Self(n)
         }
-        if (self < (0 as Self)) == (n < (0 as Self)) {
+        if (self < Self(0)) == (n < 0) {
             return self + Self(n)
         }
 
-        return if self.magnitude < n.magnitude
+        return if UInt(self.magnitude) < n.magnitude
             then Self(Int(self) + n)
             else self + Self(n)
     }
@@ -527,7 +538,7 @@ extend BinaryInteger {
 extend BinaryInteger {
     /// \inherit
     default def infix <=>(rhs: Self) -> Int {
-        return (self - rhs) as Int
+        return Int(self) - Int(rhs)
     }
 }
 
@@ -628,7 +639,7 @@ extend FixedWidthInteger {
 
     /// \inherit
     default init (littleEndian value: Self) {
-        static if reflect.endianness == .little {
+        static if reflect.targetInfo.endianness == .little {
             self = value
         } else {
             self = value.byteSwapped
@@ -637,7 +648,7 @@ extend FixedWidthInteger {
 
     /// \inherit
     default init (bigEndian value: Self) {
-        static if reflect.endianness != .little {
+        static if reflect.targetInfo.endianness != .little {
             self = value
         } else {
             self = value.byteSwapped
@@ -646,7 +657,7 @@ extend FixedWidthInteger {
 
     /// The little-endian representation of this integer.
     default prop littleEndian: Self {
-        static if reflect.endianness == .little {
+        static if reflect.targetInfo.endianness == .little {
             return self
         } else {
             return self.byteSwapped
@@ -655,7 +666,7 @@ extend FixedWidthInteger {
 
     /// The big-endian representation of this integer.
     default prop bigEndian: Self {
-        static if reflect.endianness != .little {
+        static if reflect.targetInfo.endianness != .little {
             return self
         } else {
             return self.byteSwapped
@@ -675,7 +686,7 @@ extend FixedWidthInteger {
     }
 
     /// \inherit
-    def mutating infix &>>= <RHS: BinaryInteger>(rhs: RHS) -> Self {
+    def mutating infix &>>= <RHS: BinaryInteger>(rhs: RHS) {
         self = self &>> rhs
     }
 
@@ -692,7 +703,7 @@ extend FixedWidthInteger {
     }
 
     /// \inherit
-    def mutating infix &<<= <RHS: BinaryInteger>(rhs: RHS) -> Self {
+    def mutating infix &<<= <RHS: BinaryInteger>(rhs: RHS) {
         self = self &<< rhs
     }
 }
@@ -700,7 +711,7 @@ extend FixedWidthInteger {
 extend FixedWidthInteger {
     /// \inherit
     default def prefix ~() -> Self {
-        return 0 &- self &- 1
+        return Self(0) &- self &- Self(1)
     }
 
     /// \inherit
@@ -717,7 +728,7 @@ extend FixedWidthInteger {
 
     /// \inherit
     default def mutating infix &>>= (rhs: Self) {
-        var rhs = rhs & (bitWidth - 1)
+        var rhs = rhs & Self(bitWidth - 1)
         self >>= rhs
     }
 
@@ -764,7 +775,7 @@ extend FixedWidthInteger {
 
     /// \inherit
     default def mutating infix &<<= (rhs: Self) {
-        var rhs = rhs & (bitWidth - 1)
+        var rhs = rhs & Self(bitWidth - 1)
         self <<= rhs
     }
 
@@ -802,9 +813,9 @@ extend FixedWidthInteger {
     static def _convert<Source: BinaryFloatingPoint>(
         from source: Source
     ) -> (value: Self?, exact: Bool) {
-        if likely(source.isZero) { return (0, true) }
+        if likely(source.isZero) { return (.Some(0), true) }
         if likely(!source.isFinite) { return (none, false) }
-        if !Self.isSigned && source <= -1 { return (none, false) }
+        if !Self.isSigned && source <= Source(-1) { return (none, false) }
 
         let exponent = source.exponent
         if likely(Self.bitWidth <= exponent) {
@@ -832,14 +843,14 @@ extend FixedWidthInteger {
 
         let magnitude = ((1 as Self.Magnitude) << exponent) | shiftedBitPattern
         return (
-            if Self.isSigned && source < 0 then 0 &- Self(magnitude) else Self(magnitude),
+            if Self.isSigned && source < 0 then Self(0) &- Self(magnitude) else Self(magnitude),
             isExact)
     }
 
     /// Creates an integer from the given floating-point value, rounding toward
     /// zero. Any fractional part of the value passed as `source` is removed.
     @inline(always)
-    init<T: BinaryFloatingPoint>(_ source: T) {
+    default init<T: BinaryFloatingPoint>(_ source: T) {
         let (value, exact) = Self._convert(from: source)
         if !value {
             sys.reportFatalError("value cannot be represented")
@@ -882,7 +893,7 @@ extend FixedWidthInteger {
         }
         else {
             let neg = source < (0 as T)
-            var result: Self = if neg then ~0 else 0
+            var result: Self = if neg then Self(~0) else 0
             var shift: Self = 0
             let width = Self(_truncatingBits: Self.bitWidth._lowWord)
             for word in source.words {
@@ -900,13 +911,14 @@ extend FixedWidthInteger {
     }
 
     static prop _highBitIndex: Self {
-        return Self.init(_truncatingBits: UInt(Self.bitWidth.value) &- 1)
+        return Self(_truncatingBits: UInt(Self.bitWidth &- 1))
     }
 
     /// Returns the sum of the two given values, wrapping the result in case of
     /// any overflow.
     def infix &+ (rhs: Self) -> Self {
-        return self.addingReportingOverflow(rhs).partialValue
+        let (partialValue, overflow) =  self.addingReportingOverflow(rhs)
+        return partialValue
     }
 
     /// Adds two values and stores the result in the left-hand-side variable,
@@ -918,7 +930,8 @@ extend FixedWidthInteger {
     /// Returns the difference of the two given values, wrapping the result in
     /// case of any overflow.
     def infix &- (rhs: Self) -> Self {
-        return self.subtractingReportingOverflow(rhs).partialValue
+        let (partialValue, overflow) =  self.subtractingReportingOverflow(rhs)
+        return partialValue
     }
 
     /// Subtracts the second value from the first and stores the difference in the
@@ -930,7 +943,8 @@ extend FixedWidthInteger {
     /// Returns the product of the two given values, wrapping the result in case
     /// of any overflow.
     def infix &* (rhs: Self) -> Self {
-        return self.multipliedReportingOverflow(by: rhs).partialValue
+        let (partialValue, overflow) =  self.multipliedReportingOverflow(by: rhs)
+        return partialValue
     }
 
     /// Multiplies two values and stores the result in the left-hand-side
@@ -959,16 +973,16 @@ extend UnsignedInteger where Self is FixedWidthInteger {
     /// Creates a new instance from the given integer.
     @inline(always)
     default init<T: BinaryInteger>(_ source: T) {
-        // This check is potentially removable by the optimizer
-        if T.isSigned {
-            precondition!(source >= (0 as T), "Negative value is not representable")
-        }
+        // // This check is potentially removable by the optimizer
+        // if T.isSigned {
+        //     precondition!(source >= T(0), "Negative value is not representable")
+        // }
 
-        // This check is potentially removable by the optimizer
-        if source.bitWidth >= Self.bitWidth {
-            precondition!(source <= Self.max,
-                "Not enough bits to represent the passed value")
-        }
+        // // This check is potentially removable by the optimizer
+        // if T.bitWidth >= Self.bitWidth {
+        //     precondition!(source <= T(Self.max),
+        //         "Not enough bits to represent the passed value")
+        // }
 
         self.init(truncatingIfNeeded: source)
     }
@@ -978,12 +992,12 @@ extend UnsignedInteger where Self is FixedWidthInteger {
     @inline(always)
     default init? <T: BinaryInteger>(exactly source: T) {
         // This check is potentially removable by the optimizer
-        if T.isSigned && source < (0 as T) {
+        if T.isSigned && source < T(0) {
             return none
         }
 
         // The width check can be eliminated by the optimizer
-        if source.bitWidth >= Self.bitWidth && source > Self.max {
+        if T.bitWidth >= Self.bitWidth && source > Self.max {
             return none
         }
 
@@ -991,7 +1005,7 @@ extend UnsignedInteger where Self is FixedWidthInteger {
     }
 
     /// The maximum representable integer in this type.
-    default static prop max: Self { return ~0 }
+    default static prop max: Self { return ~Self(0) }
 
     /// The minimum representable integer in this type.
     default static prop min: Self { return 0 }
@@ -1012,19 +1026,19 @@ extend SignedInteger where Self is FixedWidthInteger {
     /// Creates a new instance from the given integer.
     @inline(always)
     default init<T: BinaryInteger>(_ source: T) {
-        // This check is potentially removable by the optimizer
-        if T.isSigned && source.bitWidth > Self.bitWidth {
-            precondition!(source >= T(Self.min),
-                          "Not enough bits to represent a signed value")
-        }
+        // // This check is potentially removable by the optimizer
+        // if T.isSigned && source.bitWidth > Self.bitWidth {
+        //     precondition!(source >= T(Self.min),
+        //                   "Not enough bits to represent a signed value")
+        // }
 
-        // This check is potentially removable by the optimizer
-        if ((source.bitWidth > Self.bitWidth) ||
-             (source.bitWidth == Self.bitWidth && !T.isSigned)) {
-            precondition!(source <= T(Self.max),
-                          "Not enough bits to represent the passed value")
-        }
-
+        // // This check is potentially removable by the optimizer
+        // if ((T.bitWidth > Self.bitWidth) ||
+        //      (T.bitWidth == Self.bitWidth && !T.isSigned)) {
+        //     precondition!(source <= T(Self.max),
+        //                   "Not enough bits to represent the passed value")
+        // }
+        
         self.init(truncatingIfNeeded: source)
     }
 
@@ -1038,8 +1052,8 @@ extend SignedInteger where Self is FixedWidthInteger {
         }
 
         // The width check can be eliminated by the optimizer
-        if ((source.bitWidth > Self.bitWidth ||
-                (source.bitWidth == Self.bitWidth && !T.isSigned)) &&
+        if ((T.bitWidth > Self.bitWidth ||
+                (T.bitWidth == Self.bitWidth && !T.isSigned)) &&
              source > Self.max) {
             return none
         }
@@ -1048,18 +1062,18 @@ extend SignedInteger where Self is FixedWidthInteger {
     }
 
     /// The maximum representable integer in this type.
-    default static prop max: Self { return ~min }
+    default static prop max: Self { return ~Self(integerLiteral: Self.min) }
 
     /// The minimum representable integer in this type.
     default static prop min: Self {
-        return (-1 as Self) &<< Self._highBitIndex
+        return -Self(integerLiteral: 1) &<< Self._highBitIndex
     }
 
     default def isMultiple(of other: Self) -> Bool {
         // Nothing but zero is a multiple of zero.
         if other == 0 { return self == 0 }
         // Special case to avoid overflow on .min / -1 for signed types.
-        if other == -1 { return true }
+        if other == Self(-1) { return true }
         // Having handled those special cases, this is safe.
         return self % other == 0
     }
@@ -1072,9 +1086,33 @@ public def numericCast<T: BinaryInteger, U: BinaryInteger>(_ x: T) -> U {
 }
 
 /// Returns the given numeric value reinterpreted as a different type of the same bitwidth.
-internal def _builtinNumericCast<T: ?, U: ?>(_ x: T) -> U {
+internal def _builtinNumericCast<T: _BuiltinPrimitiveType, U: _BuiltinPrimitiveType>(_ x: T) -> U {
     return builtin.loadFromPointer(
-        builtin.reinterpretCast<U>(builtin.addressOf(x)))
+        builtin.reinterpretCast<U, T>(builtin.addressOf(x)))
+}
+
+/// A type that represents the words of an integer.
+public struct BuiltinIntegerWords with RandomAccessCollection {
+    alias Element = UInt
+    alias Index = Int
+    alias Indices = Range<Int>
+    alias SubSequence = Slice<Self>
+
+    internal var value: UInt
+
+    init (_ value: UInt) {
+        self.value = value
+    }
+
+    prop size: Int => 1
+    prop startIndex: Int { return 0 }
+    prop endIndex: Int { return 1 }
+    prop indices: Indices { return startIndex..endIndex }
+
+    subscript(_ index: Int) -> UInt {
+        _checkIndex(index)
+        return value
+    }
 }
 
 /// Define an operator that forwards the operation to the builtin integer value.
@@ -1100,7 +1138,7 @@ fileprivate macro proxy_overflow_operator {
 }
 
 /// Defines a wrapper for a builtin integer type.
-macro integer_type{
+macro integer_type {
     ($Self:tok, $OtherSelf:tok, $BuiltinType:tok) => {
         @_builtin @_semantics("builtin_integer_type")
         public struct $Self with FixedWidthInteger, BuiltinIntegerType {
@@ -1124,7 +1162,7 @@ macro integer_type{
             }
 
             /// \inherit
-            associatedType IntegerType = Self
+            alias IntegerType = Self
 
             /// \inherit
             init (integerLiteral value: Self) {
@@ -1132,72 +1170,68 @@ macro integer_type{
             }
         }
 
+        extend $Self with _AtomicProtocol {
+            /// \inherit
+            alias _AtomicType = builtin.$BuiltinType
+
+            /// \inherit
+            prop _atomicValue: _AtomicType { return value }
+
+            /// \inherit
+            init (_atomicValue value: _AtomicType) {
+                self.init(value)
+            }
+        }
+
+        extend $Self {
+            /// Default implementation using `<=>`.
+            def infix ==(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_eq_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix !=(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_ne_ $BuiltinType}(value, rhs.value))
+            }
+        }
+
         extend $Self {
             /// The number of bits in the current binary representation of this value.
             static prop bitWidth: Int {
-                return Int(bitPattern: __traits(bitwidth_of, builtin.$BuiltinType))
+                return Int(__traits(bitwidth_of, builtin.$BuiltinType).value as builtin.i64)
             }
 
             /// \inherit
             public prop leadingZeroBitCount: Int {
-                return Int(_builtinNumericCast<builtin.i64>(builtin.${ctlz_ $BuiltinType}(value)))
+                return Int(builtin.${ctlz_ $BuiltinType}(value) as builtin.i64)
             }
 
             /// \inherit
             public prop trailingZeroBitCount: Int {
-                return Int(_builtinNumericCast<builtin.i64>(builtin.${cttz_ $BuiltinType}(value)))
+                return Int(builtin.${cttz_ $BuiltinType}(value) as builtin.i64)
             }
 
             /// \inherit
             public prop nonzeroBitCount: Int {
-                return Int(_builtinNumericCast<builtin.i64>(builtin.${ctpop_ $BuiltinType}(value)))
-            }
-
-            /// A type that represents the words of this integer.
-            public struct IntegerWords with RandomAccessCollection {
-                associatedType Element = UInt
-                associatedType Index = Int
-                associatedType Indices = Range<Int>
-                associatedType SubSequence = Slice<Self>
-
-                internal var value: $Self
-
-                init (_ value: $Self) {
-                    self.value = value
-                }
-
-                prop size: Int {
-                    return $Self.bitWidth / 8
-                }
-
-                prop startIndex: Int { return 0 }
-                prop endIndex: Int { return size }
-                prop indices: Indices { return startIndex..endIndex }
-
-                subscript(position: Int) -> UInt {
-                    precondition!(position >= 0, "Negative word index")
-                    precondition!(position < endIndex, "Word index out of range")
-                    let shift = UInt(position.value) &* 64 // FIXME
-                    return (value &>> $Self(_truncatingBits: shift))._lowWord
-                }
+                return Int(builtin.${ctpop_ $BuiltinType}(value) as builtin.i64)
             }
 
             /// \inherit
-            associatedType Words = IntegerWords
+            alias Words = BuiltinIntegerWords
 
             /// \inherit
             prop words: Words {
-                return Words(self)
+                return Words(UInt(self.value as builtin.u64))
             }
 
             /// \inherit
             prop _lowWord: UInt {
-                return UInt(self)
+                return UInt(self.value as builtin.u64)
             }
 
             /// \inherit
             init(_truncatingBits bits: UInt) {
-                self.init(_builtinNumericCast(bits.value))
+                self.init(bits.value as builtin.$BuiltinType)
             }
 
             /// \inherit
@@ -1217,12 +1251,21 @@ macro integer_type{
 
                 (&+, ${add_ $BuiltinType}),
                 (&-, ${sub_ $BuiltinType}),
-                (&*, ${mul_ $BuiltinType})
+                (&*, ${mul_ $BuiltinType}),
+
+                (&<<, ${shl_ $BuiltinType}),
+                (&>>, ${lshr_ $BuiltinType}),
+                (<<,  ${shl_ $BuiltinType}),
+                (>>,  ${ashr_ $BuiltinType}),
             }
 
             /// \inherit
-            def mutating infix **= (_ rhs: UInt) {
-                value = ${rt._cdot_intpow_ $BuiltinType}(value, rhs.value)
+            def mutating infix **= (_ rhs: Int) {
+                if rhs < 0 {
+                    sys.reportFatalError("integer exponent < 0!")
+                }
+
+                value = ${rt._cdot_intpow_ $BuiltinType}(value, rhs.value as builtin.u64)
             }
 
             /// \inherit
@@ -1230,11 +1273,11 @@ macro integer_type{
                 if unlikely(rhs == 0) {
                     return (rhs, true)
                 }
-                if unlikely(self == .min && rhs == -1) {
+                if unlikely(self == .min && rhs == Self(-1)) {
                     return (rhs, true)
                 }
 
-                return (self / rhs, false)
+                return (Self(${builtin.div_ $BuiltinType}(self.value, rhs.value)), false)
             }
 
             /// \inherit
@@ -1243,11 +1286,11 @@ macro integer_type{
                 if unlikely(rhs == 0) {
                     return (rhs, true)
                 }
-                if unlikely(self == .min && rhs == -1) {
+                if unlikely(self == .min && rhs == Self(-1)) {
                     return (rhs, true)
                 }
 
-                return (self % rhs, false)
+                return (Self(${builtin.rem_ $BuiltinType}(self.value, rhs.value)), false)
             }
 
             /// \inherit
@@ -1275,18 +1318,18 @@ macro integer_type{
                 let lhs_: builtin.u128 = _builtinNumericCast(self.value)
                 let rhs_: builtin.u128 = _builtinNumericCast(other.value)
 
-                let res = lhs_ * rhs_
+                let res = builtin.mul_u128(lhs_, rhs_)
                 let low = Magnitude(_builtinNumericCast(res))
-                let shifted = res << bitWidth
-                let high = Self(_builtinNumericCast(shifted))
+                let shifted = builtin.shl_u128(res, (bitWidth.value as builtin. u128))
+                let high = Self(shifted as builtin.$BuiltinType)
 
-                return (high: high, low: low)
+                return (high, low)
             }
 
             /// \inherit
             def dividingFullWidth(_ dividend: (high: Self, low: Self.Magnitude))
                 -> (quotient: Self, remainder: Self) {
-                precondition!(false, "Operation not supported")
+                unimplemented!()
             }
         }
     }
@@ -1297,13 +1340,35 @@ macro signed_integer{
     ($(($Self:tok, $BuiltinType:tok))*) => { $(
         integer_type!{$Self, ${U $Self}, $BuiltinType}
 
+        extend $Self {
+            /// Default implementation using `<=>`.
+            def infix <(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_slt_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix <=(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_sle_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix >(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_sgt_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix >=(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_sge_ $BuiltinType}(value, rhs.value))
+            }
+        }
+
         extend $Self with SignedInteger {
             /// \inherit
-            associatedType Magnitude = ${U $Self}
+            alias Magnitude = ${U $Self}
 
             /// \inherit
             prop magnitude: Magnitude {
-                let base = Magnitude(_builtinNumericCast(value))
+                let base = Magnitude(self)
                 return if self < (0 as $Self) then ~base &+ 1 else base
             }
 
@@ -1336,7 +1401,7 @@ macro signed_integer{
             /// \inherit
             static def random() -> Self {
                 var val = rand.SystemRandomNumberGenerator().nextInt(upperBound: ${U $Self}.max)
-                return Self(bitPattern: val)
+                return Self(val)
             }
         }
     )... }
@@ -1347,9 +1412,31 @@ macro unsigned_integer{
     ($(($Self:tok, $BuiltinType:tok))*) => { $(
         integer_type!{${U $Self}, $Self, $BuiltinType}
 
+        extend ${U $Self} {
+            /// Default implementation using `<=>`.
+            def infix <(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_ult_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix <=(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_ule_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix >(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_ugt_ $BuiltinType}(value, rhs.value))
+            }
+
+            /// Default implementation using `<=>`.
+            def infix >=(rhs: Self) -> Bool {
+                return Bool(builtin.${icmp_uge_ $BuiltinType}(value, rhs.value))
+            }
+        }
+
         extend ${U $Self} with UnsignedInteger {
             /// \inherit
-            associatedType Magnitude = ${U $Self}
+            alias Magnitude = ${U $Self}
 
             /// \inherit
             prop magnitude: Magnitude {
@@ -1385,7 +1472,7 @@ macro unsigned_integer{
             /// \inherit
             static def random() -> Self {
                 var val = rand.SystemRandomNumberGenerator().nextInt(upperBound: Self.max)
-                return Self(exactly: val)
+                return Self(val)
             }
         }
     )... }
@@ -1407,10 +1494,10 @@ extend UInt8 with ExpressibleByASCIILiteral {
 }
 
 /// The default signed integer type.
-public alias Int = Int64
+@transparent public alias Int = Int64
 
 /// The default unsigned integer type.
-public alias UInt = UInt64
+@transparent public alias UInt = UInt64
 
 /// An integer that can hold a single byte.
-public alias Byte = UInt8
+@transparent public alias Byte = UInt8

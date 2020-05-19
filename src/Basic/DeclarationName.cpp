@@ -1,32 +1,28 @@
-//
-// Created by Jonas Zell on 25.03.18.
-//
+#include "cdotc/Basic/DeclarationName.h"
 
-#include "DeclarationName.h"
-
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "Message/Diagnostics.h"
-#include "Module/Module.h"
-#include "NestedNameSpecifier.h"
-#include "Sema/Template.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Basic/NestedNameSpecifier.h"
+#include "cdotc/Diagnostics/Diagnostics.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Sema/Template.h"
 
 #include <llvm/ADT/FoldingSet.h>
 
 namespace cdot {
 
-class DeclarationNameInfo: public llvm::FoldingSetNode {
+class DeclarationNameInfo : public llvm::FoldingSetNode {
    DeclarationName::DeclarationKind Kind;
    union {
       QualType Ty;
-      const IdentifierInfo *II;
+      const IdentifierInfo* II;
       uintptr_t Data1;
       DeclarationName::SubscriptKind SubKind;
    };
 
    union {
       uintptr_t Data2;
-      const sema::FinalTemplateArgumentList *ArgList;
+      const sema::FinalTemplateArgumentList* ArgList;
       unsigned Scope;
       DeclarationName::AccessorKind AccKind;
    };
@@ -34,13 +30,11 @@ class DeclarationNameInfo: public llvm::FoldingSetNode {
 public:
    DeclarationNameInfo(DeclarationName::DeclarationKind Kind, uintptr_t Data1,
                        uintptr_t Data2)
-      : Kind(Kind), Data1(Data1), Data2(Data2)
-   {}
-
-   DeclarationName::DeclarationKind getKind() const
+       : Kind(Kind), Data1(Data1), Data2(Data2)
    {
-      return Kind;
    }
+
+   DeclarationName::DeclarationKind getKind() const { return Kind; }
 
    bool holdsType() const
    {
@@ -99,7 +93,7 @@ public:
       return Ty;
    }
 
-   const IdentifierInfo &getIdentifierInfo() const
+   const IdentifierInfo& getIdentifierInfo() const
    {
       assert(holdsIdent() && "does not hold an identifier!");
       return *II;
@@ -111,7 +105,7 @@ public:
       return DeclarationName::getFromOpaquePtr((void*)Data1);
    }
 
-   const sema::FinalTemplateArgumentList *getArgList() const
+   const sema::FinalTemplateArgumentList* getArgList() const
    {
       assert(holdsTemplateArgs() && "does not hold template args!");
       return ArgList;
@@ -150,22 +144,23 @@ public:
       return SubKind;
    }
 
-   static void Profile(llvm::FoldingSetNodeID &ID,
-                       DeclarationName::DeclarationKind Kind,
-                       uintptr_t Data1, uintptr_t Data2) {
+   static void Profile(llvm::FoldingSetNodeID& ID,
+                       DeclarationName::DeclarationKind Kind, uintptr_t Data1,
+                       uintptr_t Data2)
+   {
       ID.AddInteger(Kind);
       ID.AddInteger(Data1);
       ID.AddInteger(Data2);
    }
 
-   void Profile(llvm::FoldingSetNodeID &ID)
+   void Profile(llvm::FoldingSetNodeID& ID)
    {
       return Profile(ID, Kind, Data1, Data2);
    }
 };
 
-DeclarationName::DeclarationName(DeclarationNameInfo *DNI)
-   : Val(reinterpret_cast<uintptr_t>(DNI))
+DeclarationName::DeclarationName(DeclarationNameInfo* DNI)
+    : Val(reinterpret_cast<uintptr_t>(DNI))
 {
    assert((Val & PtrMask) == 0 && "not sufficiently aligned!");
    Val |= OtherStoredName;
@@ -222,7 +217,7 @@ QualType DeclarationName::getConstructorType() const
 {
    if (getStoredKind() == StoredInitializerName)
       return QualType::getFromOpaquePtr(
-         reinterpret_cast<void*>(Val & ~PtrMask));
+          reinterpret_cast<void*>(Val & ~PtrMask));
 
    if (getKind() == BaseConstructorName)
       return getDeclInfo()->getType();
@@ -373,7 +368,7 @@ uintptr_t DeclarationName::getUniqueID() const
    return getDeclInfo()->getData1();
 }
 
-int DeclarationName::compare(const DeclarationName &RHS) const
+int DeclarationName::compare(const DeclarationName& RHS) const
 {
    auto OwnKind = getKind();
    auto OtherKind = RHS.getKind();
@@ -384,16 +379,16 @@ int DeclarationName::compare(const DeclarationName &RHS) const
    switch (getKind()) {
    case NormalIdentifier:
       return getIdentifierInfo()->getIdentifier().compare(
-         RHS.getIdentifierInfo()->getIdentifier());
+          RHS.getIdentifierInfo()->getIdentifier());
    case InfixOperatorName:
       return getInfixOperatorName()->getIdentifier().compare(
-         RHS.getIdentifierInfo()->getIdentifier());
+          RHS.getIdentifierInfo()->getIdentifier());
    case PrefixOperatorName:
       return getPrefixOperatorName()->getIdentifier().compare(
-         RHS.getIdentifierInfo()->getIdentifier());
+          RHS.getIdentifierInfo()->getIdentifier());
    case PostfixOperatorName:
       return getPostfixOperatorName()->getIdentifier().compare(
-         RHS.getIdentifierInfo()->getIdentifier());
+          RHS.getIdentifierInfo()->getIdentifier());
    case InstantiationName:
       return getInstantiationName().compare(RHS.getInstantiationName());
    case UniqueName: {
@@ -411,12 +406,9 @@ int DeclarationName::compare(const DeclarationName &RHS) const
    }
 }
 
-void DeclarationName::dump() const
-{
-   print(llvm::errs());
-}
+void DeclarationName::dump() const { print(llvm::errs()); }
 
-void DeclarationName::print(llvm::raw_ostream &OS) const
+void DeclarationName::print(llvm::raw_ostream& OS) const
 {
    if (!*this) {
       OS << "<invalid name>";
@@ -521,13 +513,11 @@ DeclarationName DeclarationName::getManglingName() const
 using FoldingSetTy = llvm::FoldingSet<DeclarationNameInfo>;
 using NameSpecSetTy = llvm::FoldingSet<NestedNameSpecifier>;
 
-DeclarationNameTable::DeclarationNameTable(ast::ASTContext &Ctx)
-   : FoldingSetPtr(new FoldingSetTy()),
-     Ctx(Ctx),
-     ErrorName(getSpecialName(DeclarationName::ErrorName, 0, 0)),
-     NestedNameSpecifiers(new NameSpecSetTy())
+DeclarationNameTable::DeclarationNameTable(ast::ASTContext& Ctx)
+    : FoldingSetPtr(new FoldingSetTy()), Ctx(Ctx),
+      ErrorName(getSpecialName(DeclarationName::ErrorName, 0, 0)),
+      NestedNameSpecifiers(new NameSpecSetTy())
 {
-
 }
 
 DeclarationNameTable::~DeclarationNameTable()
@@ -538,7 +528,8 @@ DeclarationNameTable::~DeclarationNameTable()
 
 DeclarationName
 DeclarationNameTable::getIdentifiedName(DeclarationName::DeclarationKind Kind,
-                                        const cdot::IdentifierInfo &II) {
+                                        const cdot::IdentifierInfo& II)
+{
    switch (Kind) {
    case DeclarationName::NormalIdentifier:
       return getNormalIdentifier(II);
@@ -557,7 +548,8 @@ DeclarationNameTable::getIdentifiedName(DeclarationName::DeclarationKind Kind,
 
 DeclarationName
 DeclarationNameTable::getTypedName(DeclarationName::DeclarationKind Kind,
-                                   QualType Ty) {
+                                   QualType Ty)
+{
    switch (Kind) {
    case DeclarationName::ConstructorName:
    case DeclarationName::BaseConstructorName:
@@ -574,28 +566,31 @@ DeclarationNameTable::getTypedName(DeclarationName::DeclarationKind Kind,
 }
 
 DeclarationName
-DeclarationNameTable::getNormalIdentifier(const IdentifierInfo &II)
+DeclarationNameTable::getNormalIdentifier(const IdentifierInfo& II)
 {
    return DeclarationName(II);
 }
 
 DeclarationName
 DeclarationNameTable::getConstructorName(CanType ConstructedType,
-                                         bool IsCompleteCtor) {
-   assert(!ConstructedType || ConstructedType->isRecordType());
+                                         bool IsCompleteCtor)
+{
+   assert(!ConstructedType || ConstructedType->isRecordType()
+          || ConstructedType->isExistentialType());
 
-   if (IsCompleteCtor)
-      return DeclarationName(ConstructedType,
-                             DeclarationName::ConstructorName);
+   if (IsCompleteCtor) {
+      return DeclarationName(ConstructedType, DeclarationName::ConstructorName);
+   }
 
    return getSpecialName(DeclarationName::BaseConstructorName,
                          (uintptr_t)ConstructedType.getAsOpaquePtr());
 }
 
-DeclarationName
-DeclarationNameTable::getDestructorName(CanType DestructedType)
+DeclarationName DeclarationNameTable::getDestructorName(CanType DestructedType)
 {
-   assert(!DestructedType || DestructedType->isRecordType());
+   assert(!DestructedType || DestructedType->isRecordType()
+          || DestructedType->isExistentialType());
+
    return DeclarationName(DestructedType, DeclarationName::DestructorName);
 }
 
@@ -606,10 +601,7 @@ DeclarationNameTable::getOperatorDeclName(DeclarationName OpName)
                          (uintptr_t)OpName.getAsOpaquePtr());
 }
 
-DeclarationName DeclarationNameTable::getErrorName()
-{
-   return ErrorName;
-}
+DeclarationName DeclarationNameTable::getErrorName() { return ErrorName; }
 
 DeclarationName DeclarationNameTable::getUniqueName(uintptr_t Data)
 {
@@ -622,53 +614,52 @@ DeclarationName DeclarationNameTable::getUniqueName(uintptr_t Data)
 
 DeclarationName
 DeclarationNameTable::getSpecialName(DeclarationName::DeclarationKind Kind,
-                                     uintptr_t Data1, uintptr_t Data2) {
-   auto &FS = *reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
+                                     uintptr_t Data1, uintptr_t Data2)
+{
+   auto& FS = *reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
 
    llvm::FoldingSetNodeID ID;
    DeclarationNameInfo::Profile(ID, Kind, Data1, Data2);
 
-   void *InsertPos;
-   if (auto *Ptr = FS.FindNodeOrInsertPos(ID, InsertPos)) {
+   void* InsertPos;
+   if (auto* Ptr = FS.FindNodeOrInsertPos(ID, InsertPos)) {
       return DeclarationName(Ptr);
    }
 
-   auto *Info = new(Ctx) DeclarationNameInfo(Kind, Data1, Data2);
+   auto* Info = new (Ctx) DeclarationNameInfo(Kind, Data1, Data2);
    FS.InsertNode(Info, InsertPos);
 
    return DeclarationName(Info);
 }
 
 DeclarationName
-DeclarationNameTable::getInfixOperatorName(const IdentifierInfo &II)
+DeclarationNameTable::getInfixOperatorName(const IdentifierInfo& II)
 {
    return getSpecialName(DeclarationName::InfixOperatorName,
                          reinterpret_cast<uintptr_t>(&II));
 }
 
 DeclarationName
-DeclarationNameTable::getPrefixOperatorName(const IdentifierInfo &II)
+DeclarationNameTable::getPrefixOperatorName(const IdentifierInfo& II)
 {
    return getSpecialName(DeclarationName::PrefixOperatorName,
                          reinterpret_cast<uintptr_t>(&II));
 }
 
 DeclarationName
-DeclarationNameTable::getPostfixOperatorName(const IdentifierInfo &II)
+DeclarationNameTable::getPostfixOperatorName(const IdentifierInfo& II)
 {
    return getSpecialName(DeclarationName::PostfixOperatorName,
                          reinterpret_cast<uintptr_t>(&II));
 }
 
-DeclarationName
-DeclarationNameTable::getMacroName(const IdentifierInfo &II)
+DeclarationName DeclarationNameTable::getMacroName(const IdentifierInfo& II)
 {
    return getSpecialName(DeclarationName::MacroName,
                          reinterpret_cast<uintptr_t>(&II));
 }
 
-DeclarationName
-DeclarationNameTable::getConversionOperatorName(QualType Ty)
+DeclarationName DeclarationNameTable::getConversionOperatorName(QualType Ty)
 {
    return getSpecialName(DeclarationName::ConversionOperatorName,
                          (uintptr_t)Ty.getAsOpaquePtr());
@@ -693,54 +684,55 @@ DeclarationName DeclarationNameTable::getClosureArgumentName(unsigned ArgNo)
 }
 
 DeclarationName DeclarationNameTable::getLocalVarName(DeclarationName Name,
-                                                      unsigned Scope) {
+                                                      unsigned Scope)
+{
    return getSpecialName(DeclarationName::LocalVarName,
-                         (uintptr_t)Name.getAsOpaquePtr(),
-                         (uintptr_t)Scope);
+                         (uintptr_t)Name.getAsOpaquePtr(), (uintptr_t)Scope);
 }
 
 DeclarationName DeclarationNameTable::getPackExpansionName(DeclarationName Name,
-                                                           unsigned idx) {
+                                                           unsigned idx)
+{
    return getSpecialName(DeclarationName::PackExpansionName,
-                         (uintptr_t)Name.getAsOpaquePtr(),
-                         idx);
+                         (uintptr_t)Name.getAsOpaquePtr(), idx);
 }
 
 DeclarationName
-DeclarationNameTable::getAccessorName(const IdentifierInfo &II,
-                                      DeclarationName::AccessorKind Kind) {
+DeclarationNameTable::getAccessorName(const IdentifierInfo& II,
+                                      DeclarationName::AccessorKind Kind)
+{
    return getSpecialName(DeclarationName::AccessorName, (uintptr_t)&II, Kind);
 }
 
-DeclarationName
-DeclarationNameTable::getInstantiationName(DeclarationName Name,
-                                           const sema::FinalTemplateArgumentList
-                                                                     &ArgList) {
-   auto &FS = *reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
+DeclarationName DeclarationNameTable::getInstantiationName(
+    DeclarationName Name, const sema::FinalTemplateArgumentList& ArgList)
+{
+   auto& FS = *reinterpret_cast<FoldingSetTy*>(FoldingSetPtr);
 
    llvm::FoldingSetNodeID ID;
    DeclarationNameInfo::Profile(
-      ID, DeclarationName::InstantiationName,
-      reinterpret_cast<uintptr_t>(Name.getAsOpaquePtr()),
-      reinterpret_cast<uintptr_t>(&ArgList));
+       ID, DeclarationName::InstantiationName,
+       reinterpret_cast<uintptr_t>(Name.getAsOpaquePtr()),
+       reinterpret_cast<uintptr_t>(&ArgList));
 
-   void *InsertPos;
-   if (auto *Ptr = FS.FindNodeOrInsertPos(ID, InsertPos)) {
+   void* InsertPos;
+   if (auto* Ptr = FS.FindNodeOrInsertPos(ID, InsertPos)) {
       return DeclarationName(Ptr);
    }
 
-   auto *Info = new(Ctx) DeclarationNameInfo(
-      DeclarationName::InstantiationName,
-      reinterpret_cast<uintptr_t>(Name.getAsOpaquePtr()),
-      reinterpret_cast<uintptr_t>(&ArgList));
+   auto* Info = new (Ctx)
+       DeclarationNameInfo(DeclarationName::InstantiationName,
+                           reinterpret_cast<uintptr_t>(Name.getAsOpaquePtr()),
+                           reinterpret_cast<uintptr_t>(&ArgList));
 
    FS.InsertNode(Info, InsertPos);
 
    return DeclarationName(Info);
 }
 
-diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
-                                    const DeclarationName &DN) {
+diag::DiagnosticBuilder& operator<<(diag::DiagnosticBuilder& builder,
+                                    const DeclarationName& DN)
+{
    std::string s;
    {
       llvm::raw_string_ostream OS(s);
@@ -750,8 +742,9 @@ diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
    return builder << s;
 }
 
-diag::DiagnosticBuilder &operator<<(diag::DiagnosticBuilder &builder,
-                                    IdentifierInfo *II) {
+diag::DiagnosticBuilder& operator<<(diag::DiagnosticBuilder& builder,
+                                    IdentifierInfo* II)
+{
    return builder << (II ? II->getIdentifier() : "");
 }
 

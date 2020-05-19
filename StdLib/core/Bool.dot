@@ -25,7 +25,7 @@ public protocol ExpressibleByBoolLiteral {
 
 /// A boolean value that can have the values `true` and `false`.
 @_builtin @_semantics("builtin_bool_type")
-public struct Bool {
+public struct Bool with ImplicitlyCopyable {
     /// The builtin boolean value.
     internal var value: builtin.i1
 
@@ -43,7 +43,7 @@ public struct Bool {
 extend Bool {
     /// \return a new boolean value that is the negation of `self`.
     public def prefix !() -> Self {
-        return Self(builtin.not_i1(self.value))
+        return Self(builtin.icmp_eq_i1(self.value, false))
     }
 
     /// Toggle the underlying value of this Bool instance.
@@ -52,6 +52,8 @@ extend Bool {
     }
 
     /// Logical and operator with short-circuiting semantics.
+    /// (Usually, the compiler will replace calls to these with a direct implementation)
+    @_builtin("Bool.infix &&")
     public def infix &&(@autoclosure _ rhs: Bool) -> Bool {
         if !self {
             return false
@@ -61,6 +63,8 @@ extend Bool {
     }
 
     /// Logical or operator with short-circuiting semantics.
+    /// (Usually, the compiler will replace calls to these with a direct implementation)
+    @_builtin("Bool.infix ||")
     public def infix ||(@autoclosure _ rhs: Bool) -> Bool {
         if self {
             return true
@@ -93,6 +97,12 @@ extend Bool with Randomizable {
     static def random() -> Bool {
         let value = Int.random()
         return value >= 0
+    }
+}
+
+extend Bool with StringRepresentable {
+    def toString() -> String {
+        return if self then "true" else "false"
     }
 }
 

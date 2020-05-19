@@ -1,6 +1,4 @@
 
-// #include "DeclNodes.tg"
-
 class DeclClass
 class DerivedDecl<let Base: DeclClass> : DeclClass
 class DeclContext
@@ -149,6 +147,16 @@ def VersionStmt : StmtAttr<"version"> {
     Args = [EnumArg<"version", ["None", "Windows", "Darwin", "macOS", "Linux", "POSIX"], false>]
 }
 
+def ExternallyInitialized : DeclAttr<"externallyInitialized", [GlobalVarDecl]> {
+    Visit = Never
+}
+
+def Instantiate : DeclAttr<"instantiate", [NamedDecl]> {
+    Visit = AfterSema
+}
+
+def Transparent : DeclAttr<"transparent", [AliasDecl]> {}
+
 // hidden attributes
 def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
     Visit = Immediate
@@ -158,4 +166,8 @@ def _Builtin : DeclAttr<"_builtin", [NamedDecl]> {
 def _Semantics : DeclAttr<"_semantics", [NamedDecl]> {
     Visit = Immediate
     Args = [StringArg<"semanticsKind">]
+}
+
+def _Debug : DeclAttr<"_debug", [NamedDecl]> {
+    Visit = Immediate
 }

@@ -3,14 +3,18 @@ module core {
     // Make declarations compiletime by default.
     compiletime = true
 
+    // Import the policy module implicitly.
+    implicitImports = [policy]
+
     sourceFiles = [
         "ASCII.dot",
-        "Array.dot",
+        // "Array.dot",
         "BidirectionalCollection.dot",
         "Bool.dot", 
         "Character.dot",
         "Collection.dot",
         "CollectionExtras.dot",
+        "Dictionary.dot",
         "FlagEnum.dot",
         "FloatingPoint.dot",
         "Integers.dot",
@@ -18,7 +22,6 @@ module core {
         "Macro.dot",
         "MutableCollection.dot",
         "Option.dot",
-        "Policy.dot",
         "Print.dot",
         "Protocols.dot",
         "RandomAccessCollection.dot",
@@ -26,9 +29,19 @@ module core {
         "RangeReplaceableCollection.dot",
         "RawRepresentable.dot",
         "Slice.dot",
-        "String.dot",
+        "SimpleArray.dot",
+        // "String.dot",
+        "SimpleString.dot",
         "UnsafePtr.dot"
     ]
+
+    module algorithm {
+        module hashing {
+            sourceFiles = [
+                "algorithm/Hashing.dot"
+            ]
+        }
+    }
 
     module atomic {
         sourceFiles = [
@@ -36,19 +49,25 @@ module core {
         ]
     }
 
-    // module fs {
-    //     sourceFiles = ["fs/FileSystem.dot"]
-    // }
+    module collection {
+        sourceFiles = [
+            "collection/CowBuffer.dot",
+        ]
+    }
 
-    // module io {
-    //     sourceFiles = [
-    //         "io/Console.dot",
-    //         "io/FileInputStream.dot",
-    //         "io/FileOutputStream.dot",
-    //         "io/InputStream.dot",
-    //         "io/OutputStream.dot"
-    //     ]
-    // }
+    module fs {
+        sourceFiles = ["fs/FileSystem.dot"]
+    }
+
+    module io {
+        sourceFiles = [
+            "io/Console.dot",
+            "io/FileInputStream.dot",
+            "io/FileOutputStream.dot",
+            "io/InputStream.dot",
+            "io/OutputStream.dot"
+        ]
+    }
 
     module math {
         sourceFiles = [
@@ -71,7 +90,7 @@ module core {
     module reflect {
         sourceFiles = [
             "reflect/Compiler.dot",
-            "reflect/TypeTraits.dot"
+            // "reflect/TypeTraits.dot"
         ]
     }
 
@@ -81,21 +100,30 @@ module core {
             "rt/MemoryManagement.dot",
             "rt/RC.dot",
             "rt/Shims.dot",
-            "rt/TypeInfo.dot"
+            "rt/TypeInfo.dot",
         ]
     }
 
     module sys {
         sourceFiles = [
-            // "sys/Program.dot",
-            "sys/System.dot"
+            "sys/Program.dot",
+            "sys/System.dot",
+            "sys/Thread.dot",
+            "sys/Time.dot",
         ]
     }
 
     // Module containg operating system specific functionality.
-    // module _sys {
-    //     sourceFiles = [
-    //         "sys/Posix.dot"
-    //     ]
-    // }
+    module _sys {
+        sourceFiles = [
+            "sys/Posix.dot"
+        ]
+    }
+
+    module test {
+        sourceFiles = [
+            "test/TestUtils.dot",
+            // "test/Unittest.dot",
+        ]
+    }
 }

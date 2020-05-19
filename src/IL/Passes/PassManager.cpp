@@ -1,31 +1,25 @@
-//
-// Created by Jonas Zell on 22.11.17.
-//
+#include "cdotc/IL/Passes/PassManager.h"
 
-#include "PassManager.h"
-
-#include "IL/Analysis/AnalysisKinds.h"
-#include "IL/Analysis/Dominance.h"
-#include "IL/Analysis/EscapeAnalysis.h"
-#include "IL/Analysis/UnsafeAnalysis.h"
-#include "IL/Passes/BorrowCheckPass.h"
-#include "IL/Passes/DefinitiveInitializationPass.h"
-#include "IL/Passes/FinalizeFunctionPass.h"
-#include "IL/Passes/PassKinds.h"
-#include "IL/Passes/ReorderBasicBlockPass.h"
-#include "IL/Passes/VerifierPass.h"
-#include "IL/Transforms/StackPromotion.h"
-#include "VerifierPass.h"
+#include "cdotc/IL/Analysis/AnalysisKinds.h"
+#include "cdotc/IL/Analysis/Dominance.h"
+#include "cdotc/IL/Analysis/EscapeAnalysis.h"
+#include "cdotc/IL/Analysis/UnsafeAnalysis.h"
+#include "cdotc/IL/Passes/BorrowCheckPass.h"
+#include "cdotc/IL/Passes/DefinitiveInitializationPass.h"
+#include "cdotc/IL/Passes/FinalizeFunctionPass.h"
+#include "cdotc/IL/Passes/PassKinds.h"
+#include "cdotc/IL/Passes/ReorderBasicBlockPass.h"
+#include "cdotc/IL/Passes/VerifierPass.h"
+#include "cdotc/IL/Transforms/StackPromotion.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-PassManager::PassManager(il::Module *M, bool isMandatoryPipeline)
-   : M(M), isMandatoryPipeline(isMandatoryPipeline)
+PassManager::PassManager(il::Module* M, bool isMandatoryPipeline)
+    : M(M), isMandatoryPipeline(isMandatoryPipeline)
 {
-
 }
 
 bool PassManager::continueTransforming()
@@ -38,18 +32,18 @@ bool PassManager::continueTransforming()
 
 bool PassManager::analysesUnlocked()
 {
-   for (auto *A : Analyses)
+   for (auto* A : Analyses)
       if (A->isLocked())
          return false;
 
    return true;
 }
 
-void PassManager::runPassOnFunction(unsigned TransIdx, il::Function *F)
+void PassManager::runPassOnFunction(unsigned TransIdx, il::Function* F)
 {
    assert(analysesUnlocked() && "Expected all analyses to be unlocked!");
 
-   auto *SFT = cast<FunctionPass>(Passes[TransIdx]);
+   auto* SFT = cast<FunctionPass>(Passes[TransIdx]);
    SFT->setPassManager(this);
    SFT->setFunction(F);
 
@@ -63,7 +57,7 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
    if (ToTransIdx <= FromTransIdx)
       return;
 
-   for (auto &F : M->getFuncList()) {
+   for (auto& F : M->getFuncList()) {
       // Only include functions that are definitions, and which have not
       // been intentionally excluded from optimization.
       if (!F.isDeclared() && !F.isInvalid())
@@ -76,28 +70,30 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
    // happening.
    const unsigned MaxNumRestarts = 20;
 
-   // Run all transforms for all functions, starting at the tail of the worklist.
+   // Run all transforms for all functions, starting at the tail of the
+   // allDecls.
    while (!FunctionWorklist.empty() && continueTransforming()) {
       unsigned TailIdx = (unsigned)FunctionWorklist.size() - 1;
       unsigned PipelineIdx = FunctionWorklist[TailIdx].PipelineIdx;
-      Function *F = FunctionWorklist[TailIdx].F;
+      Function* F = FunctionWorklist[TailIdx].F;
 
       if (PipelineIdx >= (ToTransIdx - FromTransIdx)) {
-         // All passes did already run for the function. Pop it off the worklist.
+         // All passes did already run for the function. Pop it off the
+         // allDecls.
          FunctionWorklist.pop_back();
          continue;
       }
 
-      assert(
-         !shouldRestartPipeline() &&
-         "Did not expect function pipeline set up to restart from beginning!");
+      assert(!shouldRestartPipeline()
+             && "Did not expect function pipeline set up to restart from "
+                "beginning!");
 
       runPassOnFunction(FromTransIdx + PipelineIdx, F);
 
       // Note: Don't get entry reference prior to runPassOnFunction().
-      // A pass can push a new function to the worklist which may cause a
+      // A pass can push a new function to the allDecls which may cause a
       // reallocation of the buffer and that would invalidate the reference.
-      WorklistEntry &Entry = FunctionWorklist[TailIdx];
+      WorklistEntry& Entry = FunctionWorklist[TailIdx];
       if (shouldRestartPipeline() && Entry.NumRestarts < MaxNumRestarts) {
          ++Entry.NumRestarts;
          Entry.PipelineIdx = 0;
@@ -112,7 +108,7 @@ void PassManager::runFunctionPasses(unsigned FromTransIdx, unsigned ToTransIdx)
 
 void PassManager::runModulePass(unsigned TransIdx)
 {
-   auto *SMT = cast<ModulePass>(Passes[TransIdx]);
+   auto* SMT = cast<ModulePass>(Passes[TransIdx]);
    SMT->setPassManager(this);
    SMT->setModule(M);
 
@@ -134,9 +130,9 @@ void PassManager::execute()
    unsigned Idx = 0, NumTransforms = (unsigned)Passes.size();
 
    while (Idx < NumTransforms && continueTransforming()) {
-      ILPass *Tr = Passes[Idx];
-      assert((isa<FunctionPass>(Tr) || isa<ModulePass>(Tr)) &&
-             "Unexpected pass kind!");
+      ILPass* Tr = Passes[Idx]; (void)Tr;
+      assert((isa<FunctionPass>(Tr) || isa<ModulePass>(Tr))
+             && "Unexpected pass kind!");
 
       unsigned FirstFuncTrans = Idx;
       while (Idx < NumTransforms && isa<FunctionPass>(Passes[Idx]))
@@ -154,10 +150,9 @@ void PassManager::execute()
    }
 }
 
-void PassManager::runPassesOnFunction(il::Function &F)
+void PassManager::runPassesOnFunction(il::Function& F)
 {
-   assert(isMandatoryPipeline
-      && "only call this with empty worklist!");
+   assert(isMandatoryPipeline && "only call this with empty allDecls!");
 
    for (auto P : Passes) {
       if (auto FP = dyn_cast<FunctionPass>(P)) {
@@ -177,7 +172,7 @@ PassManager::~PassManager()
       delete A;
 }
 
-void PassManager::addFunctionToWorklist(Function *F)
+void PassManager::addFunctionToWorklist(Function* F)
 {
    assert(F && !F->isDeclared() && isMandatoryPipeline
           && "Expected optimizable function definition!");
@@ -185,16 +180,16 @@ void PassManager::addFunctionToWorklist(Function *F)
    FunctionWorklist.emplace_back(F);
 }
 
-void PassManager::restartWithCurrentFunction(ILPass *T)
+void PassManager::restartWithCurrentFunction(ILPass* T)
 {
-   assert(isa<FunctionPass>(T) &&
-          "Can only restart the pipeline from function passes");
+   assert(isa<FunctionPass>(T)
+          && "Can only restart the pipeline from function passes");
    RestartPipeline = true;
 }
 
 void PassManager::resetAndRemovePasses()
 {
-   for (auto *T : Passes)
+   for (auto* T : Passes)
       delete T;
 
    Passes.clear();
@@ -203,11 +198,11 @@ void PassManager::resetAndRemovePasses()
 void PassManager::addPass(il::PassKind Kind)
 {
    switch (Kind) {
-#  define CDOT_PASS(CLASS, NAME)                \
-   case PassKind::CLASS##ID:                    \
-      Passes.push_back(create##CLASS(*this));   \
+#define CDOT_PASS(CLASS, NAME)                                                 \
+   case PassKind::CLASS##ID:                                                   \
+      Passes.push_back(create##CLASS(*this));                                  \
       break;
-#  include "Passes.def"
+#include "cdotc/IL/Passes/Passes.def"
 
    default:
       llvm_unreachable("bad pass kind");
@@ -217,11 +212,11 @@ void PassManager::addPass(il::PassKind Kind)
 void PassManager::addAnalysis(cdot::il::AnalysisKind Kind)
 {
    switch (Kind) {
-#  define CDOT_ANALYSIS(CLASS, NAME)            \
-   case AnalysisKind::CLASS##ID:                \
-      Analyses.push_back(create##CLASS(*this)); \
+#define CDOT_ANALYSIS(CLASS, NAME)                                             \
+   case AnalysisKind::CLASS##ID:                                               \
+      Analyses.push_back(create##CLASS(*this));                                \
       break;
-#  include "IL/Analysis/Analysis.def"
+#include "cdotc/IL/Analysis/Analysis.def"
    }
 }
 void PassManager::initializeAnalyses()

@@ -1,0 +1,23 @@
+
+// VERIFY
+
+let v1 = 0
+print(v1.0) // expected-error {{cannot access indexed member on type Int64}}
+
+let v2 = (3, 12)
+_ = v2.0 + v2.1
+_ = v2.2 // expected-error {{cannot access index 2 on tuple with arity 2}}
+
+let v3 : (Int8, Float) = (12, 231)
+let _ : Float = v3.1
+
+let _ : (String, Int) = (3, 3) // expected-error {{incompatible types Int64 and String}}
+
+let v5 : ((Int, Int), Int)
+print(v5.0 .0) // FIXME
+print(v5.0 .1) // FIXME
+print(v5.0 .2) // expected-error {{cannot access index 2 on tuple with arity 2}}
+print(v5.1 .0) // expected-error {{cannot access indexed member on type Int64}}
+
+let v6 = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "hello", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+let _ : String = v6.15

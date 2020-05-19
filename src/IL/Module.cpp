@@ -1,19 +1,15 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
+#include "cdotc/IL/Module.h"
 
-#include "Module.h"
-#include "Context.h"
-
-#include "IL/Constants.h"
-#include "IL/Function.h"
-#include "IL/BasicBlock.h"
-#include "IL/Argument.h"
-#include "IL/GlobalVariable.h"
-#include "IL/Instruction.h"
-#include "IL/ValueSymbolTable.h"
-#include "IL/Writer/ModuleWriter.h"
-#include "Serialization/ModuleFile.h"
+#include "cdotc/IL/Argument.h"
+#include "cdotc/IL/BasicBlock.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/GlobalVariable.h"
+#include "cdotc/IL/Instruction.h"
+#include "cdotc/IL/ValueSymbolTable.h"
+#include "cdotc/IL/Writer/ModuleWriter.h"
+#include "cdotc/Serialization/ModuleFile.h"
 
 #include <llvm/Support/FileSystem.h>
 
@@ -22,10 +18,10 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-Module::Module(Context &Ctx, size_t fileID,
-               llvm::StringRef fileName, llvm::StringRef path)
-   : Functions(this), GlobalVariables(this), Ctx(Ctx),
-     fileID(fileID), fileName(fileName), path(path)
+Module::Module(Context& Ctx, size_t fileID, llvm::StringRef fileName,
+               llvm::StringRef path)
+    : Functions(this), GlobalVariables(this), Ctx(Ctx), fileID(fileID),
+      fileName(fileName), path(path)
 {
    Ctx.registerModule(this);
 }
@@ -38,11 +34,11 @@ Module::~Module()
    Ctx.removeModule(this);
 }
 
-Function *Module::insertFunction(Function *Fn,
-                                 bool OverridePrevious,
-                                 Function **Previous) {
+Function* Module::insertFunction(Function* Fn, bool OverridePrevious,
+                                 Function** Previous)
+{
    if (OverridePrevious) {
-      auto *Prev = Functions.find(Fn->getName());
+      auto* Prev = Functions.find(Fn->getName());
       if (Prev && (!Fn->isDeclared() || Fn->getLazyFnInfo())
           && Prev->overridePreviousDefinition()) {
          if (Previous)
@@ -63,7 +59,7 @@ Function *Module::insertFunction(Function *Fn,
    return Fn;
 }
 
-Function *Module::getFunction(llvm::StringRef name)
+Function* Module::getFunction(llvm::StringRef name)
 {
    auto fun = Functions.find(name);
    if (!fun) {
@@ -74,7 +70,7 @@ Function *Module::getFunction(llvm::StringRef name)
    return fun;
 }
 
-Function *Module::getOwnFunction(llvm::StringRef name)
+Function* Module::getOwnFunction(llvm::StringRef name)
 {
    auto Fn = Functions.find(name);
    if (Fn)
@@ -87,11 +83,11 @@ Function *Module::getOwnFunction(llvm::StringRef name)
    return Fn;
 }
 
-GlobalVariable *Module::insertGlobal(GlobalVariable *G,
-                                     bool OverridePrevious,
-                                     GlobalVariable **Previous) {
+GlobalVariable* Module::insertGlobal(GlobalVariable* G, bool OverridePrevious,
+                                     GlobalVariable** Previous)
+{
    if (OverridePrevious) {
-      auto *Prev = GlobalVariables.find(G->getName());
+      auto* Prev = GlobalVariables.find(G->getName());
       if (Prev && (!G->isDeclared() || G->getLazyGlobalInfo())
           && Prev->overridePreviousDefinition()) {
          if (Previous)
@@ -112,7 +108,7 @@ GlobalVariable *Module::insertGlobal(GlobalVariable *G,
    return G;
 }
 
-GlobalVariable *Module::getGlobal(llvm::StringRef name)
+GlobalVariable* Module::getGlobal(llvm::StringRef name)
 {
    auto val = GlobalVariables.find(name);
    if (!val) {
@@ -123,36 +119,27 @@ GlobalVariable *Module::getGlobal(llvm::StringRef name)
    return val;
 }
 
-GlobalVariable *Module::getOwnGlobal(llvm::StringRef name)
+GlobalVariable* Module::getOwnGlobal(llvm::StringRef name)
 {
    return GlobalVariables.find(name);
 }
 
-void Module::addRecord(ast::RecordDecl *R)
-{
-   Records.insert(R);
-}
+void Module::addRecord(ast::RecordDecl* R) { Records.insert(R); }
 
-Context &Module::getContext() const
-{
-   return Ctx;
-}
+Context& Module::getContext() const { return Ctx; }
 
-void Module::dump() const
-{
-   writeTo(llvm::errs());
-}
+void Module::dump() const { writeTo(llvm::errs()); }
 
-void Module::writeTo(llvm::raw_ostream &out, NameProvider *nameProvider) const
+void Module::writeTo(llvm::raw_ostream& out, NameProvider* nameProvider) const
 {
    ModuleWriter Writer(this, nameProvider);
    Writer.WriteTo(out);
 }
 
-void Module::writeToFile(const char *FileName) const
+void Module::writeToFile(const char* FileName) const
 {
    std::error_code EC;
-   llvm::raw_fd_ostream OS(FileName, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream OS(FileName, EC);
 
    if (EC)
       llvm::report_fatal_error(EC.message());
@@ -160,9 +147,10 @@ void Module::writeToFile(const char *FileName) const
    writeTo(OS);
 }
 
-bool Module::linkInModule(std::unique_ptr<Module> &&M,
-                          llvm::function_ref<void(GlobalObject*, GlobalObject*)>
-                              Callback) {
+bool Module::linkInModule(
+    std::unique_ptr<Module>&& M,
+    llvm::function_ref<void(GlobalObject*, GlobalObject*)> Callback)
+{
    if (&M->getContext() != &getContext())
       return true;
 
@@ -173,14 +161,14 @@ bool Module::linkInModule(std::unique_ptr<Module> &&M,
    // move all of the modules globals
    for (auto it = M->GlobalVariables.begin(), end = M->GlobalVariables.end();
         it != end;) {
-      GlobalVariable &G = *it;
+      GlobalVariable& G = *it;
       auto NextIt = it;
       ++NextIt;
 
       M->GlobalVariables.remove(it);
       it = NextIt;
 
-      GlobalVariable *Prev = nullptr;
+      GlobalVariable* Prev = nullptr;
       auto NewGlob = insertGlobal(&G, true, &Prev);
 
       if (Callback && Prev)
@@ -194,14 +182,14 @@ bool Module::linkInModule(std::unique_ptr<Module> &&M,
 
    // move all of the modules functions
    for (auto it = M->Functions.begin(), end = M->Functions.end(); it != end;) {
-      Function &F = *it;
+      Function& F = *it;
       auto NextIt = it;
       ++NextIt;
 
       M->Functions.remove(it);
       it = NextIt;
 
-      Function *Prev = nullptr;
+      Function* Prev = nullptr;
       auto NewFn = insertFunction(&F, !isa<Lambda>(F), &Prev);
 
       if (Callback)

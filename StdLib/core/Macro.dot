@@ -1,4 +1,38 @@
 
+import reflect
+import sys
+
+flag_enum! DebugPrintTypes {
+    /// Memory (de-)allocations.
+    case Memory
+
+    /// Refcounting.
+    case Refcounting
+
+    /// Lambda refcounting.
+    case LambdaRefcounting
+
+    /// Box refcounting.
+    case BoxRefcounting
+
+    /// String allocs / deallocs.
+    case Strings
+
+    /// Array allocs / deallocs.
+    case Arrays
+}
+
+public static var debugPrintTypes: DebugPrintTypes = .None
+macro debugPrint(
+    ($type:ident, $($args:expr),*) => {
+        static if core.reflect.debug {
+            if debugPrintTypes ~ .$type {
+                _ = libc.stdio.printf($($args,)...)
+            }
+        }
+    }
+)
+
 @extern(C)
 public def _cdot_AssertionFailure(_ cond: String,
                                   _ msg: String,
@@ -10,7 +44,7 @@ public def _cdot_AssertionFailure(_ cond: String,
 
 macro assert(
     ($cond:any, $msg:expr) => {
-        static if reflect.debug {
+        static if core.reflect.debug {
             if !($cond) {
                 _cdot_AssertionFailure(stringify!($cond), $msg,
                                        core.reflect.sourceLocation,
@@ -86,8 +120,7 @@ public def _cdot_Unimplemented(_ loc: reflect.SourceLocation,
 
 macro unimplemented (
     () => {
-        _cdot_Unimplemented(core.reflect.sourceLocation,
-                            core.reflect.function)
+        _cdot_Unimplemented(core.reflect.sourceLocation, core.reflect.function)
     }
 )
 

@@ -1,8 +1,0 @@
-
-struct Outer {}
-extend Outer {
-    struct Inner {}
-}
-
-// Lookup of inner members defined in an extension.
-_ = Outer.Inner()

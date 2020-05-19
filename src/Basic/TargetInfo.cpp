@@ -1,23 +1,19 @@
-//
-// Created by Jonas Zell on 16.03.18.
-//
+#include "cdotc/Basic/TargetInfo.h"
 
-#include "TargetInfo.h"
-
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "Driver/Compiler.h"
-#include "Query/QueryContext.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/Query/QueryContext.h"
 
 namespace cdot {
 
-TargetInfo::TargetInfo(CompilerInstance &CI, const llvm::Triple &T)
-   : CI(CI), T(T)
+TargetInfo::TargetInfo(CompilerInstance& CI, const llvm::Triple& T)
+    : CI(CI), T(T)
 {
    PointerSizeInBytes = PointerAlignInBytes = sizeof(void*);
    DefaultIntType = CI.getContext().getIntegerTy(PointerSizeInBytes * 8, false);
    BigEndian = !T.isLittleEndian();
-   HasFP128  = false;
+   HasFP128 = false;
    DirectStructPassingFieldThreshold = 2;
 }
 

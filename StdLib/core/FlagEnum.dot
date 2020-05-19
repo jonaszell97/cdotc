@@ -7,7 +7,7 @@ macro flag_enum {
             case $caseName:tok
         )*
     /*}*/) => {
-        struct $name with RawRepresentable {
+        struct $name with RawRepresentable, ImplicitlyCopyable {
             /// The raw value of this flag enum.
             var value: UInt
 
@@ -22,7 +22,7 @@ macro flag_enum {
             )...
 
             /// \inherit
-            associatedType RawType = UInt
+            alias RawType = UInt
 
             /// \inherit
             prop rawValue: UInt {

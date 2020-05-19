@@ -1,18 +1,14 @@
-//
-// Created by Jonas Zell on 19.12.17.
-//
+#include "cdotc/IRGen/IRGen.h"
 
-#include "IRGen.h"
-
-#include "AST/ASTContext.h"
-#include "AST/Decl.h"
-#include "AST/Type.h"
-#include "Driver/Compiler.h"
-#include "Basic/FileUtils.h"
-#include "Basic/FileManager.h"
-#include "IL/Constants.h"
-#include "IL/Context.h"
-#include "IL/Module.h"
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Type.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Module.h"
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/Module.h>
@@ -42,16 +38,14 @@ llvm::MDNode* IRGen::emitModuleDI()
 }
 
 llvm::DIFile* IRGen::getFileDI(size_t fileID, llvm::StringRef fileName,
-                               llvm::StringRef path) {
+                               llvm::StringRef path)
+{
    auto ID = fileID;
    auto it = DIFileMap.find(ID);
    if (it != DIFileMap.end())
       return it->second;
 
-   auto File = DI->createFile(
-      fileName,
-      path
-   );
+   auto File = DI->createFile(fileName, path);
 
    DIFileMap.try_emplace(ID, File);
    return File;
@@ -67,7 +61,7 @@ llvm::DIFile* IRGen::getFileDI(SourceLocation loc)
    if (it != DIFileMap.end())
       return it->second;
 
-   auto &FileMgr = CI.getFileMgr();
+   auto& FileMgr = CI.getFileMgr();
    auto fileNameAndPath = FileMgr.getFileName(ID).str();
 
    llvm::SmallString<64> Path;
@@ -77,10 +71,7 @@ llvm::DIFile* IRGen::getFileDI(SourceLocation loc)
 
    auto fileName = fs::getFileNameAndExtension(fileNameAndPath);
 
-   auto File = DI->createFile(
-      fileName,
-      Path.str()
-   );
+   auto File = DI->createFile(fileName, Path.str());
 
    DIFileMap.try_emplace(ID, File);
    return File;
@@ -94,134 +85,70 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
    if (it != DITypeMap.end())
       return it->second;
 
-   auto &TI = CI.getContext().getTargetInfo();
+   auto& TI = CI.getContext().getTargetInfo();
 
-   llvm::DIType *MD;
+   llvm::DIType* MD;
    switch (ty->getTypeID()) {
    case Type::BuiltinTypeID: {
       switch (ty->asBuiltinType()->getKind()) {
       case BuiltinType::i1:
-         MD = DI->createBasicType(
-            "i1",
-            8,
-            llvm::dwarf::DW_ATE_boolean
-         );
-         
+         MD = DI->createBasicType("i1", 8, llvm::dwarf::DW_ATE_boolean);
+
          break;
       case BuiltinType::i8:
-         MD = DI->createBasicType(
-            "i8",
-            8,
-            llvm::dwarf::DW_ATE_signed_char
-         );
+         MD = DI->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed_char);
 
          break;
       case BuiltinType::u8:
-         MD = DI->createBasicType(
-            "u8",
-            8,
-            llvm::dwarf::DW_ATE_unsigned_char
-         );
+         MD = DI->createBasicType("u8", 8, llvm::dwarf::DW_ATE_unsigned_char);
 
          break;
       case BuiltinType::i16:
-         MD = DI->createBasicType(
-            "i16",
-            16,
-            llvm::dwarf::DW_ATE_signed
-         );
+         MD = DI->createBasicType("i16", 16, llvm::dwarf::DW_ATE_signed);
 
          break;
       case BuiltinType::u16:
-         MD = DI->createBasicType(
-            "u16",
-            16,
-            llvm::dwarf::DW_ATE_unsigned
-         );
+         MD = DI->createBasicType("u16", 16, llvm::dwarf::DW_ATE_unsigned);
 
          break;
       case BuiltinType::i32:
-         MD = DI->createBasicType(
-            "i32",
-            32,
-            llvm::dwarf::DW_ATE_signed
-         );
+         MD = DI->createBasicType("i32", 32, llvm::dwarf::DW_ATE_signed);
 
          break;
       case BuiltinType::u32:
-         MD = DI->createBasicType(
-            "u32",
-            32,
-            llvm::dwarf::DW_ATE_unsigned
-         );
+         MD = DI->createBasicType("u32", 32, llvm::dwarf::DW_ATE_unsigned);
 
          break;
       case BuiltinType::i64:
-         MD = DI->createBasicType(
-            "i64",
-            64,
-            llvm::dwarf::DW_ATE_signed
-         );
+         MD = DI->createBasicType("i64", 64, llvm::dwarf::DW_ATE_signed);
 
          break;
       case BuiltinType::u64:
-         MD = DI->createBasicType(
-            "u64",
-            64,
-            llvm::dwarf::DW_ATE_unsigned
-         );
+         MD = DI->createBasicType("u64", 64, llvm::dwarf::DW_ATE_unsigned);
 
          break;
       case BuiltinType::i128:
-         MD = DI->createBasicType(
-            "i128",
-            128,
-            llvm::dwarf::DW_ATE_signed
-         );
+         MD = DI->createBasicType("i128", 128, llvm::dwarf::DW_ATE_signed);
 
          break;
       case BuiltinType::u128:
-         MD = DI->createBasicType(
-            "u128",
-            128,
-            llvm::dwarf::DW_ATE_unsigned
-         );
+         MD = DI->createBasicType("u128", 128, llvm::dwarf::DW_ATE_unsigned);
 
          break;
       case BuiltinType::f16:
-         MD = DI->createBasicType(
-            "f16",
-            16,
-            llvm::dwarf::DW_ATE_float
-         );
+         MD = DI->createBasicType("f16", 16, llvm::dwarf::DW_ATE_float);
          break;
       case BuiltinType::f32:
-         MD = DI->createBasicType(
-            "f32",
-            32,
-            llvm::dwarf::DW_ATE_float
-         );
+         MD = DI->createBasicType("f32", 32, llvm::dwarf::DW_ATE_float);
          break;
       case BuiltinType::f64:
-         MD = DI->createBasicType(
-            "f64",
-            64,
-            llvm::dwarf::DW_ATE_float
-         );
+         MD = DI->createBasicType("f64", 64, llvm::dwarf::DW_ATE_float);
          break;
       case BuiltinType::f80:
-         MD = DI->createBasicType(
-            "f80",
-            80,
-            llvm::dwarf::DW_ATE_float
-         );
+         MD = DI->createBasicType("f80", 80, llvm::dwarf::DW_ATE_float);
          break;
       case BuiltinType::f128:
-         MD = DI->createBasicType(
-            "f128",
-            128,
-            llvm::dwarf::DW_ATE_float
-         );
+         MD = DI->createBasicType("f128", 128, llvm::dwarf::DW_ATE_float);
          break;
       case BuiltinType::Void:
          MD = nullptr;
@@ -234,46 +161,32 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
    }
    case Type::PointerTypeID:
    case Type::MutablePointerTypeID: {
-      MD = DI->createPointerType(
-         getTypeDI(ty->getPointeeType()),
-         TI.getPointerSizeInBytes() * 8,
-         TI.getPointerAlignInBytes()
-      );
+      MD = DI->createPointerType(getTypeDI(ty->getPointeeType()),
+                                 TI.getPointerSizeInBytes() * 8,
+                                 TI.getPointerAlignInBytes());
 
       break;
    }
    case Type::ReferenceTypeID:
-   case Type::MutableReferenceTypeID:
-   case Type::MutableBorrowTypeID: {
-      MD = DI->createReferenceType(
-         llvm::dwarf::DW_TAG_reference_type,
-         getTypeDI(ty->getReferencedType()),
-         TI.getPointerSizeInBytes() * 8u,
-         TI.getPointerAlignInBytes()
-      );
+   case Type::MutableReferenceTypeID: {
+      MD = DI->createReferenceType(llvm::dwarf::DW_TAG_reference_type,
+                                   getTypeDI(ty->getReferencedType()),
+                                   TI.getPointerSizeInBytes() * 8u,
+                                   TI.getPointerAlignInBytes());
 
       break;
    }
    case Type::BoxTypeID: {
-      auto &ASTCtx = CI.getContext();
+      auto& ASTCtx = CI.getContext();
       auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
       auto UWordTy = getTypeDI(ASTCtx.getUIntTy());
 
-      llvm::Metadata *ContainedTys[] = {
-         UWordTy, UWordTy, Int8PtrTy, Int8PtrTy
-      };
+      llvm::Metadata* ContainedTys[] = {UWordTy, UWordTy, Int8PtrTy, Int8PtrTy};
 
       MD = DI->createStructType(
-         ScopeStack.top(),
-         ty->toString(),
-         File,
-         0,
-         TI.getSizeOfType(ty) * 8u,
-         TI.getAlignOfType(ty) * 8u,
-         llvm::DINode::DIFlags::FlagZero,
-         nullptr,
-         DI->getOrCreateArray(ContainedTys)
-      );
+          ScopeStack.top(), ty->toString(), File, 0, TI.getSizeOfType(ty) * 8u,
+          TI.getAlignOfType(ty) * 8u, llvm::DINode::DIFlags::FlagZero, nullptr,
+          DI->getOrCreateArray(ContainedTys));
 
       break;
    }
@@ -284,33 +197,21 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
       }
 
       MD = DI->createPointerType(
-         DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes)
-         ),
-         TI.getPointerSizeInBytes() * 8u,
-         TI.getPointerAlignInBytes()
-      );
+          DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes)),
+          TI.getPointerSizeInBytes() * 8u, TI.getPointerAlignInBytes());
 
       break;
    }
    case Type::LambdaTypeID: {
-      auto &ASTCtx = CI.getContext();
+      auto& ASTCtx = CI.getContext();
       auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
 
-      llvm::Metadata *ContainedTys[5] = {
-         Int8PtrTy, Int8PtrTy
-      };
+      llvm::Metadata* ContainedTys[5] = {Int8PtrTy, Int8PtrTy};
 
       MD = DI->createStructType(
-         ScopeStack.top(),
-         ty->toString(),
-         File,
-         0,
-         TI.getSizeOfType(ty) * 8u,
-         TI.getAlignOfType(ty) * 8u,
-         llvm::DINode::DIFlags::FlagZero,
-         nullptr,
-         DI->getOrCreateArray(ContainedTys)
-      );
+          ScopeStack.top(), ty->toString(), File, 0, TI.getSizeOfType(ty) * 8u,
+          TI.getAlignOfType(ty) * 8u, llvm::DINode::DIFlags::FlagZero, nullptr,
+          DI->getOrCreateArray(ContainedTys));
 
       break;
    }
@@ -325,13 +226,8 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
       auto flags = llvm::DINode::DIFlags::FlagZero;
       llvm::SmallVector<llvm::Metadata*, 4> containedTypes;
 
-      llvm::DICompositeType *forwardDecl = DI->createReplaceableCompositeType(
-         llvm::dwarf::DW_TAG_structure_type,
-         "",
-         ScopeStack.top(),
-         File,
-         0
-      );
+      llvm::DICompositeType* forwardDecl = DI->createReplaceableCompositeType(
+          llvm::dwarf::DW_TAG_structure_type, "", ScopeStack.top(), File, 0);
 
       unsigned i = 0;
       unsigned offset = 0;
@@ -342,21 +238,14 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
       OS << "(";
 
       for (auto& cont : tuple->getContainedTypes()) {
-         if (i != 0) OS << ", ";
+         if (i != 0)
+            OS << ", ";
          OS << cont;
 
          auto size = TI.getSizeOfType(cont) * 8;
          auto elementDI = DI->createMemberType(
-            forwardDecl,
-            std::to_string(i++),
-            File,
-            1,
-            size,
-            TI.getAlignOfType(cont) * 8,
-            offset,
-            flags,
-            getTypeDI(cont)
-         );
+             forwardDecl, std::to_string(i++), File, 1, size,
+             TI.getAlignOfType(cont) * 8, offset, flags, getTypeDI(cont));
 
          offset += size;
          containedTypes.push_back(elementDI);
@@ -364,74 +253,47 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
 
       OS << ")";
 
-      MD = DI->createStructType(
-         ScopeStack.top(),
-         OS.str(),
-         File,
-         1,
-         TI.getSizeOfType(ty) * 8u,
-         TI.getAlignOfType(ty) * 8u,
-         flags,
-         nullptr,
-         DI->getOrCreateArray(containedTypes)
-      );
+      MD = DI->createStructType(ScopeStack.top(), OS.str(), File, 1,
+                                TI.getSizeOfType(ty) * 8u,
+                                TI.getAlignOfType(ty) * 8u, flags, nullptr,
+                                DI->getOrCreateArray(containedTypes));
 
       DI->replaceTemporary(llvm::TempDIType(forwardDecl), MD);
 
       break;
    }
    case Type::ArrayTypeID: {
-      ArrayType *ArrTy = ty->asArrayType();
+      ArrayType* ArrTy = ty->asArrayType();
       MD = DI->createArrayType(
-         ArrTy->getNumElements(),
-         TI.getAlignOfType(ArrTy),
-         getTypeDI(*ArrTy->getElementType()),
-         DI->getOrCreateArray({})
-      );
+          ArrTy->getNumElements(), TI.getAlignOfType(ArrTy),
+          getTypeDI(*ArrTy->getElementType()), DI->getOrCreateArray({}));
 
       break;
    }
    case Type::MetaTypeID: {
-      auto &ASTCtx = CI.getContext();
+      auto& ASTCtx = CI.getContext();
       auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
 
-      llvm::Metadata *ContainedTys[] {
-         Int8PtrTy, Int8PtrTy, Int8PtrTy, Int8PtrTy, Int8PtrTy
-      };
+      llvm::Metadata* ContainedTys[]{Int8PtrTy, Int8PtrTy, Int8PtrTy, Int8PtrTy,
+                                     Int8PtrTy};
 
       MD = DI->createStructType(
-         ScopeStack.top(),
-         ty->toString(),
-         File,
-         0,
-         TI.getSizeOfType(ty) * 8u,
-         TI.getAlignOfType(ty) * 8u,
-         llvm::DINode::DIFlags::FlagZero,
-         nullptr,
-         DI->getOrCreateArray(ContainedTys)
-      );
+          ScopeStack.top(), ty->toString(), File, 0, TI.getSizeOfType(ty) * 8u,
+          TI.getAlignOfType(ty) * 8u, llvm::DINode::DIFlags::FlagZero, nullptr,
+          DI->getOrCreateArray(ContainedTys));
 
       break;
    }
    case Type::ExistentialTypeID: {
-      auto &ASTCtx = CI.getContext();
+      auto& ASTCtx = CI.getContext();
       auto Int8PtrTy = getTypeDI(ASTCtx.getInt8PtrTy());
 
-      llvm::Metadata *ContainedTys[] {
-         Int8PtrTy, Int8PtrTy, Int8PtrTy
-      };
+      llvm::Metadata* ContainedTys[]{Int8PtrTy, Int8PtrTy, Int8PtrTy};
 
       MD = DI->createStructType(
-         ScopeStack.top(),
-         ty->toString(),
-         File,
-         0,
-         TI.getSizeOfType(ty) * 8u,
-         TI.getAlignOfType(ty) * 8u,
-         llvm::DINode::DIFlags::FlagZero,
-         nullptr,
-         DI->getOrCreateArray(ContainedTys)
-      );
+          ScopeStack.top(), ty->toString(), File, 0, TI.getSizeOfType(ty) * 8u,
+          TI.getAlignOfType(ty) * 8u, llvm::DINode::DIFlags::FlagZero, nullptr,
+          DI->getOrCreateArray(ContainedTys));
 
       break;
    }
@@ -443,7 +305,7 @@ llvm::DIType* IRGen::getTypeDI(QualType ty)
    return MD;
 }
 
-llvm::dwarf::Tag IRGen::getTagForRecord(ast::RecordDecl *R)
+llvm::dwarf::Tag IRGen::getTagForRecord(ast::RecordDecl* R)
 {
    llvm::dwarf::Tag Tag;
    switch (R->getKind()) {
@@ -477,7 +339,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
    assert(ty->isRecordType());
 
    auto flags = llvm::DINode::DIFlags::FlagZero;
-   llvm::SmallVector<llvm::Metadata *, 8> containedTypes;
+   llvm::SmallVector<llvm::Metadata*, 8> containedTypes;
 
    auto Ty = ty->getRecord();
    auto loc = Ty->getSourceLoc();
@@ -486,13 +348,8 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
    auto LineAndCol = CI.getFileMgr().getLineAndCol(loc);
 
    string fullName = Ty->getFullName();
-   llvm::DICompositeType *forwardDecl = DI->createReplaceableCompositeType(
-      getTagForRecord(Ty),
-      fullName,
-      ScopeStack.top(),
-      File,
-      LineAndCol.line
-   );
+   llvm::DICompositeType* forwardDecl = DI->createReplaceableCompositeType(
+       getTagForRecord(Ty), fullName, ScopeStack.top(), File, LineAndCol.line);
 
    DITypeMap[ty] = forwardDecl;
 
@@ -500,53 +357,29 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       size_t offset = 0;
 
       if (isa<ClassDecl>(S)) {
-#     ifndef NDEBUG
+#ifndef NDEBUG
          auto size = TI.getPointerSizeInBytes() * 8;
          unsigned short align = TI.getPointerAlignInBytes() * 8;
 
-         auto &ASTCtx = CI.getContext();
+         auto& ASTCtx = CI.getContext();
 
          auto strongRefcount = DI->createMemberType(
-            forwardDecl,
-            "strongRefcount",
-            File,
-            LineAndCol.line,
-            size,
-            align,
-            offset,
-            flags,
-            getTypeDI(ASTCtx.getUIntTy())
-         );
+             forwardDecl, "strongRefcount", File, LineAndCol.line, size, align,
+             offset, flags, getTypeDI(ASTCtx.getUIntTy()));
 
          auto weakRefcount = DI->createMemberType(
-            forwardDecl,
-            "weakRefcount",
-            File,
-            LineAndCol.line,
-            size,
-            align,
-            offset,
-            flags,
-            getTypeDI(ASTCtx.getUIntTy())
-         );
+             forwardDecl, "weakRefcount", File, LineAndCol.line, size, align,
+             offset, flags, getTypeDI(ASTCtx.getUIntTy()));
 
          auto typeInfo = DI->createMemberType(
-            forwardDecl,
-            "typeInfo",
-            File,
-            LineAndCol.line,
-            size,
-            align,
-            offset,
-            flags,
-            getTypeDI(ASTCtx.getUInt8PtrTy())
-         );
+             forwardDecl, "typeInfo", File, LineAndCol.line, size, align,
+             offset, flags, getTypeDI(ASTCtx.getUInt8PtrTy()));
 
          containedTypes.push_back(strongRefcount);
          containedTypes.push_back(weakRefcount);
          containedTypes.push_back(typeInfo);
 
-#     endif
+#endif
 
          offset += 3 * TI.getPointerSizeInBytes() * 8;
       }
@@ -554,23 +387,16 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
       std::string FieldName;
       llvm::raw_string_ostream OS(FieldName);
 
-      for (const auto &field : S->getFields()) {
+      for (const auto& field : S->getFields()) {
          OS << field->getDeclName();
 
          QualType Ty = field->getType()->getCanonicalType();
 
          auto size = TI.getSizeOfType(Ty) * 8;
          auto member = DI->createMemberType(
-            forwardDecl,
-            OS.str(),
-            File,
-            LineAndCol.line,
-            size,
-            TI.getAlignOfType(Ty) * (unsigned short)8,
-            offset,
-            flags,
-            getTypeDI(Ty)
-         );
+             forwardDecl, OS.str(), File, LineAndCol.line, size,
+             TI.getAlignOfType(Ty) * (unsigned short)8, offset, flags,
+             getTypeDI(Ty));
 
          offset += size;
          containedTypes.push_back(member);
@@ -583,10 +409,10 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
       if (forwardDecl->isForwardDecl())
          forwardDecl = llvm::MDNode::replaceWithPermanent(
-            llvm::TempDICompositeType(forwardDecl));
+             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto U = dyn_cast<UnionDecl>(Ty)) {
-      for (const auto &field : U->getFields()) {
+      for (const auto& field : U->getFields()) {
          containedTypes.push_back(getTypeDI(field->getType()));
       }
 
@@ -595,15 +421,14 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
       if (forwardDecl->isForwardDecl())
          forwardDecl = llvm::MDNode::replaceWithPermanent(
-            llvm::TempDICompositeType(forwardDecl));
+             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto E = dyn_cast<EnumDecl>(Ty)) {
       if (E->isRawEnum()) {
-         for (const auto &Case : E->getCases()) {
+         for (const auto& Case : E->getCases()) {
             containedTypes.push_back(DI->createEnumerator(
-               Case->getName(),
-               cast<ConstantInt>(Case->getILValue())->getZExtValue()
-            ));
+                Case->getName(),
+                cast<ConstantInt>(Case->getILValue())->getZExtValue()));
          }
 
          DI->replaceArrays(forwardDecl, DI->getOrCreateArray(containedTypes));
@@ -613,26 +438,21 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
          llvm::raw_string_ostream OS(CurrentName);
 
          OS << fullName << ".Discriminator";
-         llvm::DICompositeType *DiscrimDecl =
-            DI->createReplaceableCompositeType(
-               llvm::dwarf::DW_TAG_enumeration_type,
-               OS.str(),
-               ScopeStack.top(),
-               File,
-               LineAndCol.line
-            );
+         llvm::DICompositeType* DiscrimDecl
+             = DI->createReplaceableCompositeType(
+                 llvm::dwarf::DW_TAG_enumeration_type, OS.str(),
+                 ScopeStack.top(), File, LineAndCol.line);
 
-         for (const auto &Case : E->getCases()) {
+         for (const auto& Case : E->getCases()) {
             containedTypes.push_back(DI->createEnumerator(
-               Case->getName(),
-               cast<ConstantInt>(Case->getILValue())->getZExtValue()
-            ));
+                Case->getName(),
+                cast<ConstantInt>(Case->getILValue())->getZExtValue()));
          }
 
          DI->replaceArrays(DiscrimDecl, DI->getOrCreateArray(containedTypes));
          if (DiscrimDecl->isForwardDecl())
             DiscrimDecl = llvm::MDNode::replaceWithPermanent(
-               llvm::TempDICompositeType(DiscrimDecl));
+                llvm::TempDICompositeType(DiscrimDecl));
 
          CurrentName.clear();
          containedTypes.clear();
@@ -641,25 +461,20 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
          unsigned offset = TI.getSizeOfType(RawTy) * 8;
 
          auto DiscrimType = DI->createMemberType(
-            forwardDecl, "discriminator", File, LineAndCol.line,
-            offset, TI.getAlignOfType(RawTy), 0, flags,
-            DiscrimDecl);
+             forwardDecl, "discriminator", File, LineAndCol.line, offset,
+             TI.getAlignOfType(RawTy), 0, flags, DiscrimDecl);
 
          containedTypes.push_back(DiscrimType);
 
-         for (const auto &Case : E->getCases()) {
+         for (const auto& Case : E->getCases()) {
             if (Case->getArgs().empty())
                continue;
 
             OS << fullName << "." << Case->getDeclName() << ".Payload";
-            llvm::DICompositeType *PayloadDecl =
-               DI->createReplaceableCompositeType(
-                  llvm::dwarf::DW_TAG_structure_type,
-                  OS.str(),
-                  ScopeStack.top(),
-                  File,
-                  LineAndCol.line
-               );
+            llvm::DICompositeType* PayloadDecl
+                = DI->createReplaceableCompositeType(
+                    llvm::dwarf::DW_TAG_structure_type, OS.str(),
+                    ScopeStack.top(), File, LineAndCol.line);
 
             CurrentName.clear();
 
@@ -668,30 +483,20 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
             unsigned LocalOffset = offset;
 
             auto LocalDiscrim = DI->createMemberType(
-               PayloadDecl, "discriminator", File, LineAndCol.line,
-               offset, TI.getAlignOfType(RawTy), 0, flags,
-               DiscrimDecl);
+                PayloadDecl, "discriminator", File, LineAndCol.line, offset,
+                TI.getAlignOfType(RawTy), 0, flags, DiscrimDecl);
 
-            llvm::SmallVector<llvm::Metadata*, 4> CaseTypes{ LocalDiscrim };
-            for (auto &Val : Case->getArgs()) {
+            llvm::SmallVector<llvm::Metadata*, 4> CaseTypes{LocalDiscrim};
+            for (auto& Val : Case->getArgs()) {
                QualType Ty = Val->getType()->getCanonicalType();
 
                unsigned Size = TI.getSizeOfType(Ty) * 8;
                unsigned short Align = TI.getAlignOfType(Ty) * (unsigned short)8;
 
                OS << Val->getDeclName();
-               CaseTypes.push_back(
-                  DI->createMemberType(
-                     PayloadDecl,
-                     OS.str(),
-                     File,
-                     LineAndCol.line,
-                     Size,
-                     Align,
-                     LocalOffset,
-                     flags,
-                     getTypeDI(Ty)
-                  ));
+               CaseTypes.push_back(DI->createMemberType(
+                   PayloadDecl, OS.str(), File, LineAndCol.line, Size, Align,
+                   LocalOffset, flags, getTypeDI(Ty)));
 
                LocalOffset += Size;
                SizeInBits += Size;
@@ -704,19 +509,19 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
             DI->replaceArrays(PayloadDecl, DI->getOrCreateArray(CaseTypes));
             if (PayloadDecl->isForwardDecl())
                PayloadDecl = llvm::MDNode::replaceWithPermanent(
-                  llvm::TempDICompositeType(PayloadDecl));
+                   llvm::TempDICompositeType(PayloadDecl));
 
-            llvm::DIType *PayloadTy = PayloadDecl;
+            llvm::DIType* PayloadTy = PayloadDecl;
             if (Case->isIndirect()) {
                PayloadTy = DI->createPointerType(
-                  PayloadTy, TI.getPointerSizeInBytes() * 8,
-                  TI.getPointerAlignInBytes() * (unsigned short)8);
+                   PayloadTy, TI.getPointerSizeInBytes() * 8,
+                   TI.getPointerAlignInBytes() * (unsigned short)8);
             }
 
             OS << Case->getDeclName();
             auto CasePayload = DI->createMemberType(
-               forwardDecl, OS.str(), File, LineAndCol.line, SizeInBits,
-               AlignInBits, 0, flags, PayloadTy);
+                forwardDecl, OS.str(), File, LineAndCol.line, SizeInBits,
+                AlignInBits, 0, flags, PayloadTy);
 
             containedTypes.push_back(CasePayload);
             CurrentName.clear();
@@ -727,7 +532,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
       if (forwardDecl->isForwardDecl())
          forwardDecl = llvm::MDNode::replaceWithPermanent(
-            llvm::TempDICompositeType(forwardDecl));
+             llvm::TempDICompositeType(forwardDecl));
    }
    else if (auto P = dyn_cast<ProtocolDecl>(Ty)) {
       auto contained = DI->getOrCreateArray(containedTypes);
@@ -735,7 +540,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
 
       if (forwardDecl->isForwardDecl())
          forwardDecl = llvm::MDNode::replaceWithPermanent(
-            llvm::TempDICompositeType(forwardDecl));
+             llvm::TempDICompositeType(forwardDecl));
    }
    else {
       llvm_unreachable("unknown record type");
@@ -744,7 +549,7 @@ llvm::DIType* IRGen::getRecordDI(QualType ty)
    return forwardDecl;
 }
 
-void IRGen::beginScope(llvm::DIScope *scope)
+void IRGen::beginScope(llvm::DIScope* scope)
 {
    assert(scope);
    ScopeStack.push(scope);
@@ -756,7 +561,7 @@ void IRGen::endScope()
    ScopeStack.pop();
 }
 
-void IRGen::beginLexicalScope(const SourceLocation &loc)
+void IRGen::beginLexicalScope(const SourceLocation& loc)
 {
    auto lineAndLoc = CI.getFileMgr().getLineAndCol(loc);
    auto scope = DI->createLexicalBlock(ScopeStack.top(), getFileDI(loc),
@@ -765,8 +570,8 @@ void IRGen::beginLexicalScope(const SourceLocation &loc)
    beginScope(scope);
 }
 
-void IRGen::emitLocalVarDI(const il::DebugLocalInst &Inst,
-                           llvm::Value *Val) {
+void IRGen::emitLocalVarDI(const il::DebugLocalInst& Inst, llvm::Value* Val)
+{
    auto ILVal = Inst.getVal();
    if (!Val)
       Val = getLlvmValue(ILVal);
@@ -777,7 +582,7 @@ void IRGen::emitLocalVarDI(const il::DebugLocalInst &Inst,
    }
 
    QualType ReferencedTy = ILVal->getType()->removeReference();
-   llvm::DIType *DIType;
+   llvm::DIType* DIType;
 
    if (ReferencedTy->isClass() && !isa<il::Argument>(ILVal)) {
       DIType = getTypeDI(ILVal->getType());
@@ -790,25 +595,16 @@ void IRGen::emitLocalVarDI(const il::DebugLocalInst &Inst,
    if (!DebugLoc)
       return;
 
-   auto DIVar = DI->createAutoVariable(
-      ScopeStack.top(),
-      Inst.getName()->getIdentifier(),
-      File,
-      DebugLoc->getLine(),
-      DIType
-   );
+   auto DIVar = DI->createAutoVariable(ScopeStack.top(),
+                                       Inst.getName()->getIdentifier(), File,
+                                       DebugLoc->getLine(), DIType);
 
    DIVarMap[ILVal] = DIVar;
-   DI->insertDeclare(
-      Val,
-      DIVar,
-      DI->createExpression(),
-      DebugLoc,
-      Builder.GetInsertBlock()
-   );
+   DI->insertDeclare(Val, DIVar, DI->createExpression(), DebugLoc,
+                     Builder.GetInsertBlock());
 }
 
-void IRGen::emitDebugValue(il::Value *Val, llvm::Value *LLVMVal)
+void IRGen::emitDebugValue(il::Value* Val, llvm::Value* LLVMVal)
 {
    auto It = DIVarMap.find(Val);
    if (It == DIVarMap.end())
@@ -819,41 +615,34 @@ void IRGen::emitDebugValue(il::Value *Val, llvm::Value *LLVMVal)
       return;
 
    auto DIVar = It->getSecond();
-   DI->insertDbgValueIntrinsic(
-      LLVMVal, DIVar, DI->createExpression(),
-      DebugLoc, Builder.GetInsertBlock());
+   DI->insertDbgValueIntrinsic(LLVMVal, DIVar, DI->createExpression(), DebugLoc,
+                               Builder.GetInsertBlock());
 }
 
 llvm::MDNode* IRGen::emitGlobalVarDI(GlobalVariable const& G,
-                                     llvm::GlobalVariable *var) {
+                                     llvm::GlobalVariable* var)
+{
    auto loc = G.getSourceLoc();
    auto File = getFileDI(loc);
 
    auto LineAndCol = CI.getFileMgr().getLineAndCol(loc);
    auto MD = DI->createGlobalVariableExpression(
-      ScopeStack.top(),
-      G.getName(),
-      var->getName(),
-      File,
-      LineAndCol.line,
-      getTypeDI(G.getType()),
-      false
-   );
+       ScopeStack.top(), G.getName(), var->getName(), File, LineAndCol.line,
+       getTypeDI(G.getType()), false);
 
    var->addDebugInfo(MD);
    return MD;
 }
 
-llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
+llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function* func)
 {
    std::vector<llvm::Metadata*> argTypes;
    for (const auto& arg : F.getEntryBlock()->getArgs()) {
       argTypes.push_back(getTypeDI(arg.getType()));
    }
 
-   llvm::DISubroutineType *funcTy = DI->createSubroutineType(
-      DI->getOrCreateTypeArray(argTypes)
-   );
+   llvm::DISubroutineType* funcTy
+       = DI->createSubroutineType(DI->getOrCreateTypeArray(argTypes));
 
    unsigned int scopeStart = 0;
    auto loc = F.getSourceLoc();
@@ -867,37 +656,34 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
       line = 0;
    }
 
-   llvm::DISubprogram *MD;
+   llvm::DISubprogram* MD;
 
-   auto File = getFileDI(F.getSourceLoc());
+   llvm::DINode::DIFlags Flags = llvm::DINode::FlagZero;
+   llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagZero;
+
+   if (!F.isDeclared()) {
+      SPFlags |= llvm::DISubprogram::SPFlagDefinition;
+   }
+
+   auto FileDI = getFileDI(F.getSourceLoc());
    if (auto M = dyn_cast<Method>(&F)) {
-      MD = DI->createMethod(
-         ScopeStack.top(),
-         F.getUnmangledName(),
-         F.getName(),
-         File,
-         line,
-         funcTy,
-         false,
-         !F.isDeclared(),
-         M->isVirtual(),
-         M->getVtableOffset() == -1 ? 0 : M->getVtableOffset(),
-         1,
-         nullptr //FIXME
-      );
+      if (M->isVirtual()) {
+         Flags |= llvm::DINode::FlagVirtual;
+         SPFlags |= llvm::DISubprogram::SPFlagVirtual;
+      }
+
+      auto *RecordDI = getTypeDI(M->getEntryBlock()->getBlockArg(0)->getType()
+                                  ->removeMetaType()->removeReference());
+
+      MD = DI->createMethod(RecordDI,
+          F.getUnmangledName(), F.getName(), FileDI, line,
+          funcTy, M->getVtableOffset() == -1 ? 0 : M->getVtableOffset(), 1,
+          nullptr, Flags, SPFlags);
    }
    else {
-      MD = DI->createFunction(
-         ScopeStack.top(),
-         F.getUnmangledName(),
-         F.getName(),
-         File,
-         line,
-         funcTy,
-         false,
-         !F.isDeclared(),
-         scopeStart
-      );
+      MD = DI->createFunction(ScopeStack.top(), F.getUnmangledName(),
+                              F.getName(), FileDI, line, funcTy, scopeStart,
+                              Flags, SPFlags);
    }
 
    if (!F.isDeclared()) {
@@ -908,10 +694,7 @@ llvm::MDNode* IRGen::emitFunctionDI(il::Function const& F, llvm::Function *func)
    return MD;
 }
 
-void IRGen::emitArgumentDI(il::Function const &F, llvm::Function *func)
-{
-
-}
+void IRGen::emitArgumentDI(il::Function const& F, llvm::Function* func) {}
 
 } // namespace il
 } // namespace cdot

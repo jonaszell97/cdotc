@@ -1,13 +1,9 @@
-//
-// Created by Jonas Zell on 30.04.18.
-//
+#include "cdotc/IL/Passes/FinalizeFunctionPass.h"
 
-#include "FinalizeFunctionPass.h"
-
-#include "IL/Analysis/AccessPathDescriptor.h"
-#include "IL/Instructions.h"
-#include "ILGen/ILGenPass.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/IL/Analysis/AccessPathDescriptor.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot::support;
 
@@ -17,8 +13,8 @@ namespace il {
 void FinalizeFunctionPass::run()
 {
    llvm::SmallPtrSet<AssignInst*, 8> Assigns;
-   for (auto &B : *F) {
-      for (auto &I : B) {
+   for (auto& B : *F) {
+      for (auto& I : B) {
          if (auto Assign = dyn_cast<AssignInst>(&I)) {
             Assigns.insert(Assign);
          }
@@ -27,14 +23,13 @@ void FinalizeFunctionPass::run()
       }
    }
 
-   auto &Builder = ILGen.Builder;
-   for (auto Assign : Assigns) {;
+   auto& Builder = ILGen.Builder;
+   for (auto Assign : Assigns) {
       Builder.SetInsertPoint(Assign->getIterator());
 
       auto Ld = Builder.CreateLoad(Assign->getDst());
       Ld->setSynthesized(true);
-
-      DefaultCleanup(Assign->getSrc()).Emit(ILGen);
+      DefaultCleanup(Ld).Emit(ILGen);
 
       if (!Assign->getDst()->getType()->isMutableReferenceType()) {
          ILGen.getSema().diagnose(diag::err_reassign_constant,
@@ -50,7 +45,7 @@ void FinalizeFunctionPass::run()
    }
 }
 
-void FinalizeFunctionPass::visitMoveInst(const il::MoveInst &I)
+void FinalizeFunctionPass::visitMoveInst(const il::MoveInst& I)
 {
    if (!I.getType()->isMutableReferenceType()) {
       ILGen.getSema().diagnose(diag::err_cannot_move_immutable,

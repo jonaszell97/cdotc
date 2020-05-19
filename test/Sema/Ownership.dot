@@ -1,0 +1,87 @@
+
+// VERIFY-IL
+
+def use<T>(_ value: T) {}
+def consume<T>(_ value: owned T) {}
+def takesMutRef<T>(_ value: mut ref T) {}
+def takesRef<T>(_ value: ref T) {}
+
+struct CantCopy with MoveOnly {}
+struct CanCopy {}
+struct ImplicitCopy with ImplicitlyCopyable {}
+
+let v1 = CantCopy() // expected-note {{was declared here}}
+use(v1) // OK
+consume(v1) // expected-error {{cannot move immutable value 'v1'}}
+use(v1) // expected-error {{'v1' is uninitialized when used here}}
+
+var v2 = CantCopy()
+consume(v2) // OK
+
+var v3 = CantCopy() // expected-note {{was declared here}}
+if 3 == 4 {
+    consume(v3) // OK
+}
+
+use(v3) // expected-error {{'v3' may be uninitialized when used here}}
+
+let v4 = CanCopy()
+consume(v4) // expected-error {{cannot move immutable value 'v4'}}
+
+let v5 = ImplicitCopy()
+consume(v5) // OK
+consume(v5) // OK
+use(v5) // OK
+
+var v6 = CantCopy() // expected-note {{was declared here}}
+var v7 = v6 // OK
+use(v7) // OK
+use(v6) // expected-error {{'v6' is uninitialized when used here}}
+
+def takesOwned(_ value: owned CantCopy) {
+    takesOwned(value) // OK
+}
+
+var v8 = CantCopy()
+takesMutRef(&v8)
+
+struct S1 {
+    var cantCopy: CantCopy = default
+    var canCopy: CanCopy = default
+    let canCopy2: CanCopy = default
+    var impCopy: ImplicitCopy = default
+    let impCopy2: ImplicitCopy = default
+}
+
+var s = S1() // expected-note {{was declared here}}
+var v9 = s.cantCopy
+use(s) // expected-error {{'s' is partially uninitialized when used here}}
+
+var s2 = S1()
+var v10 = s2.impCopy
+use(s2) // OK
+
+if true {
+    let borrow1 = &s2.cantCopy // expected-note {{previous borrow begins here}}
+    let borrow2 = &s2.cantCopy // OK - more than one immutable borrow is fine
+    var borrow3 = &s2.cantCopy // expected-error {{cannot mutably borrow 's2.cantCopy' since there is already a borrow active}}
+    var borrow4 = &s2.canCopy // OK
+} // expected-note {{previous borrow ends here}}
+
+let s3 = S1()
+let v11 = s3.cantCopy // expected-error {{cannot move immutable value 's3.cantCopy'}}
+
+var arr: [CantCopy; 3] = default
+let arr_borrow1 = &arr[0] // expected-note {{previous borrow begins here}}
+let arr_borrow2 = &arr[0]
+let arr_borrow3 = &arr[0]
+
+if true {
+    var arr_borrow4 = &arr[1] // expected-note {{previous borrow begins here}}
+    let arr_borrow5 = &arr[1] // expected-error {{cannot borrow 'arr[1]' since there is already a mutable borrow active}}
+} // expected-note {{previous borrow ends here}}
+
+
+let unknownIndex = (() => { return 0 })()
+var arr_borrow6 = &arr[unknownIndex] // expected-error {{cannot mutably borrow 'arr[?]' since there is already a borrow active}}
+// expected-note {{previous borrow ends here}}

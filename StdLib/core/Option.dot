@@ -1,4 +1,6 @@
 
+import sys
+
 /// A protocol for types that are expressible with a `none` literal, i.e.
 /// those that have a null-like value.
 public protocol ExpressibleByNoneLiteral {
@@ -18,7 +20,7 @@ public protocol Unwrappable {
 // A truth value can trivially unwrap to itself.
 extend TruthValue with Unwrappable {
     /// \inherit
-    default associatedType Wrapped = Self
+    default alias Wrapped = Self
 
     /// \inherit
     default def mutating tryUnwrap() -> Wrapped? {
@@ -34,6 +36,7 @@ extend TruthValue with Unwrappable {
 postfix !
 
 /// A type that represents a value of type `T` that may not be present.
+@noDerive(RawRepresentable)
 @_builtin public enum Option<T> {
     /// Represents the absence of a value.
     case None
@@ -78,7 +81,7 @@ postfix !
     }
 
     /// \return the value contained in this Option, or \param defaultVal if it is `none`.
-    public def infix ?? (/*@autoclosure*/defaultVal: T) -> T {
+    public def infix ?? (@autoclosure defaultVal: T) -> T {
         match self {
         case .Some(let t): 
             return t
@@ -124,6 +127,20 @@ extend Option with ExpressibleByNoneLiteral {
     }
 }
 
+// extend Option with ExpressibleByIntegerLiteral where T is ExpressibleByIntegerLiteral {
+//     alias IntegerType = T.IntegerType
+
+//     init (integerLiteral i: IntegerType) {
+//         self = .Some(i)
+//     }
+// }
+
+extend Option with ImplicitlyCopyable where T is ImplicitlyCopyable {
+}
+
+extend Option with ImplicitlyCopyable where T is class {
+}
+
 extend Option with TruthValue {
     /// \inherit
     prop truthValue: Bool {
@@ -133,7 +150,7 @@ extend Option with TruthValue {
 
 extend Option with Unwrappable {
     /// \inherit
-    associatedType Wrapped = T
+    alias Wrapped = T
 
     /// \inherit
     def mutating tryUnwrap() -> Wrapped? {

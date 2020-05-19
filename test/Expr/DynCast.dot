@@ -1,0 +1,56 @@
+
+// RUN
+// CHECK deriving
+// CHECK-NEXT deriving more
+
+class Base {
+    static var allocs: Int = 0
+    static var deallocs: Int = 0
+
+    let str: String
+    init (_ str: String) {
+        self.str = str
+    }
+}
+
+class Derived: Base {
+    init (_ str: String) {
+        super.init(str)
+        allocs += 1
+    }
+    deinit {
+        deallocs += 1
+    }
+    def doDerivedThings() {
+        print("deriving")
+    }
+}
+
+class MoreDerived: Derived with StringRepresentable {
+    init {
+        super.init("MoreDerived")
+    }
+    def doMoreDerivedThings() {
+        print("deriving more")
+    }
+    def toString() -> String {
+        return "MoreDerived()"
+    }
+}
+
+do {
+    var x: Base = Derived("hello")
+    if let d = x as? Derived {
+        d.doDerivedThings()
+    }
+    if let d = x as? MoreDerived {
+        d.doMoreDerivedThings()
+    }
+
+    var y: StringRepresentable & Base = MoreDerived()
+    if let d = y as? MoreDerived {
+        d.doMoreDerivedThings()
+    }
+}
+
+assertEqual!(Base.allocs, Base.deallocs)

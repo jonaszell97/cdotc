@@ -1,5 +1,10 @@
 
+import { _AtomicProtocol } from atomic
+import builtin
 import libc
+import mem
+import reflect
+import rt
 
 prefix *
 
@@ -10,6 +15,9 @@ public protocol Pointer with RawRepresentable {
     /// Constrain the raw type to be an integer.
     associatedType RawType
         where RawType == Int
+
+    /// The return type of pointer arithmetic operations.
+    associatedType ArithmeticReturnType: Pointer
 
     /// Override the 'rawValue' requirement to be mutable.
     prop rawValue: RawType { get set }
@@ -25,11 +33,14 @@ public protocol Pointer with RawRepresentable {
 
     /// Deallocate the memory associated with this pointer.
     /// \note This is only valid if the pointer was allocated with `Pointer.allocate()`.
-    def deallocate()
+    def deallocate(loc: reflect.RawSourceLocation)
 
     /// Deallocate the memory associated with this pointer, and deinitializes the value.
     /// \note This is only valid if the pointer was allocated with `Pointer.allocate()`.
-    def deinitialize()
+    def deinitialize(loc: reflect.RawSourceLocation)
+
+    /// Initialize to a null pointer.
+    init
 
     /// Initialize from a pointer sized integer.
     init (bitPattern: Int)
@@ -43,7 +54,12 @@ public protocol Pointer with RawRepresentable {
 
 extend Pointer {
     /// \inherit
-    default associatedType RawType = Int
+    default alias RawType = Int
+
+    /// \inherit
+    default init {
+        self.init(bitPattern: 0)
+    }
 
     /// \inherit
     default init (rawValue: RawType) {
@@ -63,30 +79,51 @@ extend Pointer {
     /// \inherit
     default static def allocate() -> Self {
         var memory = rt._cdot_Malloc(reflect.sizeOf<Pointee>.value)
-        return Self(bitPattern: Int(builtin.ptrtoint(memory)))
+        return Self(bitPattern: memory.rawValue)
     }
 
     /// \inherit
-    default def deallocate() {
-        rt._cdot_Free(builtin.inttoptr(rawValue.value))
+    default def deallocate(loc: reflect.RawSourceLocation = reflect.rawSourceLocation) {
+        rt._cdot_Free(builtin.inttoptr(rawValue.value), loc)
     }
 
     /// \inherit
-    default def deinitialize() {
-        builtin.deinit(*self)
-        rt._cdot_Free(builtin.inttoptr(rawValue.value))
+    default def deinitialize(loc: reflect.RawSourceLocation = reflect.rawSourceLocation) {
+        // Simply loading the value will call the deinitializer.
+        _ = load()
+        rt._cdot_Free(builtin.inttoptr(rawValue.value), loc)
     }
 
     /// \inherit
     default def load() -> Pointee {
-        return builtin.loadFromPointer(
+        rt._access_memory!(self.rawPointer, reflect.sizeOf<Pointee>)
+
+        var value = builtin.loadFromPointer(
             builtin.bitcast<Pointee>(
                 builtin.inttoptr(self.rawValue.value)))
+
+        var ret = builtin.copy(value)
+        builtin.consume(value)
+
+        return ret
     }
 
     /// \inherit
     default def prefix *() -> Pointee {
         return load()
+    }
+}
+
+extend Pointer with _AtomicProtocol {
+    /// \inherit
+    default alias _AtomicType = builtin.i64
+
+    /// \inherit
+    default prop _atomicValue: _AtomicType { return rawValue.value }
+
+    /// \inherit
+    default init (_atomicValue value: _AtomicType) {
+        self.init(rawValue: Int(value))
     }
 }
 
@@ -100,7 +137,7 @@ extend Pointer with Comparable {
 extend Pointer with StringRepresentable {
     /// \inherit
     default def toString() -> String {
-        return rawValue.toString<16>()
+        return rawValue.toString(base: 16)
     }
 }
 
@@ -113,11 +150,12 @@ extend Pointer with TruthValue {
 
 extend Pointer with Dereferenceable {
     /// \inherit
-    default associatedType DereferencedType = Pointee
+    default alias DereferencedType = Pointee
 
     /// \inherit
     default prop deref: DereferencedType {
         read {
+            rt._access_memory!(self.rawPointer, reflect.sizeOf<Pointee>)
             return UnsafeMutablePtr<DereferencedType>(rawValue: self.rawValue)
         }
     }
@@ -125,7 +163,7 @@ extend Pointer with Dereferenceable {
 
 extend Pointer with Unwrappable {
     /// \inherit
-    default associatedType Wrapped = Pointee
+    default alias Wrapped = Pointee
 
     /// \inherit
     default def tryUnwrap() -> Wrapped? {
@@ -138,33 +176,14 @@ extend Pointer with Unwrappable {
 }
 
 extend Pointer {
-    /// Initialize from a thin function pointer.
-    init <Ret, ...Args> (_ functionPointer: @thin (Args...) -> Ret) {
-        self.init(bitPattern: builtin.ptrtoint(functionPointer))
-    }
-
     /// Return a pointer pointing to the next element of the pointee type.
-    def infix +(rhs: Int) -> Self {
-        var copy = self
-        copy += rhs
-        return copy
-    }
-
-    /// Replace this pointer with a pointer pointing to the next element of the pointee type.
-    def mutating infix +=(rhs: Int) {
-        rawValue = rawValue + (rhs * reflect.sizeOf<Pointee>)
+    def infix +(rhs: Int) -> ArithmeticReturnType {
+        return ArithmeticReturnType(rawValue: self.rawValue + (rhs * reflect.sizeOf<Pointee>))
     }
 
     /// Return a pointer pointing to the last element of the pointee type.
-    def infix -(rhs: Int) -> Self {
-        var copy = self
-        copy -= rhs
-        return copy
-    }
-
-    /// Replace this pointer with a pointer pointing to the last element of the pointee type.
-    def mutating infix -=(rhs: Int) {
-        rawValue = rawValue - (rhs * reflect.sizeOf<Pointee>)
+    def infix -(rhs: Int) -> ArithmeticReturnType {
+        return ArithmeticReturnType(rawValue: self.rawValue - (rhs * reflect.sizeOf<Pointee>))
     }
 
     /// Return the number of values of type `Pointee` that are between this pointer and `rhs`.
@@ -176,13 +195,16 @@ extend Pointer {
 extend Pointer where Pointee == Byte {
     /// \return a cstring.
     prop cstring: libc.cstring {
-        return builtin.bitcast(builtin.inttoptr(rawValue.value))
+        return builtin.bitcast<libc.char>(builtin.inttoptr(rawValue.value))
     }
 }
 
 public protocol ConstPointer with Pointer {
     /// Initialize from a const or mutable reference to the pointee type.
     init (referencing: ref Pointee)
+
+    /// The builtin raw pointer.
+    prop raw: builtin.RawPointer<Pointee> { get }
 
     /// Initialize from a mutable pointer.
     @implicit init <T: Pointer> (_ pointer: T)
@@ -191,21 +213,48 @@ public protocol ConstPointer with Pointer {
 
 extend ConstPointer {
     /// \inherit
+    default alias ArithmeticReturnType = Self
+
+    /// \inherit
     default init (referencing value: ref Pointee) {
-        self.init(Int(builtin.ptrtoint(builtin.addressOf(value))))
+        self.init(bitPattern: Int(builtin.ptrtoint(builtin.addressOf(value))))
     }
 
     /// \inherit
     @implicit
     default init <T: Pointer> (_ pointer: T)
         where T.Pointee == Pointee
+        where T.RawType == Int
     {
         self.init(bitPattern: pointer.rawValue)
     }
 
+    /// \inherit
+    default prop raw: builtin.RawPointer<Pointee> {
+        return builtin.bitcast<Pointee>(builtin.inttoptr(rawValue.value))
+    }
+
     /// Execute the given closure on a reference to the pointee value.
-    def withReference<T>(_ closure: (ref Pointee) -> T) {
-        return closure(*(rawValue as! builtin.RawPointer<T>))
+    def withReference<T>(_ closure: (ref Pointee) -> T) -> T {
+        rt._access_memory!(self.rawPointer, reflect.sizeOf<Pointee>)
+
+        var pointee = builtin.loadFromPointer(builtin.bitcast<Pointee>(builtin.inttoptr(rawValue.value)))
+        var retVal = closure(pointee)
+
+        builtin.consume(pointee)
+        return retVal
+    }
+}
+
+extend ConstPointer where ArithmeticReturnType == Self {
+    /// Return a pointer pointing to the next element of the pointee type.
+    def mutating infix +=(rhs: Int) {
+        self = self + rhs
+    }
+
+    /// Return a pointer pointing to the next element of the pointee type.
+    def mutating infix -=(rhs: Int) {
+        self = self - rhs
     }
 }
 
@@ -217,42 +266,71 @@ public protocol MutablePointer with Pointer {
     init <T: MutablePointer> (_ mutablePointer: T)
         where T.Pointee == Pointee
 
+    /// The builtin raw pointer.
+    prop raw: builtin.MutableRawPointer<Pointee> { get }
+
     /// Store a value at the pointer address.
     def store(_ newValue: owned Pointee)
 }
 
 extend MutablePointer {
     /// \inherit
+    default alias ArithmeticReturnType = Self
+
+    /// \inherit
     default init (referencing value: mut ref Pointee) {
-        self.init(Int(builtin.ptrtoint(builtin.addressOf(value))))
+        self.init(bitPattern: Int(builtin.ptrtoint(builtin.addressOf(value))))
     }
 
     /// \inherit
     @implicit
     default init <T: MutablePointer> (_ mutablePointer: T)
         where T.Pointee == Pointee
+        where T.RawType == Int
     {
         self.init(bitPattern: mutablePointer.rawValue)
     }
 
     /// \inherit
+    default prop raw: builtin.MutableRawPointer<Pointee> {
+        return builtin.inttoptr(rawValue.value) as! builtin.MutableRawPointer<Pointee>
+    }
+
+    /// \inherit
     default def store(_ newValue: owned Pointee) {
+        rt._access_memory!(self.rawPointer, reflect.sizeOf<Pointee>)
+
         builtin.storeToPointer(newValue, to: builtin.bitcast<Pointee>(
             builtin.inttoptr(self.rawValue.value)))
     }
 
     /// Execute the given closure on a reference to the pointee value.
-    def withReference<T>(_ closure: (mut ref Pointee) -> T) {
-        return closure(*(rawValue as! builtin.RawPointer<T>))
+    def withReference<T>(_ closure: (mut ref Pointee) -> T) -> T {
+        rt._access_memory!(self.rawPointer, reflect.sizeOf<Pointee>)
+
+        var pointee = builtin.loadFromPointer(builtin.bitcast<Pointee>(builtin.inttoptr(rawValue.value)))
+        var retVal = closure(&pointee)
+
+        builtin.consume(pointee)
+        return retVal
+    }
+}
+
+extend MutablePointer where ArithmeticReturnType == Self {
+    /// Return a pointer pointing to the next element of the pointee type.
+    def mutating infix +=(rhs: Int) {
+        self = self + rhs
+    }
+
+    /// Return a pointer pointing to the next element of the pointee type.
+    def mutating infix -=(rhs: Int) {
+        self = self - rhs
     }
 }
 
 public protocol BufferPointer with Pointer {
     /// Allocate memory for `n` instances of `Pointee` type.
     static def allocate(_ n: Int = 1) -> Self
-
-    /// Access the `n`th element of this buffer pointer.
-    subscript (index: Int) -> Pointee { get }
 }
 
 extend BufferPointer {
@@ -261,46 +339,95 @@ extend BufferPointer {
         var memory = rt._cdot_Malloc((reflect.sizeOf<Pointee> * n).value)
         return Self(bitPattern: Int(builtin.ptrtoint(memory)))
     }
+
+    /// Create a buffer pointer to the element at `index`.
+    def offset(by: Int) -> Self {
+        return Self(rawValue: self.rawValue + (by * reflect.sizeOf<Pointee>))
+    }
 }
 
 public protocol ConstBufferPointer with BufferPointer, ConstPointer {
     /// Initialize from a mutable buffer pointer.
     init <T: BufferPointer> (_ bufferPointer: T)
         where T.Pointee == Pointee
+
+    /// Access the `n`th element of this buffer pointer.
+    subscript (index: Int) -> Pointee { get }
 }
 
 extend ConstBufferPointer {
     /// \inherit
+    default alias ArithmeticReturnType = UnsafePtr<Pointee>
+
+    /// \inherit
     @implicit
     default init <T: BufferPointer> (_ bufferPointer: T)
         where T.Pointee == Pointee
+        where T.RawType == Int
     {
         self.init(bitPattern: bufferPointer.rawValue)
+    }
+
+    /// Execute the given closure on a reference to the pointee value.
+    def withReference<T>(_ elementIdx: Int, _ closure: (ref Pointee) -> T) -> T {
+        var offsetPtr = self + elementIdx
+        rt._access_memory!(offsetPtr.rawPointer, reflect.sizeOf<Pointee>)
+
+        var pointee = builtin.loadFromPointer(builtin.bitcast<Pointee>(builtin.inttoptr(offsetPtr.rawValue.value)))
+        var retVal = closure(pointee)
+
+        builtin.consume(pointee)
+        return retVal
     }
 }
 
 public protocol MutableBufferPointer with BufferPointer, MutablePointer {
-    /// Access or override the `n`th element of this buffer pointer.
-    subscript (index: Int) -> Pointee { get; nonmutating set }
-
     /// Initialize from a mutable buffer pointer.
     init <T: MutableBufferPointer> (_ mutableBufferPointer: T)
         where T.Pointee == Pointee
+
+    /// Access or override the `n`th element of this buffer pointer.
+    subscript (index: Int) -> Pointee { read }
 }
 
 extend MutableBufferPointer {
     /// \inherit
+    default alias ArithmeticReturnType = UnsafeMutablePtr<Pointee>
+
+    /// \inherit
     @implicit
     default init <T: MutableBufferPointer> (_ mutableBufferPointer: T)
         where T.Pointee == Pointee
+        where T.RawType == Int
     {
         self.init(bitPattern: mutableBufferPointer.rawValue)
+    }
+
+    /// Execute the given closure on a reference to the pointee value.
+    def withReference<T>(_ elementIdx: Int, _ closure: (mut ref Pointee) -> T) -> T {
+        var offsetPtr = self + elementIdx
+        rt._access_memory!(offsetPtr.rawPointer, reflect.sizeOf<Pointee>)
+
+        var pointee = builtin.loadFromPointer(builtin.bitcast<Pointee>(builtin.inttoptr(offsetPtr.rawValue.value)))
+        var retVal = closure(&pointee)
+
+        builtin.consume(pointee)
+        return retVal
+    }
+
+    /// Memset the entire buffer to a specified value.
+    def write(size: Int, _ value: Byte = 0) {
+        rt._access_memory!(self.rawPointer, size * reflect.sizeOf<Pointee>)
+        mem.set(UnsafeMutableRawPtr(rawValue: self.rawValue), size: size * reflect.sizeOf<Pointee>, value)
     }
 }
 
 public struct UnsafePtr<T> {
     /// The raw pointer value.
     internal var rawPointer: builtin.RawPointer
+
+    /// Memberwise c'tor.
+    public memberwise init
 
     /// \return this pointer reinterpreted as a pointer of a different type.
     def reinterpretCast<U>() -> UnsafePtr<U> {
@@ -310,7 +437,7 @@ public struct UnsafePtr<T> {
 
 extend UnsafePtr with ConstPointer {
     /// \inherit
-    associatedType Pointee = T
+    alias Pointee = T
 
     /// \inherit
     init (bitPattern: Int) {
@@ -332,6 +459,9 @@ public struct UnsafeMutablePtr<T> {
     /// The raw pointer value.
     internal var rawPointer: builtin.RawPointer
 
+    /// Memberwise c'tor.
+    public memberwise init
+
     /// \return this pointer reinterpreted as a pointer of a different type.
     def reinterpretCast<U>() -> UnsafeMutablePtr<U> {
         return UnsafeMutablePtr<U>(rawPointer: self.rawPointer)
@@ -340,7 +470,7 @@ public struct UnsafeMutablePtr<T> {
 
 extend UnsafeMutablePtr with MutablePointer {
     /// \inherit
-    associatedType Pointee = T
+    alias Pointee = T
 
     /// \inherit
     init (bitPattern: Int) {
@@ -362,15 +492,23 @@ public struct UnsafeRawPtr {
     /// The raw pointer value.
     internal var rawPointer: builtin.RawPointer
 
+    /// Memberwise c'tor.
+    public memberwise init
+
     /// \return this pointer reinterpreted as a pointer of a different type.
     def reinterpretCast<T>() -> UnsafePtr<T> {
         return UnsafePtr<T>(rawPointer: self.rawPointer)
+    }
+
+    /// Implicitly initialize from any other pointer.
+    @implicit init <T: Pointer> (_ pointer: T) {
+        self.init(bitPattern: pointer.rawValue)
     }
 }
 
 extend UnsafeRawPtr with ConstPointer {
     /// \inherit
-    associatedType Pointee = ()
+    alias Pointee = Void
 
     /// \inherit
     init (bitPattern: Int) {
@@ -392,15 +530,23 @@ public struct UnsafeMutableRawPtr {
     /// The raw pointer value.
     internal var rawPointer: builtin.RawPointer
 
+    /// Memberwise c'tor.
+    public memberwise init
+
     /// \return this pointer reinterpreted as a pointer of a different type.
     def reinterpretCast<T>() -> UnsafeMutablePtr<T> {
         return UnsafeMutablePtr<T>(rawPointer: self.rawPointer)
+    }
+
+    /// Implicitly initialize from any other pointer.
+    @implicit init <T: MutablePointer> (_ pointer: T) {
+        self.init(bitPattern: pointer.rawValue)
     }
 }
 
 extend UnsafeMutableRawPtr with MutablePointer {
     /// \inherit
-    associatedType Pointee = ()
+    alias Pointee = Void
 
     /// \inherit
     init (bitPattern: Int) {
@@ -422,50 +568,23 @@ public struct UnsafeBufferPtr<T> {
     /// The raw pointer value.
     internal var rawPointer: builtin.RawPointer
 
+    /// Memberwise c'tor.
+    public memberwise init
+
     /// \return this pointer reinterpreted as a pointer of a different type.
     def reinterpretCast<U>() -> UnsafeBufferPtr<U> {
         return UnsafeBufferPtr<U>(rawPointer: self.rawPointer)
+    }
+
+    /// Implicitly initialize from any other pointer.
+    @implicit init <T: BufferPointer> (_ pointer: T) {
+        self.init(bitPattern: pointer.rawValue)
     }
 }
 
 extend UnsafeBufferPtr with ConstBufferPointer {
     /// \inherit
-    associatedType Pointee = T
-
-    /// \inherit
-    init (bitPattern: Int) {
-        self.rawPointer = builtin.inttoptr(bitPattern.value)
-    }
-
-    /// \inherit
-    prop rawValue: RawType {
-        get {
-            return Int(builtin.ptrtoint<builtin.i64>(rawPointer))
-        }
-        set {
-            rawPointer = builtin.inttoptr(newVal.value)
-        }
-    }
-
-    /// \inherit
-    subscript (index: Int) -> Pointee {
-        return (self + index).load()
-    }
-}
-
-public struct UnsafeMutableBufferPtr<T> {
-    /// The raw pointer value.
-    internal var rawPointer: builtin.RawPointer
-
-    /// \return this pointer reinterpreted as a pointer of a different type.
-    def reinterpretCast<U>() -> UnsafeMutableBufferPtr<U> {
-        return UnsafeMutableBufferPtr<U>(rawPointer: self.rawPointer)
-    }
-}
-
-extend UnsafeMutableBufferPtr with MutableBufferPointer {
-    /// \inherit
-    associatedType Pointee = T
+    alias Pointee = T
 
     /// \inherit
     init (bitPattern: Int) {
@@ -487,8 +606,51 @@ extend UnsafeMutableBufferPtr with MutableBufferPointer {
         get {
             return (self + index).load()
         }
-        nonmutating set {
-            (self + index).store(newVal)
+    }
+}
+
+public struct UnsafeMutableBufferPtr<T> {
+    /// The raw pointer value.
+    internal var rawPointer: builtin.RawPointer
+
+    /// Memberwise c'tor.
+    public memberwise init
+
+    /// \return this pointer reinterpreted as a pointer of a different type.
+    def reinterpretCast<U>() -> UnsafeMutableBufferPtr<U> {
+        return UnsafeMutableBufferPtr<U>(rawPointer: self.rawPointer)
+    }
+
+    /// Implicitly initialize from any other pointer.
+    @implicit init <T: MutableBufferPointer> (_ pointer: T) {
+        self.init(bitPattern: pointer.rawValue)
+    }
+}
+
+extend UnsafeMutableBufferPtr with MutableBufferPointer {
+    /// \inherit
+    alias Pointee = T
+
+    /// \inherit
+    init (bitPattern: Int) {
+        self.rawPointer = builtin.inttoptr(bitPattern.value)
+    }
+
+    /// \inherit
+    prop rawValue: RawType {
+        get {
+            return Int(builtin.ptrtoint<builtin.i64>(rawPointer))
+        }
+        set {
+            rawPointer = builtin.inttoptr(newVal.value)
+        }
+    }
+
+    /// \inherit
+    subscript (index: Int) -> Pointee {
+        read {
+            rt._access_memory!((self + index).rawPointer, reflect.sizeOf<Pointee>)
+            return self + index
         }
     }
 }

@@ -1,7 +1,0 @@
-
-struct S {
-    var m: i64
-    init (_ m: i64) {
-        self.m = m
-    }
-}

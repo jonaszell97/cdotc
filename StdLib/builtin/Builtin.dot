@@ -11,6 +11,12 @@
 /// Raw typed pointer type.
 @_builtin alias RawPointer<T>
 
+/// Raw pointer type.
+@_builtin alias MutableRawPointer
+
+/// Raw typed pointer type.
+@_builtin alias MutableRawPointer<T>
+
 /// Undefined value for a given type.
 @_builtin alias undefValue<T>: T
 
@@ -35,7 +41,7 @@ alias IsBuiltinFloatingPoint<T> = __traits(is_floating_point, T)
 
 /// Returns the meta type of the given expression.
 /// The passed expression will not be evaluated at runtime.
-@_builtin def type<T>(of t: T) -> MetaType<T>
+@_builtin def type<T>(of t: T) -> T.Type
 
 /// Allocate \param size bytes on the stack.
 def allocStack(bytes: u64) -> RawPointer
@@ -44,7 +50,7 @@ def allocStack(bytes: u64) -> RawPointer
 @_builtin def allocStack<T>(count: u64 = 1) -> RawPointer<T>
 
 /// Turns a given reference into a mutable pointer.
-@_builtin def addressOf<T>(_ t: mut ref T) -> RawPointer<T>
+@_builtin def addressOf<T>(_ t: mut ref T) -> MutableRawPointer<T>
 
 /// Turns a given reference into an immutable pointer.
 @_builtin def addressOf<T>(_ t: ref T) -> RawPointer<T>
@@ -56,8 +62,8 @@ def allocStack(bytes: u64) -> RawPointer
 @_builtin def storeToPointer<T>(_ val: owned T, to ptr: RawPointer<T>)
 
 /// Initialize a struct or class in manually allocated memory.
-@_builtin def constructInPlace<T: ?, ...Args>(at ptr: RawPointer<T>,
-                                              _ args: owned Args...) {
+@_builtin def constructInPlace<T, ...Args>(at ptr: RawPointer<T>,
+                                           _ args: owned Args) {
     // This is never actually executed, just used to verify that the type is
     // constructible with the given arguments.
     // _ = T(_: args...)
@@ -67,7 +73,7 @@ def allocStack(bytes: u64) -> RawPointer
 @_builtin def move<T>(_ t: owned T) -> T
 
 /// Consume a value, effectively removing all scheduled cleanups.
-@_builtin def consume<T>(_ t: owned T)
+@_builtin @discardableResult def consume<T>(_ t: owned T) -> i1
 
 /// Reinterpret a pointer of type `SrcTy` as a pointer of type `DstTy`.
 @_builtin def reinterpretCast<DstTy, SrcTy>(_ val: RawPointer<SrcTy>) -> RawPointer<DstTy>
@@ -86,13 +92,13 @@ def allocStack(bytes: u64) -> RawPointer
 @_builtin def deinit<T>(_ t: owned T)
 
 /// Print the current compile-time execution stack trace. This is a no-op at runtime.
-def printCTFEStacktrace() -> ()
+def printCTFEStacktrace() -> Void
 
 /// Lowers to a call to `llvm.memcpy`.
-def memcpy(dst: RawPointer, src: RawPointer, size: u64, align: u64 = 1) -> ()
+def memcpy(dst: RawPointer, src: RawPointer, size: u64, align: u64 = 1) -> Void
 
 /// Lowers to a call to `llvm.memset`.
-def memset(memory dst: RawPointer, value: u8, size: u64) -> ()
+def memset(memory dst: RawPointer, value: u8, size: u64) -> Void
 
 /// Tell the optimizer that the given condition is likely to be true.
 def likely(_ cond: i1) -> i1
@@ -102,7 +108,7 @@ def unlikely(_ cond: i1) -> i1
 
 /// Expands to a call to an arbitrary llvm intrinsic.
 @_builtin
-def llvm_intrinsic<RetTy, ...Args>(_ name: RawPointer<u8>, _ args: Args...) -> RetTy
+def llvm_intrinsic<RetTy, ...Args>(_ name: RawPointer<u8>, _ args: Args) -> RetTy
 
 //===--------------------------------------------------------------------===//
 // LLVM Instructions
@@ -152,95 +158,95 @@ macro fp_ops {
         }
 
         // def ${canonicalize_ $type}(_ val: $type) -> $type {
-        //     return llvm_intrinsic(stringify!("llvm.canonicalize."$type), val)
+        //     return llvm_intrinsic("llvm.canonicalize.$type", val)
         // }
 
         def ${log10_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.log10."$type), val)
+            return llvm_intrinsic("llvm.log10", val)
         }
 
         def ${log2_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.log2."$type), val)
+            return llvm_intrinsic("llvm.log2", val)
         }
 
         def ${log_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.log1."$type), val)
+            return llvm_intrinsic("llvm.log", val)
         }
 
         def ${floor_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.floor."$type), val)
+            return llvm_intrinsic("llvm.floor", val)
         }
 
         def ${ceil_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.ceil."$type), val)
+            return llvm_intrinsic("llvm.ceil", val)
         }
 
         def ${round_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.round."$type), val)
+            return llvm_intrinsic("llvm.round", val)
         }
 
         def ${rint_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.rint."$type), val)
+            return llvm_intrinsic("llvm.rint", val)
         }
 
         def ${trunc_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.trunc."$type), val)
+            return llvm_intrinsic("llvm.trunc", val)
         }
 
         def ${sqrt_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.sqrt."$type), val)
+            return llvm_intrinsic("llvm.sqrt", val)
         }
 
         def ${fabs_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.fabs."$type), val)
+            return llvm_intrinsic("llvm.fabs", val)
         }
 
         def ${sin_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.sin."$type), val)
+            return llvm_intrinsic("llvm.sin", val)
         }
 
         def ${cos_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.cos."$type), val)
+            return llvm_intrinsic("llvm.cos", val)
         }
 
         def ${exp_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.exp."$type), val)
+            return llvm_intrinsic("llvm.exp", val)
         }
 
         def ${exp2_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.exp2."$type), val)
+            return llvm_intrinsic("llvm.exp2", val)
         }
 
         def ${pow_ $type}(_ val: $type, _ exp: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.pow."$type), val, exp)
+            return llvm_intrinsic("llvm.pow", val, exp)
         }
 
         def ${powi_ $type}(_ val: $type, _ exp: i32) -> $type {
-            return llvm_intrinsic(stringify!("llvm.powi."$type), val, exp)
+            return llvm_intrinsic("llvm.powi", val, exp)
         }
 
         def ${minnum_ $type}(_ lhs: $type, _ rhs: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.minnum."$type), lhs, rhs)
+            return llvm_intrinsic("llvm.minnum", lhs, rhs)
         }
 
         def ${maxnum_ $type}(_ lhs: $type, _ rhs: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.maxnum."$type), lhs, rhs)
+            return llvm_intrinsic("llvm.maxnum", lhs, rhs)
         }
 
-        def ${minimum_ $type}(_ lhs: $type, _ rhs: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.minimum."$type), lhs, rhs)
-        }
+        // def ${minimum_ $type}(_ lhs: $type, _ rhs: $type) -> $type {
+        //     return llvm_intrinsic("llvm.minimum", lhs, rhs)
+        // }
 
-        def ${maximum_ $type}(_ lhs: $type, _ rhs: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.maximum."$type), lhs, rhs)
-        }
+        // def ${maximum_ $type}(_ lhs: $type, _ rhs: $type) -> $type {
+        //     return llvm_intrinsic("llvm.maximum", lhs, rhs)
+        // }
 
         def ${copysign_ $type}(_ mag: $type, _ sign: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.copysign."$type), mag, sign)
+            return llvm_intrinsic("llvm.copysign", mag, sign)
         }
 
         def ${fma_ $type}(_ a: $type, _ b: $type, _ c: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.fma."$type), a, b, c)
+            return llvm_intrinsic("llvm.fma", a, b, c)
         }
     )... }
 }
@@ -248,19 +254,19 @@ macro fp_ops {
 macro integer_ops {
     ($(($type:tok, $argType:tok))*) => { $(
         def ${ctlz_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.ctlz."$argType), val, false)
+            return llvm_intrinsic("llvm.ctlz", val, false)
         }
 
         def ${cttz_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.cttz."$argType), val, false)
+            return llvm_intrinsic("llvm.cttz", val, false)
         }
 
         def ${ctpop_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.ctpop."$argType), val)
+            return llvm_intrinsic("llvm.ctpop", val)
         }
 
         def ${bitreverse_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.bitreverse."$argType), val)
+            return llvm_intrinsic("llvm.bitreverse", val)
         }
 
         def ${not_ $type}(_ val: $type) -> $type {
@@ -303,27 +309,27 @@ macro integer_ops {
         def ${icmp_sle_ $type}(_ lhs: $type, _ rhs: $type) -> i1
 
         def ${sadd_with_overflow_ $type}(_ lhs: $type, _ rhs: $type) -> ($type, i1) {
-            return llvm_intrinsic(stringify!("llvm.sadd.with.overflow."$argType), lhs, rhs)
+            return llvm_intrinsic("llvm.sadd.with.overflow", lhs, rhs)
         }
 
         def ${uadd_with_overflow_ $type}(_ lhs: $type, _ rhs: $type) -> ($type, i1) {
-            return llvm_intrinsic(stringify!("llvm.uadd.with.overflow."$argType), lhs, rhs)
+            return llvm_intrinsic("llvm.uadd.with.overflow", lhs, rhs)
         }
 
         def ${ssub_with_overflow_ $type}(_ lhs: $type, _ rhs: $type) -> ($type, i1) {
-            return llvm_intrinsic(stringify!("llvm.ssub.with.overflow."$argType), lhs, rhs)
+            return llvm_intrinsic("llvm.ssub.with.overflow", lhs, rhs)
         }
 
         def ${usub_with_overflow_ $type}(_ lhs: $type, _ rhs: $type) -> ($type, i1) {
-            return llvm_intrinsic(stringify!("llvm.usub.with.overflow."$argType), lhs, rhs)
+            return llvm_intrinsic("llvm.usub.with.overflow", lhs, rhs)
         }
 
         def ${smul_with_overflow_ $type}(_ lhs: $type, _ rhs: $type) -> ($type, i1) {
-            return llvm_intrinsic(stringify!("llvm.smul.with.overflow."$argType), lhs, rhs)
+            return llvm_intrinsic("llvm.smul.with.overflow", lhs, rhs)
         }
 
         def ${umul_with_overflow_ $type}(_ lhs: $type, _ rhs: $type) -> ($type, i1) {
-            return llvm_intrinsic(stringify!("llvm.umul.with.overflow."$argType), lhs, rhs)
+            return llvm_intrinsic("llvm.umul.with.overflow", lhs, rhs)
         }
     )... }
 }
@@ -331,7 +337,7 @@ macro integer_ops {
 macro even_bytecnt_integer_ops {
     ($(($type:tok, $argType:tok))*) => { $(
         def ${bswap_ $type}(_ val: $type) -> $type {
-            return llvm_intrinsic(stringify!("llvm.bswap."$argType), val)
+            return llvm_intrinsic("llvm.bswap", val)
         }
     )... }
 }
@@ -349,6 +355,10 @@ even_bytecnt_integer_ops!{
     (i16, i16) (i32, i32) (i64, i64) (i128, i128)
     (u16, i16) (u32, i32) (u64, i64) (u128, i128)
 }
+
+def bswap_i8(_ val: i8) -> i8 { return val }
+def bswap_u8(_ val: u8) -> u8 { return val }
+def bswap_i1(_ val: i1) -> i1 { return val }
 
 // Pointer operations.
 def icmp_eq_ptr(_ lhs: RawPointer, _ rhs: RawPointer) -> i1 {
@@ -473,6 +483,8 @@ conversion_op!{ inttoptr u128 => RawPointer }
 // Bitcast.
 @_builtin def bitcast<To, From>(_ val: RawPointer<From>) -> RawPointer<To>
 @_builtin def bitcast<To>(_ val: RawPointer) -> RawPointer<To>
+@_builtin def bitcast<To, From>(_ val: MutableRawPointer<From>) -> MutableRawPointer<To>
+@_builtin def bitcast<To>(_ val: MutableRawPointer) -> MutableRawPointer<To>
 
 //===--------------------------------------------------------------------===//
 // Atomic intrinsics
@@ -486,7 +498,7 @@ def atomic_load<T>(_ addr: RawPointer<T>, _ memoryOrder: i32) -> T
 @_builtin
 def atomic_store<T>(_ value: owned T,
                     _ addr: RawPointer<T>,
-                    _ memoryOrder: i32) -> ()
+                    _ memoryOrder: i32) -> Void
 
 /// Expands to an instruction that atomically checks whether a specified value 
 /// is in a memory location, and, if it is, stores a new value.
@@ -501,7 +513,7 @@ def atomic_cmpxchg<T>(_ ptr: RawPointer<T>, _ cmp: T, _ newVal: T,
 /// 'old' is the initial value of *p, and 'v' is the other value passed to the
 /// instruction.  These instructions always return 'old'.
 @noDerive(*)
-internal enum AtomicRMWBinOp {
+enum AtomicRMWBinOp {
     /// *p = v
     case Xchg = 0,
     /// *p = old + v
@@ -530,26 +542,26 @@ internal enum AtomicRMWBinOp {
 /// combines it with another value, and then stores the result back.
 /// \return the old value.
 @_builtin
-internal def atomic_rmw<T>(_ op: AtomicRMWBinOp,
-                           _ ptr: RawPointer<T>,
-                           _ val: T,
-                           _ ordering: i32) -> T
+def atomic_rmw<T>(_ op: AtomicRMWBinOp,
+                  _ ptr: RawPointer<T>,
+                  _ val: T,
+                  _ ordering: i32) -> T
 
 //===--------------------------------------------------------------------===//
 // Coroutine intrinsics
 //===--------------------------------------------------------------------===//
 
 /// Resume the coroutine referenced by this handle.
-internal def coro_resume(_ hdl: RawPointer) -> CVoid {
+def coro_resume(_ hdl: RawPointer) -> CVoid {
    return llvm_intrinsic("llvm.coro.resume", hdl) 
 }
 
 /// Destroy the coroutine referenced by this handle.
-internal def coro_destroy(_ hdl: RawPointer) -> CVoid {
+def coro_destroy(_ hdl: RawPointer) -> CVoid {
    return llvm_intrinsic("llvm.coro.destroy", hdl) 
 }
 
 /// Returns true if the given corutine has run to completion.
-internal def coro_done(_ hdl: RawPointer) -> i1 {
+def coro_done(_ hdl: RawPointer) -> i1 {
    return llvm_intrinsic("llvm.coro.done", hdl) 
 }

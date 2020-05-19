@@ -1,15 +1,11 @@
-//
-// Created by Jonas Zell on 13.06.17.
-//
+#include "cdotc/Lex/Token.h"
 
-#include "Token.h"
+#include "cdotc/Basic/IdentifierInfo.h"
+#include "cdotc/Basic/Variant.h"
+#include "cdotc/Support/Format.h"
 
-#include "Basic/Variant.h"
-#include "Basic/IdentifierInfo.h"
-#include "Support/Format.h"
-
-#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/FoldingSet.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/Support/raw_ostream.h>
 
 using cdot::lex::tok::TokenType;
@@ -49,13 +45,13 @@ string tokenTypeToString(TokenType kind)
 
 } // namespace tok
 
-template <unsigned StrLen>
+template<unsigned StrLen>
 static constexpr unsigned strLen(const char (&Str)[StrLen])
 {
    return StrLen;
 }
 
-void Token::Profile(llvm::FoldingSetNodeID &ID) const
+void Token::Profile(llvm::FoldingSetNodeID& ID) const
 {
    ID.AddInteger(kind);
    ID.AddPointer(Ptr);
@@ -73,23 +69,40 @@ SourceLocation Token::getEndLoc() const
    case tok::fpliteral:
       Length = Data;
       break;
-#  define CDOT_OPERATOR_TOKEN(Name, Spelling)             \
-   case tok::Name: Length = strLen(Spelling); break;
-#  define CDOT_KEYWORD_TOKEN(Name, Spelling)              \
-   case tok::Name: Length = strLen(Spelling); break;
-#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling)        \
-   case tok::Name: Length = strLen(Spelling); break;
-#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)           \
-   case tok::Name: Length = 1; break;
-#  include "Tokens.def"
+#define CDOT_OPERATOR_TOKEN(Name, Spelling)                                    \
+   case tok::Name:                                                             \
+      Length = strLen(Spelling);                                               \
+      break;
+#define CDOT_KEYWORD_TOKEN(Name, Spelling)                                     \
+   case tok::Name:                                                             \
+      Length = strLen(Spelling);                                               \
+      break;
+#define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling)                               \
+   case tok::Name:                                                             \
+      Length = strLen(Spelling);                                               \
+      break;
+#define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                                  \
+   case tok::Name:                                                             \
+      Length = 1;                                                              \
+      break;
+#include "cdotc/Lex/Tokens.def"
    case tok::sentinel:
    case tok::eof:
-   case tok::interpolation_begin: Length = 2; break;
-   case tok::interpolation_end: Length = 1; break;
+   case tok::interpolation_begin:
+      Length = 2;
+      break;
+   case tok::interpolation_end:
+      Length = 1;
+      break;
    case tok::ident:
    case tok::op_ident:
    case tok::macro_name:
       Length = (unsigned)getIdentifierInfo()->getIdentifier().size();
+      break;
+   case tok::macro_expression:
+   case tok::macro_statement:
+   case tok::macro_declaration:
+      Length = 0;
       break;
    default:
       llvm_unreachable("bad token kind");
@@ -98,8 +111,7 @@ SourceLocation Token::getEndLoc() const
    return SourceLocation(loc.getOffset() + Length - 1);
 }
 
-template<unsigned N>
-void Token::rawRepr(llvm::SmallString<N> &s) const
+template<unsigned N> void Token::rawRepr(llvm::SmallString<N>& s) const
 {
    if (kind == tok::space) {
       s += getText();
@@ -109,64 +121,109 @@ void Token::rawRepr(llvm::SmallString<N> &s) const
    switch (kind) {
    case tok::charliteral:
    case tok::stringliteral:
-      s += llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1,
-                           Data + 2);
+      s += llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1, Data + 2);
       break;
-#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                               \
-   case tok::Name: s += (Spelling); break;
-#  include "Tokens.def"
+#define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                                  \
+   case tok::Name:                                                             \
+      s += (Spelling);                                                         \
+      break;
+#include "cdotc/Lex/Tokens.def"
    default:
       toString(s);
       break;
    }
 }
 
-template<unsigned N>
-void Token::toString(llvm::SmallString<N> &s) const
+template<unsigned N> void Token::toString(llvm::SmallString<N>& s) const
 {
    llvm::raw_svector_ostream OS(s);
    print(OS);
 }
 
-void Token::dump() const
-{
-   print(llvm::errs());
-}
+void Token::dump() const { print(llvm::errs()); }
 
-void Token::print(llvm::raw_ostream &OS) const
+void Token::print(llvm::raw_ostream& OS) const
 {
    if (kind == tok::space) {
-      OS << getText();
+      for (int i = 0; i < Data; ++i)
+         OS << ' ';
+
       return;
    }
 
    switch (kind) {
-#  define CDOT_OPERATOR_TOKEN(Name, Spelling)                               \
-   case tok::Name: OS << (Spelling); return;
-#  define CDOT_KEYWORD_TOKEN(Name, Spelling)                                \
-   case tok::Name: OS << (Spelling); return;
-#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling)                          \
-   case tok::Name: OS << (Spelling); return;
-#  define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling)                          \
-   case tok::Name: OS << (Spelling); return;
-#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                             \
-   case tok::Name: support::unescape_char((Spelling), OS); return;
-#  define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling) CDOT_KEYWORD_TOKEN(Name, Spelling)
-   case tok::sentinel: OS << "<sentinel>"; return;
-   case tok::eof: OS << "<eof>"; return;
-   case tok::expr_begin: OS << "#{"; return;
-   case tok::stringify_begin: OS << "##{"; return;
-   case tok::interpolation_begin: OS << "${"; return;
-   case tok::interpolation_end: OS << "}"; return;
+#define CDOT_OPERATOR_TOKEN(Name, Spelling)                                    \
+   case tok::Name:                                                             \
+      OS << (Spelling);                                                        \
+      return;
+#define CDOT_KEYWORD_TOKEN(Name, Spelling)                                     \
+   case tok::Name:                                                             \
+      OS << (Spelling);                                                        \
+      return;
+#define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling)                               \
+   case tok::Name:                                                             \
+      OS << (Spelling);                                                        \
+      return;
+#define CDOT_CONTEXTUAL_KW_TOKEN(Name, Spelling)                               \
+   case tok::Name:                                                             \
+      OS << (Spelling);                                                        \
+      return;
+#define CDOT_PUNCTUATOR_TOKEN(Name, Spelling)                                  \
+   case tok::Name:                                                             \
+      support::unescape_char((Spelling), OS);                                  \
+      return;
+#define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling)                                 \
+   CDOT_KEYWORD_TOKEN(Name, Spelling)
+   case tok::sentinel:
+      OS << "<sentinel>";
+      return;
+   case tok::eof:
+      OS << "<eof>";
+      return;
+   case tok::expr_begin:
+      OS << "${";
+      return;
+   case tok::stringify_begin:
+      OS << "##{";
+      return;
+   case tok::interpolation_begin:
+      OS << "";
+      return;
+   case tok::interpolation_end:
+      OS << "}";
+      return;
    case tok::ident:
-   case tok::op_ident:
-      OS << getIdentifier(); return;
+   case tok::op_ident: {
+      if (Data)
+         OS << '`';
+
+      OS << getIdentifier();
+
+      if (Data)
+         OS << '`';
+
+      return;
+   }
    case tok::dollar_ident: {
       OS << "$" << getIdentifier();
       return;
    }
+   case tok::stringliteral: {
+      auto *BeginPtr = reinterpret_cast<const char*>(Ptr) - 1;
+      auto *EndPtr = BeginPtr + Data + 2;
+
+      // Check if this string was introduced by interpolation.
+      if (*BeginPtr != '"') {
+         ++BeginPtr;
+      }
+      if (*(EndPtr-1) != '"') {
+         --EndPtr;
+      }
+
+      OS << llvm::StringRef(BeginPtr, EndPtr - BeginPtr);
+      break;
+   }
    case tok::charliteral:
-   case tok::stringliteral:
       OS << llvm::StringRef(reinterpret_cast<const char*>(Ptr) - 1, Data + 2);
       break;
    case tok::fpliteral:
@@ -188,7 +245,7 @@ void Token::print(llvm::raw_ostream &OS) const
    default:
       llvm_unreachable("unhandled token kind");
 
-#  include "Tokens.def"
+#include "cdotc/Lex/Tokens.def"
    }
 }
 
@@ -202,7 +259,7 @@ template void Token::rawRepr(llvm::SmallString<128>&) const;
 template void Token::rawRepr(llvm::SmallString<256>&) const;
 template void Token::rawRepr(llvm::SmallString<512>&) const;
 
-bool Token::is(cdot::IdentifierInfo *II) const
+bool Token::is(cdot::IdentifierInfo* II) const
 {
    if (!is_identifier())
       return false;
@@ -237,7 +294,8 @@ bool Token::isIdentifierEndingWith(llvm::StringRef str) const
 bool Token::isWhitespace() const
 {
    switch (getKind()) {
-   case tok::space: case tok::newline:
+   case tok::space:
+   case tok::newline:
       return true;
    default:
       return false;
@@ -297,65 +355,70 @@ string Token::rawRepr() const
 bool Token::is_punctuator() const
 {
    switch (kind) {
-#  define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) \
-      case tok::Name:
-#  include "Tokens.def"
-         return true;
-      default:
-         return false;
+#define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
+      return true;
+   default:
+      return false;
    }
 }
 
 bool Token::is_keyword() const
 {
    switch (kind) {
-#  define CDOT_KEYWORD_TOKEN(Name, Spelling) \
-      case tok::Name:
-#  define CDOT_MODULE_KEYWORD_TOKEN(Name, Spelling) \
-      case tok::Name:
-#  define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling) CDOT_KEYWORD_TOKEN(Name, Spelling)
-#  include "Tokens.def"
-         return true;
-      default:
-         return false;
+#define CDOT_KEYWORD_TOKEN(Name, Spelling) case tok::Name:
+#define CDOT_MODULE_KEYWORD_TOKEN(Name, Spelling) case tok::Name:
+#define CDOT_TABLEGEN_KW_TOKEN(Name, Spelling)                                 \
+   CDOT_KEYWORD_TOKEN(Name, Spelling)
+#include "cdotc/Lex/Tokens.def"
+      return true;
+   default:
+      return false;
    }
 }
 
 bool Token::is_operator() const
 {
    switch (kind) {
-#  define CDOT_OPERATOR_TOKEN(Name, Spelling) \
-      case tok::Name:
-#  include "Tokens.def"
-         return true;
-      default:
-         return false;
+#define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
+      return true;
+   default:
+      return false;
    }
 }
 
 bool Token::is_directive() const
 {
    switch (kind) {
-#  define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) \
-      case tok::Name:
-#  include "Tokens.def"
-         return true;
-      default:
-         return false;
+#define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
+      return true;
+   default:
+      return false;
    }
 }
 
 bool Token::is_literal() const
 {
    switch (kind) {
-#  define CDOT_LITERAL_TOKEN(Name, Spelling) \
-      case tok::Name:
-#  include "Tokens.def"
-         return true;
-      default:
-         return false;
+#define CDOT_LITERAL_TOKEN(Name, Spelling) case tok::Name:
+#include "cdotc/Lex/Tokens.def"
+      return true;
+   default:
+      return false;
    }
 }
 
 } // namespace lex
 } // namespace cdot
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, cdot::lex::tok::TokenType Tok)
+{
+   switch (Tok) {
+#  define CDOT_TOKEN(NAME, _) case cdot::lex::tok::NAME: return OS << #NAME;
+#  include "cdotc/Lex/Tokens.def"
+   default:
+      llvm_unreachable("bad token kind!");
+   }
+}

@@ -1,10 +1,14 @@
 
+import { self, i64, u64, i32, addressOf, bitcast } from builtin
+import libc
+import posix
+
 public abstract class Thread {
     /// Pointer to a pthread handle.
-    protected var pthread: posix.pthread_t
+    protected var pthread: posix.pthread.pthread_t
 
     /// Thread attributes.
-    protected var attrs: posix.pthread_attr_t
+    protected var attrs: posix.pthread.pthread_attr_t
 
     /// Tracks whether or not the thread is started.
     protected var running: Bool { get }
@@ -12,14 +16,14 @@ public abstract class Thread {
     /// Subclass C'tor. The thread is only created when @method{start} is called.
     protected init {
         self.pthread = __nullptr
-        self.attrs = posix.pthread_attr_t()
-        _ = posix.pthread_attr_init(builtin.addressOf(&self.attrs))
+        self.attrs = posix.pthread.pthread_attr_t()
+        _ = posix.pthread.pthread_attr_init(bitcast(addressOf(&self.attrs)))
         self.running = false
     }
 
     /// D'tor. Cleans up the thread.
     deinit {
-         _ = posix.pthread_attr_destroy(builtin.addressOf(&self.attrs))
+         _ = posix.pthread.pthread_attr_destroy(bitcast(addressOf(&self.attrs)))
     }
 
     /// Reference to the current thread.
@@ -31,63 +35,56 @@ public abstract class Thread {
     public def start() -> Thread {
         require!(!self.running, "cannot start thread that is already running")
 
-        var routine = Self.runImpl as! UnsafeMutableRawPtr
-        var selfPtr = builtin.loadFromPointer(builtin.addressOf(&self) as! UnsafePtr<libc.void_p>)
-        var ret = posix.pthread_create(thread: builtin.addressOf(&self.pthread),
-                                       attr: builtin.addressOf(&self.attrs),
-                                       start_routine: routine as! posix.pthread_routine_t,
-                                       arg: selfPtr)
+        var routine = Self.runImpl as! builtin.RawPointer
+        var ret = posix.pthread.pthread_create(addressOf(&self.pthread),
+                                               addressOf(&self.attrs),
+                                               routine as! @thin (builtin.MutableRawPointer) -> builtin.MutableRawPointer,
+                                               self as! builtin.MutableRawPointer)
 
-        self.running = ret == 0
+        if ret == 0 {
+            self.running = true
+
+            // Prevent this object from being cleaned up before completing its `run` method.
+            builtin.retainValue(&self)
+        }
+
         return self
     }
 
     /// Suspend execution of the current thread for the given time interval.
-    public static def sleep(_ val: UInt, _ unit: TimeUnit = .Millis) {
-        var val = val
-        match unit {
-        case .Seconds:
-            _ = posix.sleep(seconds: val as libc.unsigned)
-        case .Millis:
-            val *= 1000
-            continue
-        case .Nanos:
-            var ts = posix.timespec(tv_sec: 0, tv_nsec: val as libc.long)
-            _ = posix.nanosleep(builtin.addressOf(ts))
-        }
+    public static def sleep(_ ts: TimeSpan) {
+        var ts = posix.pthread.timespec(tv_sec: 0, tv_nsec: (ts.millis * 1000).value as i64)
+        _ = posix.time.nanosleep(addressOf(ts), __nullptr)
     }
 
     /// Raise a signal to this thread.
     public def signal(_ sig: posix.Signal) {
-        _ = posix.pthread_kill(self.pthread, sig)
+        _ = posix.pthread.pthread_kill(self.pthread, sig.rawValue)
     }
 
     /// Suspend the current thread until execution of this thread has finished.
     public def join() {
-        assert!(self.pthread != posix.pthread_self(), "cannot join current thread!")
-        _ = posix.pthread_join(self.pthread)
+        assert!(UnsafeRawPtr(rawPointer: self.pthread) != posix.pthread.pthread_self(),
+                "cannot join current thread!")
+
+        _ = posix.pthread.pthread_join(self.pthread)
     }
 
     /// Wrapper for the run method that takes care of exiting the thread.
     private def runImpl() {
-        // Keep this thread alive for the duration of this method by retaining here.
-        builtin.retainValue(&self)
-        
         self.run()
         self.running = false
 
         // Normal cleanups will not be reached after pthread_exit, so release self here.
         builtin.releaseValue(&self)
 
-        posix.pthread_exit()
+        posix.pthread.pthread_exit()
     }
 
     /// Get a unique ID for this thread. This does not necessarily equal an operating
     /// system specific thread ID, it just guarantees to be unique for each thread.
     public prop uniqueID: UInt {
-        return builtin.loadFromPointer(
-            builtin.reinterpretCast<UInt>(
-                builtin.addressOf(self.pthread)))
+        return UInt(builtin.ptrtoint<u64>(self.pthread))
     }
 
     //===--------------------------------------------------------------------===//
@@ -104,107 +101,110 @@ public abstract class Thread {
     /// Type used to represent priorites.
     alias Priority = Int
 
-    enum SchedulingPolicy(Int) {
-        case Default = posix.SchedulingPolicy.SCHED_OTHER as Int
-        case RoundRobin = posix.SchedulingPolicy.SCHED_RR as Int
-        case FIFO = posix.SchedulingPolicy.SCHED_FIFO as Int
+    enum SchedulingPolicy {
+        case Default = Int(posix.sched.SCHED_OTHER)
+        case RoundRobin = Int(posix.sched.SCHED_RR)
+        case FIFO = Int(posix.sched.SCHED_FIFO)
     }
 
     /// Returns the current scheduling policy.
     public def getSchedulingPolicy() -> SchedulingPolicy {
-        var policy = posix.SchedulingPolicy.SCHED_OTHER
-        _ = posix.pthread_attr_getschedpolicy(builtin.addressOf(self.attrs),
-                                              builtin.addressOf(&policy))
+        var policy = posix.sched.SCHED_OTHER
+        _ = posix.pthread.pthread_attr_getschedpolicy(addressOf(self.attrs),
+                                                      bitcast(addressOf(&policy)))
 
-        return policy as Int as SchedulingPolicy
+        return SchedulingPolicy(rawValue: Int(policy)) ?? .Default
     }
 
     /// Set the scheduling policy of this thread.
     public def setSchedulingPolicy(to policy: SchedulingPolicy) {
-        var policy = policy as Int as libc.int as posix.SchedulingPolicy
-        _ = posix.pthread_attr_setschedpolicy(builtin.addressOf(&self.attrs),
-                                              policy)
+        _ = posix.pthread.pthread_attr_setschedpolicy(addressOf(&self.attrs),
+                                                      policy.rawValue.value as i32)
     }
 
     /// Returns the maximum priority this thread can have.
     public def getMaxPriority() -> Priority {
-        var policy = posix.SchedulingPolicy.SCHED_OTHER
-        _ = posix.pthread_attr_getschedpolicy(builtin.addressOf(self.attrs),
-                                              builtin.addressOf(&policy))
-        
-        return posix.sched_get_priority_max(policy) as Priority
+        var policy = posix.sched.SCHED_OTHER
+        _ = posix.pthread.pthread_attr_getschedpolicy(addressOf(self.attrs),
+                                                      bitcast(addressOf(&policy)))
+
+        return Int(posix.pthread.sched_get_priority_max(policy as i32))
     }
 
     /// Returns the minimum priority this thread can have.
     public def getMinPriority() -> Priority {
-        var policy = posix.SchedulingPolicy.SCHED_OTHER
-        _ = posix.pthread_attr_getschedpolicy(builtin.addressOf(self.attrs),
-                                              builtin.addressOf(&policy))
-        
-        return posix.sched_get_priority_min(policy) as Priority
+        var policy = posix.sched.SCHED_OTHER
+        _ = posix.pthread.pthread_attr_getschedpolicy(addressOf(self.attrs),
+                                                      bitcast(addressOf(&policy)))
+
+        return Int(posix.pthread.sched_get_priority_min(policy as i32))
     }
 
     /// Set the priority of this thread.
     public def setPriority(to prio: Priority) throws {
-        if prio < getMinPriority() || prio > getMaxPriority() {
-            throw error.InvalidArgumentException(argName: "priority")
-        }
+        precondition!(prio > getMinPriority() && prio < getMaxPriority(),
+                      "invalid priority")
 
-        var policy = posix.SchedulingPolicy.SCHED_OTHER
-        var param = posix.sched_param()
-        _ = posix.pthread_getschedparam(thread: self.pthread,
-                                        policy: builtin.addressOf(&policy),
-                                        param: builtin.addressOf(&param))
+        var policy = posix.sched.SCHED_OTHER as i32
+        var param = posix.pthread.sched_param()
+        _ = posix.pthread.pthread_getschedparam(self.pthread, addressOf(&policy),
+                                                addressOf(&param))
 
-        param.sched_priority = prio as libc.int
-        _ = posix.pthread_setschedparam(thread: self.pthread,
-                                        policy: policy,
-                                        param: builtin.addressOf(&param))
+        param.sched_priority = prio.value as i32
+        _ = posix.pthread.pthread_setschedparam(self.pthread,
+                                                policy, addressOf(&param))
     }
 
     /// Get the priority of this thread.
     public def getPriority() -> Priority {
-        var policy = posix.SchedulingPolicy.SCHED_OTHER
-        var param = posix.sched_param()
-        _ = posix.pthread_getschedparam(thread: self.pthread,
-                                        policy: builtin.addressOf(&policy),
-                                        param: builtin.addressOf(&param))
+        var policy = posix.sched.SCHED_OTHER as i32
+        var param = posix.pthread.sched_param()
+        _ = posix.pthread.pthread_getschedparam(self.pthread, addressOf(&policy),
+                                                addressOf(&param))
 
-        return param.sched_priority as Priority
+        return Priority(param.sched_priority)
     }
 
     //===--------------------------------------------------------------------===//
     // Mutexes
     //===--------------------------------------------------------------------===//
 
-    internal class Mutex {
+    public class Mutex {
         /// Native pthread mutex.
-        internal var mutex: posix.pthread_mutex_t
+        internal var mutex: posix.pthread.pthread_mutex_t
 
         /// C'tor.
         init {
-            self.mutex = posix.pthread_mutex_t()
-            _ = posix.pthread_mutex_init(builtin.addressOf(&self.mutex))
+            self.mutex = posix.pthread.pthread_mutex_t()
+            _ = posix.pthread.pthread_mutex_init(addressOf(&self.mutex))
         }
 
         /// D'tor.
         deinit {
-            _ = posix.pthread_mutex_destroy(builtin.addressOf(&self.mutex))
+            _ = posix.pthread.pthread_mutex_destroy(addressOf(&self.mutex))
         }
 
         /// Lock this mutex.
         public def lock() {
-            _ = posix.pthread_mutex_lock(builtin.addressOf(&self.mutex))
+            _ = posix.pthread.pthread_mutex_lock(addressOf(&self.mutex))
         }
 
         /// Try to this mutex.
         public def tryLock() -> Bool {
-            return posix.pthread_mutex_lock(builtin.addressOf(&self.mutex)) == 0
+            return posix.pthread.pthread_mutex_lock(addressOf(&self.mutex)) == 0
         }
 
         /// Unlock this mutex.
         public def unlock() {
-            _ = posix.pthread_mutex_unlock(builtin.addressOf(&self.mutex))
+            _ = posix.pthread.pthread_mutex_unlock(addressOf(&self.mutex))
+        }
+
+        /// Helper function for locking / unlocking.
+        public def withLock<T>(_ fn: () -> T) -> T {
+            self.lock()
+            var result = fn()
+            self.unlock()
+            return result
         }
     }
 
@@ -217,41 +217,41 @@ public abstract class Thread {
     // Conditions
     //===--------------------------------------------------------------------===//
 
-    internal class Condition {
+    public class Condition {
         /// Native pthread condition.
-        var cond: posix.pthread_cond_t
+        var cond: posix.pthread.pthread_cond_t
 
         /// Mutex belonging to this condition.
         var mutex: Mutex { get }
 
         /// C'tor.
         init (on mutex: Mutex) {
-            self.cond = posix.pthread_cond_t()
+            self.cond = posix.pthread.pthread_cond_t()
             self.mutex = mutex
 
-            _ = posix.pthread_cond_init(builtin.addressOf(&self.cond))
+            _ = posix.pthread.pthread_cond_init(addressOf(&self.cond))
         }
 
         /// D'tor.
         deinit {
-            _ = posix.pthread_cond_destroy(builtin.addressOf(&self.cond))
+            _ = posix.pthread.pthread_cond_destroy(addressOf(&self.cond))
         }
 
         /// Make the current thread wait on this condition.
         public def wait() {
-            _ = posix.pthread_cond_wait(builtin.addressOf(&self.cond),
-                                        builtin.addressOf(&mutex.mutex))
+            _ = posix.pthread.pthread_cond_wait(addressOf(&self.cond),
+                                        addressOf(&mutex.mutex))
         }
 
         /// Notify all threads that are waiting on this condition.
         public def notifyAll() {
-            _ = posix.pthread_cond_broadcast(builtin.addressOf(&self.cond))
+            _ = posix.pthread.pthread_cond_broadcast(addressOf(&self.cond))
             mutex.unlock()
         }
 
         /// Notify at least one thread that is waiting on this condition.
         public def notify() {
-            _ = posix.pthread_cond_signal(builtin.addressOf(&self.cond))
+            _ = posix.pthread.pthread_cond_signal(addressOf(&self.cond))
         }
     }
 
@@ -266,7 +266,7 @@ fileprivate class CurrentThread: Thread {
     /// C'tor.
     fileprivate init {
         super.init()
-        self.pthread = posix.pthread_self()
+        self.pthread = posix.pthread.pthread_self().rawPointer as! posix.pthread.pthread_t
         self.running = true
     }
 

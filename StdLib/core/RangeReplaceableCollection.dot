@@ -20,7 +20,7 @@ public protocol RangeReplaceableCollection with MutableCollection {
     init (repeating repeatedValue: Element, count: Int)
 
     /// Creates a new instance of a collection containing the elements of the given one.
-    init<S: Iterable>(elementsOf: S)
+    init<S: Iterable>(elementsOf: owned S)
         where S.Element == Element
 
     /// Adds an element to the end of the collection.
@@ -75,9 +75,9 @@ extend RangeReplaceableCollection {
     }
 
     /// \inherit
-    default init<S: Iterable>(elementsOf elements: S) where S.Element == Element {
+    default init<S: Iterable>(elementsOf elements: owned S) where S.Element == Element {
         self.init()
-        append(contentsOf: S)
+        append(elementsOf: elements)
     }
 
     /// \inherit
@@ -106,12 +106,12 @@ extend RangeReplaceableCollection {
     def mutating infix += <S: Iterable>(elementsOf newElements: owned S)
         where S.Element == Element
     {
-        append(contentsOf: newElements)
+        append(elementsOf: newElements)
     }
 
     /// \inherit
     default def mutating insert(_ newElement: owned Element, at i: Index) {
-        replaceSubrange(i..i, with: CollectionOfOne(newElement))
+        replaceSubrange(i..i, with: CollectionOfOne(element: newElement))
     }
 
     /// \inherit
@@ -125,14 +125,14 @@ extend RangeReplaceableCollection {
     default def mutating remove(at position: Index) -> Element {
         precondition!(!empty, "Can't remove from an empty collection")
         var result: Element = self[position]
-        replaceSubrange(position..index(after: position), with: EmptyCollection())
+        replaceSubrange(position..index(after: position), with: EmptyCollection<Element>())
 
         return result
     }
 
     /// \inherit
     default def mutating removeSubrange(_ bounds: Range<Index>) {
-        replaceSubrange(bounds, with: EmptyCollection())
+        replaceSubrange(bounds, with: EmptyCollection<Element>())
     }
 
     /// \inherit
@@ -161,7 +161,7 @@ extend RangeReplaceableCollection {
             self = Self()
         }
         else {
-            replaceSubrange(startIndex..endIndex, with: EmptyCollection())
+            replaceSubrange(startIndex..endIndex, with: EmptyCollection<Element>())
         }
     }
 

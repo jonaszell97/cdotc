@@ -1,15 +1,11 @@
-//
-// Created by Jonas Zell on 29.07.18.
-//
-
 #ifndef CDOT_IMPORTERIMPL_H
 #define CDOT_IMPORTERIMPL_H
 
-#include "AST/Type.h"
-#include "Basic/DeclarationName.h"
-#include "ClangImporter.h"
-#include "Lex/SourceLocation.h"
-#include "Lex/Token.h"
+#include "cdotc/AST/Type.h"
+#include "cdotc/Basic/DeclarationName.h"
+#include "cdotc/ClangImporter/ClangImporter.h"
+#include "cdotc/Lex/SourceLocation.h"
+#include "cdotc/Lex/Token.h"
 
 #include <clang/AST/Type.h>
 #include <clang/Basic/SourceLocation.h>
@@ -35,6 +31,7 @@ namespace ast {
    class Decl;
    class EnumDecl;
    class Expression;
+   class FunctionDecl;
    class GlobalVarDecl;
    class Statement;
    class StructDecl;
@@ -65,6 +62,9 @@ public:
 
    /// Map from clang decls to translated ones.
    llvm::DenseMap<clang::Decl*, ast::Decl*> DeclMap;
+
+   /// Map from names to imported functions with C linkage.
+   llvm::StringMap<ast::FunctionDecl*> CLinkageFuncs;
 
    /// The source ID of the file we're currently importing.
    unsigned SourceID = 0;

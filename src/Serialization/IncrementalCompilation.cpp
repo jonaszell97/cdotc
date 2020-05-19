@@ -1,23 +1,22 @@
 
-#include "IncrementalCompilation.h"
+#include "cdotc/Serialization/IncrementalCompilation.h"
 
-#include "ASTCommon.h"
-#include "Basic/FileUtils.h"
-#include "Driver/Compiler.h"
-#include "ModuleReader.h"
-#include "ModuleWriter.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Support/Casting.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/Driver/Compiler.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/GlobalVariable.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ASTCommon.h"
+#include "cdotc/Serialization/ModuleReader.h"
+#include "cdotc/Serialization/ModuleWriter.h"
+#include "cdotc/Support/Casting.h"
 
 #include <llvm/ADT/StringExtras.h>
-#include <llvm/Support/OnDiskHashTable.h>
 #include <llvm/Support/FileSystem.h>
-
-#include "IL/Module.h"
-#include "IL/GlobalVariable.h"
-#include "IL/Function.h"
+#include <llvm/Support/OnDiskHashTable.h>
 
 #define DEBUG_TYPE "incremental-compilation"
 
@@ -28,9 +27,9 @@ using namespace cdot::support;
 
 using FileInfo = IncrementalCompilationManager::FileInfo;
 
-static unsigned getCompilationHash(CompilerInstance &CI)
+static unsigned getCompilationHash(CompilerInstance& CI)
 {
-   auto &Opts = CI.getOptions();
+   auto& Opts = CI.getOptions();
 
    llvm::FoldingSetNodeID ID;
    ID.AddString(CI.getMainSourceFile());
@@ -45,28 +44,27 @@ static unsigned getCompilationHash(CompilerInstance &CI)
    return ID.ComputeHash();
 }
 
-IncrementalCompilationManager::IncrementalCompilationManager(CompilerInstance &CI)
-   : CI(CI), InfoFileBuf(nullptr), InfoFileReader(nullptr)
+IncrementalCompilationManager::IncrementalCompilationManager(
+    CompilerInstance& CI)
+    : CI(CI), InfoFileBuf(nullptr), InfoFileReader(nullptr),
+      FileDependency(CI.getContext().getAllocator()),
+      ReadFileDependency(CI.getContext().getAllocator())
 {
-
 }
 
 IncrementalCompilationManager::~IncrementalCompilationManager()
 {
-   FileDependency.print([&](unsigned ID) {
-      return IDFileMap[ID]->getValue().FileName;
-   });
-
-   llvm::outs() << "\n\n";
+#ifndef NDEBUG
+   FileDependency.print(
+       [&](unsigned ID) { return IDFileMap[ID]->getValue().FileName; });
+#endif
 }
 
-static bool startsWithCacheFileMagic(llvm::BitstreamCursor &Stream)
+static bool startsWithCacheFileMagic(llvm::BitstreamCursor& Stream)
 {
-   return Stream.canSkipToPos(4) &&
-          Stream.Read(8) == 'C' &&
-          Stream.Read(8) == 'A' &&
-          Stream.Read(8) == 'S' &&
-          Stream.Read(8) == 'T';
+   return Stream.canSkipToPos(4) && Stream.Read(8).get() == 'C'
+          && Stream.Read(8).get() == 'A' && Stream.Read(8).get() == 'S'
+          && Stream.Read(8).get() == 'T';
 }
 
 ReadResult IncrementalCompilationManager::ReadInfoFile()
@@ -89,9 +87,8 @@ ReadResult IncrementalCompilationManager::ReadInfoFile()
    SourceRange MainFileLoc = CI.getMainFileLoc();
 
    llvm::BitstreamCursor Stream(InfoFileBuf->getBuffer());
-   InfoFileReader = std::make_unique<ModuleReader>(CI, MainFileLoc,
-                                                   MainFileLoc.getStart(),
-                                                   Stream);
+   InfoFileReader = std::make_unique<ModuleReader>(
+       CI, MainFileLoc, MainFileLoc.getStart(), Stream);
 
    InfoFileReader->IncMgr = this;
 
@@ -105,7 +102,7 @@ ReadResult IncrementalCompilationManager::ReadInfoFile()
          return Success;
       }
 
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::Record:
@@ -149,10 +146,10 @@ ReadResult IncrementalCompilationManager::ReadInfoFile()
       case DECL_TYPES_BLOCK_ID: {
          InfoFileReader->ASTReader.DeclsCursor = Stream;
 
-         if (Stream.SkipBlock() ||  // Skip with the main cursor.
-             // Read the abbrevs.
+         if (Stream.SkipBlock() || // Skip with the main cursor.
+                                   // Read the abbrevs.
              ModuleReader::ReadBlockAbbrevs(
-                InfoFileReader->ASTReader.DeclsCursor, DECL_TYPES_BLOCK_ID)) {
+                 InfoFileReader->ASTReader.DeclsCursor, DECL_TYPES_BLOCK_ID)) {
             Error("malformed block record in module file");
             return Failure;
          }
@@ -198,8 +195,8 @@ ReadResult IncrementalCompilationManager::ReadInfoFile()
    }
 }
 
-ReadResult
-IncrementalCompilationManager::ReadCacheControlBlock(llvm::BitstreamCursor &Stream)
+ReadResult IncrementalCompilationManager::ReadCacheControlBlock(
+    llvm::BitstreamCursor& Stream)
 {
    if (ModuleReader::ReadBlockAbbrevs(Stream, CACHE_CONTROL_BLOCK_ID)) {
       Error("invalid cache info file");
@@ -208,7 +205,7 @@ IncrementalCompilationManager::ReadCacheControlBlock(llvm::BitstreamCursor &Stre
 
    RecordData Record;
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::EndBlock:
@@ -236,7 +233,7 @@ IncrementalCompilationManager::ReadCacheControlBlock(llvm::BitstreamCursor &Stre
       Record.clear();
 
       StringRef Blob;
-      auto RecordType = Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType = Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch ((ControlRecordTypes)RecordType) {
       case CACHE_FILE: {
@@ -296,8 +293,8 @@ void IncrementalCompilationManager::CheckIfRecompilationNeeded()
 {
    SmallPtrSet<FileInfo*, 16> Visited;
 
-   for (auto &Entry : FileInfoMap) {
-      auto &FI = Entry.getValue();
+   for (auto& Entry : FileInfoMap) {
+      auto& FI = Entry.getValue();
       FI.CheckedIfRecompilationNeeded = true;
 
       if (!FI.NeedsRecompilation) {
@@ -306,13 +303,13 @@ void IncrementalCompilationManager::CheckIfRecompilationNeeded()
 
       SmallPtrSet<FileInfo*, 16> Worklist;
 
-      auto &Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
-      for (auto *Dependency : Vert.getOutgoing()) {
-         Worklist.insert(&IDFileMap[Dependency->getPtr()]->getValue());
+      auto& Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
+      for (auto* Dependency : Vert.getOutgoing()) {
+         Worklist.insert(&IDFileMap[Dependency->getVal()]->getValue());
       }
 
       while (!Worklist.empty()) {
-         auto &OtherFI = **Worklist.begin();
+         auto& OtherFI = **Worklist.begin();
          Worklist.erase(&OtherFI);
 
          if (!Visited.insert(&OtherFI).second)
@@ -320,19 +317,19 @@ void IncrementalCompilationManager::CheckIfRecompilationNeeded()
 
          OtherFI.NeedsRecompilation = true;
 
-         auto &OtherVert = ReadFileDependency.getOrAddVertex(OtherFI.FileID);
-         for (auto *Dependency : OtherVert.getOutgoing()) {
-            Worklist.insert(&IDFileMap[Dependency->getPtr()]->getValue());
+         auto& OtherVert = ReadFileDependency.getOrAddVertex(OtherFI.FileID);
+         for (auto* Dependency : OtherVert.getOutgoing()) {
+            Worklist.insert(&IDFileMap[Dependency->getVal()]->getValue());
          }
       }
    }
 }
 
-void IncrementalCompilationManager::ReadFileDecls(FileInfo &FI, StringRef Blob)
+void IncrementalCompilationManager::ReadFileDecls(FileInfo& FI, StringRef Blob)
 {
    using namespace llvm::support;
 
-   auto *Ptr = Blob.data();
+   auto* Ptr = Blob.data();
    auto NumDecls = endian::readNext<uint32_t, little, unaligned>(Ptr);
 
    while (NumDecls--) {
@@ -342,28 +339,29 @@ void IncrementalCompilationManager::ReadFileDecls(FileInfo &FI, StringRef Blob)
 }
 
 void IncrementalCompilationManager::ReadDependencies(RecordDataRef,
-                                                     StringRef Blob) {
-   auto *Ptr = reinterpret_cast<const uint32_t*>(Blob.data());
+                                                     StringRef Blob)
+{
+   auto* Ptr = reinterpret_cast<const uint32_t*>(Blob.data());
    auto NumNodes = *Ptr++;
 
    while (NumNodes--) {
-      auto &FI = IDFileMap[*Ptr++];
-      auto &Vert = ReadFileDependency.getOrAddVertex(FI->getValue().FileID);
+      auto& FI = IDFileMap[*Ptr++];
+      auto& Vert = ReadFileDependency.getOrAddVertex(FI->getValue().FileID);
       auto NumDeps = *Ptr++;
 
       while (NumDeps--) {
-         auto *OtherFI = IDFileMap[*Ptr++];
-         auto &OtherVert = ReadFileDependency.getOrAddVertex(
-            OtherFI->getValue().FileID);
+         auto* OtherFI = IDFileMap[*Ptr++];
+         auto& OtherVert
+             = ReadFileDependency.getOrAddVertex(OtherFI->getValue().FileID);
 
          Vert.addOutgoing(&OtherVert);
       }
    }
 }
 
-void
-IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream,
-                                                 ModuleWriter&) {
+void IncrementalCompilationManager::WriteDependencies(
+    llvm::BitstreamWriter& Stream, ModuleWriter&)
+{
    using namespace llvm;
 
    auto Abv = std::make_shared<BitCodeAbbrev>();
@@ -376,17 +374,17 @@ IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream,
    Vec.emplace_back(); // total number of nodes, fill in later
 
    unsigned NumNodes = 0;
-   for (auto &Node : FileDependency.getVertices()) {
+   for (auto& Node : FileDependency.getVertices()) {
       ++NumNodes;
 
-      Vec.push_back(Node->getPtr());
+      Vec.push_back(Node->getVal());
 
       auto Idx = Vec.size();
       Vec.emplace_back(); // number of outgoing edges, fill in later
 
       unsigned NumDeps = 0;
-      for (auto *Edge : Node->getOutgoing()) {
-         Vec.push_back(Edge->getPtr());
+      for (auto* Edge : Node->getOutgoing()) {
+         Vec.push_back(Edge->getVal());
          ++NumDeps;
       }
 
@@ -399,73 +397,6 @@ IncrementalCompilationManager::WriteDependencies(llvm::BitstreamWriter &Stream,
    Stream.EmitRecordWithBlob(AbbrevID, Data, bytes(Vec));
 }
 
-LLVM_ATTRIBUTE_UNUSED
-static void writeDeclsPerFile(StringRef FileName, fs::FileManager &FileMgr,
-                llvm::DenseMap<unsigned, SmallVector<Decl*, 0>> &DeclsPerFile) {
-   std::string Path = "/Users/Jonas/Downloads/";
-   Path += FileName;
-
-   std::error_code EC;
-   llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_RW);
-
-   SmallVector<StringRef, 16> FileNames;
-   for (auto &Pair : DeclsPerFile) {
-      FileNames.push_back(FileMgr.getFileName(Pair.getFirst()));
-   }
-
-   std::stable_sort(FileNames.begin(), FileNames.end());
-
-   SmallVector<string, 64> DeclNames;
-   unsigned i = 0;
-   for (auto File : FileNames) {
-      if (i++ != 0) OS << "\n\n";
-      OS << File << "\n";
-
-      auto ID = FileMgr.openFile(File).SourceId;
-      for (auto *D : DeclsPerFile[ID]) {
-         if (auto *ND = dyn_cast<NamedDecl>(D)) {
-            DeclNames.push_back(ND->getFullName());
-         }
-      }
-
-      std::stable_sort(DeclNames.begin(), DeclNames.end());
-
-      for (auto &Name : DeclNames)
-         OS << "   " << Name << "\n";
-
-      DeclNames.clear();
-   }
-}
-
-LLVM_ATTRIBUTE_UNUSED
-static void writeILVals(StringRef FileName, il::Module &M)
-{
-   SmallVector<std::pair<std::string, bool>, 0> Names;
-
-   for (auto &G : M.getGlobalList()) {
-      Names.emplace_back(G.getName(), G.isDeclared());
-   }
-   for (auto &F : M.getFuncList()) {
-      Names.emplace_back(F.getName(), F.isDeclared());
-   }
-
-   std::stable_sort(Names.begin(), Names.end(),
-      [](const std::pair<std::string, bool> &LHS,
-         const std::pair<std::string, bool> &RHS) {
-         return LHS.first > RHS.first;
-      });
-
-   std::string Path = "/Users/Jonas/Downloads/";
-   Path += FileName;
-
-   std::error_code EC;
-   llvm::raw_fd_ostream OS(Path, EC, llvm::sys::fs::F_RW);
-
-   for (auto &Name : Names) {
-      OS << Name.first << " " << Name.second << "\n";
-   }
-}
-
 void IncrementalCompilationManager::WriteFileInfo()
 {
    using namespace llvm;
@@ -474,23 +405,23 @@ void IncrementalCompilationManager::WriteFileInfo()
    llvm::raw_svector_ostream OS(Str);
    BitstreamWriter Stream(Str);
 
-   ModuleWriter *MW;
+   ModuleWriter* MW;
    std::unique_ptr<ModuleWriter> WriterPtr;
 
    if (CI.getOptions().emitModules()) {
       MW = CI.getModuleMgr().getModuleWriter();
    }
    else {
-      WriterPtr = std::make_unique<ModuleWriter>(CI, Stream, fs::InvalidID,
-                                                 this);
+      WriterPtr
+          = std::make_unique<ModuleWriter>(CI, Stream, fs::InvalidID, this);
 
       MW = WriterPtr.get();
    }
 
-   auto &FileMgr = CI.getFileMgr();
+   auto& FileMgr = CI.getFileMgr();
    SmallVector<unsigned, 32> ModuleDeclIDs;
 
-   for (auto &Entry : FileInfoMap) {
+   for (auto& Entry : FileInfoMap) {
       auto SourceID = FileMgr.openFile(Entry.getKey()).SourceId;
       auto ModID = CI.getModuleForSource(SourceID);
 
@@ -509,15 +440,15 @@ void IncrementalCompilationManager::WriteFileInfo()
 
    auto Abv = std::make_shared<BitCodeAbbrev>();
    Abv->Add(BitCodeAbbrevOp(CACHE_FILE));
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // file ID
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // last modified 1
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // last modified 2
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // module ID
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // module decl ID
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // source ID
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // source offset
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32));   // file name length
-   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));        // file name
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // file ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // last modified 1
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // last modified 2
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // module ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // module decl ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // source ID
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // source offset
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // file name length
+   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob));      // file name
    auto CacheFileAbbrevID = Stream.EmitAbbrev(move(Abv));
 
    SmallVector<unsigned, 4> SourceIDs;
@@ -525,23 +456,22 @@ void IncrementalCompilationManager::WriteFileInfo()
    // Emit the source file table.
    unsigned i = 0;
    SmallString<256> DeclsTable;
-   for (auto &FI : FileInfoMap) {
+   for (auto& FI : FileInfoMap) {
       auto SourceID = FileMgr.openFile(FI.getKey()).SourceId;
       auto ModuleDeclID = ModuleDeclIDs[i];
-      auto *Mod = CI.getModuleForSource(SourceID);
+      auto* Mod = CI.getModuleForSource(SourceID);
 
       uint64_t LastMod = (uint64_t)FI.getValue().LastModified;
-      RecordData::value_type Data[] = {
-         CACHE_FILE,
-         FI.getValue().FileID,
-         (uint32_t)LastMod,
-         (uint32_t)(LastMod >> 32),
-         Mod ? MW->ModuleIDs[Mod->getModule()] : 0,
-         ModuleDeclID,
-         SourceID,
-         FileMgr.getOpenedFile(SourceID).BaseOffset,
-         FI.getKeyLength()
-      };
+      RecordData::value_type Data[]
+          = {CACHE_FILE,
+             FI.getValue().FileID,
+             (uint32_t)LastMod,
+             (uint32_t)(LastMod >> 32),
+             Mod ? MW->ModuleIDs[Mod->getModule()] : 0,
+             ModuleDeclID,
+             SourceID,
+             FileMgr.getOpenedFile(SourceID).BaseOffset,
+             FI.getKeyLength()};
 
       DeclsTable += FI.getKey();
       WriteFileDecls(DeclsTable, DeclsPerFile[SourceID], *MW);
@@ -556,7 +486,7 @@ void IncrementalCompilationManager::WriteFileInfo()
    Stream.ExitBlock();
 
    std::error_code EC;
-   llvm::raw_fd_ostream FS(InfoFileName, EC, llvm::sys::fs::F_RW);
+   llvm::raw_fd_ostream FS(InfoFileName, EC);
    if (EC) {
       llvm::report_fatal_error(EC.message());
    }
@@ -564,21 +494,20 @@ void IncrementalCompilationManager::WriteFileInfo()
    FS << Str.str();
 }
 
-void
-IncrementalCompilationManager::WriteFileDecls(SmallVectorImpl<char> &Vec,
-                                              SmallVectorImpl<Decl*> &Decls,
-                                              ModuleWriter &MW) {
+void IncrementalCompilationManager::WriteFileDecls(
+    SmallVectorImpl<char>& Vec, SmallVectorImpl<Decl*>& Decls, ModuleWriter& MW)
+{
    using namespace llvm::support;
 
-   auto &ASTWriter = MW.ASTWriter;
+   auto& ASTWriter = MW.ASTWriter;
 
    auto size = Vec.size();
    Vec.resize(Vec.size() + 4);
 
-   auto *Ptr = Vec.data() + size;
+   auto* Ptr = Vec.data() + size;
    endian::write<uint32_t, little, unaligned>(Ptr, (unsigned)Decls.size());
 
-   for (auto *D : Decls) {
+   for (auto* D : Decls) {
       auto ID = ASTWriter.GetDeclRef(D);
       size = Vec.size();
       Vec.resize(Vec.size() + 4);
@@ -588,27 +517,27 @@ IncrementalCompilationManager::WriteFileDecls(SmallVectorImpl<char> &Vec,
    }
 }
 
-bool IncrementalCompilationManager::fileNeedsRecompilation(fs::OpenFile &File)
+bool IncrementalCompilationManager::fileNeedsRecompilation(fs::OpenFile& File)
 {
-   FileNameMap[File.SourceId] =
-      &CI.getContext().getIdentifiers().get(File.FileName);
+   FileNameMap[File.SourceId]
+       = &CI.getContext().getIdentifiers().get(File.FileName);
 
    auto result = fileNeedsRecompilation(File.FileName);
-   llvm::outs() << "file " << File.FileName << " needs recompilation: "
-                << result << "\n";
+   llvm::outs() << "file " << File.FileName
+                << " needs recompilation: " << result << "\n";
 
-   auto &FI = FileInfoMap[File.FileName];
+   auto& FI = FileInfoMap[File.FileName];
    if (result) {
       RecompiledDecls.insert(FI.DeclIDs.begin(), FI.DeclIDs.end());
    }
    else {
       // Copy the deserialized dependencies to our real dependency graph.
-      auto &ReadVert = ReadFileDependency.getOrAddVertex(FI.FileID);
-      auto &OtherVert = FileDependency.getOrAddVertex(FI.FileID);
+      auto& ReadVert = ReadFileDependency.getOrAddVertex(FI.FileID);
+      auto& OtherVert = FileDependency.getOrAddVertex(FI.FileID);
 
-      for (auto *Incoming : ReadVert.getIncoming()) {
+      for (auto* Incoming : ReadVert.getIncoming()) {
          OtherVert.addIncoming(
-            &FileDependency.getOrAddVertex(Incoming->getPtr()));
+             &FileDependency.getOrAddVertex(Incoming->getVal()));
       }
    }
 
@@ -624,7 +553,7 @@ bool IncrementalCompilationManager::fileNeedsRecompilation(StringRef File)
    auto It = FileInfoMap.find(File);
    if (It == FileInfoMap.end()) {
       It = FileInfoMap.try_emplace(File).first;
-      auto &FI = It->getValue();
+      auto& FI = It->getValue();
 
       // This is a new source file.
       FI.IsNewFile = true;
@@ -638,21 +567,22 @@ bool IncrementalCompilationManager::fileNeedsRecompilation(StringRef File)
       return true;
    }
 
-   auto &FI = It->getValue();
+   auto& FI = It->getValue();
    assert(FI.CheckedIfRecompilationNeeded);
 
    return FI.NeedsRecompilation;
 }
 
-bool
-IncrementalCompilationManager::fileNeedsRecompilationImpl(StringRef File,
-                                                          FileInfo &FI) {
+bool IncrementalCompilationManager::fileNeedsRecompilationImpl(StringRef File,
+                                                               FileInfo& FI)
+{
    assert(!FI.CheckedIfRecompilationNeeded && "duplicate check");
    FI.BeingChecked = true;
 
-   auto &Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
-   for (auto *Dep : Vert.getIncoming()) {
-      if (fileNeedsRecompilation(IDFileMap[Dep->getPtr()]->getValue().FileName)) {
+   auto& Vert = ReadFileDependency.getOrAddVertex(FI.FileID);
+   for (auto* Dep : Vert.getIncoming()) {
+      if (fileNeedsRecompilation(
+              IDFileMap[Dep->getVal()]->getValue().FileName)) {
          FI.NeedsRecompilation = true;
          break;
       }
@@ -665,27 +595,27 @@ IncrementalCompilationManager::fileNeedsRecompilationImpl(StringRef File,
 
 void IncrementalCompilationManager::finalizeCacheFiles()
 {
-   for (auto &FI : FileInfoMap) {
+   for (auto& FI : FileInfoMap) {
       if (!FI.getValue().NeedsRecompilation)
          finalizeCacheFile(FI.getValue());
    }
 }
 
-ModuleDecl* IncrementalCompilationManager::readFile(FileInfo &FI)
+ModuleDecl* IncrementalCompilationManager::readFile(FileInfo& FI)
 {
-   for (auto &ModPair : InfoFileReader->ModuleDeclMap) {
-      auto *D = cast_or_null<ModuleDecl>(
-         InfoFileReader->ASTReader.GetDecl(ModPair.getSecond()));
+   for (auto& ModPair : InfoFileReader->ModuleDeclMap) {
+      auto* D = cast_or_null<ModuleDecl>(
+          InfoFileReader->ASTReader.GetDecl(ModPair.getSecond()));
 
       if (D)
          ModPair.getFirst()->setDecl(D->getPrimaryModule());
    }
 
    return cast_or_null<ModuleDecl>(
-      InfoFileReader->ASTReader.GetDecl(FI.ModuleDeclID));
+       InfoFileReader->ASTReader.GetDecl(FI.ModuleDeclID));
 }
 
-void IncrementalCompilationManager::finalizeCacheFile(FileInfo &FI)
+void IncrementalCompilationManager::finalizeCacheFile(FileInfo& FI)
 {
    assert(!FI.NeedsRecompilation && "file does not need recompilation!");
 
@@ -695,7 +625,7 @@ void IncrementalCompilationManager::finalizeCacheFile(FileInfo &FI)
    }
 
    SmallVector<il::GlobalObject*, 16> Globals;
-   auto *Mod = InfoFileReader->Modules[FI.ModuleID];
+   auto* Mod = InfoFileReader->Modules[FI.ModuleID];
    ILReader::EagerRAII Eager(InfoFileReader->ILReader, Globals);
 
    InfoFileReader->ILReader.setModule(Mod->getILModule());
@@ -718,7 +648,8 @@ FileInfo& IncrementalCompilationManager::getFile(StringRef FileName)
 }
 
 void IncrementalCompilationManager::addDependency(unsigned DependentFile,
-                                                  unsigned OtherFile) {
+                                                  unsigned OtherFile)
+{
    if (DependentFile == OtherFile)
       return;
 
@@ -733,8 +664,8 @@ void IncrementalCompilationManager::addDependency(unsigned DependentFile,
    auto ThisID = FileInfoMap[It->getSecond()->getIdentifier()].FileID;
    auto OtherID = FileInfoMap[It2->getSecond()->getIdentifier()].FileID;
 
-   auto &ThisVert = FileDependency.getOrAddVertex(ThisID);
-   auto &OtherVert = FileDependency.getOrAddVertex(OtherID);
+   auto& ThisVert = FileDependency.getOrAddVertex(ThisID);
+   auto& OtherVert = FileDependency.getOrAddVertex(OtherID);
 
    OtherVert.addOutgoing(&ThisVert);
 }

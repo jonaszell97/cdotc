@@ -1,15 +1,15 @@
 
-import libc
+import fs
+import { self, cstring } from libc
 import posix
-
-using libc.cstring
+import _sys
 
 /// Execute the program with the given arguments.
 /// \return `true` on success, `false` on failure.
-public def execute(program: String,
+public def execute(_ program: String,
                    args: [String],
                    env: [String]? = none,
-                   redirects: [String?] = [String?](),
+                   redirects: [String?] = Array<Option<String>>(),
                    memoryLimit: UInt = 0) -> Bool {
     var (success, pid) = _sys._execute(program, args, env, redirects, memoryLimit)
     return success
@@ -17,11 +17,11 @@ public def execute(program: String,
 
 /// Execute the program with the given arguments and wait for it to finish.
 /// \return The exit code of the program, or `-1` on error.
-public def executeAndWait(program: String,
+public def executeAndWait(_ program: String,
                           args: [String],
                           secondsToWait: UInt = 0,
                           env: [String]? = none,
-                          redirects: [String?] = [String?](),
+                          redirects: [String?] = Array<Option<String>>(),
                           memoryLimit: UInt = 0) -> Int {
     var (success, pid) = _sys._execute(program, args, env, redirects, memoryLimit)
     if success {
@@ -36,7 +36,7 @@ public def executeAndWait(program: String,
 /// Find an executable by name.
 /// \return the path of the executable if found, @code{none} otherwise.
 public def findProgramByName(_ name: String,
-                             inPaths paths: [String] = [String]()) -> String? {
+                             inPaths paths: [String] = Array<String>()) -> String? {
     if name.empty {
         return none
     }

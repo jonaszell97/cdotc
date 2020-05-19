@@ -1,23 +1,20 @@
-//
-// Created by Jonas Zell on 02.05.18.
-//
+#include "cdotc/IL/Analysis/AccessPathIterator.h"
 
-#include "AccessPathIterator.h"
-#include "IL/Instructions.h"
+#include "cdotc/IL/Instructions.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-AccessPathIterator::AccessPathIterator(il::Value *V, bool RvaluePath)
-   : V(V), RvaluePath(RvaluePath)
+AccessPathIterator::AccessPathIterator(il::Value* V, bool RvaluePath)
+    : V(V), RvaluePath(RvaluePath)
 {
    if (!V->isLvalue() && !RvaluePath)
       moveNext();
 }
 
-static il::Value *LookThroughLoad(il::Value *V)
+static il::Value* LookThroughLoad(il::Value* V)
 {
    if (auto Ld = dyn_cast<LoadInst>(V))
       return Ld->getOperand(0);

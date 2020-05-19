@@ -1,19 +1,18 @@
-//
-// Created by Jonas Zell on 24.11.17.
-//
+#include "cdotc/Sema/ExpressionResolver.h"
 
-#include "ExpressionResolver.h"
-#include "CandidateSet.h"
-#include "Query/QueryContext.h"
-#include "SemaPass.h"
-#include "Support/Casting.h"
-#include "Support/StringSwitch.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/CandidateSet.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Support/Casting.h"
+#include "cdotc/Support/StringSwitch.h"
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
 
 using namespace cdot::support;
 using namespace cdot::diag;
+
+using std::string;
 
 namespace cdot {
 namespace ast {
@@ -22,14 +21,14 @@ using FragList = std::vector<SequenceElement>;
 
 class ExprResolverImpl {
 public:
-   ExprResolverImpl(SemaPass &SP, ExprSequence *Expr,
-                    QualType contextualType,
+   ExprResolverImpl(SemaPass& SP, ExprSequence* Expr, QualType contextualType,
                     bool ignoreErrors = false)
-      : contextualType(contextualType),
-        SP(SP), Fragments(Expr->getFragments()), counter(0),
-        ignoreErrors(ignoreErrors), HadError(false), TypeDependent(false),
-        ExprSeq(Expr)
-   {}
+       : contextualType(contextualType), SP(SP),
+         Fragments(Expr->getFragments()), counter(0),
+         ignoreErrors(ignoreErrors), HadError(false), TypeDependent(false),
+         ExprSeq(Expr)
+   {
+   }
 
    bool hasNext(unsigned add = 1) const
    {
@@ -47,68 +46,63 @@ public:
       return Fragments[counter + count - 1];
    }
 
-   SequenceElement const &advance()
+   SequenceElement const& advance()
    {
       assert(hasNext() && "cant advance");
       return Fragments[counter++];
    }
 
-   SequenceElement const& current()
-   {
-      return Fragments[counter - 1];
-   }
+   SequenceElement const& current() { return Fragments[counter - 1]; }
 
    struct PrecedenceResult {
       PrecedenceResult(DeclarationName OpName = DeclarationName(),
-                       SourceLocation OpLoc = SourceLocation(),
-                       PrecedenceGroupDecl *PG = nullptr)
-         : PG(PG), OpName(OpName), OpLoc(OpLoc)
-      {}
-
-      operator bool() const
+                       SourceRange OpLoc = SourceRange(),
+                       PrecedenceGroupDecl* PG = nullptr)
+          : PG(PG), OpName(OpName), OpLoc(OpLoc)
       {
-         return PG != nullptr;
       }
 
-      PrecedenceGroupDecl *PG;
+      operator bool() const { return PG != nullptr; }
+
+      PrecedenceGroupDecl* PG;
       DeclarationName OpName;
-      SourceLocation OpLoc;
+      SourceRange OpLoc;
       op::OperatorKind OpKind = op::UnknownOp;
    };
 
-   Expression *ParseUnaryExpression();
-   Expression *GetUnaryExpressionTarget();
+   Expression* ParseUnaryExpression();
+   Expression* GetUnaryExpressionTarget();
 
-   Expression* ParseExpression(Expression *LHS = nullptr,
-                               PrecedenceGroupDecl *MinPrec = nullptr);
+   Expression* ParseExpression(Expression* LHS = nullptr,
+                               PrecedenceGroupDecl* MinPrec = nullptr);
 
    PrecedenceResult getBinOp();
-   PrecedenceResult precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
+   PrecedenceResult precedenceFollowsImpl(PrecedenceGroupDecl* MinPrec,
                                           bool HigherOrEqual);
 
-   PrecedenceResult higherOrEqualPrecedenceFollows(PrecedenceGroupDecl *MinPrec)
+   PrecedenceResult higherOrEqualPrecedenceFollows(PrecedenceGroupDecl* MinPrec)
    {
       return precedenceFollowsImpl(MinPrec, true);
    }
 
-   PrecedenceResult higherPrecedenceFollows(PrecedenceGroupDecl *MinPrec)
+   PrecedenceResult higherPrecedenceFollows(PrecedenceGroupDecl* MinPrec)
    {
       return precedenceFollowsImpl(MinPrec, false);
    }
 
-   Expression *buildBinaryOp(PrecedenceResult &Res,
-                             Expression *LHS, Expression *RHS);
+   Expression* buildBinaryOp(PrecedenceResult& Res, Expression* LHS,
+                             Expression* RHS);
 
-   Expression *buildCastExpr(PrecedenceResult &Res,
-                             Expression *LHS, Expression *RHS);
+   Expression* buildCastExpr(PrecedenceResult& Res, Expression* LHS,
+                             Expression* RHS);
 
-   Expression *buildMetaTypeUnionExpr(PrecedenceResult &Res,
-                                      CandidateSet::Candidate &Cand,
-                                      Expression *LHS, Expression *RHS);
+   Expression* buildMetaTypeUnionExpr(PrecedenceResult& Res,
+                                      CandidateSet::Candidate& Cand,
+                                      Expression* LHS, Expression* RHS);
 
    void diagnoseUnexpectedExpr();
 
-   template<class ...Args>
+   template<class... Args>
    void diagnose(SourceLocation loc, MessageKind msg, Args&&... args)
    {
       if (ignoreErrors)
@@ -118,38 +112,38 @@ public:
    }
 
    QualType contextualType;
-   SemaPass &SP;
+   SemaPass& SP;
    llvm::ArrayRef<SequenceElement> Fragments;
    size_t counter;
 
    std::unordered_map<size_t, std::pair<size_t, Expression*>> ExprSubstMap;
 
-   bool ignoreErrors  : 1;
-   bool HadError      : 1;
+   bool ignoreErrors : 1;
+   bool HadError : 1;
    bool TypeDependent : 1;
 
-   ExprSequence *ExprSeq;
+   ExprSequence* ExprSeq;
 };
 
-Expression *ExprResolverImpl::GetUnaryExpressionTarget()
+Expression* ExprResolverImpl::GetUnaryExpressionTarget()
 {
-   auto &Frag = current();
+   auto& Frag = current();
    switch (Frag.getKind()) {
-      case SequenceElement::EF_Expression:
-         return Frag.getExpr();
-      case SequenceElement::EF_Operator: {
-         auto *II = &SP.getContext().getIdentifiers().get(
-            op::toString(Frag.getOperatorKind()));
+   case SequenceElement::EF_Expression:
+      return Frag.getExpr();
+   case SequenceElement::EF_Operator: {
+      auto* II = &SP.getContext().getIdentifiers().get(
+          op::toString(Frag.getOperatorKind()));
 
-         return new(SP.getContext()) IdentifierRefExpr(Frag.getLoc(), II);
-      }
-      case SequenceElement::EF_PossibleOperator:
-         return new(SP.getContext()) IdentifierRefExpr(Frag.getLoc(),
-                                                       Frag.getOp());
+      return new (SP.getContext()) IdentifierRefExpr(Frag.getLoc(), II);
+   }
+   case SequenceElement::EF_PossibleOperator:
+      return new (SP.getContext())
+          IdentifierRefExpr(Frag.getLoc(), Frag.getOp());
    }
 }
 
-Expression *ExprResolverImpl::ParseUnaryExpression()
+Expression* ExprResolverImpl::ParseUnaryExpression()
 {
    auto SubstIt = ExprSubstMap.find(counter);
    if (SubstIt != ExprSubstMap.end()) {
@@ -172,43 +166,44 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
    bool IsAssignment = lookahead().isOperator()
                        && lookahead().getOperatorKind() == op::Assign;
 
-   Expression *Target = nullptr;
+   Expression* Target = nullptr;
    size_t possibleIdentLoc = string::npos;
 
    while (true) {
       switch (current().getKind()) {
-         case SequenceElement::EF_Expression: {
-            Target = GetUnaryExpressionTarget();
-            break;
-         }
-         case SequenceElement::EF_PossibleOperator: {
-            auto *Op = current().getOp();
-            if (SP.Context.isPrefixOperator(Op)
-            && current().hasLeftWhiteSpace()
-            && !current().hasRightWhiteSpace()) {
-               if (possibleIdentLoc == string::npos) {
-                  possibleIdentLoc = counter;
-               }
-
-               break;
+      case SequenceElement::EF_Expression: {
+         Target = GetUnaryExpressionTarget();
+         break;
+      }
+      case SequenceElement::EF_PossibleOperator: {
+         auto* Op = current().getOp();
+         if (SP.Context.isPrefixOperator(Op) && current().hasLeftWhiteSpace()
+             && !current().hasRightWhiteSpace()) {
+            if (possibleIdentLoc == string::npos) {
+               possibleIdentLoc = counter;
             }
 
-            Target = new(SP.Context) IdentifierRefExpr(current().getLoc(), Op);
-
             break;
          }
-         case SequenceElement::EF_Operator: {
-            if (!current().hasRightWhiteSpace()) {
-               if (possibleIdentLoc == string::npos) {
-                  possibleIdentLoc = counter;
-               }
 
-               break;
+         SourceLocation Loc = current().getLoc();
+         SourceRange SR(Loc, Loc.offsetBy(Op->getLength()));
+
+         Target = new (SP.Context) IdentifierRefExpr(SR, Op);
+         break;
+      }
+      case SequenceElement::EF_Operator: {
+         if (!current().hasRightWhiteSpace()) {
+            if (possibleIdentLoc == string::npos) {
+               possibleIdentLoc = counter;
             }
 
-            Target = GetUnaryExpressionTarget();
             break;
          }
+
+         Target = GetUnaryExpressionTarget();
+         break;
+      }
       }
 
       if (Target) {
@@ -225,7 +220,7 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
             break;
          }
 
-         SP.diagnose(ExprSeq, err_generic_error, "expected expression");
+         SP.diagnose(ExprSeq, err_expected_expression);
          return nullptr;
       }
 
@@ -245,7 +240,7 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
 
       assert(!current().isExpression() && "skipped over expr!");
 
-      const IdentifierInfo *OpName;
+      const IdentifierInfo* OpName;
       if (current().isPossibleOperator()) {
          OpName = current().getOp();
       }
@@ -257,12 +252,15 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
          Target = AddrOfExpr::Create(SP.Context, current().getLoc(), Target);
       }
       else {
-         SourceRange Loc = current().getLoc();
-         DeclarationName DN = SP.Context.getDeclNameTable()
-                                .getPrefixOperatorName(*OpName);
+         SourceLocation Loc = current().getLoc();
+         DeclarationName DN
+             = SP.Context.getDeclNameTable().getPrefixOperatorName(*OpName);
 
-         auto *Ident = new(SP.Context) IdentifierRefExpr(Loc, Target, DN);
-         Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, {}, {});
+         SourceRange SR(Loc, Loc.offsetBy(OpName->getLength()));
+         auto* Ident = new (SP.Context) IdentifierRefExpr(SR, Target, DN);
+
+         SR = SourceRange(Loc, Target->getSourceRange().getEnd());
+         Target = AnonymousCallExpr::Create(SP.Context, SR, Ident, {}, {});
       }
    }
 
@@ -275,40 +273,43 @@ Expression *ExprResolverImpl::ParseUnaryExpression()
          return Target;
       }
 
-      auto &Next = lookahead();
+      auto& Next = lookahead();
       if (Next.hasLeftWhiteSpace() || !Next.hasRightWhiteSpace()) {
          break;
       }
 
       switch (Next.getKind()) {
-         case SequenceElement::EF_Expression:
+      case SequenceElement::EF_Expression:
+         done = true;
+         break;
+      case SequenceElement::EF_PossibleOperator:
+      case SequenceElement::EF_Operator: {
+         const IdentifierInfo* OpName;
+         if (Next.isPossibleOperator()) {
+            OpName = Next.getOp();
+         }
+         else {
+            OpName = &SP.Context.getIdentifiers().get(Next.asString());
+         }
+
+         if (!SP.Context.isPostfixOperator(OpName)) {
             done = true;
             break;
-         case SequenceElement::EF_PossibleOperator:
-         case SequenceElement::EF_Operator: {
-            const IdentifierInfo *OpName;
-            if (Next.isPossibleOperator()) {
-               OpName = Next.getOp();
-            }
-            else {
-               OpName = &SP.Context.getIdentifiers().get(Next.asString());
-            }
-
-            if (!SP.Context.isPostfixOperator(OpName)) {
-               done = true;
-               break;
-            }
-
-            SourceRange Loc = Next.getLoc();
-            DeclarationName DN = SP.Context.getDeclNameTable()
-                                   .getPostfixOperatorName(*OpName);
-
-            auto *Ident = new(SP.Context) IdentifierRefExpr(Loc, Target, DN);
-            Target = AnonymousCallExpr::Create(SP.Context, Loc, Ident, {}, {});
-
-            advance();
-            break;
          }
+
+         SourceLocation Loc = Next.getLoc();
+         DeclarationName DN
+             = SP.Context.getDeclNameTable().getPostfixOperatorName(*OpName);
+
+         SourceRange SR(Loc, Loc.offsetBy(OpName->getLength()));
+         auto* Ident = new (SP.Context) IdentifierRefExpr(SR, Target, DN);
+
+         SR = SourceRange(Target->getSourceLoc(), SR.getEnd());
+         Target = AnonymousCallExpr::Create(SP.Context, SR, Ident, {}, {});
+
+         advance();
+         break;
+      }
       }
    }
 
@@ -320,23 +321,29 @@ ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
    if (!hasNext(2))
       return PrecedenceResult();
 
-   auto &Next = lookahead();
+   auto& Next = lookahead();
    if (Next.isExpression()) {
       return PrecedenceResult();
    }
 
    op::OperatorKind OpKind = op::UnknownOp;
-   auto &DeclNames = SP.getContext().getDeclNameTable();
+   auto& DeclNames = SP.getContext().getDeclNameTable();
    if (Next.isOperator()) {
       // Handle conversions before evaluating the left hand side.
       switch (Next.getOperatorKind()) {
-      case op::As: case op::AsExclaim: case op::AsQuestion: {
-         auto *II = &SP.getContext().getIdentifiers().get(Next.asString());
+      case op::As:
+      case op::AsExclaim:
+      case op::AsQuestion: {
+         auto* II = &SP.getContext().getIdentifiers().get(Next.asString());
          auto OpName = DeclNames.getInfixOperatorName(*II);
 
-         PrecedenceResult Result(OpName, Next.getLoc(), nullptr);
-         Result.OpKind = Next.getOperatorKind();
+         int length = Next.getOperatorKind() == op::As ? 2 : 3;
+         PrecedenceResult Result(
+             OpName,
+             SourceRange(Next.getLoc(), Next.getLoc().offsetBy(length - 1)),
+             nullptr);
 
+         Result.OpKind = Next.getOperatorKind();
          if (SP.QC.FindPrecedenceGroup(Result.PG,
                                        SP.getIdentifier("CastingPrecedence"))) {
             llvm_unreachable("no 'CastingPrecedence' decl!");
@@ -352,19 +359,20 @@ ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
    }
 
    auto OpStr = Next.asString();
-   auto *II = &SP.getContext().getIdentifiers().get(OpStr);
+   auto* II = &SP.getContext().getIdentifiers().get(OpStr);
 
    auto OpName = DeclNames.getInfixOperatorName(*II);
    auto OpDeclName = DeclNames.getOperatorDeclName(OpName);
 
-   OperatorDecl *Decl;
+   OperatorDecl* Decl;
    PrecedenceResult Res;
+   SourceRange SR(Next.getLoc(), Next.getLoc().offsetBy(OpStr.size() - 1));
 
    if (SP.QC.FindOperator(Decl, OpDeclName, false) || !Decl) {
-      Res = PrecedenceResult(OpName, Next.getLoc());
+      Res = PrecedenceResult(OpName, SR);
    }
    else {
-      Res = PrecedenceResult(OpName, Next.getLoc(), Decl->getPrecedenceGroup());
+      Res = PrecedenceResult(OpName, SR, Decl->getPrecedenceGroup());
    }
 
    Res.OpKind = OpKind;
@@ -374,59 +382,64 @@ ExprResolverImpl::PrecedenceResult ExprResolverImpl::getBinOp()
 static CastStrength getCastStrength(op::OperatorKind Kind)
 {
    switch (Kind) {
-   case op::As: return CastStrength::Normal;
-   case op::AsExclaim: return CastStrength::Force;
-   case op::AsQuestion: return CastStrength::Fallible;
+   case op::As:
+      return CastStrength::Normal;
+   case op::AsExclaim:
+      return CastStrength::Force;
+   case op::AsQuestion:
+      return CastStrength::Fallible;
    default:
       llvm_unreachable("not a conversion operator!");
    }
 }
 
-Expression* ExprResolverImpl::buildCastExpr(PrecedenceResult &Res,
-                                            Expression *LHS,
-                                            Expression *RHS) {
-   return CastExpr::Create(SP.getContext(), Res.OpLoc,
-                           getCastStrength(Res.OpKind),
-                           LHS, SourceType(RHS));
+Expression* ExprResolverImpl::buildCastExpr(PrecedenceResult& Res,
+                                            Expression* LHS, Expression* RHS)
+{
+   return CastExpr::Create(SP.getContext(), Res.OpLoc.getStart(),
+                           getCastStrength(Res.OpKind), LHS, SourceType(RHS));
 }
 
-Expression* ExprResolverImpl::buildMetaTypeUnionExpr(PrecedenceResult &Res,
-                                                     CandidateSet::Candidate &Cand,
-                                                     Expression *LHS,
-                                                     Expression *RHS) {
-   SourceType Types[] {
-      SourceType(LHS->getExprType()->removeMetaType()),
-      SourceType(RHS->getExprType()->removeMetaType())
-   };
+Expression*
+ExprResolverImpl::buildMetaTypeUnionExpr(PrecedenceResult& Res,
+                                         CandidateSet::Candidate& Cand,
+                                         Expression* LHS, Expression* RHS)
+{
+   SourceType Types[]{SourceType(LHS->getExprType()->removeMetaType()),
+                      SourceType(RHS->getExprType()->removeMetaType())};
 
    SourceRange SR(LHS->getSourceLoc(), RHS->getSourceRange().getEnd());
    return ExistentialTypeExpr::Create(SP.Context, SR, Types, true);
 }
 
-Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult &Res,
-                                            Expression *LHS,
-                                            Expression *RHS) {
+Expression* ExprResolverImpl::buildBinaryOp(PrecedenceResult& Res,
+                                            Expression* LHS, Expression* RHS)
+{
    // Handle builtin operators that can't be overloaded.
    switch (Res.OpKind) {
-   case op::As: case op::AsExclaim: case op::AsQuestion: {
+   case op::As:
+   case op::AsExclaim:
+   case op::AsQuestion: {
       return buildCastExpr(Res, LHS, RHS);
    }
    case op::Assign: {
-      return AssignExpr::Create(SP.getContext(), Res.OpLoc, LHS, RHS);
+      return AssignExpr::Create(SP.getContext(), Res.OpLoc.getStart(), LHS,
+                                RHS);
    }
    default: {
-      auto *Ident = new(SP.Context) IdentifierRefExpr(Res.OpLoc, LHS,
-                                                      Res.OpName);
+      auto* Ident
+          = new (SP.Context) IdentifierRefExpr(Res.OpLoc, LHS, Res.OpName);
 
-      return AnonymousCallExpr::Create(SP.Context, Res.OpLoc, Ident, {RHS},
-                                       {});
+      SourceRange SR(LHS->getSourceLoc(), RHS->getSourceRange().getEnd());
+      return AnonymousCallExpr::Create(SP.Context, SR, Ident, {RHS}, {});
    }
    }
 }
 
 ExprResolverImpl::PrecedenceResult
-ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
-                                        bool HigherOrEqual) {
+ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl* MinPrec,
+                                        bool HigherOrEqual)
+{
    auto NextPrec = getBinOp();
    if (!NextPrec || !MinPrec) {
       return NextPrec;
@@ -441,7 +454,7 @@ ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
       return PrecedenceResult();
    case PrecedenceGroupDecl::Equal: {
       if (!HigherOrEqual) {
-         return PrecedenceResult(NextPrec.OpName);
+         return PrecedenceResult(NextPrec.OpName, NextPrec.OpLoc);
       }
 
       LLVM_FALLTHROUGH;
@@ -449,12 +462,13 @@ ExprResolverImpl::precedenceFollowsImpl(PrecedenceGroupDecl *MinPrec,
    case PrecedenceGroupDecl::Higher:
       return NextPrec;
    case PrecedenceGroupDecl::Lower:
-      return PrecedenceResult(NextPrec.OpName);
+      return PrecedenceResult(NextPrec.OpName, NextPrec.OpLoc);
    }
 }
 
-Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
-                                              PrecedenceGroupDecl *MinPrec) {
+Expression* ExprResolverImpl::ParseExpression(Expression* LHS,
+                                              PrecedenceGroupDecl* MinPrec)
+{
    if (!LHS) {
       advance();
 
@@ -508,8 +522,8 @@ Expression* ExprResolverImpl::ParseExpression(Expression *LHS,
          diagnoseUnexpectedExpr();
       }
       else {
-         SP.diagnose(ExprSeq, err_generic_error, lookahead().getLoc(),
-                     lookahead().asString() + " is not an operator");
+         SP.diagnose(ExprSeq, err_not_an_operator, lookahead().getLoc(),
+                     lookahead().asString());
       }
 
       return nullptr;
@@ -524,27 +538,14 @@ void ExprResolverImpl::diagnoseUnexpectedExpr()
    SP.diagnose(ExprSeq, err_unexpected_expression, lookahead().getLoc());
 }
 
-static void visitContextDependentExpr(SemaPass &SP, Expression *E)
+static void visitContextDependentExpr(SemaPass& SP, Expression* E)
 {
    switch (E->getTypeID()) {
-   case Statement::EnumCaseExprID: {
-      auto *EC = cast<EnumCaseExpr>(E);
-      EC->setIsTypeDependent(true);
-
-      for (auto *Arg : EC->getArgs()) {
-         auto Result = SP.visitExpr(EC, Arg);
-         if (Result) {
-            Arg = Result.get();
-         }
-      }
-
-      break;
-   }
    case Statement::CallExprID: {
-      auto *CE = cast<CallExpr>(E);
+      auto* CE = cast<CallExpr>(E);
       CE->setIsTypeDependent(true);
 
-      for (auto &Arg : CE->getArgs()) {
+      for (auto& Arg : CE->getArgs()) {
          auto Result = SP.visitExpr(CE, Arg);
          if (Result) {
             Arg = Result.get();
@@ -554,7 +555,7 @@ static void visitContextDependentExpr(SemaPass &SP, Expression *E)
       break;
    }
    case Statement::LambdaExprID: {
-      auto *LE = cast<LambdaExpr>(E);
+      auto* LE = cast<LambdaExpr>(E);
       LE->setIsTypeDependent(true);
 
       auto Result = SP.visitStmt(LE, LE->getBody());
@@ -569,8 +570,9 @@ static void visitContextDependentExpr(SemaPass &SP, Expression *E)
    }
 }
 
-Expression *ExpressionResolver::resolve(ExprSequence *ExprSeq,
-                                        bool ignoreErrors) {
+Expression* ExpressionResolver::resolve(ExprSequence* ExprSeq,
+                                        bool ignoreErrors)
+{
    ExprResolverImpl Resolver(SP, ExprSeq, ExprSeq->getContextualType(),
                              ignoreErrors);
 
@@ -580,7 +582,7 @@ Expression *ExpressionResolver::resolve(ExprSequence *ExprSeq,
    if (Resolver.TypeDependent) {
       ExprSeq->setIsTypeDependent(true);
 
-      for (auto &SeqEl : ExprSeq->getFragments()) {
+      for (auto& SeqEl : ExprSeq->getFragments()) {
          if (SeqEl.isExpression()) {
             auto E = SeqEl.getExpr();
             if (E->isContextDependent()) {
@@ -597,7 +599,8 @@ Expression *ExpressionResolver::resolve(ExprSequence *ExprSeq,
       }
    }
    else {
-      ExprSeq->setIsInvalid(!Result || ExprSeq->isInvalid() || Resolver.HadError);
+      ExprSeq->setIsInvalid(!Result || ExprSeq->isInvalid()
+                            || Resolver.HadError);
    }
 
    return Result;

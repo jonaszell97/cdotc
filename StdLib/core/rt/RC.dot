@@ -1,5 +1,5 @@
 
-using atomic.Atomic
+import { Atomic } from atomic
 
 internal protocol RC {
     prop strongRefcount: UInt { get set }
@@ -44,22 +44,13 @@ struct Refcounted with RC {
     }
 }
 
-alias debugPrintEnabled = false
-macro debugPrint(
-    ($($args:expr),*) => {
-        static if debugPrintEnabled {
-            _ = libc.stdio.printf($($args,)...)
-        }
-    }
-)
-
 @inline(always) @extern(C)
 public def _cdot_Retain(_ target: UnsafeMutablePtr<Refcounted>) {
     assert!(target->strongRefcount != 0, "[1;35mretaining freed object $target![0m\n")
 
-    target.withReference { $0.strongRetain() }
+    target->strongRetain()
 
-    debugPrint!("object %p of type %s after retain: %llu\n",
+    debugPrint!(Refcounting, "object %p of type %s after retain: %llu\n",
                 target, target->typeInfo->name, target->strongRefcount)
 }
 
@@ -67,8 +58,8 @@ public def _cdot_Retain(_ target: UnsafeMutablePtr<Refcounted>) {
 public def _cdot_WeakRetain(_ target: UnsafeMutablePtr<Refcounted>) {
     assert!(target->strongRefcount != 0, "[1;35mretaining freed object $target![0m\n")
 
-    target.withReference { $0.weakRetain() }
-    debugPrint!("object %p of type %s after weak retain: %llu\n",
+    target->weakRetain()
+    debugPrint!(Refcounting, "object %p of type %s after weak retain: %llu\n",
                 target, target->typeInfo->name, target->weakRefcount)
 }
 
@@ -78,19 +69,24 @@ public def _cdot_Release(_ target: owned UnsafeMutablePtr<Refcounted>) {
         return
     }
 
-    assert!(target->strongRefcount != 0, "[1;35mtrying to release object $target with refcount of 0![0m\n")
+    var refc = target->strongRefcount
+    assert!(refc != 0, "[1;35mtrying to release object $target with refcount of 0![0m\n")
 
-    target.withReference { $0.strongRelease() }
-    
-    debugPrint!("object %p of type %s after release: %llu\n",
-               target, target->typeInfo->name, target->strongRefcount)
+    if refc == 1 {
+        target->typeInfo->deinitialize(target.raw)
+        target->strongRelease()
 
-    if target->strongRefcount == 0 {
-        target->typeInfo->deinit(UnsafeMutableRawPtr(target))
+        debugPrint!(Refcounting, "object %p of type %s after release: %llu\n",
+                    target, target->typeInfo->name, target->strongRefcount)
 
         if target->weakRefcount == 0 {
             target.deallocate()
         }
+    }
+    else {
+        target->strongRelease()
+        debugPrint!(Refcounting, "object %p of type %s after release: %llu\n",
+                    target, target->typeInfo->name, target->strongRefcount)
     }
 }
 
@@ -102,9 +98,9 @@ public def _cdot_WeakRelease(_ target: owned UnsafeMutablePtr<Refcounted>) {
 
     assert!(target->strongRefcount != 0, "[1;35mtrying to release object $target with refcount of 0![0m\n")
 
-    target.withReference { $0.weakRelease() }
+    target->weakRelease()
 
-    debugPrint!("object %p of type %s after weak release: %llu\n",
+    debugPrint!(Refcounting, "object %p of type %s after weak release: %llu\n",
                target, target->typeInfo->name, target->weakRefcount)
 
     if target->weakRefcount == 0u {
@@ -113,18 +109,38 @@ public def _cdot_WeakRelease(_ target: owned UnsafeMutablePtr<Refcounted>) {
 }
 
 struct AtomicRefcounted with RC {
-    var _strongRefcount: Atomic<UInt>
-    var _weakRefcount: Atomic<UInt>
+    var _strongRefcount: UInt
+    var _weakRefcount: UInt
     let typeInfo: UnsafePtr<TypeInfo>
 
     prop strongRefcount: UInt {
-        get { return _strongRefcount.load() }
-        set { _strongRefcount.store(newVal) }
+        get {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_strongRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            return at.load()
+        }
+        set {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_strongRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            at.store(newVal)
+        }
     }
 
     prop weakRefcount: UInt {
-        get { return _weakRefcount.load() }
-        set { _weakRefcount.store(newVal) }
+        get {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_weakRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            return at.load()
+        }
+        set {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_weakRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            at.store(newVal)
+        }
     }
 }
 
@@ -132,18 +148,18 @@ struct AtomicRefcounted with RC {
 public def _cdot_AtomicRetain(_ target: UnsafeMutablePtr<AtomicRefcounted>) {
     assert!(target->strongRefcount != 0u, "[1;35mretaining freed object $target![0m\n")
 
-    target.withReference { $0.strongRetain() }
-    debugPrint!("object %p of type %s after retain: %llu\n",
-                target, target->typeInfo->name, target->strongRefcount.load())
+    target->strongRetain()
+    debugPrint!(Refcounting, "object %p of type %s after retain: %llu\n",
+                target, target->typeInfo->name, target->strongRefcount)
 }
 
 @inline(always) @extern(C)
 public def _cdot_AtomicWeakRetain(_ target: UnsafeMutablePtr<AtomicRefcounted>) {
     assert!(target->strongRefcount != 0u, "[1;35mretaining freed object $target![0m\n")
 
-    target.withReference { $0.weakRetain() }
-    debugPrint!("object %p of type %s after weak retain: %llu\n",
-                target, target->typeInfo->name, target->weakRefcount.load())
+    target->weakRetain()
+    debugPrint!(Refcounting, "object %p of type %s after weak retain: %llu\n",
+                target, target->typeInfo->name, target->weakRefcount)
 }
 
 @_builtin @extern(C) @inline(always)
@@ -152,20 +168,24 @@ public def _cdot_AtomicRelease(_ target: owned UnsafeMutablePtr<AtomicRefcounted
         return
     }
 
-    assert!(target->strongRefcount != 0u,
-            "[1;35mtrying to release object $target with refcount of 0![0m\n")
-    
-    target.withReference { $0.strongRelease() }
-    
-    debugPrint!("object %p of type %s after release: %llu\n",
-                target, target->typeInfo->name, target->strongRefcount.load())
+    var refc = target->strongRefcount
+    assert!(refc != 0, "[1;35mtrying to release object $target with refcount of 0![0m\n")
 
-    if target->strongRefcount == 0u {
-        target->typeInfo->deinit(UnsafeMutableRawPtr(target))
+    if refc == 1 {
+        target->typeInfo->deinitialize(target.raw)
+        target->strongRelease()
+
+        debugPrint!(Refcounting, "object %p of type %s after release: %llu\n",
+                    target, target->typeInfo->name, target->strongRefcount)
 
         if target->weakRefcount == 0u {
             target.deallocate()
         }
+    }
+    else {
+        target->strongRelease()
+        debugPrint!(Refcounting, "object %p of type %s after release: %llu\n",
+                    target, target->typeInfo->name, target->strongRefcount)
     }
 }
 
@@ -178,10 +198,10 @@ public def _cdot_AtomicWeakRelease(_ target: owned UnsafeMutablePtr<AtomicRefcou
     assert!(target->strongRefcount != 0u,
             "[1;35mtrying to release object $target with refcount of 0![0m\n")
     
-    target.withReference { $0.weakRelease() }
+    target->weakRelease()
     
-    debugPrint!("object %p of type %s after weak release: %llu\n",
-                target, target->typeInfo->name, target->weakRefcount.load())
+    debugPrint!(Refcounting, "object %p of type %s after weak release: %llu\n",
+                target, target->typeInfo->name, target->weakRefcount)
 
     if target->weakRefcount == 0u {
         target.deallocate()
@@ -191,7 +211,7 @@ public def _cdot_AtomicWeakRelease(_ target: owned UnsafeMutablePtr<AtomicRefcou
 struct Box with RC {
     var _strongRefcount: UInt
     var _weakRefcount: UInt
-    var deinitializer: @thin (UnsafeMutableRawPtr) -> Void
+    var deinitialize: @thin (UnsafeMutableRawPtr) -> Void
     var data: UnsafeMutableRawPtr
 
     prop strongRefcount: UInt {
@@ -207,8 +227,8 @@ struct Box with RC {
 
 @extern(C)
 public def _cdot_RetainBox(_ box: UnsafeMutablePtr<Box>) {
-    box.withReference { $0.strongRetain() }
-    debugPrint!("box %p after retain: %llu\n", box, box->strongRefcount)
+    box->strongRetain()
+    debugPrint!(BoxRefcounting, "box %p after retain: %llu\n", box, box->strongRefcount)
 }
 
 @extern(C)
@@ -217,13 +237,13 @@ public def _cdot_ReleaseBox(_ box: UnsafeMutablePtr<Box>) {
         return
     }
 
-    box.withReference { $0.strongRelease() }
-    debugPrint!("box %p after release: %llu\n", box, box->strongRefcount)
+    box->strongRelease()
+    debugPrint!(BoxRefcounting, "box %p after release: %llu\n", box, box->strongRefcount)
 
     if box->strongRefcount == 0 {
-        debugPrint!("freeing box\n")
-        if (box->deinitializer as! builtin.RawPointer) != (0 as! builtin.RawPointer) {
-            box->deinitializer(box->data)
+        debugPrint!(BoxRefcounting, "freeing box\n")
+        if builtin.icmp_ne_u64(box->deinitialize as! builtin.u64, 0) {
+            box->deinitialize(box->data)
         }
 
         box.deallocate()
@@ -231,26 +251,46 @@ public def _cdot_ReleaseBox(_ box: UnsafeMutablePtr<Box>) {
 }
 
 struct AtomicBox with RC {
-    var _strongRefcount: Atomic<UInt>
-    var _weakRefcount: Atomic<UInt>
-    var deinitializer: @thin (UnsafeMutableRawPtr) -> Void
+    var _strongRefcount: UInt
+    var _weakRefcount: UInt
+    var deinitialize: @thin (UnsafeMutableRawPtr) -> Void
     var data: Byte
 
     prop strongRefcount: UInt {
-        get { return _strongRefcount.load() }
-        set { _strongRefcount.store(newVal) }
+        get {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_strongRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            return at.load()
+        }
+        set {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_strongRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            at.store(newVal)
+        }
     }
 
     prop weakRefcount: UInt {
-        get { return _weakRefcount.load() }
-        set { _weakRefcount.store(newVal) }
+        get {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_weakRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            return at.load()
+        }
+        set {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_weakRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            at.store(newVal)
+        }
     }
 }
 
 @extern(C)
 public def _cdot_AtomicRetainBox(_ box: UnsafeMutablePtr<AtomicBox>) {
-    box.withReference { $0.strongRetain() }
-    debugPrint!("box %p after retain: %llu\n", box, box->strongRefcount.load())
+    box->strongRetain()
+    debugPrint!(BoxRefcounting, "box %p after retain: %llu\n", box.rawPointer, box->strongRefcount)
 }
 
 @extern(C)
@@ -259,18 +299,16 @@ public def _cdot_AtomicReleaseBox(_ box: UnsafeMutablePtr<AtomicBox>) {
         return
     }
 
-    box.withReference { $0.strongRelease() }
-    debugPrint!("box %p after release: %llu\n", box, box->strongRefcount.load())
+    box->strongRelease()
+    debugPrint!(BoxRefcounting, "box %p after release: %llu\n", box.rawPointer, box->strongRefcount)
 
     if box->strongRefcount == 0 {
-        debugPrint!("freeing box\n")
-        if (box->deinitializer as! builtin.RawPointer) != (0 as! builtin.RawPointer) {
-            var dataPtr: UnsafeMutableRawPtr
-            box.withReference {
-                dataPtr = UnsafeMutableRawPtr(rawPointer: builtin.addressOf(&$0.data))
-            }
+        debugPrint!(BoxRefcounting, "freeing box\n")
+        if builtin.icmp_ne_u64(box->deinitialize as! builtin.u64, 0) {
+            var dataPtr: UnsafeMutableRawPtr = UnsafeMutableRawPtr(rawPointer:
+                builtin.addressOf(box->data) as! builtin.RawPointer)
 
-            box->deinitializer(dataPtr)
+            box->deinitialize(dataPtr)
         }
         
         box.deallocate()
@@ -295,8 +333,8 @@ struct Lambda with RC {
 
 @extern(C)
 public def _cdot_RetainLambda(_ lambda: UnsafeMutablePtr<Lambda>) {
-    lambda.withReference { $0.strongRetain() }
-    debugPrint!("lambda %p after retain: %llu\n", lambda, lambda->strongRefcount)
+    lambda->strongRetain()
+    debugPrint!(LambdaRefcounting, "lambda %p after retain: %llu\n", lambda, lambda->strongRefcount)
 }
 
 @extern(C)
@@ -305,8 +343,8 @@ public def _cdot_ReleaseLambda(_ lambda: UnsafeMutablePtr<Lambda>) {
         return
     }
 
-    lambda.withReference { $0.strongRelease() }
-    debugPrint!("lambda %p after release: %llu\n", lambda, lambda->strongRefcount)
+    lambda->strongRelease()
+    debugPrint!(LambdaRefcounting, "lambda %p after release: %llu\n", lambda, lambda->strongRefcount)
 
     if lambda->strongRefcount == 0 {
         _cdot_CleanupLambda(lambda)
@@ -315,15 +353,12 @@ public def _cdot_ReleaseLambda(_ lambda: UnsafeMutablePtr<Lambda>) {
 
 @extern(C)
 public def _cdot_CleanupLambda(_ lambda: UnsafeMutablePtr<Lambda>) {
-    debugPrint!("freeing lambda\n")
+    debugPrint!(LambdaRefcounting, "freeing lambda\n")
 
     if lambda->captures {
         var i = 0
-        var ptr: UnsafeMutablePtr<UnsafeMutablePtr<Box>>
-        lambda.withReference {
-            ptr = UnsafeMutablePtr<UnsafeMutablePtr<Box>>(
-                rawPointer: builtin.addressOf(&$0.captures))
-        }
+        var ptr: UnsafeMutablePtr<UnsafeMutablePtr<Box>> = UnsafeMutablePtr<UnsafeMutablePtr<Box>>(
+                rawPointer: builtin.addressOf(&lambda->captures) as! builtin.RawPointer)
 
         loop {
             var capt = *ptr
@@ -341,12 +376,22 @@ public def _cdot_CleanupLambda(_ lambda: UnsafeMutablePtr<Lambda>) {
 
 struct AtomicLambda with RC {
     let fn: UnsafeMutableRawPtr
-    var _strongRefcount: Atomic<UInt>
+    var _strongRefcount: UInt
     var captures: UnsafeMutablePtr<AtomicBox>
 
     prop strongRefcount: UInt {
-        get { return _strongRefcount.load() }
-        set { _strongRefcount.store(newVal) }
+        get {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_strongRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            return at.load()
+        }
+        set {
+            var ptr = UnsafeMutablePtr<UInt._AtomicType>(rawPointer: builtin.addressOf(_strongRefcount))
+            var at =  Atomic<UInt>(ptr)
+
+            at.store(newVal)
+        }
     }
 
     prop weakRefcount: UInt {
@@ -357,8 +402,8 @@ struct AtomicLambda with RC {
 
 @extern(C)
 public def _cdot_AtomicRetainLambda(_ lambda: UnsafeMutablePtr<AtomicLambda>) {
-    lambda.withReference { $0.strongRetain() }
-    debugPrint!("lambda %p after retain: %llu\n", lambda, lambda->strongRefcount.load())
+    lambda->strongRetain()
+    debugPrint!(LambdaRefcounting, "lambda %p after retain: %llu\n", lambda, lambda->strongRefcount)
 }
 
 @extern(C)
@@ -367,8 +412,8 @@ public def _cdot_AtomicReleaseLambda(_ lambda: UnsafeMutablePtr<AtomicLambda>) {
         return
     }
 
-    lambda.withReference { $0.strongRelease() }
-    debugPrint!("lambda %p after release: %llu\n", lambda, lambda->strongRefcount.load())
+    lambda->strongRelease()
+    debugPrint!(LambdaRefcounting, "lambda %p after release: %llu\n", lambda, lambda->strongRefcount)
 
     if lambda->strongRefcount == 0u {
         _cdot_AtomicCleanupLambda(lambda)
@@ -377,15 +422,12 @@ public def _cdot_AtomicReleaseLambda(_ lambda: UnsafeMutablePtr<AtomicLambda>) {
 
 @extern(C)
 public def _cdot_AtomicCleanupLambda(_ lambda: UnsafeMutablePtr<AtomicLambda>) {
-    debugPrint!("freeing lambda\n")
+    debugPrint!(LambdaRefcounting, "freeing lambda\n")
 
     if lambda->captures {
         var i = 0
-        var ptr: UnsafeMutablePtr<UnsafeMutablePtr<AtomicBox>>
-        lambda.withReference {
-            ptr = UnsafeMutablePtr<UnsafeMutablePtr<AtomicBox>>(
-                rawPointer: builtin.addressOf(&$0.captures))
-        }
+        var ptr: UnsafeMutablePtr<UnsafeMutablePtr<AtomicBox>> = UnsafeMutablePtr<UnsafeMutablePtr<AtomicBox>>(
+                rawPointer: builtin.addressOf(&lambda->captures) as! builtin.RawPointer)
 
         loop {
             var capt = *ptr

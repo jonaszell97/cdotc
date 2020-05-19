@@ -2,8 +2,6 @@
 import builtin
 import libc
 
-using builtin.ops.*
-
 /// Implemented in cdotrt
 declare C public def _cdot_GetLastModifiedTime(_ fileName: libc.cstring) -> libc.long_long
 
@@ -15,15 +13,15 @@ macro define_int_pow_fn{
                     -> builtin.$name {
                 var base = base
                 var exp = exp
-                var result = 1 as builtin.$name
+                var result: builtin.$name = 1
 
-                while exp != 0 {
-                    if (exp & 1) != 0 {
-                        result *= base
+                while builtin.icmp_ne_u64(exp, 0) {
+                    if builtin.icmp_ne_u64(builtin.and_u64(exp, 1), 0) {
+                        result = builtin.${mul_ $name}(result, base)
                     }
 
-                    exp >>= 1
-                    base *= base
+                    exp = builtin.ashr_u64(exp, 1)
+                    base = builtin.${mul_ $name}(base, base)
                 }
 
                 return result

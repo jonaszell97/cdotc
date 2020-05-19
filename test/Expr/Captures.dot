@@ -1,0 +1,38 @@
+
+// RUN
+
+def run<Ret>(_ fn: () -> Ret) -> Ret { return fn() }
+def run(_ fn: () -> Void) { return fn() }
+
+var x = 12
+run {
+    x = 53
+}
+run {
+    assertEqual!(x, 53)
+    x = 129
+}
+
+assertEqual!(x, 129)
+
+var y = ""
+var fn = {
+    y += "hello world"
+}
+
+assertEqual!(y, "")
+fn()
+assertEqual!(y, "hello world")
+
+var cpy = fn
+cpy()
+assertEqual!(y, "hello worldhello world")
+
+var moved = builtin.move(fn)
+moved()
+assertEqual!(y, "hello worldhello worldhello world")
+
+var _ = cpy
+var _ = cpy
+var _ = cpy
+_ = cpy

@@ -1,20 +1,16 @@
-//
-// Created by Jonas Zell on 29.04.18.
-//
+#include "cdotc/IL/Passes/BorrowCheckPass.h"
 
-#include "BorrowCheckPass.h"
-
-#include "DataflowProblem.h"
-#include "IL/Analysis/AccessPathDescriptor.h"
-#include "IL/Analysis/AccessPathIterator.h"
-#include "IL/Analysis/Dominance.h"
-#include "IL/Analysis/MemoryUse.h"
-#include "IL/Analysis/UnsafeAnalysis.h"
-#include "IL/BasicBlock.h"
-#include "IL/Function.h"
-#include "IL/Instructions.h"
-#include "ILGen/ILGenPass.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/IL/Analysis/AccessPathDescriptor.h"
+#include "cdotc/IL/Analysis/AccessPathIterator.h"
+#include "cdotc/IL/Analysis/Dominance.h"
+#include "cdotc/IL/Analysis/MemoryUse.h"
+#include "cdotc/IL/Analysis/UnsafeAnalysis.h"
+#include "cdotc/IL/BasicBlock.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/Passes/DataflowProblem.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Sema/SemaPass.h"
 
 #include <llvm/ADT/BitVector.h>
 
@@ -24,7 +20,7 @@ using namespace cdot::support;
 namespace cdot {
 namespace il {
 
-static il::Value *LookThroughLoad(il::Value *V)
+static il::Value* LookThroughLoad(il::Value* V)
 {
    if (auto Ld = dyn_cast<LoadInst>(V))
       return Ld->getOperand(0);
@@ -32,17 +28,17 @@ static il::Value *LookThroughLoad(il::Value *V)
    // also look through MutRefToRef casts
    if (auto BC = dyn_cast<BitCastInst>(V))
       if (BC->getType()->isReferenceType()
-            && BC->getOperand(0)->getType()->isReferenceType()) {
+          && BC->getOperand(0)->getType()->isReferenceType()) {
          return BC->getOperand(0);
       }
 
    return V;
 }
 
-void BorrowCheckPass::computeMemoryAccesses(il::Function &F)
+void BorrowCheckPass::computeMemoryAccesses(il::Function& F)
 {
-   for (auto &B : F) {
-      for (auto &I : B) {
+   for (auto& B : F) {
+      for (auto& I : B) {
          if (UA->isUnsafe(I))
             continue;
 
@@ -56,7 +52,7 @@ void BorrowCheckPass::computeMemoryAccesses(il::Function &F)
    }
 }
 
-void BorrowCheckPass::buildMemoryUse(il::MoveInst &I)
+void BorrowCheckPass::buildMemoryUse(il::MoveInst& I)
 {
    // get the moved memory location
    auto Loc = MemoryLocation::get(I.getOperand(0));
@@ -69,7 +65,7 @@ void BorrowCheckPass::buildMemoryUse(il::MoveInst &I)
    llvm::SmallVector<MemoryRestriction, 8> Restrictions;
    buildRestrictions(I.getOperand(0), MemoryUse::Move, Restrictions);
 
-   auto *Mem = Allocator.Allocate<MemoryRestriction>(Restrictions.size());
+   auto* Mem = Allocator.Allocate<MemoryRestriction>(Restrictions.size());
    std::copy(Restrictions.begin(), Restrictions.end(), Mem);
 
    // remember this memory use
@@ -82,7 +78,7 @@ void BorrowCheckPass::buildMemoryUse(il::MoveInst &I)
    MemoryUses.push_back(Use);
 }
 
-void BorrowCheckPass::buildMemoryUse(il::BeginBorrowInst &I)
+void BorrowCheckPass::buildMemoryUse(il::BeginBorrowInst& I)
 {
    // get the borrowed memory location
    auto Loc = MemoryLocation::get(I.getOperand(0));
@@ -91,20 +87,19 @@ void BorrowCheckPass::buildMemoryUse(il::BeginBorrowInst &I)
       return;
    }
 
-   MemoryUse::Kind UseKind = I.isMutableBorrow()
-                                ? MemoryUse::MutableBorrow
-                                : MemoryUse::ImmutableBorrow;
+   MemoryUse::Kind UseKind = I.isMutableBorrow() ? MemoryUse::MutableBorrow
+                                                 : MemoryUse::ImmutableBorrow;
 
    // compute further restrictions
    llvm::SmallVector<MemoryRestriction, 8> Restrictions;
    buildRestrictions(I.getOperand(0), UseKind, Restrictions);
 
-   auto *Mem = Allocator.Allocate<MemoryRestriction>(Restrictions.size());
+   auto* Mem = Allocator.Allocate<MemoryRestriction>(Restrictions.size());
    std::copy(Restrictions.begin(), Restrictions.end(), Mem);
 
    // remember this memory use
-   MemoryUse Use(UseKind, SourceRange(I.getBeginBorrowLoc(),
-                                      I.getEndBorrowLoc()), Loc,
+   MemoryUse Use(UseKind,
+                 SourceRange(I.getBeginBorrowLoc(), I.getEndBorrowLoc()), Loc,
                  llvm::ArrayRef<MemoryRestriction>(Mem, Restrictions.size()));
 
    InstUseMap.try_emplace(&I, MemoryUses.size());
@@ -119,8 +114,9 @@ void BorrowCheckPass::buildMemoryUse(il::BeginBorrowInst &I)
    MemoryUses.push_back(Use);
 }
 
-MemoryRestriction BorrowCheckPass::getRestriction(il::Value *V,
-                                                  MemoryUse::Kind UseKind) {
+MemoryRestriction BorrowCheckPass::getRestriction(il::Value* V,
+                                                  MemoryUse::Kind UseKind)
+{
    auto Loc = MemoryLocation::get(V);
    if (auto Decl = ILGen.getDeclForValue(V)) {
       MemDeclMap.try_emplace(Loc, Decl);
@@ -138,20 +134,20 @@ MemoryRestriction BorrowCheckPass::getRestriction(il::Value *V,
    }
    case MemoryUse::ImmutableBorrow: {
       // an immutable borrow prevents mutable borrows and moves
-      return MemoryRestriction(MemoryRestriction::MutableBorrow
-                                 | MemoryRestriction::Move, Loc);
+      return MemoryRestriction(
+          MemoryRestriction::MutableBorrow | MemoryRestriction::Move, Loc);
    }
    case MemoryUse::MutableBorrow: {
-      // a mutable borrows prevents all uses
+      // a mutable borrow prevents all uses
       return MemoryRestriction(MemoryRestriction::Use, Loc);
    }
    }
 }
 
-void
-BorrowCheckPass::buildRestrictions(il::Value *V,
-                                 MemoryUse::Kind UseKind,
-                                 llvm::SmallVectorImpl<MemoryRestriction> &Vec){
+void BorrowCheckPass::buildRestrictions(
+    il::Value* V, MemoryUse::Kind UseKind,
+    llvm::SmallVectorImpl<MemoryRestriction>& Vec)
+{
    V = LookThroughLoad(V);
 
    while (true) {
@@ -184,8 +180,9 @@ BorrowCheckPass::buildRestrictions(il::Value *V,
    }
 }
 
-void BorrowCheckPass::visitIntrinsicCallInst(const IntrinsicCallInst &I,
-                                             BitVector &Gen, BitVector &Kill) {
+void BorrowCheckPass::visitIntrinsicCallInst(const IntrinsicCallInst& I,
+                                             BitVector& Gen, BitVector& Kill)
+{
    switch (I.getCalledIntrinsic()) {
    case Intrinsic::lifetime_begin:
    case Intrinsic::lifetime_end: {
@@ -210,8 +207,9 @@ void BorrowCheckPass::visitIntrinsicCallInst(const IntrinsicCallInst &I,
    }
 }
 
-void BorrowCheckPass::visitMoveInst(const il::MoveInst &I, BitVector &Gen,
-                                    BitVector &Kill) {
+void BorrowCheckPass::visitMoveInst(const il::MoveInst& I, BitVector& Gen,
+                                    BitVector& Kill)
+{
    auto IdxIt = InstUseMap.find(&I);
    if (IdxIt == InstUseMap.end())
       return;
@@ -220,8 +218,9 @@ void BorrowCheckPass::visitMoveInst(const il::MoveInst &I, BitVector &Gen,
    Kill.reset(IdxIt->getSecond());
 }
 
-void BorrowCheckPass::visitBeginBorrowInst(const il::BeginBorrowInst &I,
-                                         BitVector &Gen, BitVector &Kill) {
+void BorrowCheckPass::visitBeginBorrowInst(const il::BeginBorrowInst& I,
+                                           BitVector& Gen, BitVector& Kill)
+{
    auto IdxIt = InstUseMap.find(&I);
    if (IdxIt == InstUseMap.end())
       return;
@@ -230,8 +229,9 @@ void BorrowCheckPass::visitBeginBorrowInst(const il::BeginBorrowInst &I,
    Kill.reset(IdxIt->getSecond());
 }
 
-void BorrowCheckPass::visitEndBorrowInst(const il::EndBorrowInst &I,
-                                         BitVector &Gen, BitVector &Kill) {
+void BorrowCheckPass::visitEndBorrowInst(const il::EndBorrowInst& I,
+                                         BitVector& Gen, BitVector& Kill)
+{
 
    auto IdxIt = InstUseMap.find(&I);
    if (IdxIt == InstUseMap.end())
@@ -241,11 +241,12 @@ void BorrowCheckPass::visitEndBorrowInst(const il::EndBorrowInst &I,
    Kill.set(IdxIt->getSecond());
 }
 
-void BorrowCheckPass::checkConflictingUse(const Instruction &I,
-                                        MemoryLocation Loc,
-                                        const MemoryUse &Use,
-                                        bool IsDirectlyAccessedMem) {
-   for (auto &R : Use.getRestrictions()) {
+void BorrowCheckPass::checkConflictingUse(const Instruction& I,
+                                          MemoryLocation Loc,
+                                          const MemoryUse& Use,
+                                          bool IsDirectlyAccessedMem)
+{
+   for (auto& R : Use.getRestrictions()) {
       checkConflictingRestriction(I, Loc, Use, R);
 
       if (!IsDirectlyAccessedMem) {
@@ -255,10 +256,11 @@ void BorrowCheckPass::checkConflictingUse(const Instruction &I,
    }
 }
 
-void BorrowCheckPass::checkConflictingRestriction(const Instruction &I,
+void BorrowCheckPass::checkConflictingRestriction(const Instruction& I,
                                                   MemoryLocation Loc,
-                                                  const MemoryUse &Use,
-                                                  const MemoryRestriction &R) {
+                                                  const MemoryUse& Use,
+                                                  const MemoryRestriction& R)
+{
    if (R.getRestrictedMem() != Loc || R.getKind() == MemoryRestriction::None)
       return;
 
@@ -316,17 +318,15 @@ void BorrowCheckPass::checkConflictingRestriction(const Instruction &I,
       // previous use was a move
       if (Use.isMove()) {
          bool Partial = Use.getAccessedMem() != Loc;
-         ILGen.getSema().diagnose(diag::err_borrow_after_move,
-                                  I.getSourceLoc(), Borrow->isMutableBorrow(),
-                                  Name, Partial);
+         ILGen.getSema().diagnose(diag::err_borrow_after_move, I.getSourceLoc(),
+                                  Borrow->isMutableBorrow(), Name, Partial);
 
          ILGen.getSema().diagnose(diag::note_moved_here, Use.getSourceLoc());
       }
       else {
-         ILGen.getSema().diagnose(diag::err_cannot_borrow,
-                                  Borrow->getBeginBorrowLoc(),
-                                  Borrow->isMutableBorrow(),
-                                  Name, Use.isMutableBorrow());
+         ILGen.getSema().diagnose(
+             diag::err_cannot_borrow, Borrow->getBeginBorrowLoc(),
+             Borrow->isMutableBorrow(), Name, Use.isMutableBorrow());
 
          ILGen.getSema().diagnose(diag::note_borrow_begins_here,
                                   Use.getSourceLoc().getStart());
@@ -344,14 +344,13 @@ void BorrowCheckPass::checkConflictingRestriction(const Instruction &I,
    // previous use was a move
    if (Use.isMove()) {
       bool Partial = Use.getAccessedMem() != Loc;
-      ILGen.getSema().diagnose(diag::err_use_after_move,
-                               I.getSourceLoc(), Name, Partial);
+      ILGen.getSema().diagnose(diag::err_use_after_move, I.getSourceLoc(), Name,
+                               Partial);
 
       ILGen.getSema().diagnose(diag::note_moved_here, Use.getSourceLoc());
    }
    else {
-      ILGen.getSema().diagnose(diag::err_cannot_borrow,
-                               I.getSourceLoc(), true,
+      ILGen.getSema().diagnose(diag::err_cannot_borrow, I.getSourceLoc(), true,
                                Name, Use.isMutableBorrow());
 
       ILGen.getSema().diagnose(diag::note_borrow_begins_here,
@@ -364,8 +363,9 @@ void BorrowCheckPass::checkConflictingRestriction(const Instruction &I,
    DiagnosedLocs.insert(I.getSourceLoc());
 }
 
-void BorrowCheckPass::checkOverlappingMemoryUse(const il::Instruction &I,
-                                                const BitVector &Gen) {
+void BorrowCheckPass::checkOverlappingMemoryUse(const il::Instruction& I,
+                                                const BitVector& Gen)
+{
    if ((!isa<MoveInst>(I) && !isa<BeginBorrowInst>(I)) || UA->isUnsafe(I))
       return;
 
@@ -377,7 +377,7 @@ void BorrowCheckPass::checkOverlappingMemoryUse(const il::Instruction &I,
 
       // check all active memory uses for overlapping access
       for (auto Idx : Gen.set_bits()) {
-         auto &Use = MemoryUses[Idx];
+         auto& Use = MemoryUses[Idx];
          checkConflictingUse(I, MemLoc, Use, IsDirectlyAccessedMem);
       }
 
@@ -387,6 +387,12 @@ void BorrowCheckPass::checkOverlappingMemoryUse(const il::Instruction &I,
 
 void BorrowCheckPass::run()
 {
+   if (isa<Initializer>(F)) {
+      if (cast<ast::InitDecl>(ILGen.getDeclForValue(F))->isBaseInitializer()) {
+         return;
+      }
+   }
+
    UA = PM->getAnalysis<UnsafeAnalysis>()->get(F);
 
    computeMemoryAccesses(*F);
@@ -398,23 +404,13 @@ void BorrowCheckPass::run()
 
    // set up data flow problem
    solveForwardMayProblem(*F, NumMemUses, GenMap, KillMap, InMap, OutMap,
-                          [&](Instruction &I, BitVector &Gen, BitVector &Kill) {
-                              visit(I, Gen, Kill);
-                          }, false);
-
-//   if (F->getName()=="_CNW4mainE6_startEv") {
-//      int i = 2;
-//      for (auto &B : *F) {
-//         llvm::outs()<<B.getName()<<"\n";
-//         llvm::outs()<<"   IN = "<<InMap[&B][i]<<"\n";
-//         llvm::outs()<<"   OUT = "<<OutMap[&B][i]<<"\n";
-//         llvm::outs()<<"   GEN = "<<GenMap[&B][i]<<"\n";
-//         llvm::outs()<<"   KILL = "<<KillMap[&B][i]<<"\n";
-//      }
-//   }
+                          [&](Instruction& I, BitVector& Gen, BitVector& Kill) {
+                             visit(I, Gen, Kill);
+                          },
+                          false);
 
    // check for overlapping borrows
-   for (auto &B : *F) {
+   for (auto& B : *F) {
       if (B.hasNoPredecessors())
          continue;
 
@@ -423,7 +419,7 @@ void BorrowCheckPass::run()
 
       BitVector Kill(NumMemUses);
 
-      for (auto &I : B) {
+      for (auto& I : B) {
          checkOverlappingMemoryUse(I, Gen);
          visit(I, Gen, Kill);
 

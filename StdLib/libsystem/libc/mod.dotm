@@ -1,8 +1,5 @@
 
 module libc {
-    // Only emit declarations.
-    declarationsOnly = true
-
     // Export everything.
     defaultAccess = public
 
@@ -22,6 +19,9 @@ module libc {
     }
     module errno {
         include_system = ["errno.h"]
+    }
+    module execinfo {
+        include_system = ["execinfo.h"?]
     }
     module fenv {
         include_system = ["fenv.h"]

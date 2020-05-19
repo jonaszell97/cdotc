@@ -1,0 +1,57 @@
+
+// RUN
+// CHECK MyStruct \{ x = hi, y = 128, z = 3\.14 \}
+// CHECK-NEXT \.One\(128, this is my string\)
+// CHECK-NEXT \.Two\(2\.78\)
+// CHECK-NEXT \.Three\(128, this is another string, 3\.14\)
+// CHECK-NEXT \.Four
+
+struct MyStruct {
+    let x: String
+    let y: Int
+    let z: Double
+}
+
+extend MyStruct with Equatable {}
+extend MyStruct with StringRepresentable {}
+
+var s1 = MyStruct(x: "hi", y: 128, z: 3.141592)
+print(s1)
+
+assertEqual!(s1, MyStruct(x: "hi", y: 128, z: 3.141592))
+assertNotEqual!(s1, MyStruct(x: "hi", y: 128, z: 3.1141592))
+assertNotEqual!(s1, MyStruct(x: "hi", y: 127, z: 3.141592))
+assertNotEqual!(s1, MyStruct(x: "hi...", y: 128, z: 3.141592))
+
+enum MyEnum {
+    case One(Int, String)
+    case Two(Float)
+    case Three(Int, String, Double)
+    case Four
+}
+
+extend MyEnum with Equatable {}
+extend MyEnum with StringRepresentable {}
+
+var v1: MyEnum = .One(128, "this is my string")
+print(v1)
+
+var v2: MyEnum = .Two(2.7831123189)
+print(v2)
+
+var v3: MyEnum = .Three(128, "this is another string", 3.141592)
+print(v3)
+
+var v4: MyEnum = .Four
+print(v4)
+
+assertEqual!(v1, .One(128, "this is my string"))
+assertNotEqual!(v1, .One(127, "this is my string"))
+assertNotEqual!(v1, v2)
+assertNotEqual!(v2, v3)
+assertNotEqual!(v3, v4)
+assertNotEqual!(v4, v1)
+assertEqual!(v2, v2)
+assertEqual!(v3, v3)
+assertEqual!(v4, v4)
+

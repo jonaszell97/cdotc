@@ -1,19 +1,18 @@
-//
-// Created by Jonas Zell on 13.02.18.
-//
+#include "cdotc/Support/LiteralParser.h"
 
-#include "LiteralParser.h"
+#include "cdotc/Support/Format.h"
 
-#include "Support/Format.h"
+#include <llvm/Support/Error.h>
 
 using namespace cdot;
 
 LiteralParser::FPResult LiteralParser::parseFloating()
 {
    llvm::APFloat APF(0.0);
-   auto status = APF.convertFromString(Str, llvm::APFloat::rmNearestTiesToEven);
+   auto statusOrErr = APF.convertFromString(Str, llvm::APFloat::rmNearestTiesToEven);
 
-   return FPResult{ std::move(APF), status };
+   return FPResult{std::move(APF),
+       !statusOrErr ? llvm::APFloat::opInexact : statusOrErr.get()};
 }
 
 uint8_t LiteralParser::getIntegerRadix()
@@ -25,16 +24,16 @@ uint8_t LiteralParser::getIntegerRadix()
       return 8;
 
    switch (Str[1]) {
-      case 'x':
-      case 'X':
-         Str = Str.drop_front(2);
-         return 16;
-      case 'b':
-      case 'B':
-         Str = Str.drop_front(2);
-         return 2;
-      default:
-         break;
+   case 'x':
+   case 'X':
+      Str = Str.drop_front(2);
+      return 16;
+   case 'b':
+   case 'B':
+      Str = Str.drop_front(2);
+      return 2;
+   default:
+      break;
    }
 
    Str = Str.drop_front(1);
@@ -62,7 +61,8 @@ static uint8_t getDigitValue(char c, uint8_t radix)
 }
 
 LiteralParser::IntResult LiteralParser::parseInteger(unsigned int bitwidth,
-                                                     bool isSigned) {
+                                                     bool isSigned)
+{
    llvm::APInt API(bitwidth, 0);
 
    uint8_t radix = getIntegerRadix();
@@ -71,7 +71,7 @@ LiteralParser::IntResult LiteralParser::parseInteger(unsigned int bitwidth,
    assert(len && "empty literal string!");
    if (len == 1) {
       API += static_cast<uint64_t>(getDigitValue(Str.front(), radix));
-      return IntResult{ llvm::APSInt(std::move(API), !isSigned), false };
+      return IntResult{llvm::APSInt(std::move(API), !isSigned), false};
    }
 
    unsigned shift;
@@ -92,8 +92,8 @@ LiteralParser::IntResult LiteralParser::parseInteger(unsigned int bitwidth,
       llvm_unreachable("bad radix!");
    }
 
-   const char *Ptr = Str.begin();
-   const char *End = Str.end();
+   const char* Ptr = Str.begin();
+   const char* End = Str.end();
 
    for (; Ptr != End; ++Ptr) {
       if (*Ptr == '_') {
@@ -111,7 +111,7 @@ LiteralParser::IntResult LiteralParser::parseInteger(unsigned int bitwidth,
       API += Val;
    }
 
-   return IntResult{ llvm::APSInt(std::move(API), !isSigned), false };
+   return IntResult{llvm::APSInt(std::move(API), !isSigned), false};
 }
 
 LiteralParser::CharResult LiteralParser::parseCharacter()
@@ -148,7 +148,7 @@ LiteralParser::StringResult LiteralParser::parseString()
 
    bool escaped = false;
 
-   const char *ptr  = Str.data();
+   const char* ptr = Str.data();
    unsigned Len = (unsigned)Str.size();
 
    for (unsigned i = 0; i < Len; ++ptr, ++i) {
@@ -169,5 +169,5 @@ LiteralParser::StringResult LiteralParser::parseString()
       }
    }
 
-   return { move(str), false };
+   return {move(str), false};
 }

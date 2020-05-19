@@ -1,25 +1,21 @@
-//
-// Created by Jonas Zell on 01.06.18.
-//
+#include "cdotc/Serialization/ModuleReader.h"
 
-#include "ModuleReader.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Basic/FileUtils.h"
+#include "cdotc/IL/GlobalVariable.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Module/Module.h"
+#include "cdotc/Module/ModuleManager.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Serialization/ASTReaderInternals.h"
+#include "cdotc/Serialization/BitCodes.h"
+#include "cdotc/Serialization/ILReader.h"
+#include "cdotc/Serialization/IncrementalCompilation.h"
+#include "cdotc/Serialization/ModuleFile.h"
 
-#include "ASTReaderInternals.h"
-#include "Basic/FileManager.h"
-#include "Basic/FileUtils.h"
-#include "BitCodes.h"
-#include "ILReader.h"
-#include "IL/GlobalVariable.h"
-#include "IL/Module.h"
-#include "ILGen/ILGenPass.h"
-#include "ModuleFile.h"
-#include "Module/Module.h"
-#include "Module/ModuleManager.h"
-#include "Sema/SemaPass.h"
-#include "IncrementalCompilation.h"
-
-#include <llvm/Support/SaveAndRestore.h>
 #include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/SaveAndRestore.h>
 
 #include <chrono>
 
@@ -29,37 +25,31 @@ using namespace cdot::serial;
 using namespace cdot::support;
 using namespace cdot::serial::reader;
 
-ModuleReader::ModuleReader(cdot::CompilerInstance &CI,
-                           SourceRange ImportLoc,
-                           SourceLocation DiagLoc,
-                           llvm::BitstreamCursor Cursor)
-   : CI(CI), ImportLoc(ImportLoc), DiagLoc(DiagLoc), Mod(nullptr),
-     ASTReader(*this),
-     ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
-     Stream(Cursor)
+ModuleReader::ModuleReader(cdot::CompilerInstance& CI, SourceRange ImportLoc,
+                           SourceLocation DiagLoc, llvm::BitstreamCursor Cursor)
+    : CI(CI), ImportLoc(ImportLoc), DiagLoc(DiagLoc), Mod(nullptr),
+      ASTReader(*this),
+      ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
+      Stream(Cursor)
 {
-
 }
 
-ModuleReader::ModuleReader(cdot::CompilerInstance &CI,
+ModuleReader::ModuleReader(cdot::CompilerInstance& CI,
                            llvm::BitstreamCursor Cursor)
-   : CI(CI), ImportLoc(), DiagLoc(), Mod(nullptr),
-     ASTReader(*this),
-     ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
-     Stream(Cursor)
+    : CI(CI), ImportLoc(), DiagLoc(), Mod(nullptr), ASTReader(*this),
+      ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
+      Stream(Cursor)
 {
-
 }
 
-ModuleReader::ModuleReader(cdot::CompilerInstance &CI,
+ModuleReader::ModuleReader(cdot::CompilerInstance& CI,
                            llvm::BitstreamCursor Cursor,
-                           ModuleReader &MainReader)
-   : CI(CI), ImportLoc(), DiagLoc(), Mod(nullptr),
-     ASTReader(*this, MainReader.ASTReader),
-     ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
-     Stream(Cursor)
+                           ModuleReader& MainReader)
+    : CI(CI), ImportLoc(), DiagLoc(), Mod(nullptr),
+      ASTReader(*this, MainReader.ASTReader),
+      ILReader(CI.getSema(), CI.getContext(), ASTReader, Cursor, CI.getILCtx()),
+      Stream(Cursor)
 {
-
 }
 
 ModuleReader::~ModuleReader()
@@ -70,17 +60,16 @@ ModuleReader::~ModuleReader()
 void ModuleReader::Error(llvm::StringRef Msg) const
 {
    CI.getSema().diagnose(diag::err_generic_error, Msg);
-   CI.getSema().~SemaPass();
-
-   std::exit(1);
+   std::abort();
 }
 
 void ModuleReader::Error(unsigned DiagID, llvm::StringRef Arg1,
-                      llvm::StringRef Arg2) const {
+                         llvm::StringRef Arg2) const
+{
    CI.getSema().diagnose((diag::MessageKind)DiagID, Arg1, Arg2);
 }
 
-unsigned ASTIdentifierLookupTraitBase::ComputeHash(const internal_key_type &a)
+unsigned ASTIdentifierLookupTraitBase::ComputeHash(const internal_key_type& a)
 {
    return static_cast<unsigned>(llvm::hash_value(a));
 }
@@ -98,25 +87,26 @@ ASTIdentifierLookupTraitBase::ReadKeyDataLength(const unsigned char*& d)
 ASTIdentifierLookupTraitBase::internal_key_type
 ASTIdentifierLookupTraitBase::ReadKey(const unsigned char* d, unsigned n)
 {
-   assert(n >= 2 && d[n-1] == '\0');
-   return StringRef((const char*) d, n-1);
+   assert(n >= 2 && d[n - 1] == '\0');
+   return StringRef((const char*)d, n - 1);
 }
 
-unsigned ASTIdentifierLookupTrait::ReadIdentifierID(const unsigned char *d)
+unsigned ASTIdentifierLookupTrait::ReadIdentifierID(const unsigned char* d)
 {
    using namespace llvm::support;
    return endian::readNext<uint32_t, little, unaligned>(d);
 }
 
-IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type &k,
-                                                   const unsigned char *d,
-                                                   unsigned) {
+IdentifierInfo* ASTIdentifierLookupTrait::ReadData(const internal_key_type& k,
+                                                   const unsigned char* d,
+                                                   unsigned)
+{
    using namespace llvm::support;
 
    uint32_t ID = endian::readNext<uint32_t, little, unaligned>(d);
 
    // Build the IdentifierInfo and link the identifier ID with it.
-   IdentifierInfo *II = KnownII;
+   IdentifierInfo* II = KnownII;
    if (!II) {
       II = &Reader.getCompilerInstance().getContext().getIdentifiers().get(k);
       KnownII = II;
@@ -129,39 +119,36 @@ IdentifierInfo *ASTIdentifierLookupTrait::ReadData(const internal_key_type &k,
 /// ReadBlockAbbrevs - Enter a subblock of the specified BlockID with the
 /// specified cursor.  Read the abbreviations that are at the top of the block
 /// and then leave the cursor pointing into the block.
-bool ModuleReader::ReadBlockAbbrevs(llvm::BitstreamCursor &Cursor,
-                                    unsigned BlockID) {
+bool ModuleReader::ReadBlockAbbrevs(llvm::BitstreamCursor& Cursor,
+                                    unsigned BlockID)
+{
    if (Cursor.EnterSubBlock(BlockID))
       return true;
 
    while (true) {
       uint64_t Offset = Cursor.GetCurrentBitNo();
-      unsigned Code = Cursor.ReadCode();
+      unsigned Code = Cursor.ReadCode().get();
 
       // We expect all abbrevs to be at the start of the block.
       if (Code != llvm::bitc::DEFINE_ABBREV) {
-         Cursor.JumpToBit(Offset);
+         (void) Cursor.JumpToBit(Offset);
          return false;
       }
 
-      Cursor.ReadAbbrevRecord();
+      (void) Cursor.ReadAbbrevRecord();
    }
 }
 
-unsigned ModuleReader::GetDeclID(Decl *D)
-{
-   return ASTReader.DeclIDMap[D];
-}
+unsigned ModuleReader::GetDeclID(Decl* D) { return ASTReader.DeclIDMap[D]; }
 
-void ModuleReader::SetIdentifierInfo(unsigned ID, IdentifierInfo *II)
+void ModuleReader::SetIdentifierInfo(unsigned ID, IdentifierInfo* II)
 {
    assert(ID && "Non-zero identifier ID required");
    assert(ID <= IdentifiersLoaded.size() && "identifier ID out of range");
    IdentifiersLoaded[ID - 1] = II;
 }
 
-ReadResult
-ModuleReader::ReadOptionsBlock()
+ReadResult ModuleReader::ReadOptionsBlock()
 {
    if (Stream.EnterSubBlock(OPTIONS_BLOCK_ID))
       return Failure;
@@ -171,7 +158,7 @@ ModuleReader::ReadOptionsBlock()
    ReadResult Result = Success;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -188,7 +175,7 @@ ModuleReader::ReadOptionsBlock()
 
       // Read and process a record.
       Record.clear();
-      switch ((OptionsRecordTypes) Stream.readRecord(Entry.ID, Record)) {
+      switch ((OptionsRecordTypes)Stream.readRecord(Entry.ID, Record).get()) {
       case LANGUAGE_OPTIONS: {
          if (ParseLanguageOptions(Record, true, true))
             Result = ConfigurationMismatch;
@@ -206,7 +193,7 @@ ModuleReader::ReadOptionsBlock()
    }
 }
 
-ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor &Stream)
+ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor& Stream)
 {
    ReadResult Result = Success;
 
@@ -217,7 +204,7 @@ ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor &Stream)
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -229,6 +216,10 @@ ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor &Stream)
          switch (Entry.ID) {
          case MODULE_BLOCK_ID:
             Mod = ReadModuleBlock(Stream);
+            if (!Mod) {
+               return Failure;
+            }
+
             continue;
          default:
             if (Stream.SkipBlock()) {
@@ -245,18 +236,19 @@ ReadResult ModuleReader::ReadControlBlock(llvm::BitstreamCursor &Stream)
    }
 }
 
-Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
-                                      Module *ParentModule) {
+Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor& Stream,
+                                      Module* ParentModule)
+{
    if (ReadBlockAbbrevs(Stream, MODULE_BLOCK_ID)) {
       Error("malformed block record in AST file");
       return nullptr;
    }
 
-   class Module *Mod = nullptr;
+   class Module* Mod = nullptr;
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -267,7 +259,10 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
       case llvm::BitstreamEntry::SubBlock:
          switch (Entry.ID) {
          case MODULE_BLOCK_ID: {
-            ReadModuleBlock(Stream, Mod);
+            if (!ReadModuleBlock(Stream, Mod)) {
+               return nullptr;
+            }
+
             continue;
          }
          default:
@@ -289,11 +284,18 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
       switch ((ModuleBlockRecordTypes)Kind) {
       case MODULE_NAME: {
          auto ID = (unsigned)Record.readInt();
+         auto* II = &CI.getContext().getIdentifiers().get(Record.readString());
 
-         auto *II = &CI.getContext().getIdentifiers().get(Record.readString());
+         auto major = Record.readInt();
+         auto minor = Record.readInt();
+
+         if (major != CDOT_VERSION_MAJOR || minor != CDOT_VERSION_MINOR) {
+            Error("module was compiled for a different version of cdot!");
+            return nullptr;
+         }
 
          if (ParentModule) {
-            if (auto *SubMod = ParentModule->getSubModule(II)) {
+            if (auto* SubMod = ParentModule->getSubModule(II)) {
                Mod = SubMod;
             }
             else {
@@ -302,7 +304,7 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
             }
          }
          else {
-            auto *MainMod = CI.getModuleMgr().getMainModule();
+            auto* MainMod = CI.getModuleMgr().getMainModule();
             if (MainMod && MainMod->getName() == II) {
                Mod = MainMod;
             }
@@ -322,7 +324,7 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
       case MODULE_DIRECTORY: {
          assert(Mod && "module not created");
 
-         auto *II = &CI.getContext().getIdentifiers().get(Record.readString());
+         auto* II = &CI.getContext().getIdentifiers().get(Record.readString());
          Mod->setModulePath(II);
 
          break;
@@ -353,7 +355,7 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
          auto NumImports = Record.readInt();
          while (NumImports--) {
             ImplicitlyImportedModuleIdents.emplace_back();
-            auto &ModuleName = ImplicitlyImportedModuleIdents.back();
+            auto& ModuleName = ImplicitlyImportedModuleIdents.back();
 
             unsigned NameDepth = Record.readInt();
             while (NameDepth--) {
@@ -374,12 +376,12 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
             long long Timestamp = Record.readInt();
             unsigned SourceID = (unsigned)Record.readInt();
             unsigned BaseOffset = (unsigned)Record.readInt();
-            auto *II = &CI.getContext().getIdentifiers()
-                          .get(Record.readString());
+            auto* II
+                = &CI.getContext().getIdentifiers().get(Record.readString());
 
             Mod->addSourceFile(
-               II->getIdentifier(),
-               Module::SourceFileInfo{ Timestamp, SourceID, BaseOffset });
+                II->getIdentifier(),
+                Module::SourceFileInfo{Timestamp, SourceID, BaseOffset});
 
             // if we can find the file on disk, use it to provide better
             // diagnostics.
@@ -407,18 +409,18 @@ Module* ModuleReader::ReadModuleBlock(llvm::BitstreamCursor &Stream,
    }
 }
 
-ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
+ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor& Stream)
 {
    if (ReadBlockAbbrevs(Stream, FILE_MANAGER_BLOCK_ID)) {
       Error("malformed block record in AST file");
       return Failure;
    }
 
-   auto &FileMgr = CI.getFileMgr();
+   auto& FileMgr = CI.getFileMgr();
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -446,22 +448,22 @@ ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
          auto NumFiles = Record.readInt();
          while (NumFiles--) {
             auto FileName = Record.readString();
-            auto SourceID = (unsigned) Record.readInt();
-            auto BaseOffset = (unsigned) Record.readInt();
+            auto SourceID = (unsigned)Record.readInt();
+            auto BaseOffset = (unsigned)Record.readInt();
 
             auto OpenFile = FileMgr.openFile(FileName);
 
             // Check if the file doesn't exist on disk anymore.
             if (OpenFile.Buf) {
                SourceIDSubstitutionOffsets[SourceID]
-                  = OpenFile.BaseOffset - BaseOffset;
+                   = OpenFile.BaseOffset - BaseOffset;
             }
          }
 
          break;
       }
       case MACRO_EXPANSIONS: {
-         auto &Idents = CI.getContext().getIdentifiers();
+         auto& Idents = CI.getContext().getIdentifiers();
          auto NumExpansions = Record.readInt();
          while (NumExpansions--) {
             auto ID = (unsigned)Record.readInt();
@@ -471,7 +473,7 @@ ReadResult ModuleReader::ReadFileManagerBlock(llvm::BitstreamCursor &Stream)
             auto PatternLoc = Record.readSourceLocation();
             auto MacroName = Record.readString();
 
-            auto &II = Idents.get(MacroName);
+            auto& II = Idents.get(MacroName);
             auto Loc = FileMgr.createMacroExpansion(ExpansionLoc, PatternLoc,
                                                     Length, &II);
 
@@ -498,7 +500,7 @@ ReadResult ModuleReader::ReadCacheControlBlock()
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -521,11 +523,12 @@ ReadResult ModuleReader::ReadCacheControlBlock()
       ASTRecordReader Record(this->ASTReader);
       auto Kind = Record.readRecord(Stream, Entry.ID);
 
-      switch ((ControlRecordTypes)Kind) {
+      switch ((int)(ControlRecordTypes)Kind) {
       case CACHE_FILE: {
          // calculate the offset we need to add / subtract to get to
          // the correct location.
-         SourceIDSubstitutionOffsets[SourceID] = static_cast<unsigned>(Record[0]);
+         SourceIDSubstitutionOffsets[SourceID]
+             = static_cast<unsigned>(Record[0]);
          break;
       }
       case IMPORTS: {
@@ -542,19 +545,23 @@ ReadResult ModuleReader::ReadCacheControlBlock()
    }
 }
 
-bool ModuleReader::ParseLanguageOptions(const RecordData &Record, bool Complain,
-                                        bool AllowCompatibleDifferences) {
+bool ModuleReader::ParseLanguageOptions(const RecordData& Record, bool Complain,
+                                        bool AllowCompatibleDifferences)
+{
    return false;
 }
 
-bool ModuleReader::ParseTargetOptions(const RecordData &Record, bool Complain,
-                                      bool AllowCompatibleDifferences) {
+bool ModuleReader::ParseTargetOptions(const RecordData& Record, bool Complain,
+                                      bool AllowCompatibleDifferences)
+{
    return false;
 }
 
-ReadResult ModuleReader::ReadOffsetRangeBlock(llvm::BitstreamCursor &Stream,
-                                              IncrementalCompilationManager &Mgr,
-                                              StringRef FileName) {
+ReadResult
+ModuleReader::ReadOffsetRangeBlock(llvm::BitstreamCursor& Stream,
+                                   IncrementalCompilationManager& Mgr,
+                                   StringRef FileName)
+{
    ReadResult Result = Success;
 
    if (ReadBlockAbbrevs(Stream, OFFSET_RANGE_BLOCK_ID)) {
@@ -564,7 +571,7 @@ ReadResult ModuleReader::ReadOffsetRangeBlock(llvm::BitstreamCursor &Stream,
 
    // Read all of the records and blocks in the control block.
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -599,7 +606,7 @@ IdentifierInfo* ModuleReader::get(llvm::StringRef Name)
    return &CI.getContext().getIdentifiers().get(Name);
 }
 
-IdentifierInfo *ModuleReader::getLocalIdentifier(unsigned LocalID)
+IdentifierInfo* ModuleReader::getLocalIdentifier(unsigned LocalID)
 {
    return DecodeIdentifierInfo(LocalID);
 }
@@ -619,25 +626,25 @@ IdentifierInfo* ModuleReader::DecodeIdentifierInfo(unsigned ID)
       ++NumIdentsRead;
 
       unsigned Index = ID - BaseIdentifierID;
-      const char *Str = IdentifierTableData + IdentifierOffsets[Index];
+      const char* Str = IdentifierTableData + IdentifierOffsets[Index];
 
       // All of the strings in the AST file are preceded by a 16-bit length.
       // Extract that 16-bit length to avoid having to execute strlen().
       // NOTE: 'StrLenPtr' is an 'unsigned char*' so that we load bytes as
       //  unsigned integers.  This is important to avoid integer overflow when
       //  we cast them to 'unsigned'.
-      const unsigned char *StrLenPtr = (const unsigned char*) Str - 2;
-      unsigned StrLen = (((unsigned) StrLenPtr[0])
-                         | (((unsigned) StrLenPtr[1]) << 8)) - 1;
+      const unsigned char* StrLenPtr = (const unsigned char*)Str - 2;
+      unsigned StrLen
+          = (((unsigned)StrLenPtr[0]) | (((unsigned)StrLenPtr[1]) << 8)) - 1;
 
-      auto &II = CI.getContext().getIdentifiers().get(StringRef(Str, StrLen));
+      auto& II = CI.getContext().getIdentifiers().get(StringRef(Str, StrLen));
       IdentifiersLoaded[ID] = &II;
    }
 
    return IdentifiersLoaded[ID];
 }
 
-ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor &Stream)
+ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor& Stream)
 {
    if (Stream.EnterSubBlock(IDENTIFIER_BLOCK_ID)) {
       Error("malformed block record in module file");
@@ -648,7 +655,7 @@ ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor &Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -672,20 +679,20 @@ ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor &Stream)
       Record.clear();
       StringRef Blob;
 
-      auto RecordType =
-         (IdentifierRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType
+          = (IdentifierRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
-      default:  // Default behavior: ignore.
+      default: // Default behavior: ignore.
          break;
       case IDENTIFIER_TABLE:
          IdentifierTableData = Blob.data();
          if (Record[0]) {
             IdentifierLookupTable = ASTIdentifierLookupTable::Create(
-               (const unsigned char *)IdentifierTableData + Record[0],
-               (const unsigned char *)IdentifierTableData + sizeof(uint32_t),
-               (const unsigned char *)IdentifierTableData,
-               ASTIdentifierLookupTrait(*this));
+                (const unsigned char*)IdentifierTableData + Record[0],
+                (const unsigned char*)IdentifierTableData + sizeof(uint32_t),
+                (const unsigned char*)IdentifierTableData,
+                ASTIdentifierLookupTrait(*this));
          }
 
          break;
@@ -695,7 +702,7 @@ ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor &Stream)
             return Failure;
          }
 
-         IdentifierOffsets = (const uint32_t *)Blob.data();
+         IdentifierOffsets = (const uint32_t*)Blob.data();
          LocalNumIdentifiers = Record[0];
          BaseIdentifierID = getTotalNumIdentifiers();
 
@@ -710,13 +717,14 @@ ReadResult ModuleReader::ReadIdentifierBlock(llvm::BitstreamCursor &Stream)
    }
 }
 
-ReadResult ModuleReader::ReadDeclsTypesValuesBlock(llvm::BitstreamCursor &Stream)
+ReadResult
+ModuleReader::ReadDeclsTypesValuesBlock(llvm::BitstreamCursor& Stream)
 {
    ASTReader.DeclsCursor = Stream;
 
-   if (Stream.SkipBlock() ||  // Skip with the main cursor.
-         // Read the abbrevs.
-         ReadBlockAbbrevs(ASTReader.DeclsCursor, DECL_TYPES_BLOCK_ID)) {
+   if (Stream.SkipBlock() || // Skip with the main cursor.
+                             // Read the abbrevs.
+       ReadBlockAbbrevs(ASTReader.DeclsCursor, DECL_TYPES_BLOCK_ID)) {
       Error("malformed block record in module file");
       return Failure;
    }
@@ -724,7 +732,7 @@ ReadResult ModuleReader::ReadDeclsTypesValuesBlock(llvm::BitstreamCursor &Stream
    return Success;
 }
 
-ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
+ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor& Stream)
 {
    if (ReadBlockAbbrevs(Stream, OFFSET_BLOCK_ID)) {
       Error("malformed block record in module file");
@@ -735,7 +743,7 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -760,11 +768,11 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
       Record.clear();
       StringRef Blob;
 
-      auto RecordType =
-         (OffsetBlockRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType
+          = (OffsetBlockRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
-      default:  // Default behavior: ignore.
+      default: // Default behavior: ignore.
          break;
       case DECL_OFFSET: {
          if (ASTReader.LocalNumDecls != 0) {
@@ -774,12 +782,12 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
 
          ASTReader.DeclOffsets = (const uint32_t*)Blob.data();
          ASTReader.LocalNumDecls = (unsigned)Record[0];
-         ASTReader.BaseDeclID = ASTReader.getTotalNumDecls()
-            + (unsigned)Record[1];
+         ASTReader.BaseDeclID
+             = ASTReader.getTotalNumDecls() + (unsigned)Record[1];
 
          if (ASTReader.LocalNumDecls > 0) {
             ASTReader.DeclsLoaded.resize(ASTReader.DeclsLoaded.size()
-               + ASTReader.LocalNumDecls);
+                                         + ASTReader.LocalNumDecls);
          }
 
          break;
@@ -790,13 +798,13 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
             return Failure;
          }
 
-         ASTReader.TypeOffsets = (const uint32_t *)Blob.data();
+         ASTReader.TypeOffsets = (const uint32_t*)Blob.data();
          ASTReader.LocalNumTypes = Record[0];
          ASTReader.BaseTypeIndex = ASTReader.getTotalNumTypes() + Record[1];
 
          if (ASTReader.LocalNumTypes > 0) {
             ASTReader.TypesLoaded.resize(ASTReader.TypesLoaded.size()
-               + ASTReader.LocalNumTypes);
+                                         + ASTReader.LocalNumTypes);
          }
 
          break;
@@ -807,13 +815,13 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
             return Failure;
          }
 
-         ASTReader.ScopeOffsets = (const uint32_t *)Blob.data();
+         ASTReader.ScopeOffsets = (const uint32_t*)Blob.data();
          ASTReader.LocalNumScopes = Record[0];
          ASTReader.BaseScopeID = ASTReader.getTotalNumScopes() + Record[1];
 
          if (ASTReader.LocalNumScopes > 0) {
             ASTReader.LoadedScopes.resize(ASTReader.LoadedScopes.size()
-                                         + ASTReader.LocalNumScopes);
+                                          + ASTReader.LocalNumScopes);
          }
 
          break;
@@ -824,13 +832,13 @@ ReadResult ModuleReader::ReadOffsetsBlock(llvm::BitstreamCursor &Stream)
             return Failure;
          }
 
-         ILReader.ValueOffsets = (const uint32_t *)Blob.data();
+         ILReader.ValueOffsets = (const uint32_t*)Blob.data();
          ILReader.LocalNumDecls = Record[0];
          ILReader.BaseValueIndex = ILReader.getTotalNumValues() + Record[1];
 
          if (ILReader.LocalNumDecls > 0) {
             ILReader.ValuesLoaded.resize(ILReader.ValuesLoaded.size()
-               + ILReader.LocalNumDecls);
+                                         + ILReader.LocalNumDecls);
          }
 
          break;
@@ -850,7 +858,7 @@ ReadResult ModuleReader::ReadStaticLibBlock()
    RecordData Record;
 
    while (true) {
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
 
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
@@ -875,11 +883,11 @@ ReadResult ModuleReader::ReadStaticLibBlock()
       Record.clear();
       StringRef Blob;
 
-      auto RecordType =
-         (StaticLibRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob);
+      auto RecordType
+          = (StaticLibRecordTypes)Stream.readRecord(Entry.ID, Record, &Blob).get();
 
       switch (RecordType) {
-      default:  // Default behavior: ignore.
+      default: // Default behavior: ignore.
          break;
       case STATIC_LIB_DATA:
          StaticLibBlob = Blob;
@@ -890,27 +898,28 @@ ReadResult ModuleReader::ReadStaticLibBlock()
 
 void ModuleReader::LoadModuleImports()
 {
-   auto &Mgr = CI.getModuleMgr();
+   auto& Mgr = CI.getModuleMgr();
    SourceLocation Loc = Mod->getSourceLoc();
    SourceRange SR = Mod->getSourceRange();
 
    auto MainModuleDeclID = ModuleDeclMap[Mod];
    Mod->setDecl(cast<ModuleDecl>(ASTReader.GetDecl(MainModuleDeclID)));
 
-   for (auto &ModPair : ModuleDeclMap) {
+   for (auto& ModPair : ModuleDeclMap) {
       if (ModPair.getFirst() == Mod)
          continue;
 
-      auto *D = cast_or_null<ModuleDecl>(ASTReader.GetDecl(ModPair.getSecond()));
+      auto* D
+          = cast_or_null<ModuleDecl>(ASTReader.GetDecl(ModPair.getSecond()));
       if (D)
          ModPair.getFirst()->setDecl(D->getPrimaryModule());
    }
 
    for (auto IdentID : ImportedModuleIdents) {
-      auto *II = getLocalIdentifier(IdentID);
+      auto* II = getLocalIdentifier(IdentID);
       assert(II != Mod->getName());
 
-      auto *Import = Mgr.LookupModule(SR, Loc, II);
+      auto* Import = Mgr.LookupModule(SR, Loc, II);
       if (!Import)
          continue;
 
@@ -918,12 +927,12 @@ void ModuleReader::LoadModuleImports()
    }
 
    SmallVector<IdentifierInfo*, 2> Idents;
-   for (auto &ModName : ImplicitlyImportedModuleIdents) {
+   for (auto& ModName : ImplicitlyImportedModuleIdents) {
       for (unsigned ID : ModName) {
          Idents.push_back(getLocalIdentifier(ID));
       }
 
-      auto *II = Mgr.GetModule(Idents);
+      auto* II = Mgr.GetModule(Idents);
       Mod->addImplicitlyImportedModule(II);
 
       Idents.clear();
@@ -932,15 +941,15 @@ void ModuleReader::LoadModuleImports()
 
 void ModuleReader::LoadModuleImports(StringRef FileName)
 {
-   auto &Mgr = CI.getModuleMgr();
+   auto& Mgr = CI.getModuleMgr();
    SourceLocation Loc = Mod->getSourceLoc();
    SourceRange SR = Mod->getSourceRange();
 
    for (auto IdentID : ImportedModuleIdents) {
-      auto *II = getLocalIdentifier(IdentID);
+      auto* II = getLocalIdentifier(IdentID);
       assert(II != Mod->getName());
 
-      auto *Import = Mgr.LookupModule(SR, Loc, II);
+      auto* Import = Mgr.LookupModule(SR, Loc, II);
       if (!Import)
          continue;
 
@@ -948,13 +957,11 @@ void ModuleReader::LoadModuleImports(StringRef FileName)
    }
 }
 
-static bool startsWithASTFileMagic(llvm::BitstreamCursor &Stream)
+static bool startsWithASTFileMagic(llvm::BitstreamCursor& Stream)
 {
-   return Stream.canSkipToPos(4) &&
-          Stream.Read(8) == 'C' &&
-          Stream.Read(8) == 'A' &&
-          Stream.Read(8) == 'S' &&
-          Stream.Read(8) == 'T';
+   return Stream.canSkipToPos(4) && Stream.Read(8).get() == 'C'
+          && Stream.Read(8).get() == 'A' && Stream.Read(8).get() == 'S'
+          && Stream.Read(8).get() == 'T';
 }
 
 static long long getCurrentTimeMillis()
@@ -965,20 +972,19 @@ static long long getCurrentTimeMillis()
 
 namespace {
 
-class ModuleReaderStackTraceEntry: public llvm::PrettyStackTraceEntry {
-   Module *Mod;
+class ModuleReaderStackTraceEntry : public llvm::PrettyStackTraceEntry {
+   Module* Mod;
    StringRef FileName;
 
 public:
-   ModuleReaderStackTraceEntry(Module *Mod)
-      : Mod(Mod)
-   {}
+   ModuleReaderStackTraceEntry(Module* Mod) : Mod(Mod) {}
 
    ModuleReaderStackTraceEntry(StringRef FileName)
-      : Mod(nullptr), FileName(FileName)
-   {}
+       : Mod(nullptr), FileName(FileName)
+   {
+   }
 
-   void print(raw_ostream &OS) const override
+   void print(raw_ostream& OS) const override
    {
       if (Mod) {
          OS << "while deserializing module '" << Mod->getFullName() << "'\n";
@@ -991,8 +997,7 @@ public:
 
 } // anonymous namespace
 
-
-Module *ModuleReader::ReadModule()
+Module* ModuleReader::ReadModule()
 {
    ModuleReaderStackTraceEntry MRST(Mod);
 
@@ -1008,7 +1013,7 @@ Module *ModuleReader::ReadModule()
       if (Stream.AtEndOfStream()) {
          LoadModuleImports();
 
-         auto *ModFile = Mod->getDecl()->getModFile();
+         auto* ModFile = Mod->getDecl()->getModFile();
          ModFile->setInstantiationTable(ASTReader.InstantiationTable);
 
          ASTReader.ReadOperatorPrecedenceGroups();
@@ -1020,7 +1025,7 @@ Module *ModuleReader::ReadModule()
          return Mod;
       }
 
-      llvm::BitstreamEntry Entry = Stream.advance();
+      llvm::BitstreamEntry Entry = Stream.advance().get();
       switch (Entry.Kind) {
       case llvm::BitstreamEntry::Error:
       case llvm::BitstreamEntry::Record:
@@ -1068,6 +1073,13 @@ Module *ModuleReader::ReadModule()
 
          break;
       }
+      case CONFORMANCE_BLOCK_ID: {
+         auto Res = ASTReader.ReadConformanceBlock(Stream);
+         if (Res != Success)
+            return nullptr;
+
+         break;
+      }
       case IL_MODULE_BLOCK_ID: {
          ILReader.Stream = Stream;
          if (Stream.SkipBlock()) {
@@ -1079,13 +1091,6 @@ Module *ModuleReader::ReadModule()
       }
       case OFFSET_BLOCK_ID: {
          auto Res = ReadOffsetsBlock(Stream);
-         if (Res != Success)
-            return nullptr;
-
-         break;
-      }
-      case CONFORMANCE_BLOCK_ID: {
-         auto Res = ASTReader.ReadConformanceBlock(Stream);
          if (Res != Success)
             return nullptr;
 
@@ -1109,9 +1114,9 @@ Module *ModuleReader::ReadModule()
    }
 }
 
-void ModuleReader::FinalizeCacheFile(IncrementalCompilationManager &Mgr,
-                                     Module *Mod,
-                                     StringRef FileName) {
+void ModuleReader::FinalizeCacheFile(IncrementalCompilationManager& Mgr,
+                                     Module* Mod, StringRef FileName)
+{
    this->IncMgr = &Mgr;
    this->Mod = Mod;
 
@@ -1134,8 +1139,7 @@ void ModuleReader::printStatistics() const
    }
    else {
       llvm::errs() << "*** Statistics for module '"
-                   << Mod->getName()->getIdentifier()
-                   << "' ***\n";
+                   << Mod->getName()->getIdentifier() << "' ***\n";
    }
 
    llvm::errs() << "   reading took " << (EndTime - StartTime) << "ms.\n";
@@ -1148,9 +1152,11 @@ void ModuleReader::printStatistics() const
 
    llvm::errs() << "   " << NumILValuesRead << " IL values read.\n";
 
-   llvm::errs() << "   " << ILReader.NumGlobalVariables <<" IL globals read.\n";
+   llvm::errs() << "   " << ILReader.NumGlobalVariables
+                << " IL globals read.\n";
    llvm::errs() << "   " << ILReader.NumFunctions << " IL functions read.\n";
-   llvm::errs() << "   " << ILReader.NumInstructions << " IL instructions "
-                                                        "read.\n";
+   llvm::errs() << "   " << ILReader.NumInstructions
+                << " IL instructions "
+                   "read.\n";
    llvm::errs() << "   " << ILReader.NumConstants << " IL constants read.\n";
 }

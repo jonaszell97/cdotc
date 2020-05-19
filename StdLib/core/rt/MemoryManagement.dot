@@ -1,37 +1,198 @@
 
 import builtin
+import builtin.ops
 import libc
+import reflect
+import rt
+import sys
 
 var allocs: UInt = 0
 var deallocs: UInt = 0
 
 deinit {
     if allocs != deallocs {
-        _ = libc.stdio.printf("[21;31mallocs: %llu, deallocs: %llu\n[0m ", allocs, deallocs)
+        debugPrint!(Memory, "[21;31mallocs: %llu, deallocs: %llu[0m\n", allocs, deallocs)
     } else {
-        debugPrint!("allocs: %llu, deallocs: %llu\n", allocs, deallocs)
+        debugPrint!(Memory, "allocs: %llu, deallocs: %llu\n", allocs, deallocs)
     }
 }
 
-@extern(C) @compiletime
-public def _cdot_Malloc(_ size: builtin.u64) -> builtin.RawPointer {
-    allocs += 1
-    return libc.stdlib.malloc(size)
+alias ProfileAllocations: Bool = false
+
+struct MemoryMonitor {
+    struct MemoryLocation {
+        var begin: builtin.RawPointer
+        var size: builtin.i64
+        var loc: reflect.RawSourceLocation
+        var freedLoc: reflect.RawSourceLocation? = none
+
+        prop valid: Bool => freedLoc.isNone
+        prop end: builtin.RawPointer => builtin.add_i64(begin as! builtin.i64, size) as! builtin.RawPointer
+
+        def mutating invalidate(_ loc: reflect.RawSourceLocation) {
+            freedLoc = .Some(loc)
+        }
+    }
+
+    alias BufferType = builtin.MutableRawPointer<MemoryLocation>
+
+    var buffer: BufferType
+    var bufferSize: Int
+    var bufferCapacity: Int
+
+    init {
+        bufferCapacity = 64
+        bufferSize = 0
+        buffer = libc.stdlib.malloc(bufferCapacity * reflect.sizeOf<MemoryLocation>).raw as! BufferType
+    }
+
+    deinit {
+        libc.stdlib.free(buffer)
+    }
+
+    def mutating registerAllocation(_ ptr: builtin.RawPointer, _ size: builtin.i64, _ loc: reflect.RawSourceLocation) {
+        if bufferSize + 1 >= bufferCapacity {
+            bufferCapacity <<= 1
+            buffer = libc.stdlib.realloc(
+                buffer, bufferCapacity * reflect.sizeOf<MemoryLocation>).raw as! BufferType
+        }
+
+        buffer[bufferSize] = MemoryLocation(begin: ptr, size, loc)
+        bufferSize += 1
+    }
+
+    def mutating registerReallocation(_ prev: builtin.RawPointer, _ newPtr: builtin.RawPointer, _ size: builtin.i64,
+                                      _ loc: reflect.RawSourceLocation) {
+        var found = false
+        for i in 0..bufferSize {
+            var memoryLoc = &buffer[i]
+            if memoryLoc.begin == prev {
+                found = true
+                memoryLoc.invalidate(loc)
+                break
+            }
+        }
+
+        assert!(found, "unregistered allocation")
+        registerAllocation(newPtr, size, loc)
+    }
+
+    def mutating registerDeallocation(_ ptr: builtin.RawPointer, _ loc: reflect.RawSourceLocation) {
+        if ptr == __nullptr {
+            return
+        }
+
+        var found = false
+        for i in 0..bufferSize {
+            var memoryLoc = &buffer[i]
+            if memoryLoc.begin == ptr {
+                found = true
+                memoryLoc.invalidate(loc)
+                break
+            }
+        }
+
+        assert!(found, "unregistered allocation")
+    }
+
+    def accessMemory(_ ptr: builtin.RawPointer, _ size: Int, _ loc: reflect.RawSourceLocation = reflect.rawSourceLocation) {
+        if sys._isPointerOnStack(ptr) {
+            return
+        }
+
+        var size = size.value as builtin.i64
+        var potentialAlloc: MemoryLocation? = none
+
+        for i in 0..bufferSize {
+            var loc = &buffer[i]
+            var validStart = Bool(builtin.icmp_uge_i64(ptr as! builtin.i64, loc.begin as! builtin.i64))
+            var validEnd = Bool(builtin.icmp_ule_i64(builtin.add_i64(ptr as! builtin.i64, size), loc.end as! builtin.i64))
+
+            if validStart && validEnd {
+                if !loc.valid {
+                    potentialAlloc = .Some(loc.copy())
+                    continue
+                }
+
+                return
+            }
+        }
+
+        _ = libc.stdio.printf("[21;31maccess to %llu byte(s) of uninitialized memory at address %p[0m\n", size, ptr)
+
+        if case .Some(let memoryLoc) = potentialAlloc {
+            _ = libc.stdio.printf("  > previously allocated at %s:%llu:%llu\n",
+                                  memoryLoc.loc.fileName,
+                                  memoryLoc.loc.line,
+                                  memoryLoc.loc.column)
+
+            if case .Some(let freedLoc) = memoryLoc.freedLoc {
+                _ = libc.stdio.printf("  > freed at %s:%llu:%llu\n",
+                                    freedLoc.fileName,
+                                    freedLoc.line,
+                                    freedLoc.column)
+            }
+        }
+    }
 }
 
+internal var _memoryMonitor = MemoryMonitor()
+
+internal macro _access_memory(
+    ($ptr:any, $size:expr) => {
+        static if core.rt.ProfileAllocations {
+            core.rt._memoryMonitor.accessMemory($ptr, $size)
+        }
+    }
+)
+
+internal macro _register_allocation(
+    ($ptr:any, $size:expr) => {
+        static if core.rt.ProfileAllocations {
+            core.rt._memoryMonitor.registerAllocation($ptr as! builtin.RawPointer, $size as! builtin.i64,
+                                                      core.reflect.rawSourceLocation)
+        }
+    }
+)
+
 @extern(C) @compiletime
-public def _cdot_Realloc(_ ptr: builtin.RawPointer, _ size: builtin.u64) -> builtin.RawPointer {
-    if UnsafeRawPtr(rawPointer: ptr) {
+public def _cdot_Malloc(_ size: builtin.i64,
+                        _ loc: reflect.RawSourceLocation = reflect.rawSourceLocation) -> builtin.RawPointer {
+    static if ProfileAllocations {
+        var ptr = libc.stdlib.malloc(size)
+        _memoryMonitor.registerAllocation(ptr.rawPointer, size, loc)
+
+        return ptr.rawPointer
+    }
+    else {
         allocs += 1
+        return libc.stdlib.malloc(size).rawPointer
     }
-
-    return libc.stdlib.realloc(ptr, size)
 }
 
 @extern(C) @compiletime
-public def _cdot_Free(_ ptr: builtin.RawPointer) {
-    if UnsafeRawPtr(rawPointer: ptr) {
-        deallocs += 1
+public def _cdot_Realloc(_ ptr: builtin.RawPointer, _ size: builtin.i64,
+                         _ loc: reflect.RawSourceLocation = reflect.rawSourceLocation) -> builtin.RawPointer {
+    static if ProfileAllocations {
+        var newPtr = libc.stdlib.realloc(ptr, size)
+        _memoryMonitor.registerReallocation(ptr, newPtr.rawPointer, size, loc)
+
+        return newPtr.rawPointer
+    }
+    else {
+        return libc.stdlib.realloc(ptr, size).rawPointer
+    }
+}
+
+@extern(C) @compiletime
+public def _cdot_Free(_ ptr: builtin.RawPointer, _ loc: reflect.RawSourceLocation = reflect.rawSourceLocation) {
+    static if ProfileAllocations {
+        _memoryMonitor.registerDeallocation(ptr, loc)
+    }
+    else {
+        if UnsafeRawPtr(rawPointer: ptr) {
+            deallocs += 1
+        }
     }
 
     libc.stdlib.free(ptr)

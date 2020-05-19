@@ -1,14 +1,10 @@
-//
-// Created by Jonas Zell on 27.04.18.
-//
+#include "cdotc/ILGen/Cleanup.h"
 
-#include "Cleanup.h"
-
-#include "AST/Decl.h"
-#include "IL/Instructions.h"
-#include "IL/Function.h"
-#include "ILGen/ILGenPass.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/Function.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/ILGen/ILGenPass.h"
+#include "cdotc/Sema/SemaPass.h"
 
 using namespace cdot::il;
 using namespace cdot::support;
@@ -17,7 +13,7 @@ namespace cdot {
 
 void Cleanup::anchor() {}
 
-void DefaultCleanup::Emit(ast::ILGenPass &ILGen)
+void DefaultCleanup::Emit(ast::ILGenPass& ILGen)
 {
    if (Flags & Ignored)
       return;
@@ -26,111 +22,44 @@ void DefaultCleanup::Emit(ast::ILGenPass &ILGen)
    deinitializeValue(ILGen, Val);
 }
 
-void DefaultCleanup::deinitializeValue(ast::ILGenPass &ILGen,
-                                       il::Value *Val) {
-   auto &Builder = ILGen.Builder;
+void DefaultCleanup::deinitializeValue(ast::ILGenPass& ILGen, il::Value* Val)
+{
+   auto& Builder = ILGen.Builder;
    auto ty = Val->getType()->removeReference();
 
-   if (Val->isLvalue())
-      Builder.CreateLifetimeEnd(Val);
-
-   auto &Sema = ILGen.getSema();
-   if (!Sema.NeedsDeinitilization(ty))
-      return;
-
-   ILBuilder::SynthesizedRAII SR(Builder);
-
-   if (ty->isRefcounted() || ty->isLambdaType() || ty->isBoxType()) {
-      if (Val->isLvalue()) {
-         Val = Builder.CreateLoad(Val);
-      }
-
-      Builder.CreateRelease(Val);
+   auto& Sema = ILGen.getSema();
+   if (!Sema.NeedsDeinitilization(ty)) {
       return;
    }
 
-   if (RecordType *Obj = ty->asRecordType()) {
-      if (Obj->isRawEnum())
-         return;
+   auto *DeinitFn = ILGen.GetDeinitFn(ty);
 
-      if (Obj->isProtocol()) {
-         Builder.CreateIntrinsicCall(Intrinsic::deinit_existential, Val);
-         return;
-      }
-
-      auto deinit = ty->getRecord()->getDeinitializer();
-      assert(deinit && "trivially deinitializable type!");
-
-      deinit = ILGen.getSema().maybeInstantiateTemplateMember(
-         ty->getRecord(), deinit);
-
-      if (ILGen.inCTFE()) {
-         if (!ILGen.registerCalledFunction(deinit, deinit)) {
-            return;
-         }
-      }
-
-      if (!Val->isLvalue()) {
-         auto *Alloc = Builder.CreateAlloca(Val->getType());
-         Builder.CreateStore(Val, Alloc);
-         Val = Alloc;
-      }
-      else if (Val->getType()->isNonMutableReferenceType()) {
-         Val = Builder.CreateBitCast(
-            CastKind::BitCast, Val,
-            ILGen.getSema().Context.getMutableReferenceType(
-               Val->getType()->getReferencedType()));
-      }
-
-      ILGen.CreateCall(deinit, { Val });
-      return;
+   ILBuilder::SynthesizedRAII Synthesized(Builder);
+   if (!Val->isLvalue()) {
+      auto *Alloc = Builder.CreateAlloca(Val->getType());
+      Builder.CreateStore(Val, Alloc);
+      Val = Alloc;
+   }
+   else if (!Val->getType()->isMutableReferenceType()) {
+      Val = Builder.CreateBitCast(CastKind::BitCast,
+          Val, DeinitFn->getEntryBlock()->getArgs().front().getType());
    }
 
-   if (ArrayType *Arr = ty->asArrayType()) {
-      auto NumElements = Arr->getNumElements();
-      for (unsigned i = 0; i < NumElements; ++i) {
-         auto GEP = Builder.CreateGEP(Val, i);
-         auto Ld = Builder.CreateLoad(GEP);
-
-         deinitializeValue(ILGen, Ld);
-      }
-
-      return;
-   }
-
-   if (TupleType *Tup = ty->asTupleType()) {
-      size_t i = 0;
-      auto Cont = Tup->getContainedTypes();
-      size_t numTys = Cont.size();
-
-      while (i < numTys) {
-         if (!Sema.NeedsDeinitilization(Cont[i])) {
-            ++i;
-            continue;
-         }
-
-         auto val = Builder.CreateTupleExtract(Val, i);
-         auto Ld = Builder.CreateLoad(val);
-
-         deinitializeValue(ILGen, Ld);
-         ++i;
-      }
-
-      return;
-   }
+   auto *Call = Builder.CreateCall(DeinitFn, Val);
+   Call->setDeinitCall(true);
 }
 
-void BorrowCleanup::Emit(ast::ILGenPass &ILGen)
+void BorrowCleanup::Emit(ast::ILGenPass& ILGen)
 {
    ast::ILGenPass::TerminatorRAII terminatorRAII(ILGen);
    ILGen.Builder.CreateEndBorrow(BeginBorrow, EndLoc,
                                  BeginBorrow->isMutableBorrow());
 }
 
-CleanupStack& CleanupStack::operator=(CleanupStack &&other) noexcept
+CleanupStack& CleanupStack::operator=(CleanupStack&& other) noexcept
 {
    this->~CleanupStack();
-   new(this) CleanupStack(std::move(other));
+   new (this) CleanupStack(std::move(other));
 
    return *this;
 }
@@ -140,32 +69,36 @@ namespace {
 /// A CleanupBuffer is a location to which to temporarily copy a
 /// cleanup.
 class CleanupBuffer {
-   llvm::SmallVector<char, sizeof(Cleanup) + 10 * sizeof(void *)> data;
+   llvm::SmallVector<char, sizeof(Cleanup) + 10 * sizeof(void*)> data;
 
 public:
-   CleanupBuffer(const Cleanup &cleanup) {
+   CleanupBuffer(const Cleanup& cleanup)
+   {
       size_t size = cleanup.allocated_size();
       data.set_size(size);
-      memcpy(data.data(), reinterpret_cast<const void *>(&cleanup), size);
+      memcpy(data.data(), reinterpret_cast<const void*>(&cleanup), size);
    }
 
-   Cleanup &getCopy() { return *reinterpret_cast<Cleanup *>(data.data()); }
+   Cleanup& getCopy() { return *reinterpret_cast<Cleanup*>(data.data()); }
 };
 
 } // anonymous namespace
 
 void CleanupStack::emitCleanups(CleanupsDepth depth, bool popCleanups,
-                                bool doEmitCleanups) {
+                                bool doEmitCleanups)
+{
+   START_TIMER("IL Cleanups");
+
    auto begin = stack.stable_begin();
    while (begin != depth) {
       auto iter = stack.find(begin);
 
-      Cleanup &stackCleanup = *iter;
+      Cleanup& stackCleanup = *iter;
 
       // Copy it off the cleanup stack in case the cleanup pushes a new cleanup
       // and the backing storage is re-allocated.
       CleanupBuffer buffer(stackCleanup);
-      Cleanup &cleanup = buffer.getCopy();
+      Cleanup& cleanup = buffer.getCopy();
 
       // Advance stable iterator.
       begin = stack.stabilize(++iter);
@@ -192,12 +125,17 @@ void CleanupStack::endScope(CleanupsDepth depth, bool doEmitCleanups)
    emitCleanups(depth, true, doEmitCleanups);
 }
 
-bool CleanupStack::ignoreValue(CleanupsDepth depth, il::Value *Val)
+bool CleanupStack::ignoreValue(il::Value *Val)
+{
+   return ignoreValue(stack.stable_end(), Val);
+}
+
+bool CleanupStack::ignoreValue(CleanupsDepth depth, il::Value* Val)
 {
    auto begin = stack.stable_begin();
    while (begin != depth) {
       auto iter = stack.find(begin);
-      Cleanup &cleanup = *iter;
+      Cleanup& cleanup = *iter;
 
       // Advance stable iterator.
       begin = stack.stabilize(++iter);
@@ -209,6 +147,16 @@ bool CleanupStack::ignoreValue(CleanupsDepth depth, il::Value *Val)
    }
 
    return false;
+}
+
+void CleanupStack::emitUntil(CleanupsDepth depth)
+{
+   emitCleanups(depth, true, true);
+}
+
+void CleanupStack::popUntil(CleanupsDepth depth)
+{
+   emitCleanups(depth, true, false);
 }
 
 void CleanupStack::emitUntilWithoutPopping(CleanupsDepth depth)

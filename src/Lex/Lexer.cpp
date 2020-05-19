@@ -1,14 +1,17 @@
 
-#include "Lexer.h"
-#include "Preprocessor.h"
+#include "cdotc/Lex/Lexer.h"
 
-#include "Basic/IdentifierInfo.h"
-#include "Message/DiagnosticsEngine.h"
+#include "cdotc/Basic/IdentifierInfo.h"
+#include "cdotc/Basic/FileManager.h"
+#include "cdotc/Diagnostics/DiagnosticsEngine.h"
+#include "cdotc/Support/Format.h"
+#include "cdotc/Support/SaveAndRestore.h"
+
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <cassert>
 #include <regex>
-#include <llvm/Support/MemoryBuffer.h>
-#include <llvm/Support/raw_ostream.h>
 
 using std::string;
 using cdot::lex::Token;
@@ -17,37 +20,31 @@ using namespace cdot::diag;
 namespace cdot {
 namespace lex {
 
-Lexer::Lexer(IdentifierTable &Idents,
-             DiagnosticsEngine &Diags,
-             llvm::MemoryBuffer *buf,
-             unsigned sourceId,
-             unsigned offset,
-             const char InterpolationBegin,
-             bool primeLexer)
-   : Idents(Idents), Diags(Diags),
-     sourceId(sourceId),
-     CurPtr(buf->getBufferStart()),
-     BufStart(buf->getBufferStart()),
-     BufEnd(buf->getBufferEnd()),
-     InterpolationBegin(InterpolationBegin),
-     offset(offset)
+Lexer::Lexer(IdentifierTable& Idents, DiagnosticsEngine& Diags,
+             llvm::MemoryBuffer* buf, unsigned sourceId, unsigned offset,
+             const char InterpolationBegin, bool primeLexer)
+    : Idents(Idents), Diags(Diags), sourceId(sourceId),
+      CurPtr(buf->getBufferStart()), BufStart(buf->getBufferStart()),
+      BufEnd(buf->getBufferEnd()), InterpolationBegin(InterpolationBegin),
+      offset(offset)
 {
+   Idents.addKeywords();
+
    if (primeLexer)
       advance(false, true);
 }
 
-Lexer::Lexer(IdentifierTable &Idents,
-             DiagnosticsEngine &Diags,
-             llvm::ArrayRef<Token> Tokens,
-             unsigned sourceId,
+Lexer::Lexer(IdentifierTable& Idents, DiagnosticsEngine& Diags,
+             llvm::ArrayRef<Token> Tokens, unsigned sourceId,
              unsigned int offset)
-   : Idents(Idents), Diags(Diags),
-     LookaheadVec(Tokens.begin(), Tokens.end()),
-     sourceId(sourceId), CurPtr(nullptr), BufStart(nullptr), BufEnd(nullptr),
-     InterpolationBegin('$'), offset(offset), IsTokenLexer(true)
+    : Idents(Idents), Diags(Diags), LookaheadVec(Tokens.begin(), Tokens.end()),
+      sourceId(sourceId), CurPtr(nullptr), BufStart(nullptr), BufEnd(nullptr),
+      InterpolationBegin('$'), offset(offset), IsTokenLexer(true)
 {
+   Idents.addKeywords();
+
    if (LookaheadVec.empty() || !LookaheadVec.back().is(tok::eof))
-      LookaheadVec.emplace_back(tok::eof);
+      LookaheadVec.emplace_back(makeEOF());
 
    CurTok = LookaheadVec.front();
    LookaheadIdx = 1;
@@ -61,10 +58,112 @@ void Lexer::reset(llvm::ArrayRef<Token> Tokens)
    LookaheadVec.append(Tokens.begin(), Tokens.end());
 
    if (LookaheadVec.empty() || !LookaheadVec.back().is(tok::eof))
-      LookaheadVec.emplace_back(tok::eof);
+      LookaheadVec.emplace_back(makeEOF());
 
    CurTok = LookaheadVec.front();
    LookaheadIdx = 1;
+}
+
+void Lexer::lexCompleteFile()
+{
+   auto SAR1 = support::saveAndRestore(LastTok);
+   auto SAR2 = support::saveAndRestore(CurTok);
+
+   while (!CurTok.is(tok::eof)) {
+      advance(false, true);
+      LookaheadVec.push_back(CurTok);
+      ++LookaheadIdx;
+   }
+
+   LookaheadIdx = 0;
+}
+
+namespace {
+
+class EmitCommentConsumer: public CommentConsumer {
+   /// The stream to emit comments to.
+   llvm::raw_ostream &OS;
+
+   /// Number of emitted tokens.
+   int &i;
+
+   /// Base offset of the source file.
+   unsigned BaseOffset;
+
+public:
+   explicit EmitCommentConsumer(llvm::raw_ostream &OS, int &i,
+                                unsigned BaseOffset)
+                                 : OS(OS), i(i), BaseOffset(BaseOffset)
+   {}
+
+   void HandleLineComment(llvm::StringRef Txt, SourceRange SR) override
+   {
+      if (i++ != 0)
+         OS << "\n";
+
+      auto LocStart = SR.getStart().getOffset() - BaseOffset;
+      OS << "(" << LocStart << ", line_comment, " << Txt << ")";
+   }
+
+   void HandleBlockComment(llvm::StringRef Txt, SourceRange SR) override
+   {
+      if (i++ != 0)
+         OS << "\n";
+
+      auto LocStart = SR.getStart().getOffset() - BaseOffset;
+      OS << "(" << LocStart << ", block_comment, ";
+
+      for (auto &C : Txt) {
+         support::unescape_char(C, OS);
+      }
+
+      OS << ")";
+   }
+};
+
+} // anonymous namespace
+
+void Lexer::lexAndEmitTokens(llvm::raw_ostream &OS)
+{
+   int i = 0;
+   EmitCommentConsumer CC(OS, i, offset);
+
+   auto SAR = support::saveAndRestore(this->commentConsumer,
+                                      (CommentConsumer*)&CC);
+
+   while (!currentTok().is(tok::eof)) {
+      if (i++ != 0)
+         OS << "\n";
+
+      auto &Tok = currentTok();
+      auto LocStart = Tok.getSourceLoc().getOffset() - offset;
+      OS << "(" << LocStart << ", ";
+      ::operator<<(OS, Tok.getKind());
+      OS << ", " << Tok << ")";
+
+      advance(false, true);
+   }
+}
+
+void Lexer::findComments()
+{
+   assert(commentConsumer != nullptr);
+
+   auto SAR1 = support::saveAndRestore(CurPtr);
+   auto SAR2 = support::saveAndRestore(TokBegin);
+
+   while (*CurPtr != '\0') {
+      if (*CurPtr == '/') {
+         ++CurPtr;
+         if (*CurPtr == '/')
+            skipSingleLineComment();
+
+         if (*CurPtr == '*')
+            skipMultiLineComment();
+      }
+
+      ++CurPtr;
+   }
 }
 
 Token Lexer::makeEOF()
@@ -80,10 +179,9 @@ llvm::StringRef Lexer::getCurrentIdentifier() const
 
 // RAII utility classes
 
-Lexer::LookaheadRAII::LookaheadRAII(Lexer &L)
-   : L(L), LastTok(L.LastTok), CurTok(L.CurTok)
+Lexer::LookaheadRAII::LookaheadRAII(Lexer& L)
+    : L(L), LastTok(L.LastTok), CurTok(L.CurTok)
 {
-
 }
 
 Lexer::LookaheadRAII::~LookaheadRAII()
@@ -99,12 +197,13 @@ Lexer::LookaheadRAII::~LookaheadRAII()
 }
 
 void Lexer::LookaheadRAII::advance(bool ignoreNewline,
-                                   bool significantWhitespace) {
+                                   bool significantWhitespace)
+{
    // Keep all tokens.
    L.advance(false, true);
 
    while ((ignoreNewline && L.currentTok().is(tok::newline))
-         || (!significantWhitespace && L.currentTok().is(tok::space))) {
+          || (!significantWhitespace && L.currentTok().is(tok::space))) {
       Tokens.push_back(L.currentTok());
       L.advance(false, true);
    }
@@ -112,7 +211,7 @@ void Lexer::LookaheadRAII::advance(bool ignoreNewline,
    Tokens.push_back(L.currentTok());
 }
 
-void Lexer::printTokensTo(llvm::raw_ostream &out)
+void Lexer::printTokensTo(llvm::raw_ostream& out)
 {
    while (!eof()) {
       advance();
@@ -120,56 +219,53 @@ void Lexer::printTokensTo(llvm::raw_ostream &out)
    }
 }
 
-void Lexer::dump()
-{
-   printTokensTo(llvm::outs());
-}
+void Lexer::dump() { printTokensTo(llvm::outs()); }
 
 char Lexer::escape_char(char c)
 {
    switch (c) {
-      case 'n':
-         return '\n';
-      case 'a':
-         return '\a';
-      case 'r':
-         return '\r';
-      case 'v':
-         return '\v';
-      case 't':
-         return '\t';
-      case 'b':
-         return '\b';
-      case '"':
-         return '\"';
-      case '\'':
-         return '\'';
-      case '0':
-         return '\0';
-      default:
-         return c;
+   case 'n':
+      return '\n';
+   case 'a':
+      return '\a';
+   case 'r':
+      return '\r';
+   case 'v':
+      return '\v';
+   case 't':
+      return '\t';
+   case 'b':
+      return '\b';
+   case '"':
+      return '\"';
+   case '\'':
+      return '\'';
+   case '0':
+      return '\0';
+   default:
+      return c;
    }
 }
 
 string Lexer::unescape_char(char c)
 {
    switch (c) {
-      case '\n':
-         return "\\n";
-      case '\a':
-         return "\\a";
-      case '\r':
-         return "\\r";
-      case '\v':
-         return "\\v";
-      case '\t':
-         return "\\t";
-      case '\b':
-         return "\\b";
-      case '\0':
-         return "\\0";
-      default:
-         return string(1, c);
+   case '\n':
+      return "\\n";
+   case '\a':
+      return "\\a";
+   case '\r':
+      return "\\r";
+   case '\v':
+      return "\\v";
+   case '\t':
+      return "\\t";
+   case '\b':
+      return "\\b";
+   case '\0':
+      return "\\0";
+   default:
+      return string(1, c);
    }
 }
 
@@ -208,50 +304,58 @@ Token Lexer::lexNextToken()
    case '"':
       return lexStringLiteral();
    // numeric literals
-   case '0': case '1': case '2': case '3': case '4':
-   case '5': case '6': case '7': case '8': case '9':
+   case '0':
+   case '1':
+   case '2':
+   case '3':
+   case '4':
+   case '5':
+   case '6':
+   case '7':
+   case '8':
+   case '9':
       return lexNumericLiteral();
    // preprocessing related tokens
    case '#': {
-//      if (*CurPtr == '{') {
-//         tokens.push_back(makeToken(tok::expr_begin));
-//         lexPreprocessorExpr();
-//
-//         return makeToken(tok::close_brace);
-//      }
-//      // stringify operator
-//      else if (*CurPtr == '#') {
-//         ++CurPtr;
-//
-//         if (*CurPtr == '{') {
-//            tokens.push_back(makeToken(tok::stringify_begin));
-//            lexPreprocessorExpr();
-//
-//            return makeToken(tok::close_brace);
-//         }
-//         else {
-//            Diags.Diag(err_generic_error)
-//               << "unexpected character after '##', expecting '{'"
-//               << SourceLocation(TokBegin - BufStart + offset);
-//         }
-//      }
-//      // directive
-//      else {
-//         while (*CurPtr >= 'a' && *CurPtr <= 'z')
-//            ++CurPtr;
-//
-//         auto &II = Idents.get(llvm::StringRef(TokBegin,
-//                                               CurPtr - TokBegin));
-//
-//         if (II.getKeywordTokenKind() == tok::sentinel) {
-//            Diags.Diag(err_generic_error)
-//               << "unknown directive " + II.getIdentifier()
-//               << SourceLocation(TokBegin - BufStart + offset);
-//         }
-//
-//         return Token(&II, SourceLocation(TokBegin - BufStart + offset),
-//                      II.getKeywordTokenKind());
-//      }
+      //      if (*CurPtr == '{') {
+      //         tokens.push_back(makeToken(tok::expr_begin));
+      //         lexPreprocessorExpr();
+      //
+      //         return makeToken(tok::close_brace);
+      //      }
+      //      // stringify operator
+      //      else if (*CurPtr == '#') {
+      //         ++CurPtr;
+      //
+      //         if (*CurPtr == '{') {
+      //            tokens.push_back(makeToken(tok::stringify_begin));
+      //            lexPreprocessorExpr();
+      //
+      //            return makeToken(tok::close_brace);
+      //         }
+      //         else {
+      //            Diags.Diag(err_generic_error)
+      //               << "unexpected character after '##', expecting '{'"
+      //               << SourceLocation(TokBegin - BufStart + offset);
+      //         }
+      //      }
+      //      // directive
+      //      else {
+      //         while (*CurPtr >= 'a' && *CurPtr <= 'z')
+      //            ++CurPtr;
+      //
+      //         auto &II = Idents.get(llvm::StringRef(TokBegin,
+      //                                               CurPtr - TokBegin));
+      //
+      //         if (II.getKeywordTokenKind() == tok::sentinel) {
+      //            Diags.Diag(err_generic_error)
+      //               << "unknown directive " + II.getIdentifier()
+      //               << SourceLocation(TokBegin - BufStart + offset);
+      //         }
+      //
+      //         return Token(&II, SourceLocation(TokBegin - BufStart + offset),
+      //                      II.getKeywordTokenKind());
+      //      }
 
       llvm_unreachable("what preprocessor?");
    }
@@ -265,26 +369,51 @@ Token Lexer::lexNextToken()
          return lexIdentifier(tok::dollar_ident);
       }
 
-      return tok::dollar;
+      kind = tok::dollar;
+      break;
    }
    // punctuators
-   case ',': kind = tok::comma; break;
-   case '(': kind = tok::open_paren; break;
-   case ')': kind = tok::close_paren; break;
-   case ';': kind = tok::semicolon; break;
-   case '[': kind = tok::open_square; break;
-   case ']': kind = tok::close_square; break;
-   case '{': kind = tok::open_brace; break;
-   case '}': kind = tok::close_brace; break;
-   case '\\': kind = tok::backslash; break;
-   case '@': kind = tok::at; break;
+   case ',':
+      kind = tok::comma;
+      break;
+   case '(':
+      kind = tok::open_paren;
+      break;
+   case ')':
+      kind = tok::close_paren;
+      break;
+   case ';':
+      kind = tok::semicolon;
+      break;
+   case '[':
+      kind = tok::open_square;
+      break;
+   case ']':
+      kind = tok::close_square;
+      break;
+   case '{':
+      kind = tok::open_brace;
+      break;
+   case '}':
+      kind = tok::close_brace;
+      break;
+   case '\\':
+      kind = tok::backslash;
+      break;
+   case '@':
+      kind = tok::at;
+      break;
    // possible comment
    case '/':
-      if (*CurPtr == '/')
-         return skipSingleLineComment();
+      if (*CurPtr == '/') {
+         skipSingleLineComment();
+         return lexNextToken();
+      }
 
-      if (*CurPtr == '*')
-         return skipMultiLineComment();
+      if (*CurPtr == '*') {
+         skipMultiLineComment();
+         return lexNextToken();
+      }
 
       goto case_operator;
    // operators
@@ -320,7 +449,7 @@ Token Lexer::lexNextToken()
       kind = getBuiltinOperator(op);
 
       if (kind == tok::sentinel) {
-         auto &II = Idents.get(op);
+         auto& II = Idents.get(op);
          return Token(&II, SourceLocation(TokBegin - BufStart + offset),
                       tok::op_ident);
       }
@@ -344,13 +473,12 @@ Token Lexer::lexNextToken()
          case '\0':
             if (CurPtr >= BufEnd) {
                auto Tok = makeEOF();
-               Diags.Diag(err_generic_error)
-                  << "unexpected end of file, expecting '`'"
-                  << SourceLocation(Tok.getOffset() - 1);
+               Diags.Diag(err_unexpected_eof)
+                   << true << "'`'"
+                   << SourceLocation(Tok.getOffset() - 1);
 
-               Diags.Diag(note_generic_note)
-                  << "to match this"
-                  << SourceLocation(TokBegin - 1 - BufStart + offset);
+               Diags.Diag(note_to_match_this)
+                   << SourceLocation(TokBegin - 1 - BufStart + offset);
 
                return Tok;
             }
@@ -358,13 +486,11 @@ Token Lexer::lexNextToken()
             break;
          case '\n': {
             auto Loc = SourceLocation(currentIndex() + offset - 1);
-            Diags.Diag(err_generic_error)
-               << "unexpected newline, expecting '`'"
-               << Loc;
+            Diags.Diag(err_unexpected_newline_expecting)
+                << "'`'" << Loc;
 
-            Diags.Diag(note_generic_note)
-               << "to match this"
-               << SourceLocation(TokBegin - 1 - BufStart + offset);
+            Diags.Diag(note_to_match_this)
+                << SourceLocation(TokBegin - 1 - BufStart + offset);
 
             done = true;
             break;
@@ -374,9 +500,9 @@ Token Lexer::lexNextToken()
          }
       }
 
-      auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin - 1) });
+      auto& II = Idents.get({TokBegin, size_t(CurPtr - TokBegin - 1)});
       return Token(&II, SourceLocation(TokBegin - BufStart + offset),
-                   tok::ident);
+                   tok::ident, true);
    }
    default:
       return lexIdentifier();
@@ -388,29 +514,60 @@ Token Lexer::lexNextToken()
 tok::TokenType Lexer::getBuiltinOperator(llvm::StringRef str)
 {
    assert(!str.empty());
-   
-   const char *ptr = str.data();
+
+   const char* ptr = str.data();
    tok::TokenType kind = tok::sentinel;
-   
+
    switch (str.size()) {
    case 1:
       switch (str.front()) {
-      case '+': kind = tok::plus; break;
-      case '-': kind = tok::minus; break;
-      case '*': kind = tok::times; break;
-      case '/': kind = tok::div; break;
-      case '=': kind = tok::equals; break;
-      case '<': kind = tok::smaller; break;
-      case '>': kind = tok::greater; break;
-      case '&': kind = tok::op_and; break;
-      case '|': kind = tok::op_or; break;
-      case '!': kind = tok::exclaim; break;
-      case '~': kind = tok::tilde; break;
-      case '^': kind = tok::caret; break;
-      case '.': kind = tok::period; break;
-      case ':': kind = tok::colon; break;
-      case '?': kind = tok::question; break;
-      default: break;
+      case '+':
+         kind = tok::plus;
+         break;
+      case '-':
+         kind = tok::minus;
+         break;
+      case '*':
+         kind = tok::times;
+         break;
+      case '/':
+         kind = tok::div;
+         break;
+      case '=':
+         kind = tok::equals;
+         break;
+      case '<':
+         kind = tok::smaller;
+         break;
+      case '>':
+         kind = tok::greater;
+         break;
+      case '&':
+         kind = tok::op_and;
+         break;
+      case '|':
+         kind = tok::op_or;
+         break;
+      case '!':
+         kind = tok::exclaim;
+         break;
+      case '~':
+         kind = tok::tilde;
+         break;
+      case '^':
+         kind = tok::caret;
+         break;
+      case '.':
+         kind = tok::period;
+         break;
+      case ':':
+         kind = tok::colon;
+         break;
+      case '?':
+         kind = tok::question;
+         break;
+      default:
+         break;
       }
 
       break;
@@ -418,48 +575,76 @@ tok::TokenType Lexer::getBuiltinOperator(llvm::StringRef str)
       switch (*ptr++) {
       case '+':
          switch (*ptr) {
-            case '+': kind = tok::plus_plus; break;
-            case '=': kind = tok::plus_equals; break;
-            default: break;
+         case '+':
+            kind = tok::plus_plus;
+            break;
+         case '=':
+            kind = tok::plus_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '-':
          switch (*ptr) {
-            case '-': kind = tok::minus_minus; break;
-            case '>': kind = tok::arrow_single; break;
-            case '=': kind = tok::minus_equals; break;
-            default: break;
+         case '-':
+            kind = tok::minus_minus;
+            break;
+         case '>':
+            kind = tok::arrow_single;
+            break;
+         case '=':
+            kind = tok::minus_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '*':
          switch (*ptr) {
-            case '*': kind = tok::times_times; break;
-            case '=': kind = tok::times_equals; break;
-            default: break;
+         case '*':
+            kind = tok::times_times;
+            break;
+         case '=':
+            kind = tok::times_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '/':
          switch (*ptr) {
-            case '=': kind = tok::div_equals; break;
-            default: break;
+         case '=':
+            kind = tok::div_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '%':
          switch (*ptr) {
-            case '=': kind = tok::mod_equals; break;
-            default: break;
+         case '=':
+            kind = tok::mod_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '=':
          switch (*ptr) {
-            case '=': kind = tok::double_equals; break;
-            case '>': kind = tok::arrow_double; break;
-            default: break;
+         case '=':
+            kind = tok::double_equals;
+            break;
+         case '>':
+            kind = tok::arrow_double;
+            break;
+         default:
+            break;
          }
 
          break;
@@ -470,40 +655,63 @@ tok::TokenType Lexer::getBuiltinOperator(llvm::StringRef str)
          break;
       case '<':
          switch (*ptr) {
-            case '=': kind = tok::smaller_equals; break;
-            case '<': kind = tok::shl; break;
-            default: break;
+         case '=':
+            kind = tok::smaller_equals;
+            break;
+         case '<':
+            kind = tok::shl;
+            break;
+         default:
+            break;
          }
 
          break;
       case '>':
          switch (*ptr) {
-            case '=': kind = tok::greater_equals; break;
-            case '>': kind = tok::ashr; break;
-            default: break;
+         case '=':
+            kind = tok::greater_equals;
+            break;
+         case '>':
+            kind = tok::ashr;
+            break;
+         default:
+            break;
          }
 
          break;
       case '^':
          switch (*ptr) {
-            case '=': kind = tok::xor_equals; break;
-            default: break;
+         case '=':
+            kind = tok::xor_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '&':
          switch (*ptr) {
-            case '&': kind = tok::logical_and; break;
-            case '=': kind = tok::and_equals; break;
-            default: break;
+         case '&':
+            kind = tok::logical_and;
+            break;
+         case '=':
+            kind = tok::and_equals;
+            break;
+         default:
+            break;
          }
 
          break;
       case '|':
          switch (*ptr) {
-            case '|': kind = tok::logical_or; break;
-            case '=': kind = tok::or_equals; break;
-            default: break;
+         case '|':
+            kind = tok::logical_or;
+            break;
+         case '=':
+            kind = tok::or_equals;
+            break;
+         default:
+            break;
          }
 
          break;
@@ -577,9 +785,9 @@ Token Lexer::lexStringLiteral()
 
       if (*CurPtr == '\0') {
          if (CurPtr >= BufEnd) {
-            Diags.Diag(err_generic_error)
-               << "unexpected end of file, expecting '\"'"
-               << SourceLocation(currentIndex() + offset - 1);
+            Diags.Diag(err_unexpected_eof)
+                << true << "'\"'"
+                << SourceLocation(currentIndex() + offset - 1);
 
             --CurPtr;
             return makeToken(TokBegin, CurPtr - TokBegin - 1,
@@ -587,14 +795,14 @@ Token Lexer::lexStringLiteral()
          }
       }
       else if (*CurPtr == '\\') {
-//         if (!isModuleLexer) {
-            // normal escape, e.g. "\n"
-            ++CurPtr;
-//         }
-//         else {
-//            // hex escape, e.g. "\0A"
-//            CurPtr += 2;
-//         }
+         //         if (!isModuleLexer) {
+         // normal escape, e.g. "\n"
+         ++CurPtr;
+         //         }
+         //         else {
+         //            // hex escape, e.g. "\0A"
+         //            CurPtr += 2;
+         //         }
       }
       else if (*CurPtr == InterpolationBegin && InterpolationBegin != '\0') {
          if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
@@ -626,29 +834,22 @@ void Lexer::lexStringInterpolation()
    assert(InInterpolation && "not a string interpolation");
    InInterpolation = false;
 
-   auto &Toks = LookaheadVec;
+   auto& Toks = LookaheadVec;
    while (1) {
       if (*CurPtr == '"')
          break;
 
       if (*CurPtr == '\0') {
          if (CurPtr >= BufEnd) {
-            Diags.Diag(err_generic_error)
-               << "unexpected end of file, expecting '\"'"
-               << SourceLocation(currentIndex() + offset);
+            Diags.Diag(err_unexpected_eof)
+                << true << "'\"'"
+                << SourceLocation(currentIndex() + offset);
 
             Toks.push_back(makeToken(CurPtr - 1, 0, tok::eof));
          }
       }
       else if (*CurPtr == '\\') {
-//         if (!isModuleLexer) {
-         // normal escape, e.g. "\n"
          ++CurPtr;
-//         }
-//         else {
-//            // hex escape, e.g. "\0A"
-//            CurPtr += 2;
-//         }
       }
       else if (*CurPtr == InterpolationBegin && InterpolationBegin != '\0') {
          if (!isIdentifierContinuationChar(CurPtr[1]) && CurPtr[1] != '{') {
@@ -656,8 +857,8 @@ void Lexer::lexStringInterpolation()
             continue;
          }
 
-         Toks.emplace_back(makeToken(TokBegin, CurPtr - TokBegin,
-                                     tok::stringliteral));
+         Toks.emplace_back(
+             makeToken(TokBegin, CurPtr - TokBegin, tok::stringliteral));
 
          Toks.emplace_back(tok::expr_begin, getSourceLoc());
 
@@ -672,9 +873,11 @@ void Lexer::lexStringInterpolation()
                auto tok = lexNextToken();
                switch (tok.getKind()) {
                case tok::open_brace:
-                  ++openParens; break;
+                  ++openParens;
+                  break;
                case tok::close_brace:
-                  ++closeParens; break;
+                  ++closeParens;
+                  break;
                default:
                   break;
                }
@@ -702,8 +905,8 @@ void Lexer::lexStringInterpolation()
    assert(*CurPtr == '"');
    ++CurPtr;
 
-   Toks.push_back(makeToken(TokBegin, CurPtr - TokBegin - 1,
-                            tok::stringliteral));
+   Toks.push_back(
+       makeToken(TokBegin, CurPtr - TokBegin - 1, tok::stringliteral));
 }
 
 void Lexer::lexDiagnostic()
@@ -713,7 +916,7 @@ void Lexer::lexDiagnostic()
       ++TokBegin;
    }
 
-   auto &Tokens = LookaheadVec;
+   auto& Tokens = LookaheadVec;
    while (1) {
       if (*CurPtr == '"')
          break;
@@ -723,14 +926,14 @@ void Lexer::lexDiagnostic()
             break;
       }
       else if (*CurPtr == '\\') {
-//         if (!isModuleLexer) {
-            // normal escape, e.g. "\n"
-            ++CurPtr;
-//         }
-//         else {
-//            // hex escape, e.g. "\0A"
-//            CurPtr += 2;
-//         }
+         //         if (!isModuleLexer) {
+         // normal escape, e.g. "\n"
+         ++CurPtr;
+         //         }
+         //         else {
+         //            // hex escape, e.g. "\0A"
+         //            CurPtr += 2;
+         //         }
       }
       else if (*CurPtr == InterpolationBegin) {
          if (CurPtr[1] == InterpolationBegin) {
@@ -782,8 +985,9 @@ void Lexer::lexDiagnostic()
                      case '"': {
                         auto endChar = CurPtr[-1];
                         while (*CurPtr++ != endChar) {
-                           assert(CurPtr != BufEnd && "unclosed string in "
-                                                      "diagnostic message");
+                           assert(CurPtr != BufEnd
+                                  && "unclosed string in "
+                                     "diagnostic message");
                         }
 
                         break;
@@ -882,9 +1086,9 @@ Token Lexer::lexCharLiteral()
 
          for (int i = 0; i < 2; ++i) {
             if (!::ishexnumber(*CurPtr++)) {
-               Diags.Diag(err_generic_error)
-                  << "expected hexadecimal digit"
-                  << SourceLocation(currentIndex() + offset);
+               Diags.Diag(err_invalid_hex_digit)
+                   << *(CurPtr - 1)
+                   << SourceLocation(currentIndex() + offset);
             }
          }
       }
@@ -893,9 +1097,9 @@ Token Lexer::lexCharLiteral()
 
          for (int i = 0; i < 4; ++i) {
             if (!::ishexnumber(*CurPtr++)) {
-               Diags.Diag(err_generic_error)
-                  << "expected hexadecimal digit"
-                  << SourceLocation(currentIndex() + offset);
+               Diags.Diag(err_invalid_hex_digit)
+                   << *(CurPtr - 1)
+                   << SourceLocation(currentIndex() + offset);
             }
          }
       }
@@ -905,8 +1109,7 @@ Token Lexer::lexCharLiteral()
    }
 
    if (*CurPtr != '\'')
-      Diags.Diag(err_generic_error)
-         << "expected \"'\" after character literal"
+      Diags.Diag(err_expected_after_char_literal)
          << SourceLocation(currentIndex() + offset);
 
    ++CurPtr;
@@ -919,7 +1122,7 @@ Token Lexer::lexNumericLiteral()
    assert(::isdigit(*TokBegin));
 
    char first = *TokBegin;
-   char next  = *CurPtr;
+   char next = *CurPtr;
 
    // hexadecimal literal
    if (first == '0' && (next == 'x' || next == 'X')) {
@@ -931,10 +1134,28 @@ Token Lexer::lexNumericLiteral()
       bool done = false;
       while (!done) {
          switch (*CurPtr) {
-         case '0': case '1': case '2': case '3': case '4':
-         case '5': case '6': case '7': case '8': case '9':
-         case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
-         case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+         case '0':
+         case '1':
+         case '2':
+         case '3':
+         case '4':
+         case '5':
+         case '6':
+         case '7':
+         case '8':
+         case '9':
+         case 'a':
+         case 'b':
+         case 'c':
+         case 'd':
+         case 'e':
+         case 'f':
+         case 'A':
+         case 'B':
+         case 'C':
+         case 'D':
+         case 'E':
+         case 'F':
          case '_':
             ++CurPtr;
             break;
@@ -947,18 +1168,38 @@ Token Lexer::lexNumericLiteral()
             ++CurPtr;
 
             break;
-         case 'p': case 'P':
+         case 'p':
+         case 'P':
             if (FoundExponent) {
                break;
             }
-            if (*CurPtr++ == '-') {
+            if (*(++CurPtr) == '-') {
                ++CurPtr;
             }
 
             FoundExponent = true;
             break;
-         default:
+         case ' ':
+         case '\n':
+         case '\t':
+         case '\r':
+         case '\0':
+         case 'u':
+         case 'i':
             done = true;
+            break;
+         default:
+            if (isIdentifierContinuationChar(*CurPtr)) {
+               Diags.Diag(err_invalid_hex_digit)
+                   << *CurPtr << SourceLocation(currentIndex() + offset);
+
+               ++CurPtr;
+            }
+            else {
+               done = true;
+               break;
+            }
+
             break;
          }
       }
@@ -973,17 +1214,83 @@ Token Lexer::lexNumericLiteral()
    // binary literal
    if (first == '0' && (next == 'b' || next == 'B')) {
       ++CurPtr;
-      while ((*CurPtr == '0' || *CurPtr == '1') || *CurPtr == '_') {
-         ++CurPtr;
+
+      bool done = false;
+      while (!done) {
+         switch (*CurPtr) {
+         case '0':
+         case '1':
+         case '_':
+            ++CurPtr;
+            break;
+         case ' ':
+         case '\n':
+         case '\t':
+         case '\r':
+         case '\0':
+         case 'u':
+         case 'i':
+            done = true;
+            break;
+         default:
+            if (isIdentifierContinuationChar(*CurPtr) || ::isalnum(*CurPtr)) {
+               Diags.Diag(err_invalid_binary_digit)
+                   << *CurPtr << SourceLocation(currentIndex() + offset);
+
+               ++CurPtr;
+            }
+            else {
+               done = true;
+               break;
+            }
+
+            break;
+         }
       }
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
    }
 
    // octal literal
-   if (first == '0' && next != '.') {
-      while ((*CurPtr >= '0' && *CurPtr <= '7') || *CurPtr == '_')
-         ++CurPtr;
+   if (first == '0' && ::isalnum(next)) {
+      bool done = false;
+      while (!done) {
+         switch (*CurPtr) {
+         case '0':
+         case '1':
+         case '2':
+         case '3':
+         case '4':
+         case '5':
+         case '6':
+         case '7':
+         case '_':
+            ++CurPtr;
+            break;
+         case ' ':
+         case '\n':
+         case '\t':
+         case '\r':
+         case '\0':
+         case 'u':
+         case 'i':
+            done = true;
+            break;
+         default:
+            if (isIdentifierContinuationChar(*CurPtr) || ::isalnum(*CurPtr)) {
+               Diags.Diag(err_invalid_octal_digit)
+                   << *CurPtr << SourceLocation(currentIndex() + offset);
+
+               ++CurPtr;
+            }
+            else {
+               done = true;
+               break;
+            }
+
+            break;
+         }
+      }
 
       return makeToken(TokBegin, CurPtr - TokBegin, tok::integerliteral);
    }
@@ -1027,8 +1334,7 @@ Token Lexer::lexNumericLiteral()
 Token Lexer::lexClosureArgumentName()
 {
    if (!::isdigit(*CurPtr)) {
-      Diags.Diag(err_generic_error)
-         << "expected numeric literal after '$'"
+      Diags.Diag(err_expected_digit_after_dollar)
          << SourceLocation(currentIndex() + offset);
    }
 
@@ -1041,46 +1347,46 @@ Token Lexer::lexClosureArgumentName()
 bool Lexer::isIdentifierContinuationChar(char c)
 {
    switch (c) {
-      case '+':
-      case '-':
-      case '*':
-      case '/':
-      case '.':
-      case '=':
-      case '<':
-      case '>':
-      case '&':
-      case '|':
-      case '!':
-      case '~':
-      case '^':
-      case ',':
-      case '(':
-      case ')':
-      case ';':
-      case '[':
-      case ']':
-      case '{':
-      case '}':
-      case '\\':
-      case '@':
-      case '`':
-      case ':':
-      case '?':
-      case '\'':
-      case '"':
-      case '\n':
-      case '\r':
-      case ' ':
-      case '\0':
-      case '$':
-         return false;
-      default:
-         return true;
+   case '+':
+   case '-':
+   case '*':
+   case '/':
+   case '.':
+   case '=':
+   case '<':
+   case '>':
+   case '&':
+   case '|':
+   case '!':
+   case '~':
+   case '^':
+   case ',':
+   case '(':
+   case ')':
+   case ';':
+   case '[':
+   case ']':
+   case '{':
+   case '}':
+   case '\\':
+   case '@':
+   case '`':
+   case ':':
+   case '?':
+   case '\'':
+   case '"':
+   case '\n':
+   case '\r':
+   case ' ':
+   case '\0':
+   case '$':
+      return false;
+   default:
+      return true;
    }
 }
 
-static bool isMacroInvocation(const char *CurPtr)
+static bool isMacroInvocation(const char* CurPtr)
 {
    if (*CurPtr != '!')
       return false;
@@ -1120,7 +1426,9 @@ static bool isMacroInvocation(const char *CurPtr)
       case '$':
       case '#':
          return false;
-      case '(': case '[': case '{':
+      case '(':
+      case '[':
+      case '{':
          return true;
       default:
          break;
@@ -1135,17 +1443,16 @@ Token Lexer::lexIdentifier(tok::TokenType identifierKind, bool AllowMacro)
    }
 
    bool IsKeyword = false;
-   auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });
+   auto& II = Idents.get({TokBegin, size_t(CurPtr - TokBegin)});
 
    if (II.getKeywordTokenKind() != tok::sentinel) {
       identifierKind = II.getKeywordTokenKind();
       IsKeyword = true;
    }
 
-   if (identifierKind == tok::ident
-         && !IsKeyword && AllowMacro
-         && isMacroInvocation(CurPtr)) {
-      auto &II = Idents.get({ TokBegin, size_t(CurPtr - TokBegin) });
+   if (identifierKind == tok::ident && !IsKeyword && AllowMacro
+       && isMacroInvocation(CurPtr)) {
+      auto& II = Idents.get({TokBegin, size_t(CurPtr - TokBegin)});
       ++CurPtr;
 
       return Token(&II, SourceLocation(TokBegin - BufStart + offset),
@@ -1184,7 +1491,7 @@ void Lexer::lexOperator()
          LLVM_FALLTHROUGH;
       case '>':
          if (CurMode == Mode::ParsingTemplateParams
-               || CurMode == Mode::ParsingTemplateArgs) {
+             || CurMode == Mode::ParsingTemplateArgs) {
             if (First)
                ++CurPtr;
 
@@ -1193,9 +1500,8 @@ void Lexer::lexOperator()
 
          break;
       case '!':
-         if (CurPtr[1] == 'i'
-               && CurPtr[2] == 's'
-               && isSeperatorChar(CurPtr[3])) {
+         if (CurPtr[1] == 'i' && CurPtr[2] == 's'
+             && isSeperatorChar(CurPtr[3])) {
             CurPtr += 3;
             return;
          }
@@ -1230,50 +1536,82 @@ void Lexer::lexOperator()
    }
 }
 
-Token Lexer::skipSingleLineComment()
+void Lexer::skipSingleLineComment()
 {
+   auto Begin = CurPtr - 1;
+   SourceLocation BeginLoc(Begin - BufStart + offset);
+
    while (*CurPtr != '\n' && *CurPtr != '\0')
       ++CurPtr;
 
-   return lexNextToken();
+   if (commentConsumer) {
+      SourceLocation EndLoc(CurPtr - BufStart + offset);
+      llvm::StringRef Comment(Begin, CurPtr - Begin);
+      commentConsumer->HandleLineComment(Comment, SourceRange(BeginLoc, EndLoc));
+   }
 }
 
-Token Lexer::skipMultiLineComment()
+void Lexer::skipMultiLineComment()
 {
+   auto Begin = CurPtr - 1;
+   SourceLocation BeginLoc(Begin - BufStart + offset);
+
    assert(*CurPtr == '*');
 
    ++CurPtr;
-   while (1) {
-      switch (*CurPtr++) {
-         case '\0':
-            return lexNextToken();
-         case '*':
-            if (*CurPtr == '/') {
-               ++CurPtr;
-               return lexNextToken();
-            }
 
-            LLVM_FALLTHROUGH;
-         default:
-            break;
+   bool done = false;
+   int open = 1;
+
+   while (!done) {
+      assert(CurPtr < BufEnd && "file is not zero terminated!");
+
+      switch (*CurPtr++) {
+      case '\0': {
+         done = true;
+         break;
+      }
+      case '/': {
+         if (*CurPtr == '*') {
+            ++CurPtr;
+            ++open;
+         }
+
+         break;
+      }
+      case '*':
+         if (*CurPtr == '/') {
+            ++CurPtr;
+            if (--open == 0) {
+               done = true;
+            }
+         }
+
+         LLVM_FALLTHROUGH;
+      default:
+         break;
       }
    }
 
-   llvm_unreachable("file is not zero terminated!");
+   if (commentConsumer) {
+      SourceLocation EndLoc(CurPtr - BufStart + offset);
+      llvm::StringRef Comment(Begin, CurPtr - Begin);
+      commentConsumer->HandleBlockComment(Comment, SourceRange(BeginLoc, EndLoc));
+   }
 }
 
 void Lexer::expect_impl(tok::TokenType ty)
 {
    if (!currentTok().is(ty)) {
-      Diags.Diag(err_generic_error)
-         << "unexpected token " + currentTok().toString()
-         << currentTok().getSourceLoc();
+      Diags.Diag(err_unexpected_token)
+          << currentTok().toString()
+          << currentTok().getSourceLoc();
    }
 }
 
-void Lexer::advance(bool ignoreNewline,
-                    bool significantWhiteSpace,
-                    bool rememberTok) {
+void Lexer::advance(bool ignoreNewline, bool significantWhiteSpace,
+                    bool rememberTok)
+{
    assert(!CurTok.is(tok::eof) && "advancing past the end of the file!");
 
    /// Remember this token for backtracking.

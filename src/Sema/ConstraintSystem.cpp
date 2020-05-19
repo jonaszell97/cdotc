@@ -1,14 +1,11 @@
-//
-// Created by Jonas Zell on 2018-12-01.
-//
+#include "cdotc/Sema/ConstraintSystem.h"
 
-#include "ConstraintSystem.h"
-
-#include "ConstraintStep.h"
-#include "AST/TypeBuilder.h"
-#include "AST/TypeVisitor.h"
-#include "Query/QueryContext.h"
-#include "Sema/SemaPass.h"
+#include "cdotc/AST/TypeBuilder.h"
+#include "cdotc/AST/TypeVisitor.h"
+#include "cdotc/Query/QueryContext.h"
+#include "cdotc/Sema/ConstraintStep.h"
+#include "cdotc/Sema/SemaPass.h"
+#include "cdotc/Sema/TemplateInstantiator.h"
 
 using namespace cdot;
 using namespace cdot::ast;
@@ -17,175 +14,159 @@ using namespace cdot::support;
 
 using PathElement = ConstraintLocator::PathElement;
 
-void PathElement::Profile(llvm::FoldingSetNodeID &ID) const
+void PathElement::Profile(llvm::FoldingSetNodeID& ID) const
 {
    Profile(ID, Kind, Data);
 }
 
-void PathElement::Profile(llvm::FoldingSetNodeID &ID,
-                          LocatorKind Kind,
-                          uint64_t Data) {
+void PathElement::Profile(llvm::FoldingSetNodeID& ID, LocatorKind Kind,
+                          uint64_t Data)
+{
    ID.AddInteger(Kind);
    ID.AddInteger(Data);
 }
 
-ConstraintLocator::ConstraintLocator(Expression *Anchor,
+ConstraintLocator::ConstraintLocator(Expression* Anchor,
                                      ArrayRef<PathElement> Elements)
-   : Anchor(Anchor), NumElements((unsigned)Elements.size())
+    : Anchor(Anchor), NumElements((unsigned)Elements.size())
 {
    std::copy(Elements.begin(), Elements.end(),
              reinterpret_cast<PathElement*>(this + 1));
 }
 
-void ConstraintLocator::Profile(llvm::FoldingSetNodeID &ID) const
+void ConstraintLocator::Profile(llvm::FoldingSetNodeID& ID) const
 {
    Profile(ID, Anchor, getPathElements());
 }
 
-void ConstraintLocator::Profile(llvm::FoldingSetNodeID &ID,
-                                Expression *Anchor,
-                                ArrayRef<PathElement> Elements) {
+void ConstraintLocator::Profile(llvm::FoldingSetNodeID& ID, Expression* Anchor,
+                                ArrayRef<PathElement> Elements)
+{
    ID.AddPointer(Anchor);
    ID.AddInteger(Elements.size());
 
-   for (auto &E : Elements) {
+   for (auto& E : Elements) {
       E.Profile(ID);
    }
 }
 
-ConstraintLocator* ConstraintLocator::Create(llvm::BumpPtrAllocator &Allocator,
-                                             Expression *Anchor,
-                                             ArrayRef<PathElement> Elements) {
-   size_t Size = sizeof(ConstraintLocator)
-      + Elements.size() * sizeof(PathElement);
-   void *Mem = Allocator.Allocate(Size, alignof(ConstraintLocator));
+ConstraintLocator* ConstraintLocator::Create(llvm::BumpPtrAllocator& Allocator,
+                                             Expression* Anchor,
+                                             ArrayRef<PathElement> Elements)
+{
+   size_t Size
+       = sizeof(ConstraintLocator) + Elements.size() * sizeof(PathElement);
+   void* Mem = Allocator.Allocate(Size, alignof(ConstraintLocator));
 
-   return new(Mem) ConstraintLocator(Anchor, Elements);
+   return new (Mem) ConstraintLocator(Anchor, Elements);
 }
 
-Constraint::Constraint(ConstraintKind K,
-                       TypeVariable Var,
-                       Locator Loc)
-   : Kind(K), ConstrainedType(Var), Loc(Loc)
+Constraint::Constraint(ConstraintKind K, TypeVariable Var, Locator Loc)
+    : Kind(K), ConstrainedType(Var), Loc(Loc)
 {
-
 }
 
 QualType Constraint::getRHSType() const
 {
-   if (auto *RT = dyn_cast<RelationalConstraint>(this)) {
+   if (auto* RT = dyn_cast<RelationalConstraint>(this)) {
       return RT->getType();
    }
-   if (auto *Member = dyn_cast<MemberConstraint>(this)) {
+   if (auto* Member = dyn_cast<MemberConstraint>(this)) {
       return Member->getMemberType();
    }
-   if (auto *Def = dyn_cast<DefaultableConstraint>(this)) {
+   if (auto* Def = dyn_cast<DefaultableConstraint>(this)) {
       return Def->getType();
    }
 
    return QualType();
 }
 
-void Constraint::print(llvm::raw_ostream &OS) const
+void Constraint::print(llvm::raw_ostream& OS) const
 {
    switch (Kind) {
-#  define CDOT_CONSTRAINT(NAME)                                            \
-   case NAME##ID: {                                                        \
-      static_assert(&Constraint::print != &NAME##Constraint::print,        \
-                    "constraint subclass must override print method!");    \
-      return static_cast<const NAME##Constraint*>(this)->print(OS);        \
+#define CDOT_CONSTRAINT(NAME)                                                  \
+   case NAME##ID: {                                                            \
+      static_assert(&Constraint::print != &NAME##Constraint::print,            \
+                    "constraint subclass must override print method!");        \
+      return static_cast<const NAME##Constraint*>(this)->print(OS);            \
    }
-#  include "Constraints.def"
+#include "cdotc/Sema/Constraints.def"
    }
 }
 
-void Constraint::dump() const
-{
-   print(llvm::errs());
-}
+void Constraint::dump() const { print(llvm::errs()); }
 
-llvm::raw_ostream &sema::operator<<(llvm::raw_ostream &OS, const Constraint &C)
+llvm::raw_ostream& sema::operator<<(llvm::raw_ostream& OS, const Constraint& C)
 {
    C.print(OS);
    return OS;
 }
 
-RelationalConstraint::RelationalConstraint(ConstraintKind K,
-                                           TypeVariable Var,
-                                           QualType RHS,
-                                           Locator Loc)
-   : Constraint(K, Var, Loc), Type(RHS)
+RelationalConstraint::RelationalConstraint(ConstraintKind K, TypeVariable Var,
+                                           QualType RHS, Locator Loc)
+    : Constraint(K, Var, Loc), Type(RHS)
 {
-
 }
 
 TypePropertyConstraint::TypePropertyConstraint(ConstraintKind K,
-                                               TypeVariable Var,
-                                               Locator Loc)
-   : Constraint(K, Var, Loc)
+                                               TypeVariable Var, Locator Loc)
+    : Constraint(K, Var, Loc)
 {
-
 }
 
-TypeBindingConstraint::TypeBindingConstraint(TypeVariable Var,
-                                             QualType Type,
+TypeBindingConstraint::TypeBindingConstraint(TypeVariable Var, QualType Type,
                                              Locator Loc)
-   : RelationalConstraint(TypeBindingID, Var, Type, Loc)
+    : RelationalConstraint(TypeBindingID, Var, Type, Loc)
 {
-
+//   assert(!Type->containsTypeVariable()
+//          && "binding should not contain type variable!");
 }
 
-TypeBindingConstraint*
-TypeBindingConstraint::Create(ConstraintSystem &Sys,
-                              TypeVariable Var,
-                              QualType Type,
-                              Locator Loc) {
-   return new(Sys) TypeBindingConstraint(Var, Type, Loc);
+TypeBindingConstraint* TypeBindingConstraint::Create(ConstraintSystem& Sys,
+                                                     TypeVariable Var,
+                                                     QualType Type, Locator Loc)
+{
+   return new (Sys) TypeBindingConstraint(Var, Type, Loc);
 }
 
-void TypeBindingConstraint::print(llvm::raw_ostream &OS) const
+void TypeBindingConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " := " << Type;
 }
 
-TypeEqualityConstraint::TypeEqualityConstraint(TypeVariable Var,
-                                               QualType Type,
+TypeEqualityConstraint::TypeEqualityConstraint(TypeVariable Var, QualType Type,
                                                Locator Loc)
-   : RelationalConstraint(TypeEqualityID, Var, Type, Loc)
+    : RelationalConstraint(TypeEqualityID, Var, Type, Loc)
 {
-
 }
 
-TypeEqualityConstraint*
-TypeEqualityConstraint::Create(ConstraintSystem &Sys,
-                               TypeVariable Var,
-                               QualType Type,
-                               Locator Loc) {
-   return new(Sys) TypeEqualityConstraint(Var, Type, Loc);
+TypeEqualityConstraint* TypeEqualityConstraint::Create(ConstraintSystem& Sys,
+                                                       TypeVariable Var,
+                                                       QualType Type,
+                                                       Locator Loc)
+{
+   return new (Sys) TypeEqualityConstraint(Var, Type, Loc);
 }
 
-void TypeEqualityConstraint::print(llvm::raw_ostream &OS) const
+void TypeEqualityConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " == " << Type;
 }
 
 TypeInequalityConstraint::TypeInequalityConstraint(TypeVariable Var,
-                                                   QualType Type,
-                                                   Locator Loc)
-   : RelationalConstraint(TypeInequalityID, Var, Type, Loc)
+                                                   QualType Type, Locator Loc)
+    : RelationalConstraint(TypeInequalityID, Var, Type, Loc)
 {
-
 }
 
 TypeInequalityConstraint*
-TypeInequalityConstraint::Create(ConstraintSystem &Sys,
-                                 TypeVariable Var,
-                                 QualType Type,
-                                 Locator Loc) {
-   return new(Sys) TypeInequalityConstraint(Var, Type, Loc);
+TypeInequalityConstraint::Create(ConstraintSystem& Sys, TypeVariable Var,
+                                 QualType Type, Locator Loc)
+{
+   return new (Sys) TypeInequalityConstraint(Var, Type, Loc);
 }
 
-void TypeInequalityConstraint::print(llvm::raw_ostream &OS) const
+void TypeInequalityConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " != " << Type;
 }
@@ -193,20 +174,18 @@ void TypeInequalityConstraint::print(llvm::raw_ostream &OS) const
 FunctionReturnTypeConstraint::FunctionReturnTypeConstraint(TypeVariable Var,
                                                            QualType Type,
                                                            Locator Loc)
-   : RelationalConstraint(FunctionReturnTypeID, Var, Type, Loc)
+    : RelationalConstraint(FunctionReturnTypeID, Var, Type, Loc)
 {
-
 }
 
 FunctionReturnTypeConstraint*
-FunctionReturnTypeConstraint::Create(ConstraintSystem &Sys,
-                                     TypeVariable Var,
-                                     QualType Type,
-                                     Locator Loc) {
-   return new(Sys) FunctionReturnTypeConstraint(Var, Type, Loc);
+FunctionReturnTypeConstraint::Create(ConstraintSystem& Sys, TypeVariable Var,
+                                     QualType Type, Locator Loc)
+{
+   return new (Sys) FunctionReturnTypeConstraint(Var, Type, Loc);
 }
 
-void FunctionReturnTypeConstraint::print(llvm::raw_ostream &OS) const
+void FunctionReturnTypeConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " := return type of " << Type;
 }
@@ -215,224 +194,249 @@ FunctionParamTypeConstraint::FunctionParamTypeConstraint(TypeVariable Var,
                                                          QualType Type,
                                                          unsigned ParamIdx,
                                                          Locator Loc)
-   : RelationalConstraint(FunctionParamTypeID, Var, Type, Loc),
-     ParamIdx(ParamIdx)
+    : RelationalConstraint(FunctionParamTypeID, Var, Type, Loc),
+      ParamIdx(ParamIdx)
 {
-
 }
 
 FunctionParamTypeConstraint*
-FunctionParamTypeConstraint::Create(ConstraintSystem &Sys,
-                                    TypeVariable Var,
-                                    QualType Type,
-                                    unsigned ParamIdx,
-                                    Locator Loc) {
-   return new(Sys) FunctionParamTypeConstraint(Var, Type, ParamIdx, Loc);
+FunctionParamTypeConstraint::Create(ConstraintSystem& Sys, TypeVariable Var,
+                                    QualType Type, unsigned ParamIdx,
+                                    Locator Loc)
+{
+   return new (Sys) FunctionParamTypeConstraint(Var, Type, ParamIdx, Loc);
 }
 
-void FunctionParamTypeConstraint::print(llvm::raw_ostream &OS) const
+void FunctionParamTypeConstraint::print(llvm::raw_ostream& OS) const
 {
-   OS << *ConstrainedType << " <c type of parameter #" << ParamIdx
-      << " of " << Type;
+   OS << *ConstrainedType << " <c type of parameter #" << ParamIdx << " of "
+      << Type;
 }
 
 CovarianceConstraint::CovarianceConstraint(TypeVariable Var,
-                                           QualType Covariance,
-                                           bool Variadic,
+                                           QualType Covariance, bool Variadic,
                                            Locator Loc)
-   : RelationalConstraint(CovarianceID, Var, Covariance, Loc),
-     Variadic(Variadic)
-{ }
-
-CovarianceConstraint* CovarianceConstraint::Create(ConstraintSystem &Sys,
-                                                   TypeVariable Var,
-                                                   QualType Covariance,
-                                                   bool Variadic,
-                                                   Locator Loc) {
-   return new(Sys) CovarianceConstraint(Var, Covariance, Variadic, Loc);
+    : RelationalConstraint(CovarianceID, Var, Covariance, Loc),
+      Variadic(Variadic)
+{
 }
 
-void CovarianceConstraint::print(llvm::raw_ostream &OS) const
+CovarianceConstraint* CovarianceConstraint::Create(ConstraintSystem& Sys,
+                                                   TypeVariable Var,
+                                                   QualType Covariance,
+                                                   bool Variadic, Locator Loc)
+{
+   return new (Sys) CovarianceConstraint(Var, Covariance, Variadic, Loc);
+}
+
+void CovarianceConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " <cov" << (Variadic ? "... " : " ") << Type;
 }
 
-InferenceConstraint::InferenceConstraint(TypeVariable Var,
-                                         QualType Inference,
+InferenceConstraint::InferenceConstraint(TypeVariable Var, QualType Inference,
                                          Locator Loc)
-   : RelationalConstraint(InferenceID, Var, Inference, Loc)
-{ }
-
-InferenceConstraint* InferenceConstraint::Create(ConstraintSystem &Sys,
-                                                 TypeVariable Var,
-                                                 QualType Inference,
-                                                 Locator Loc) {
-   return new(Sys) InferenceConstraint(Var, Inference, Loc);
+    : RelationalConstraint(InferenceID, Var, Inference, Loc)
+{
 }
 
-void InferenceConstraint::print(llvm::raw_ostream &OS) const
+InferenceConstraint* InferenceConstraint::Create(ConstraintSystem& Sys,
+                                                 TypeVariable Var,
+                                                 QualType Inference,
+                                                 Locator Loc)
+{
+   return new (Sys) InferenceConstraint(Var, Inference, Loc);
+}
+
+void InferenceConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " inferrable via " << Type;
 }
 
-DefaultableConstraint::DefaultableConstraint(TypeVariable Var,
-                                             QualType Type,
+DefaultableConstraint::DefaultableConstraint(TypeVariable Var, QualType Type,
                                              Locator Loc)
-   : Constraint(DefaultableID, Var, Loc),
-     Type(Type)
+    : Constraint(DefaultableID, Var, Loc), Type(Type)
 {
-
 }
 
-DefaultableConstraint*
-DefaultableConstraint::Create(ConstraintSystem &Sys,
-                              TypeVariable Var,
-                              QualType Type,
-                              Locator Loc) {
-   return new(Sys) DefaultableConstraint(Var, Type, Loc);
+DefaultableConstraint* DefaultableConstraint::Create(ConstraintSystem& Sys,
+                                                     TypeVariable Var,
+                                                     QualType Type, Locator Loc)
+{
+   return new (Sys) DefaultableConstraint(Var, Type, Loc);
 }
 
-void DefaultableConstraint::print(llvm::raw_ostream &OS) const
+void DefaultableConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " is defaultable to " << Type;
 }
 
 ConformanceConstraint::ConformanceConstraint(TypeVariable Var,
-                                             ProtocolDecl *ProtoDecl,
+                                             ProtocolDecl* ProtoDecl,
                                              Locator Loc)
-   : TypePropertyConstraint(ConformanceID, Var, Loc),
-     ProtoDecl(ProtoDecl)
+    : TypePropertyConstraint(ConformanceID, Var, Loc), ProtoDecl(ProtoDecl)
 {
-
 }
 
-ConformanceConstraint*
-ConformanceConstraint::Create(ConstraintSystem &Sys,
-                              TypeVariable Var,
-                              ProtocolDecl *ProtoDecl,
-                              Locator Loc) {
-   return new(Sys) ConformanceConstraint(Var, ProtoDecl, Loc);
+ConformanceConstraint* ConformanceConstraint::Create(ConstraintSystem& Sys,
+                                                     TypeVariable Var,
+                                                     ProtocolDecl* ProtoDecl,
+                                                     Locator Loc)
+{
+   return new (Sys) ConformanceConstraint(Var, ProtoDecl, Loc);
 }
 
-void ConformanceConstraint::print(llvm::raw_ostream &OS) const
+void ConformanceConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " conforms to " << ProtoDecl->getFullName();
 }
 
-ClassConstraint::ClassConstraint(TypeVariable Var,
-                                 Locator Loc)
-   : TypePropertyConstraint(ClassID, Var, Loc)
+ClassConstraint::ClassConstraint(TypeVariable Var, Locator Loc)
+    : TypePropertyConstraint(ClassID, Var, Loc)
 {
-
 }
 
-ClassConstraint* ClassConstraint::Create(ConstraintSystem &Sys,
-                                         TypeVariable Var,
-                                         Locator Loc) {
-   return new(Sys) ClassConstraint(Var, Loc);
+ClassConstraint* ClassConstraint::Create(ConstraintSystem& Sys,
+                                         TypeVariable Var, Locator Loc)
+{
+   return new (Sys) ClassConstraint(Var, Loc);
 }
 
-void ClassConstraint::print(llvm::raw_ostream &OS) const
+void ClassConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " is class";
 }
 
 HasDefaultValueConstraint::HasDefaultValueConstraint(TypeVariable Var,
                                                      Locator Loc)
-   : TypePropertyConstraint(HasDefaultValueID, Var, Loc)
+    : TypePropertyConstraint(HasDefaultValueID, Var, Loc)
 {
-
 }
 
-HasDefaultValueConstraint* HasDefaultValueConstraint::Create(ConstraintSystem &Sys,
-                                                             TypeVariable Var,
-                                                             Locator Loc) {
-   return new(Sys) HasDefaultValueConstraint(Var, Loc);
+HasDefaultValueConstraint*
+HasDefaultValueConstraint::Create(ConstraintSystem& Sys, TypeVariable Var,
+                                  Locator Loc)
+{
+   return new (Sys) HasDefaultValueConstraint(Var, Loc);
 }
 
-void HasDefaultValueConstraint::print(llvm::raw_ostream &OS) const
+void HasDefaultValueConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " has default value";
 }
 
-MemberConstraint::MemberConstraint(TypeVariable Var,
-                                   DeclarationName MemberName,
-                                   QualType MemberType,
-                                   Locator Loc)
-   : Constraint(MemberID, Var, Loc),
-     MemberName(MemberName), MemberType(MemberType)
+MemberConstraint::MemberConstraint(TypeVariable Var, DeclarationName MemberName,
+                                   QualType MemberType, Locator Loc)
+    : Constraint(MemberID, Var, Loc), MemberName(MemberName),
+      MemberType(MemberType)
 {
-
 }
 
-MemberConstraint* MemberConstraint::Create(ConstraintSystem &Sys,
+MemberConstraint* MemberConstraint::Create(ConstraintSystem& Sys,
                                            TypeVariable Var,
                                            DeclarationName MemberName,
-                                           QualType MemberType,
-                                           Locator Loc) {
-   return new(Sys) MemberConstraint(Var, MemberName, MemberType, Loc);
+                                           QualType MemberType, Locator Loc)
+{
+   return new (Sys) MemberConstraint(Var, MemberName, MemberType, Loc);
 }
 
-void MemberConstraint::print(llvm::raw_ostream &OS) const
+void MemberConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << "." << MemberName << " == " << MemberType;
 }
 
-ImplicitConversionConstraint::ImplicitConversionConstraint(TypeVariable Var,
-                                                           QualType Type,
-                                                           Locator Loc)
-   : RelationalConstraint(ImplicitConversionID, Var, Type, Loc)
+ImplicitConversionConstraint::ImplicitConversionConstraint(
+                           TypeVariable Var, QualType Type,
+                           Locator Loc, CastStrength allowedConversionStrength)
+    : RelationalConstraint(ImplicitConversionID, Var, Type, Loc),
+      allowedConversionStrength(allowedConversionStrength)
 {
-
 }
 
 ImplicitConversionConstraint*
-ImplicitConversionConstraint::Create(ConstraintSystem &Sys,
-                                     TypeVariable Var,
-                                     QualType Type,
-                                     Locator Loc) {
-   return new(Sys) ImplicitConversionConstraint(Var, Type, Loc);
-}
-
-void ImplicitConversionConstraint::print(llvm::raw_ostream &OS) const
+ImplicitConversionConstraint::Create(ConstraintSystem& Sys, TypeVariable Var,
+                                     QualType Type, Locator Loc,
+                                     CastStrength allowedConversionStrength)
 {
-   OS << *ConstrainedType << " <c " << Type;
+   return new (Sys) ImplicitConversionConstraint(Var, Type, Loc,
+                                                 allowedConversionStrength);
 }
 
-LiteralConstraint::LiteralConstraint(TypeVariable Var,
-                                     LiteralKind LK,
-                                     Locator Loc)
-   : Constraint(LiteralID, Var, Loc),
-     LK(LK)
+void ImplicitConversionConstraint::print(llvm::raw_ostream& OS) const
 {
+   OS << *ConstrainedType << " <c";
+   switch (allowedConversionStrength) {
+   case CastStrength::Force:
+      OS << "!";
+      break;
+   case CastStrength::Fallible:
+      OS << "?";
+      break;
+   case CastStrength::Normal:
+      OS << "~";
+      break;
+   default:
+      break;
+   }
 
+   OS << " " << Type;
 }
 
-LiteralConstraint* LiteralConstraint::Create(ConstraintSystem &Sys,
-                                             TypeVariable Var,
-                                             LiteralKind LK,
-                                             Locator Loc) {
-   return new(Sys) LiteralConstraint(Var, LK, Loc);
+LiteralConstraint::LiteralConstraint(TypeVariable Var, LiteralKind LK,
+                                     Locator Loc, QualType T1, QualType T2)
+    : Constraint(LiteralID, Var, Loc), LK(LK)
+{
+   associatedTypes.first = T1;
+   associatedTypes.second = T2;
 }
 
-void LiteralConstraint::print(llvm::raw_ostream &OS) const
+LiteralConstraint* LiteralConstraint::Create(ConstraintSystem& Sys,
+                                             TypeVariable Var, LiteralKind LK,
+                                             Locator Loc,
+                                             QualType T1, QualType T2)
+{
+   return new (Sys) LiteralConstraint(Var, LK, Loc, T1, T2);
+}
+
+void LiteralConstraint::print(llvm::raw_ostream& OS) const
 {
    OS << *ConstrainedType << " is a";
    switch (LK) {
-   case IntegerLiteral: OS << "n integer literal"; break;
-   case FPLiteral: OS << " floating point literal"; break;
-   case BoolLiteral: OS << " bool literal"; break;
-   case GraphemeClasterLiteral: OS << " grapheme cluster literal"; break;
-   case CodePointLiteral: OS << " code point literal"; break;
-   case ASCIILiteral: OS << "n ASCII literal"; break;
-   case StringLiteral: OS << " string literal"; break;
-   case ArrayLiteral: OS << "n array literal"; break;
-   case DictionaryLiteral: OS << " dictionary literal"; break;
-   case NoneLiteral: OS << " none literal"; break;
+   case IntegerLiteral:
+      OS << "n integer literal";
+      break;
+   case FPLiteral:
+      OS << " floating point literal";
+      break;
+   case BoolLiteral:
+      OS << " bool literal";
+      break;
+   case GraphemeClasterLiteral:
+      OS << " grapheme cluster literal";
+      break;
+   case CodePointLiteral:
+      OS << " code point literal";
+      break;
+   case ASCIILiteral:
+      OS << "n ASCII literal";
+      break;
+   case StringLiteral:
+      OS << " string literal";
+      break;
+   case ArrayLiteral:
+      OS << "n array literal (T = " << associatedTypes.first << ")";
+      break;
+   case DictionaryLiteral:
+      OS << " dictionary literal (K = " << associatedTypes.first
+         << ", V = " << associatedTypes.second << ")";
+      break;
+   case NoneLiteral:
+      OS << " none literal";
+      break;
    }
 }
 
-QualType LiteralConstraint::getDefaultLiteralType(QueryContext &QC)
+QualType LiteralConstraint::getDefaultLiteralType(ConstraintSystem& Sys)
 {
    GetBuiltinAliasQuery::AliasKind RK;
    switch (LK) {
@@ -463,10 +467,11 @@ QualType LiteralConstraint::getDefaultLiteralType(QueryContext &QC)
       return QualType();
    }
 
-   AliasDecl *DefaultAlias;
+   auto &QC = Sys.QC;
+
+   AliasDecl* DefaultAlias;
    if (QC.GetBuiltinAlias(DefaultAlias, RK, &QC.Sema->getDeclContext())
-       || !DefaultAlias
-       || QC.PrepareDeclInterface(DefaultAlias)) {
+       || !DefaultAlias || QC.PrepareDeclInterface(DefaultAlias)) {
       switch (LK) {
       case LiteralConstraint::IntegerLiteral:
          return QC.Context.getIntTy();
@@ -488,66 +493,136 @@ QualType LiteralConstraint::getDefaultLiteralType(QueryContext &QC)
       }
    }
 
-   return DefaultAlias->getType()->asMetaType()->getUnderlyingType();
+   switch (LK) {
+   default:
+      return DefaultAlias->getType()->asMetaType()->getUnderlyingType();
+   case LiteralConstraint::ArrayLiteral: {
+      QualType elementType = Sys.getConcreteType(associatedTypes.first);
+      if (elementType->containsTypeVariable()) {
+         return QualType();
+      }
+
+      TemplateArgList List(*QC.Sema, DefaultAlias);
+      List.insert(TemplateArgument(DefaultAlias->getTemplateParams().front(),
+                                   elementType->removeReference()));
+
+      if (!List.checkCompatibility() || List.isStillDependent()) {
+         return QualType();
+      }
+
+      auto *TemplateArgs = sema::FinalTemplateArgumentList::Create(
+          Sys.QC.Context, List);
+
+      auto *Inst = QC.Sema->getInstantiator().InstantiateAlias(
+          DefaultAlias, TemplateArgs,
+          Loc ? Loc->getAnchor()->getSourceLoc() : SourceLocation());
+
+      if (!Inst) {
+         return QualType();
+      }
+
+      if (QC.PrepareDeclInterface(Inst)) {
+         return QualType();
+      }
+
+      return Inst->getType()->removeMetaType();
+   }
+   case LiteralConstraint::DictionaryLiteral: {
+      QualType keyType = Sys.getConcreteType(associatedTypes.first);
+      QualType valueType = Sys.getConcreteType(associatedTypes.second);
+      if (keyType->containsTypeVariable() || valueType->containsTypeVariable()) {
+         return QualType();
+      }
+
+      TemplateArgList List(*QC.Sema, DefaultAlias);
+      List.insert(TemplateArgument(DefaultAlias->getTemplateParams().front(),
+                                   keyType->removeReference()));
+      List.insert(TemplateArgument(DefaultAlias->getTemplateParams()[1],
+                                   valueType->removeReference()));
+
+      if (!List.checkCompatibility() || List.isStillDependent()) {
+         return QualType();
+      }
+
+      auto *TemplateArgs = sema::FinalTemplateArgumentList::Create(
+          Sys.QC.Context, List);
+
+      auto *Inst = QC.Sema->getInstantiator().InstantiateAlias(
+          DefaultAlias, TemplateArgs,
+          Loc ? Loc->getAnchor()->getSourceLoc() : SourceLocation());
+
+      if (!Inst) {
+         return QualType();
+      }
+
+      if (QC.PrepareDeclInterface(Inst)) {
+         return QualType();
+      }
+
+      return Inst->getType()->removeMetaType();
+   }
+   }
 }
 
 DisjunctionConstraint::DisjunctionConstraint(ArrayRef<Constraint*> Constraints,
-                                             Locator Loc)
-   : Constraint(DisjunctionID, Constraints.front()->getConstrainedType(), Loc),
-     NumConstraints((unsigned)Constraints.size())
+                                             Locator Loc, unsigned defaultValue)
+    : Constraint(DisjunctionID, Constraints.front()->getConstrainedType(), Loc),
+      NumConstraints((unsigned)Constraints.size()), defaultValue(defaultValue)
 {
    std::copy(Constraints.begin(), Constraints.end(),
              getTrailingObjects<Constraint*>());
 }
 
 DisjunctionConstraint*
-DisjunctionConstraint::Create(ConstraintSystem &Sys,
-                              ArrayRef<Constraint*> Constraints,
-                              Locator Loc) {
+DisjunctionConstraint::Create(ConstraintSystem& Sys,
+                              ArrayRef<Constraint*> Constraints, Locator Loc,
+                              unsigned defaultValue)
+{
    size_t Size = totalSizeToAlloc<Constraint*>(Constraints.size());
-   void *Mem = Sys.Allocate(Size, alignof(DisjunctionConstraint));
+   void* Mem = Sys.Allocate(Size, alignof(DisjunctionConstraint));
 
-   return new(Mem) DisjunctionConstraint(Constraints, Loc);
+   return new (Mem) DisjunctionConstraint(Constraints, Loc, defaultValue);
 }
 
 ArrayRef<Constraint*> DisjunctionConstraint::getConstraints() const
 {
-   return { getTrailingObjects<Constraint*>(), NumConstraints };
+   return {getTrailingObjects<Constraint*>(), NumConstraints};
 }
 
-void DisjunctionConstraint::print(llvm::raw_ostream &OS) const
+void DisjunctionConstraint::print(llvm::raw_ostream& OS) const
 {
    unsigned i = 0;
-   for (auto *C : getConstraints()) {
-      if (i++ != 0) OS << " or ";
+   for (auto* C : getConstraints()) {
+      if (i++ != 0)
+         OS << " or ";
       C->print(OS);
    }
 }
 
 ConditionalConstraint::ConditionalConstraint(ArrayRef<Constraint*> Constraints,
-                                             TypeVariableType *Disjunction,
+                                             TypeVariableType* Disjunction,
                                              Locator Loc)
-   : Constraint(ConditionalID, Constraints.front()->getConstrainedType(), Loc),
-     Disjunction(Disjunction), NumConstraints((unsigned)Constraints.size())
+    : Constraint(ConditionalID, Constraints.front()->getConstrainedType(), Loc),
+      Disjunction(Disjunction), NumConstraints((unsigned)Constraints.size())
 {
    std::copy(Constraints.begin(), Constraints.end(),
              getTrailingObjects<Constraint*>());
 }
 
 ConditionalConstraint*
-ConditionalConstraint::Create(ConstraintSystem &Sys,
+ConditionalConstraint::Create(ConstraintSystem& Sys,
                               ArrayRef<Constraint*> Constraints,
-                              TypeVariableType *Disjunction,
-                              Locator Loc) {
+                              TypeVariableType* Disjunction, Locator Loc)
+{
    size_t Size = totalSizeToAlloc<Constraint*>(Constraints.size());
-   void *Mem = Sys.Allocate(Size, alignof(DisjunctionConstraint));
+   void* Mem = Sys.Allocate(Size, alignof(DisjunctionConstraint));
 
-   return new(Mem) ConditionalConstraint(Constraints, Disjunction, Loc);
+   return new (Mem) ConditionalConstraint(Constraints, Disjunction, Loc);
 }
 
 ArrayRef<Constraint*> ConditionalConstraint::getConstraints() const
 {
-   return { getTrailingObjects<Constraint*>(), NumConstraints };
+   return {getTrailingObjects<Constraint*>(), NumConstraints};
 }
 
 Constraint* ConditionalConstraint::getConstraintAt(unsigned Index) const
@@ -556,31 +631,31 @@ Constraint* ConditionalConstraint::getConstraintAt(unsigned Index) const
    return reinterpret_cast<Constraint* const*>(this + 1)[Index];
 }
 
-void ConditionalConstraint::print(llvm::raw_ostream &OS) const
+void ConditionalConstraint::print(llvm::raw_ostream& OS) const
 {
    unsigned i = 0;
-   for (auto *C : getConstraints()) {
-      if (i++ != 0) OS << " or ";
+   for (auto* C : getConstraints()) {
+      if (i++ != 0)
+         OS << " or ";
       C->print(OS);
    }
 
    OS << " (depends on " << QualType(Disjunction) << ")";
 }
 
-ConstraintSystem::ConstraintSystem(QueryContext &QC,
-                                   SourceRange Loc,
-                                   llvm::raw_ostream *LogStream)
-   : QC(QC), Loc(Loc), CG(*this), LogStream(LogStream)
+ConstraintSystem::ConstraintSystem(QueryContext& QC, SourceRange Loc,
+                                   llvm::raw_ostream* LogStream)
+    : QC(QC), Loc(Loc), CG(*this), LogStream(LogStream)
 {
-
 }
 
-void ConstraintSystem::setPreferredBinding(TypeVariableType *TypeVar,
-                                           QualType T) {
+void ConstraintSystem::setPreferredBinding(TypeVariableType* TypeVar,
+                                           QualType T)
+{
    PreferredBindings[TypeVar] = T;
 }
 
-QualType ConstraintSystem::getPreferredBinding(TypeVariableType *TypeVar) const
+QualType ConstraintSystem::getPreferredBinding(TypeVariableType* TypeVar) const
 {
    auto It = PreferredBindings.find(TypeVar);
    if (It != PreferredBindings.end()) {
@@ -590,14 +665,13 @@ QualType ConstraintSystem::getPreferredBinding(TypeVariableType *TypeVar) const
    return QualType();
 }
 
-ConstraintSystem::Solution::Solution(const AssignmentMapType &AssignmentMap,
+ConstraintSystem::Solution::Solution(const AssignmentMapType& AssignmentMap,
                                      unsigned Score)
-   : AssignmentMap(AssignmentMap), Score(Score)
+    : AssignmentMap(AssignmentMap), Score(Score)
 {
-
 }
 
-ConstraintSystem::SolverScope::SolverScope(ConstraintSystem &Sys) : Sys(Sys)
+ConstraintSystem::SolverScope::SolverScope(ConstraintSystem& Sys) : Sys(Sys)
 {
    PreviousScope = Sys.CurrentSolverScope;
    PreviousNumChanges = Sys.CG.getNumMadeChanges();
@@ -618,32 +692,37 @@ ConstraintSystem::SolverScope::~SolverScope()
    Sys.CurrentSolverScope = PreviousScope;
 }
 
-void ConstraintSystem::registerConstraint(Constraint *Cons)
+void ConstraintSystem::registerConstraint(Constraint* Cons)
 {
    CG.addConstraint(Cons);
 
    QualType RHSType = Cons->getRHSType();
-   if (!RHSType || !RHSType->containsTypeVariable()) {
+   if (!RHSType) {
       return;
    }
 
-   if (auto *TB = dyn_cast<TypeBindingConstraint>(Cons)) {
-      if (auto *TV = RHSType->asTypeVariableType()) {
+   if (auto* TB = dyn_cast<TypeBindingConstraint>(Cons)) {
+      if (auto* TV = RHSType->asTypeVariableType()) {
          CG.makeEquivalent(Cons->getConstrainedType(), TV);
       }
 
-      DirectBindingMap[Cons->getConstrainedType()] = TB->getRHSType();
+      auto result = DirectBindingMap.try_emplace(Cons->getConstrainedType(),
+                                                 TB->getRHSType());
+
+      (void)result;
+      assert((result.second || result.first->getSecond() == TB->getRHSType())
+             && "same type variable bound twice!");
    }
 }
 
-void ConstraintSystem::removeConstraint(Constraint *C)
+void ConstraintSystem::removeConstraint(Constraint* C)
 {
    CG.removeConstraint(C);
 }
 
 TypeVariable ConstraintSystem::newTypeVariable(uint8_t Flags)
 {
-   auto *T = QC.Context.getTypeVariableType(NextTypeVariable++);
+   auto* T = QC.Context.getTypeVariableType(NextTypeVariable++);
    TypeVariables.push_back(T);
 
    if (Flags != None) {
@@ -656,7 +735,7 @@ TypeVariable ConstraintSystem::newTypeVariable(uint8_t Flags)
    return T;
 }
 
-uint8_t ConstraintSystem::getFlags(TypeVariableType *TypeVar)
+uint8_t ConstraintSystem::getFlags(TypeVariableType* TypeVar)
 {
    auto It = TypeVariableFlagMap.find(TypeVar);
    if (It != TypeVariableFlagMap.end()) {
@@ -666,42 +745,43 @@ uint8_t ConstraintSystem::getFlags(TypeVariableType *TypeVar)
    return 0;
 }
 
-void ConstraintSystem::addFlag(TypeVariableType *TypeVar, uint8_t Flag)
+void ConstraintSystem::addFlag(TypeVariableType* TypeVar, uint8_t Flag)
 {
    TypeVariableFlagMap[TypeVar] |= Flag;
 }
 
-bool ConstraintSystem::representsTemplateParam(TypeVariableType *TypeVar)
+bool ConstraintSystem::representsTemplateParam(TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & IsTemplateParameter) != 0;
 }
 
-bool ConstraintSystem::representsVariadicTemplateParam(TypeVariableType*TypeVar)
+bool ConstraintSystem::representsVariadicTemplateParam(
+    TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & IsVariadicTemplateParameter) != 0;
 }
 
-bool ConstraintSystem::canInferTemplateParam(TypeVariableType*TypeVar)
+bool ConstraintSystem::canInferTemplateParam(TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & CanInferTemplateParam) != 0;
 }
 
-bool ConstraintSystem::hasLiteralConstraint(TypeVariableType *TypeVar)
+bool ConstraintSystem::hasLiteralConstraint(TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & HasLiteralConstraint) != 0;
 }
 
-bool ConstraintSystem::canBindToReference(TypeVariableType *TypeVar)
+bool ConstraintSystem::canBindToReference(TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & CanBindToReference) != 0;
 }
 
-bool ConstraintSystem::isOverloadChoice(TypeVariableType *TypeVar)
+bool ConstraintSystem::isOverloadChoice(TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & IsOverloadChoice) != 0;
 }
 
-bool ConstraintSystem::hasConcreteBinding(TypeVariableType *TypeVar)
+bool ConstraintSystem::hasConcreteBinding(TypeVariableType* TypeVar)
 {
    return (getFlags(TypeVar) & HasConcreteBinding) != 0;
 }
@@ -713,23 +793,24 @@ bool ConstraintSystem::isAssigned(QualType T)
 
 namespace {
 
-class TypeVariableSubstVisitor: public TypeBuilder<TypeVariableSubstVisitor> {
+class TypeVariableSubstVisitor : public TypeBuilder<TypeVariableSubstVisitor> {
    /// Reference to the constraint system.
-   ConstraintSystem &Sys;
+   ConstraintSystem& Sys;
 
    /// Reference to the constraint graph.
-   ConstraintGraph &CG;
+   ConstraintGraph& CG;
 
    void expandVariadicTypes(ArrayRef<QualType> Types,
-                            SmallVectorImpl<QualType> &Result) {
+                            SmallVectorImpl<QualType>& Result)
+   {
       for (QualType T : Types) {
-         auto *TypeVar = T->asTypeVariableType();
+         auto* TypeVar = T->asTypeVariableType();
          if (!TypeVar || !Sys.representsVariadicTemplateParam(TypeVar)) {
             Result.push_back(visit(T));
             continue;
          }
 
-         auto *Tup = CG.getBinding(TypeVar)->asTupleType();
+         auto* Tup = CG.getBinding(TypeVar)->asTupleType();
          for (QualType El : Tup->getContainedTypes()) {
             if (El->isErrorType()) {
                Result.push_back(TypeVar);
@@ -742,15 +823,13 @@ class TypeVariableSubstVisitor: public TypeBuilder<TypeVariableSubstVisitor> {
    }
 
 public:
-   TypeVariableSubstVisitor(SemaPass &SP,
-                            ConstraintSystem &Sys,
-                            ConstraintGraph &CG,
-                            SourceRange SR)
-      : TypeBuilder(SP, SR),
-        Sys(Sys), CG(CG)
-   {}
+   TypeVariableSubstVisitor(SemaPass& SP, ConstraintSystem& Sys,
+                            ConstraintGraph& CG, SourceRange SR)
+       : TypeBuilder(SP, SR), Sys(Sys), CG(CG)
+   {
+   }
 
-   QualType visitTypeVariableType(TypeVariableType *T)
+   QualType visitTypeVariableType(TypeVariableType* T)
    {
       QualType Subst = CG.getBinding(T);
       if (!Subst) {
@@ -760,7 +839,7 @@ public:
       return Subst;
    }
 
-   QualType visitTupleType(TupleType *T)
+   QualType visitTupleType(TupleType* T)
    {
       SmallVector<QualType, 2> ElementTypes;
       expandVariadicTypes(T->getContainedTypes(), ElementTypes);
@@ -768,38 +847,61 @@ public:
       return SP.Context.getTupleType(ElementTypes);
    }
 
-   QualType visitFunctionType(FunctionType *T)
+   QualType visitFunctionType(FunctionType* T)
    {
       SmallVector<QualType, 2> ParamTypes;
       expandVariadicTypes(T->getParamTypes(), ParamTypes);
 
-      return SP.Context.getFunctionType(visit(T->getReturnType()),
-                                        ParamTypes, T->getParamInfo(),
-                                        T->getRawFlags(), T->isLambdaType());
+      return SP.Context.getFunctionType(visit(T->getReturnType()), ParamTypes,
+                                        T->getParamInfo(), T->getRawFlags(),
+                                        T->isLambdaType());
+   }
+};
+
+class FinalTypeVariableSubstVisitor : public TypeBuilder<FinalTypeVariableSubstVisitor> {
+   /// Reference to the solution.
+   const ConstraintSystem::Solution &S;
+
+public:
+   FinalTypeVariableSubstVisitor(SemaPass &Sema,
+                                 const ConstraintSystem::Solution &S)
+       : TypeBuilder(Sema, {}), S(S)
+   {
+   }
+
+   QualType visitTypeVariableType(TypeVariableType* T)
+   {
+      auto It = S.AssignmentMap.find(T);
+      if (It != S.AssignmentMap.end()) {
+         return It->getSecond();
+      }
+
+      return T;
    }
 };
 
 } // anonymous namespace
 
 QualType ConstraintSystem::getConcreteType(QualType T,
-                                           TypeVariableType *ConstrainedType) {
+                                           TypeVariableType* ConstrainedType)
+{
    QualType originalType = T;
    if (T->containsTypeVariable()) {
       auto Idx = getVariadicParamIdx(ConstrainedType);
       if (Idx != -1 && T->isTypeVariableType()
-      && representsVariadicTemplateParam(T->asTypeVariableType())) {
+          && representsVariadicTemplateParam(T->asTypeVariableType())) {
          QualType TupleTy = CG.getBinding(T->asTypeVariableType());
          auto ContainedTypes = TupleTy->asTupleType()->getContainedTypes();
          if (Idx >= ContainedTypes.size()
-         || ContainedTypes[Idx]->isErrorType()) {
+             || ContainedTypes[Idx]->isErrorType()) {
             return T;
          }
 
          T = ContainedTypes[Idx];
       }
       else {
-         T = TypeVariableSubstVisitor(*QC.Sema, *this, CG,SourceRange())
-            .visit(T);
+         T = TypeVariableSubstVisitor(*QC.Sema, *this, CG, SourceRange())
+                 .visit(T);
       }
 
       if (T != originalType && T->containsTypeVariable()) {
@@ -810,10 +912,11 @@ QualType ConstraintSystem::getConcreteType(QualType T,
    return T;
 }
 
-void ConstraintSystem::bindTypeVariable(TypeVariableType *TypeVar,
+void ConstraintSystem::bindTypeVariable(TypeVariableType* TypeVar,
                                         QualType ConcreteTy,
                                         unsigned OverloadChoice,
-                                        bool AllowRebinding) {
+                                        bool AllowRebinding)
+{
    assert((AllowRebinding || !isAssigned(TypeVar))
           && "type variable already bound!");
 
@@ -826,7 +929,7 @@ bool ConstraintSystem::hasUnassignedTypeVariables() const
    return BoundTypeVariables < NextTypeVariable;
 }
 
-QualType ConstraintSystem::getConstrainedBinding(TypeVariableType *TypeVar)
+QualType ConstraintSystem::getConstrainedBinding(TypeVariableType* TypeVar)
 {
    auto It = DirectBindingMap.find(TypeVar);
    if (It != DirectBindingMap.end()) {
@@ -836,7 +939,7 @@ QualType ConstraintSystem::getConstrainedBinding(TypeVariableType *TypeVar)
    return QualType();
 }
 
-unsigned ConstraintSystem::getVariadicParamIdx(TypeVariableType *TypeVar)
+unsigned ConstraintSystem::getVariadicParamIdx(TypeVariableType* TypeVar)
 {
    auto It = VariadicParamIdx.find(TypeVar);
    if (It != VariadicParamIdx.end()) {
@@ -846,8 +949,9 @@ unsigned ConstraintSystem::getVariadicParamIdx(TypeVariableType *TypeVar)
    return -1;
 }
 
-void ConstraintSystem::setVariadicParamIdx(TypeVariableType *TypeVar,
-                                           unsigned Idx) {
+void ConstraintSystem::setVariadicParamIdx(TypeVariableType* TypeVar,
+                                           unsigned Idx)
+{
    VariadicParamIdx[TypeVar] = Idx;
 }
 
@@ -855,7 +959,7 @@ void ConstraintSystem::updateStatus(unsigned Status)
 {
    switch (static_cast<QueryResult::ResultKind>(Status)) {
    case QueryResult::Dependent:
-//      TypeDependent = true;
+      //      TypeDependent = true;
       break;
    case QueryResult::Error:
       EncounteredError = true;
@@ -865,18 +969,19 @@ void ConstraintSystem::updateStatus(unsigned Status)
    }
 }
 
-bool ConstraintSystem::isSatisfied(Constraint *C)
+bool ConstraintSystem::isSatisfied(Constraint* C)
 {
    switch (C->getKind()) {
-#  define CDOT_CONSTRAINT(NAME)                                               \
-   case Constraint::NAME##ID: return isSatisfied(cast<NAME##Constraint>(C));
-#  include "Constraints.def"
+#define CDOT_CONSTRAINT(NAME)                                                  \
+   case Constraint::NAME##ID:                                                  \
+      return isSatisfied(cast<NAME##Constraint>(C));
+#include "cdotc/Sema/Constraints.def"
    }
 }
 
-bool ConstraintSystem::isSatisfied(TypeBindingConstraint *C)
+bool ConstraintSystem::isSatisfied(TypeBindingConstraint* C)
 {
-   auto *TypeVar = C->getConstrainedType();
+   auto* TypeVar = C->getConstrainedType();
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType RHS = getConcreteType(C->getType(), TypeVar);
 
@@ -888,11 +993,11 @@ bool ConstraintSystem::isSatisfied(TypeBindingConstraint *C)
    return LHS == RHS;
 }
 
-bool ConstraintSystem::isSatisfied(TypeEqualityConstraint *C)
+bool ConstraintSystem::isSatisfied(TypeEqualityConstraint* C)
 {
-   auto *TypeVar = C->getConstrainedType();
-   CanType LHS = getConcreteType(C->getConstrainedType())->removeReference();
-   CanType RHS = getConcreteType(C->getType(), TypeVar)->removeReference();
+   auto* TypeVar = C->getConstrainedType();
+   CanType LHS = getConcreteType(C->getConstrainedType());
+   CanType RHS = getConcreteType(C->getType(), TypeVar);
 
    if (LHS->containsTypeVariable() || RHS->containsTypeVariable()) {
       // Can't tell right now, assume it's satisfied.
@@ -902,9 +1007,9 @@ bool ConstraintSystem::isSatisfied(TypeEqualityConstraint *C)
    return LHS == RHS;
 }
 
-bool ConstraintSystem::isSatisfied(TypeInequalityConstraint *C)
+bool ConstraintSystem::isSatisfied(TypeInequalityConstraint* C)
 {
-   auto *TypeVar = C->getConstrainedType();
+   auto* TypeVar = C->getConstrainedType();
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType RHS = getConcreteType(C->getType(), TypeVar);
 
@@ -916,7 +1021,7 @@ bool ConstraintSystem::isSatisfied(TypeInequalityConstraint *C)
    return LHS != RHS;
 }
 
-bool ConstraintSystem::isSatisfied(FunctionReturnTypeConstraint *C)
+bool ConstraintSystem::isSatisfied(FunctionReturnTypeConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType RHS = getConcreteType(C->getType());
@@ -930,7 +1035,7 @@ bool ConstraintSystem::isSatisfied(FunctionReturnTypeConstraint *C)
    return LHS == RHS->asFunctionType()->getReturnType();
 }
 
-bool ConstraintSystem::isSatisfied(FunctionParamTypeConstraint *C)
+bool ConstraintSystem::isSatisfied(FunctionParamTypeConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType RHS = getConcreteType(C->getType());
@@ -949,10 +1054,10 @@ bool ConstraintSystem::isSatisfied(FunctionParamTypeConstraint *C)
 
    auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS);
    if (!ConvSeq.isValid()) {
-//      if (ConvSeq.isDependent()) {
-//         TypeDependent = true;
-//         return true;
-//      }
+      //      if (ConvSeq.isDependent()) {
+      //         TypeDependent = true;
+      //         return true;
+      //      }
 
       return false;
    }
@@ -960,7 +1065,7 @@ bool ConstraintSystem::isSatisfied(FunctionParamTypeConstraint *C)
    return ConvSeq.isImplicit();
 }
 
-bool ConstraintSystem::isSatisfied(CovarianceConstraint *C)
+bool ConstraintSystem::isSatisfied(CovarianceConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType RHS = getConcreteType(C->getType());
@@ -983,17 +1088,7 @@ bool ConstraintSystem::isSatisfied(CovarianceConstraint *C)
          continue;
       }
 
-      auto ConvSeq = QC.Sema->getConversionSequence(Ty, RHS);
-      if (!ConvSeq.isValid()) {
-//         if (ConvSeq.isDependent()) {
-//            TypeDependent = true;
-//            continue;
-//         }
-
-         return false;
-      }
-
-      if (!ConvSeq.isImplicit()) {
+      if (!QC.Sema->ConformsTo(Ty, RHS)) {
          return false;
       }
    }
@@ -1001,19 +1096,19 @@ bool ConstraintSystem::isSatisfied(CovarianceConstraint *C)
    return true;
 }
 
-bool ConstraintSystem::isSatisfied(InferenceConstraint *C)
+bool ConstraintSystem::isSatisfied(InferenceConstraint* C)
 {
    // Only used for inference.
    return true;
 }
 
-bool ConstraintSystem::isSatisfied(DefaultableConstraint *C)
+bool ConstraintSystem::isSatisfied(DefaultableConstraint* C)
 {
    // Not an actual constraint, but rather a hint to the solver.
    return true;
 }
 
-bool ConstraintSystem::isSatisfied(ConformanceConstraint *C)
+bool ConstraintSystem::isSatisfied(ConformanceConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    if (LHS->containsTypeVariable()) {
@@ -1021,16 +1116,10 @@ bool ConstraintSystem::isSatisfied(ConformanceConstraint *C)
       return true;
    }
 
-   bool Conforms;
-   if (auto Err = QC.ConformsTo(Conforms, LHS, C->getProtoDecl())) {
-      updateStatus(Err.K);
-      return true;
-   }
-
-   return Conforms;
+   return QC.Sema->ConformsTo(LHS, C->getProtoDecl());
 }
 
-bool ConstraintSystem::isSatisfied(ClassConstraint *C)
+bool ConstraintSystem::isSatisfied(ClassConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    if (LHS->containsTypeVariable()) {
@@ -1041,7 +1130,7 @@ bool ConstraintSystem::isSatisfied(ClassConstraint *C)
    return LHS->isClass();
 }
 
-bool ConstraintSystem::isSatisfied(HasDefaultValueConstraint *C)
+bool ConstraintSystem::isSatisfied(HasDefaultValueConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    if (LHS->containsTypeVariable()) {
@@ -1052,9 +1141,9 @@ bool ConstraintSystem::isSatisfied(HasDefaultValueConstraint *C)
    return QC.Sema->hasDefaultValue(LHS);
 }
 
-bool ConstraintSystem::isSatisfied(ImplicitConversionConstraint *C)
+bool ConstraintSystem::isSatisfied(ImplicitConversionConstraint* C)
 {
-   auto *TypeVar = C->getConstrainedType();
+   auto* TypeVar = C->getConstrainedType();
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType RHS = getConcreteType(C->getType(), TypeVar);
 
@@ -1067,56 +1156,59 @@ bool ConstraintSystem::isSatisfied(ImplicitConversionConstraint *C)
       return true;
    }
 
-   auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS);
-   if (!ConvSeq.isValid()) {
-//      if (ConvSeq.isDependent()) {
-//         TypeDependent = true;
-//         return true;
-//      }
+   SemaPass::ConversionOpts opts = SemaPass::CO_None;
+   if ((getFlags(TypeVar) & ParameterOfClangImportedFunc) != 0) {
+      opts = SemaPass::CO_IsClangParameterValue;
+   }
 
+   auto ConvSeq = QC.Sema->getConversionSequence(LHS, RHS, opts);
+   if (!ConvSeq.isValid()) {
       return false;
    }
 
-   return ConvSeq.isImplicit();
+   auto strength = ConvSeq.getStrength();
+   auto allowedStrength = C->getAllowedStrength();
+
+   if (strength == allowedStrength) {
+      return true;
+   }
+
+   switch (allowedStrength) {
+   default:
+      return false;
+   case CastStrength::Force:
+      return true;
+   case CastStrength::Normal:
+      return strength == CastStrength::Implicit;
+   }
 }
 
-static bool isExpressibleBy(SemaPass &Sema,
-                            CanType Ty,
-                            SemaPass::InitializableByKind K,
-                            bool &Dependent,
-                            bool &EncounteredError) {
-//   if (Ty->isDependentType()) {
-//      Dependent = true;
-//      return true;
-//   }
+static bool isExpressibleBy(SemaPass& Sema, CanType Ty,
+                            SemaPass::InitializableByKind K, bool& Dependent,
+                            bool& EncounteredError)
+{
+   //   if (Ty->isDependentType()) {
+   //      Dependent = true;
+   //      return true;
+   //   }
 
    CanType Desugared = Ty->getDesugaredType();
 
-   auto *InitializableByDecl = Sema.getInitializableByDecl(K);
+   auto* InitializableByDecl = Sema.getInitializableByDecl(K);
    if (!InitializableByDecl) {
       return false;
    }
 
-   RecordDecl *ConformingRec = nullptr;
-   if (auto *RT = Desugared->asRecordType()) {
-      bool ConformsTo;
-      if (Sema.QC.ConformsTo(ConformsTo, Desugared, InitializableByDecl)) {
-         EncounteredError = true;
-         return ExprError();
-      }
-
+   RecordDecl* ConformingRec = nullptr;
+   if (auto* RT = Desugared->asRecordType()) {
+      bool ConformsTo = Sema.ConformsTo(Desugared, InitializableByDecl);
       if (ConformsTo) {
          ConformingRec = RT->getRecord();
       }
    }
-   else if (auto *Ext = Desugared->asExistentialType()) {
+   else if (auto* Ext = Desugared->asExistentialType()) {
       for (auto ET : Ext->getExistentials()) {
-         bool ConformsTo;
-         if (Sema.QC.ConformsTo(ConformsTo, ET, InitializableByDecl)) {
-            EncounteredError = true;
-            return ExprError();
-         }
-
+         bool ConformsTo = Sema.ConformsTo(ET, InitializableByDecl);
          if (ConformsTo) {
             ConformingRec = ET->getRecord();
             break;
@@ -1130,7 +1222,7 @@ static bool isExpressibleBy(SemaPass &Sema,
    return ConformingRec != nullptr;
 }
 
-bool ConstraintSystem::isSatisfied(LiteralConstraint *C)
+bool ConstraintSystem::isSatisfied(LiteralConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    if (LHS->containsTypeVariable()) {
@@ -1162,8 +1254,7 @@ bool ConstraintSystem::isSatisfied(LiteralConstraint *C)
          return true;
       }
 
-      return isExpressibleBy(*QC.Sema, LHS,
-                             SemaPass::InitializableByKind::Bool,
+      return isExpressibleBy(*QC.Sema, LHS, SemaPass::InitializableByKind::Bool,
                              TypeDependent, EncounteredError);
    }
    case LiteralConstraint::GraphemeClasterLiteral: {
@@ -1193,6 +1284,10 @@ bool ConstraintSystem::isSatisfied(LiteralConstraint *C)
       if (LHS->isPointerType() && LHS->getPointeeType()->isInt8Ty()) {
          return true;
       }
+      if (LHS->isArrayType()
+      && LHS->uncheckedAsArrayType()->getElementType()->isInt8Ty()) {
+         return true;
+      }
 
       return isExpressibleBy(*QC.Sema, LHS,
                              SemaPass::InitializableByKind::String,
@@ -1215,14 +1310,13 @@ bool ConstraintSystem::isSatisfied(LiteralConstraint *C)
                              TypeDependent, EncounteredError);
    }
    case LiteralConstraint::NoneLiteral: {
-      return isExpressibleBy(*QC.Sema, LHS,
-                             SemaPass::InitializableByKind::None,
+      return isExpressibleBy(*QC.Sema, LHS, SemaPass::InitializableByKind::None,
                              TypeDependent, EncounteredError);
    }
    }
 }
 
-bool ConstraintSystem::isSatisfied(MemberConstraint *C)
+bool ConstraintSystem::isSatisfied(MemberConstraint* C)
 {
    CanType LHS = getConcreteType(C->getConstrainedType());
    CanType MemberType = getConcreteType(C->getMemberType());
@@ -1237,9 +1331,9 @@ bool ConstraintSystem::isSatisfied(MemberConstraint *C)
       Opts |= LookupOpts::TypeLookup;
    }
 
-   const MultiLevelLookupResult *LookupRes;
-   if (auto Err = QC.MultiLevelTypeLookup(LookupRes, LHS, C->getMemberName(),
-                                          Opts)) {
+   const MultiLevelLookupResult* LookupRes;
+   if (auto Err
+       = QC.MultiLevelTypeLookup(LookupRes, LHS, C->getMemberName(), Opts)) {
       updateStatus(Err.K);
       return true;
    }
@@ -1253,17 +1347,17 @@ bool ConstraintSystem::isSatisfied(MemberConstraint *C)
       return true;
    }
 
-   for (auto *ND : LookupRes->allDecls()) {
+   for (auto* ND : LookupRes->allDecls()) {
       QualType NonCanon = QC.Sema->getTypeForDecl(ND);
       if (!NonCanon) {
          continue;
       }
 
       CanType DeclTy = NonCanon;
-//      if (DeclTy->isUnknownAnyType()) {
-//         TypeDependent = true;
-//         return true;
-//      }
+      //      if (DeclTy->isUnknownAnyType()) {
+      //         TypeDependent = true;
+      //         return true;
+      //      }
       if (DeclTy->isErrorType()) {
          EncounteredError = true;
          return true;
@@ -1281,9 +1375,9 @@ bool ConstraintSystem::isSatisfied(MemberConstraint *C)
    return false;
 }
 
-bool ConstraintSystem::isSatisfied(DisjunctionConstraint *C)
+bool ConstraintSystem::isSatisfied(DisjunctionConstraint* C)
 {
-   for (auto *IC : C->getConstraints()) {
+   for (auto* IC : C->getConstraints()) {
       if (isSatisfied(IC)) {
          return true;
       }
@@ -1292,9 +1386,9 @@ bool ConstraintSystem::isSatisfied(DisjunctionConstraint *C)
    return false;
 }
 
-bool ConstraintSystem::isSatisfied(ConditionalConstraint *C)
+bool ConstraintSystem::isSatisfied(ConditionalConstraint* C)
 {
-   auto *DJ = C->getDisjunctionVar();
+   auto* DJ = C->getDisjunctionVar();
    if (!isAssigned(DJ)) {
       // Can't tell right now, assume it's satisfied.
       return true;
@@ -1308,38 +1402,79 @@ bool ConstraintSystem::isSatisfied(ConditionalConstraint *C)
 
 namespace {
 
-class TypeEquivalenceBuilder: public TypeComparer<TypeEquivalenceBuilder> {
+class TypeEquivalenceBuilder : public TypeComparer<TypeEquivalenceBuilder> {
    /// Reference to the constraint system.
-   ConstraintSystem &Sys;
+   ConstraintSystem& Sys;
 
    /// The original constraint.
-   Constraint *C;
+   Constraint* C;
 
    /// Worklist of constraints to simplify.
-   SmallVectorImpl<Constraint*> &Worklist;
+   SmallVectorImpl<Constraint*>& Worklist;
+
+   /// Whether or not to compare for a strict match of the mutability of pointer
+   /// / reference types.
+   bool strict;
 
 public:
-   TypeEquivalenceBuilder(ConstraintSystem &Sys,
-                          Constraint *C,
-                          SmallVectorImpl<Constraint*> &Worklist)
-      : Sys(Sys), C(C), Worklist(Worklist)
-   { }
-
-   bool visitTypeVariableType(TypeVariableType *LHS, QualType RHS)
+   TypeEquivalenceBuilder(ConstraintSystem& Sys, Constraint* C,
+                          SmallVectorImpl<Constraint*>& Worklist, bool strict)
+       : Sys(Sys), C(C), Worklist(Worklist), strict(strict)
    {
+   }
+
+   bool compareImpl(QualType LHS, QualType RHS)
+   {
+      if (LHS->isTypeVariableType() || RHS->isTypeVariableType())
+         return true;
+
+      return LHS == RHS;
+   }
+
+   bool visitTypeVariableType(TypeVariableType* LHS, QualType RHS)
+   {
+      if (LHS == RHS) {
+         return true;
+      }
+
       if (isa<ImplicitConversionConstraint>(C)) {
-         Sys.newConstraint<ImplicitConversionConstraint>(LHS, RHS,
-                                                         C->getLocator());
+         Sys.newConstraint<ImplicitConversionConstraint>(
+             LHS, RHS, C->getLocator());
       }
       else if (!Sys.isOverloadChoice(LHS)) {
-         auto &CG = Sys.getConstraintGraph();
+         auto& CG = Sys.getConstraintGraph();
+         bool madeChanges = false;
 
-         Sys.bindTypeVariable(LHS, RHS);
-         Sys.newConstraint<TypeBindingConstraint>(LHS, RHS, C->getLocator());
+         if (QualType binding = Sys.getConstraintGraph().getBinding(LHS)) {
+            if (binding != RHS) {
+               return false;
+            }
+
+            return true;
+         }
+         else {
+            Sys.bindTypeVariable(LHS, RHS);
+            madeChanges = true;
+         }
+
+         if (Sys.hasConcreteBinding(LHS)) {
+            auto binding = Sys.getConstrainedBinding(LHS);
+            if (binding != RHS) {
+               return false;
+            }
+         }
+         else if (!madeChanges) {
+            Sys.newConstraint<TypeBindingConstraint>(LHS, RHS, C->getLocator());
+            madeChanges = true;
+         }
+
+         if (!madeChanges) {
+            return true;
+         }
 
          // Revisit the constraints that mention this type variable.
          auto Constraints = CG.getOrAddNode(LHS)->getConstraints();
-         for (auto *NextCons : Constraints) {
+         for (auto* NextCons : Constraints) {
             if (NextCons != C) {
                Worklist.push_back(NextCons);
             }
@@ -1348,17 +1483,105 @@ public:
 
       return true;
    }
+
+   bool compatible(const FunctionType::ParamInfo &LHS,
+                   const FunctionType::ParamInfo &RHS)
+   {
+      if (LHS.getLabel() != RHS.getLabel())
+         return false;
+
+      return Sys.QC.Sema->AreConventionsCompatible(RHS.getConvention(),
+                                                   LHS.getConvention());
+   }
+
+   bool visitFunctionType(FunctionType* LHS, QualType RHS)
+   {
+      auto* Fun = RHS->asFunctionType();
+      if (!Fun || Fun->getNumParams() != LHS->getNumParams()) {
+         return false;
+      }
+
+      if (LHS->getRawFlags() != Fun->getRawFlags()) {
+         return false;
+      }
+
+      auto LHSParams = LHS->getParamTypes();
+      auto RHSParams = Fun->getParamTypes();
+
+      auto LHSParamInfo = LHS->getParamInfo();
+      auto RHSParamInfo = Fun->getParamInfo();
+
+      unsigned Arity = LHS->getNumParams();
+      for (unsigned i = 0; i < Arity; ++i) {
+         if (!compatible(LHSParamInfo[i], RHSParamInfo[i])) {
+            return false;
+         }
+         if (!visit(LHSParams[i], RHSParams[i])) {
+            return false;
+         }
+      }
+
+      return visit(LHS->getReturnType(), Fun->getReturnType());
+   }
+
+   bool visitPointerType(PointerType* LHS, QualType RHS)
+   {
+      if (strict) {
+         if (RHS->getTypeID() == Type::PointerTypeID) {
+            return visit(LHS->getPointeeType(), RHS->getPointeeType());
+         }
+      }
+      else if (auto* Ptr = RHS->asPointerType()) {
+         return visit(LHS->getPointeeType(), Ptr->getPointeeType());
+      }
+
+      return false;
+   }
+
+   bool visitReferenceType(ReferenceType* LHS, QualType RHS)
+   {
+      if (strict) {
+         if (RHS->getTypeID() == Type::ReferenceTypeID) {
+            return visit(LHS->getReferencedType(), RHS->getReferencedType());
+         }
+      }
+      else if (auto* Ptr = RHS->asReferenceType()) {
+         return visit(LHS->getReferencedType(), Ptr->getReferencedType());
+      }
+
+      return false;
+   }
+
+   bool visitMutableReferenceType(MutableReferenceType* LHS, QualType RHS)
+   {
+      if (strict) {
+         if (RHS->getTypeID() == Type::MutableReferenceTypeID) {
+            return visit(LHS->getReferencedType(), RHS->getReferencedType());
+         }
+      }
+      else if (auto* Ref = RHS->asMutableReferenceType()) {
+         return visit(LHS->getReferencedType(), Ref->getReferencedType());
+      }
+
+      return false;
+   }
 };
 
 } // anonymous namespace
 
-bool ConstraintSystem::simplify(Constraint *C,
-                                SmallVectorImpl<Constraint*> &Worklist) {
+bool ConstraintSystem::simplify(
+    Constraint* C, SmallVectorImpl<Constraint*>& Worklist,
+    SmallPtrSetImpl<Constraint*>& removedConstraints)
+{
+   if (removedConstraints.count(C) != 0) {
+      return false;
+   }
+
    switch (C->getKind()) {
    case Constraint::TypeBindingID:
    case Constraint::TypeEqualityID:
    case Constraint::ImplicitConversionID: {
-      auto *TypeVar = C->getConstrainedType();
+      auto* TypeVar = C->getConstrainedType();
       QualType LHS = getConcreteType(C->getConstrainedType());
       QualType RHS = getConcreteType(C->getRHSType(), TypeVar);
 
@@ -1368,14 +1591,22 @@ bool ConstraintSystem::simplify(Constraint *C,
          return !isSatisfied(C);
       }
 
+      bool isEquality = C->getKind() == Constraint::TypeEqualityID;
       QualType Concrete;
       QualType Inconcrete;
 
-      if (!LHS->containsTypeVariable()) {
-         Concrete = LHS;
-         Inconcrete = RHS;
+      // Only equality constraints are associative.
+      if (isEquality) {
+         if (hasConcreteBinding(TypeVar) || !LHS->containsTypeVariable()) {
+            Concrete = LHS;
+            Inconcrete = RHS;
+         }
+         else if (!RHS->containsTypeVariable()) {
+            Concrete = RHS;
+            Inconcrete = LHS;
+         }
       }
-      else if (!RHS->containsTypeVariable()) {
+      else {
          Concrete = RHS;
          Inconcrete = LHS;
       }
@@ -1385,21 +1616,29 @@ bool ConstraintSystem::simplify(Constraint *C,
          return false;
       }
 
-      // Implicit conversion constraints are only transitive for tuple types.
-      if ((isa<ImplicitConversionConstraint>(C)
-      && !Concrete->isTupleType()
-      && !Concrete->isFunctionType())) {
+      // Implicit conversion constraints are only transitive for tuple types or
+      // function types.
+      bool strict = !isa<ImplicitConversionConstraint>(C);
+      if (Concrete == Inconcrete || (isa<ImplicitConversionConstraint>(C)
+          && !Concrete->isTupleType()
+          && !Concrete->isFunctionType())) {
          return false;
       }
 
-      // Otherwise, we can make simplify based on the structure of the type,
+      // Otherwise, we can simplify based on the structure of the type,
       // e.g. for the constraint
       //    `T0 == (T1, T2)`
       // we can form new equality constraints for T1 and T2 if T0 is known
       // and of tuple type. If the structure doesn't match, we know that the
       // solution is invalid.
-      return !TypeEquivalenceBuilder(*this, C, Worklist)
-         .visit(Inconcrete, Concrete);
+      TypeEquivalenceBuilder Builder(*this, C, Worklist, strict);
+      bool error = !Builder.visit(Inconcrete, Concrete);
+
+      if (isEquality && Concrete->containsTypeVariable()) {
+         error |= !Builder.visit(Concrete, Inconcrete);
+      }
+
+      return error;
    }
    case Constraint::FunctionReturnTypeID: {
       QualType LHS = getConcreteType(C->getConstrainedType());
@@ -1422,8 +1661,8 @@ bool ConstraintSystem::simplify(Constraint *C,
                        RHS->asFunctionType()->getReturnType());
 
       // Revisit the constraints that mention this type variable.
-      auto Constraints = CG.getOrAddNode(C->getConstrainedType())
-         ->getConstraints();
+      auto Constraints
+          = CG.getOrAddNode(C->getConstrainedType())->getConstraints();
 
       Worklist.append(Constraints.begin(), Constraints.end());
       return false;
@@ -1451,15 +1690,15 @@ bool ConstraintSystem::simplify(Constraint *C,
                        RHS->asFunctionType()->getParamTypes()[Idx]);
 
       // Revisit the constraints that mention this type variable.
-      auto Constraints = CG.getOrAddNode(C->getConstrainedType())
-                           ->getConstraints();
+      auto Constraints
+          = CG.getOrAddNode(C->getConstrainedType())->getConstraints();
 
       Worklist.append(Constraints.begin(), Constraints.end());
       return false;
    }
    case Constraint::InferenceID: {
-      auto *IC = cast<InferenceConstraint>(C);
-      auto *TypeVar = IC->getConstrainedType();
+      auto* IC = cast<InferenceConstraint>(C);
+      auto* TypeVar = IC->getConstrainedType();
 
       QualType RHS = getConcreteType(IC->getRHSType());
       if (RHS->containsTypeVariable()) {
@@ -1474,11 +1713,12 @@ bool ConstraintSystem::simplify(Constraint *C,
          bindTypeVariable(TypeVar, RHS);
       }
 
-      CG.removeConstraint(C);
-
       // Revisit the constraints that mention this type variable.
       auto Constraints = CG.getOrAddNode(TypeVar)->getConstraints();
       Worklist.append(Constraints.begin(), Constraints.end());
+
+      CG.removeConstraint(C);
+      removedConstraints.insert(C);
 
       return false;
    }
@@ -1488,11 +1728,35 @@ bool ConstraintSystem::simplify(Constraint *C,
    }
 }
 
+bool ConstraintSystem::applyConcreteBindings()
+{
+   for (auto& binding : DirectBindingMap) {
+      //      if (QualType concreteType = CG.getBinding(binding.getFirst())) {
+      //         if (binding.getSecond() != concreteType) {
+      //            return true;
+      //         }
+      //      }
+      //      else {
+      //         bindTypeVariable(binding.getFirst(), binding.getSecond());
+      //      }
+      bindTypeVariable(binding.getFirst(), binding.getSecond());
+   }
+
+   if (auto* failed = simplifyConstraints()) {
+      return true;
+   }
+
+   return false;
+}
+
 ConstraintSystem::ResultKind
-ConstraintSystem::solve(SmallVectorImpl<Solution> &Solutions,
-                        bool StopAfterFirstFailure) {
+ConstraintSystem::solve(SmallVectorImpl<Solution>& Solutions,
+                        bool StopAfterFirstFailure)
+{
+   START_TIMER("Constraint Solving");
+
    // Enter a first solver scope.
-   SolverScope *OuterScope = new(*this) SolverScope(*this);
+   auto* OuterScope = new (*this) SolverScope(*this);
    this->StopAfterFirstFailure = StopAfterFirstFailure;
 
    if (NextTypeVariable == 0) {
@@ -1500,12 +1764,20 @@ ConstraintSystem::solve(SmallVectorImpl<Solution> &Solutions,
       return Success;
    }
 
+   if (applyConcreteBindings()) {
+      if (!StopAfterFirstFailure) {
+         OuterScope->~SolverScope();
+      }
+
+      return Failure;
+   }
+
    SmallVector<SolverStep*, 4> Worklist;
-   Worklist.push_back(new(*this) SplitterStep(*this, Solutions, Worklist));
+   Worklist.push_back(new (*this) SplitterStep(*this, Solutions, Worklist));
 
    bool PrevFailed = false;
    while (!Worklist.empty()) {
-      SolverStep *Next = Worklist.back();
+      SolverStep* Next = Worklist.back();
       Worklist.pop_back();
 
       if (Next->state() == SolverStep::Error) {
@@ -1548,7 +1820,7 @@ ConstraintSystem::solve(SmallVectorImpl<Solution> &Solutions,
    return Solutions.empty() ? Failure : Success;
 }
 
-Constraint *ConstraintSystem::simplifyConstraints(TypeVariableType *Modified)
+Constraint* ConstraintSystem::simplifyConstraints(TypeVariableType* Modified)
 {
    // We need to use an index here because simplification might modify the
    // vector of active constraints.
@@ -1563,9 +1835,11 @@ Constraint *ConstraintSystem::simplifyConstraints(TypeVariableType *Modified)
    }
 
    unsigned i = 0;
+   SmallPtrSet<Constraint*, 2> removedConstraints;
+
    while (i < Worklist.size()) {
-      auto *C = Worklist[i++];
-      if (simplify(C, Worklist)) {
+      auto* C = Worklist[i++];
+      if (simplify(C, Worklist, removedConstraints)) {
          FailedConstraint = C;
          return C;
       }
@@ -1574,16 +1848,19 @@ Constraint *ConstraintSystem::simplifyConstraints(TypeVariableType *Modified)
    return nullptr;
 }
 
-bool
-ConstraintSystem::appendCurrentSolution(SmallVectorImpl<Solution> &Solutions,
-                                        ArrayRef<TypeVariableType*> TypeVars) {
+bool ConstraintSystem::appendCurrentSolution(
+    SmallVectorImpl<Solution>& Solutions, ArrayRef<TypeVariableType*> TypeVars)
+{
    Solutions.emplace_back();
 
-   Solution &S = Solutions.back();
+   Solution& S = Solutions.back();
    S.Score = CurrentScore;
 
-   for (auto *TypeVar : TypeVars) {
+   TypeVariableSubstVisitor Visitor(*QC.Sema, *this, CG, {});
+   for (auto* TypeVar : TypeVars) {
       QualType T = CG.getBinding(TypeVar);
+      T = Visitor.visit(T);
+
       if (!T || T->containsTypeVariable()) {
          // Not a viable solution.
          Solutions.pop_back();
@@ -1606,10 +1883,10 @@ ConstraintSystem::appendCurrentSolution(SmallVectorImpl<Solution> &Solutions,
 }
 
 template<class T>
-T *getFirstConstraint(ConstraintSystem &Sys, TypeVariableType *TV)
+T* getFirstConstraint(ConstraintSystem& Sys, TypeVariableType* TV)
 {
-   for (auto *C : Sys.getConstraintGraph().getOrAddNode(TV)->getConstraints()) {
-      if (auto *TC = dyn_cast<T>(C)) {
+   for (auto* C : Sys.getConstraintGraph().getOrAddNode(TV)->getConstraints()) {
+      if (auto* TC = dyn_cast<T>(C)) {
          return TC;
       }
    }
@@ -1617,9 +1894,25 @@ T *getFirstConstraint(ConstraintSystem &Sys, TypeVariableType *TV)
    return nullptr;
 }
 
-static int isBetterBinding(ConstraintSystem &Sys,
-                           TypeVariableType *TV,
-                           CanType T1, CanType T2) {
+static CanType GetConcreteType(SemaPass &Sema, CanType T,
+                               const ConstraintSystem::Solution &S)
+{
+   if (!T->containsTypeVariable())
+      return T;
+
+   return buildSpecificType<TypeVariableType>(Sema, [&](TypeVariableType *TV) {
+      auto it = S.AssignmentMap.find(TV);
+      assert(it != S.AssignmentMap.end());
+
+      return it->getSecond();
+   }, T);
+}
+
+static int isBetterBinding(ConstraintSystem& Sys, TypeVariableType* TV,
+                           CanType T1, CanType T2,
+                           const ConstraintSystem::Solution &S1,
+                           const ConstraintSystem::Solution &S2)
+{
    if (Sys.representsTemplateParam(TV)) {
       bool T1IsProto = T1->isProtocol();
       bool T2IsProto = T2->isProtocol();
@@ -1631,7 +1924,7 @@ static int isBetterBinding(ConstraintSystem &Sys,
          return 1;
       }
 
-      auto *Conv = getFirstConstraint<ImplicitConversionConstraint>(Sys, TV);
+      auto* Conv = getFirstConstraint<ImplicitConversionConstraint>(Sys, TV);
       if (!Conv) {
          return 0;
       }
@@ -1648,18 +1941,52 @@ static int isBetterBinding(ConstraintSystem &Sys,
    }
 
    if (Sys.hasLiteralConstraint(TV)) {
-      auto *Lit = getFirstConstraint<LiteralConstraint>(Sys, TV);
+      auto* Lit = getFirstConstraint<LiteralConstraint>(Sys, TV);
       assert(Lit && "does not have a literal constraint!");
 
-      QualType DefaultTy = Lit->getDefaultLiteralType(Sys.QC);
+      QualType DefaultTy = Lit->getDefaultLiteralType(Sys);
       if (T1 != DefaultTy) {
-         return -1;
+         return T2 != DefaultTy ? 0 : 1;
       }
       if (T2 != DefaultTy) {
-         return 1;
+         return -1;
       }
 
       return 0;
+   }
+
+   if (auto *Conv = Sys.getFirstConstraint<ImplicitConversionConstraint>(TV)) {
+      int score = 0;
+
+      CanType RHS = GetConcreteType(*Sys.QC.Sema, Conv->getRHSType(), S1);
+      if (T1 == RHS) {
+         if (T2 != RHS) {
+            score += 1;
+         }
+      }
+      if (T2 == RHS) {
+         if (T1 != RHS) {
+            score -= 1;
+         }
+      }
+
+      CanType OtherRHS = GetConcreteType(*Sys.QC.Sema, Conv->getRHSType(), S2);
+      if (RHS != OtherRHS) {
+         if (T1 == OtherRHS) {
+            if (T2 != OtherRHS) {
+               score += 1;
+            }
+         }
+         if (T2 == OtherRHS) {
+            if (T1 != OtherRHS) {
+               score -= 1;
+            }
+         }
+      }
+
+      if (score != 0) {
+         return score;
+      }
    }
 
    if (T1->isProtocol()) {
@@ -1674,7 +2001,7 @@ static int isBetterBinding(ConstraintSystem &Sys,
 }
 
 ConstraintSystem::SolutionComparisonResult
-ConstraintSystem::compareSolutions(const Solution &S1, const Solution &S2)
+ConstraintSystem::compareSolutions(const Solution& S1, const Solution& S2)
 {
    if (S1.Score != S2.Score) {
       return S2.Score < S1.Score ? BetterSolution : WorseSolution;
@@ -1683,7 +2010,7 @@ ConstraintSystem::compareSolutions(const Solution &S1, const Solution &S2)
    bool AllEqual = true;
    int RelativeScore = 0;
 
-   for (auto *TypeVar : TypeVariables) {
+   for (auto* TypeVar : TypeVariables) {
       auto It1 = S1.AssignmentMap.find(TypeVar);
       if (It1 == S1.AssignmentMap.end()) {
          continue;
@@ -1694,7 +2021,7 @@ ConstraintSystem::compareSolutions(const Solution &S1, const Solution &S2)
 
       if (T1 != T2) {
          AllEqual = false;
-         RelativeScore += isBetterBinding(*this, TypeVar, T1, T2);
+         RelativeScore += isBetterBinding(*this, TypeVar, T1, T2, S1, S2);
       }
    }
 
@@ -1702,34 +2029,87 @@ ConstraintSystem::compareSolutions(const Solution &S1, const Solution &S2)
       return EquivalentSolution;
    }
 
-   return RelativeScore == 0 ? EqualSolution
-                             : (RelativeScore < 0 ? BetterSolution
-                                                  : WorseSolution);
+   return RelativeScore == 0
+              ? EqualSolution
+              : (RelativeScore < 0 ? BetterSolution : WorseSolution);
 }
 
-void ConstraintSystem::dumpSolution(const Solution &S)
+uint64_t ConstraintSystem::calculateConversionPenalty(const Solution &S)
+{
+   FinalTypeVariableSubstVisitor Visitor(*QC.Sema, S);
+
+   uint64_t penalty = 0;
+   for (auto *TypeVar : TypeVariables) {
+      auto it = S.AssignmentMap.find(TypeVar);
+      assert(it != S.AssignmentMap.end());
+
+      QualType ConcreteTy = it->getSecond();
+      auto Constraints = CG.getOrAddNode(TypeVar)->getConstraints();
+
+      for (auto *C : Constraints) {
+         if (C->getConstrainedType() != TypeVar) {
+            continue;
+         }
+         if (!isa<ImplicitConversionConstraint>(C)) {
+            continue;
+         }
+
+         auto *Loc = C->getLocator();
+         if (!Loc || Loc->getPathElements().empty()
+         || Loc->getPathElements().back().getKind() != ConstraintLocator::ParameterType) {
+            continue;
+         }
+
+         auto *ArgDecl = Loc->getPathElements().back().getParamDecl();
+         if (ArgDecl->isVariadic()) {
+            continue;
+         }
+
+         bool importedFromClang = false;
+         if ((getFlags(TypeVar) & ParameterOfClangImportedFunc) != 0) {
+            importedFromClang = true;
+         }
+
+         QualType RHSTy = Visitor.visit(C->getRHSType());
+         IsValidParameterValueQuery::result_type result;
+         if (QC.IsValidParameterValue(result, ConcreteTy, RHSTy,
+                                      ArgDecl->isSelf(), importedFromClang)) {
+            continue;
+         }
+
+         assert(result.isValid);
+         penalty += result.conversionPenalty;
+      }
+   }
+
+   return penalty;
+}
+
+void ConstraintSystem::dumpSolution(const Solution& S)
 {
    printSolution(S, llvm::errs());
 }
 
-void ConstraintSystem::printSolution(const Solution &S, llvm::raw_ostream &OS)
+void ConstraintSystem::printSolution(const Solution& S, llvm::raw_ostream& OS)
 {
    OS << "viable solution (score " << S.Score << "):\n";
 
-   for (auto &AS : S.AssignmentMap) {
+   for (auto& AS : S.AssignmentMap) {
       OS << *AS.getFirst() << " = " << AS.getSecond().toDiagString() << "\n";
    }
 }
 
-void ConstraintSystem::dumpConstraints()
-{
-   printConstraints(llvm::errs());
-}
+void ConstraintSystem::dumpConstraints() { printConstraints(llvm::errs()); }
 
-void ConstraintSystem::printConstraints(llvm::raw_ostream &OS)
+void ConstraintSystem::printConstraints(llvm::raw_ostream& OS)
 {
-   for (auto *C : CG.getActiveConstraints()) {
+   for (auto* C : CG.getActiveConstraints()) {
       C->print(OS);
       OS << "\n";
    }
+}
+
+void ConstraintSystem::enableLogging()
+{
+   LogStream = &llvm::errs();
 }

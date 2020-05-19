@@ -1,21 +1,16 @@
-//
-// Created by Jonas Zell on 09.04.18.
-//
+#include "cdotc/AST/StmtOrDecl.h"
 
-#include "StmtOrDecl.h"
-
-#include "Decl.h"
-#include "Statement.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Statement.h"
 
 using namespace cdot::ast;
 
 namespace cdot {
 
-#define DISPATCH(METHOD, TYPE)                     \
-   Union.isNull() ? TYPE()                         \
-   : Union.is<Statement*>()                        \
-      ? Union.get<Statement*>()->METHOD            \
-      : Union.get<Decl*>()->METHOD
+#define DISPATCH(METHOD, TYPE)                                                 \
+   Union.isNull() ? TYPE()                                                     \
+                  : Union.is<Statement*>() ? Union.get<Statement*>()->METHOD   \
+                                           : Union.get<Decl*>()->METHOD
 
 SourceLocation StmtOrDecl::getSourceLoc() const
 {
@@ -27,10 +22,7 @@ SourceRange StmtOrDecl::getSourceRange() const
    return DISPATCH(getSourceRange(), SourceRange);
 }
 
-bool StmtOrDecl::isInvalid() const
-{
-   return DISPATCH(isInvalid(), bool);
-}
+bool StmtOrDecl::isInvalid() const { return DISPATCH(isInvalid(), bool); }
 
 void StmtOrDecl::setIsInvalid(bool b) const
 {
@@ -64,22 +56,19 @@ void StmtOrDecl::copyStatusFlags(StmtOrDecl Other) const
 
    if (Union.is<Statement*>()) {
       if (Other.Union.is<Statement*>()) {
-         Union.get<Statement*>()
-            ->copyStatusFlags(Other.Union.get<Statement*>());
+         Union.get<Statement*>()->copyStatusFlags(
+             Other.Union.get<Statement*>());
       }
       else {
-         Union.get<Statement*>()
-              ->copyStatusFlags(Other.Union.get<Decl*>());
+         Union.get<Statement*>()->copyStatusFlags(Other.Union.get<Decl*>());
       }
    }
    else {
       if (Other.Union.is<Statement*>()) {
-         Union.get<Decl*>()
-              ->copyStatusFlags(Other.Union.get<Statement*>());
+         Union.get<Decl*>()->copyStatusFlags(Other.Union.get<Statement*>());
       }
       else {
-         Union.get<Decl*>()
-              ->copyStatusFlags(Other.Union.get<Decl*>());
+         Union.get<Decl*>()->copyStatusFlags(Other.Union.get<Decl*>());
       }
    }
 }

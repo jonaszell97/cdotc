@@ -1,5 +1,6 @@
 
-using fs.FileDescriptor
+import { self, FileDescriptor } from fs
+import sys
 
 /// The standard input file descriptor.
 public alias STDIN_FD: FileDescriptor = 0
@@ -48,7 +49,7 @@ public class FileInputStream: BufferedInputStream {
         var result = fs.closeFile(fd)
         assert!(result, "closing file failed")
 
-        fd = -1
+        fd = FileDescriptor(-1)
         shouldClose = false
     }
 
@@ -91,10 +92,10 @@ public class MemoryBuffer: InputStream {
     private var bufferStart: UnsafeBufferPtr<Byte> { get }
 
     /// Pointer to the end of the streamed memory.
-    private var bufferEnd: UnsafeBufferPtr<Byte> { get }
+    private var bufferEnd: UnsafePtr<Byte> { get }
 
     /// Pointer to the current position in the stream.
-    private var bufferCur: UnsafeBufferPtr<Byte> { get }
+    private var bufferCur: UnsafePtr<Byte> { get }
 
     /// True if the file was mmap'ed, not allocated.
     private var wasMemoryMapped: Bool
@@ -106,8 +107,8 @@ public class MemoryBuffer: InputStream {
         var bufPtr = UnsafeBufferPtr<Byte>.allocate(fileSize)
 
         // save starting position
-        self.bufferStart = bufPtr
-        self.bufferCur = self.bufferStart
+        self.bufferStart = bufPtr.copy()
+        self.bufferCur = UnsafePtr<Byte>(self.bufferStart)
         self.bufferEnd = self.bufferStart + fileSize
         self.wasMemoryMapped = false
 
@@ -121,7 +122,7 @@ public class MemoryBuffer: InputStream {
             }
 
             bytesLeft -= numRead
-            bufPtr += numRead
+            bufPtr = bufPtr.offset(by: numRead)
         }
     }
 
@@ -152,7 +153,7 @@ public class MemoryBuffer: InputStream {
 
         // We don't use mmap for small files because this can severely fragment our
         // address space.
-        alias MinMmapSize = 4u * 4096
+        let MinMmapSize = 4 * 4096
         var pageSize = sys.getPageSize()
         if fileSize < MinMmapSize || fileSize < pageSize {
             return false

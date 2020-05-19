@@ -1,0 +1,26 @@
+{
+    "name": "cdot-diag-lang-support",
+    "displayName": "cdot-diag-lang-support",
+    "description": "",
+    "version": "0.0.1",
+    "publisher": "Jonas",
+    "engines": {
+        "vscode": "^1.13.0"
+    },
+    "categories": [
+        "Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "cdotdef",
+            "aliases": ["CDot-Def", "cdotdef"],
+            "extensions": [".def"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "cdotdef",
+            "scopeName": "source.cdotdef",
+            "path": "./syntaxes/cdot.tmLanguage.json"
+        }]
+    }
+}

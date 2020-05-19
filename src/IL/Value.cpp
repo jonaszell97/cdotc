@@ -1,45 +1,48 @@
-//
-// Created by Jonas Zell on 16.11.17.
-//
+#include "cdotc/IL/Value.h"
+
+#include "cdotc/AST/ASTContext.h"
+#include "cdotc/AST/Decl.h"
+#include "cdotc/IL/Constants.h"
+#include "cdotc/IL/Context.h"
+#include "cdotc/IL/Instructions.h"
+#include "cdotc/IL/MetaData.h"
+#include "cdotc/IL/Module.h"
+#include "cdotc/IL/Use.h"
+#include "cdotc/IL/ValueSymbolTable.h"
 
 #include <llvm/Support/raw_ostream.h>
-#include "Value.h"
-
-#include "AST/ASTContext.h"
-#include "Constants.h"
-#include "Context.h"
-#include "Instructions.h"
-#include "MetaData.h"
-#include "Module.h"
-#include "Use.h"
-#include "ValueSymbolTable.h"
 
 using namespace cdot::support;
 
 namespace cdot {
 namespace il {
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, MemoryOrder MO)
+llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, MemoryOrder MO)
 {
    switch (MO) {
-   case MemoryOrder::NotAtomic: return OS << "<not atomic>";
-   case MemoryOrder::Relaxed: return OS << "relaxed";
-   case MemoryOrder::Consume: return OS << "consume";
-   case MemoryOrder::Acquire: return OS << "acquire";
-   case MemoryOrder::Release: return OS << "release";
-   case MemoryOrder::AcquireRelease: return OS << "acq_rel";
-   case MemoryOrder::SequentiallyConsistent: return OS << "seq_cst";
+   case MemoryOrder::NotAtomic:
+      return OS << "<not atomic>";
+   case MemoryOrder::Relaxed:
+      return OS << "relaxed";
+   case MemoryOrder::Consume:
+      return OS << "consume";
+   case MemoryOrder::Acquire:
+      return OS << "acquire";
+   case MemoryOrder::Release:
+      return OS << "release";
+   case MemoryOrder::AcquireRelease:
+      return OS << "acq_rel";
+   case MemoryOrder::SequentiallyConsistent:
+      return OS << "seq_cst";
    }
 }
 
-ValueType::ValueType(il::Context &Ctx, QualType ty)
-   : Ty(ty ? ty.getCanonicalType()->getDesugaredType() : QualType()),
-     Ctx(&Ctx)
+ValueType::ValueType(il::Context& Ctx, QualType ty)
+    : Ty(ty ? ty.getCanonicalType()->getDesugaredType() : QualType()), Ctx(&Ctx)
 {
-
 }
 
-ValueType &ValueType::operator=(QualType ty)
+ValueType& ValueType::operator=(QualType ty)
 {
    Ty = ty ? ty.getCanonicalType()->getDesugaredType() : QualType();
    return *this;
@@ -55,13 +58,10 @@ ValueType ValueType::getReferenceTo() const
    return ValueType(*Ctx, Ctx->getASTCtx().getReferenceType(Ty));
 }
 
-void ValueType::makeReference()
-{
-   Ty = Ctx->getASTCtx().getReferenceType(Ty);
-}
+void ValueType::makeReference() { Ty = Ctx->getASTCtx().getReferenceType(Ty); }
 
 Value::Value(TypeID id, ValueType ty)
-   : id(id), SubclassData(0), type(ty), uses(0), metaData(nullptr)
+    : id(id), SubclassData(0), type(ty), uses(0), metaData(nullptr)
 {
 }
 
@@ -75,27 +75,32 @@ Value::~Value()
 StringRef Value::getValueKindDescription(TypeID ID)
 {
    switch (ID) {
-#     define CDOT_ALL(NAME) case NAME##ID: return #NAME;
-#     define CDOT_ABSTRACT(NAME) case NAME: return #NAME;
-#     include "Instructions.def"
+#define CDOT_ALL(NAME)                                                         \
+   case NAME##ID:                                                              \
+      return #NAME;
+#define CDOT_ABSTRACT(NAME)                                                    \
+   case NAME:                                                                  \
+      return #NAME;
+#include "cdotc/IL/Instructions.def"
    }
 }
 
 void Value::deleteValue()
 {
    switch (id) {
-#define CDOT_ALL(name) \
-      case name##ID:           \
-         delete static_cast<name*>(this); break;
-#include "Instructions.def"
-      default:
-         llvm_unreachable("unknown value kind");
+#define CDOT_ALL(name)                                                         \
+   case name##ID:                                                              \
+      delete static_cast<name*>(this);                                         \
+      break;
+#include "cdotc/IL/Instructions.def"
+   default:
+      llvm_unreachable("unknown value kind");
    }
 }
 
 bool Value::isSelf() const
 {
-   Function *Fn = nullptr;
+   Function* Fn = nullptr;
    if (auto Arg = dyn_cast<Argument>(this)) {
       Fn = Arg->getParent()->getParent();
    }
@@ -126,15 +131,9 @@ bool Value::isIndexingInstruction() const
    }
 }
 
-ast::ASTContext& Value::getASTCtx() const
-{
-   return getCtx().getASTCtx();
-}
+ast::ASTContext& Value::getASTCtx() const { return getCtx().getASTCtx(); }
 
-bool Value::isLvalue() const
-{
-   return type->isReferenceType();
-}
+bool Value::isLvalue() const { return type->isReferenceType(); }
 
 void Value::setIsLvalue(bool ref)
 {
@@ -210,10 +209,11 @@ void Value::detachAndErase()
    eraseValue();
 }
 
-void Value::addUse(Value *User)
+void Value::addUse(Value* User)
 {
    if (!uses) {
-      uses = new Use(User); return;
+      uses = new Use(User);
+      return;
    }
 
 #ifndef NDEBUG
@@ -223,9 +223,9 @@ void Value::addUse(Value *User)
    uses->addUseAtEnd(new Use(User));
 }
 
-void Value::removeUser(Value *User)
+void Value::removeUser(Value* User)
 {
-   for (auto *use : *uses) {
+   for (auto* use : *uses) {
       if (use->getUser() == User) {
          if (!use->hasNext() && !use->hasPrev()) {
             // this was the last use
@@ -248,9 +248,9 @@ void Value::removeUser(Value *User)
    }
 }
 
-void Value::replaceUser(cdot::il::Value *User, il::Value *ReplaceWith)
+void Value::replaceUser(cdot::il::Value* User, il::Value* ReplaceWith)
 {
-   for (auto *use : *uses) {
+   for (auto* use : *uses) {
       if (use->getUser() == User) {
          use->setUser(ReplaceWith);
          return;
@@ -262,7 +262,7 @@ void Value::checkIfStillInUse()
 {
    bool useFound = false;
    if (uses) {
-      for (auto *use : *uses) {
+      for (auto* use : *uses) {
          if (isa<BasicBlock>(use->getUser())) {
             continue;
          }
@@ -279,20 +279,18 @@ void Value::checkIfStillInUse()
 
 size_t Value::getNumUses() const
 {
-   if (!uses) return 0;
+   if (!uses)
+      return 0;
    return uses->count();
 }
 
-bool Value::isUnused() const
-{
-   return !getNumUses();
-}
+bool Value::isUnused() const { return !getNumUses(); }
 
-void Value::replaceAllUsesWith(Value *V)
+void Value::replaceAllUsesWith(Value* V)
 {
    assert(type == V->getType() && "replacement value must be of same type");
    if (uses) {
-      for (auto *use : *uses) {
+      for (auto* use : *uses) {
          if (auto I = dyn_cast<Instruction>(use->getUser()))
             I->replaceOperand(this, V);
          else if (auto C = dyn_cast<Constant>(use->getUser()))
@@ -319,7 +317,7 @@ void Value::replaceAllUsesWith(Value *V)
    }
 }
 
-il::Value *Value::ignoreBitCast()
+il::Value* Value::ignoreBitCast()
 {
    if (auto BC = dyn_cast<BitCastInst>(this))
       return BC->getOperand(0);
@@ -327,10 +325,7 @@ il::Value *Value::ignoreBitCast()
    return this;
 }
 
-llvm::StringRef Value::getName() const
-{
-   return name;
-}
+llvm::StringRef Value::getName() const { return name; }
 
 void Value::setName(llvm::StringRef name)
 {
@@ -359,15 +354,9 @@ void Value::setName(llvm::StringRef name)
    }
 }
 
-bool Value::hasName() const
-{
-   return !name.empty();
-}
+bool Value::hasName() const { return !name.empty(); }
 
-MDSet *Value::getMetaData() const
-{
-   return metaData;
-}
+MDSet* Value::getMetaData() const { return metaData; }
 
 bool Value::hasMetaData(MDKind kind) const
 {
@@ -385,7 +374,7 @@ MetaData* Value::getMetaData(MDKind kind) const
    return metaData->getNode(kind);
 }
 
-void Value::addMetaData(MetaData *MD)
+void Value::addMetaData(MetaData* MD)
 {
    if (!metaData)
       metaData = new MDSet;
@@ -417,10 +406,75 @@ ImmutableCallSite Value::getAsImmutableCallSite() const
 
 bool Value::isAllZerosValue() const
 {
-   if (auto *C = dyn_cast<Constant>(this))
+   if (auto* C = dyn_cast<Constant>(this))
       return C->isAllZerosValue();
 
    return false;
+}
+
+const llvm::APSInt* Value::getConstantIntegerValue() const
+{
+   if (auto *CI = dyn_cast<ConstantInt>(this)) {
+      return &CI->getValue();
+   }
+
+   if (auto *Ld = dyn_cast<LoadInst>(this)) {
+      return Ld->getOperand(0)->getConstantIntegerValue();
+   }
+
+   if (auto *GEP = dyn_cast<GEPInst>(this)) {
+      return GEP->getVal()->getConstantIntegerValue();
+   }
+
+   if (!isa<ConstantStruct>(this)) {
+      return nullptr;
+   }
+
+   auto *RT = getType()->asRecordType();
+   if (!RT || !RT->isStruct()) {
+      return nullptr;
+   }
+
+   auto *S = cast<ast::StructDecl>(RT->getRecord());
+   if (!S->hasAttribute<_BuiltinAttr>()
+   || !S->getDeclName().getIdentifierInfo()->getIdentifier().contains("Int")
+   || !S->getStoredFields().front()->getType()->isIntegerType()) {
+      return nullptr;
+   }
+
+   return cast<ConstantStruct>(this)->getElements().front()->getConstantIntegerValue();
+}
+
+const llvm::APFloat* Value::getConstantFPValue() const
+{
+   if (auto *CI = dyn_cast<ConstantFloat>(this)) {
+      return &CI->getValue();
+   }
+
+   if (auto *Ld = dyn_cast<LoadInst>(this)) {
+      return Ld->getOperand(0)->getConstantFPValue();
+   }
+
+   if (auto *GEP = dyn_cast<GEPInst>(this)) {
+      return GEP->getVal()->getConstantFPValue();
+   }
+
+   if (!isa<ConstantStruct>(this)) {
+      return nullptr;
+   }
+
+   auto *RT = getType()->asRecordType();
+   if (!RT || !RT->isStruct()) {
+      return nullptr;
+   }
+
+   auto *S = cast<ast::StructDecl>(RT->getRecord());
+   if (!S->hasAttribute<_BuiltinAttr>()
+       || !S->getStoredFields().front()->getType()->isFPType()) {
+      return nullptr;
+   }
+
+   return cast<ConstantStruct>(this)->getElements().front()->getConstantFPValue();
 }
 
 } // namespace il

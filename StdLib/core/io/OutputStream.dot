@@ -209,7 +209,7 @@ public class StringOutputStream: OutputStream {
     }
 
     def override writeToStream(_ bytes: [Byte]) {
-        str.append(elementsOf: bytes)
+        str.append(elementsOf: bytes.map((b: Byte) => Character(ascii: b)))
     }
 }
 

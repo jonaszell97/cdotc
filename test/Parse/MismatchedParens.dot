@@ -1,0 +1,10 @@
+
+// VERIFY
+
+_ = ( // expected-note@+1 {{to match this}}
+print([1, 2, 3) // expected-error {{unexpected token ); expecting ',' or ']'}}
+
+
+} // expected-error@+2 {{unexpected end of file; expecting ')'}}
+// expected-error@-1 {{unexpected token }; expecting )}}
+// expected-error {{unexpected token <eof>; expecting )}}

@@ -22,8 +22,9 @@ extend BidirectionalCollection {
     /// \return a subsequence, up to the given maximum length, containing the
     /// final elements of the collection.
     def suffix(_ maxLength: Int) -> SubSequence {
-        precondition!(maxLength >= 0, "Can't take a suffix of negative length from a collection")
-        let start = index(endIndex, advancedBy: -maxLength, limitedBy: startIndex) ?? startIndex
-        return self[start..endIndex]
+        // precondition!(maxLength >= 0, "Can't take a suffix of negative length from a collection")
+        // let start = index(endIndex, advancedBy: -maxLength, limitedBy: startIndex) ?? startIndex
+        // return self[start..endIndex]
+        unimplemented!()
     }
 }

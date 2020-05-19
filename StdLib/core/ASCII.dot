@@ -1,12 +1,10 @@
 
 internal let alphaNumeric: [builtin.u8; ?] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
 internal let printable: [builtin.u8; ?] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`$&%<>|()[]{}+-/*\n?!#=\"';,.:"
 
 /// \return a random alpha numeric character.
 internal def randomAlphaNumeric() -> Character {
-    let size = UInt8(truncatingIfNeeded: elementCount(alphaNumeric))
-    return Character(ascii: alphaNumeric[Byte.random() % size])
+    return Character(ascii: UInt8(alphaNumeric[Int(Byte.random()) % alphaNumeric.size]))
 }
 
 /// \return a random alpha numeric string of length `len`.
@@ -21,8 +19,7 @@ internal def randomAlphaNumeric(withLength len: Int) -> String {
 
 /// \return a random printable character.
 internal def randomPrintable() -> Character {
-    let size = UInt8(truncatingIfNeeded: elementCount(printable))
-    return Character(ascii: printable[Byte.random() % size])
+    return Character(ascii: UInt8(printable[Int(Byte.random()) % printable.size]))
 }
 
 /// \return a random printable string of length \param len.

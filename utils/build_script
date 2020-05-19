@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+
+import os
+import platform
+import shutil
+import subprocess
+import sys
+
+if platform.system() == 'Linux':
+    dylib_ext = "so"
+elif platform.system() == 'Darwin':
+    dylib_ext = "dylib"
+elif platform.system() == 'Windows':
+    dylib_ext = "dll"
+
+if platform.system() == 'Linux':
+    sys_bin_dir = "/usr/local/bin"
+    sys_lib_dir = "/usr/local/lib"
+elif platform.system() == 'Darwin':
+    sys_bin_dir = "/usr/local/bin"
+    sys_lib_dir = "/usr/local/lib"
+
+cpu_count = str(os.cpu_count())
+
+def find_executable(name):
+    return shutil.which(name)
+
+def require_executable(name):
+    cmd = shutil.which(name)
+    if cmd is None:
+        if platform.system() == 'Linux':
+            installer = "apt-get install"
+        elif platform.system() == 'Darwin':
+            installer = "brew install"
+
+        print("'%s' executable not found; try running '%s %s'" % (name, installer, name))
+
+    return cmd
+
+def parse_args():
+    opts = {
+        "run_tests": False,
+        "clean": False,
+    }
+
+    skip = False
+    for i in range(0, len(sys.argv)):
+        if i == 0 or skip:
+            skip = False
+            continue
+
+        arg = sys.argv[i]
+        if arg == "--test":
+            opts["run_tests"] = True
+        elif arg == "--clean":
+            opts["clean"] = True
+        elif arg == "--use-llvm":
+            if i == len(sys.argv) - 1:
+                print("expected path after --use-llvm")
+            else:
+                opts["llvm_dir"] = sys.argv[i + 1]
+                skip = True
+        else:
+            print("unknown option '%s'" % (sys.argv[i]))
+
+    return opts
+
+def try_build_tblgen(build_dir):
+    repo = "https://github.com/jonaszell97/tblgen.git"
+    subprocess.run([
+        "git", "clone", repo,
+    ], check=True, stdout=subprocess.DEVNULL, cwd=build_dir)
+
+    subprocess.run([
+        "python3", build_dir + "/tblgen/utils/build_script",
+    ], check=True)
+
+    return sys_bin_dir + "/tblgen"
+
+def build_tblgen_libs(cmake, build_dir):
+    subprocess.run([
+        cmake,
+        "--build", build_dir,
+        "--target", "cdotc-tblgens",
+        "--", "-j", cpu_count,
+    ], check=True, cwd=build_dir)
+
+    return build_dir + "/libcdotc-tblgens." + dylib_ext
+
+def build_tblgen_files(tblgen, src_dir, inc_dir, tblgen_lib):
+    # Attributes
+    if not os.path.isfile(inc_dir + "/AST/Attributes.def"):
+        subprocess.run([
+            tblgen,
+            src_dir + "/Basic/Attributes.tg",
+            "-attribute-defs",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/AST/Attributes.def", "w"), check=True)
+
+    if not os.path.isfile(inc_dir + "/AST/Attr.inc"):
+        subprocess.run([
+            tblgen,
+            src_dir + "/Basic/Attributes.tg",
+            "-attribute-classes",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/AST/Attr.inc", "w"), check=True)
+
+    if not os.path.isfile(inc_dir + "/Parse/ParseAttr.inc"):
+        subprocess.run([
+            tblgen,
+            src_dir + "/Basic/Attributes.tg",
+            "-attribute-parse",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Parse/ParseAttr.inc", "w"), check=True)
+
+    # Diagnostics
+    if not os.path.isfile(inc_dir + "/Diagnostics/Diagnostics.def"):
+        subprocess.run([
+            tblgen,
+            src_dir + "/Diagnostics/Diagnostics.tg",
+            "-diagnostics",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Diagnostics/Diagnostics.def", "w"), check=True)
+
+    # Queries
+    if not os.path.exists(inc_dir + "/Query/Inc"):
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-defs",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/Queries.def", "w"), check=True)
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-decls",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/QueryDecls.inc", "w"), check=True)
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-impls",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/QueryImpls.inc", "w"), check=True)
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-context-fields",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/QueryContextFields.inc", "w"), check=True)
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-context-decls",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/QueryContextDecls.inc", "w"), check=True)
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-context-specializations",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/QueryContextSpecializations.inc", "w"), check=True)
+        subprocess.run([
+            tblgen,
+            src_dir + "/Query/Queries.tg",
+            "-query-context-impls",
+            tblgen_lib,
+        ], stdout=open(inc_dir + "/Query/Inc/QueryContextImpls.inc", "w"), check=True)
+
+def build_cdotc(cmake, build_dir, bin_dir):
+    subprocess.run([
+        cmake,
+        "--build", build_dir,
+        "--target", "cdotc",
+        "--", "-j", cpu_count,
+    ], check=True, cwd=bin_dir)
+
+    try:
+        os.unlink(sys_bin_dir + "/cdotc")
+        os.unlink(bin_dir + "/cdotc")
+    except:
+        pass
+
+    subprocess.run([
+        "ln", "-s", build_dir + "/cdotc", bin_dir,
+    ])
+    subprocess.run([
+        "ln", "-s", build_dir + "/cdotc", sys_bin_dir,
+    ])
+
+def build_cdot_module(mod_name, mod_dir, build_dir, args=[]):
+    subprocess.run([
+        "cdotc",
+        mod_dir + "/mod.dotm",
+        "-emit-modules",
+        "-fno-incremental",
+        *args,
+    ], check=True)
+
+def run_test_suite(test_dir):
+    try:
+        subprocess.run([
+            "cdotc",
+            "%s/mod.dotm" % (test_dir),
+        ], check=True, stdout=subprocess.DEVNULL)
+
+        return 0
+    except subprocess.CalledProcessError as err:
+        print("Build contains test failures! See %s/test.log for details" % (os.path.realpath(test_dir)))
+        return 1
+
+def clean(inc_dir, build_dir, bin_dir):
+    try:
+        os.unlink(sys_bin_dir + "/cdotc")
+    except:
+        pass
+    try:
+        os.remove(inc_dir + "/AST/Attributes.def")
+    except:
+        pass
+    try:
+        os.remove(inc_dir + "/AST/Attr.inc")
+    except:
+        pass
+    try:
+        os.remove(inc_dir + "/Parse/ParseAttr.inc")
+    except:
+        pass
+    try:
+        os.remove(inc_dir + "/Diagnostics/Diagnostics.def")
+    except:
+        pass
+    try:
+        shutil.rmtree(inc_dir + "/Query/Inc")
+    except:
+        pass
+    try:
+        shutil.rmtree(build_dir)
+    except:
+        pass
+    try:
+        shutil.rmtree(bin_dir)
+    except:
+        pass
+
+def main():
+    opts = parse_args()
+
+    # Verify that the platform is supported.
+    if platform.system() != 'Linux' and platform.system() != 'Darwin':
+        print("unsupported platform: %s" % (platform.system()))
+        return 1
+
+    # Get the current working directory.
+    cwd = os.getcwd()
+    src_dir = os.path.realpath(cwd + "/../src/")
+    inc_dir = os.path.realpath(cwd + "/../include/cdotc")
+    stdlib_dir = os.path.realpath(cwd + "/../StdLib")
+
+    if not os.path.exists(src_dir):
+        print("invalid build directory structure: no 'src' directory")
+        return 1
+
+    if not os.path.exists(inc_dir):
+        print("invalid build directory structure: no 'include' directory")
+        return 1
+
+    if not os.path.exists(stdlib_dir):
+        print("invalid build directory structure: no 'StdLib' directory")
+        return 1
+
+    bin_dir = os.path.realpath(cwd + "/../bin")
+    os.makedirs(bin_dir, exist_ok=True)
+
+    # Create a temporary build directory.
+    build_dir = os.path.realpath(cwd + "/../.build")
+
+    # Clean the build artifacts.
+    if opts["clean"]:
+        clean(inc_dir, build_dir, bin_dir)
+        return 0
+
+    os.makedirs(build_dir, exist_ok=True)
+
+    # Verify that LLVM 10.0.0 is installed.
+    if not "llvm_dir" in opts:
+        llvm_cfg = find_executable("llvm-config")
+    else:
+        llvm_cfg = opts["llvm_dir"]
+
+    if llvm_cfg is None:
+        require_executable("llvm")
+    else:
+        llvm_ver = str(subprocess.check_output([llvm_cfg, "--version"]))
+        if not "10.0.0" in llvm_ver:
+            print("LLVM version 10.0.0 required; you can pass a custom llvm install with the '--use-llvm' option")
+            return 1
+
+    # Find LLVM and clang
+    clang = require_executable("clang++")
+
+    # Find or build TblGen
+    tblgen = find_executable("tblgen")
+    if tblgen is None:
+        try:
+            tblgen = try_build_tblgen(build_dir)
+        except:
+            return 1
+
+    # Find CMake
+    cmake = require_executable("cmake")
+    if not os.path.isfile(build_dir + "/CMakeCache.txt"):
+        try:
+            subprocess.run([
+                cmake,
+                os.path.realpath(build_dir + "/.."),
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_CXX_COMPILER=" + clang,
+                "-DLLVM_DIR=" + os.path.realpath(os.path.dirname(llvm_cfg) + "/../cmake"),
+                "-DTblGen_DIR=" + os.path.realpath(os.path.dirname(tblgen) + "/../cmake"),
+            ], check=True, cwd=build_dir)
+        except:
+            return 1
+
+    # Build TblGen backend
+    try:
+        tblgen_lib = build_tblgen_libs(cmake, build_dir)
+    except subprocess.CalledProcessError as err:
+        print("error building tblgen: %s" % (err))
+        return 1
+
+    # Build TblGen files
+    try:
+        build_tblgen_files(tblgen, src_dir, inc_dir, tblgen_lib)
+    except subprocess.CalledProcessError as err:
+        print("error building tblgen files: %s" % (err))
+        return 1
+
+    # Build cdotc
+    try:
+        build_cdotc(cmake, build_dir, bin_dir)
+    except subprocess.CalledProcessError as err:
+        print(err)
+        return 1
+
+    # Build the required libraries.
+    try:
+        build_cdot_module("policy", stdlib_dir + "/policy", build_dir, ["-no-prelude"])
+        build_cdot_module("builtin", stdlib_dir + "/builtin", build_dir, ["-no-prelude"])
+        build_cdot_module("libc", stdlib_dir + "/libsystem/libc", build_dir, ["-no-prelude"])
+        build_cdot_module("posix", stdlib_dir + "/libsystem/posix", build_dir, ["-no-prelude"])
+        build_cdot_module("icu", stdlib_dir + "/icu", build_dir, ["-no-prelude"])
+        build_cdot_module("core", stdlib_dir + "/core", build_dir, ["-is-std-lib"])
+    except subprocess.CalledProcessError as err:
+        print(err)
+        return 1
+
+    if opts["run_tests"]:
+        test_dir = cwd + "/../test"
+        return run_test_suite(test_dir)
+
+    return 0
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(1)

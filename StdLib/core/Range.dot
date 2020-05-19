@@ -16,25 +16,19 @@ public protocol RangeExpression {
 extend RangeExpression with RandomAccessCollection where Bound is Strideable
                                                    where Bound is BinaryInteger {
     /// \inherit
-    default associatedType Element = Bound
+    default alias Element = Bound
 
     /// \inherit
-    default associatedType Index = Bound
+    default alias Index = Bound
 
     /// \inherit
-    default prop startIndex: Index { return lowerBound }
+    default prop startIndex: Index => lowerBound
 
     /// \inherit
-    default prop endIndex: Index { return upperBound }
+    default prop endIndex: Index => upperBound
 
     /// \inherit
-    default subscript (idx: Index) -> Element {
-        _checkIndex(idx)
-        return lowerBound.advanced(by: Int(idx))
-    }
-
-    /// \inherit
-    default associatedType SubSequence = Self
+    default alias SubSequence = Self
 
     /// \inherit
     default subscript (range: Range<Index>) -> SubSequence {
@@ -66,13 +60,19 @@ public struct Range<_Bound: Comparable> {
 
 extend Range with RangeExpression {
     /// \inherit
-    associatedType Bound = _Bound
+    alias Bound = _Bound
 
     /// \inherit
     prop lowerBound: Bound { return _lowerBound }
 
     /// \inherit
     prop upperBound: Bound { return _upperBound }
+
+    /// \inherit
+    subscript (idx: Index) -> Element {
+        _checkIndex(idx)
+        return idx
+    }
 }
 
 public struct InclusiveRange<_Bound: Comparable> {
@@ -91,33 +91,47 @@ public struct InclusiveRange<_Bound: Comparable> {
 
 extend InclusiveRange with RangeExpression where _Bound is Strideable {
     /// \inherit
-    associatedType Bound = _Bound
+    alias Bound = _Bound
 
     /// \inherit
     prop lowerBound: Bound { return _lowerBound }
 
     /// \inherit
     prop upperBound: Bound { return _upperBound.advanced(by: 1) }
+
+    /// \inherit
+    subscript (idx: Index) -> Element {
+        _checkIndex(idx)
+        return idx
+    }
 }
 
-public struct HalfOpenRange<Bound: Comparable> {
+public struct HalfOpenRange<_Bound: Comparable> {
     /// The first value in the range.
     var _lowerBound: _Bound
 
     /// Memberwise C'tor.
-    public memberwise init
+    public init (from _lowerBound: _Bound) {
+        self._lowerBound = _lowerBound
+    }
 }
 
 extend HalfOpenRange with RangeExpression where _Bound is Strideable
-                                          where _Bound is BinaryInteger {
+                                          where _Bound is FixedWidthInteger {
     /// \inherit
-    associatedType Bound = _Bound
+    alias Bound = _Bound
 
     /// \inherit
     prop lowerBound: Bound { return _lowerBound }
 
     /// \inherit
     prop upperBound: Bound { return Bound.max }
+
+    /// \inherit
+    subscript (idx: Index) -> Element {
+        _checkIndex(idx)
+        return idx
+    }
 }
 
 public def infix ..= <T: Comparable>(from: T, to: T) -> InclusiveRange<T> {
