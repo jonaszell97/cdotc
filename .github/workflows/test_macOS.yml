@@ -12,7 +12,7 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Install LLVM and python
-      run: sudo brew install llvm@10.0.0_3 python
+      run: brew install llvm@10.0.0_3 python
 
     - name: Build the compiler and run the test suite
       run: |
