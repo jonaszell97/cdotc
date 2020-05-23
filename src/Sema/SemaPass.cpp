@@ -148,8 +148,9 @@ SemaPass::SemaPass(CompilerInstance& compilationUnit)
       DiagConsumer(std::make_unique<SemaDiagConsumer>(*this)),
       Diags(DiagConsumer.get(), &compilationUnit.getFileMgr()),
       QC(compilationUnit.getQueryContext()),
-      Context(compilationUnit.getContext()), mangle(*this),
-      Evaluator(*this),
+      Context(compilationUnit.getContext()),
+      DeclCtx(&compilationUnit.getGlobalDeclCtx()),
+      mangle(*this), Evaluator(*this),
       Instantiator(std::make_unique<TemplateInstantiator>(*this)),
       ConfResolver(nullptr),
       ILGen(std::make_unique<ILGenPass>(compilationUnit.getILCtx(), *this)),
@@ -235,7 +236,7 @@ void SemaPass::addDeclToContext(DeclContext& Ctx, DeclarationName declName,
    auto res = isa<RecordDecl>(&Ctx) ? cast<RecordDecl>(&Ctx)->addDecl(Decl)
                                     : Ctx.addDecl(declName, Decl);
 
-   if (!Decl->isImportedFromClang())
+   if (!Decl->isImportedFromClang() && !Decl->isSynthesized())
       diagnoseRedeclaration(Ctx, res, declName, Decl);
 }
 

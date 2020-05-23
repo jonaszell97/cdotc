@@ -205,13 +205,14 @@ void ModuleManager::EmitModule(Module* Mod)
 
    string OutPath = CI.getOptions().EmitModulePath;
    if (OutPath.empty()) {
-      OutPath = fs::getLibraryDir();
+      OutPath = fs::getApplicationDir();
+      OutPath += "/lib";
    }
 
    SmallString<128> OutFile;
-   fs::appendToPath(OutFile, StringRef(OutPath));
+   OutFile.append(OutPath);
 
-   fs::createDirectories(OutFile);
+   fs::createDirectories(OutPath);
    fs::appendToPath(OutFile, Mod->getName()->getIdentifier() + ".cdotm");
 
    if (fs::fileExists(OutFile)) {
@@ -220,7 +221,8 @@ void ModuleManager::EmitModule(Module* Mod)
 
    llvm::raw_fd_ostream OS(OutFile.str(), EC);
    if (EC) {
-      llvm::report_fatal_error(EC.message());
+      llvm::report_fatal_error(
+         "could not open output file '" + OutFile.str() + "': " + EC.message());
    }
 
    // if the module doesn't export anything, there's no need to emit a
@@ -240,7 +242,8 @@ void ModuleManager::EmitModule(Module* Mod)
       // emit the static library
       EC = llvm::sys::fs::createUniqueFile("cdot-tmp-%%%%%%%%.a", TmpFile);
       if (EC) {
-         llvm::report_fatal_error(EC.message());
+         llvm::report_fatal_error(
+            "could not open temporary file: " + EC.message());
       }
 
       SmallString<56> TmpDir;
@@ -266,8 +269,10 @@ void ModuleManager::EmitModule(Module* Mod)
 
       if (EmitStaticLib) {
          auto MaybeBuf = llvm::MemoryBuffer::getFile(TmpFile);
-         if (!MaybeBuf)
-            llvm::report_fatal_error("failed opening archive");
+         if (!MaybeBuf) {
+            llvm::report_fatal_error(
+               "failed opening archive '" + TmpFile.str() + "'");
+         }
 
          Writer->WriteModule(Mod, MaybeBuf.get().get());
          fs::deleteFile(TmpFile.str());

@@ -141,8 +141,10 @@ void Module::writeToFile(const char* FileName) const
    std::error_code EC;
    llvm::raw_fd_ostream OS(FileName, EC);
 
-   if (EC)
-      llvm::report_fatal_error(EC.message());
+   if (EC) {
+      llvm::report_fatal_error(
+         "error opening output file '" + fileName + "': " + EC.message());
+   }
 
    writeTo(OS);
 }

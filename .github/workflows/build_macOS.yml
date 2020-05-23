@@ -1,0 +1,20 @@
+name: Build (macOS)
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: macOS-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install LLVM, Python and CMake
+      run: brew install https://raw.githubusercontent.com/Homebrew/homebrew-core/6616d50fb0b24dbe30f5e975210bdad63257f517/Formula/llvm.rb python cmake
+
+    - name: Build the compiler and run the test suite
+      run: |
+        cd utils
+        ./build_script --test --use-llvm "/usr/local/Cellar/llvm/10.0.0_3/bin/llvm-config"

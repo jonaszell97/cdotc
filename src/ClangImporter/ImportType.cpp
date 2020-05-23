@@ -242,7 +242,10 @@ QualType ImporterImpl::getType(clang::QualType Ty)
          unsigned Size = 0;
 
          for (clang::FieldDecl* F : RecTy->getDecl()->fields()) {
-            Size += ASTCtx.getTypeSize(F->getType());
+            auto ByteSize = ASTCtx.getTypeSizeInCharsIfKnown(F->getType());
+            if (ByteSize.hasValue()) {
+               Size += ByteSize.getValue().getQuantity();
+            }
          }
 
          return Ctx.getArrayType(Ctx.getUInt8Ty(), Size);

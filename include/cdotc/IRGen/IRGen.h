@@ -204,6 +204,7 @@ private:
                                 llvm::ArrayRef<llvm::Type*> Tys = {});
 
    llvm::Intrinsic::ID getIntrinsicID(StringRef Name);
+   bool intrinsicNeedsTypeAnnot(llvm::Intrinsic::ID ID);
 
    template<class... Args>
    void debugPrint(const llvm::Twine& str, Args&&... args)

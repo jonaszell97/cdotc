@@ -182,13 +182,8 @@ private:
 
    /// Query
    void EmitDecl(Record* Query);
-   void EmitSimpleDecl(Record* Query, QueryInfo& Info);
-
    void EmitImpl(Record* Query);
    void EmitQueryClassImpls(llvm::ArrayRef<Record*> Queries);
-
-   /// Query Macros
-   void EmitQueryMacros(llvm::ArrayRef<Record*> Queries);
 };
 
 } // anonymous namespace
@@ -1537,8 +1532,6 @@ void QueryClassEmitter::EmitQueryContextImpls()
       OS << "\n}\n\n";
    }
 }
-
-void QueryClassEmitter::EmitQueryMacros(llvm::ArrayRef<Record*> Queries) {}
 
 extern "C" {
 

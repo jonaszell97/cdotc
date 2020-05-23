@@ -231,19 +231,19 @@ static void addDefaultInvocationArgs(CompilerInstance& CI,
       ArgStrings.emplace_back("-std=gnu11");
    }
 
-   // Add system root directory.
-   if (Target.isOSDarwin()) {
-      ArgStrings.emplace_back("-isysroot");
-   }
-   else {
-      ArgStrings.emplace_back("--sysroot");
-   }
-
    const char* SDKROOT = getenv("CDOT_SDKROOT");
    if (SDKROOT) {
+      // Add system root directory.
+      if (Target.isOSDarwin()) {
+         ArgStrings.emplace_back("-isysroot");
+      }
+      else {
+         ArgStrings.emplace_back("--sysroot");
+      }
+
       ArgStrings.emplace_back(SDKROOT);
    }
-   else
+   else if (Target.isOSDarwin()) {
       do {
          // xcrun --show-sdk-path
          auto xcrunOrError = llvm::sys::findProgramByName("xcrun");
@@ -251,7 +251,7 @@ static void addDefaultInvocationArgs(CompilerInstance& CI,
             break;
          }
 
-         auto& xcrun = xcrunOrError.get();
+         auto &xcrun = xcrunOrError.get();
          xcrun += " --show-sdk-path";
 
          auto sysroot = fs::exec(xcrun);
@@ -262,8 +262,11 @@ static void addDefaultInvocationArgs(CompilerInstance& CI,
             sysroot.pop_back();
 
          setenv("CDOT_SDKROOT", sysroot.c_str(), true);
+
+         ArgStrings.emplace_back("-isysroot");
          ArgStrings.emplace_back(move(sysroot));
       } while (false);
+   }
 
    // Add custom clang options from the command line.
    for (auto& Opt : CI.getOptions().getClangOptions()) {
@@ -278,40 +281,51 @@ void ImporterImpl::Initialize()
 {
    START_TIMER("Clang Importer Initialization");
 
-   auto clangPathOrError = llvm::sys::findProgramByName("clang");
-   if (clangPathOrError.getError()) {
-      llvm::report_fatal_error("'clang' executable could not be found");
+   if (IsCXX) {
+      auto clangPathOrError = llvm::sys::findProgramByName("clang++");
+      if (clangPathOrError.getError()) {
+         llvm::report_fatal_error("'clang++' executable could not be found");
+      }
+
+      InvocationArgStrings.emplace_back(move(clangPathOrError.get()));
+   }
+   else {
+      auto clangPathOrError = llvm::sys::findProgramByName("clang");
+      if (clangPathOrError.getError()) {
+         llvm::report_fatal_error("'clang' executable could not be found");
+      }
+
+      InvocationArgStrings.emplace_back(move(clangPathOrError.get()));
    }
 
-   std::vector<std::string> ArgStrings;
-   ArgStrings.emplace_back(move(clangPathOrError.get()));
-
-   addDefaultInvocationArgs(CI, ArgStrings,
-                            CI.getContext().getTargetInfo().getTriple(), IsCXX);
+   addDefaultInvocationArgs(
+      CI, InvocationArgStrings,
+      CI.getContext().getTargetInfo().getTriple(), IsCXX);
 
    std::vector<const char*> ArgCStrings;
-   ArgCStrings.reserve(ArgStrings.size());
+   ArgCStrings.reserve(InvocationArgStrings.size());
 
-   for (auto& Str : ArgStrings)
+   for (auto& Str : InvocationArgStrings)
       ArgCStrings.push_back(Str.c_str());
 
-   auto DiagnosticOpts = std::make_unique<clang::DiagnosticOptions>();
-   auto DiagClient = std::make_unique<ClangDiagnosticConsumer>(*this);
+   ClangDiagnosticOpts = new clang::DiagnosticOptions;
 
+   auto DiagClient = new ClangDiagnosticConsumer(*this);
    auto ClangDiags = clang::CompilerInstance::createDiagnostics(
-       DiagnosticOpts.get(), DiagClient.release());
+       ClangDiagnosticOpts, DiagClient, true);
 
    this->ClangDiags = ClangDiags.get();
 
    // Create a new Clang compiler invocation.
-   auto Invocation
-       = clang::createInvocationFromCommandLine(ArgCStrings, ClangDiags);
+   auto Invocation = clang::createInvocationFromCommandLine(
+      ArgCStrings, ClangDiags, nullptr);
 
    // We passed ownership of the diagnostics.
    ClangDiags.resetWithoutRelease();
 
-   if (!Invocation)
+   if (!Invocation) {
       llvm::report_fatal_error("clang invocation failed");
+   }
 
    this->Invocation.reset(Invocation.release());
 }

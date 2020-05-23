@@ -1222,7 +1222,7 @@ llvm::ArrayRef<ExtensionDecl*> RecordDecl::getExtensions() const
 void RecordDecl::addExtension(ExtensionDecl* E) const
 {
    auto& Context = getASTCtx();
-   getASTCtx().addExtension(
+   Context.addExtension(
        Context.getRecordType(const_cast<RecordDecl*>(this)), E);
 }
 

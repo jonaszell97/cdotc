@@ -128,6 +128,7 @@ fileprivate def RedirectIO(_ Path: String?, _ FD: Int32) -> Bool {
     return false
 }
 
+@version(Darwin)
 internal def _execute(_ program: String,
                       _ args: [String],
                       _ env: [String]? = none,
@@ -300,6 +301,15 @@ internal def _execute(_ program: String,
     return (true, Int(child))
 }
 
+@version(Linux)
+internal def _execute(_ program: String,
+                      _ args: [String],
+                      _ env: [String]? = none,
+                      _ redirects: [String?] = Array<Option<String>>(),
+                      _ memoryLimit: UInt = 0) -> (success: Bool, childID: Int) {
+    unimplemented!()
+}
+
 /*** File System  ***/
 
 /// Opaque value that represents an open file.
@@ -310,6 +320,7 @@ alias InvalidFD: FileDescriptor = FileDescriptor(-1)
 
 /// Open the file with the given name for reading. Returns a FileDescriptor describing
 /// the file on success, or InvalidFD on error.
+@version(Darwin)
 def openFileForRead(_ fileName: String) -> FileDescriptor {
     var openFlags = OpenFlags.O_RDONLY
     if reflect.targetInfo.operatingSystem.isDarwin {
@@ -322,8 +333,14 @@ def openFileForRead(_ fileName: String) -> FileDescriptor {
     return posix.fcntl.open(fileName.unsafeCString, openFlags.rawValue.value as libc.int)
 }
 
+@version(Linux)
+def openFileForRead(_ fileName: String) -> FileDescriptor {
+    unimplemented!()
+}
+
 /// Open the file with the given name for writing. Returns a FileDescriptor describing
 /// the file on success, or InvalidFD on error.
+@version(Darwin)
 def openFileForWrite(_ fileName: String,
                      _ flags: fs.OpenFlags,
                      _ mode: Int = 0666) -> FileDescriptor {
@@ -352,6 +369,13 @@ def openFileForWrite(_ fileName: String,
     return FileDescriptor(posix.fcntl.open(fileName.unsafeCString,
                                            openFlags.value as libc.int,
                                            mode.value as libc.int))
+}
+
+@version(Linux)
+def openFileForWrite(_ fileName: String,
+                     _ flags: fs.OpenFlags,
+                     _ mode: Int = 0666) -> FileDescriptor {
+    unimplemented!()
 }
 
 /// Attempt to close the file described by the file descriptor.

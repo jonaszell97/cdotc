@@ -1,6 +1,13 @@
 <img src="https://imgur.com/eGguu7Y.png" alt="CDot Logo" height="70px" />
 
-# The C• Programming Language
+The C• Programming Language
+===========================
+
+| | **Architecture** | **Master** |
+|---|:---:|:---:|
+| **macOS**        | x86_64 |![Build Status](https://github.com/jonaszell97/cdotc/workflows/Build%20(macOS)/badge.svg)|
+| **Ubuntu 18.04** | x86_64 |![Build Status](https://github.com/jonaszell97/cdotc/workflows/Build%20(Ubuntu%2018.04)/badge.svg)|
+| **Ubuntu 16.04** | x86_64 |![Build Status](https://github.com/jonaszell97/cdotc/workflows/Build%20(Ubuntu%2016.04)/badge.svg)|
 
 C• (pronouced _see-dot_) is a multi-paradigm systems programming language with the goal of combining the most popular features from a variety of modern languages. This includes (among many others)
 
@@ -17,12 +24,12 @@ C• binaries are compiled to machine code using LLVM, which means that the powe
 For code examples and further documentation, please refer to the [docs](https://jonaszell97.github.io). 
 
 - [Building cdotc](#building-cdotc)
-- [macOS](#macos)
-- [Linux](#linux)
-- [Building](#building)
+  - [macOS](#macos)
+  - [Linux](#linux)
+  - [Building](#building)
 - [Using cdotc](#using-cdotc)
-- [Building a standalone executable](#building-a-standalone-executable)
-- [Building a module](#building-a-module)
+  - [Building a standalone executable](#building-a-standalone-executable)
+  - [Building a module](#building-a-module)
 
 ## Building cdotc
 

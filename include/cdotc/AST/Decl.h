@@ -1965,9 +1965,9 @@ private:
 
    InitDecl(EmptyShell Empty, unsigned N);
 
-   ConstructorKind Kind : 7;
-   bool ExplicitMemberwise : 1;
-   bool IsFallible : 1;
+   ConstructorKind Kind;
+   bool ExplicitMemberwise;
+   bool IsFallible;
 
    QualType OptionTy;
 
@@ -2463,8 +2463,8 @@ class PrecedenceGroupDecl : public NamedDecl {
    PrecedenceGroupDecl(EmptyShell Empty);
 
    SourceRange SR;
-   Associativity Assoc : 7;
-   bool IsAssignment : 1;
+   Associativity Assoc;
+   bool IsAssignment;
 
    const IdentifierInfo* HigherThanIdent;
    PrecedenceGroupDecl* HigherThan = nullptr;

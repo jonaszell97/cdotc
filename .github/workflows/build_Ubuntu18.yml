@@ -1,0 +1,31 @@
+name: Build (Ubuntu 18.04)
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install LLVM
+      run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo apt-add-repository "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-10 main"
+        sudo apt-add-repository "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-10 main"
+        sudo apt-get update
+        sudo apt-get install libllvm-10-ocaml-dev libllvm10 llvm-10 llvm-10-dev llvm-10-doc llvm-10-examples llvm-10-runtime clang-10 clang-tools-10 clang-10-doc libclang-common-10-dev libclang-10-dev libclang1-10 clang-format-10 python3-clang-10 clangd-10 lld-10
+
+        sudo ln -sf /usr/lib/llvm-10/lib/*.so /usr/lib/
+        sudo ln -sf /usr/lib/llvm-10/lib/*.so.10 /usr/lib/
+
+    - name: Install Python and CMake
+      run: sudo apt-get install python cmake libedit-dev
+
+    - name: Build the Compiler and Run the Test Suite
+      run: |
+        cd utils
+        ./build_script --test --use-llvm /usr/bin/llvm-config-10 --use-cxx /usr/bin/clang++-10 --sudo

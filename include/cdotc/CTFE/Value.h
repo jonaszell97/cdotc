@@ -40,7 +40,6 @@ public:
 #define INT_INIT(Ty)                                                           \
    static Value getInt(Ty val) { return Value(val); }
 
-   INT_INIT(size_t)
    INT_INIT(uint64_t)
    INT_INIT(uint32_t)
    INT_INIT(uint16_t)
@@ -137,7 +136,6 @@ public:
       Field = val;                                                             \
    }
 
-   CDOT_VALUE_INIT(u64, size_t)
    CDOT_VALUE_INIT(u64, uint64_t)
    CDOT_VALUE_INIT(u32, uint32_t)
    CDOT_VALUE_INIT(u16, uint16_t)

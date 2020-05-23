@@ -984,7 +984,7 @@ public:
       bool operator!=(const ParamInfo& I) const { return !(*this == I); }
 
    private:
-      ArgumentConvention Conv : 4;
+      ArgumentConvention Conv;
       IdentifierInfo* Label;
    };
 

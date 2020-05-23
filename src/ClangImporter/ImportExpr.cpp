@@ -147,6 +147,10 @@ static Expression* expressionFromCharToken(ImporterImpl& I,
    LiteralParser LP(StringRef(Tok.getLiteralData() + 1, Tok.getLength() - 2));
    auto Result = LP.parseCharacter();
 
+   if (Result.Malformed) {
+      return nullptr;
+   }
+
    auto SR = SourceRange(I.getSourceLoc(Tok.getLocation()),
                          I.getSourceLoc(Tok.getEndLoc()));
 

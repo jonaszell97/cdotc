@@ -1088,7 +1088,6 @@ void IRGen::DeclareType(ast::RecordDecl* R)
          ContainedTypes.push_back(Builder.getInt64Ty());   // weak refcount
          ContainedTypes.push_back(Builder.getInt8PtrTy()); // typeinfo
       }
-
       for (auto F : S->getFields()) {
          auto fieldTy = getStorageType(F->getType()->getCanonicalType());
          ContainedTypes.push_back(fieldTy);
@@ -1642,16 +1641,23 @@ llvm::Constant* IRGen::getConstantVal(il::Constant const* C)
    }
 
    if (auto F = dyn_cast<ConstantFloat>(C)) {
-      if (F->getType()->isFloatTy())
-         return llvm::ConstantFP::get(Builder.getFloatTy(), F->getFloatVal());
-
       auto it = ValueMap.find(F);
       if (it != ValueMap.end())
          return cast<llvm::ConstantFP>(it->getSecond());
 
-      auto V = llvm::ConstantFP::get(Builder.getDoubleTy(), F->getDoubleVal());
-      addMappedValue(F, V);
+      llvm::Constant *V;
+      if (F->getType()->isFloatTy()) {
+         V = llvm::ConstantFP::get(Builder.getFloatTy(), F->getFloatVal());
+      }
+      else if (F->getType()->isDoubleTy()) {
+         V = llvm::ConstantFP::get(Builder.getDoubleTy(), F->getDoubleVal());
+      }
+      else {
+         V = llvm::ConstantFP::get(
+            llvm::Type::getFP128Ty(Ctx), F->getDoubleVal());
+      }
 
+      addMappedValue(F, V);
       return V;
    }
 
@@ -3174,9 +3180,18 @@ llvm::Function* IRGen::getIntrinsic(llvm::Intrinsic::ID ID,
 
 llvm::Value* IRGen::visitLLVMIntrinsicCallInst(const LLVMIntrinsicCallInst& I)
 {
-   auto *Fn = llvm::Intrinsic::getDeclaration(
-       M, getIntrinsicID(I.getIntrinsicName()->getIdentifier()),
-       getStorageType(I.getArgs().front()->getType()));
+   auto Name = I.getIntrinsicName()->getIdentifier();
+
+   llvm::Function *Fn;
+   auto ID = getIntrinsicID(Name);
+
+   if (intrinsicNeedsTypeAnnot(ID)) {
+      Fn = llvm::Intrinsic::getDeclaration(
+         M, ID, getStorageType(I.getArgs().front()->getType()));
+   }
+   else {
+      Fn = llvm::Intrinsic::getDeclaration(M, ID);
+   }
 
    llvm::SmallVector<llvm::Value*, 8> args;
    for (const auto& arg : I.getArgs())

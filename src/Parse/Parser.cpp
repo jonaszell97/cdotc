@@ -416,7 +416,7 @@ ParseResult Parser::skipUntilProbableEndOfStmt()
    while (!lookahead().oneOf(tok::newline, tok::semicolon, tok::eof,
                              tok::open_brace, tok::close_paren,
                              tok::close_square, tok::close_brace)
-          && !lookahead().is_keyword())
+          && !lookahead().isKeyword())
       advance(false);
 
    return ParseError();
@@ -432,7 +432,7 @@ ParseResult Parser::skipUntilProbableEndOfStmt(cdot::lex::tok::TokenType kind)
    while (!lookahead().oneOf(kind, tok::newline, tok::semicolon, tok::eof,
                              tok::open_brace, tok::close_paren,
                              tok::close_square, tok::close_brace)
-          && !lookahead().is_keyword())
+          && !lookahead().isKeyword())
       advance(false);
 
    return ParseError();
@@ -443,7 +443,7 @@ ParseResult Parser::skipUntilProbableEndOfExpr()
    while (!lookahead().oneOf(tok::newline, tok::semicolon, tok::eof,
                              tok::open_brace, tok::close_paren,
                              tok::close_square, tok::close_brace)
-          && !lookahead().is_keyword())
+          && !lookahead().isKeyword())
       advance(false);
 
    return ParseError();
@@ -681,7 +681,7 @@ ParseTypeResult Parser::parseTypeImpl(bool allowInferredArraySize,
 {
    auto BeginLoc = currentTok().getSourceLoc();
 
-   if (currentTok().getIdentifierInfo() == Ident_decltype) {
+   if (currentTok().is(Ident_decltype)) {
       if (!expect(tok::open_paren)) {
          skipUntilProbableEndOfExpr();
          return ParseTypeResult();
@@ -1914,7 +1914,7 @@ ParseResult Parser::parseUnaryExpr(bool parsingStmt)
       Expression* E = parseExprSequence().tryGetExpr();
       Expr = AwaitExpr::Create(Context, AwaitLoc, E);
    }
-   else if (currentTok().getIdentifierInfo() == Ident___traits) {
+   else if (currentTok().is(Ident___traits)) {
       Expr = parseTraitsExpr();
    }
    else if (currentTok().is(tok::kw_static)) {
@@ -3917,7 +3917,7 @@ ASTVector<TemplateParamDecl*> Parser::tryParseTemplateParameters()
       bool variadic = false;
       bool isTypeName = true;
 
-      if (currentTok().getIdentifierInfo() == Ident_typename) {
+      if (currentTok().is(Ident_typename)) {
          // default
          TypeNameOrValueLoc = consumeToken();
       }
@@ -4719,7 +4719,7 @@ ParseResult Parser::parseForStmt(IdentifierInfo* Label)
    }
 
    // range based for loop
-   if (currentTok().getIdentifierInfo() == Ident_in) {
+   if (currentTok().is(Ident_in)) {
       advance();
 
       Expression* range

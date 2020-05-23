@@ -88,6 +88,12 @@ ConstantFloat* ConstantFloat::get(ValueType Ty, llvm::APFloat&& APF)
    else if (Ty->isDoubleTy()) {
       Map = &Ctx.FP64Constants;
    }
+   else if (Ty->asBuiltinType()->getKind() == Type::f80) {
+      Map = &Ctx.FP80Constants;
+   }
+   else if (Ty->asBuiltinType()->getKind() == Type::f128) {
+      Map = &Ctx.FP128Constants;
+   }
    else {
       llvm_unreachable("bad floating point type!");
    }

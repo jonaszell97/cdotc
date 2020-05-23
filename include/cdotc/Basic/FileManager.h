@@ -129,8 +129,8 @@ public:
    struct MacroExpansionLoc {
       /// C'tor.
       MacroExpansionLoc(SourceLocation ExpandedFrom, SourceLocation PatternLoc,
-                        SourceOffset BaseOffset, unsigned Length, SourceID ID,
-                        const IdentifierInfo* MacroName)
+                        SourceOffset BaseOffset, unsigned Length,
+                        fs::SourceID ID, const IdentifierInfo* MacroName)
           : ExpandedFrom(ExpandedFrom), PatternLoc(PatternLoc),
             BaseOffset(BaseOffset), Length(Length), SourceID(ID),
             MacroName(MacroName)
@@ -150,7 +150,7 @@ public:
       unsigned Length;
 
       /// The source ID of this macro expansion location.
-      SourceID SourceID;
+      fs::SourceID SourceID;
 
       /// The name of the expanded macro.
       const IdentifierInfo* MacroName;

@@ -92,26 +92,18 @@ private:
 
    Record* OperandTy;
 
-   const char* TyMacro = "CDOT_TYPE";
    const char* OpMacro = "CDOT_OPERATOR";
    const char* PGMacro = "CDOT_PRECEDENCE_GROUP";
    const char* BinOpMacro = "CDOT_BINARY_OP";
    const char* PrefixOpMacro = "CDOT_PREFIX_OP";
    const char* PostfixOpMacro = "CDOT_POSTFIX_OP";
 
-   void emitType(Record& Ty);
    void emitPrecedenceGroup(Record& PG);
-
    void emitOpGeneral(Record& Op);
    void emitOp(Record& Op, Fix fix);
 };
 
 } // end anonymous namespace
-
-void AttrDefEmitter::emitType(Record& Ty)
-{
-   out << TyMacro << "(" << Ty.getName() << ")";
-}
 
 void AttrDefEmitter::emitPrecedenceGroup(Record& PG)
 {
@@ -197,4 +189,4 @@ void EmitBuiltinOperators(std::ostream& out, RecordKeeper& RK)
    out << s;
 }
 
-};
+}

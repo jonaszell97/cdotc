@@ -64,6 +64,9 @@ static cl::list<string> LibrarySearchDirs("L", cl::ZeroOrMore, cl::Prefix,
 /// If given, debug info will be emitted.
 static cl::opt<bool> EmitDebugInfo("g", cl::desc("emit debug info"));
 
+/// Control verbose output
+static cl::opt<bool> Verbose("v", cl::desc("verbose output"));
+
 /// If true, the module's unit tests will be executed.
 static cl::opt<bool> RunUnitTests("test", cl::desc("run unit tests"));
 
@@ -312,6 +315,7 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       ScratchBuf += LI;
 
       options.linkerInput.emplace_back(ScratchBuf.str());
+      ScratchBuf.clear();
    }
 
    ScratchBuf.clear();
@@ -320,7 +324,10 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
       ScratchBuf += LI;
 
       options.linkerInput.emplace_back(ScratchBuf.str());
+      ScratchBuf.clear();
    }
+
+   options.linkerInput.emplace_back("-L" + fs::getApplicationDir() + "/lib");
 
    /* Output File */
 
@@ -331,6 +338,7 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    /* Include Paths */
 
    options.includePaths.emplace_back("./");
+   options.includePaths.emplace_back(fs::getApplicationDir() + "/lib");
    options.includePaths.emplace_back(fs::getIncludeDir());
    options.includePaths.emplace_back(fs::getLibraryDir());
 
@@ -385,6 +393,9 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
    }
    if (RunUnitTests) {
       options.setFlag(CompilerOptions::F_RunUnitTests, true);
+   }
+   if (Verbose) {
+      options.setFlag(CompilerOptions::F_Verbose, true);
    }
    if (VerifyIL) {
       options.setFlag(CompilerOptions::F_VerifyIL, true);
@@ -971,11 +982,11 @@ void CompilerInstance::setCompilationModule(Module* Mod)
 
 ClangImporter& CompilerInstance::getClangImporter()
 {
-   if (ClangImporter)
-      return *ClangImporter;
+   if (ClangImporterInstance)
+      return *ClangImporterInstance;
 
-   ClangImporter = std::make_unique<cdot::ClangImporter>(*this);
-   return *ClangImporter;
+   ClangImporterInstance = std::make_unique<cdot::ClangImporter>(*this);
+   return *ClangImporterInstance;
 }
 
 ast::ILGenPass& CompilerInstance::getILGen() const { return Sema->getILGen(); }

@@ -11,6 +11,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <cassert>
+#include <cctype>
 #include <regex>
 
 using std::string;
@@ -1085,7 +1086,7 @@ Token Lexer::lexCharLiteral()
          ++CurPtr;
 
          for (int i = 0; i < 2; ++i) {
-            if (!::ishexnumber(*CurPtr++)) {
+            if (!isxdigit(*CurPtr++)) {
                Diags.Diag(err_invalid_hex_digit)
                    << *(CurPtr - 1)
                    << SourceLocation(currentIndex() + offset);
@@ -1096,7 +1097,7 @@ Token Lexer::lexCharLiteral()
          ++CurPtr;
 
          for (int i = 0; i < 4; ++i) {
-            if (!::ishexnumber(*CurPtr++)) {
+            if (!isxdigit(*CurPtr++)) {
                Diags.Diag(err_invalid_hex_digit)
                    << *(CurPtr - 1)
                    << SourceLocation(currentIndex() + offset);

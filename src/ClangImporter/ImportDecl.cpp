@@ -38,12 +38,12 @@ DeclarationName ImporterImpl::getName(const clang::DeclarationName& Name)
    //      CXXOperatorName,
    //      CXXLiteralOperatorName,
    //      CXXUsingDirective
-   if (!Name)
-      return DeclarationName();
+   auto& Idents = CI.getContext().getIdentifiers();
+   if (!Name) {
+      return &Idents.get("_UnnamedDecl_" + std::to_string(NumUnnamedDecls++));
+   }
 
    auto& Tbl = CI.getContext().getDeclNameTable();
-   auto& Idents = CI.getContext().getIdentifiers();
-
    switch (Name.getNameKind()) {
    case clang::DeclarationName::Identifier:
       return DeclarationName(Idents.get(Name.getAsIdentifierInfo()->getName()));
@@ -235,7 +235,7 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
       }
 
       auto* Field = FieldDecl::Create(
-          Ctx, getAccess(F->getAccess()), SourceLocation(), FieldLoc,
+          Ctx, getAccess(F->getAccess()), FieldLoc, FieldLoc,
           getName(F->getDeclName()), SourceType(FieldTy), false,
           F->getType().isConstQualified(), DefaultVal);
 
@@ -278,9 +278,19 @@ EnumDecl* ImporterImpl::importEnum(clang::EnumDecl* ClangE)
       Name = getName(ClangE->getDeclName());
    }
 
+   SourceType UnderlyingType;
+   auto IntTy = ClangE->getIntegerType();
+
+   if (IntTy.isNull()) {
+      UnderlyingType = Ctx.getIntTy();
+   }
+   else {
+      UnderlyingType = getType(IntTy);
+   }
+
    auto* D = EnumDecl::Create(Ctx, getAccess(ClangE->getAccess()),
                               getSourceLoc(ClangE->getBeginLoc()), Name, {}, {},
-                              SourceType(getType(ClangE->getIntegerType())));
+                              SourceType(UnderlyingType));
 
    D->setImportedFromClang(true);
    DeclMap[ClangE] = D;

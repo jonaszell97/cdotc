@@ -130,6 +130,8 @@ private:
    IntMapTy IntConstants;
    FPMapTy FP32Constants;
    FPMapTy FP64Constants;
+   FPMapTy FP80Constants;
+   FPMapTy FP128Constants;
    StringMapTy StringConstants;
    NullPtrMapTy NullConstants;
    UndefMapTy UndefConstants;

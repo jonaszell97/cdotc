@@ -233,6 +233,9 @@ void Token::print(llvm::raw_ostream& OS) const
    case tok::macro_name:
       OS << getIdentifier() << "!";
       break;
+   case tok::closure_arg:
+      OS << "$" << getText();
+      break;
    case tok::macro_expression:
       OS << "<expr " << getExpr() << ">";
       break;
@@ -261,7 +264,7 @@ template void Token::rawRepr(llvm::SmallString<512>&) const;
 
 bool Token::is(cdot::IdentifierInfo* II) const
 {
-   if (!is_identifier())
+   if (!isIdentifier())
       return false;
 
    return getIdentifierInfo() == II;
@@ -269,7 +272,7 @@ bool Token::is(cdot::IdentifierInfo* II) const
 
 bool Token::isIdentifier(llvm::StringRef str) const
 {
-   if (!is_identifier())
+   if (!isIdentifier())
       return false;
 
    return getIdentifierInfo()->getIdentifier().equals(str);
@@ -277,7 +280,7 @@ bool Token::isIdentifier(llvm::StringRef str) const
 
 bool Token::isIdentifierStartingWith(llvm::StringRef str) const
 {
-   if (!is_identifier())
+   if (!isIdentifier())
       return false;
 
    return getIdentifierInfo()->getIdentifier().startswith(str);
@@ -285,7 +288,7 @@ bool Token::isIdentifierStartingWith(llvm::StringRef str) const
 
 bool Token::isIdentifierEndingWith(llvm::StringRef str) const
 {
-   if (!is_identifier())
+   if (!isIdentifier())
       return false;
 
    return getIdentifierInfo()->getIdentifier().endswith(str);
@@ -300,6 +303,14 @@ bool Token::isWhitespace() const
    default:
       return false;
    }
+}
+
+IdentifierInfo* Token::getIdentifierInfo() const
+{
+   assert((oneOf(tok::ident, tok::op_ident, tok::macro_name, tok::dollar_ident,
+       tok::dollar_dollar_ident) || isKeyword())
+      && "not an identifier token!");
+   return (IdentifierInfo*)(Ptr);
 }
 
 llvm::StringRef Token::getIdentifier() const
@@ -352,18 +363,7 @@ string Token::rawRepr() const
    return str.str();
 }
 
-bool Token::is_punctuator() const
-{
-   switch (kind) {
-#define CDOT_PUNCTUATOR_TOKEN(Name, Spelling) case tok::Name:
-#include "cdotc/Lex/Tokens.def"
-      return true;
-   default:
-      return false;
-   }
-}
-
-bool Token::is_keyword() const
+bool Token::isKeyword() const
 {
    switch (kind) {
 #define CDOT_KEYWORD_TOKEN(Name, Spelling) case tok::Name:
@@ -377,7 +377,7 @@ bool Token::is_keyword() const
    }
 }
 
-bool Token::is_operator() const
+bool Token::isOperator() const
 {
    switch (kind) {
 #define CDOT_OPERATOR_TOKEN(Name, Spelling) case tok::Name:
@@ -388,18 +388,7 @@ bool Token::is_operator() const
    }
 }
 
-bool Token::is_directive() const
-{
-   switch (kind) {
-#define CDOT_POUND_KEYWORD_TOKEN(Name, Spelling) case tok::Name:
-#include "cdotc/Lex/Tokens.def"
-      return true;
-   default:
-      return false;
-   }
-}
-
-bool Token::is_literal() const
+bool Token::isLiteral() const
 {
    switch (kind) {
 #define CDOT_LITERAL_TOKEN(Name, Spelling) case tok::Name:

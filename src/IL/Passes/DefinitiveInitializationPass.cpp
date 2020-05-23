@@ -297,20 +297,9 @@ LocalVariable* DefinitiveInitializationPass::getLocal(Value* Val,
                                     MemoryLocCounter++, Vec);
 
    auto Result = MemoryLocs.try_emplace(Var->Loc, Var);
-   (void)Result;
-
-#ifndef NDEBUG
    if (!Result.second) {
-      if (Val) {
-         llvm::outs() << "Name: " << Val->getName() << "\n";
-         if (auto inst = dyn_cast<il::Instruction>(Val)) {
-            inst->getParent()->getParent()->dump();
-         }
-      }
-
-      llvm_unreachable("FIXME!");
+      return Result.first->getSecond();
    }
-#endif
 
    return Var;
 }
@@ -575,6 +564,9 @@ void DefinitiveInitializationPass::run()
    // collect local variables
    for (auto& B : *F) {
       for (auto& I : B) {
+         if (I.isSynthesized())
+            continue;
+
          getLocal(&I);
       }
    }

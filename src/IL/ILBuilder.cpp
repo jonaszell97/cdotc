@@ -188,10 +188,9 @@ ConstantInt* ILBuilder::GetChar(char c)
 ConstantFloat* ILBuilder::GetConstantFP(QualType ty, double d)
 {
    if (ty->isFloatTy())
-      return ConstantFloat::get(ValueType(Ctx, ASTCtx.getFloatTy()), (float)d);
+      return ConstantFloat::get(ValueType(Ctx, ty), (float)d);
 
-   assert(ty->isDoubleTy());
-   return ConstantFloat::get(ValueType(Ctx, ASTCtx.getDoubleTy()), d);
+   return ConstantFloat::get(ValueType(Ctx, ty), d);
 }
 
 ConstantFloat* ILBuilder::GetConstantFP(QualType ty, llvm::APFloat&& Val)

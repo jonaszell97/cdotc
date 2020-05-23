@@ -892,14 +892,20 @@ il::Constant* ILGenPass::DeclareAlias(AliasDecl *AD)
    }
 
    il::Constant *Val;
-
-   auto result = evaluateStaticExpr(AD->getAliasExpr()->getExpr());
-   if (!result) {
-      AD->setIsInvalid(true);
-      Val = Builder.GetUndefValue(AD->getType());
+   if (AD->isTypedef()) {
+      Val = ConstantExpr::getBitCast(
+          GetOrCreateTypeInfo(AD->getType()->removeMetaType()),
+              AD->getType());
    }
    else {
-      Val = result.getVal();
+      auto result = evaluateStaticExpr(AD->getAliasExpr()->getExpr());
+      if (!result) {
+         AD->setIsInvalid(true);
+         Val = Builder.GetUndefValue(AD->getType());
+      }
+      else {
+         Val = result.getVal();
+      }
    }
 
    DeclMap[AD] = Val;
@@ -5911,7 +5917,7 @@ void ILGenPass::visitBreakStmt(BreakStmt* node)
         it != end; ++it) {
       auto& S = *it;
 
-      if (!node->getLabel() || S.Label == node->getLabel()) {
+      if (S.Label == node->getLabel()) {
          if (!S.BreakTarget) {
             continue;
          }
@@ -5922,8 +5928,14 @@ void ILGenPass::visitBreakStmt(BreakStmt* node)
       }
    }
 
-   SP.diagnose(node, err_loop_label, node->getLabel()->getIdentifier(),
-               node->getSourceLoc());
+   if (auto *Lbl = node->getLabel()) {
+      SP.diagnose(node, err_loop_label, Lbl->getIdentifier(),
+                  node->getSourceLoc());
+   }
+   else {
+      SP.diagnose(node, err_generic_error, "no unlabeled loop is in scope",
+                  node->getSourceLoc());
+   }
 }
 
 void ILGenPass::visitContinueStmt(ContinueStmt* node)
@@ -5934,7 +5946,7 @@ void ILGenPass::visitContinueStmt(ContinueStmt* node)
         it != end; ++it) {
       auto& S = *it;
 
-      if (!node->getLabel() || S.Label == node->getLabel()) {
+      if (S.Label == node->getLabel()) {
          if (!S.ContinueTarget) {
             continue;
          }
@@ -5945,8 +5957,14 @@ void ILGenPass::visitContinueStmt(ContinueStmt* node)
       }
    }
 
-   SP.diagnose(node, err_loop_label, node->getLabel()->getIdentifier(),
-               node->getSourceLoc());
+   if (auto *Lbl = node->getLabel()) {
+      SP.diagnose(node, err_loop_label, Lbl->getIdentifier(),
+                  node->getSourceLoc());
+   }
+   else {
+      SP.diagnose(node, err_generic_error, "no unlabeled loop is in scope",
+                  node->getSourceLoc());
+   }
 }
 
 il::Value* ILGenPass::visitDictionaryLiteral(DictionaryLiteral* Expr)

@@ -168,7 +168,7 @@ void DiagnosticBuilder::handleFunction(unsigned idx, lex::Lexer& lex,
                                        std::string& msg)
 {
    llvm::StringRef funcName;
-   if (lex.currentTok().is_keyword()) {
+   if (lex.currentTok().isKeyword()) {
       switch (lex.currentTok().getKind()) {
       case tok::kw_if:
          funcName = "if";

@@ -3,6 +3,7 @@ import { self, i64, u64, i32, addressOf, bitcast } from builtin
 import libc
 import posix
 
+@version(Darwin)
 public abstract class Thread {
     /// Pointer to a pthread handle.
     protected var pthread: posix.pthread.pthread_t
@@ -30,7 +31,7 @@ public abstract class Thread {
     public static let currentThread: Thread = CurrentThread()
 
     /// Start the execution of the thread.
-    /// @return @code{self} to allow chaining with calls to other methods.
+    /// \return `self` to allow chaining with calls to other methods.
     @discardableResult
     public def start() -> Thread {
         require!(!self.running, "cannot start thread that is already running")
@@ -262,6 +263,7 @@ public abstract class Thread {
 }
 
 /// Represents the thread the class constructor was called on.
+@version(Darwin)
 fileprivate class CurrentThread: Thread {
     /// C'tor.
     fileprivate init {

@@ -11,12 +11,12 @@
 #include <system_error>
 
 #if defined(__APPLE__)
-#include <pwd.h>
-#include <unistd.h>
-#endif
-
-#ifdef _WIN32
-#include <direct.h>
+#  include <pwd.h>
+#  include <unistd.h>
+#elif defined(__linux__)
+#  include <unistd.h>
+#elif defined(_WIN32)
+#  include <direct.h>
 #endif
 
 using std::string;
@@ -250,13 +250,26 @@ string findFileInDirectories(llvm::StringRef fileName,
    return "";
 }
 
-int executeCommand(llvm::StringRef Program, llvm::ArrayRef<string> args)
+int executeCommand(llvm::StringRef Program, llvm::ArrayRef<string> args,
+                   bool verbose)
 {
    SmallVector<StringRef, 2> ArgVec;
    ArgVec.reserve(args.size());
 
    for (auto &arg : args) {
       ArgVec.emplace_back(arg);
+   }
+
+   if (verbose) {
+      auto &OS = llvm::errs();
+      OS << Program;
+
+      for (int i = 1; i < args.size(); ++i) {
+         OS << " " << args[i];
+      }
+
+      OS << "\n";
+      OS.flush();
    }
 
    return llvm::sys::ExecuteAndWait(Program, ArgVec);
@@ -374,10 +387,12 @@ std::error_code makeAbsolute(llvm::SmallVectorImpl<char>& Buf)
 
 llvm::StringRef getLibraryDir()
 {
-#ifndef _WIN32
+#if defined(__APPLE__)
    return "/usr/local/lib";
-#else
+#elif defined(_WIN32)
    return "C:\\Windows\\System32";
+#else
+   return "/usr/local/lib";
 #endif
 }
 
@@ -411,9 +426,13 @@ std::string getApplicationDir()
 
    return str;
 #elif defined(__linux__)
-   return "~/.config/cdotc"
+   StringRef Path = "~/.cdotc";
+   SmallString<64> Out;
+   llvm::sys::fs::expand_tilde(Path, Out);
+
+   return Out.str();
 #else
-#error "unsupported platform"
+#  error "unsupported platform"
 #endif
 }
 
@@ -460,7 +479,7 @@ openTmpFile(StringRef Ext, std::string *FileName)
    int FD;
    llvm::SmallString<128> TmpFile;
 
-   auto EC = createTemporaryFile("cdot-tmp-%%%%%%%%", Ext, FD, TmpFile);
+   auto EC = createTemporaryFile("cdot-tmp", Ext, FD, TmpFile);
    if (EC) {
       return nullptr;
    }
@@ -476,9 +495,9 @@ std::string getTmpFileName(StringRef Ext)
    using namespace llvm::sys::fs;
 
    llvm::SmallString<128> TmpFile;
-   auto EC = getPotentiallyUniqueTempFileName("cdot-tmp-%%%%%%%%", Ext, TmpFile);
+   auto EC = getPotentiallyUniqueTempFileName("cdot-tmp", Ext, TmpFile);
    if (EC) {
-      llvm::report_fatal_error(EC.message());
+      llvm::report_fatal_error("could not open temporary file: " + EC.message());
    }
 
    return TmpFile.str().str();

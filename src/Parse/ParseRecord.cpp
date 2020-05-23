@@ -1236,7 +1236,7 @@ DeclarationName Parser::parseOperatorName(FixKind Fix, bool& isCastOp)
       return MakeDeclName(currentTok().getIdentifier());
    }
 
-   if (currentTok().is_operator()) {
+   if (currentTok().isOperator()) {
       return MakeDeclName(currentTok().toString());
    }
 

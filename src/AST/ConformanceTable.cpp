@@ -78,7 +78,7 @@ void ConformanceTable::insertConformance(RecordDecl* Rec, Conformance* Conf)
 
    LOG(ProtocolConformances, "registered ",
        conformanceKindToString(Conf->getKind()), " conformance of ",
-       Rec->getDeclName(), " to protocol ", Conf->getProto(), " ", Conf->getProto()->getFullName(),
+       Rec->getDeclName(), " to protocol ", Conf->getProto()->getFullName(),
        Conf->isConditional() ? " (where " : "",
        Conf->isConditional() ? *Conf->getConstraints()
                              : *Rec->getASTCtx().EmptyConstraintSet,

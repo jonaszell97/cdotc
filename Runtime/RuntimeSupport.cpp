@@ -16,7 +16,13 @@ extern "C" long long _cdot_GetLastModifiedTime(const char *file)
    struct stat st;
    stat(file, &st);
 
+#if __APPLE__
    return st.st_mtimespec.tv_nsec;
+#elif __linux__
+   return st.st_ctime;
+#else
+#  error "Unsupported platform"
+#endif
 }
 
 struct ProcessInfo {

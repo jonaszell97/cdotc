@@ -168,7 +168,7 @@ struct Test {
 
 class TaskExecutor {
 public:
-   using callback_type = std::function<void(int)>;
+   using callback_type = std::function<void(int, StringRef)>;
 
 private:
    struct PendingTask {
@@ -183,6 +183,9 @@ private:
       }
    };
 
+   /// Reference to the query context.
+   QueryContext &QC;
+
    /// Vector of tasks and their respective callbacks.
    std::vector<PendingTask> tasks;
 
@@ -194,8 +197,9 @@ private:
 
 public:
    /// C'tor.
-   TaskExecutor(llvm::raw_ostream &OS, llvm::raw_ostream &LogFile)
-      : OS(OS), LogFile(LogFile)
+   TaskExecutor(QueryContext &QC, llvm::raw_ostream &OS,
+                llvm::raw_ostream &LogFile)
+      : QC(QC), OS(OS), LogFile(LogFile)
    {
    }
 
@@ -203,9 +207,24 @@ public:
                 ArrayRef<Optional<StringRef>> Redirects,
                 callback_type &&Fn)
    {
-      auto PI = llvm::sys::ExecuteNoWait(Program, Args, llvm::None, Redirects);
+      if (QC.CI.getOptions().verbose()) {
+         auto &OS = llvm::errs();
+         OS << Program;
+
+         for (int i = 1; i < Args.size(); ++i) {
+            OS << " " << Args[i];
+         }
+
+         OS << "\n";
+         OS.flush();
+      }
+
+      std::string ErrMsg;
+      auto PI = llvm::sys::ExecuteNoWait(Program, Args, llvm::None,
+                                         Redirects, 0, &ErrMsg);
+
       if (PI.Pid == llvm::sys::ProcessInfo::InvalidPid) {
-         return Fn(-1);
+         return Fn(-1, ErrMsg);
       }
 
       tasks.emplace_back(PI, move(Fn));
@@ -213,19 +232,23 @@ public:
 
    void WaitUntilCompletion()
    {
+      std::string ErrMsg;
+
       bool foundPendingTask = true;
       while (foundPendingTask) {
          foundPendingTask = false;
 
          for (size_t i = 0; i < tasks.size(); ++i) {
+            ErrMsg.clear();
+
             auto &Task = tasks[i];
             if (Task.done)
                continue;
 
-            auto WaitPI = llvm::sys::Wait(Task.PI, 0, false);
+            auto WaitPI = llvm::sys::Wait(Task.PI, 0, false, &ErrMsg);
             if (WaitPI.Pid == Task.PI.Pid) {
                Task.done = true;
-               Task.Callback(WaitPI.ReturnCode);
+               Task.Callback(WaitPI.ReturnCode, ErrMsg);
 
                continue;
             }
@@ -444,6 +467,10 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
          Task.CompileArgs.emplace_back("-error-limit=0");
          Task.CompileArgs.emplace_back("-fno-incremental");
 
+         if (QC.CI.getOptions().verbose()) {
+            Task.CompileArgs.emplace_back("-v");
+         }
+
          switch (Task.Kind) {
          case Task::VERIFY:
          case Task::VERIFY_IL:
@@ -471,12 +498,12 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
          LogOS << "\n";
 
          Task.StartTime = CurrentTimeMillis();
-         auto callback = [&](int ExitCode) {
+         auto callback = [&](int ExitCode, StringRef ErrMsg) {
            switch (ExitCode) {
            case 0:
               break;
            case -1:
-              LogOS << "UNDETERMINED: could not execute cdotc\n";
+              LogOS << "UNDETERMINED: could not execute cdotc: " << ErrMsg << "\n";
               Task.Status = TestStatus::UNDETERMINED;
               break;
            case -2:
@@ -512,11 +539,18 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
            }
 
            // Run the test executable.
-           auto nextCallback = [&](int RunExitCode) {
+           auto nextCallback = [&](int RunExitCode, StringRef ErrMsg) {
              if (RunExitCode == -1) {
-                LogOS << "XFAIL: failed running output executable\n";
-                Task.Status = TestStatus::VERFAIL;
-                return Executor.TaskComplete(Test, Task);;
+                LogOS << "XFAIL: failed running output executable: " << ErrMsg << " (" << Task.Executable << ")\n";
+                Task.Status = TestStatus::XFAIL;
+
+                auto &RunRedirect = Task.Redirects[::Task::EXEC];
+                auto BufOrError = llvm::MemoryBuffer::getFile(RunRedirect);
+                if (BufOrError) {
+                   LogOS << BufOrError.get()->getBuffer() << "\n";
+                }
+
+                return Executor.TaskComplete(Test, Task);
              }
              if (RunExitCode != Task.ExitCode) {
                 LogOS << "XFAIL: unexpected exit code " << RunExitCode
@@ -632,10 +666,10 @@ QueryResult RunTestModuleQuery::run()
       return fail();
    }
 
-   auto &OS = llvm::outs();
+   auto &OS = llvm::errs();
 
    // Tmp file for redirecting stdout and stderr.
-   TaskExecutor Executor(OS, LogOS);
+   TaskExecutor Executor(QC, OS, LogOS);
    AddTests(Mod, TestMap);
    RunTestsForModule(QC, Mod, Executor, TestMap, cdotc);
 
@@ -647,7 +681,7 @@ QueryResult RunTestModuleQuery::run()
       Totals[Test.getValue()->Status]++;
    }
 
-   llvm::outs() << "\n";
+   OS << "\n";
    for (int i = 0; i <= CRASH; ++i) {
       if (!Totals[i])
          continue;
@@ -679,7 +713,7 @@ QueryResult RunTestModuleQuery::run()
    }
 
    if (Totals[SUCCESS] != TestMap.size()) {
-      llvm::outs() << "Test execution failed.\n";
+      OS << "Test execution failed.\n";
    }
 
    return finish();

@@ -132,30 +132,18 @@ struct Token {
 
    bool oneOf(IdentifierInfo* II) const { return is(II); }
 
-   bool is_punctuator() const;
-   bool is_keyword() const;
-   bool is_operator() const;
-   bool is_literal() const;
-   bool is_directive() const;
+   bool isKeyword() const;
+   bool isOperator() const;
+   bool isLiteral() const;
 
-   bool is_identifier() const
+   bool isIdentifier() const
    {
       return kind == tok::ident || kind == tok::op_ident;
    }
 
-   bool is_separator() const
-   {
-      return oneOf(tok::newline, tok::semicolon, tok::eof);
-   }
-
    bool isWhitespace() const;
 
-   IdentifierInfo* getIdentifierInfo() const
-   {
-      assert((oneOf(tok::ident, tok::op_ident) || is_keyword()) && "not an identifier!");
-      return (IdentifierInfo*)(Ptr);
-   }
-
+   IdentifierInfo* getIdentifierInfo() const;
    llvm::StringRef getIdentifier() const;
 
    llvm::StringRef getText() const

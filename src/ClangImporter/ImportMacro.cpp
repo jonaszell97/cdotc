@@ -234,6 +234,8 @@ lex::Token ImporterImpl::getToken(const clang::Token& Tok)
    case cl::kw__Static_assert:
    case cl::kw_static_assert:
       return Token(tok::kw_static_assert, Loc);
+   case cl::unknown:
+      return Token(tok::sentinel);
    default:
       return Token(&Idents.get(Tok.getIdentifierInfo()->getName()), Loc,
                    tok::ident);
@@ -334,7 +336,7 @@ static void importMacro(ImporterImpl& Importer, ASTContext& Ctx, SemaPass& Sema,
       IsSimpleExpression = isSimpleExpression(MI);
    }
 
-   if (IsSimpleConstant || HasNoTokens || IsSimpleExpression) {
+   while (IsSimpleConstant || HasNoTokens || IsSimpleExpression) {
       SourceLocation Loc = Importer.getSourceLoc(MI->getDefinitionLoc());
       Expression* Expr;
 
@@ -350,10 +352,24 @@ static void importMacro(ImporterImpl& Importer, ASTContext& Ctx, SemaPass& Sema,
       // For other Parameterless macros, we need to parse the expression.
       else {
          Expr = Importer.parseExpression(MI->tokens());
+
+         // Try to evaluate the expression and go to a token-based macro if we
+         // can't.
+         VoidDiagnosticConsumer Consumer;
+         SemaPass::DiagConsumerRAII ConsumerRAII(Sema, &Consumer);
+         SemaPass::DiagnosticScopeRAII ScopeRAII(Sema);
+
+         auto Result = Sema.typecheckExpr(Expr);
+         if (!Result || Result.get()->isInvalid()) {
+            break;
+         }
+
+         Expr = Result.get();
       }
 
-      if (!Expr)
-         return;
+      if (!Expr) {
+         break;
+      }
 
       auto* SE = StaticExpr::Create(Ctx, Expr);
       auto* Alias = AliasDecl::Create(Ctx, Loc, AccessSpecifier::Public,
@@ -362,6 +378,7 @@ static void importMacro(ImporterImpl& Importer, ASTContext& Ctx, SemaPass& Sema,
 
       Alias->setImportedFromClang(true);
       Sema.ActOnDecl(DC, Alias);
+
       return;
    }
 
@@ -455,6 +472,9 @@ static void importMacro(ImporterImpl& Importer, ASTContext& Ctx, SemaPass& Sema,
 
    for (auto& Tok : MI->tokens()) {
       auto CopyTok = Importer.getToken(Tok);
+      if (CopyTok.is(lex::tok::sentinel))
+         continue;
+
       Len += CopyTok.getLength();
 
       if (CopyTok.is(lex::tok::ident)) {
@@ -519,7 +539,6 @@ void ImporterImpl::importMacros(DeclContext* DC)
    for (auto* Name : MacroNames) {
       auto MD = Instance->getPreprocessor().getMacroDefinition(Name);
       auto* MI = MD.getMacroInfo();
-
       if (!MI)
          continue;
 

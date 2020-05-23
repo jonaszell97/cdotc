@@ -3241,6 +3241,10 @@ TemplateInstantiator::InstantiateRecord(RecordDecl *Template,
          Inst->setImportedInstantiation(true);
          return Inst;
       }
+
+      if (auto *MF = Template->getModFile()) {
+         MF->LoadAllDecls(*Template);
+      }
    }
 
    unsigned Depth = ::getInstantiationDepth(Template, TemplateArgs);
@@ -3401,6 +3405,10 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
 
       if (!Applies)
          continue;
+
+      if (auto *MF = Ext->getModFile()) {
+         MF->LoadAllDecls(*Ext);
+      }
 
       for (auto* ND : Ext->getDecls<NamedDecl>()) {
          VisibleDecls.push_back(ND);
@@ -3921,9 +3929,12 @@ bool TemplateInstantiator::InstantiateFunctionBody(CallableDecl *Inst)
       IsExternallyLoaded = true;
    }
 
-   auto* InstScope = QC.Sema->getCurrentDecl();
-   QualType Self;
+   NamedDecl *InstScope = QC.Sema->getInstantiationScope(Inst);
+   if (!InstScope) {
+      InstScope = QC.Sema->getCurrentDecl();
+   }
 
+   QualType Self;
    if (auto* M = dyn_cast<MethodDecl>(Inst)) {
       Self = QC.Context.getRecordType(M->getRecord());
    }

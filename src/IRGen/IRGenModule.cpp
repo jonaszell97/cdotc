@@ -127,9 +127,9 @@ void IRGen::prepareModuleForEmission(llvm::Module* Module)
       auto Features = "";
 
       llvm::TargetOptions opt;
-      auto RM = llvm::Optional<llvm::Reloc::Model>();
       TargetMachine = Target->createTargetMachine(TargetTriple.str(), CPU,
-                                                  Features, opt, RM);
+                                                  Features, opt,
+                                                  llvm::Reloc::Model::PIC_);
    }
 
    Module->setDataLayout(TargetMachine->createDataLayout());
@@ -159,7 +159,8 @@ void IRGen::emitObjectFile(llvm::StringRef OutFile, llvm::Module* Module,
    int FD;
    std::error_code EC = openFileForWrite(OutFile, FD);
    if (EC) {
-      llvm::report_fatal_error(EC.message());
+      llvm::report_fatal_error(
+         "could not open output file '" + OutFile + "': " + EC.message());
    }
 
    llvm::raw_fd_ostream OS(FD, !KeepOpen);
@@ -316,7 +317,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
       Module->print(*TmpObjOS, nullptr);
    }
 
-   auto clangPathOrError = llvm::sys::findProgramByName("clang");
+   auto clangPathOrError = llvm::sys::findProgramByName("clang++");
    if (clangPathOrError.getError()) {
       llvm::report_fatal_error("'clang' executable could not be found");
    }
@@ -357,9 +358,9 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
    args.push_back("-lcdotrt");
    args.push_back("-o");
    args.push_back(OutFile);
+   args.push_back("--rtlib=compiler-rt");
 
-   fs::executeCommand(clangPathOrError.get(), args);
-
+   fs::executeCommand(clangPathOrError.get(), args, CI.getOptions().verbose());
    args.resize(initialSize);
 
    llvm::Triple Target(Module->getTargetTriple());
@@ -370,7 +371,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
              DsymPath.get(), OutFile,
          };
 
-         fs::executeCommand(DsymPath.get(), dsymArgs);
+         fs::executeCommand(DsymPath.get(), dsymArgs, CI.getOptions().verbose());
       }
    }
 }
@@ -385,8 +386,10 @@ void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module* Module)
    auto EC = llvm::sys::fs::createTemporaryFile("cdot-tmp", "o", TmpFD,
                                                 TmpFilePath);
 
-   if (EC)
-      llvm::report_fatal_error(EC.message());
+   if (EC) {
+      llvm::report_fatal_error(
+         "could not open temporary file: " + EC.message());
+   }
 
    // emit the temporary object file
    {
@@ -422,7 +425,7 @@ void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module* Module)
    args.push_back(OutFile);
    args.emplace_back(TmpFilePath.str());
 
-   int result = fs::executeCommand(args[0], args);
+   int result = fs::executeCommand(args[0], args, CI.getOptions().verbose());
    switch (result) {
    case 0:
       return;
@@ -441,8 +444,9 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
    auto EC = llvm::sys::fs::createTemporaryFile("cdot-tmp", "o", TmpFD,
                                                 TmpFilePath);
 
-   if (EC)
-      llvm::report_fatal_error(EC.message());
+   if (EC) {
+      llvm::report_fatal_error("could not open temporary file: " + EC.message());
+   }
 
    // emit the temporary object file
    {
@@ -458,7 +462,7 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
       PM.run(*Module);
    }
 
-   auto clangPathOrError = llvm::sys::findProgramByName("clang");
+   auto clangPathOrError = llvm::sys::findProgramByName("clang++");
    if (clangPathOrError.getError()) {
       llvm::report_fatal_error("'clang' executable could not be found");
    }
@@ -468,16 +472,23 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
    }
 
    std::vector<std::string> args{
-       clangPathOrError.get(), "-shared", "-undefined",
-       "dynamic_lookup",       "-o",      OutFile.str(),
+       clangPathOrError.get(), "-shared",
+       "-o",      OutFile.str(),
        TmpFilePath.str(),
    };
+
+#ifdef __APPLE__
+   args.emplace_back("-undefined");
+   args.emplace_back("dynamic_lookup");
+#endif
+
+   args.emplace_back("-fPIC");
 
    for (auto& file : CI.getOptions().getLinkerInput()) {
       args.push_back(file);
    }
 
-   int result = fs::executeCommand(args[0], args);
+   int result = fs::executeCommand(args[0], args, CI.getOptions().verbose());
    switch (result) {
    case 0:
       return;
@@ -493,8 +504,9 @@ std::string IRGen::createLinkedModuleTmpFile(llvm::StringRef Str)
    auto EC = llvm::sys::fs::createTemporaryFile("cdot-tmp", "a", TmpFD,
                                                 TmpFilePath);
 
-   if (EC)
-      llvm::report_fatal_error(EC.message());
+   if (EC) {
+      llvm::report_fatal_error("could not open temporary file: " + EC.message());
+   }
 
    llvm::raw_fd_ostream OS(TmpFD, true);
    OS << Str;

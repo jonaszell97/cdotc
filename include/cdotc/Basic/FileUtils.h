@@ -43,7 +43,8 @@ void deleteAllFilesInDirectory(const llvm::Twine& Dir);
 std::string findFileInDirectories(llvm::StringRef fileName,
                                   llvm::ArrayRef<std::string> directories);
 
-int executeCommand(llvm::StringRef Program, llvm::ArrayRef<std::string> args);
+int executeCommand(llvm::StringRef Program, llvm::ArrayRef<std::string> args,
+                   bool verbose = false);
 long long getLastModifiedTime(llvm::Twine const& pathToFile);
 
 void getAllMatchingFiles(llvm::StringRef fileName,

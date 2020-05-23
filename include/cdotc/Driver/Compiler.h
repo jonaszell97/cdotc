@@ -111,6 +111,7 @@ struct CompilerOptions {
       F_IsTest = F_VerifyIL << 1,
       F_EmitAsm = F_IsTest << 1,
       F_EmitTokens = F_EmitAsm << 1,
+      F_Verbose = F_EmitTokens << 1,
    };
 
    enum FeatureFlag : uint64_t {
@@ -196,6 +197,7 @@ public:
    bool shouldVerify() const { return flagIsSet(F_Verify); }
    bool shouldVerifyIL() const { return flagIsSet(F_VerifyIL); }
    bool isTest() const { return flagIsSet(F_IsTest); }
+   bool verbose() const { return flagIsSet(F_Verbose); }
 
    /// Experimental feature checks.
    bool runtimeGenerics() const
@@ -255,7 +257,7 @@ public:
 
    QueryContext& getQueryContext() const { return *QC; }
 
-   ClangImporter& getClangImporter();
+   cdot::ClangImporter& getClangImporter();
 
    lex::CommentConsumer *getCommentConsumer() const { return CommentConsumer.get(); }
 
@@ -323,7 +325,7 @@ private:
    std::unique_ptr<module::ModuleManager> ModuleManager;
 
    /// The importer for clang modules.
-   std::unique_ptr<cdot::ClangImporter> ClangImporter;
+   std::unique_ptr<cdot::ClangImporter> ClangImporterInstance;
 
    /// The compilation's LLVM-IR generator
    std::unique_ptr<il::IRGen> IRGen;

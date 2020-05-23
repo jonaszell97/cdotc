@@ -2061,7 +2061,7 @@ EngineImpl::checkBuiltinCall(il::Function const& F,
    case KnownFunction::Printf: {
       auto str = simulatePrintf(args, callerLoc);
       SP.diagnose(note_printf_ctfe, callerLoc, str);
-      V = Value::getInt(str.length());
+      V = Value::getInt((uint64_t)str.length());
       break;
    }
    case KnownFunction::PutChar: {

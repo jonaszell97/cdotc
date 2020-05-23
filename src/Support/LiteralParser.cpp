@@ -120,7 +120,9 @@ LiteralParser::CharResult LiteralParser::parseCharacter()
       return {static_cast<uint32_t>(Str.front()), false};
    }
 
-   assert(Str.front() == '\\' && "malformed character literal");
+   if (Str.front() != '\\') {
+      return {0, true};
+   }
 
    uint32_t Val = 0;
 

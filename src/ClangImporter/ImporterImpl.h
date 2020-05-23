@@ -42,8 +42,14 @@ public:
    /// The cdot compiler instance.
    CompilerInstance &CI;
 
+   /// Invocation arguments for clang.
+   std::vector<std::string> InvocationArgStrings;
+
    /// The clang compiler invocation.
    std::shared_ptr<clang::CompilerInvocation> Invocation;
+
+   /// The clang diagnostic options.
+   clang::DiagnosticOptions *ClangDiagnosticOpts;
 
    /// The clang diagnostics engine.
    clang::DiagnosticsEngine *ClangDiags = nullptr;
@@ -77,6 +83,9 @@ public:
 
    /// The number of unnamed enums we've imported.
    unsigned NumUnnamedEnums = 0;
+
+   /// The number of unnamed other decls we've imported.
+   unsigned NumUnnamedDecls = 0;
 
    /// C'tor.
    explicit ImporterImpl(CompilerInstance &CI);

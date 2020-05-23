@@ -2,18 +2,18 @@ cmake_minimum_required(VERSION 3.7)
 
 project(CDot)
 
-set(CMAKE_CXX_STANDARD 17)
-
 # find tblgen
 find_package(TblGen REQUIRED CONFIG)
 include_directories("${TBLGEN_INCLUDE_DIR}")
 message(STATUS "Found TblGen ${TBLGEN_MAIN_INCLUDE_DIR}")
 
 # find LLVM
-find_package(LLVM 10.0.0 REQUIRED CONFIG)
+find_package(LLVM 10 REQUIRED CONFIG)
 
 # llvm libraries
 set(llvm_libs ${LLVM_AVAILABLE_LIBS})
+string(REPLACE ";LLVM;" ";" llvm_libs "${llvm_libs}")
+string(REPLACE ";LLVM-C" "" llvm_libs "${llvm_libs}")
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Found LLVM libs ${llvm_libs}")
@@ -23,8 +23,8 @@ include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 # find clang
-set(Clang_DIR "${LLVM_CMAKE_DIR}/../clang")
-find_package(Clang REQUIRED CONFIG)
+set(Clang_DIR "${LLVM_DIR}/../clang")
+find_package(Clang REQUIRED CONFIG HINTS ${Clang_DIR})
 
 MACRO(FIND_AND_ADD_CLANG_LIB _libname_)
     find_library(CLANG_${_libname_}_LIB ${_libname_} ${LLVM_LIBRARY_DIRS} ${CLANG_LIBRARY_DIRS})
@@ -63,7 +63,17 @@ if(clang_libs)
 endif()
 
 # set CXX flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -pedantic")
+if(UNIX AND NOT APPLE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare")
+endif()
+
+# set Linker flags
+if(UNIX AND NOT APPLE)
+    set(linker_flags "-fuse-ld=/usr/bin/ld.lld-10 -Wl,--start-group")
+else()
+    set(linker_flags "")
+endif()
 
 # add include directories
 include_directories(include)
@@ -91,15 +101,6 @@ add_executable(cdotc_coverage src/Driver/main.cpp ${SOURCE_FILES})
 add_library(cdotc-tblgens SHARED ${CDOTC_TBLGENS_SOURCE_FILES})
 add_library(cdotrt SHARED ${RUNTIME_SUPPORT_SOURCE_FILES})
 
-set_target_properties(cdotrt
-    PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "/usr/local/lib"
-    LIBRARY_OUTPUT_DIRECTORY "/usr/local/lib"
-    RUNTIME_OUTPUT_DIRECTORY "/usr/local/lib")
-
-install(TARGETS cdotrt
-        DESTINATION "/usr/local/lib")
-
 target_compile_options(cdotc
         PUBLIC "-fvisibility=hidden")
 target_compile_options(cdotc_asan
@@ -115,8 +116,8 @@ target_compile_options(cdotc_coverage
         PUBLIC "-fcoverage-mapping"
         PUBLIC "-fvisibility=hidden")
 
-target_link_libraries(cdotc ${llvm_libs} ${clang_libs} -fvisibility=hidden -w)
-target_link_libraries(cdotc-tblgens ${llvm_libs})
+target_link_libraries(cdotc LLVM Polly ${clang_libs} -fvisibility=hidden -w ${linker_flags})
+target_link_libraries(cdotc-tblgens LLVMSupport -fvisibility=hidden)
 
 target_link_libraries(cdotc_asan
         ${llvm_libs} ${clang_libs}
