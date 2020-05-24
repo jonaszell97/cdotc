@@ -20,6 +20,7 @@ class StaticExpr;
 class CallableDecl;
 class EnumCaseDecl;
 class FuncArgDecl;
+class LambdaExpr;
 class Statement;
 
 } // namespace ast
@@ -32,6 +33,8 @@ CandidateSet::Candidate* resolveCandidateSet(
     ArrayRef<ast::Expression*> TemplateArgExprs, ast::SourceType RequiredType,
     ast::Statement* Caller, bool DiagnoseFailure = true,
     bool isFunctionArgument = false, ConstraintBuilder* outerBuilder = nullptr);
+
+void markCaptures(ast::SemaPass& Sema, ast::LambdaExpr *Expr);
 
 } // namespace sema
 } // namespace cdot

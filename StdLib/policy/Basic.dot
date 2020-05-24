@@ -3,4 +3,4 @@
 public enum Never {}
 
 /// The type that is returned by functions that do not specify a return type. 
-public alias Void: ().Type = default
+@transparent public alias Void: ().Type = default

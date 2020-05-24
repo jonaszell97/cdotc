@@ -1039,8 +1039,9 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr, QualType destTy,
    if (ConvSeq.getStrength() != CastStrength::Implicit) {
       if (!ignoreError) {
          diagnose(Expr, err_cast_requires_op, DiagLoc, DiagRange,
-                  diag::opt::show_constness, destTy->removeReference(),
-                  originTy->removeReference(), (int)ConvSeq.getStrength() - 1,
+                  diag::opt::show_constness,
+                  originTy->removeReference(), destTy->removeReference(),
+                  (int)ConvSeq.getStrength() - 1,
                   Expr->getSourceRange());
       }
       else if (hadError) {

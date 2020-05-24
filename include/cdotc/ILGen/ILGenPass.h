@@ -367,6 +367,7 @@ public:
 
    il::Function* wrapNonLambdaFunction(il::Function* F);
    il::Function* wrapNonLambdaFunction(il::Value* F);
+   il::Function* wrapNonThrowingFunction(il::Value* F);
    il::Function* getPartiallyAppliedLambda(il::Method* M, il::Value* Self);
    il::Function* getPartiallyAppliedLambda(il::Value* F, il::Value* Self);
 

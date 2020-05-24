@@ -142,8 +142,8 @@ static bool compatible(const FunctionType::ParamInfo &LHS,
 static void FromFn(SemaPass& SP, CanType from, CanType to,
                    ConversionSequenceBuilder& Seq)
 {
-   auto *FromFn = from->asLambdaType();
-   if (auto *ToFn = to->asLambdaType()) {
+   auto *FromFn = from->asFunctionType();
+   if (auto *ToFn = to->asFunctionType()) {
       if (FromFn->getNumParams() != ToFn->getNumParams()) {
          return Seq.invalidate();
       }
@@ -186,9 +186,6 @@ static void FromFn(SemaPass& SP, CanType from, CanType to,
 
       return Seq.addStep(CastKind::NoOp, to, CastStrength::Implicit);
    }
-
-   SP.diagnose(diag::warn_generic_warn, "FIXME function cast ('"
-      + from->toDiagString() + "' -> '" + to->toDiagString() + "')");
 
    return Seq.addStep(CastKind::BitCast, to, CastStrength::Implicit);
 }
@@ -241,7 +238,7 @@ static void FromThinFn(SemaPass& SP, CanType from, CanType to,
       }
 
       // Function Pointer -> UInt
-      if (to->isIntegerType()) {
+      if (to == SP.Context.getIntTy() || to == SP.Context.getUIntTy()) {
          return Seq.addStep(CastKind::PtrToInt, to, CastStrength::Force);
       }
 

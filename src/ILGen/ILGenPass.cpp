@@ -3911,6 +3911,54 @@ il::Value* ILGenPass::visitOverloadedDeclRefExpr(OverloadedDeclRefExpr* Expr)
    llvm_unreachable("should have been replaced!");
 }
 
+il::Function* ILGenPass::wrapNonThrowingFunction(il::Value *F)
+{
+   auto* FnTy = F->getType()->asFunctionType();
+   assert(!FnTy->throws() && "function already throws!");
+
+   SmallVector<il::Argument*, 8> args;
+
+   unsigned i = 0;
+   auto ParamTys = FnTy->getParamTypes();
+   auto Info = FnTy->getParamInfo();
+
+   for (unsigned NumParams = FnTy->getNumParams(); i < NumParams; ++i) {
+      args.push_back(Builder.CreateArgument(ParamTys[i],
+                                            Info[i].getConvention(), nullptr,
+                                            "", F->getSourceLoc()));
+   }
+
+   il::Function *wrappedFn;
+   if (F->getType()->isLambdaType()) {
+      wrappedFn
+         = Builder.CreateLambda(FnTy->getReturnType(), args, true,
+            F->getSourceLoc());
+   }
+   else {
+      wrappedFn
+         = Builder.CreateFunction("", FnTy->getReturnType(), args, true, false,
+            F->getSourceLoc());
+   }
+
+   wrappedFn->addDefinition();
+
+   auto IP = Builder.saveIP();
+   Builder.SetInsertPoint(wrappedFn->getEntryBlock());
+
+   SmallVector<il::Value*, 8> givenArgs;
+   auto begin_it = wrappedFn->getEntryBlock()->arg_begin();
+   auto end_it = wrappedFn->getEntryBlock()->arg_end();
+
+   while (begin_it != end_it)
+      givenArgs.push_back(&*begin_it++);
+
+   Builder.CreateDebugLoc(F->getSourceLoc());
+   Builder.CreateRet(Builder.CreateCall(F, givenArgs));
+   Builder.restoreIP(IP);
+
+   return wrappedFn;
+}
+
 il::Function* ILGenPass::wrapNonLambdaFunction(il::Value* F)
 {
    auto* FnTy = F->getType()->asFunctionType();
@@ -3941,6 +3989,7 @@ il::Function* ILGenPass::wrapNonLambdaFunction(il::Value* F)
    while (begin_it != end_it)
       givenArgs.push_back(&*begin_it++);
 
+   Builder.CreateDebugLoc(F->getSourceLoc());
    Builder.CreateRet(Builder.CreateCall(F, givenArgs));
    Builder.restoreIP(IP);
 
@@ -4430,11 +4479,58 @@ il::Value* ILGenPass::visitAnonymousCallExpr(AnonymousCallExpr* Expr)
    il::Value* func = visit(Expr->getParentExpr());
    FunctionType* funcTy = func->getType()->asFunctionType();
 
-   if (funcTy->isThinFunctionTy()) {
-      return Builder.CreateCall(func, args);
+   if (!funcTy->throws()) {
+      if (funcTy->isThinFunctionTy()) {
+         return Builder.CreateCall(func, args);
+      }
+
+      return Builder.CreateLambdaCall(func, args);
    }
 
-   return Builder.CreateLambdaCall(func, args);
+   il::BasicBlock* lpad = Builder.CreateBasicBlock("invoke.lpad");
+   lpad->addBlockArg(SP.getContext().getUInt8PtrTy(), "err");
+
+   il::BasicBlock* ContBB = Builder.CreateBasicBlock("invoke.cont");
+
+   bool HasReturnVal = !funcTy->getReturnType()->isVoidType()
+                       && !funcTy->getReturnType()->isEmptyTupleType();
+
+   if (HasReturnVal) {
+      ContBB->addBlockArg(funcTy->getReturnType(), "retval");
+   }
+
+   auto IP = Builder.saveIP();
+   Builder.SetInsertPoint(lpad);
+
+   if (EHStack.empty()) {
+      Cleanups.emitAllWithoutPopping();
+
+      // unconditionally rethrow exception
+      if (!Builder.GetInsertBlock()->getParent()->mightThrow()) {
+         Builder.CreateIntrinsicCall(
+            Intrinsic::print_runtime_error,
+            Builder.GetConstantInt(WordTy,
+                                   IntrinsicCallInst::UnexpectedThrownError));
+         Builder.CreateUnreachable();
+      }
+      else {
+         Builder.CreateRethrow(lpad->getBlockArg(0));
+      }
+   }
+   else {
+      Cleanups.emitUntilWithoutPopping(EHStack.back()->getDepth());
+      Builder.CreateBr(EHStack.back()->LandingPad, lpad->getBlockArg(0));
+   }
+
+   Builder.restoreIP(IP);
+
+   auto* Invoke = Builder.CreateInvoke(func, args, ContBB, lpad);
+   Builder.SetInsertPoint(ContBB);
+
+   if (HasReturnVal)
+      return ContBB->getBlockArg(0);
+
+   return Invoke;
 }
 
 il::Value* ILGenPass::HandleUnsafeTupleGet(il::Value* tup, il::Value* idx,

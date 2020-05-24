@@ -1,0 +1,39 @@
+
+// RUN
+// CHECK 37
+// CHECK-NEXT 121
+// CHECK-NEXT 182
+// CHECK-NEXT 31
+// CHECK-NEXT 691
+
+def fn1(_ param: Int) -> String { return param.toString() }
+
+// Thin -> Thick
+let v1: (Int) -> String = fn1
+print(v1(37))
+
+// Thin Nothrow -> Thick Throw
+let v2: (Int) throws -> String = fn1
+print(try! v2(121))
+
+// Thin nothrow -> Thin throw
+let v3: @thin (Int) throws -> String = fn1
+print(try! v3(182))
+
+struct S {
+    let value: Int
+    def m1() { print(self.value) }
+    static def sm1() {}
+}
+
+// Method references
+let f1 : (S) -> Void = S.m1
+let f2 : (S.Type) -> Void = S.sm1
+
+_ = f1(S(value: 31))
+_ = f2(S)
+
+// Partially applied methods
+var s = S(value: 691)
+let f3 : () -> Void = s.m1
+_ = f3()

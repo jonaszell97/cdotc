@@ -1796,3 +1796,8 @@ CandidateSet::Candidate* sema::resolveCandidateSet(
 
    return BestCandidate;
 }
+
+void sema::markCaptures(SemaPass &Sema, LambdaExpr *Expr)
+{
+   CaptureMarker(Sema.Context, Expr).visit(Expr);
+}

@@ -1382,14 +1382,22 @@ ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr* Expr)
       ++i;
    }
 
+   unsigned Flags = FunctionType::None;
+   if (Expr->throws())
+      Flags |= FunctionType::Throws;
+   if (Expr->isAsync())
+      Flags |= FunctionType::Async;
+   if (Expr->isUnsafe())
+      Flags |= FunctionType::Unsafe;
+
    auto RetTyResult = visitSourceType(Expr, Expr->getReturnType());
    QualType RetTy = RetTyResult ? RetTyResult.get() : ErrorTy;
 
    if (Expr->isThin()) {
-      Expr->setExprType(Context.getFunctionType(RetTy, ArgTys, ParamInfo));
+      Expr->setExprType(Context.getFunctionType(RetTy, ArgTys, ParamInfo, Flags));
    }
    else {
-      Expr->setExprType(Context.getLambdaType(RetTy, ArgTys, ParamInfo));
+      Expr->setExprType(Context.getLambdaType(RetTy, ArgTys, ParamInfo, Flags));
    }
 
    Expr->setExprType(Context.getMetaType(Expr->getExprType()));

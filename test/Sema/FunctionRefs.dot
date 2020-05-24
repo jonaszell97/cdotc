@@ -1,0 +1,51 @@
+
+// VERIFY
+
+import { i1, i64, u64, RawPointer } from builtin
+
+def fn1(_ param: Int) -> String { __unreachable }
+def fn2() -> Int { __unreachable }
+def fn3(_ param: Int, _ param2: String) -> Double { __unreachable }
+def fn4() throws { __unreachable }
+
+// Thin function pointer -> Thick function pointer
+let _ : (Int) -> String = fn1
+
+// Thin function pointer -> i1
+let _ : i1 = fn1
+
+// Thin function pointer -> void*
+let _ : RawPointer = fn1
+
+// Thin function pointer -> integer
+let _ : i64 = fn1 // expected-error {{cast between '@thin (borrow Int64) -> String' and 'i64' requires 'as!' operator}}
+let _ : u64 = fn1 as! u64
+
+// Invalid conversion
+let _ : (Int) -> String = fn2 // expected-error {{incompatible types @thin () -> Int64 and (borrow Int64) -> String}}
+
+// Nothrow -> throw
+let _ : (Int) throws -> String = fn1
+
+// Throw -> nothrow
+let _ : () -> Void = fn4 // expected-error {{incompatible types @thin () throws -> () and () -> ()}}
+
+struct S {
+    def m1() {}
+    static def sm1() {}
+}
+
+// Method references
+let _ : () -> Void = S.m1 // expected-error {{incompatible types @thin (borrow S) -> () and () -> ()}}
+let _ : (S) -> Void = S.m1
+let _ : (mut ref S) -> Void = S.m1 // expected-error {{incompatible types @thin (borrow S) -> () and (mut ref &mut S) -> ()}}
+let _ : () -> Void = S.sm1 // expected-error {{incompatible types @thin (borrow S.Type) -> () and () -> ()}}
+let v1 : (S.Type) -> Void = S.sm1
+
+_ = v1(S)
+
+// Partially applied methods
+var s = S()
+let _ : () -> Void = s.m1
+let _ : (S) -> Void = s.m1 // expected-error {{incompatible types () -> () and (borrow S) -> ()}}
+let _ : (S.Type) -> Void = s.sm1

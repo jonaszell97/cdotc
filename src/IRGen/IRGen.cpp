@@ -2711,13 +2711,15 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
    Builder.CreateStore(llvm::ConstantPointerNull::get(Int8PtrTy), ErrAlloc);
 
    llvm::SmallVector<llvm::Value*, 8> args{ErrAlloc};
-   PrepareCallArgs(args, I.getArgs(), isa<Method>(I.getCalledFunction()));
+   PrepareCallArgs(args, I.getArgs(), I.getCalledMethod() != nullptr);
 
-   auto* Call = Builder.CreateCall(getFunction(I.getCalledFunction()), args);
+   auto* Call = Builder.CreateCall(getLlvmValue(I.getCallee()), args);
    Call->addParamAttr(0, llvm::Attribute::SwiftError);
 
+   auto RetTy = I.getCallee()->getType()->asFunctionType()->getReturnType();
+
    llvm::Value* RetVal;
-   if (I.getCalledFunction()->hasStructReturn()) {
+   if (NeedsStructReturn(RetTy)) {
       RetVal = Call->getArgOperand(1);
    }
    else {

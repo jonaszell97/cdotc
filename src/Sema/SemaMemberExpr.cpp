@@ -8,6 +8,7 @@
 #include "cdotc/Parse/Parser.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Sema/Builtin.h"
+#include "cdotc/Sema/OverloadResolver.h"
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Sema/TemplateInstantiator.h"
 #include "cdotc/Serialization/IncrementalCompilation.h"
@@ -191,6 +192,42 @@ static ExprResult CheckBuiltinIdentifier(SemaPass &Sema,
    }
 
    return ExprError();
+}
+
+static ExprResult CreatePartiallyAppliedMethod(SemaPass &Sema,
+                                               IdentifierRefExpr *Ident,
+                                               MethodDecl *M)
+{
+   if (Sema.QC.PrepareDeclInterface(M)) {
+      return ExprError();
+   }
+
+   SmallVector<FuncArgDecl*, 2> Args;
+   for (auto *Arg : M->getArgs().drop_front(1)) {
+      auto *NewArg = FuncArgDecl::Create(Sema.Context, SourceLocation(),
+         SourceLocation(), Arg->getDeclName(),
+         Arg->getLabel(), Arg->getConvention(),
+         Arg->getType(), nullptr, false);
+
+      Args.push_back(NewArg);
+   }
+
+   auto *LE = LambdaExpr::Create(Sema.Context, Ident->getSourceRange(),
+      Ident->getSourceLoc(), M->getReturnType(), Args, nullptr);
+
+   SmallVector<Expression*, 2> CallArgs{ Ident->getParentExpr() };
+   for (auto *Arg : Args) {
+      CallArgs.push_back(DeclRefExpr::Create(
+         Sema.Context, Arg, Ident->getSourceRange()));
+   }
+
+   auto *Call = Sema.CreateCall(M, CallArgs, Ident->getSourceLoc());
+   auto *Ret = ReturnStmt::Create(Sema.Context, Ident->getSourceLoc(), Call);
+
+   LE->setBody(Ret);
+   sema::markCaptures(Sema, LE);
+
+   return Sema.visitExpr(LE);
 }
 
 /// Find declarations whose name is close to the given one for fix-its.
@@ -933,7 +970,6 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
       LLVM_FALLTHROUGH;
    }
    case Decl::PropDeclID:
-   case Decl::MethodDeclID:
    case Decl::InitDeclID:
    case Decl::DeinitDeclID:
       if (!checkImplicitSelf(*this, FoundDecl, Ident)) {
@@ -942,6 +978,28 @@ ExprResult SemaPass::visitIdentifierRefExpr(IdentifierRefExpr* Ident,
 
       IsMemberRef = true;
       break;
+   case Decl::MethodDeclID: {
+      if (!checkImplicitSelf(*this, FoundDecl, Ident)) {
+         return ExprError();
+      }
+
+      if (!Ident->isCalled() && !FoundDecl->isStatic()
+      && !Ident->getParentExpr()->getExprType()->isMetaType()) {
+         if (!ParentType->isReferenceType()) {
+            diagnose(
+               Ident, err_generic_error,
+               "cannot apply 'self' function reference to temporary value",
+               Ident->getSourceRange());
+         }
+
+         // Transform the method reference into a lambda.
+         return CreatePartiallyAppliedMethod(*this, Ident,
+                                             cast<MethodDecl>(FoundDecl));
+      }
+
+      IsMemberRef = true;
+      break;
+   }
    case Decl::EnumCaseDeclID:
       IsMemberRef = false;
       break;
@@ -1218,8 +1276,10 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr* Expr)
                 "cannot apply 'self' function reference to temporary value",
                 Expr->getSourceRange());
          }
-         else if (auto* IE = dyn_cast<IdentifierRefExpr>(PE)) {
-            IE->getVarDecl()->setCaptured(true);
+         else if (auto* IE = dyn_cast<DeclRefExpr>(PE)) {
+            if (auto *VD = dyn_cast<VarDecl>(IE->getDecl())) {
+               VD->setCaptured(true);
+            }
          }
          else if (auto* SE = dyn_cast<SelfExpr>(PE)) {
             SE->setCaptureIndex(0);
@@ -1227,9 +1287,12 @@ ExprResult SemaPass::visitMemberRefExpr(MemberRefExpr* Expr)
          }
 
          // Function does not take 'self' argument.
-         FTy = Context.getLambdaType(
-             FTy->getReturnType(), FTy->getParamTypes().drop_front(1),
-             FTy->getParamInfo().drop_front(1), FTy->getRawFlags());
+         if ((ND->isStatic() && PE->getExprType()->isMetaType())
+         || (!ND->isStatic() && !PE->getExprType()->isMetaType())) {
+            FTy = Context.getLambdaType(
+               FTy->getReturnType(), FTy->getParamTypes().drop_front(1),
+               FTy->getParamInfo().drop_front(1), FTy->getRawFlags());
+         }
       }
 
       ResultType = FTy;
