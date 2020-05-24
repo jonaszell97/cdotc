@@ -1,3 +1,6 @@
+
+*.DS_Store
+
 bootstrap
 build/
 .history/
@@ -19,3 +22,5 @@ include/cdotc/Parse/ParseAttr.inc
 include/cdotc/Diagnostics/Diagnostics.def
 include/cdotc/Query/Inc
 tools/TableGenScripts
+
+src/.project

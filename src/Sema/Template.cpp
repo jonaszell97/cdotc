@@ -721,7 +721,7 @@ private:
                     P->getSourceLoc());
          }
          else if (P->isTypeName()) {
-            emplace(P, P, SP.getContext().getTemplateArgType(P),
+            emplace(P, P, SP.getContext().getTemplateParamType(P),
                     P->getSourceLoc());
          }
          else {
@@ -1225,7 +1225,7 @@ bool TemplateArgListImpl::inferTemplateArg(
          continue;
       }
 
-      QualType NeededTy = Context.getTemplateArgType(NeededArg);
+      QualType NeededTy = Context.getTemplateParamType(NeededArg);
 
       bool IsVariadic = NeededArg->isVariadic();
       if (IsVariadic) {

@@ -123,24 +123,24 @@ private:
    alignas(TypeAlignment) mutable TokenType TokenTy;
    TupleType* EmptyTupleTy;
 
-   mutable llvm::FoldingSet<PointerType> PointerTypes;
-   mutable llvm::FoldingSet<MutablePointerType> MutablePointerTypes;
-   mutable llvm::FoldingSet<ReferenceType> ReferenceTypes;
-   mutable llvm::FoldingSet<MutableReferenceType> MutableReferenceTypes;
+   mutable llvm::DenseMap<QualType, PointerType*> PointerTypes;
+   mutable llvm::DenseMap<QualType, MutablePointerType*> MutablePointerTypes;
+   mutable llvm::DenseMap<QualType, ReferenceType*> ReferenceTypes;
+   mutable llvm::DenseMap<QualType, MutableReferenceType*> MutableReferenceTypes;
    mutable llvm::DenseMap<QualType, BoxType*> BoxTypes;
    mutable llvm::FoldingSet<ExistentialType> ExistentialTypes;
    mutable llvm::FoldingSet<FunctionType> FunctionTypes;
    mutable llvm::FoldingSet<LambdaType> LambdaTypes;
    mutable llvm::FoldingSet<ArrayType> ArrayTypes;
-   mutable llvm::FoldingSet<InferredSizeArrayType> InferredSizeArrayTypes;
+   mutable llvm::DenseMap<QualType, InferredSizeArrayType*> InferredSizeArrayTypes;
    mutable llvm::FoldingSet<TupleType> TupleTypes;
-   mutable llvm::FoldingSet<TemplateParamType> TemplateParamTypes;
+   mutable llvm::DenseMap<ast::TemplateParamDecl*, TemplateParamType*> TemplateParamTypes;
    mutable llvm::FoldingSet<AssociatedType> AssociatedTypes;
    mutable llvm::FoldingSet<DependentRecordType> DependentRecordTypes;
-   mutable llvm::FoldingSet<MetaType> MetaTypes;
-   mutable llvm::FoldingSet<TypedefType> TypedefTypes;
+   mutable llvm::DenseMap<QualType, MetaType*> MetaTypes;
+   mutable llvm::DenseMap<ast::AliasDecl*, TypedefType*> TypedefTypes;
    mutable llvm::FoldingSet<DependentTypedefType> DependentTypedefTypes;
-   mutable llvm::FoldingSet<RecordType> RecordTypes;
+   mutable llvm::DenseMap<ast::RecordDecl*, RecordType*> RecordTypes;
    mutable llvm::FoldingSet<DependentNameType> DependentNameTypes;
    mutable llvm::DenseMap<unsigned, TypeVariableType*> TypeVariableTypes;
 
@@ -397,7 +397,7 @@ public:
    DependentNameType*
    getDependentNameType(NestedNameSpecifierWithLoc* Name) const;
 
-   TemplateParamType* getTemplateArgType(TemplateParamDecl* Param) const;
+   TemplateParamType* getTemplateParamType(TemplateParamDecl* Param) const;
    AssociatedType* getAssociatedType(AssociatedTypeDecl* AT,
                                      QualType OuterAT = QualType()) const;
 

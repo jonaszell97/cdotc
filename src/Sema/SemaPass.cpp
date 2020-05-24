@@ -4933,7 +4933,7 @@ static NamedDecl* createVariadicDecl(SemaPass& Sema, NamedDecl* variadicDecl,
       }
 
       QualType elementType
-          = Sema.Context.getMetaType(Sema.Context.getTemplateArgType(param));
+          = Sema.Context.getMetaType(Sema.Context.getTemplateParamType(param));
       auto* aliasDecl = AliasDecl::Create(Sema.Context, SOD.getSourceLoc(),
                                           AccessSpecifier::Public, DeclName,
                                           elementType, nullptr, {});

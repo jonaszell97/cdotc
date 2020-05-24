@@ -25,7 +25,7 @@ QueryResult GetDefaultTemplateArgQuery::run()
           TemplateArgument(P, P->isTypeName(), {}, P->getSourceLoc()));
    }
    if (P->isTypeName()) {
-      return finish(TemplateArgument(P, QC.Sema->Context.getTemplateArgType(P),
+      return finish(TemplateArgument(P, QC.Sema->Context.getTemplateParamType(P),
                                      P->getSourceLoc()));
    }
 
@@ -669,7 +669,7 @@ QueryResult VerifyConstraintQuery::run()
             return fail();
 
          assert(i == 0 && "should only appear as the first part of the type!");
-         CurrentType = QC.Context.getTemplateArgType(P);
+         CurrentType = QC.Context.getTemplateParamType(P);
          LookupTy = P->getCovariance();
       }
       else {

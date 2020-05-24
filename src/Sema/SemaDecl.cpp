@@ -1121,7 +1121,7 @@ public:
 
       auto* OtherParam = CD->getTemplateParams()[Idx];
       if (SP.equivalent(Param, OtherParam))
-         return SP.getContext().getTemplateArgType(OtherParam);
+         return SP.getContext().getTemplateParamType(OtherParam);
 
       return T;
    }

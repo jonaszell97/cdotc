@@ -1041,7 +1041,7 @@ ExprResult SemaPass::visitDeclRefExpr(DeclRefExpr* Expr)
       }
 
       if (Param->isTypeName()) {
-         ResultType = Context.getMetaType(Context.getTemplateArgType(Param));
+         ResultType = Context.getMetaType(Context.getTemplateParamType(Param));
       }
       else {
          ResultType = Param->getValueType();

@@ -302,7 +302,7 @@ void SemaPass::SetBuiltinAliasType(AliasDecl* A)
    else if ((II == BuiltinIdents[builtin::RawPointer]
    || II == BuiltinIdents[builtin::MutableRawPointer])
    && A->isTemplate()) {
-      QualType Ty = Context.getTemplateArgType(A->getTemplateParams().front());
+      QualType Ty = Context.getTemplateParamType(A->getTemplateParams().front());
       QualType PtrTy;
       if (II == BuiltinIdents[builtin::MutableRawPointer]) {
          PtrTy = Context.getMutablePointerType(Ty);

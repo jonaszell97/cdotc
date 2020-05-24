@@ -401,7 +401,7 @@ public:
       }
 
       bool Inferrable = VariadicParams.insert(VariadicParam).second;
-      QualType NeededTy = Sema.Context.getTemplateArgType(VariadicParam);
+      QualType NeededTy = Sema.Context.getTemplateParamType(VariadicParam);
 
       unsigned LeftoverElements = T->getArity() - VariadicIdx - 1;
       unsigned j = 0;
@@ -1208,7 +1208,7 @@ bindTemplateParams(SemaPass& Sema, CandidateSet::Candidate& Cand,
                    MultiLevelTemplateArgList& templateArgList)
 {
    for (auto& B : Cand.Builder->Bindings.ParamBindings) {
-      QualType ParamTy = Sema.Context.getTemplateArgType(B.getFirst());
+      QualType ParamTy = Sema.Context.getTemplateParamType(B.getFirst());
       QualType AssignedTy = Solutions.front().AssignmentMap[B.getSecond()];
 
       if (!AssignedTy) {

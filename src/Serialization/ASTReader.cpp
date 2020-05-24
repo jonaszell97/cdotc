@@ -406,7 +406,7 @@ QualType ASTReader::readTypeRecord(unsigned ID)
       }
 
       auto* PD = ReadDeclAs<TemplateParamDecl>(Record, Idx);
-      return Context.getTemplateArgType(PD);
+      return Context.getTemplateParamType(PD);
    }
    case Type::InferredSizeArrayTypeID: {
       if (Record.size() != 1) {
