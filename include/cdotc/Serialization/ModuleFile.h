@@ -45,7 +45,7 @@ class ModuleFile {
 
    /// Act on a loaded declaration.
    void LoadedDecl(ast::DeclContext& Ctx, ast::Decl* ReadDecl,
-                   bool IgnoreInst = false);
+                   DeclarationName Name);
 
 public:
    ModuleFile(ModuleReader& Reader, void* HashTablePtr);

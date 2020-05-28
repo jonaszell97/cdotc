@@ -642,6 +642,9 @@ private:
       /// The coroutine ID token.
       il::Value* ID = nullptr;
 
+      /// The raw coroutine handle.
+      il::Value* RawHandle = nullptr;
+
       /// The coroutine handle.
       il::Value* Handle = nullptr;
 

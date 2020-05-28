@@ -79,7 +79,7 @@ extend Pointer {
     /// \inherit
     default static def allocate() -> Self {
         var memory = rt._cdot_Malloc(reflect.sizeOf<Pointee>.value)
-        return Self(bitPattern: memory.rawValue)
+        return Self(bitPattern: Int(memory as! builtin.i64))
     }
 
     /// \inherit

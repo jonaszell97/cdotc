@@ -1,0 +1,13 @@
+
+// VERIFY
+
+enum E1 {
+    case One
+    case Two
+    case Three(E1) // expected-error {{E1 cannot contain a case value of its own type}}
+    // expected-note@-1 {{mark the case as 'indirect' to avoid this error}}
+}
+
+enum E2 {
+    indirect case One(E2)
+}

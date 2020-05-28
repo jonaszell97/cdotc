@@ -20,13 +20,6 @@ ModuleFile::ModuleFile(ModuleReader& Reader, void* HashTablePtr)
 
 ModuleFile::~ModuleFile() {}
 
-static void addDeclToContext(SemaPass& Sema, DeclContext& Ctx, Decl* D)
-{
-   if (auto ND = support::cast_or_null<NamedDecl>(D)) {
-      Sema.makeDeclAvailable(Ctx, ND, true);
-   }
-}
-
 void ModuleFile::PerformExternalLookup(DeclContext& Ctx, DeclarationName Name)
 {
    if (LoadedAllDecls)
@@ -45,7 +38,7 @@ void ModuleFile::PerformExternalLookup(DeclContext& Ctx, DeclarationName Name)
       for (auto ID : IDs) {
          auto ReadDecl = Reader.ASTReader.GetDecl(ID);
          if (ReadDecl) {
-            LoadedDecl(Ctx, ReadDecl);
+            LoadedDecl(Ctx, ReadDecl, Name);
          }
       }
    }
@@ -59,7 +52,8 @@ void ModuleFile::PerformExternalLookup(DeclContext& Ctx, DeclarationName Name)
    }
 }
 
-void ModuleFile::LoadedDecl(DeclContext& Ctx, Decl* ReadDecl, bool IgnoreInst)
+void ModuleFile::LoadedDecl(DeclContext& Ctx, Decl* ReadDecl,
+                            DeclarationName Name)
 {
    // these decls are immediately made visible
    switch (ReadDecl->getKind()) {
@@ -85,7 +79,13 @@ void ModuleFile::LoadedDecl(DeclContext& Ctx, Decl* ReadDecl, bool IgnoreInst)
    }
 
    auto& Sema = Reader.CI.getSema();
-   addDeclToContext(Sema, Ctx, ReadDecl);
+   if (auto ND = support::cast_or_null<NamedDecl>(ReadDecl)) {
+      if (!Name) {
+         Name = ND->getDeclName();
+      }
+
+      Sema.makeDeclAvailable(Ctx, Name, ND, true);
+   }
 }
 
 void ModuleFile::LoadAllDecls(DeclContext& Ctx, bool IgnoreInst)
@@ -106,13 +106,16 @@ void ModuleFile::LoadAllDecls(DeclContext& Ctx, bool IgnoreInst)
             continue;
          }
 
+         DeclarationName Name;
          if (auto* ND = dyn_cast<NamedDecl>(D)) {
             if (AlreadyLookedUp.find(ND->getDeclName())
                 != AlreadyLookedUp.end())
                continue;
+
+            Name = ND->getDeclName();
          }
 
-         LoadedDecl(Ctx, D, IgnoreInst);
+         LoadedDecl(Ctx, D, Name);
       }
 
       ++it;

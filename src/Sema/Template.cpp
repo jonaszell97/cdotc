@@ -508,6 +508,8 @@ public:
 
       auto ty = res.get()->getExprType();
       if (isa<TypeExpr>(res.get()) || ty->isErrorType()) {
+         ty = ty->removeMetaType();
+
          if (!P->isTypeName()) {
             Res.setHasIncompatibleKind(0, P);
             Out = TemplateArgument(P, nullptr, TA->getSourceLoc());
@@ -559,7 +561,8 @@ public:
          if (ty->isDependentType()) {
             StillDependent = true;
          }
-         else if (StatExp->getExprType() != P->getValueType()) {
+         else if (StatExp->getExprType()->getCanonicalType()
+               != P->getValueType()->getCanonicalType()) {
             Res.setHasIncompatibleType(StatExp->getExprType(), P);
             Out = TemplateArgument(P, nullptr, TA->getSourceLoc());
             return false;
@@ -1344,7 +1347,8 @@ bool TemplateArgListImpl::checkSingleCompatibility(TemplateArgument& TA,
          return false;
       }
 
-      if (TA.getValueType() != P->getValueType()) {
+      if (TA.getValueType()->getCanonicalType()
+            != P->getValueType()->getCanonicalType()) {
          Res.setHasIncompatibleType(TA.getValueType(), P);
          return false;
       }

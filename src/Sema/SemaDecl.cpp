@@ -1013,10 +1013,10 @@ void SemaPass::collectCoroutineInfo(QualType Ty, StmtOrDecl D)
    QC.PrepareDeclInterface(Awaitable);
 
    Info.AwaitableType = Ty;
-   Info.AwaitedType = Awaitable->getAssociatedType(getIdentifier("AwaitedType"))
-                          ->getDefaultType();
-   Info.AwaiterType = Awaitable->getAssociatedType(getIdentifier("AwaiterType"))
-                          ->getDefaultType();
+   Info.AwaitedType = Awaitable->lookupSingle<AliasDecl>(getIdentifier("AwaitedType"))
+                          ->getType()->removeMetaType();
+   Info.AwaiterType = Awaitable->lookupSingle<AliasDecl>(getIdentifier("AwaiterType"))
+                          ->getType()->removeMetaType();
 
    // Instantiate the coroutine handle type.
    {

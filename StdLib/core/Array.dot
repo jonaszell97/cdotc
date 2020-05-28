@@ -1,5 +1,6 @@
 
-import { CowBuffer } from collection
+import math
+import mem
 
 public alias DefaultArrayLiteralType<T> = Array<T>
 
@@ -8,34 +9,228 @@ public protocol ExpressibleByArrayLiteral {
     init (arrayLiteral: [Element])
 }
 
+@_builtin @compiletime @testable
 public struct Array<T> {
-    /// The copy-on-write buffer.
-    internal var buffer: CowBuffer<T>
+    /// The owned mask.
+    static let OwnedMask    = 1 << 63
 
-    /// Memberwise initializer.
-    internal memberwise init
+    /// The capacity mask.
+    static let CapacityMask = (Int(Int32(-1)) << 32) & ~OwnedMask
+
+    /// The size mask.
+    static let SizeMask     = Int(Int32(-1))
+
+    /// Default capacity to allocate when growing from zero.
+    static let DefaultCapacity = 32
+
+    /// The underlying storage of this string.
+    fileprivate var storage: (Int, Int)
+
+    /// Empty c'tor.
+    init {
+        storage = (0, 0)
+    }
 
     /// Initialize from a static array. This is only called by the compiler
-    /// when the lifetime of the array is guaranteed to exceed the lifetime of
-    /// this array.
-    private init (staticBuffer bytes: UnsafePtr<T>, size: Int) {
-        self.buffer = CowBuffer<T>(staticBuffer: bytes, size)
+    /// when the lifetime of the buffer is guaranteed to exceed the lifetime of
+    /// this string.
+    private init (staticBuffer bytes: UnsafeBufferPtr<T>, size: Int) {
+        self.storage = (Int(builtin.ptrtoint(bytes.raw)), 0)
+        self.byteSize = Int(size)
+        self.storageIsOwned = false
+        self.byteCapacity = 0
+
+        rt._register_allocation!(bytes.raw, size.value)
     }
 
-    /// C'tor. Initialize with an initial capacity of bytes.
-    public init(withInitialCapacity capacity: Int) {
+    /// Initialize a substring.
+    init (_ arr: Self, bounds: Range<Int>) {
         self.init()
-        buffer.grow(byAtLeast: capacity)
+        uncheckedInsert(arr.rawBytes.offset(by: bounds.startIndex), bounds.size, at: 0)
     }
+
+    /// Memberwise C'tor.
+    private memberwise init
 
     /// D'tor.
     deinit {
+        var bytes = mutableBytes
+        for i in 0..size {
+            bytes.withReference(i) {
+                builtin.deinit($0)
+            }
+        }
 
+        if !storageIsOwned {
+            return
+        }
+
+        debugPrint!(Arrays, "deinitializing array %p (self %p)\n", rawBytes.raw, builtin.addressOf(self))
+        bytes.deallocate()
     }
 
-    /// \return a pointer to the beginning of this arrays buffer.
-    prop unsafeBuffer: UnsafePtr<T> {
-        return buffer.bytes
+    /// \return the raw bytes of this string.
+    prop rawBytes: UnsafeBufferPtr<T> {
+        get {
+            return UnsafeBufferPtr<T>(rawValue: storage.0)
+        }
+        private set {
+            storage.0 = newVal.rawValue
+        }
+    }
+
+    /// \return the raw bytes of this string.
+    private prop mutableBytes: UnsafeMutableBufferPtr<T> => UnsafeMutableBufferPtr<T>(rawValue: storage.0)
+
+    /// \return the byte size of this string.
+    prop byteSize: Int {
+        get {
+            return storage.1 & SizeMask
+        }
+        set {
+            // Clear the size.
+            storage.1 &= ~SizeMask
+
+            // Set the new size.
+            storage.1 |= (newVal & SizeMask)
+        }
+    }
+
+    /// \return the byte capacity of this string.
+    prop byteCapacity: Int {
+        get {
+            return (storage.1 & CapacityMask) >> 32
+        }
+        set {
+            // Clear the size.
+            storage.1 &= ~CapacityMask
+
+            // Set the new size.
+            storage.1 |= ((newVal << 32) & CapacityMask)
+        }
+    }
+
+    /// \return `true` iff this string owns its storage.
+    prop storageIsOwned: Bool {
+        get {
+            return storage.1 & OwnedMask != 0
+        }
+        set {
+            if newVal {
+                storage.1 |= OwnedMask
+            }
+            else {
+                storage.1 &= ~OwnedMask
+            }
+        }
+    }
+
+    /// Append the contents of \param arr to this array.
+    def mutating infix += (arr: Self) {
+        reserveCapacity(capacity + arr.size)
+        for i in 0..arr.size {
+            append(arr[i])
+        }
+    }
+
+    /// Turn this buffer into an isOwned buffer, if it is not already one.
+    def mutating makeOwned(ensuringCapacity minCapacity: Int = 0) {
+        var minCapacity = minCapacity
+        if minCapacity == 0 {
+            minCapacity = math.max(DefaultCapacity, math.closestPowerOfTwo(roundingUp: byteSize))
+        }
+
+        // Allocate storage.
+        var buffer = UnsafeMutableBufferPtr<T>.allocate(minCapacity)
+        debugPrint!(Arrays, "creating array %p (self %p)\n", buffer.raw, builtin.addressOf(self))
+
+        // Copy existing bytes.
+        mem.copy(to: buffer, from: rawBytes, byteSize)
+
+        // Remember previous size.
+        var prevSize = byteSize
+
+        // Mark memory as owned.
+        self.rawBytes = buffer
+        self.storageIsOwned = true
+        self.byteSize = prevSize
+        self.byteCapacity = minCapacity
+    }
+
+    /// Grow this buffer to be able to store at least the given number of bytes.
+    def mutating grow(toAtLeast n: Int = 0) {
+        var n = n
+        if n == 0 {
+            n = math.closestPowerOfTwo(roundingUp: byteSize + 1)
+        }
+
+        if n <= byteCapacity {
+            return
+        }
+
+        var growTo = math.closestPowerOfTwo(roundingUp: n)
+        if !storageIsOwned {
+            return makeOwned(ensuringCapacity: growTo)
+        }
+
+        // Reallocate to make sure there is enough storage.
+        var prev = self.rawBytes.rawPointer
+        self.rawBytes = mem.reallocate(mutableBytes, toSize: growTo)
+        debugPrint!(Arrays, "realloc %p -> %p (self: %p)\n", prev, rawBytes.raw, builtin.addressOf(self))
+        self.byteCapacity = growTo
+    }
+
+    /// Insert the given raw bytes into the buffer at the specified position,
+    /// these must be valid UTF8.
+    def mutating uncheckedInsert(_ bytes: UnsafeBufferPtr<T>,
+                                 _ size: Int,
+                                 at position: Int) {
+        grow(toAtLeast: byteSize + size)
+
+        if position != byteSize {
+            // Move the following elements.
+            mem.move(to: self.mutableBytes.offset(by: position + size),
+                     from: self.rawBytes.offset(by: position),
+                     size)
+        }
+
+        mem.copy(to: self.mutableBytes.offset(by: position), from: bytes, size)
+        self.byteSize = self.byteSize + size
+    }
+
+    /// Replace a subrange with a different byte sequence of the same size.
+    def mutating uncheckedReplace(from index: Int, with bytes: UnsafeBufferPtr<T>, size n: Int) {
+         assert!(index + n <= byteSize, "subrange is out of bounds!")
+        mem.copy(to: self.mutableBytes.offset(by: index), from: bytes, n)
+    }
+
+    /// Remove \param n bytes following \param position.
+    def mutating remove(count n: Int64, at position: Int64) {
+         assert!(position + n < byteSize, "bad remove parameters")
+
+        /// Copy all following bytes behind by n bytes.
+        mem.move(to: self.mutableBytes.offset(by: position),
+                 from: self.rawBytes.offset(by: position + n),
+                 n)
+
+        /// Reduce our size.
+        byteSize = byteSize - n
+    }
+
+    /// Reverse the bytes in the buffer.
+    def mutating reverse(fromIndex position: Int) {
+        mem.reverse(self.mutableBytes.offset(by: position), self.byteSize - position)
+    }
+
+    /// Clear the storage buffer.
+    def mutating clear() {
+        byteSize = 0
+    }
+}
+
+extend Array with ExpressibleByArrayLiteral {
+    init (arrayLiteral: [Element]) {
+        self = arrayLiteral
     }
 }
 
@@ -49,50 +244,55 @@ extend Array with RangeReplaceableCollection {
     /// \inherit
     alias SubSequence = Self
 
-    /// Empty C'tor. Initializes an empty array.
-    init {
-        self.buffer = CowBuffer<T>()
-    }
+    /// \inherit
+    prop size: Int => byteSize
 
     /// \inherit
-    prop size: Int => buffer.bufferSize
-
-    /// \inherit
-    prop capacity: Int => buffer.bufferCapacity
+    prop capacity: Int => byteCapacity
 
     /// \inherit
     prop startIndex: Index => 0
 
     /// \inherit
-    prop endIndex: Index => buffer.bufferSize
+    prop endIndex: Index => byteSize
+
+    /// \inherit
+    def mutating reserveCapacity(_ n: Int) {
+        grow(toAtLeast: n)
+    }
 
     /// \inherit
     subscript (idx: Index) -> Element {
         get {
             _checkIndex(idx)
-            return buffer.bytes[idx]
+            return rawBytes[idx]
         }
         set {
             _checkIndex(idx)
-            buffer.bytes[idx] = newVal
+            mutableBytes[idx] = newVal
         }
     }
 
     /// \inherit
     subscript (_ range: Range<Index>) -> SubSequence {
         get {
-            return Self(buffer: CowBuffer<T>(&self.buffer, range.startIndex, range.size))
+            return Self(self, bounds: range)
         }
         set {
+            if range.size == newVal.size {
+                uncheckedReplace(from: range.startIndex, with: newVal.rawBytes, size: range.size)
+                return
+            }
+
             replaceSubrange(range, with: newVal)
         }
     }
 
     /// \inherit
     def mutating replaceSubrange<C: Collection>(
-        _ subRange: Range<Index>, with newElements: C
+        _ subRange: Range<Index>, with newElements: owned C
     ) where C.Element == Element {
-        _string_precondition!(subRange.startIndex >= self.startIndex && subRange.endIndex <= self.endIndex, 
+        precondition!(subRange.startIndex >= self.startIndex && subRange.endIndex <= self.endIndex, 
                               "invalid indices passed to String.replaceSubrange")
 
         var result = Self()
@@ -112,18 +312,46 @@ extend Array with RangeReplaceableCollection {
 
     /// \inherit
     def mutating append(_ newElement: owned T) {
-        buffer.insert(newElement, at: buffer.bufferSize)
+        uncheckedInsert(UnsafeBufferPtr<T>(rawPointer: builtin.addressOf(newElement)), 1, at: byteSize)
+        builtin.consume(newElement)
+    }
+}
+
+extend Array with ImplicitlyCopyable {
+    /// \inherit
+    def copy() -> Self {
+        var result = Self()
+        result += self
+        return result
+    }
+}
+
+extend Array with StringRepresentable where T is StringRepresentable {
+    /// \inherit
+    def toString() -> String {
+        var str = "["
+
+        for i in 0..size {
+            if i > 0 {
+                str += ", "
+            }
+
+            str += self[i].toString()
+        }
+
+        str += "]"
+        return str
     }
 }
 
 extend Array {
     /// Execute the given closure with a pointer to the beginning of this array's buffer.
     def withUnsafeBufferPtr<U>(_ closure: (UnsafeBufferPtr<T>) -> U) -> U {
-        return closure(self.buffer.bytes)
+        return closure(self.rawBytes)
     }
 
     /// Execute the given closure with a pointer to the beginning of this array's buffer.
     def mutating withUnsafeMutableBufferPtr<U>(_ closure: (UnsafeMutableBufferPtr<T>) -> U) -> U {
-        return closure(self.buffer.bytes)
+        return closure(self.mutableBytes)
     }
 }

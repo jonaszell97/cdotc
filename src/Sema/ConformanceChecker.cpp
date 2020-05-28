@@ -49,6 +49,9 @@ struct DependencyNode : public llvm::FoldingSetNode {
 
       /// We need to know whether or not a constraint set is satisfied.
       ConstraintsSatisfied,
+
+      /// The type of a field or enum case.
+      StoredValueType,
    };
 
    /// The node kind.
@@ -147,6 +150,9 @@ struct DependencyNode : public llvm::FoldingSetNode {
          OS << "Constraint set [";
          getConstraints()->print(OS);
          OS << "] satisfied for " << Decl->getFullName();
+         break;
+      case StoredValueType:
+         OS << "Type of stored field " << Decl->getFullName();
          break;
       }
       }
@@ -460,6 +466,8 @@ class cdot::ConformanceResolver {
 
    bool CreateUncheckedConformanceForImportedDecl(RecordDecl *R);
    bool ResolveConformanceDependencies();
+
+   bool DiagnoseCircularDependency();
 
    friend class SemaPass;
 
@@ -3331,14 +3339,14 @@ bool ConformanceResolver::FindLayoutDependencies(
       return false;
    }
 
-   SmallSetVector<QualType, 4> TypesToCheck;
+   SmallSetVector<std::pair<QualType, NamedDecl*>, 4> TypesToCheck;
    if (auto *S = dyn_cast<StructDecl>(R)) {
       for (auto *F : S->getStoredFields()) {
          if (QC.PrepareDeclInterface(F)) {
             continue;
          }
 
-         TypesToCheck.insert(F->getType().getResolvedType());
+         TypesToCheck.insert(std::make_pair(F->getType().getResolvedType(), F));
       }
    }
    else if (auto *E = dyn_cast<EnumDecl>(R)) {
@@ -3348,12 +3356,12 @@ bool ConformanceResolver::FindLayoutDependencies(
          }
 
          for (auto *Val : EC->getArgs()) {
-            TypesToCheck.insert(Val->getType().getResolvedType());
+            TypesToCheck.insert(std::make_pair(Val->getType().getResolvedType(), Val));
          }
       }
    }
 
-   for (auto &Ty : TypesToCheck) {
+   for (auto &Pair : TypesToCheck) {
       visitSpecificType<RecordType, FunctionType, PointerType, ReferenceType>(
           [&](QualType T) {
         // Functions, pointers and references do not actually store
@@ -3365,16 +3373,23 @@ bool ConformanceResolver::FindLayoutDependencies(
            return false;
         }
 
-        auto &OtherNode = GetDependencyNode(
-            DependencyNode::Complete, T->getRecord());
+        bool isNew = false;
+        auto &TypeNode = GetDependencyNode(DependencyNode::StoredValueType,
+                                           Pair.second, nullptr, &isNew);
 
-        if (OtherNode.getVal()->Done) {
+        if (isNew) {
+           auto &OtherNode = GetDependencyNode(
+              DependencyNode::Complete, T->getRecord());
+
+           TypeNode.addIncoming(&OtherNode);
+        }
+        else if (TypeNode.getVal()->Done) {
            return false;
         }
 
-        CompleteNode.addIncoming(&OtherNode);
+        CompleteNode.addIncoming(&TypeNode);
         return false;
-      }, Ty);
+      }, Pair.first);
    }
 
    return false;
@@ -3639,6 +3654,7 @@ bool ConformanceResolver::ResolveDependencyNode(DependencyNode *Node,
    case DependencyNode::ExtensionApplicability:
    case DependencyNode::ConformancesOfRecord:
    case DependencyNode::ConstraintsSatisfied:
+   case DependencyNode::StoredValueType:
       // These are only used as markers.
       break;
    }
@@ -3723,7 +3739,9 @@ BEGIN_LOG(ConformanceDependencies)
 END_LOG
 #endif
 
-   assert(valid && "loop in conformance dependency graph!");
+   if (!valid) {
+      return DiagnoseCircularDependency();
+   }
 
    for (auto *Vert : Dependencies.getVertices()) {
       NumDependencies[Vert->getVal()] = Vert->getIncoming().size();
@@ -3762,7 +3780,9 @@ END_LOG
             LogDependencyGraph(Dependencies, valid);
          END_LOG
 #endif
-         assert(valid && "loop in conformance dependency graph!");
+         if (!valid) {
+            return DiagnoseCircularDependency();
+         }
 
          for (auto *Vert : Dependencies.getVertices()) {
             NumDependencies[Vert->getVal()] = Vert->getIncoming().size();
@@ -3826,6 +3846,54 @@ bool ConformanceResolver::ResolveConformanceDependencies()
 
    ConformanceDAG.clear();
    return false;
+}
+
+bool ConformanceResolver::DiagnoseCircularDependency()
+{
+   auto pair = Dependencies.getOffendingPair();
+   DependencyNode *CompleteNode = nullptr;
+   DependencyNode *OtherNode = nullptr;
+
+   if (pair.first->Kind == DependencyNode::Complete) {
+      CompleteNode = pair.first;
+      OtherNode = pair.second;
+   }
+   else if (pair.second->Kind == DependencyNode::Complete) {
+      CompleteNode = pair.second;
+      OtherNode = pair.first;
+   }
+
+   if (CompleteNode) {
+      if (OtherNode->Kind == DependencyNode::StoredValueType) {
+         auto *ValueDecl = OtherNode->Decl;
+         if (auto *F = dyn_cast<FieldDecl>(ValueDecl)) {
+            QC.Sema->diagnose(F, err_generic_error,
+               F->getRecord()->getDeclName().toString()
+               + " cannot contain a stored field of its own type",
+               F->getSourceLoc());
+
+            return true;
+         }
+         if (auto *Arg = dyn_cast<FuncArgDecl>(ValueDecl)) {
+            auto *EC = cast<EnumCaseDecl>(Arg->getDeclContext());
+            QC.Sema->diagnose(EC, err_generic_error,
+                              EC->getRecord()->getDeclName().toString()
+                              + " cannot contain a case value of its own type",
+                              Arg->getSourceLoc());
+
+            QC.Sema->diagnose(note_generic_note, "mark the case as 'indirect' "
+                                                 "to avoid this error",
+                                                 EC->getSourceLoc());
+
+            return true;
+         }
+      }
+   }
+
+   QC.Sema->diagnose(fatal_any_fatal,
+      "could not resolve conformance dependency graph");
+
+   return true;
 }
 
 bool SemaPass::PrepareNameLookup(DeclContext *DC)

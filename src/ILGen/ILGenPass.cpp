@@ -1356,7 +1356,8 @@ il::Function* ILGenPass::DeclareFunction(CallableDecl* C)
    else {
       func = Builder.CreateFunction(MangledName, RetTy, args, C->throws(),
                                     C->isCstyleVararg(), C->getSourceLoc(),
-                                    C->isExternC() && !C->getBody());
+                                    C->isExternC() && !C->getBody(),
+                                    C->isAsync());
    }
 
    if (Self) {
@@ -5946,12 +5947,11 @@ void ILGenPass::visitReturnStmt(ReturnStmt* Stmt)
          retainIfNecessary(Val);
       }
 
+      EmitCoroutineReturn(Val);
       ECR.pop();
 
       // Emit cleanups
       Cleanups.emitAllWithoutPopping();
-
-      EmitCoroutineReturn(Val);
       return;
    }
 

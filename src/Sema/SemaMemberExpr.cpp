@@ -2385,7 +2385,8 @@ void SemaPass::diagnoseTemplateArgErrors(
       unsigned select2 = (diagSelect >> 2u) & 0x3u;
 
       auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
-      diagnose(ErrorStmt, note_template_arg_kind_mismatch, select1, select2, 0,
+      diagnose(ErrorStmt, note_template_arg_kind_mismatch, select2, select1,
+               Param->getIndex() + 1,
                list.getArgForParam(Param)->getLoc());
 
       diagnose(ErrorStmt, note_template_parameter_here, Param->getSourceLoc());
@@ -2396,11 +2397,11 @@ void SemaPass::diagnoseTemplateArgErrors(
       auto givenTy = reinterpret_cast<Type*>(Cand.Data1);
       auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
 
-      diagnose(ErrorStmt, note_template_arg_type_mismatch, givenTy, 0,
-               Param->getCovariance());
+      diagnose(ErrorStmt, note_template_arg_type_mismatch,
+               Param->getCovariance(), Param->getIndex() + 1, givenTy,
+               list.getArgForParam(Param)->getLoc());
 
       diagnose(ErrorStmt, note_template_parameter_here, Param->getSourceLoc());
-
       break;
    }
    case sema::TemplateArgListResultKind::TLR_ConflictingInferredArg: {

@@ -1,3 +1,4 @@
+#include <cdotc/AST/Expression.h>
 #include "cdotc/AST/ASTContext.h"
 
 #include "cdotc/AST/Decl.h"
@@ -642,7 +643,13 @@ static DependentRecordType* createTemplateType(ASTContext& C, RecordDecl* R)
                                    param->getSourceLoc());
       }
       else {
-         llvm_unreachable("not sure how to handle this!");
+         auto *Expr = StaticExpr::Create(
+            C, param->getValueType().getResolvedType(),
+            param->getSourceRange(), nullptr);
+
+         Expr->setSemanticallyChecked(true);
+         templateArgs.emplace_back(param,
+            Expr, param->getSourceLoc());
       }
    }
 

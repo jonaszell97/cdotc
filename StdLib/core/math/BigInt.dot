@@ -1,7 +1,5 @@
 
-module std.math
-
-public struct BigInt {
+public struct BigInt with BinaryInteger {
     enum Sign {
         case negative, positive
     }
@@ -455,7 +453,7 @@ extend BigInt with ExpressibleByIntegerLiteral {
     }
 }
 
-extend BigInt {
+extend BigInt with StringInitializable {
     init? (_ s: String) {
         self.init(s, radix: 10u)
     }
@@ -548,16 +546,16 @@ extend BigInt with Hashable {
 
 extend BigInt with StringRepresentable {
     def toString() -> String {
-        return toString<10>()
+        return toString(base: 10)
     }
 
-    def toString<let Base>() -> String {
+    def toString(base: Int) -> String {
         var s = ""
         if sign == .negative {
             s += "-"
         }
 
-        s += val.toString<Base>()
+        s += val.toString(base)
         return s
     }
 }

@@ -9,6 +9,27 @@ using namespace cdot::ast;
 using namespace cdot::il;
 using namespace cdot::support;
 
+static Value *CreateStruct(ILBuilder &Builder, Value *Val, QualType T)
+{
+   // This can happen for modules that do not include std.core
+   if (!T->isRecordType()) {
+      return Val;
+   }
+
+   auto *S = cast<StructDecl>(T->getRecord());
+
+   auto FieldTy = S->getFields().front()->getType();
+   if (FieldTy->isPointerType()) {
+      Val = Builder.CreateBitCast(CastKind::BitCast, Val, FieldTy);
+   }
+
+   auto *Alloc = Builder.CreateAlloca(T);
+   auto *FieldRef = Builder.CreateStructGEP(Alloc, 0);
+   Builder.CreateStore(Val, FieldRef);
+
+   return Builder.CreateLoad(Alloc);
+}
+
 il::Value* ILGenPass::visitAwaitExpr(AwaitExpr* Expr)
 {
    auto* Awaiter = visit(Expr->getExpr());
@@ -26,8 +47,8 @@ void ILGenPass::CreateEndCleanupBlocks(CoroutineInfo& Info)
       Info.EndBB = Builder.CreateBasicBlock("coro.end");
       Builder.SetInsertPoint(Info.EndBB);
 
-      Builder.CreateIntrinsicCall(Intrinsic::coro_end, {Info.Handle});
-      Builder.CreateIntrinsicCall(Intrinsic::coro_return, {Info.Handle});
+      Builder.CreateIntrinsicCall(Intrinsic::coro_end, {Info.RawHandle});
+      Builder.CreateIntrinsicCall(Intrinsic::coro_return, {Info.RawHandle});
       Builder.CreateUnreachable();
    }
 
@@ -35,7 +56,7 @@ void ILGenPass::CreateEndCleanupBlocks(CoroutineInfo& Info)
       Info.CleanupBB = Builder.CreateBasicBlock("coro.cleanup");
       Builder.SetInsertPoint(Info.CleanupBB);
 
-      Builder.CreateIntrinsicCall(Intrinsic::coro_free, {Info.ID, Info.Handle});
+      Builder.CreateIntrinsicCall(Intrinsic::coro_free, {Info.ID, Info.RawHandle});
       // Fall through to the end block.
       Builder.CreateBr(Info.EndBB);
    }
@@ -63,21 +84,23 @@ il::Value* ILGenPass::EmitCoroutineAwait(il::Value* Awaitable)
    pushDefaultCleanup(Awaiter);
 
    // Check whether the value is ready immediately.
-   auto* Ready = Builder.CreateCall(getFunc(Info.AwaitReady), Awaiter);
-   Builder.CreateCondBr(Ready, ResumeBB, SuspendBB);
+   Value* Ready = Builder.CreateCall(getFunc(Info.AwaitReady), Awaiter);
+   Builder.CreateCondBr(Builder.CreateLoad(Builder.CreateStructGEP(Ready, 0)),
+      ResumeBB, SuspendBB);
 
    // Save the coroutine state.
    Builder.SetInsertPoint(SuspendBB);
 
-   auto* HandlePtr = CoroInfo.Handle;
-   auto* Save = Builder.CreateIntrinsicCall(Intrinsic::coro_save, HandlePtr);
+   auto* Save = Builder.CreateIntrinsicCall(Intrinsic::coro_save, CoroInfo.RawHandle);
 
    // Create the coroutine handle to pass the awaiter.
    auto* Handle = Builder.CreateStructInit(
        cast<StructDecl>(Info.CoroHandleInit->getRecord()),
-       getFunc(Info.CoroHandleInit), HandlePtr);
+       getFunc(Info.CoroHandleInit), CoroInfo.Handle);
 
    Ready = Builder.CreateCall(getFunc(Info.AwaitSuspend), {Awaiter, Handle});
+   Ready = Builder.CreateLoad(Builder.CreateStructGEP(Ready, 0));
+
    auto* SuspendRealBB = Builder.CreateBasicBlock("await.suspend");
 
    Builder.CreateCondBr(Ready, ResumeBB, SuspendRealBB);
@@ -114,7 +137,8 @@ il::Value* ILGenPass::EmitCoroutineReturn(il::Value* Value)
 
    // Resolve the awaitable with the returned value.
    il::Value* Awaitable = Builder.CreateLoad(CoroInfo.Awaitable);
-   Builder.CreateCall(getFunc(Info.AwaitableResolve), {Awaitable, Value});
+   Builder.CreateCall(getFunc(Info.AwaitableResolve),
+      {Awaitable, Forward(Value)});
 
    // Suspend the coroutine one final time.
    auto* Discrim = Builder.CreateIntrinsicCall(
@@ -175,11 +199,15 @@ void ILGenPass::EmitCoroutinePrelude(CallableDecl* C, il::Function& F)
    Builder.SetInsertPoint(MergeBB);
 
    // Begin the coroutine.
-   auto* Handle = Builder.CreateIntrinsicCall(Intrinsic::coro_begin,
-                                              {ID, MergeBB->getBlockArg(0)});
+   auto* RawHandle = Builder.CreateIntrinsicCall(Intrinsic::coro_begin,
+      {ID, MergeBB->getBlockArg(0)});
+
+   auto *Handle = CreateStruct(Builder, RawHandle,
+      SP.getCoroutineHandleDecl()->getStoredFields().front()->getType());
 
    // Remember the promise and coroutine handle.
    CoroInfo.ID = ID;
+   CoroInfo.RawHandle = RawHandle;
    CoroInfo.Handle = Handle;
    CoroInfo.Awaitable = AwaitableAlloc;
 

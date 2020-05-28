@@ -354,25 +354,7 @@ public:
 
    ExprResult visitAwaitExpr(AwaitExpr* Expr)
    {
-      {
-         bool needsFullTypeChecking = false;
-         auto SAR = support::saveAndRestore(this->NeedsFullTypechecking,
-                                            needsFullTypeChecking);
-
-         auto Result = visitExpr(Expr->getExpr());
-         if (!Result) {
-            return ExprError();
-         }
-
-         Expr->setExpr(Result.get());
-
-         if (!NeedsFullTypechecking) {
-            return Sema.visitExpr(Expr);
-         }
-      }
-
-      NeedsFullTypechecking = true;
-      return Expr;
+      return Sema.visitExpr(Expr);
    }
 
    ExprResult visitMacroExpansionExpr(MacroExpansionExpr* Expr)

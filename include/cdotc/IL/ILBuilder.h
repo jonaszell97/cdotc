@@ -198,7 +198,8 @@ public:
    Function* CreateFunction(llvm::StringRef name, QualType returnType,
                             llvm::ArrayRef<Argument*> args, bool mightThrow,
                             bool vararg, SourceLocation loc = {},
-                            bool OverridePrevious = false);
+                            bool OverridePrevious = false,
+                            bool isAsync = false);
 
    Function* CreateFunction(Value::TypeID Kind, llvm::StringRef name,
                             QualType functionType, SourceLocation Loc,

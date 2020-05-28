@@ -1263,6 +1263,11 @@ void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl* R)
       auto Self = fun->getEntryBlock()->getBlockArg(0);
       fun->setSelf(Self);
 
+      EnumDecl *SelfOpt = nullptr;
+      if (Self->getType()->isRecordType()) {
+         SelfOpt = cast<EnumDecl>(Self->getType()->getRecord());
+      }
+
       il::Value *Val = fun->getEntryBlock()->getBlockArg(1);
       if (!Val->getType()->isIntegerType()) {
          Val = Builder.CreateLoad(Builder.CreateStructGEP(Val, 0));
@@ -1292,16 +1297,24 @@ void ILGenPass::DefineImplicitRawRepresentableConformance(EnumDecl* R)
 
          sw->addCase(rawVal, caseBB);
          auto enumVal = Builder.CreateEnumInit(R, Case, {});
-
          auto* enumAlloc = Builder.CreateAlloca(enumVal->getType());
          Builder.CreateStore(enumVal, enumAlloc);
+
+         Value *optVal;
+         if (SelfOpt) {
+            optVal = Builder.CreateEnumInit(
+               SelfOpt, SelfOpt->getSomeCase(), enumVal);
+         }
+         else {
+            optVal = enumAlloc;
+         }
 
          Value* Size = Builder.GetConstantInt(
              Context.getUInt64Ty(),
              Context.getTargetInfo().getAllocSizeOfType(Self->getType()));
 
          Builder.CreateIntrinsicCall(Intrinsic::memcpy,
-                                     {Self, enumAlloc, Size});
+                                     {Self, optVal, Size});
          Builder.CreateRetVoid();
       }
 
