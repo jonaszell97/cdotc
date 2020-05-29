@@ -149,13 +149,9 @@ public abstract class Thread {
                       "invalid priority")
 
         var policy = posix.sched.SCHED_OTHER as i32
-        var param = posix.pthread.sched_param()
-        _ = posix.pthread.pthread_getschedparam(self.pthread, addressOf(&policy),
-                                                addressOf(&param))
+        var param = prio.value as i32
 
-        param.sched_priority = prio.value as i32
-        _ = posix.pthread.pthread_setschedparam(self.pthread,
-                                                policy, addressOf(&param))
+        _ = posix.pthread.pthread_setschedparam(self.pthread, policy, bitcast(addressOf(&param)))
     }
 
     /// Get the priority of this thread.
@@ -165,7 +161,7 @@ public abstract class Thread {
         _ = posix.pthread.pthread_getschedparam(self.pthread, addressOf(&policy),
                                                 addressOf(&param))
 
-        return Priority(param.sched_priority)
+        return Priority(builtin.loadFromPointer(builtin.bitcast<i32>(addressOf(&param))))
     }
 
     //===--------------------------------------------------------------------===//
@@ -271,7 +267,7 @@ fileprivate class CurrentThread: Thread {
         super.init()
         self.running = true
         @version(Darwin) {
-            self.pthread = posix.pthread.pthread_self().rawValue as! posix.pthread.pthread_t
+            self.pthread = posix.pthread.pthread_self().rawValue.value as! posix.pthread.pthread_t
         } else {
             self.pthread = posix.pthread.pthread_self().value as! posix.pthread.pthread_t
         }
