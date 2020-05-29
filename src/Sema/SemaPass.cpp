@@ -1039,8 +1039,9 @@ Expression* SemaPass::implicitCastIfNecessary(Expression* Expr, QualType destTy,
    if (ConvSeq.getStrength() != CastStrength::Implicit) {
       if (!ignoreError) {
          diagnose(Expr, err_cast_requires_op, DiagLoc, DiagRange,
-                  diag::opt::show_constness, destTy->removeReference(),
-                  originTy->removeReference(), (int)ConvSeq.getStrength() - 1,
+                  diag::opt::show_constness,
+                  originTy->removeReference(), destTy->removeReference(),
+                  (int)ConvSeq.getStrength() - 1,
                   Expr->getSourceRange());
       }
       else if (hadError) {
@@ -3067,6 +3068,8 @@ void SemaPass::visitIfConditions(Statement* Stmt,
             continue;
          }
 
+         C.BindingData.Decl->setSynthesized(true);
+
          auto CondExpr = C.BindingData.Decl->getValue();
          CanType CondTy
              = CondExpr->getExprType()->removeReference()->getDesugaredType();
@@ -3696,6 +3699,7 @@ static ExprResult matchEnum(SemaPass& SP, CasePattern* Expr,
          if (auto* Var = Arg.BindingData.Decl) {
             Var->setDeclared(true);
             Var->setSemanticallyChecked(true);
+            Var->setSynthesized(true);
 
             // Verify that mutability of the declaration and the matched value
             // is compatible.
@@ -4017,8 +4021,7 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
 
    // Async functions return their awaited type.
    if (fn->isAsync()) {
-      fn->getReturnType().setResolvedType(
-          getCoroutineInfo(declaredReturnType).AwaitedType);
+      declaredReturnType = getCoroutineInfo(declaredReturnType).AwaitedType;
    }
 
    // Check if the expected returned type is dependent.
@@ -4084,23 +4087,25 @@ StmtResult SemaPass::visitReturnStmt(ReturnStmt* Stmt)
       // Check NRVO candidate
       if (auto DeclRef = dyn_cast<DeclRefExpr>(noConv)) {
          if (auto *LV = dyn_cast<LocalVarDecl>(DeclRef->getDecl())) {
-            bool valid = true;
-            if (auto PrevDecl = fn->getNRVOCandidate()) {
-               if (PrevDecl != LV) {
-                  valid = false;
+            if (!LV->isSynthesized()) {
+               bool valid = true;
+               if (auto PrevDecl = fn->getNRVOCandidate()) {
+                  if (PrevDecl != LV) {
+                     valid = false;
+                  }
                }
-            }
 
-            if (valid) {
-               Stmt->setNRVOCand(LV);
-               LV->setIsNRVOCandidate(true);
-               fn->setNRVOCandidate(LV);
-            }
-            else {
-               Stmt->setNRVOCand(LV);
-            }
+               if (valid) {
+                  Stmt->setNRVOCand(LV);
+                  LV->setIsNRVOCandidate(true);
+                  fn->setNRVOCandidate(LV);
+               }
+               else {
+                  Stmt->setNRVOCand(LV);
+               }
 
-            MaybeInvalidRefReturn = false;
+               MaybeInvalidRefReturn = false;
+            }
          }
       }
 
@@ -4505,9 +4510,13 @@ ExprResult SemaPass::visitAwaitExpr(AwaitExpr* Expr)
       diagnose(Expr, err_await_in_non_async_fn, Expr->getSourceRange());
    }
 
-   auto Res = visitExpr(Expr, Expr->getExpr());
-   if (!Res) {
-      return Res;
+   ExprResult Res;
+   {
+      AwaitScopeRAII AwaitRAII(*this);
+      Res = typecheckExpr(Expr->getExpr(), SourceType(), Expr);
+      if (!Res) {
+         return Res;
+      }
    }
 
    Expr->setExpr(Res.get());
@@ -4933,7 +4942,7 @@ static NamedDecl* createVariadicDecl(SemaPass& Sema, NamedDecl* variadicDecl,
       }
 
       QualType elementType
-          = Sema.Context.getMetaType(Sema.Context.getTemplateArgType(param));
+          = Sema.Context.getMetaType(Sema.Context.getTemplateParamType(param));
       auto* aliasDecl = AliasDecl::Create(Sema.Context, SOD.getSourceLoc(),
                                           AccessSpecifier::Public, DeclName,
                                           elementType, nullptr, {});

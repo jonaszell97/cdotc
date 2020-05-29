@@ -508,7 +508,7 @@ static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
       auto TP = reinterpret_cast<TemplateParamDecl*>(Cand.Data1);
       SP.diagnose(Caller, note_could_not_infer_template_arg, TP->getName(),
                   Cand.getFunc()->getSourceLoc());
-      SP.diagnose(note_declared_here, TP->getSourceLoc());
+      SP.diagnose(note_template_parameter_here, TP->getSourceLoc());
 
       break;
    }
@@ -956,7 +956,7 @@ void CandidateSet::diagnoseAlias(SemaPass& SP, DeclarationName AliasName,
 
          auto Param = reinterpret_cast<TemplateParamDecl*>(Cand.Data2);
          SP.diagnose(Caller, note_template_arg_kind_mismatch, select1, select2,
-                     0, templateArgs[0]->getSourceRange());
+                     Param->getIndex() + 1, templateArgs[0]->getSourceRange());
 
          SP.diagnose(Caller, note_template_parameter_here,
                      Param->getSourceLoc());

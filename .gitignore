@@ -1,9 +1,13 @@
+
+*.DS_Store
+
 bootstrap
 build/
 .history/
 .idea/
 .vscode/
 .build/
+.local/
 bin/
 cmake-build-debug/
 cmake-build-release/
@@ -19,3 +23,5 @@ include/cdotc/Parse/ParseAttr.inc
 include/cdotc/Diagnostics/Diagnostics.def
 include/cdotc/Query/Inc
 tools/TableGenScripts
+
+src/.project

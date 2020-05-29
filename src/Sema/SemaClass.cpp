@@ -1361,7 +1361,7 @@ static bool shouldAddRawRepresentableConformance(RecordDecl* R)
 
 static void checkCopyableConformances(SemaPass& SP, RecordDecl* S,
                                       bool AllCopyable,
-                                      bool AllImplicitlyCopyable)
+                                      bool AddImplicitlyCopyableConf)
 {
    if (isa<ClassDecl>(S)) {
       return;
@@ -1396,6 +1396,13 @@ static void checkCopyableConformances(SemaPass& SP, RecordDecl* S,
       if (NewConformance) {
          SP.QC.CheckSingleConformance(Context.getRecordType(S), Copyable);
       }
+   }
+
+   if (!AddImplicitlyCopyableConf)
+      return;
+
+   if (auto* ImpCopyable = SP.getImplicitlyCopyableDecl()) {
+      ConfTable.addExplicitConformance(Context, S, ImpCopyable);
    }
 }
 
@@ -1511,8 +1518,7 @@ QueryResult CheckBuiltinConformancesQuery::run()
          AllImplicitlyCopyable &= FieldImplicitlyCopyable;
       }
 
-      checkCopyableConformances(*QC.Sema, S, AllCopyable,
-                                AllImplicitlyCopyable);
+      checkCopyableConformances(*QC.Sema, S, AllCopyable, false);
    }
    else if (auto E = dyn_cast<EnumDecl>(R)) {
       bool AllEquatable = true;
@@ -1581,7 +1587,7 @@ QueryResult CheckBuiltinConformancesQuery::run()
       }
 
       checkCopyableConformances(*QC.Sema, E, AllCopyable,
-                                AllImplicitlyCopyable);
+                                E->getMaxAssociatedValues() == 0);
    }
 
    auto& Meta = QC.RecordMeta[R];

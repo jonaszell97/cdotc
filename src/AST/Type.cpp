@@ -868,7 +868,7 @@ public:
 
    void visitMetaType(const MetaType* Ty)
    {
-      OS << "MetaType<" << Ty->getUnderlyingType() << ">";
+      OS << Ty->getUnderlyingType() << ".Type";
    }
 
    void visitTemplateParamType(const TemplateParamType* Ty)

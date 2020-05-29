@@ -663,7 +663,7 @@ QueryResult GetBuiltinRecordQuery::run()
          return fail();
       }
 
-      II = sema().getIdentifier("CoroHandle");
+      II = sema().getIdentifier("CoroutineHandle");
       break;
    case TypeInfo:
       if (QC.GetBuiltinModule(Mod, GetBuiltinModuleQuery::Runtime)) {

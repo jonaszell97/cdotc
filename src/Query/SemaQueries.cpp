@@ -25,7 +25,7 @@ QueryResult GetDefaultTemplateArgQuery::run()
           TemplateArgument(P, P->isTypeName(), {}, P->getSourceLoc()));
    }
    if (P->isTypeName()) {
-      return finish(TemplateArgument(P, QC.Sema->Context.getTemplateArgType(P),
+      return finish(TemplateArgument(P, QC.Sema->Context.getTemplateParamType(P),
                                      P->getSourceLoc()));
    }
 
@@ -669,7 +669,7 @@ QueryResult VerifyConstraintQuery::run()
             return fail();
 
          assert(i == 0 && "should only appear as the first part of the type!");
-         CurrentType = QC.Context.getTemplateArgType(P);
+         CurrentType = QC.Context.getTemplateParamType(P);
          LookupTy = P->getCovariance();
       }
       else {
@@ -1948,47 +1948,46 @@ QueryResult PrepareCallableInterfaceQuery::run()
    }
 
    // Transform the return type into a Future<T>.
-   //   while (D->isAsync()) {
-   //      auto *AwaitableDecl = getAwaitableDecl();
-   //      if (!AwaitableDecl) {
-   //         diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
-   //         break;
-   //      }
-   //
-   //      QualType RetTy = D->getReturnType();
-   //      auto &Conformances = Context.getConformanceTable();
-   //
-   //      if (!RetTy->isRecordType()
-   //          || !Conformances.conformsTo(RetTy->getRecord(), AwaitableDecl)) {
-   //         auto *FutureDecl = getFutureDecl();
-   //         if (!FutureDecl) {
-   //            diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
-   //            break;
-   //         }
-   //
-   //         ensureDeclared(FutureDecl);
-   //
-   //         TemplateArgument Arg(FutureDecl->getTemplateParams().front(),
-   //                                 D->getReturnType(), D->getSourceLoc());
-   //
-   //         bool isNew = false;
-   //         auto TemplateArgs = FinalTemplateArgumentList::Create(Context,{
-   //         Arg }); auto Inst = Instantiator.InstantiateRecord(D, FutureDecl,
-   //                                                    TemplateArgs, &isNew);
-   //
-   //         if (!Inst)
-   //            break;
-   //
-   //         auto *Fut = Inst.get();
-   //         RetTy = Context.getRecordType(Fut);
-   //
-   //         D->getReturnType().setResolvedType(RetTy);
-   //         D->setImplicitFutureReturn(true);
-   //      }
-   //
-   //      collectCoroutineInfo(RetTy, D);
-   //      break;
-   //   }
+   while (D->isAsync()) {
+      auto *AwaitableDecl = QC.Sema->getAwaitableDecl();
+      if (!AwaitableDecl) {
+         QC.Sema->diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
+         break;
+      }
+
+      QualType RetTy = D->getReturnType();
+      auto &Conformances = Context.getConformanceTable();
+
+      if (!RetTy->isRecordType()
+          || !Conformances.conformsTo(RetTy->getRecord(), AwaitableDecl)) {
+         auto *FutureDecl = QC.Sema->getFutureDecl();
+         if (!FutureDecl) {
+            QC.Sema->diagnose(D, err_no_builtin_decl, 12, D->getSourceLoc());
+            break;
+         }
+
+         if (QC.PrepareDeclInterface(FutureDecl)) {
+            break;
+         }
+
+         TemplateArgument Arg(FutureDecl->getTemplateParams().front(),
+                              D->getReturnType(), D->getSourceLoc());
+
+         auto TemplateArgs = FinalTemplateArgumentList::Create(Context, {Arg});
+         auto *FutInst = QC.Sema->getInstantiator().InstantiateRecord(
+            FutureDecl, TemplateArgs, D->getSourceLoc());
+
+         if (!FutInst)
+            break;
+
+         RetTy = Context.getRecordType(FutInst);
+         D->getReturnType().setResolvedType(RetTy);
+         D->setImplicitFutureReturn(true);
+      }
+
+      QC.Sema->collectCoroutineInfo(RetTy, D);
+      break;
+   }
 
    if (D->isConversionOp()) {
       auto Name = Context.getDeclNameTable().getConversionOperatorName(

@@ -392,7 +392,8 @@ Argument* ILBuilder::CreateArgument(QualType type,
 Function* ILBuilder::CreateFunction(llvm::StringRef name, QualType returnType,
                                     llvm::ArrayRef<Argument*> args,
                                     bool mightThrow, bool vararg,
-                                    SourceLocation loc, bool OverridePrevious)
+                                    SourceLocation loc, bool OverridePrevious,
+                                    bool isAsync)
 {
    llvm::SmallVector<QualType, 8> argTypes;
    for (auto& arg : args)
@@ -404,6 +405,9 @@ Function* ILBuilder::CreateFunction(llvm::StringRef name, QualType returnType,
 
    if (vararg)
       flags |= FunctionType::CStyleVararg;
+
+   if (isAsync)
+      flags |= FunctionType::Async;
 
    auto FuncTy = ASTCtx.getFunctionType(returnType, argTypes, flags);
 

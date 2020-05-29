@@ -8,7 +8,7 @@ module core {
 
     sourceFiles = [
         "ASCII.dot",
-        // "Array.dot",
+        "Array.dot",
         "BidirectionalCollection.dot",
         "Bool.dot", 
         "Character.dot",
@@ -29,16 +29,15 @@ module core {
         "RangeReplaceableCollection.dot",
         "RawRepresentable.dot",
         "Slice.dot",
-        "SimpleArray.dot",
-        // "String.dot",
-        "SimpleString.dot",
+        "String.dot",
         "UnsafePtr.dot"
     ]
 
     module algorithm {
         module hashing {
             sourceFiles = [
-                "algorithm/Hashing.dot"
+                "algorithm/Hashing.dot",
+                "algorithm/Sorting.dot",
             ]
         }
     }
@@ -49,14 +48,16 @@ module core {
         ]
     }
 
-    module collection {
+    module async {
         sourceFiles = [
-            "collection/CowBuffer.dot",
+            "async/Async.dot"
         ]
     }
 
     module fs {
-        sourceFiles = ["fs/FileSystem.dot"]
+        sourceFiles = [
+            "fs/FileSystem.dot"
+        ]
     }
 
     module io {
@@ -90,7 +91,6 @@ module core {
     module reflect {
         sourceFiles = [
             "reflect/Compiler.dot",
-            // "reflect/TypeTraits.dot"
         ]
     }
 
@@ -123,7 +123,6 @@ module core {
     module test {
         sourceFiles = [
             "test/TestUtils.dot",
-            // "test/Unittest.dot",
         ]
     }
 }

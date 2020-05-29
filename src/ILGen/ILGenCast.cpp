@@ -283,9 +283,11 @@ il::Value* ILGenPass::doFunctionCast(ArrayRef<ConversionStep> Steps,
       case CastKind::Forward:
          Val = Forward(Val);
          break;
-      case CastKind::NoThrowToThrows:
       case CastKind::BitCast:
          Val = Builder.CreateBitCast(Step.getKind(), Val, ResTy);
+         break;
+      case CastKind::NoThrowToThrows:
+         Val = wrapNonThrowingFunction(Val);
          break;
       case CastKind::ThinToThick: {
          auto* Lambda = wrapNonLambdaFunction(Val);

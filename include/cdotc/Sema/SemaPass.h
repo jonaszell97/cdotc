@@ -986,6 +986,9 @@ private:
    /// Stack of try scopes.
    std::vector<bool> TryScopeStack;
 
+   /// Stack of await scopes.
+   std::vector<bool> AwaitScopeStack;
+
    /// The conformance resolver instance.
    ConformanceResolver *ConfResolver;
 
@@ -1000,6 +1003,21 @@ public:
       ~TryScopeRAII() { SP.TryScopeStack.pop_back(); }
 
       bool containsThrowingCall() const { return SP.TryScopeStack.back(); }
+
+   private:
+      SemaPass& SP;
+   };
+
+   /// Enter a new 'await' scope for async handling.
+   struct AwaitScopeRAII {
+      explicit AwaitScopeRAII(SemaPass& SP) : SP(SP)
+      {
+         SP.AwaitScopeStack.emplace_back(false);
+      }
+
+      ~AwaitScopeRAII() { SP.AwaitScopeStack.pop_back(); }
+
+      bool containsAsyncCall() const { return SP.AwaitScopeStack.back(); }
 
    private:
       SemaPass& SP;

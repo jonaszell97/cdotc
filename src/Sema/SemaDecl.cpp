@@ -1013,10 +1013,10 @@ void SemaPass::collectCoroutineInfo(QualType Ty, StmtOrDecl D)
    QC.PrepareDeclInterface(Awaitable);
 
    Info.AwaitableType = Ty;
-   Info.AwaitedType = Awaitable->getAssociatedType(getIdentifier("AwaitedType"))
-                          ->getDefaultType();
-   Info.AwaiterType = Awaitable->getAssociatedType(getIdentifier("AwaiterType"))
-                          ->getDefaultType();
+   Info.AwaitedType = Awaitable->lookupSingle<AliasDecl>(getIdentifier("AwaitedType"))
+                          ->getType()->removeMetaType();
+   Info.AwaiterType = Awaitable->lookupSingle<AliasDecl>(getIdentifier("AwaiterType"))
+                          ->getType()->removeMetaType();
 
    // Instantiate the coroutine handle type.
    {
@@ -1121,7 +1121,7 @@ public:
 
       auto* OtherParam = CD->getTemplateParams()[Idx];
       if (SP.equivalent(Param, OtherParam))
-         return SP.getContext().getTemplateArgType(OtherParam);
+         return SP.getContext().getTemplateParamType(OtherParam);
 
       return T;
    }
@@ -1382,14 +1382,22 @@ ExprResult SemaPass::visitFunctionTypeExpr(FunctionTypeExpr* Expr)
       ++i;
    }
 
+   unsigned Flags = FunctionType::None;
+   if (Expr->throws())
+      Flags |= FunctionType::Throws;
+   if (Expr->isAsync())
+      Flags |= FunctionType::Async;
+   if (Expr->isUnsafe())
+      Flags |= FunctionType::Unsafe;
+
    auto RetTyResult = visitSourceType(Expr, Expr->getReturnType());
    QualType RetTy = RetTyResult ? RetTyResult.get() : ErrorTy;
 
    if (Expr->isThin()) {
-      Expr->setExprType(Context.getFunctionType(RetTy, ArgTys, ParamInfo));
+      Expr->setExprType(Context.getFunctionType(RetTy, ArgTys, ParamInfo, Flags));
    }
    else {
-      Expr->setExprType(Context.getLambdaType(RetTy, ArgTys, ParamInfo));
+      Expr->setExprType(Context.getLambdaType(RetTy, ArgTys, ParamInfo, Flags));
    }
 
    Expr->setExprType(Context.getMetaType(Expr->getExprType()));

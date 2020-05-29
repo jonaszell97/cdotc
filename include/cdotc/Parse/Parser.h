@@ -357,6 +357,7 @@ private:
    IdentifierInfo* Ident_mut;
    IdentifierInfo* Ident_from;
    IdentifierInfo* Ident_unittest;
+   IdentifierInfo* Ident_indirect;
    IdentifierInfo* Ident___traits;
    IdentifierInfo* Ident___nullptr;
    IdentifierInfo* Ident___builtin_void;
@@ -709,7 +710,7 @@ private:
    ParseResult parseFieldDecl();
    ParseResult parseSubscriptDecl();
 
-   ParseResult parseEnumCase();
+   ParseResult parseEnumCase(bool indirect);
    ParseResult parseAssociatedType();
 
    ParseResult parsePattern(int ExprFlags = DefaultFlags);

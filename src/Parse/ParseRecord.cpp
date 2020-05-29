@@ -181,7 +181,19 @@ ParseResult Parser::parseRecordLevelDecl()
    else if (currentTok().is(Ident_memberwise)) {
       NextDecl = parseConstrDecl();
    }
-   else
+   else {
+      bool indirect = false;
+      if (currentTok().is(Ident_indirect)) {
+         indirect = true;
+         advance();
+
+         if (!currentTok().is(tok::kw_case)) {
+            errorUnexpectedToken(currentTok(), tok::kw_case);
+         }
+
+         DeclKind = currentTok().getKind();
+      }
+
       switch (DeclKind) {
       case tok::kw_public:
       case tok::kw_private:
@@ -286,7 +298,7 @@ ParseResult Parser::parseRecordLevelDecl()
 
          ParseResult PR;
          while (1) {
-            PR = parseEnumCase();
+            PR = parseEnumCase(indirect);
 
             if (lookahead().is(tok::comma)) {
                advance();
@@ -296,8 +308,9 @@ ParseResult Parser::parseRecordLevelDecl()
 
                advance();
             }
-            else
+            else {
                break;
+            }
          }
 
          NextDecl = PR;
@@ -320,7 +333,7 @@ ParseResult Parser::parseRecordLevelDecl()
          break;
       case tok::kw_module:
          SP.diagnose(err_module_must_be_first, currentTok().getSourceLoc());
-         (void)parseModuleDecl();
+         (void) parseModuleDecl();
 
          return ParseError();
       default:
@@ -330,6 +343,7 @@ ParseResult Parser::parseRecordLevelDecl()
 
          return skipUntilProbableEndOfStmt();
       }
+   }
 
    int selector;
    if (currentTok().is(Ident_deinit)) {
@@ -1442,7 +1456,7 @@ ParseResult Parser::parseMethodDecl()
    return ActOnDecl(methodDecl);
 }
 
-ParseResult Parser::parseEnumCase()
+ParseResult Parser::parseEnumCase(bool indirect)
 {
    auto CaseLoc = currentTok().getSourceLoc();
    consumeToken(tok::kw_case);
@@ -1477,6 +1491,7 @@ ParseResult Parser::parseEnumCase()
    caseDecl = EnumCaseDecl::Create(Context, CurDeclAttrs.Access, CaseLoc,
                                    CaseLoc, caseName, Expr, associatedTypes);
 
+   caseDecl->setIndirect(indirect);
    return ActOnDecl(caseDecl);
 }
 

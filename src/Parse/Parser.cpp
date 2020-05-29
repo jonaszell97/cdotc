@@ -65,6 +65,7 @@ Parser::Parser(ASTContext& Context, lex::Lexer* lexer, SemaPass& SP,
       Ident_borrow(&Idents.get("borrow")), Ident_ref(&Idents.get("ref")),
       Ident_mut(&Idents.get("mut")), Ident_from(&Idents.get("from")),
       Ident_unittest(&Idents.get("unittest")),
+      Ident_indirect(&Idents.get("indirect")),
       Ident___traits(&Idents.get("__traits")),
       Ident___nullptr(&Idents.get("__nullptr")),
       Ident___builtin_void(&Idents.get("__builtin_void")),
@@ -5316,6 +5317,8 @@ void Parser::parsePatternCommon(SmallVectorImpl<IfCondition>& Args,
 
       if (currentTok().oneOf(tok::kw_var, tok::kw_let)) {
          auto* VD = parseVarDecl(false, false, true).tryGetDecl<LocalVarDecl>();
+         if (VD)
+            VD->setSynthesized(true);
 
          OnlyExprs = false;
          Args.emplace_back(VD, nullptr);

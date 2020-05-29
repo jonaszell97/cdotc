@@ -3173,12 +3173,16 @@ static bool CreateTemplateParamAliases(QueryContext &QC,
          Expr = StaticExpr::Create(QC.Context,
              new(QC.Context) IdentifierRefExpr(Param->getSourceRange(),
                                                IdentifierKind::MetaType, T));
+
+         Expr->setExprType(T);
       }
       else {
          T = Param->getCovariance();
          Expr = StaticExpr::Create(QC.Context, Arg->getValueType(),
                                    Param->getSourceRange(), Arg->getValue());
       }
+
+      Expr->setSemanticallyChecked(true);
 
       auto *Alias = AliasDecl::Create(QC.Context, Param->getSourceLoc(),
           AccessSpecifier::Public,  Param->getDeclName(), T, Expr, {});
@@ -3388,6 +3392,10 @@ bool TemplateInstantiator::completeShallowInstantiation(RecordDecl *Inst)
 
          QC.Context.addProtocolImpl(Inst, req, impl);
       }
+   }
+
+   if (auto *MF = Template->getModFile()) {
+      MF->LoadAllDecls(*Template);
    }
 
    // Make all declarations visible without instantiating them.

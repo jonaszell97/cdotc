@@ -267,7 +267,7 @@ def build_cdot_module(opts, cdotc, mod_name, mod_dir, build_dir, args=[]):
         *args,
     ], check=True)
 
-    run_subprocess(opts, ["sudo", "ln", "-sfv",
+    run_subprocess(opts, ["sudo", "ln", "-sf",
                           app_dir + "/lib/libcdot" + mod_name + "." + dylib_ext,
                           sys_lib_dir], check=True)
 

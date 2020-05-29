@@ -19,14 +19,14 @@ class MoreDerived: Derived {}
 
 let v7 = Derived()
 let v8: Base = v7 // OK
-let v9: MoreDerived = v7 // expected-error {{cast between 'MoreDerived' and 'Derived' requires 'as?' operator}}
+let v9: MoreDerived = v7 // expected-error {{cast between 'Derived' and 'MoreDerived' requires 'as?' operator}}
 let v10 = v7 as? MoreDerived // OK
 let v11 = v7 as! MoreDerived // OK
 let v12 = v7 as MoreDerived // expected-error {{cast between 'Derived' and 'MoreDerived' requires 'as?' operator}}
 
 let v13: i8 = 13
 let v14: i64 = v13 // OK
-let v15: u8 = v13 // expected-error {{cast between 'u8' and 'i8' requires 'as' operator}}
+let v15: u8 = v13 // expected-error {{cast between 'i8' and 'u8' requires 'as' operator}}
 let v16 = v13 as? u8 // expected-error {{cast between 'i8' and 'u8' requires 'as' operator}}
 let v17 = v13 as u8 // OK
 
@@ -43,7 +43,7 @@ let v21: P1 & P2 = S3() // OK
 let v22: P1 & P2 & Any = S3() // expected-warning {{using 'Any' in existential type is redundant}}
 
 let v23: (i64, i64) = (3, 3)
-let v24: (i8, i8) = v23 // expected-error {{cast between '(i8, i8)' and '(i64, i64)' requires 'as' operator}}
+let v24: (i8, i8) = v23 // expected-error {{cast between '(i64, i64)' and '(i8, i8)' requires 'as' operator}}
 let v25 = v23 as (i8, i8) // OK
 
 def returnsInt() -> Int {

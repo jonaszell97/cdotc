@@ -261,6 +261,16 @@ static ExprResult checkAccessorAssignment(SemaPass& Sema, AssignExpr* Expr)
       return ExprError();
    }
 
+   auto rhs = Expr->getRhs();
+   auto RhsResult = Sema.visitExpr(Expr, rhs, propDecl->getType());
+
+   if (!RhsResult) {
+      return ExprError();
+   }
+
+   rhs = RhsResult.get();
+   Expr->setRhs(rhs);
+
    // Build a call to the appropriate accessor method.
    auto* Call = Sema.CreateCall(propDecl->getSetterMethod(),
                                 {Ident->getParentExpr(), Expr->getRhs()},
@@ -282,6 +292,17 @@ static ExprResult checkSubscriptAssignment(SemaPass& Sema, AssignExpr* Expr)
          && !SubExpr->getSubscriptDecl()->hasSetter())) {
       return ExprError();
    }
+
+   auto rhs = Expr->getRhs();
+   auto RhsResult = Sema.visitExpr(
+      Expr, rhs, SubExpr->getSubscriptDecl()->getType());
+
+   if (!RhsResult) {
+      return ExprError();
+   }
+
+   rhs = RhsResult.get();
+   Expr->setRhs(rhs);
 
    // Replace the dummy default value.
    assert(isa<BuiltinExpr>(Call->getArgs().back()));

@@ -1,7 +1,5 @@
 
-module std.math
-
-public struct BigUInt {
+public struct BigUInt with BinaryInteger {
     alias IntTy    = u32
     alias BufferTy = [IntTy]
 
@@ -9,8 +7,6 @@ public struct BigUInt {
 
     /// Memberwise C'tor.
     public memberwise init
-
-    alias UInt32Max = limits.max<UInt32>
 
     internal static def trustedStripLeadingZeroInts(from val: mut ref BufferTy) {
         var drop = 0
@@ -191,7 +187,7 @@ extend BigUInt {
         carry = (sum >> 32) != 0
         while xIndex-- > 0 {
             result[xIndex] = x[xIndex] + (carry as UInt32)
-            carry = x[xIndex] == UInt32Max
+            carry = x[xIndex] == UInt32.max
         }
 
         // grow result if necessary
@@ -275,7 +271,7 @@ extend BigUInt {
         borrow = if (diff >> 32) != 0 then -1 else 0
         while xIndex-- > 0 {
             result[xIndex] = x[xIndex] + (borrow as UInt32)
-            borrow = if x[xIndex] == UInt32Max then -1 else 0
+            borrow = if x[xIndex] == UInt32.max then -1 else 0
         }
 
         return result
@@ -1058,7 +1054,7 @@ extend BigUInt with ExpressibleByIntegerLiteral {
     }
 }
 
-extend BigUInt {
+extend BigUInt with StringInitializable {
     init? (_ s: String) {
         self.init(s, radix: 10u)
     }
@@ -1162,10 +1158,10 @@ extend BigUInt with StringRepresentable {
     static let digits: [u8; 36] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
     def toString() -> String {
-        return toString<10>()
+        return toString(base: 10)
     }
 
-    def toString<let Base>() -> String {
+    def toString(base: Int) -> String {
         var s = ""
         var val = copy()
 

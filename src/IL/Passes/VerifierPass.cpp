@@ -653,9 +653,20 @@ static bool isValidBitCastType(QualType Ty)
 
 void VerifierPass::visitBitCastInst(BitCastInst const& I)
 {
-   errorIf(!isValidBitCastType(I.getType())
-               || !isValidBitCastType(I.getOperand(0)->getType()),
-           "bitcast type must be a pointer type", I);
+   switch (I.getKind()) {
+   case CastKind::BitCast:
+   case CastKind::MutRefToRef:
+   case CastKind::MutPtrToPtr:
+   case CastKind::RValueToConstRef:
+   case CastKind::UpCast:
+      errorIf(!isValidBitCastType(I.getType())
+              || !isValidBitCastType(I.getOperand(0)->getType()),
+              "bitcast type must be a pointer type", I);
+      break;
+   default:
+      errorIf(true, "bad bitcast type", I);
+      break;
+   }
 }
 
 void VerifierPass::visitIntegerCastInst(IntegerCastInst const& I)

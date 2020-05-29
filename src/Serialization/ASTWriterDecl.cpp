@@ -85,10 +85,17 @@ static CallableDecl* EmitFunctionBody(Decl* D)
       return Fn;
    }
 
-   if (Fn->isTemplateOrInTemplate()
-       && (Fn->isCalledFromTemplate()
-           || Fn->getAccess() == AccessSpecifier::Public)) {
-      return Fn;
+   if (Fn->isTemplateOrInTemplate()) {
+      if (Fn->isCalledFromTemplate()
+      || Fn->getAccess() == AccessSpecifier::Public) {
+         return Fn;
+      }
+
+      if (auto *M = dyn_cast<MethodDecl>(Fn)) {
+         if (M->getRecord()->getAccess() == AccessSpecifier::Public) {
+            return Fn;
+         }
+      }
    }
 
    return nullptr;

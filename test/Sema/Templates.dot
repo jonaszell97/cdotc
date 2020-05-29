@@ -1,0 +1,56 @@
+
+// VERIFY
+
+struct NotATemplate {}
+struct Template1<T> {}
+struct Template2<T: StringRepresentable> {}
+struct Template3<let V: Int> {}
+struct Template4<T = Int> {}
+
+// Not a template
+_ = NotATemplate<Int>() // expected-error {{struct 'NotATemplate' is not a template}}
+
+// Incomplete args
+_ = Template1() // expected-error {{no matching initializer for struct 'Template1' found}}
+// expected-note@5 {{candidate not viable: could not infer template argument T}}
+// expected-note@5 {{template parameter declared here}}
+
+// Incompatible arg kind
+_ = Template1<0>() // expected-error {{incompatible template arguments for struct Template1}}
+// expected-note@-1 {{candidate not viable: expected typename but found value for 1st argument}}
+// expected-note@5 {{template parameter declared here}}
+
+_ = Template1<Int>() // OK
+_ = Template2<Int>() // OK
+
+struct NotStringRepresentable {}
+// Incompatible arg type
+_ = Template2<NotStringRepresentable>() // expected-error {{incompatible template arguments for struct Template2}}
+// expected-note@-1 {{expected type conforming to protocol 'StringRepresentable' for template parameter 'T', but got 'NotStringRepresentable'}}
+// expected-note@6 {{template parameter declared here}}
+
+// Incompatible arg kind
+_ = Template2<NotStringRepresentable()>() // expected-error {{incompatible template arguments for struct Template2}}
+// expected-note@-1 {{candidate not viable: expected typename but found value for 1st argument}}
+// expected-note@6 {{template parameter declared here}}
+
+_ = Template3<831291>() // OK
+_ = Template3<3.0>()  // expected-error {{incompatible template arguments for struct Template3}}
+// expected-note@-1 {{candidate not viable: expected Int64 as 1st argument but found Double}}
+// expected-note@7 {{template parameter declared here}}
+
+_ = Template4() // OK
+_ = Template4<Int, String>() // expected-error {{incompatible template arguments for struct Template4}}
+// expected-note@8 {{candidate not viable: expected at most 1 template argument, 2 given}}
+
+struct Template5<T: StringRepresentable> {
+    let value: T
+    def myprint() {
+        print(value)
+    }
+}
+
+let v1 = Template5(value: 3)
+_ = v1.myprint()
+_ = Template5(value: NotStringRepresentable()).myprint() // expected-error {{no matching initializer for struct 'Template5' found}}
+// expected-note@47 {{candidate not viable: no implicit conversion from 'NotStringRepresentable' to 'StringRepresentable' for 1st argument}}

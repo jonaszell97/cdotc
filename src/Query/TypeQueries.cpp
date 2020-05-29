@@ -1528,7 +1528,7 @@ public:
             const TemplateArgument* Arg = TemplateArgs.getArgForParam(Param);
             if (!Arg) {
                Dependent = true;
-               Args.emplace_back(Param, this->Ctx.getTemplateArgType(Param),
+               Args.emplace_back(Param, this->Ctx.getTemplateParamType(Param),
                                  Param->getSourceLoc());
 
                continue;
