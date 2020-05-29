@@ -3,7 +3,6 @@ import { self, i64, u64, i32, addressOf, bitcast } from builtin
 import libc
 import posix
 
-@version(Darwin)
 public abstract class Thread {
     /// Pointer to a pthread handle.
     protected var pthread: posix.pthread.pthread_t
@@ -16,8 +15,8 @@ public abstract class Thread {
 
     /// Subclass C'tor. The thread is only created when @method{start} is called.
     protected init {
-        self.pthread = __nullptr
-        self.attrs = posix.pthread.pthread_attr_t()
+        self.pthread = default
+        self.attrs = default
         _ = posix.pthread.pthread_attr_init(bitcast(addressOf(&self.attrs)))
         self.running = false
     }
@@ -38,7 +37,7 @@ public abstract class Thread {
 
         var routine = Self.runImpl as! builtin.RawPointer
         var ret = posix.pthread.pthread_create(addressOf(&self.pthread),
-                                               addressOf(&self.attrs),
+                                               bitcast(addressOf(&self.attrs)),
                                                routine as! @thin (builtin.MutableRawPointer) -> builtin.MutableRawPointer,
                                                self as! builtin.MutableRawPointer)
 
@@ -54,13 +53,16 @@ public abstract class Thread {
 
     /// Suspend execution of the current thread for the given time interval.
     public static def sleep(_ ts: TimeSpan) {
-        var ts = posix.pthread.timespec(tv_sec: 0, tv_nsec: (ts.millis * 1000).value as i64)
-        _ = posix.time.nanosleep(addressOf(ts), __nullptr)
+        var pts = posix.pthread.timespec()
+        pts.tv_sec = 0
+        pts.tv_nsec = (ts.millis * 1000).value as i64
+
+        _ = posix.time.nanosleep(addressOf(pts), __nullptr)
     }
 
     /// Raise a signal to this thread.
     public def signal(_ sig: posix.Signal) {
-        _ = posix.pthread.pthread_kill(self.pthread, sig.rawValue)
+        _ = posix.signal.pthread_kill(self.pthread, sig.rawValue)
     }
 
     /// Suspend the current thread until execution of this thread has finished.
@@ -68,7 +70,7 @@ public abstract class Thread {
         assert!(UnsafeRawPtr(rawPointer: self.pthread) != posix.pthread.pthread_self(),
                 "cannot join current thread!")
 
-        _ = posix.pthread.pthread_join(self.pthread)
+        _ = posix.pthread.pthread_join(self.pthread, __nullptr)
     }
 
     /// Wrapper for the run method that takes care of exiting the thread.
@@ -79,13 +81,13 @@ public abstract class Thread {
         // Normal cleanups will not be reached after pthread_exit, so release self here.
         builtin.releaseValue(&self)
 
-        posix.pthread.pthread_exit()
+        posix.pthread.pthread_exit(__nullptr)
     }
 
     /// Get a unique ID for this thread. This does not necessarily equal an operating
     /// system specific thread ID, it just guarantees to be unique for each thread.
     public prop uniqueID: UInt {
-        return UInt(builtin.ptrtoint<u64>(self.pthread))
+        return UInt(self.pthread as! u64)
     }
 
     //===--------------------------------------------------------------------===//
@@ -111,7 +113,7 @@ public abstract class Thread {
     /// Returns the current scheduling policy.
     public def getSchedulingPolicy() -> SchedulingPolicy {
         var policy = posix.sched.SCHED_OTHER
-        _ = posix.pthread.pthread_attr_getschedpolicy(addressOf(self.attrs),
+        _ = posix.pthread.pthread_attr_getschedpolicy(bitcast(addressOf(self.attrs)),
                                                       bitcast(addressOf(&policy)))
 
         return SchedulingPolicy(rawValue: Int(policy)) ?? .Default
@@ -119,14 +121,14 @@ public abstract class Thread {
 
     /// Set the scheduling policy of this thread.
     public def setSchedulingPolicy(to policy: SchedulingPolicy) {
-        _ = posix.pthread.pthread_attr_setschedpolicy(addressOf(&self.attrs),
+        _ = posix.pthread.pthread_attr_setschedpolicy(bitcast(addressOf(&self.attrs)),
                                                       policy.rawValue.value as i32)
     }
 
     /// Returns the maximum priority this thread can have.
     public def getMaxPriority() -> Priority {
         var policy = posix.sched.SCHED_OTHER
-        _ = posix.pthread.pthread_attr_getschedpolicy(addressOf(self.attrs),
+        _ = posix.pthread.pthread_attr_getschedpolicy(bitcast(addressOf(self.attrs)),
                                                       bitcast(addressOf(&policy)))
 
         return Int(posix.pthread.sched_get_priority_max(policy as i32))
@@ -135,7 +137,7 @@ public abstract class Thread {
     /// Returns the minimum priority this thread can have.
     public def getMinPriority() -> Priority {
         var policy = posix.sched.SCHED_OTHER
-        _ = posix.pthread.pthread_attr_getschedpolicy(addressOf(self.attrs),
+        _ = posix.pthread.pthread_attr_getschedpolicy(bitcast(addressOf(self.attrs)),
                                                       bitcast(addressOf(&policy)))
 
         return Int(posix.pthread.sched_get_priority_min(policy as i32))
@@ -176,8 +178,8 @@ public abstract class Thread {
 
         /// C'tor.
         init {
-            self.mutex = posix.pthread.pthread_mutex_t()
-            _ = posix.pthread.pthread_mutex_init(addressOf(&self.mutex))
+            self.mutex = default
+            _ = posix.pthread.pthread_mutex_init(addressOf(&self.mutex), __nullptr)
         }
 
         /// D'tor.
@@ -227,10 +229,10 @@ public abstract class Thread {
 
         /// C'tor.
         init (on mutex: Mutex) {
-            self.cond = posix.pthread.pthread_cond_t()
+            self.cond = default
             self.mutex = mutex
 
-            _ = posix.pthread.pthread_cond_init(addressOf(&self.cond))
+            _ = posix.pthread.pthread_cond_init(addressOf(&self.cond), __nullptr)
         }
 
         /// D'tor.
@@ -263,13 +265,16 @@ public abstract class Thread {
 }
 
 /// Represents the thread the class constructor was called on.
-@version(Darwin)
 fileprivate class CurrentThread: Thread {
     /// C'tor.
     fileprivate init {
         super.init()
-        self.pthread = posix.pthread.pthread_self().rawPointer as! posix.pthread.pthread_t
         self.running = true
+        @version(Darwin) {
+            self.pthread = posix.pthread.pthread_self().rawValue as! posix.pthread.pthread_t
+        } else {
+            self.pthread = posix.pthread.pthread_self().value as! posix.pthread.pthread_t
+        }
     }
 
     /// Run method only implemented to satisfy the requirement.

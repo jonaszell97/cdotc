@@ -1357,7 +1357,8 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr* Ident)
              [&](RecordType* RT) {
                 if (auto* S = dyn_cast<StructDecl>(RT->getRecord())) {
                    auto* Init = S->getParameterlessConstructor();
-                   assert(Init && "no default constructor!");
+                   if (!Init)
+                      return true;
 
                    auto* Inst = maybeInstantiateTemplateMember(S, Init);
                    if (Inst) {

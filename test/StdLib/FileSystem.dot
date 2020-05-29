@@ -4,7 +4,5 @@
 
 import core.io
 
-@version(Darwin) {
-    var out = io.stdout
-    out << "hello\n"
-}
+var out = io.stdout
+out << "hello\n"

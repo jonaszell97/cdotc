@@ -177,6 +177,46 @@ static NamespaceDecl* importNamespace(ImporterImpl& I, clang::NamespaceDecl* NS)
    return D;
 }
 
+static void CreateDefaultInit(SemaPass &Sema, StructDecl *S)
+{
+   for (auto *I : S->getDecls<InitDecl>()) {
+      if (I->getArgs().empty()) {
+         return;
+      }
+   }
+
+   auto &Ctx = Sema.Context;
+   auto Loc = S->getSourceLoc();
+
+   // Create a reference to 'self'.
+   auto* SelfRef = SelfExpr::Create(Ctx, Loc, false);
+
+   SmallVector<Statement*, 4> Stmts;
+   for (auto *F : S->getStoredFields()) {
+      auto *StorageRef = MemberRefExpr::Create(Ctx, SelfRef, F, Loc);
+
+      auto *DefaultVal
+         = BuiltinIdentExpr::Create(Ctx, Loc, BuiltinIdentifier::defaultValue);
+      auto *DefaultAssign
+         = AssignExpr::Create(Ctx, Loc, StorageRef, DefaultVal, false);
+
+      Stmts.push_back(DefaultAssign);
+   }
+
+   // Create the body.
+   auto* Body
+      = CompoundStmt::Create(Ctx, Stmts, false, Loc, Loc);
+
+   // Create the initializer.
+   auto *Init = InitDecl::Create(Ctx, AccessSpecifier::Public, Loc, {}, {},
+                                 Body);
+
+   Init->setImportedFromClang(true);
+   Sema.ActOnDecl(S, Init);
+
+   S->setParameterlessConstructor(Init);
+}
+
 StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
 {
    if (DeclMap.find(ClangRec) != DeclMap.end())
@@ -206,10 +246,12 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
    Rec->setImportedFromClang(true);
    DeclMap[ClangRec] = Rec;
 
+   bool allDefaultable = true;
    for (clang::FieldDecl* F : ClangRec->fields()) {
       if (F->isBitField()) {
          // Import as an opaque structure.
          Ctx.addAttribute(Rec, new (Ctx) OpaqueAttr);
+         allDefaultable = false;
          break;
       }
 
@@ -233,6 +275,9 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
          DefaultVal->setExprType(FieldTy);
          DefaultVal->setSemanticallyChecked(true);
       }
+      else {
+         allDefaultable = false;
+      }
 
       auto* Field = FieldDecl::Create(
           Ctx, getAccess(F->getAccess()), FieldLoc, FieldLoc,
@@ -252,6 +297,10 @@ StructDecl* ImporterImpl::importStruct(clang::RecordDecl* ClangRec)
    }
    if (auto* Copyable = Sema.getImplicitlyCopyableDecl()) {
       Ctx.getConformanceTable().addExplicitConformance(Ctx, Rec, Copyable);
+   }
+
+   if (allDefaultable) {
+      CreateDefaultInit(Sema, Rec);
    }
 
    importDecls(ClangRec, Rec);
@@ -521,6 +570,31 @@ static InitDecl* CreateUnionInit(SemaPass& SP, ASTContext& Ctx,
                            Body);
 }
 
+static InitDecl* CreateUnionDefaultInit(SemaPass& SP, ASTContext& Ctx,
+                                        FieldDecl* Storage, SourceLocation Loc)
+{
+   // Create a reference to 'self'.
+   auto* SelfRef = SelfExpr::Create(Ctx, Loc, false);
+
+   // Create a reference to 'self._storage'.
+   auto* StorageRef = MemberRefExpr::Create(Ctx, SelfRef, Storage, Loc);
+
+   // Initialize with a default value to keep definitive initialization
+   // analysis happy.
+   auto* DefaultVal
+      = BuiltinIdentExpr::Create(Ctx, Loc, BuiltinIdentifier::defaultValue);
+   auto* DefaultAssign
+      = AssignExpr::Create(Ctx, Loc, StorageRef, DefaultVal, false);
+
+   // Create the body.
+   auto* Body
+      = CompoundStmt::Create(Ctx, DefaultAssign, false, Loc, Loc);
+
+   // Create the initializer.
+   return InitDecl::Create(Ctx, AccessSpecifier::Public, Loc, {}, {},
+                           Body);
+}
+
 StructDecl* ImporterImpl::importUnion(clang::RecordDecl* ClangU)
 {
    if (DeclMap.find(ClangU) != DeclMap.end())
@@ -601,6 +675,12 @@ StructDecl* ImporterImpl::importUnion(clang::RecordDecl* ClangU)
       Init->setImportedFromClang(true);
       Sema.ActOnDecl(Rec, Init);
    }
+
+   auto* DefaultInit = CreateUnionDefaultInit(CI.getSema(), Ctx,
+                                              Storage, Rec->getSourceLoc());
+
+   DefaultInit->setImportedFromClang(true);
+   Sema.ActOnDecl(Rec, DefaultInit);
 
    Storage->getType().setResolvedType(
        Ctx.getArrayType(Ctx.getUInt8Ty(), MaxSize));
