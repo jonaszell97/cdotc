@@ -106,7 +106,7 @@ string DiagnosticBuilder::prepareMessage(llvm::StringRef str)
                    && "expected arg index");
 
             auto txt = lex.currentTok().getText();
-            auto val = std::stoul(txt);
+            auto val = std::stoul(txt.str());
 
             appendArgumentString(val, msg);
          }
@@ -115,7 +115,7 @@ string DiagnosticBuilder::prepareMessage(llvm::StringRef str)
                    && "expected arg index");
 
             auto txt = lex.currentTok().getText();
-            auto val = std::stoull(txt);
+            auto val = std::stoull(txt.str());
             assert(Engine.NumArgs > val && "not enough args provided");
 
             lex.advance();

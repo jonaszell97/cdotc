@@ -474,7 +474,7 @@ il::Method* ILGenPass::createProtocolRequirementImplStub(MethodDecl* Req,
    if (isa<InitDecl>(Req) || true)
       return M;
 
-   std::string Name = M->getName();
+   std::string Name = M->getName().str();
    SP.getMangler().mangleProtocolStub(Impl, Name);
 
    SmallVector<il::Argument*, 4> Args;

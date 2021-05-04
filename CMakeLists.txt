@@ -8,7 +8,7 @@ include_directories("${TBLGEN_INCLUDE_DIR}")
 message(STATUS "Found TblGen ${TBLGEN_MAIN_INCLUDE_DIR}")
 
 # find LLVM
-find_package(LLVM 10 REQUIRED CONFIG)
+find_package(LLVM 12 REQUIRED CONFIG)
 
 # llvm libraries
 set(llvm_libs ${LLVM_AVAILABLE_LIBS})
@@ -24,7 +24,7 @@ add_definitions(${LLVM_DEFINITIONS})
 
 # find clang
 set(Clang_DIR "${LLVM_DIR}/../clang")
-find_package(Clang REQUIRED CONFIG HINTS ${Clang_DIR})
+find_package(Clang REQUIRED NO_DEFAULT_PATH CONFIG PATHS ${Clang_DIR})
 
 MACRO(FIND_AND_ADD_CLANG_LIB _libname_)
     find_library(CLANG_${_libname_}_LIB ${_libname_} ${LLVM_LIBRARY_DIRS} ${CLANG_LIBRARY_DIRS})
@@ -60,6 +60,7 @@ FIND_AND_ADD_CLANG_LIB(clangSerialization)
 if(clang_libs)
     message(STATUS "Found Clang libs: ${clang_libs}")
     message(STATUS "Found Clang: ${CLANG_INCLUDE_DIRS}")
+    include_directories(${CLANG_INCLUDE_DIRS})
 endif()
 
 # set CXX flags
@@ -70,7 +71,7 @@ endif()
 
 # set Linker flags
 if(UNIX AND NOT APPLE)
-    set(linker_flags "-fuse-ld=/usr/bin/ld.lld-10 -Wl,--start-group")
+    set(linker_flags "-fuse-ld=/usr/bin/ld.lld-12 -Wl,--start-group")
 else()
     set(linker_flags "")
 endif()
@@ -102,21 +103,25 @@ add_library(cdotc-tblgens SHARED ${CDOTC_TBLGENS_SOURCE_FILES})
 add_library(cdotrt SHARED ${RUNTIME_SUPPORT_SOURCE_FILES})
 
 target_compile_options(cdotc
-        PUBLIC "-fvisibility=hidden")
+        PUBLIC "-fvisibility=hidden"
+        PUBLIC "-fno-rtti")
 target_compile_options(cdotc_asan
         PUBLIC "-fsanitize=address"
         PUBLIC "-fno-omit-frame-pointer"
-        PUBLIC "-fvisibility=hidden")
+        PUBLIC "-fvisibility=hidden"
+        PUBLIC "-fno-rtti")
 target_compile_options(cdotc_ubsan
         PUBLIC "-fsanitize=undefined"
         PUBLIC "-fno-omit-frame-pointer"
-        PUBLIC "-fvisibility=hidden")
+        PUBLIC "-fvisibility=hidden"
+        PUBLIC "-fno-rtti")
 target_compile_options(cdotc_coverage
         PUBLIC "-fprofile-instr-generate"
         PUBLIC "-fcoverage-mapping"
-        PUBLIC "-fvisibility=hidden")
+        PUBLIC "-fvisibility=hidden"
+        PUBLIC "-fno-rtti")
 
-target_link_libraries(cdotc LLVM Polly ${clang_libs} -fvisibility=hidden -w ${linker_flags})
+target_link_libraries(cdotc ${llvm_libs} ${clang_libs} -fvisibility=hidden -w ${linker_flags})
 target_link_libraries(cdotc-tblgens LLVMSupport -fvisibility=hidden)
 
 target_link_libraries(cdotc_asan

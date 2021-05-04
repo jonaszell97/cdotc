@@ -15,16 +15,12 @@ namespace llvm {
 struct DenseMapAPIntKeyInfo {
    static inline APSInt getEmptyKey()
    {
-      APInt V(nullptr, 0);
-      V.U.VAL = 0;
-      return APSInt(V);
+      return APSInt(APInt(64, uint64_t(-1), false));
    }
 
    static inline APSInt getTombstoneKey()
    {
-      APInt V(nullptr, 0);
-      V.U.VAL = 1;
-      return APSInt(V);
+      return APSInt(APInt(64, uint64_t(-1) - 1, false));
    }
 
    static unsigned getHashValue(const APSInt& Key)

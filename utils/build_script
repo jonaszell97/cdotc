@@ -374,9 +374,9 @@ def main():
         require_executable("llvm")
     else:
         llvm_ver = str(subprocess.check_output([llvm_cfg, "--version"]))
-        if not "10." in llvm_ver:
+        if not "12." in llvm_ver:
             print(
-                "LLVM version 10 required; you can pass a custom llvm install with the '--use-llvm' option")
+                "LLVM version 12 required; you can pass a custom llvm install with the '--use-llvm' option")
             return 1
 
     # Find LLVM and clang

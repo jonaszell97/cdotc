@@ -700,8 +700,14 @@ AliasDecl* ImporterImpl::importTypedef(clang::TypedefNameDecl* ClangTD)
 
    auto RetTy = SourceType(getType(ClangTD->getUnderlyingType()));
    if (!RetTy) {
+      std::string s;
+      {
+         llvm::raw_string_ostream OS(s);
+         ClangTD->getUnderlyingType().print(OS, clang::PrintingPolicy(Instance->getLangOpts()));
+      }
+
       CI.getSema().diagnose(
-          diag::warn_generic_warn, "type cannot be imported",
+          diag::warn_generic_warn, "type '" + s + "' cannot be imported",
           getSourceLoc(
               ClangTD->getTypeSourceInfo()->getTypeLoc().getSourceRange()));
 

@@ -22,6 +22,7 @@
 #include "cdotc/Support/Various.h"
 
 #include <llvm/Support/Allocator.h>
+#include <llvm/Support/Host.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include <cmath>
@@ -1063,7 +1064,7 @@ string EngineImpl::toString(ctfe::Value Val, QualType type)
       return s.str();
    }
    else if (type->isThinFunctionTy()) {
-      return (reinterpret_cast<il::Function*>(buffer))->getName();
+      return (reinterpret_cast<il::Function*>(buffer))->getName().str();
    }
    else if (type->isFunctionType()) {
       std::ostringstream s;

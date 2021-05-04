@@ -5525,7 +5525,7 @@ ExprResult SemaPass::visitTraitsExpr(TraitsExpr* Expr)
             bool HandleDiagnostic(const Diagnostic& Diag) override
             {
                auto S
-                   = StringLiteral::Create(SP.getContext(), SR, Diag.getMsg());
+                   = StringLiteral::Create(SP.getContext(), SR, Diag.getMsg().str());
 
                elements.push_back(S);
                return false;

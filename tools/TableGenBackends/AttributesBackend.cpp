@@ -434,7 +434,7 @@ void AttrClassEmitter::emitAttrDecl(Record* Attr, Class* Base)
                 << "() const { return " << Name << "; }";
 
       // build constructor arguments and initialization
-      std::string constructorArg = ArgTypeName;
+      std::string constructorArg = ArgTypeName.str();
       constructorArg += " ";
       constructorArg += Name;
 
@@ -795,7 +795,7 @@ void AttrParseEmitter::emit()
              = cast<StringLiteral>(ArgVal->getRecord()->getFieldValue("name"))
                    ->getVal();
 
-         std::string TypeName = getCXXType(ArgVal);
+         std::string TypeName = getCXXType(ArgVal).str();
          if (TypeName.empty()) {
             TypeName += Attr->getName();
             TypeName += "Attr::";

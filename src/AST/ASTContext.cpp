@@ -1,12 +1,15 @@
-#include <cdotc/AST/Expression.h>
+
 #include "cdotc/AST/ASTContext.h"
 
 #include "cdotc/AST/Decl.h"
+#include "cdotc/AST/Expression.h"
 #include "cdotc/Driver/Compiler.h"
 #include "cdotc/Query/QueryContext.h"
 #include "cdotc/Serialization/ModuleFile.h"
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/Log.h"
+
+#include <llvm/Support/Host.h>
 
 using namespace cdot::support;
 

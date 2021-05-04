@@ -29,7 +29,7 @@ uint64_t ActiveLogs()
 
    uint64_t val = 0;
    for (llvm::StringRef substr : splitValues) {
-      val |= std::stoull(substr, nullptr, 16);
+      val |= std::stoull(substr.str(), nullptr, 16);
    }
 
    resolvedLogs = val;

@@ -8,6 +8,7 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Support/AlignOf.h>
 
 namespace cdot {
 

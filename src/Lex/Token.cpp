@@ -352,7 +352,7 @@ string Token::toString() const
    llvm::SmallString<128> str;
    toString(str);
 
-   return str.str();
+   return str.str().str();
 }
 
 string Token::rawRepr() const
@@ -360,7 +360,7 @@ string Token::rawRepr() const
    llvm::SmallString<128> str;
    rawRepr(str);
 
-   return str.str();
+   return str.str().str();
 }
 
 bool Token::isKeyword() const

@@ -203,7 +203,7 @@ void ModuleManager::EmitModule(Module* Mod)
 {
    std::error_code EC;
 
-   string OutPath = CI.getOptions().EmitModulePath;
+   string OutPath = CI.getOptions().EmitModulePath.str();
    if (OutPath.empty()) {
       OutPath = fs::getApplicationDir();
       OutPath += "/lib";

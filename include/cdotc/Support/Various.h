@@ -27,7 +27,7 @@ inline void hash_combine(HashTy& seed, const T& v)
 inline std::string toCamelCase(StringRef Str)
 {
    if (Str.find('_') != std::string::npos)
-      return Str;
+      return Str.str();
 
    std::string res;
    res.reserve(Str.size());
