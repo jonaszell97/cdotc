@@ -706,10 +706,12 @@ AliasDecl* ImporterImpl::importTypedef(clang::TypedefNameDecl* ClangTD)
          ClangTD->getUnderlyingType().print(OS, clang::PrintingPolicy(Instance->getLangOpts()));
       }
 
-      CI.getSema().diagnose(
-          diag::warn_generic_warn, "type '" + s + "' cannot be imported",
-          getSourceLoc(
-              ClangTD->getTypeSourceInfo()->getTypeLoc().getSourceRange()));
+      if (!ClangTD->getName().startswith("__")) {
+         CI.getSema().diagnose(
+            diag::warn_generic_warn, "type '" + s + "' cannot be imported",
+            getSourceLoc(
+               ClangTD->getTypeSourceInfo()->getTypeLoc().getSourceRange()));
+      }
 
       return nullptr;
    }
