@@ -1,0 +1,408 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Basic Operators &#8212; CDot  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Functions" href="Functions.html" />
+    <link rel="prev" title="Control Flow" href="ControlFlow.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+    <link rel="apple-touch-icon" href="../_static/cdot_logo.png" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="basic-operators">
+<span id="id1"></span><h1>Basic Operators<a class="headerlink" href="#basic-operators" title="Permalink to this headline">¶</a></h1>
+<p>CDot supports most of the basic arithmetic, logical and assignment operators you are probably familiar with from other languages. Unlike many of those other languages though, every operator in CDot is actually just a normal function or method that can be called with operator syntax. You can also define your own operators with custom spellings, for more information on how to do that see <a class="reference internal" href="Functions.html#functions"><span class="std std-ref">Functions</span></a>.</p>
+<p>Operators come in three forms:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>Infix</strong> operators, which operate on two values and are written between the two</p></li>
+<li><p><strong>Prefix</strong> operators, which operate on one value and are written before it</p></li>
+<li><p><strong>Postfix</strong> operators, which operate on one value and are written after it</p></li>
+</ul>
+</div></blockquote>
+<div class="section" id="arithmetic-operators">
+<h2>Arithmetic Operators<a class="headerlink" href="#arithmetic-operators" title="Permalink to this headline">¶</a></h2>
+<p>All numeric types (i.e. integer and floating point types) support the familiar arithmetic infix operators <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">*</span></code> and <code class="docutils literal notranslate"><span class="pre">/</span></code>. In contrast to their C equivalents, these operators check for overflow and exit the application with a fatal error when overflow (or division by zero) is encountered. You can opt in to the usual behavior of silently allowing overflow by using <code class="docutils literal notranslate"><span class="pre">&amp;</span></code>-prefixed variants of these operators:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span><span class="p"> </span><span class="g">add1</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">312</span><span class="p"> </span><span class="o">+</span><span class="p"> </span><span class="m">328</span><span class="p"> </span><span class="c">// OK</span><span class="p"></span>
+<span class="k">let</span><span class="p"> </span><span class="g">add2</span><span class="o">:</span><span class="p"> </span><span class="n">Int8</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">127</span><span class="p"> </span><span class="o">+</span><span class="p"> </span><span class="m">1</span><span class="p"> </span><span class="c">// fatal error: unexpected integer overflow!</span><span class="p"></span>
+<span class="k">let</span><span class="p"> </span><span class="g">add3</span><span class="o">:</span><span class="p"> </span><span class="n">Int8</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">127</span><span class="p"> </span><span class="o">&amp;+</span><span class="p"> </span><span class="m">1</span><span class="p"> </span><span class="c">// OK: yields -128</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>In addition to the default arithmetic operators, CDot also supports <em>remainder</em> and <em>exponentiation</em> operators, which are spelled <code class="docutils literal notranslate"><span class="pre">%</span></code> and <code class="docutils literal notranslate"><span class="pre">**</span></code>, respectively.</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">let</span><span class="p"> </span><span class="g">rem</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">125</span><span class="p"> </span><span class="o">%</span><span class="p"> </span><span class="m">12</span><span class="p"> </span><span class="c">// Yields 5</span><span class="p"></span>
+<span class="k">let</span><span class="p"> </span><span class="g">exp</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">10</span><span class="p"> </span><span class="o">**</span><span class="p"> </span><span class="m">5</span><span class="p"> </span><span class="c">// Yields 100,000</span><span class="p"></span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="prefix-arithmetic-operators">
+<h2>Prefix Arithmetic Operators<a class="headerlink" href="#prefix-arithmetic-operators" title="Permalink to this headline">¶</a></h2>
+<p>There are two additional unary arithmetic operators, <code class="docutils literal notranslate"><span class="pre">+</span></code> and <code class="docutils literal notranslate"><span class="pre">-</span></code>. The prefix <code class="docutils literal notranslate"><span class="pre">-</span></code> operator can be used to negate a  numeric value, while the prefix <code class="docutils literal notranslate"><span class="pre">+</span></code> operator has no real purpose except for providing symmetry:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span><span class="p"> </span><span class="g">negOne</span><span class="p">      </span><span class="o">=</span><span class="p"> </span><span class="o">-</span><span class="m">1</span><span class="p"></span>
+<span class="k">let</span><span class="p"> </span><span class="g">stillNegOne</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="o">+</span><span class="g">negOne</span><span class="p"></span>
+<span class="k">let</span><span class="p"> </span><span class="g">posOne</span><span class="p">      </span><span class="o">=</span><span class="p"> </span><span class="o">-</span><span class="g">stillNegOne</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="assignment-operators">
+<h2>Assignment Operators<a class="headerlink" href="#assignment-operators" title="Permalink to this headline">¶</a></h2>
+<p>As you have seen in previous examples, variables can be assigned a new value using the <em>assignment</em> operator <code class="docutils literal notranslate"><span class="pre">=</span></code>. To avoid accidental confusion between this operator and the equality comparison operator <code class="docutils literal notranslate"><span class="pre">==</span></code>, assignment does not return a value in CDot:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">v</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">210</span><span class="p"></span>
+<span class="g">v</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">32</span><span class="p"></span>
+
+<span class="k">if</span><span class="p"> </span><span class="g">v</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">32</span><span class="p"> {} </span><span class="c">// error: assignment does not yield a value</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>Cdot also supports <em>compound assignment</em> operators for all of the arithmetic operators, which combine an arithmetic computation with an assignment. These are spelled as <code class="docutils literal notranslate"><span class="pre">{op}=</span></code> and can be used like this:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">v</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">128</span><span class="p"></span>
+<span class="g">v</span><span class="p"> </span><span class="o">*=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="c">// Multiply v by three and assign the result back to v</span><span class="p"></span>
+<span class="g">v</span><span class="p"> </span><span class="o">-=</span><span class="p"> </span><span class="m">10</span><span class="p"> </span><span class="c">// Subtract ten from v and assign the result back to v</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">v</span><span class="p">) </span><span class="c">// Prints &quot;374&quot;</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="comparison-operators">
+<h2>Comparison Operators<a class="headerlink" href="#comparison-operators" title="Permalink to this headline">¶</a></h2>
+<p>Most types support the equality comparison operators <code class="docutils literal notranslate"><span class="pre">==</span></code> and <code class="docutils literal notranslate"><span class="pre">!=</span></code>. Numeric types additionally support the comparison operators <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code> and <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code>. All of these yield a boolean value and have the expected behavior.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">if</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="o">==</span><span class="p"> </span><span class="m">4</span><span class="p"> {</span>
+<span class="p">    </span><span class="n">print</span><span class="p">(</span><span class="s">&quot;well that&#39;s odd&quot;</span><span class="p">) </span><span class="c">// This will never run</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="k">var</span><span class="p"> </span><span class="g">a</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="o">&gt;</span><span class="p"> </span><span class="m">4</span><span class="p">  </span><span class="c">// a is false</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">b</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="o">&lt;</span><span class="p"> </span><span class="m">4</span><span class="p">  </span><span class="c">// b is true</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">c</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="o">&lt;=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="c">// c is true</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">d</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">8</span><span class="p"> </span><span class="o">&gt;=</span><span class="p"> </span><span class="m">9</span><span class="p"> </span><span class="c">// d is false</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All of these operators are actually implemented using another operator <code class="docutils literal notranslate"><span class="pre">&lt;=&gt;</span></code>, commonly called the <em>spaceship</em> operator. This operator is required to return a negative value if the left-hand operand is smaller than the right, zero if they are equal, and a positive value if the left operand is greater. Implementing this operator for your own types is actually enough to get all six other comparison operators.</p>
+</div>
+<p>There are two additional comparison operators, <code class="docutils literal notranslate"><span class="pre">===</span></code> and <code class="docutils literal notranslate"><span class="pre">!==</span></code>, which are called the <em>identity comparison</em> operators. These can only be used on values of <a class="reference internal" href="Classes.html#classes"><span class="std std-ref">class</span></a> type, and determine whether or not two values refer to the same <em>instance</em> of a class:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span><span class="p"> </span><span class="g">a</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">MyClass</span><span class="p">()</span>
+<span class="k">let</span><span class="p"> </span><span class="g">b</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">MyClass</span><span class="p">()</span>
+<span class="k">let</span><span class="p"> </span><span class="g">c</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">a</span><span class="p"></span>
+
+<span class="n">print</span><span class="p">(</span><span class="g">a</span><span class="p"> </span><span class="o">===</span><span class="p"> </span><span class="g">c</span><span class="p">) </span><span class="c">// Prints &quot;true&quot;</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">b</span><span class="p"> </span><span class="o">===</span><span class="p"> </span><span class="g">c</span><span class="p">) </span><span class="c">// Prints &quot;false&quot;</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="logical-operators">
+<h2>Logical Operators<a class="headerlink" href="#logical-operators" title="Permalink to this headline">¶</a></h2>
+<p>Logical operators operate on boolean values. There are three builtin logical operators:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Logical Not <code class="docutils literal notranslate"><span class="pre">!</span></code>, a prefix operator</p></li>
+<li><p>Logical And <code class="docutils literal notranslate"><span class="pre">&amp;&amp;</span></code>, an infix operator</p></li>
+<li><p>Logical Or <code class="docutils literal notranslate"><span class="pre">||</span></code>, an infix operator</p></li>
+</ul>
+</div></blockquote>
+<p>The logical not operator is used to <em>flip</em> the value of a <code class="docutils literal notranslate"><span class="pre">Bool</span></code>, which means that it turns a <code class="docutils literal notranslate"><span class="pre">true</span></code> into a <code class="docutils literal notranslate"><span class="pre">false</span></code> and vice versa.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">if</span><span class="p"> </span><span class="o">!</span><span class="g">condition</span><span class="p"> {</span>
+<span class="p">    </span><span class="c">// do something if condition is false</span><span class="p"></span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+<p>The logical <em>and</em> and <em>or</em> operators are special because they use <em>short-circuiting</em>, which means that the right-hand side expression will only be evaluated if it is necessary to determine the result of the expression. The <code class="docutils literal notranslate"><span class="pre">&amp;&amp;</span></code> operator will evaluate to <code class="docutils literal notranslate"><span class="pre">true</span></code> if both operands evaluate to <code class="docutils literal notranslate"><span class="pre">true</span></code>, and will only evaluate the right-hand side expression if the left-hand side evaluated to <code class="docutils literal notranslate"><span class="pre">true</span></code>. Similarly, the <code class="docutils literal notranslate"><span class="pre">||</span></code> operator will evaluate to <code class="docutils literal notranslate"><span class="pre">true</span></code> if either of the operands does, and will only evaluate the right-hand side if the left was not already <code class="docutils literal notranslate"><span class="pre">true</span></code>.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c">// `condition2` is only called if `condition1` returns true</span><span class="p"></span>
+<span class="k">if</span><span class="p"> </span><span class="g">condition1</span><span class="p">() </span><span class="o">&amp;&amp;</span><span class="p"> </span><span class="g">condition2</span><span class="p">() {</span>
+<span class="p">    </span><span class="c">// do something...</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="c">// `condition4` is only called if `condition3` returns false</span><span class="p"></span>
+<span class="k">if</span><span class="p"> </span><span class="g">condition3</span><span class="p">() </span><span class="o">||</span><span class="p"> </span><span class="g">condition4</span><span class="p">() {</span>
+<span class="p">    </span><span class="c">// do something...</span><span class="p"></span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="bitwise-operators">
+<h2>Bitwise Operators<a class="headerlink" href="#bitwise-operators" title="Permalink to this headline">¶</a></h2>
+<p>Bitwise operators operate on the individual bits of an integer value. There are several of them in CDot:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Bitwise Not <code class="docutils literal notranslate"><span class="pre">~</span></code>, a prefix operator</p></li>
+<li><p>Bitwise Or <code class="docutils literal notranslate"><span class="pre">|</span></code>, an infix operator</p></li>
+<li><p>Bitwise And <code class="docutils literal notranslate"><span class="pre">&amp;</span></code>, an infix operator</p></li>
+<li><p>Bitwise Xor <code class="docutils literal notranslate"><span class="pre">^</span></code>, an infix operator</p></li>
+</ul>
+</div></blockquote>
+<p>The bitwise <em>not</em> operator flips the value of each individual bit:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">binaryValue</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">0b0100_1010</span><span class="p"></span>
+<span class="n">print</span><span class="p">((</span><span class="o">~</span><span class="g">binaryValue</span><span class="p">).</span><span class="g">toString</span><span class="p">(</span><span class="g">base</span><span class="o">:</span><span class="p"> </span><span class="m">2</span><span class="p">)) </span><span class="c">// Prints 0b1011_0101</span><span class="p"></span>
+</pre></div>
+</div>
+<p>The remaining bitwise operators compare the bits of two values and set the result bit according to their specific behaviour:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">|</span></code> sets the result bit if <em>either</em> of the operand bits were one</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&amp;</span></code> sets the result bit if <em>both</em> of the operand bits were one</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">^</span></code> sets the result bit if <em>exactly one</em> of the operand bits is one</p></li>
+</ul>
+</div></blockquote>
+<p>Here’s an example of how they work in action:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">value1</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">0b1010</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">value2</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">0b1100</span><span class="p"></span>
+
+<span class="n">print</span><span class="p">((</span><span class="g">value1</span><span class="p"> </span><span class="o">&amp;</span><span class="p"> </span><span class="g">value2</span><span class="p">).</span><span class="g">toString</span><span class="p">(</span><span class="g">base</span><span class="o">:</span><span class="p"> </span><span class="m">2</span><span class="p">)) </span><span class="c">// Prints &quot;0b1000&quot;</span><span class="p"></span>
+<span class="n">print</span><span class="p">((</span><span class="g">value1</span><span class="p"> </span><span class="o">|</span><span class="p"> </span><span class="g">value2</span><span class="p">).</span><span class="g">toString</span><span class="p">(</span><span class="g">base</span><span class="o">:</span><span class="p"> </span><span class="m">2</span><span class="p">)) </span><span class="c">// Prints &quot;0b1110&quot;</span><span class="p"></span>
+<span class="n">print</span><span class="p">((</span><span class="g">value1</span><span class="p"> </span><span class="o">^</span><span class="p"> </span><span class="g">value2</span><span class="p">).</span><span class="g">toString</span><span class="p">(</span><span class="g">base</span><span class="o">:</span><span class="p"> </span><span class="m">2</span><span class="p">)) </span><span class="c">// Prints &quot;0b0110&quot;</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="optional-operators">
+<span id="id2"></span><h2>Optional Operators<a class="headerlink" href="#optional-operators" title="Permalink to this headline">¶</a></h2>
+<p>CDot provides additional operators to make dealing with <a class="reference internal" href="Optionals.html#optionals"><span class="std std-ref">optional values</span></a> more convenient:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Force Unwrap <code class="docutils literal notranslate"><span class="pre">!</span></code>, a postfix operator</p></li>
+<li><p>Safe Unwrap <code class="docutils literal notranslate"><span class="pre">??</span></code>, an infix operator</p></li>
+</ul>
+</div></blockquote>
+<p>The <em>force unwrap</em> operator is used when you are certain that an optional contains a value. It will return the contained value or trap with a runtime failure if there is none.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">opt1</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="o">?</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">3</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">opt1</span><span class="o">!</span><span class="p">) </span><span class="c">// Prints &quot;3&quot;</span><span class="p"></span>
+
+<span class="k">var</span><span class="p"> </span><span class="g">opt2</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="o">?</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="l">none</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">opt2</span><span class="o">!</span><span class="p">) </span><span class="c">// fatal error: force unwrapping a `none` value!</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>Because this operator has the ability to trap, you should only use it when you are absolutely positive that an operation returns a value. In cases where you are not sure, you can use the <em>safe unwrap</em> operator instead. This operator will evaluate and return the right-hand side value if the left-hand side optional is <code class="docutils literal notranslate"><span class="pre">none</span></code>:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span><span class="p"> </span><span class="g">defaultValue</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">17</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">optionalValue</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="o">?</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="l">none</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">safeValue</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">optionalValue</span><span class="p"> </span><span class="o">??</span><span class="p"> </span><span class="g">defaultValue</span><span class="p"></span>
+
+<span class="n">print</span><span class="p">(</span><span class="g">safeValue</span><span class="p">) </span><span class="c">// Prints &quot;17&quot;</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>This operator is also <em>short-circuiting</em>, which means that the default value is only evaluated if the optional value is <code class="docutils literal notranslate"><span class="pre">none</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The short-circuiting behavior of the <code class="docutils literal notranslate"><span class="pre">??</span></code> operator is made possible by a special <a class="reference internal" href="Attributes.html#attributes"><span class="std std-ref">attribute</span></a>, which will be explained in more detail later.</p>
+</div>
+</div>
+<div class="section" id="range-formation-operators">
+<h2>Range-Formation Operators<a class="headerlink" href="#range-formation-operators" title="Permalink to this headline">¶</a></h2>
+<p>CDot also provides three convenience operators for forming <em>ranges</em>, one of which you have already seen in previous examples. These operators are a shorthand for forming range expressions, and are commonly used in <code class="docutils literal notranslate"><span class="pre">for-in</span></code> loops. The three range formation operators are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Exclusive Range Operator <code class="docutils literal notranslate"><span class="pre">..</span></code>, an infix operator</p></li>
+<li><p>Inclusive Range Operator <code class="docutils literal notranslate"><span class="pre">..=</span></code>, an infix operator</p></li>
+<li><p>Half Open Range Operator <code class="docutils literal notranslate"><span class="pre">..</span></code>, a postfix operator</p></li>
+</ul>
+</div></blockquote>
+<p>The <em>exclusive</em> range operator forms a range from the left-hand side up to the right-hand side (exclusive), while the <em>inclusive</em> version forms a range that includes the upper bound. The half open range operator is special in that it does not provide an upper bound, instead continuing on forever.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c">// Exclusive range, prints &quot;0 1 2 3 4&quot;</span><span class="p"></span>
+<span class="k">for</span><span class="p"> </span><span class="g">i</span><span class="p"> </span><span class="k">in</span><span class="p"> </span><span class="m">0</span><span class="o">..</span><span class="m">5</span><span class="p"> {</span>
+<span class="p">    </span><span class="n">print</span><span class="p">(</span><span class="g">i</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="c">// Inclusive range, prints &quot;0 1 2 3 4 5&quot;</span><span class="p"></span>
+<span class="k">for</span><span class="p"> </span><span class="g">i</span><span class="p"> </span><span class="k">in</span><span class="p"> </span><span class="m">0</span><span class="o">..=</span><span class="m">5</span><span class="p"> {</span>
+<span class="p">    </span><span class="n">print</span><span class="p">(</span><span class="g">i</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="c">// Half open range, prints &quot;0 1 2 3 4 5 6 7 ...&quot;</span><span class="p"></span>
+<span class="k">for</span><span class="p"> </span><span class="g">i</span><span class="p"> </span><span class="k">in</span><span class="p"> </span><span class="m">0</span><span class="o">..</span><span class="p"> {</span>
+<span class="p">    </span><span class="n">print</span><span class="p">(</span><span class="g">i</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/CDot_Logo_FullWidth.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">The C• Programming Language</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=jonaszell97&repo=cdotc&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Basics.html">The Basics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ControlFlow.html">Control Flow</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Basic Operators</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#prefix-arithmetic-operators">Prefix Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#assignment-operators">Assignment Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#comparison-operators">Comparison Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#logical-operators">Logical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optional-operators">Optional Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#range-formation-operators">Range-Formation Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Functions.html">Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="CustomOperators.html">Custom Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Closures.html">Closures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Structs.html">Structs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Classes.html">Classes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Enums.html">Enums</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Initialization.html">Initialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Protocols.html">Protocols</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Extensions.html">Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Optionals.html">Optionals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="PatternMatching.html">Pattern Matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Generics.html">Generics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ErrorHandling.html">Error Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Ownership.html">Ownership</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Macros.html">Macros</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Attributes.html">Attributes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="ControlFlow.html" title="previous chapter">Control Flow</a></li>
+      <li>Next: <a href="Functions.html" title="next chapter">Functions</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Jonas Zell.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/content/BasicOperators.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

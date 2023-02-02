@@ -1,0 +1,284 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Functions &#8212; CDot  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Custom Operators" href="CustomOperators.html" />
+    <link rel="prev" title="Basic Operators" href="BasicOperators.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+    <link rel="apple-touch-icon" href="../_static/cdot_logo.png" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="functions">
+<span id="id1"></span><h1>Functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h1>
+<p><em>Functions</em> are specialized pieces of code that can be executed from different parts of your program. They allow you to avoid repetition and bundle common logic into reusable components. In CDot, functions are introduced with the <code class="docutils literal notranslate"><span class="pre">def</span></code> keyword followed by the function name. After that, the functions <em>parameter list</em> follows in parentheses. Functions can also declare an optional return type by writing a type name after a <em>single arrow</em> <code class="docutils literal notranslate"><span class="pre">-&gt;</span></code>.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">def</span><span class="p"> </span><span class="g">myFunction</span><span class="p">(_ </span><span class="g">param1</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p">, _ </span><span class="g">param2</span><span class="o">:</span><span class="p"> </span><span class="n">Float</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">String</span><span class="p"></span>
+<span class="c">//  ^^^^^^^^^^   ^^^^^^         ^^^^^^            ^^^^^^</span><span class="p"></span>
+<span class="c">//  Name         Parameter      Parameter         Return Type</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you do not explicitly write a return type, the functions return value is assumed to be of type <code class="docutils literal notranslate"><span class="pre">Void</span></code>, which is just an alias for the empty tuple type <code class="docutils literal notranslate"><span class="pre">()</span></code> in CDot.</p>
+</div>
+<p>A function can take zero or more parameters, but the parentheses are always required, even for parameterless functions. After the function declaration, its <em>body</em> follows surrounded by braces. This is the actual code that is executed whenever your function is called.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c">/// A function that takes two ``Int`` s and returns their sum.</span><span class="p"></span>
+<span class="k">def</span><span class="p"> </span><span class="g">addTwoInts</span><span class="p">(_ </span><span class="g">lhs</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p">, _ </span><span class="g">rhs</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">return</span><span class="p"> </span><span class="g">lhs</span><span class="p"> </span><span class="o">+</span><span class="p"> </span><span class="g">rhs</span><span class="p"></span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Every function that has a return type needs to include a <code class="docutils literal notranslate"><span class="pre">return</span></code> statement at the end of every possible path through the function. For <code class="docutils literal notranslate"><span class="pre">Void</span></code>-returning functions, a <code class="docutils literal notranslate"><span class="pre">return</span></code> statement is implicitly inserted for you at the end of the function body if you do not write one.</p>
+</div>
+<p>You can <code class="docutils literal notranslate"><span class="pre">return</span></code> from any point in a function, but every path through the function must end in a <code class="docutils literal notranslate"><span class="pre">return</span></code> statement (with the aforementioned exception of <code class="docutils literal notranslate"><span class="pre">Void</span></code>-returning functions). For example, the following function definition is invalid:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">def</span><span class="p"> </span><span class="g">badFunction</span><span class="p">() </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">if</span><span class="p"> </span><span class="g">someCondition</span><span class="p"> {</span>
+<span class="p">        </span><span class="k">return</span><span class="p"> </span><span class="m">12</span><span class="p"></span>
+<span class="p">    }</span>
+
+<span class="p">    </span><span class="c">// error: badFunction does not return if `someCondition` is false!</span><span class="p"></span>
+<span class="p">}</span>
+</pre></div>
+</td></tr></table></div>
+<div class="section" id="argument-labels">
+<h2>Argument Labels<a class="headerlink" href="#argument-labels" title="Permalink to this headline">¶</a></h2>
+<p>You may have wondered about the underscores in front of the parameter name in the first example - these are necessary because functions parameters are <em>labeled</em> by default. A parameter <em>label</em> has to be specified at the call site, which makes function calls easier to read and can help disambiguation. There are three different ways to label a function parameter:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Equal label and parameter name: If you do not specify a label, the parameter will implicitly be labeled with the parameter name.</p></li>
+<li><p>Different label and parameter name: If you put a label before the parameter name, the label will be what callers of the function put in their call, while the parameter name is what the parameter can be referred to in the function body.</p></li>
+<li><p>Unlabeled parameters: An underscore in place of a label will make the parameter <em>unlabeled</em>, which means that callers do not have to specify a label.</p></li>
+</ul>
+</div></blockquote>
+<p>Labels should be used when the role of a parameter is not obvious from the context of the function call. By convention, labeled function calls should read like a sentence - as an example, you might define a function that divides an integer like this:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">def</span><span class="p"> </span><span class="g">divide</span><span class="p">(_ </span><span class="g">value</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p">, </span><span class="g">by</span><span class="p"> </span><span class="g">rhs</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">return</span><span class="p"> </span><span class="g">value</span><span class="p"> </span><span class="o">/</span><span class="p"> </span><span class="g">rhs</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="c">// Called like this:</span><span class="p"></span>
+<span class="g">divide</span><span class="p">(</span><span class="m">12</span><span class="p">, </span><span class="g">by</span><span class="o">:</span><span class="p"> </span><span class="m">39</span><span class="p">) </span><span class="c">// Read as &quot;divide 12 by 39&quot;</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="default-parameter-values">
+<h2>Default Parameter Values<a class="headerlink" href="#default-parameter-values" title="Permalink to this headline">¶</a></h2>
+<p>Function parameters can declare an optional <em>default value</em>, which will allow callers to leave out that parameter in the call. An example for this is the global <code class="docutils literal notranslate"><span class="pre">print</span></code> function you are already familiar with. Its declaration looks something like this:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">def</span><span class="p"> </span><span class="n">print</span><span class="p">(_ </span><span class="g">value</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">,</span>
+<span class="p">          </span><span class="g">separator</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="s">&quot;, &quot;</span><span class="p">,</span>
+<span class="p">          </span><span class="g">terminator</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="s">&quot;\n&quot;</span><span class="p">) {</span>
+<span class="p">    </span><span class="c">// ...</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="c">// Can be called without the optional parameters...</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="s">&quot;Hello, World&quot;</span><span class="p">)</span>
+
+<span class="c">// ...or with one of them</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="s">&quot;Hello, World&quot;</span><span class="p">, </span><span class="g">terminator</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;&quot;</span><span class="p">)</span>
+
+<span class="c">// ...or with both</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="s">&quot;Hello, World&quot;</span><span class="p">, </span><span class="g">separator</span><span class="o">:</span><span class="p"> </span><span class="s">&quot; &lt;&gt; &quot;</span><span class="p">, </span><span class="g">terminator</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;&quot;</span><span class="p">)</span>
+</pre></div>
+</td></tr></table></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Like other languages, CDot requires every parameter after one with a default value to also have a default value.</p>
+</div>
+</div>
+<div class="section" id="ownership-semantics">
+<h2>Ownership Semantics<a class="headerlink" href="#ownership-semantics" title="Permalink to this headline">¶</a></h2>
+<p>Function parameters can also declare an <em>ownership type</em>, which can be one of <code class="docutils literal notranslate"><span class="pre">borrow</span></code>, <code class="docutils literal notranslate"><span class="pre">ref</span></code>, <code class="docutils literal notranslate"><span class="pre">mut</span> <span class="pre">ref</span></code>, or <code class="docutils literal notranslate"><span class="pre">owned</span></code>. The exact semantics of these are explained in chapter <a class="reference internal" href="Ownership.html#ownership"><span class="std std-ref">Ownership</span></a>. By default, a function parameter will use the <code class="docutils literal notranslate"><span class="pre">borrow</span></code> ownership convention.</p>
+</div>
+<div class="section" id="function-overloading">
+<h2>Function Overloading<a class="headerlink" href="#function-overloading" title="Permalink to this headline">¶</a></h2>
+<p>In CDot, you can define multiple functions with the same name, as long as their signatures are different in some way. The correct overload will then be chosen at the call site based on parameter types, labels, or even the return type.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">def</span><span class="p"> </span><span class="n">print</span><span class="p">(_ </span><span class="g">i</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p">)                      </span><span class="c">// #1</span><span class="p"></span>
+<span class="k">def</span><span class="p"> </span><span class="n">print</span><span class="p">(_ </span><span class="g">s</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">)                   </span><span class="c">// #2</span><span class="p"></span>
+<span class="k">def</span><span class="p"> </span><span class="n">print</span><span class="p">(_ </span><span class="g">s</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">String</span><span class="p">         </span><span class="c">// #3</span><span class="p"></span>
+<span class="k">def</span><span class="p"> </span><span class="n">print</span><span class="p">(_ </span><span class="g">s</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">, </span><span class="g">to</span><span class="o">:</span><span class="p"> </span><span class="g">OutputStream</span><span class="p">) </span><span class="c">// #4</span><span class="p"></span>
+
+<span class="n">print</span><span class="p">(</span><span class="m">3</span><span class="p">) </span><span class="c">// #1 chosen based on parameter type</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="s">&quot;hello&quot;</span><span class="p">) </span><span class="c">// ambiguous: could be #2 or #3</span><span class="p"></span>
+<span class="k">var</span><span class="p"> </span><span class="g">s</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="n">print</span><span class="p">(</span><span class="s">&quot;hello&quot;</span><span class="p">) </span><span class="c">// #3 chosen based on return type</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="s">&quot;hello&quot;</span><span class="p">, </span><span class="g">to</span><span class="o">:</span><span class="p"> </span><span class="g">io</span><span class="p">.</span><span class="g">stderr</span><span class="p">) </span><span class="c">// #4 chosen based on parameter labels</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>It is an error if a function call cannot be uniquely resolved to a specific overload of a function.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Overload resolution also takes into account other factors such as <em>conversion penalties</em> or <em>genericness</em>. This means that a non-generic function will be preferred over a <a class="reference internal" href="Generics.html#generics"><span class="std std-ref">generic</span></a> one, and that the overload that requires the minimum amount of conversions will be chosen.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/CDot_Logo_FullWidth.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">The C• Programming Language</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=jonaszell97&repo=cdotc&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Basics.html">The Basics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ControlFlow.html">Control Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="BasicOperators.html">Basic Operators</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#argument-labels">Argument Labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#default-parameter-values">Default Parameter Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ownership-semantics">Ownership Semantics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#function-overloading">Function Overloading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="CustomOperators.html">Custom Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Closures.html">Closures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Structs.html">Structs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Classes.html">Classes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Enums.html">Enums</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Initialization.html">Initialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Protocols.html">Protocols</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Extensions.html">Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Optionals.html">Optionals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="PatternMatching.html">Pattern Matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Generics.html">Generics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ErrorHandling.html">Error Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Ownership.html">Ownership</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Macros.html">Macros</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Attributes.html">Attributes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="BasicOperators.html" title="previous chapter">Basic Operators</a></li>
+      <li>Next: <a href="CustomOperators.html" title="next chapter">Custom Operators</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Jonas Zell.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/content/Functions.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,282 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Structs &#8212; CDot  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Classes" href="Classes.html" />
+    <link rel="prev" title="Closures" href="Closures.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+    <link rel="apple-touch-icon" href="../_static/cdot_logo.png" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="structs">
+<h1>Structs<a class="headerlink" href="#structs" title="Permalink to this headline">¶</a></h1>
+<p>CDot provides a variety of different ways to define custom types, the simplest of which are <em>structure types</em>, or <code class="docutils literal notranslate"><span class="pre">struct</span></code> s for short. In fact, most of the types we have been using in the previous sections like Int and String are defined as structs in the standard library. Structs allow you to group related data and functionality in a common place. You define a struct by writing the <code class="docutils literal notranslate"><span class="pre">struct</span></code> keyword followed by a name. After that, you can define the struct’s contents in curly braces.</p>
+<div class="section" id="fields">
+<h2>Fields<a class="headerlink" href="#fields" title="Permalink to this headline">¶</a></h2>
+<p>A struct declaration can contain one or more <em>stored properties</em>, or <em>fields</em>, which are introduced with the familiar <code class="docutils literal notranslate"><span class="pre">var</span></code> and <code class="docutils literal notranslate"><span class="pre">let</span></code> keywords. The fields that you declare on the struct are what determines its physical size and layout, every instance of that struct will have enough space to store all of its fields. Let’s say we want to define a <code class="docutils literal notranslate"><span class="pre">struct</span></code> to store information about a person, such as his or her name, age, and address. We could declare these three as <em>fields</em> on a struct:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="p"> </span><span class="g">Person</span><span class="p"> {</span>
+<span class="p">    </span><span class="c">// The name may change, so make it a variable</span><span class="p"></span>
+<span class="p">    </span><span class="k">var</span><span class="p"> </span><span class="g">name</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"></span>
+
+<span class="p">    </span><span class="c">// Birthday can&#39;t change, make it constant</span><span class="p"></span>
+<span class="p">    </span><span class="k">let</span><span class="p"> </span><span class="g">birthday</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"></span>
+
+<span class="p">    </span><span class="c">// Address can change, so declare a mutable field</span><span class="p"></span>
+<span class="p">    </span><span class="k">var</span><span class="p"> </span><span class="g">address</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"></span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Every person we create will now have storage for these three fields. Because we did not write an initializer, CDot implicitly created one for us - you can learn more about this in <a class="reference internal" href="Initialization.html#initialization"><span class="std std-ref">Initialization</span></a>. This means that we can create a new person like this:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">mike</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">Person</span><span class="p">(</span><span class="g">name</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;Mike&quot;</span><span class="p">, </span><span class="g">birthday</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;02/29/1997&quot;</span><span class="p">, </span><span class="g">address</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;22 Broadway&quot;</span><span class="p">)</span>
+<span class="n">print</span><span class="p">(</span><span class="g">mike</span><span class="p">.</span><span class="g">name</span><span class="p">) </span><span class="c">// Prints &quot;Mike&quot;</span><span class="p"></span>
+
+<span class="g">mike</span><span class="p">.</span><span class="g">address</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="s">&quot;23 Broadway&quot;</span><span class="p"> </span><span class="c">// OK - address was declared as a var</span><span class="p"></span>
+<span class="g">mike</span><span class="p">.</span><span class="g">name</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="s">&quot;Peter&quot;</span><span class="p"> </span><span class="c">// error - reassignment rules also apply to structs</span><span class="p"></span>
+</pre></div>
+</div>
+<p>Stored fields can optionally define a <em>default value</em>, which will be assigned to the field if no value is given. For example, if we want to allow persons to exist without an address for privacy reasons, we could define the address field like this:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">address</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="s">&quot;&quot;</span><span class="p"></span>
+</pre></div>
+</div>
+<p>This allows us to create a person without supplying an address:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">var</span><span class="p"> </span><span class="g">kate</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">Person</span><span class="p">(</span><span class="g">name</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;Kate&quot;</span><span class="p">, </span><span class="g">birthday</span><span class="o">:</span><span class="p"> </span><span class="s">&quot;05/12/1989&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="properties">
+<h2>Properties<a class="headerlink" href="#properties" title="Permalink to this headline">¶</a></h2>
+<p>CDot provides a second type of property you can define on custom types, called <em>computed properties</em> or simply <em>properties</em>, which are introduced with the <code class="docutils literal notranslate"><span class="pre">prop</span></code> keyword. A computed property differs from a stored one in that there is no physical storage allocated for it in the struct - the value it represents is computed every time you access it. This computation is done in <em>accessor methods</em>, which you define after the property declaration. There are two types of accessor methods: <em>getters</em> and <em>setters</em>. The <em>setter</em> method is called whenever the property is referenced on the left hand side of an assignment, in all other cases, the <em>getter</em> is called. You have to define at least a getter or a setter for every property. Suppose we want to allow users of the person class to query a person’s age, which we can compute using the stored birthday:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">prop</span><span class="p"> </span><span class="g">age</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">get</span><span class="p"> {</span>
+<span class="p">        </span><span class="c">// Assume that getCurrentDate is a function that returns the current date</span><span class="p"></span>
+<span class="p">        </span><span class="k">return</span><span class="p"> (</span><span class="g">getCurrentDate</span><span class="p">() </span><span class="o">-</span><span class="p"> </span><span class="g">birthday</span><span class="p">).</span><span class="g">years</span><span class="p"></span>
+<span class="p">    }</span>
+<span class="p">}</span>
+
+<span class="n">print</span><span class="p">(</span><span class="g">kate</span><span class="p">.</span><span class="g">age</span><span class="p">) </span><span class="c">// Prints &quot;31&quot;</span><span class="p"></span>
+</pre></div>
+</div>
+<p>If we wanted to allow modifying the birthday via the age property as well, we could define a <em>setter</em>:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">prop</span><span class="p"> </span><span class="g">age</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">get</span><span class="p"> { </span><span class="o">...</span><span class="p"> } </span><span class="c">// Same as above</span><span class="p"></span>
+<span class="p">    </span><span class="k">set</span><span class="p"> {</span>
+<span class="p">        </span><span class="c">// The new value is accessible via an implicit ``newVal`` parameter</span><span class="p"></span>
+<span class="p">        </span><span class="g">birthday</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">getCurrentDate</span><span class="p">().</span><span class="g">subtract</span><span class="p">(</span><span class="g">years</span><span class="o">:</span><span class="p"> </span><span class="g">newVal</span><span class="p">)</span>
+<span class="p">    }</span>
+<span class="p">}</span>
+
+<span class="g">kate</span><span class="p">.</span><span class="g">age</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="m">19</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">kate</span><span class="p">.</span><span class="g">birthday</span><span class="p">) </span><span class="c">// Prints &quot;01/01/2001&quot;</span><span class="p"></span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>There is an additional set of accessors besides <code class="docutils literal notranslate"><span class="pre">get</span></code> and <code class="docutils literal notranslate"><span class="pre">set</span></code>, the <em>modification accessors</em> <code class="docutils literal notranslate"><span class="pre">read</span></code> and <code class="docutils literal notranslate"><span class="pre">write</span></code>. These accessors make a property feel more like a stored value by allowing you to take a mutable reference to the property, which will then be written back at the end of the reference’s lifetime.</p>
+</div>
+</div>
+<div class="section" id="shorthand-property-syntax">
+<h2>Shorthand Property Syntax<a class="headerlink" href="#shorthand-property-syntax" title="Permalink to this headline">¶</a></h2>
+<p>If a property only has a getter accessor, you can leave out the <code class="docutils literal notranslate"><span class="pre">get</span></code> keyword and put the body directly in the braces. If the return value is a single expression, you can even leave out the body and <code class="docutils literal notranslate"><span class="pre">return</span></code> entirely and just use a double arrow:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="c">// Short syntax</span><span class="p"></span>
+<span class="k">prop</span><span class="p"> </span><span class="g">age</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">return</span><span class="p"> (</span><span class="g">getCurrentDate</span><span class="p">() </span><span class="o">-</span><span class="p"> </span><span class="g">birthday</span><span class="p">).</span><span class="g">years</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="c">// Even shorter syntax</span><span class="p"></span>
+<span class="k">prop</span><span class="p"> </span><span class="g">age</span><span class="o">:</span><span class="p"> </span><span class="n">Int</span><span class="p"> </span><span class="o">=&gt;</span><span class="p"> (</span><span class="g">getCurrentDate</span><span class="p">() </span><span class="o">-</span><span class="p"> </span><span class="g">birthday</span><span class="p">).</span><span class="g">years</span><span class="p"></span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h2>
+<p>Structs can also contain <em>methods</em>, which are functions that logically belong to the type. Every method has an implicit <code class="docutils literal notranslate"><span class="pre">self</span></code> parameter which is set to the struct instance on which the method was called. For example, we may want to allow our person to be greeted, which we could do by implementing a method:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="p"> </span><span class="g">Person</span><span class="p"> {</span>
+<span class="p">    </span><span class="c">// Like above</span><span class="p"></span>
+<span class="p">    </span><span class="c">// ...</span><span class="p"></span>
+
+<span class="p">    </span><span class="k">def</span><span class="p"> </span><span class="g">greet</span><span class="p">() {</span>
+<span class="p">        </span><span class="n">print</span><span class="p">(</span><span class="s">&quot;Hello, </span><span class="k">${self</span><span class="p">.</span><span class="g">name</span><span class="k">}</span><span class="s">!&quot;</span><span class="p">)</span>
+<span class="p">    }</span>
+
+<span class="p">    </span><span class="c">// Mutating methods can modify ``self``</span><span class="p"></span>
+<span class="p">    </span><span class="k">def</span><span class="p"> </span><span class="k">mutating</span><span class="p"> </span><span class="g">rename</span><span class="p">(</span><span class="g">to</span><span class="p"> </span><span class="g">name</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">) {</span>
+<span class="p">        </span><span class="k">self</span><span class="p">.</span><span class="g">name</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">name</span><span class="p"></span>
+<span class="p">    }</span>
+<span class="p">}</span>
+
+<span class="c">// Call method greet on the instance mike of type Person</span><span class="p"></span>
+<span class="g">mike</span><span class="p">.</span><span class="g">greet</span><span class="p">() </span><span class="c">// Prints &quot;Hello, Mike!&quot;</span><span class="p"></span>
+</pre></div>
+</div>
+<p>Defining and calling methods follows the same rules as functions with regards to labeling, default values, and so on, which the exception that a method has to be called on an instance of a type. By default, the <code class="docutils literal notranslate"><span class="pre">self</span></code> value cannot be modified inside of a method, unless you declare it as <code class="docutils literal notranslate"><span class="pre">mutating</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Property setter methods are implicitly marked as <code class="docutils literal notranslate"><span class="pre">mutating</span></code>. You can opt out of this behaviour with the contextual <code class="docutils literal notranslate"><span class="pre">nonmutating</span></code> keyword.</p>
+</div>
+</div>
+<div class="section" id="subscripts">
+<h2>Subscripts<a class="headerlink" href="#subscripts" title="Permalink to this headline">¶</a></h2>
+<p>Subscripts are a special kind of accessor that you have already encountered in previous examples. They allow you to use the familiar element access syntax using square brackets <code class="docutils literal notranslate"><span class="pre">[]</span></code> on any value. Subscripts are declared using the <code class="docutils literal notranslate"><span class="pre">subscript</span></code> keyword followed by a parameter list. Since subscripts behave more like functions than properties, the type of the subscript is declared using a single arrow. The definition of the getters and setters for the subscript is similar to a computed property declaration.</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="k">struct</span><span class="p"> </span><span class="g">Household</span><span class="p"> {</span>
+<span class="p">    </span><span class="c">/// The people in this Household.</span><span class="p"></span>
+<span class="p">    </span><span class="k">var</span><span class="p"> </span><span class="g">people</span><span class="o">:</span><span class="p"> [</span><span class="g">Person</span><span class="p">]</span>
+
+<span class="p">    </span><span class="c">/// Allow access to a person of this household via their name.</span><span class="p"></span>
+<span class="p">    </span><span class="k">subscript</span><span class="p"> (</span><span class="g">name</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="g">Person</span><span class="o">?</span><span class="p"> {</span>
+<span class="p">        </span><span class="k">get</span><span class="p"> {</span>
+<span class="p">            </span><span class="k">for</span><span class="p"> </span><span class="g">p</span><span class="p"> </span><span class="k">in</span><span class="p"> </span><span class="g">people</span><span class="p"> {</span>
+<span class="p">                </span><span class="k">if</span><span class="p"> </span><span class="g">p</span><span class="p">.</span><span class="g">name</span><span class="p"> </span><span class="o">==</span><span class="p"> </span><span class="g">name</span><span class="p"> {</span>
+<span class="p">                    </span><span class="k">return</span><span class="p"> </span><span class="g">p</span><span class="p"></span>
+<span class="p">                }</span>
+<span class="p">            }</span>
+
+<span class="p">            </span><span class="k">return</span><span class="p"> </span><span class="l">none</span><span class="p"></span>
+<span class="p">        }</span>
+<span class="p">    }</span>
+<span class="p">}</span>
+
+<span class="k">var</span><span class="p"> </span><span class="g">household</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">new</span><span class="p"> </span><span class="g">Household</span><span class="p">(</span><span class="g">people</span><span class="o">:</span><span class="p"> [</span><span class="g">mike</span><span class="p">, </span><span class="g">kate</span><span class="p">]</span>
+<span class="n">print</span><span class="p">(</span><span class="g">household</span><span class="p">[</span><span class="s">&quot;Kate&quot;</span><span class="p">]) </span><span class="c">// Prints &quot;Person { name = &quot;Kate&quot;, birthday = &quot;05/12/1989&quot; }&quot;</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">household</span><span class="p">[</span><span class="s">&quot;Sarah&quot;</span><span class="p">]) </span><span class="c">// Prints &quot;none&quot;</span><span class="p"></span>
+
+<span class="g">household</span><span class="p">[</span><span class="s">&quot;Sarah&quot;</span><span class="p">] </span><span class="o">=</span><span class="p"> </span><span class="g">Person</span><span class="p">(</span><span class="o">...</span><span class="p">) </span><span class="c">// error: subscript does not define a setter</span><span class="p"></span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/CDot_Logo_FullWidth.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">The C• Programming Language</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=jonaszell97&repo=cdotc&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Basics.html">The Basics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ControlFlow.html">Control Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="BasicOperators.html">Basic Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Functions.html">Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="CustomOperators.html">Custom Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Closures.html">Closures</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Structs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#fields">Fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#properties">Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#shorthand-property-syntax">Shorthand Property Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#methods">Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#subscripts">Subscripts</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Classes.html">Classes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Enums.html">Enums</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Initialization.html">Initialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Protocols.html">Protocols</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Extensions.html">Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Optionals.html">Optionals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="PatternMatching.html">Pattern Matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Generics.html">Generics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ErrorHandling.html">Error Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Ownership.html">Ownership</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Macros.html">Macros</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Attributes.html">Attributes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="Closures.html" title="previous chapter">Closures</a></li>
+      <li>Next: <a href="Classes.html" title="next chapter">Classes</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Jonas Zell.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/content/Structs.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

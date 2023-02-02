@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Custom Operators &#8212; CDot  documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Closures" href="Closures.html" />
+    <link rel="prev" title="Functions" href="Functions.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+    <link rel="apple-touch-icon" href="../_static/cdot_logo.png" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="custom-operators">
+<span id="id1"></span><h1>Custom Operators<a class="headerlink" href="#custom-operators" title="Permalink to this headline">¶</a></h1>
+<p>CDot allows you to define custom overloads of the available operators, as well as entirely new ones. Operators are declared like normal functions, but with a special syntax for the function name.</p>
+<div class="section" id="overloading-existing-operators">
+<h2>Overloading Existing Operators<a class="headerlink" href="#overloading-existing-operators" title="Permalink to this headline">¶</a></h2>
+<p>Existing operators like <code class="docutils literal notranslate"><span class="pre">+</span></code> or <code class="docutils literal notranslate"><span class="pre">-</span></code> can be implemented for new types easily. Simply define a global function with the operator name in place of a normal function name. For an infix function, the declaration needs to take exactly two parameters, for a prefix or postfix function, only one parameter is allowed.</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c">/// Remove the right-hand side string from the left one.</span><span class="p"></span>
+<span class="k">def</span><span class="p"> </span><span class="k">infix</span><span class="p"> </span><span class="o">-</span><span class="p">(_ </span><span class="g">str</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">, _ </span><span class="g">rem</span><span class="o">:</span><span class="p"> </span><span class="n">String</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">String</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">if</span><span class="p"> </span><span class="g">str</span><span class="p">.</span><span class="g">endsWith</span><span class="p">(</span><span class="g">rem</span><span class="p">) {</span>
+<span class="p">        </span><span class="k">return</span><span class="p"> </span><span class="g">str</span><span class="p">[</span><span class="m">0</span><span class="o">..</span><span class="p">(</span><span class="g">str</span><span class="p">.</span><span class="g">size</span><span class="p"> </span><span class="o">-</span><span class="p"> </span><span class="g">rem</span><span class="p">.</span><span class="g">size</span><span class="p">)]</span>
+<span class="p">    }</span>
+
+<span class="p">    </span><span class="k">return</span><span class="p"> </span><span class="g">str</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="k">let</span><span class="p"> </span><span class="g">s1</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="s">&quot;Hello, World!&quot;</span><span class="p"></span>
+<span class="n">print</span><span class="p">(</span><span class="g">s1</span><span class="p"> </span><span class="o">-</span><span class="p"> </span><span class="s">&quot;, World!&quot;</span><span class="p">) </span><span class="c">// Prints &quot;Hello&quot;</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="defining-new-operators">
+<h2>Defining New Operators<a class="headerlink" href="#defining-new-operators" title="Permalink to this headline">¶</a></h2>
+<p>If you want to define an operator that does not yet exist in the language, you need to declare it first. An operator declaration starts with one of the keywords <code class="docutils literal notranslate"><span class="pre">infix</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>, or <code class="docutils literal notranslate"><span class="pre">postfix</span></code>, followed by the operator name and an optional <em>precedence group</em>. Suppose we want to create the familiar increment and decrement operators from <code class="docutils literal notranslate"><span class="pre">C</span></code>. First, we have to declare the operators themselves:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">prefix</span><span class="p"> </span><span class="o">++</span><span class="p"></span>
+<span class="k">postfix</span><span class="p"> </span><span class="o">++</span><span class="p"></span>
+<span class="k">prefix</span><span class="p"> </span><span class="o">--</span><span class="p"></span>
+<span class="k">postfix</span><span class="p"> </span><span class="o">--</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>Once we’ve done that, we can define our custom operator functions:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">def</span><span class="p"> </span><span class="k">prefix</span><span class="p"> </span><span class="o">++</span><span class="p">(_ </span><span class="g">value</span><span class="o">:</span><span class="p"> </span><span class="k">mut</span><span class="p"> </span><span class="k">ref</span><span class="p"> </span><span class="n">Int</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="g">value</span><span class="p"> </span><span class="o">+=</span><span class="p"> </span><span class="m">1</span><span class="p"></span>
+<span class="p">    </span><span class="k">return</span><span class="p"> </span><span class="g">value</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="k">def</span><span class="p"> </span><span class="k">postfix</span><span class="p"> </span><span class="o">++</span><span class="p">(_ </span><span class="g">value</span><span class="o">:</span><span class="p"> </span><span class="k">mut</span><span class="p"> </span><span class="k">ref</span><span class="p"> </span><span class="n">Int</span><span class="p">) </span><span class="o">-&gt;</span><span class="p"> </span><span class="n">Int</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">var</span><span class="p"> </span><span class="g">oldVal</span><span class="p"> </span><span class="o">=</span><span class="p"> </span><span class="g">value</span><span class="p"></span>
+<span class="p">    </span><span class="g">value</span><span class="p"> </span><span class="o">+=</span><span class="p"> </span><span class="m">1</span><span class="p"></span>
+<span class="p">    </span><span class="k">return</span><span class="p"> </span><span class="g">oldVal</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="c">// And so on...</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>You may have noticed the <code class="docutils literal notranslate"><span class="pre">mut</span> <span class="pre">ref</span></code> before the parameter type in the function signatures. This is required because this function needs to <em>mutate</em> the parameter it is passed. You can learn more about this in a <a class="reference internal" href="Ownership.html#ownership"><span class="std std-ref">different chapter</span></a>.</p>
+</div>
+<p>Infix operators can also define a <em>precedence group</em>, which will decide how the operator will be parsed. You may remember from school that multiplication has a higher <em>precedence</em> than addition, which is reflected by the following <em>precedence group</em> declarations in the standard library:</p>
+<div class="highlight-CDot notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">precedenceGroup</span><span class="p"> </span><span class="g">AdditionPrecedence</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">associativity</span><span class="o">:</span><span class="p"> </span><span class="g">left</span><span class="p"></span>
+<span class="p">    </span><span class="k">higherThan</span><span class="o">:</span><span class="p"> </span><span class="c">// Some other precedence group</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="k">precedenceGroup</span><span class="p"> </span><span class="g">MultiplicationPrecedence</span><span class="p"> {</span>
+<span class="p">    </span><span class="k">associativity</span><span class="o">:</span><span class="p"> </span><span class="g">left</span><span class="p"></span>
+<span class="p">    </span><span class="k">higherThan</span><span class="o">:</span><span class="p"> </span><span class="g">AdditionPrecedence</span><span class="p"></span>
+<span class="p">}</span>
+
+<span class="c">// Now we can declare the operators like so...</span><span class="p"></span>
+<span class="k">infix</span><span class="p"> </span><span class="o">+</span><span class="p"> </span><span class="o">:</span><span class="p"> </span><span class="g">AdditionPrecedence</span><span class="p"></span>
+<span class="k">infix</span><span class="p"> </span><span class="o">*</span><span class="p"> </span><span class="o">:</span><span class="p"> </span><span class="g">MultiplicationPrecedence</span><span class="p"></span>
+</pre></div>
+</td></tr></table></div>
+<p>Precedence groups are related to each other with <code class="docutils literal notranslate"><span class="pre">higherThan</span></code> and <code class="docutils literal notranslate"><span class="pre">lowerThan</span></code> relationships. If an operator belongs to a precedence group that is <em>higher</em> than another, it will be parsed first, which means that the following two expressions are equivalent:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="p">_ </span><span class="o">=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="o">+</span><span class="p"> </span><span class="m">4</span><span class="p"> </span><span class="o">*</span><span class="p"> </span><span class="m">5</span><span class="p"></span>
+<span class="p">_ </span><span class="o">=</span><span class="p"> </span><span class="m">3</span><span class="p"> </span><span class="o">+</span><span class="p"> (</span><span class="m">4</span><span class="p"> </span><span class="o">*</span><span class="p"> </span><span class="m">5</span><span class="p">) </span><span class="c">// equivalent - `*` binds more tightly than `+`</span><span class="p"></span>
+</pre></div>
+</div>
+<p>If no relationship is established between two precedence groups, you are required to use parentheses to disambiguate.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>There are two more attributes you can define for a precedence group besides <code class="docutils literal notranslate"><span class="pre">higherThan</span></code> and <code class="docutils literal notranslate"><span class="pre">lowerThan</span></code>. The first is the <code class="docutils literal notranslate"><span class="pre">associativity</span></code>, which can be either <code class="docutils literal notranslate"><span class="pre">left</span></code> or <code class="docutils literal notranslate"><span class="pre">right</span></code> (default is <code class="docutils literal notranslate"><span class="pre">left</span></code>). The associativity of an operator specifies how a sequence of operators with the same precedence level are grouped together in the absence of grouping parentheses. For example, the <code class="docutils literal notranslate"><span class="pre">-</span></code> operator is left-associative, which means that the expression <code class="docutils literal notranslate"><span class="pre">3</span> <span class="pre">-</span> <span class="pre">4</span> <span class="pre">-</span> <span class="pre">5</span></code> is equivalent to <code class="docutils literal notranslate"><span class="pre">(3</span> <span class="pre">-</span> <span class="pre">4)</span> <span class="pre">-</span> <span class="pre">5</span></code>, which equals -12. If it were right associative, it would be parsed as <code class="docutils literal notranslate"><span class="pre">3</span> <span class="pre">-</span> <span class="pre">(4</span> <span class="pre">-</span> <span class="pre">5)</span></code>, which would equal 4. The second is <code class="docutils literal notranslate"><span class="pre">assignment</span></code>, which can be <code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">false</span></code> (default is <code class="docutils literal notranslate"><span class="pre">false</span></code>).</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/CDot_Logo_FullWidth.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">The C• Programming Language</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=jonaszell97&repo=cdotc&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Basics.html">The Basics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ControlFlow.html">Control Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="BasicOperators.html">Basic Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Functions.html">Functions</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Custom Operators</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overloading-existing-operators">Overloading Existing Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#defining-new-operators">Defining New Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Closures.html">Closures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Structs.html">Structs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Classes.html">Classes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Enums.html">Enums</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Initialization.html">Initialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Protocols.html">Protocols</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Extensions.html">Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Optionals.html">Optionals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="PatternMatching.html">Pattern Matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Generics.html">Generics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ErrorHandling.html">Error Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Ownership.html">Ownership</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Macros.html">Macros</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Attributes.html">Attributes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="Functions.html" title="previous chapter">Functions</a></li>
+      <li>Next: <a href="Closures.html" title="next chapter">Closures</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Jonas Zell.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/content/CustomOperators.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
