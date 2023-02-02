@@ -196,7 +196,7 @@ static FakeSourceLocation makeFakeSourceLoc(CandidateSet& CandSet,
 
    OS << ") -> " << FuncTy->getReturnType();
 
-   return FakeSourceLocation{str.str()};
+   return FakeSourceLocation{str.str().str()};
 }
 
 static SourceLocation getArgumentLoc(CandidateSet::Candidate& Cand,
@@ -522,7 +522,7 @@ static void diagnoseCandidate(SemaPass& SP, CandidateSet& CandSet,
          auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
          assert(templateArg && "bad diagnostic data");
 
-         string name = Param->getName();
+         string name = Param->getName().str();
          if (templateArg->isVariadic()) {
             name += "[";
             name += std::to_string(templateArg->getVariadicArgs().size() - 1);
@@ -917,7 +917,7 @@ void CandidateSet::diagnoseAlias(SemaPass& SP, DeclarationName AliasName,
                 reinterpret_cast<void*>(Cand.Data1));
             auto templateArg = Cand.InnerTemplateArgs.getArgForParam(Param);
 
-            string name = Param->getName();
+            string name = Param->getName().str();
             if (templateArg->isVariadic()) {
                name += "[";
                name

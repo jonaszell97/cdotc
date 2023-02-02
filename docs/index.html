@@ -1,0 +1,241 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>The CDot Programming Language &#8212; CDot  documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="The Basics" href="content/Basics.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+    <link rel="apple-touch-icon" href="_static/cdot_logo.png" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="the-cdot-programming-language">
+<h1>The CDot Programming Language<a class="headerlink" href="#the-cdot-programming-language" title="Permalink to this headline">¶</a></h1>
+<p>CDot is an object oriented language that was designed to feel familiar to everyone who already knows a language of the C family or any other modern language, such as Swift or Rust.</p>
+<p>CDot programs are statically compiled and type-safe, which means that the types of every variable you declare need to be known at compile-time, which differentiates it from dynamic languages like Python and JavaScript. To ease the burden on developers, CDot supports powerful type inference, which means that you won’t have to write many type annotations in practice.</p>
+<p>It’s good form to start of the documentation of any programming language by showing you how to print <code class="docutils literal notranslate"><span class="pre">&quot;Hello,</span> <span class="pre">World!&quot;</span></code> to the screen, so here’s what that looks like in CDot:</p>
+<div class="highlight-CDot notranslate"><div class="highlight"><pre><span></span><span class="n">print</span><span class="p">(</span><span class="s">&quot;Hello, World! 🌍&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>With that out of the way, we can get started with the documentation!</p>
+<div class="toctree-wrapper compound">
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="content/Basics.html">The Basics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#variables-constants">Variables &amp; Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#type-annotations">Type Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#comments-semicolons">Comments &amp; Semicolons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#integer-types">Integer Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#floating-point-types">Floating Point Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#booleans">Booleans</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#strings">Strings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#collections">Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#optionals">Optionals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#tuples">Tuples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#type-safety">Type Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Basics.html#printing-values">Printing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/ControlFlow.html">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#if-statements">If-Statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#while-statements">While-Statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#loop-statements">Loop-Statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#for-statements">For-Statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#for-in-statements">For-In-Statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#match-statements">Match-Statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#break-continue">Break &amp; Continue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/ControlFlow.html#labeled-loops">Labeled Loops</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/BasicOperators.html">Basic Operators</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#prefix-arithmetic-operators">Prefix Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#assignment-operators">Assignment Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#comparison-operators">Comparison Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#logical-operators">Logical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#optional-operators">Optional Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/BasicOperators.html#range-formation-operators">Range-Formation Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/Functions.html">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/Functions.html#argument-labels">Argument Labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Functions.html#default-parameter-values">Default Parameter Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Functions.html#ownership-semantics">Ownership Semantics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Functions.html#function-overloading">Function Overloading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/CustomOperators.html">Custom Operators</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/CustomOperators.html#overloading-existing-operators">Overloading Existing Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/CustomOperators.html#defining-new-operators">Defining New Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/Closures.html">Closures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/Closures.html#explicit-closure-syntax">Explicit Closure Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Closures.html#trailing-closure-syntax">Trailing Closure Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Closures.html#capturing-values">Capturing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/Structs.html">Structs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/Structs.html#fields">Fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Structs.html#properties">Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Structs.html#shorthand-property-syntax">Shorthand Property Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Structs.html#methods">Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="content/Structs.html#subscripts">Subscripts</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/Classes.html">Classes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/Classes.html#inheritance">Inheritance</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/Enums.html">Enums</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Initialization.html">Initialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Protocols.html">Protocols</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="content/Protocols.html#expressibleby-protocols">ExpressibleBy Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="content/Extensions.html">Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Optionals.html">Optionals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/PatternMatching.html">Pattern Matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Generics.html">Generics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/ErrorHandling.html">Error Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Ownership.html">Ownership</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Macros.html">Macros</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Attributes.html">Attributes</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="#">
+    <img class="logo" src="_static/CDot_Logo_FullWidth.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">The C• Programming Language</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=jonaszell97&repo=cdotc&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="content/Basics.html">The Basics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/ControlFlow.html">Control Flow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/BasicOperators.html">Basic Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Functions.html">Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/CustomOperators.html">Custom Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Closures.html">Closures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Structs.html">Structs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Classes.html">Classes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Enums.html">Enums</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Initialization.html">Initialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Protocols.html">Protocols</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Extensions.html">Extensions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Optionals.html">Optionals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/PatternMatching.html">Pattern Matching</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Generics.html">Generics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/ErrorHandling.html">Error Handling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Ownership.html">Ownership</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Macros.html">Macros</a></li>
+<li class="toctree-l1"><a class="reference internal" href="content/Attributes.html">Attributes</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="content/Basics.html" title="next chapter">The Basics</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Jonas Zell.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

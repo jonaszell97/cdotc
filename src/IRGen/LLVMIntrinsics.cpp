@@ -123,19 +123,17 @@ llvm::Intrinsic::ID IRGen::getIntrinsicID(StringRef Name)
        .Case("llvm.experimental.patchpoint.i64", llvm::Intrinsic::experimental_patchpoint_i64)
        .Case("llvm.experimental.patchpoint.void", llvm::Intrinsic::experimental_patchpoint_void)
        .Case("llvm.experimental.stackmap", llvm::Intrinsic::experimental_stackmap)
-       .Case("llvm.experimental.vector.reduce.add", llvm::Intrinsic::experimental_vector_reduce_add)
-       .Case("llvm.experimental.vector.reduce.and", llvm::Intrinsic::experimental_vector_reduce_and)
-       .Case("llvm.experimental.vector.reduce.fmax", llvm::Intrinsic::experimental_vector_reduce_fmax)
-       .Case("llvm.experimental.vector.reduce.fmin", llvm::Intrinsic::experimental_vector_reduce_fmin)
-       .Case("llvm.experimental.vector.reduce.mul", llvm::Intrinsic::experimental_vector_reduce_mul)
-       .Case("llvm.experimental.vector.reduce.or", llvm::Intrinsic::experimental_vector_reduce_or)
-       .Case("llvm.experimental.vector.reduce.smax", llvm::Intrinsic::experimental_vector_reduce_smax)
-       .Case("llvm.experimental.vector.reduce.smin", llvm::Intrinsic::experimental_vector_reduce_smin)
-       .Case("llvm.experimental.vector.reduce.umax", llvm::Intrinsic::experimental_vector_reduce_umax)
-       .Case("llvm.experimental.vector.reduce.umin", llvm::Intrinsic::experimental_vector_reduce_umin)
-       .Case("llvm.experimental.vector.reduce.v2.fadd", llvm::Intrinsic::experimental_vector_reduce_v2_fadd)
-       .Case("llvm.experimental.vector.reduce.v2.fmul", llvm::Intrinsic::experimental_vector_reduce_v2_fmul)
-       .Case("llvm.experimental.vector.reduce.xor", llvm::Intrinsic::experimental_vector_reduce_xor)
+       .Case("llvm.experimental.vector.reduce.add", llvm::Intrinsic::vector_reduce_add)
+       .Case("llvm.experimental.vector.reduce.and", llvm::Intrinsic::vector_reduce_and)
+       .Case("llvm.experimental.vector.reduce.fmax", llvm::Intrinsic::vector_reduce_fmax)
+       .Case("llvm.experimental.vector.reduce.fmin", llvm::Intrinsic::vector_reduce_fmin)
+       .Case("llvm.experimental.vector.reduce.mul", llvm::Intrinsic::vector_reduce_mul)
+       .Case("llvm.experimental.vector.reduce.or", llvm::Intrinsic::vector_reduce_or)
+       .Case("llvm.experimental.vector.reduce.smax", llvm::Intrinsic::vector_reduce_smax)
+       .Case("llvm.experimental.vector.reduce.smin", llvm::Intrinsic::vector_reduce_smin)
+       .Case("llvm.experimental.vector.reduce.umax", llvm::Intrinsic::vector_reduce_umax)
+       .Case("llvm.experimental.vector.reduce.umin", llvm::Intrinsic::vector_reduce_umin)
+       .Case("llvm.experimental.vector.reduce.xor", llvm::Intrinsic::vector_reduce_xor)
        .Case("llvm.experimental.widenable.condition", llvm::Intrinsic::experimental_widenable_condition)
        .Case("llvm.fabs", llvm::Intrinsic::fabs)
        .Case("llvm.floor", llvm::Intrinsic::floor)
@@ -181,8 +179,6 @@ llvm::Intrinsic::ID IRGen::getIntrinsicID(StringRef Name)
        .Case("llvm.masked.load", llvm::Intrinsic::masked_load)
        .Case("llvm.masked.scatter", llvm::Intrinsic::masked_scatter)
        .Case("llvm.masked.store", llvm::Intrinsic::masked_store)
-       .Case("llvm.matrix.columnwise.load", llvm::Intrinsic::matrix_columnwise_load)
-       .Case("llvm.matrix.columnwise.store", llvm::Intrinsic::matrix_columnwise_store)
        .Case("llvm.matrix.multiply", llvm::Intrinsic::matrix_multiply)
        .Case("llvm.matrix.transpose", llvm::Intrinsic::matrix_transpose)
        .Case("llvm.maximum", llvm::Intrinsic::maximum)
@@ -351,19 +347,17 @@ bool IRGen::intrinsicNeedsTypeAnnot(llvm::Intrinsic::ID ID)
    case llvm::Intrinsic::experimental_patchpoint_i64:
    case llvm::Intrinsic::experimental_patchpoint_void:
    case llvm::Intrinsic::experimental_stackmap:
-   case llvm::Intrinsic::experimental_vector_reduce_add:
-   case llvm::Intrinsic::experimental_vector_reduce_and:
-   case llvm::Intrinsic::experimental_vector_reduce_fmax:
-   case llvm::Intrinsic::experimental_vector_reduce_fmin:
-   case llvm::Intrinsic::experimental_vector_reduce_mul:
-   case llvm::Intrinsic::experimental_vector_reduce_or:
-   case llvm::Intrinsic::experimental_vector_reduce_smax:
-   case llvm::Intrinsic::experimental_vector_reduce_smin:
-   case llvm::Intrinsic::experimental_vector_reduce_umax:
-   case llvm::Intrinsic::experimental_vector_reduce_umin:
-   case llvm::Intrinsic::experimental_vector_reduce_v2_fadd:
-   case llvm::Intrinsic::experimental_vector_reduce_v2_fmul:
-   case llvm::Intrinsic::experimental_vector_reduce_xor:
+   case llvm::Intrinsic::vector_reduce_add:
+   case llvm::Intrinsic::vector_reduce_and:
+   case llvm::Intrinsic::vector_reduce_fmax:
+   case llvm::Intrinsic::vector_reduce_fmin:
+   case llvm::Intrinsic::vector_reduce_mul:
+   case llvm::Intrinsic::vector_reduce_or:
+   case llvm::Intrinsic::vector_reduce_smax:
+   case llvm::Intrinsic::vector_reduce_smin:
+   case llvm::Intrinsic::vector_reduce_umax:
+   case llvm::Intrinsic::vector_reduce_umin:
+   case llvm::Intrinsic::vector_reduce_xor:
    case llvm::Intrinsic::experimental_widenable_condition:
    case llvm::Intrinsic::fabs:
    case llvm::Intrinsic::floor:
@@ -382,8 +376,6 @@ bool IRGen::intrinsicNeedsTypeAnnot(llvm::Intrinsic::ID ID)
    case llvm::Intrinsic::log2:
    case llvm::Intrinsic::lrint:
    case llvm::Intrinsic::lround:
-   case llvm::Intrinsic::matrix_columnwise_load:
-   case llvm::Intrinsic::matrix_columnwise_store:
    case llvm::Intrinsic::matrix_multiply:
    case llvm::Intrinsic::matrix_transpose:
    case llvm::Intrinsic::maximum:

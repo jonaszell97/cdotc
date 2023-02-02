@@ -332,7 +332,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
       args.push_back(file);
    }
    for (auto& file : AdditionalFilesToLink) {
-      args.push_back(file);
+      args.push_back(file.str());
    }
    for (auto& ClangOpt : options.getClangOptions()) {
       args.push_back(ClangOpt);
@@ -357,7 +357,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
    args.push_back("-lc");
    args.push_back("-lcdotrt");
    args.push_back("-o");
-   args.push_back(OutFile);
+   args.push_back(OutFile.str());
    args.push_back("--rtlib=compiler-rt");
 
    fs::executeCommand(clangPathOrError.get(), args, CI.getOptions().verbose());
@@ -368,7 +368,7 @@ void IRGen::emitExecutable(StringRef OutFile, llvm::Module* Module,
       auto DsymPath = llvm::sys::findProgramByName("dsymutil");
       if (!DsymPath.getError()) {
          string dsymArgs[] = {
-             DsymPath.get(), OutFile,
+             DsymPath.get(), OutFile.str(),
          };
 
          fs::executeCommand(DsymPath.get(), dsymArgs, CI.getOptions().verbose());
@@ -422,7 +422,7 @@ void IRGen::emitStaticLibrary(llvm::StringRef OutFile, llvm::Module* Module)
    for (auto& file : CI.getOptions().getLinkerInput())
       args.push_back(file);
 
-   args.push_back(OutFile);
+   args.push_back(OutFile.str());
    args.emplace_back(TmpFilePath.str());
 
    int result = fs::executeCommand(args[0], args, CI.getOptions().verbose());
@@ -474,7 +474,7 @@ void IRGen::emitDynamicLibrary(StringRef OutFile, llvm::Module* Module)
    std::vector<std::string> args{
        clangPathOrError.get(), "-shared",
        "-o",      OutFile.str(),
-       TmpFilePath.str(),
+       TmpFilePath.str().str(),
    };
 
 #ifdef __APPLE__
@@ -511,7 +511,7 @@ std::string IRGen::createLinkedModuleTmpFile(llvm::StringRef Str)
    llvm::raw_fd_ostream OS(TmpFD, true);
    OS << Str;
 
-   return TmpFilePath.str();
+   return TmpFilePath.str().str();
 }
 
 } // namespace il

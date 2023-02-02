@@ -225,7 +225,7 @@ string Variant::toString(unsigned char opts) const
       llvm::SmallString<128> str;
       getAPFloat().toString(str);
 
-      return str.str();
+      return str.str().str();
    }
    case VariantType::Void:
       return "Void";

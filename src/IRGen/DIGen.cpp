@@ -10,6 +10,7 @@
 #include "cdotc/IL/Context.h"
 #include "cdotc/IL/Module.h"
 
+#include <llvm/ADT/SmallString.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/Module.h>
 

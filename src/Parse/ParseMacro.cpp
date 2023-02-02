@@ -2072,7 +2072,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
          auto includeDirs
              = SP.getCompilerInstance().getOptions().getIncludeDirs().vec();
 
-         includeDirs.push_back(fs::getPath(FileMgr.getFileName(Loc).str()));
+         includeDirs.push_back(fs::getPath(FileMgr.getFileName(Loc).str()).str());
 
          auto Path = fs::getPath(FileName);
          if (!Path.empty()) {
@@ -2100,8 +2100,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       if (MacroKind == BuiltinMacro::include_str) {
          auto S = StringLiteral::Create(
              SP.getContext(), Loc,
-             llvm::StringRef(File.Buf->getBufferStart(),
-                             File.Buf->getBufferSize()));
+             std::string(File.Buf->getBufferStart(), File.Buf->getBufferSize()));
 
          Vec.emplace_back(S, Loc);
          return true;

@@ -1303,7 +1303,7 @@ llvm::Value* IRGen::visitDebugLocInst(const DebugLocInst& I)
 {
    if (DI) {
       Builder.SetCurrentDebugLocation(
-          llvm::DebugLoc::get(I.getLine(), I.getCol(), ScopeStack.top()));
+          llvm::DILocation::get(CU->getContext(), I.getLine(), I.getCol(), ScopeStack.top()));
    }
 
    return nullptr;
@@ -1475,7 +1475,7 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
    else
       alloca = Builder.CreateAlloca(AllocatedType);
 
-   alloca->setAlignment(llvm::MaybeAlign(alignment));
+   alloca->setAlignment(llvm::Align(alignment));
 
    Builder.restoreIP(IP);
    Builder.SetCurrentDebugLocation(Loc);
@@ -1504,7 +1504,9 @@ llvm::AllocaInst* IRGen::CreateAlloca(llvm::Type* AllocatedType,
       alloca = Builder.CreateAlloca(AllocatedType);
    }
 
-   alloca->setAlignment(llvm::MaybeAlign(alignment));
+   if (alignment > 1) {
+      alloca->setAlignment(llvm::Align(alignment));
+   }
 
    Builder.restoreIP(IP);
    Builder.SetCurrentDebugLocation(Loc);
@@ -2204,7 +2206,7 @@ llvm::Value* IRGen::visitStoreInst(StoreInst const& I)
    }
 
    auto Store = Builder.CreateStore(Src, Dst);
-   Store->setAlignment(llvm::MaybeAlign(alignment));
+   Store->setAlignment(llvm::Align(alignment));
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
       Store->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
@@ -2267,7 +2269,7 @@ llvm::Value* IRGen::visitInitInst(const InitInst& I)
    }
 
    auto Store = Builder.CreateStore(Src, Dst);
-   Store->setAlignment(llvm::MaybeAlign(alignment));
+   Store->setAlignment(llvm::Align(alignment));
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
       Store->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
@@ -2476,7 +2478,7 @@ llvm::Value* IRGen::visitLoadInst(LoadInst const& I)
    }
 
    auto Ld = Builder.CreateLoad(val);
-   Ld->setAlignment(llvm::MaybeAlign(alignment));
+   Ld->setAlignment(llvm::Align(alignment));
 
    if (I.getMemoryOrder() != MemoryOrder::NotAtomic) {
       Ld->setAtomic(getAtomicOrdering(I.getMemoryOrder()));
@@ -2713,7 +2715,11 @@ llvm::Value* IRGen::visitInvokeInst(InvokeInst const& I)
    llvm::SmallVector<llvm::Value*, 8> args{ErrAlloc};
    PrepareCallArgs(args, I.getArgs(), I.getCalledMethod() != nullptr);
 
-   auto* Call = Builder.CreateCall(getLlvmValue(I.getCallee()), args);
+   auto *FnVal = getLlvmValue(I.getCallee());
+   auto *FnTy = cast<llvm::FunctionType>(FnVal->getType()->getPointerElementType());
+   llvm::FunctionCallee Callee(FnTy, FnVal);
+
+   auto* Call = Builder.CreateCall(Callee, args);
    Call->addParamAttr(0, llvm::Attribute::SwiftError);
 
    auto RetTy = I.getCallee()->getType()->asFunctionType()->getReturnType();
@@ -2790,7 +2796,8 @@ llvm::Value* IRGen::visitVirtualInvokeInst(const VirtualInvokeInst& I)
        Builder.CreateLoad(FuncPtr),
        getStorageType(I.getFunctionType()->getCanonicalType()));
 
-   auto* Call = Builder.CreateCall(TypedFnPtr, args);
+   auto *FnTy = cast<llvm::FunctionType>(TypedFnPtr->getType()->getPointerElementType());
+   auto* Call = Builder.CreateCall(llvm::FunctionCallee(FnTy, TypedFnPtr), args);
    Call->addParamAttr(0, llvm::Attribute::SwiftError);
 
    llvm::Value* RetVal;
@@ -3254,7 +3261,9 @@ llvm::Value* IRGen::visitCallInst(CallInst const& I)
       Call = CreateCall(Fn, args);
    }
    else {
-      Call = Builder.CreateCall(getLlvmValue(I.getCallee()), args);
+      auto *FnVal = getLlvmValue(I.getCallee());
+      auto *FnTy = cast<llvm::FunctionType>(FnVal->getType()->getPointerElementType());
+      Call = Builder.CreateCall(llvm::FunctionCallee(FnTy, FnVal), args);
    }
 
    if (MergeBB) {
@@ -3348,8 +3357,9 @@ llvm::Value* IRGen::visitVirtualCallInst(VirtualCallInst const& I)
        Builder.CreateLoad(FuncPtr),
        getStorageType(I.getFunctionType()->getCanonicalType()));
 
-   auto* RetVal
-       = PrepareReturnedValue(&I, Builder.CreateCall(TypedFnPtr, args));
+   auto *FnTy = cast<llvm::FunctionType>(TypedFnPtr->getType()->getPointerElementType());
+   auto* RetVal = PrepareReturnedValue(&I,
+         Builder.CreateCall(llvm::FunctionCallee(FnTy, TypedFnPtr), args));
 
    if (I.getFunctionType()->isAsync()) {
       auto* CoroPromise
@@ -3410,7 +3420,7 @@ llvm::Value* IRGen::visitLambdaCallInst(LambdaCallInst const& I)
    llvm::Value* Fun
        = Builder.CreateLoad(Builder.CreateStructGEP(LambdaTy, Lambda, 0));
 
-   FunctionType* funTy = I.getLambda()->getType()->asFunctionType();
+   FunctionType* funTy = I.getCallee()->getType()->asFunctionType();
    llvm::SmallVector<llvm::Value*, 8> args{Env};
 
    bool sret = NeedsStructReturn(funTy->getReturnType());
@@ -3421,9 +3431,10 @@ llvm::Value* IRGen::visitLambdaCallInst(LambdaCallInst const& I)
 
    PrepareCallArgs(args, I.getArgs());
 
-   Fun = Builder.CreateBitCast(Fun, getLambdaType(funTy)->getPointerTo());
-   llvm::Value* ret = Builder.CreateCall(Fun, args);
+   auto *FnTy = getLambdaType(funTy);
+   Fun = Builder.CreateBitCast(Fun, FnTy->getPointerTo());
 
+   llvm::Value* ret = Builder.CreateCall(llvm::FunctionCallee(FnTy, Fun), args);
    if (sret)
       ret = args[1];
 
@@ -3729,7 +3740,8 @@ llvm::Value* IRGen::applyBinaryOp(unsigned OpCode, QualType ty,
                                                  {lhs->getType()});
       }
 
-      return Builder.CreateCall(powFn, {lhs, rhs});
+      auto *FnTy = cast<llvm::FunctionType>(powFn->getType());
+      return Builder.CreateCall(llvm::FunctionCallee(FnTy, powFn), {lhs, rhs});
    }
    }
 

@@ -1,0 +1,5 @@
+
+.. _generics:
+
+Generics
+========

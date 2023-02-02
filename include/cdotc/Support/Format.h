@@ -80,7 +80,7 @@ std::string formatInteger(uint64_t val)
    llvm::SmallString<128> res;
    formatInteger<FormatTraits>(val, res);
 
-   return res.str();
+   return res.str().str();
 }
 
 template<class T> std::string formatAsHexInteger(T val)

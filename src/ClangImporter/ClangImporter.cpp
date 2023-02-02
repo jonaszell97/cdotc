@@ -9,6 +9,8 @@
 #include "cdotc/Sema/SemaPass.h"
 #include "cdotc/Support/Timer.h"
 
+#include <clang/Basic/TargetInfo.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
 
@@ -345,14 +347,16 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
       ppOpts.addRemappedFile(DummyFileName, InputFile.getFile());
    }
    else {
-      ppOpts.addRemappedFile(
-          DummyFileName, const_cast<llvm::MemoryBuffer*>(InputFile.getBuffer()));
+      auto buf = llvm::MemoryBuffer::getMemBuffer(InputFile.getBuffer());
+      ppOpts.addRemappedFile(DummyFileName, buf.release());
    }
 
    clang::InputKind InputKind(IsCXX ? clang::Language::CXX : clang::Language::C);
    clang::LangOptions Opts;
+   std::vector<std::string> includes;
    clang::CompilerInvocation::setLangDefaults(
-       Opts, InputKind, CI.getContext().getTargetInfo().getTriple(), ppOpts);
+       Opts, InputKind, CI.getContext().getTargetInfo().getTriple(),
+       includes);
 
    auto PCHContainerOperations
        = std::make_shared<clang::PCHContainerOperations>();
@@ -462,7 +466,7 @@ bool ClangImporter::importSystemHeader(StringRef File, DeclContext* IntoMod,
    OS << "#include <" << File << ">";
 
    auto MemBuf = llvm::MemoryBuffer::getMemBuffer(OS.str());
-   clang::FrontendInputFile InputFile(MemBuf.release(), clang::Language::C);
+   clang::FrontendInputFile InputFile(MemBuf->getMemBufferRef(), clang::Language::C, true);
 
    return pImpl->importModule(File, IntoMod, InputFile, ImportLoc, false,
                               Optional);

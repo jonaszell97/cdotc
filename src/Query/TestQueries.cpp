@@ -385,7 +385,7 @@ static void ParseTasks(Test *T, StringRef File,
          }
 
          TaskStr = TaskStr.drop_front(11);
-         Tasks.back()->ExitCode = std::stoi(TaskStr);
+         Tasks.back()->ExitCode = std::stoi(TaskStr.str());
       }
       else if (TaskStr.startswith("CHECK-NEXT")) {
          if (Tasks.empty() || Tasks.back()->OutputChecks.empty()) {
@@ -402,7 +402,7 @@ static void ParseTasks(Test *T, StringRef File,
          }
 
          TaskStr = TaskStr.drop_front(6);
-         Tasks.back()->OutputChecks.push_back(TaskStr);
+         Tasks.back()->OutputChecks.push_back(TaskStr.str());
       }
       else if (TaskStr.startswith("SKIP")) {
          Tasks.clear();
@@ -567,7 +567,7 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
              if (!BufOrError)
                 return;
 
-             std::string Output = BufOrError.get()->getBuffer();
+             std::string Output = BufOrError.get()->getBuffer().str();
              if (Task.OutputChecks.empty()) {
                 if (!Output.empty()) {
                    LogOS << Output << "\n";
@@ -654,7 +654,7 @@ QueryResult RunTestModuleQuery::run()
 
    // Create a log file.
    std::error_code EC;
-   string LogFileName = fs::getPath(Mod->getModulePath()->getIdentifier());
+   string LogFileName = fs::getPath(Mod->getModulePath()->getIdentifier()).str();
    if (LogFileName.empty() || LogFileName.back() != fs::PathSeperator)
       LogFileName += fs::PathSeperator;
 

@@ -3243,7 +3243,7 @@ void ILGenPass::DefineLazyGlobal(il::GlobalVariable* glob,
    Flag->setLinkage(glob->getLinkage());
    glob->setInitializedFlag(Flag);
 
-   std::string name = glob->getName();
+   std::string name = glob->getName().str();
    name += ".init";
 
    auto InitFn = Builder.CreateFunction(name, SP.getContext().getVoidType(), {},

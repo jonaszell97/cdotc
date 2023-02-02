@@ -83,14 +83,14 @@ std::string swapExtension(llvm::StringRef fullPath, llvm::StringRef newExt)
       ScratchBuf += '.';
       ScratchBuf += newExt;
 
-      return ScratchBuf.str();
+      return ScratchBuf.str().str();
    }
 
    ScratchBuf += fullPath;
    ScratchBuf.resize(period + 1);
    ScratchBuf += newExt;
 
-   return ScratchBuf.str();
+   return ScratchBuf.str().str();
 }
 
 llvm::StringRef getFileNameAndExtension(llvm::StringRef fullPath)
@@ -193,7 +193,7 @@ string findFileInDirectories(llvm::StringRef fileName,
 {
    if (fileName.front() == fs::PathSeperator) {
       if (fileExists(fileName))
-         return fileName;
+         return fileName.str();
 
       return "";
    }
@@ -364,7 +364,7 @@ void getAllMatchingFiles(llvm::StringRef fileName,
       }
    }
    else {
-      Out.push_back(fileName);
+      Out.push_back(fileName.str());
    }
 }
 

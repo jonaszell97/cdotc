@@ -287,13 +287,13 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
             FoundModule = true;
 
             // Add the path of this module to the include paths.
-            options.includePaths.push_back(fs::getPath(FileName));
+            options.includePaths.push_back(fs::getPath(FileName).str());
          }
          else {
             FoundOther = true;
          }
 
-         options.addInput(FileName);
+         options.addInput(FileName.str());
          ScratchBuf.clear();
       }
 

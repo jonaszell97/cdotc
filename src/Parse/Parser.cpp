@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/Error.h>
 #include <llvm/Support/PrettyStackTrace.h>
 
 using namespace cdot::diag;
@@ -1464,7 +1465,7 @@ ParseResult Parser::maybeParseSubExpr(Expression* ParentExpr, bool parsingType,
 
       // tuple access
       if (currentTok().is(tok::integerliteral) && !parsingType) {
-         unsigned index = unsigned(std::stoul(currentTok().getText()));
+         unsigned index = unsigned(std::stoul(currentTok().getText().str()));
          auto tupleExpr = new (Context) TupleMemberExpr(
              currentTok().getSourceLoc(), ParentExpr, index, pointerAccess);
 
@@ -1853,7 +1854,7 @@ string Parser::prepareStringLiteral(Token const& tok)
       }
    }
 
-   return str.str();
+   return str.str().str();
 }
 
 ParseResult Parser::parseUnaryExpr(bool parsingStmt)
@@ -2160,7 +2161,7 @@ ParseResult Parser::parseUnaryExpr(bool parsingStmt)
       auto Alloc = (char*)Context.Allocate(str.size());
       std::copy(str.begin(), str.end(), Alloc);
 
-      Expr = StringLiteral::Create(Context, SR, StringRef(Alloc, str.size()));
+      Expr = StringLiteral::Create(Context, SR, std::string(Alloc, str.size()));
    }
    else if (currentTok().is(tok::interpolation_begin)) {
       advance();
@@ -2175,7 +2176,7 @@ ParseResult Parser::parseUnaryExpr(bool parsingStmt)
       std::copy(str.begin(), str.end(), Alloc);
 
       auto strLiteral
-          = StringLiteral::Create(Context, SR, StringRef(Alloc, str.size()));
+          = StringLiteral::Create(Context, SR, std::string(Alloc, str.size()));
 
       advance();
       assert(currentTok().is(tok::expr_begin) && "not an interpolation");
@@ -2211,7 +2212,7 @@ ParseResult Parser::parseUnaryExpr(bool parsingStmt)
          std::copy(str.begin(), str.end(), Alloc);
 
          auto lit
-             = StringLiteral::Create(Context, SR, StringRef(Alloc, str.size()));
+             = StringLiteral::Create(Context, SR, std::string(Alloc, str.size()));
 
          strings.push_back(lit);
 
@@ -3173,7 +3174,7 @@ ParseResult Parser::parseTraitsExpr()
             break;
          }
 
-         args.emplace_back(currentTok().getIdentifierInfo()->getIdentifier());
+         args.emplace_back(currentTok().getIdentifierInfo()->getIdentifier().str());
          break;
       case TraitArguments::String:
          if (!currentTok().is(tok::stringliteral)) {
@@ -3184,7 +3185,7 @@ ParseResult Parser::parseTraitsExpr()
             break;
          }
 
-         args.emplace_back(currentTok().getText());
+         args.emplace_back(currentTok().getText().str());
          break;
       default:
          llvm_unreachable("bad arg kind");

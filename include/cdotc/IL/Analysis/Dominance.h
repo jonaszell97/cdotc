@@ -176,7 +176,7 @@ class DominanceAnalysis : public FunctionAnalysisBase<DominanceInfo> {
 protected:
    virtual void verify(DominanceInfo* DI) const override
    {
-      if (DI->getRoots().empty())
+      if (DI->root_size() == 0)
          return;
       DI->verify();
    }
@@ -210,7 +210,7 @@ class PostDominanceAnalysis : public FunctionAnalysisBase<PostDominanceInfo> {
 protected:
    virtual void verify(PostDominanceInfo* PDI) const override
    {
-      if (PDI->getRoots().empty())
+      if (PDI->root_size() == 0)
          return;
       PDI->verify();
    }

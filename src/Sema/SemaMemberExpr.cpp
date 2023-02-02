@@ -1401,7 +1401,7 @@ ExprResult SemaPass::visitBuiltinIdentExpr(BuiltinIdentExpr* Ident)
                 ? C->getName()
                 : ILGen->getFunc(C)->getName();
 
-      return StringLiteral::Create(Context, Ident->getSourceRange(), str);
+      return StringLiteral::Create(Context, Ident->getSourceRange(), str.str());
    }
    case BuiltinIdentifier::FLOAT_QNAN:
    case BuiltinIdentifier::FLOAT_SNAN:
@@ -2415,7 +2415,7 @@ void SemaPass::diagnoseTemplateArgErrors(
          auto templateArg = list.getArgForParam(Param);
          assert(templateArg && "bad diagnostic data");
 
-         string name = Param->getName();
+         string name = Param->getName().str();
          if (templateArg->isVariadic()) {
             name += "[";
             name += std::to_string(templateArg->getVariadicArgs().size() - 1);

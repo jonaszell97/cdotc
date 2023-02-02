@@ -34,7 +34,11 @@ static Expression* expressionFromNumericConstantToken(ImporterImpl& I,
    if (Invalid)
       return nullptr;
 
-   clang::NumericLiteralParser Literal(TokSpelling, Tok.getLocation(), PP);
+   clang::NumericLiteralParser Literal(TokSpelling, Tok.getLocation(),
+                                       PP.getSourceManager(),
+                                       I.Instance->getLangOpts(),
+                                       I.Instance->getTarget(),
+                                       I.Instance->getDiagnostics());
    if (Literal.hadError)
       return nullptr;
 

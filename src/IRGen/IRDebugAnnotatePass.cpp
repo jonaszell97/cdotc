@@ -19,7 +19,7 @@ namespace {
 
 class IRDebugAnnotatePass : public llvm::ModulePass {
    std::unique_ptr<llvm::raw_fd_ostream> OS;
-   llvm::StringRef OutFile;
+   std::string OutFile;
 
    unsigned CurLine = 1;
    llvm::DICompileUnit* CU = nullptr;
@@ -52,7 +52,7 @@ public:
 
    IRDebugAnnotatePass(std::unique_ptr<llvm::raw_fd_ostream> &&OS,
                        llvm::StringRef OutFile)
-       : ModulePass(ID), OS(std::move(OS)), OutFile(OutFile)
+       : ModulePass(ID), OS(std::move(OS)), OutFile(OutFile.str())
    {
    }
 
@@ -212,7 +212,7 @@ llvm::DISubprogram* IRDebugAnnotatePass::annotateFunction(llvm::Function& F)
 void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction& I,
                                               llvm::DIScope* FnDI, unsigned& i)
 {
-   I.setDebugLoc(llvm::DebugLoc::get(CurLine, 1, FnDI));
+   I.setDebugLoc(llvm::DILocation::get(this->CU->getContext(), CurLine, 1, FnDI));
 
    switch (I.getOpcode()) {
    case llvm::Instruction::Switch: {
@@ -227,7 +227,7 @@ void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction& I,
       break;
    case llvm::Instruction::Alloca:
    case llvm::Instruction::GetElementPtr: {
-      std::string Name = I.getName();
+      std::string Name = I.getName().str();
       if (Name.empty()) {
          Name += "_";
          Name += std::to_string(i);
@@ -285,6 +285,7 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
       return DI->createBasicType("double", T->getScalarSizeInBits(),
                                  llvm::dwarf::DW_ATE_float);
    case llvm::Type::HalfTyID:
+   case llvm::Type::BFloatTyID:
       return DI->createBasicType("half", T->getScalarSizeInBits(),
                                  llvm::dwarf::DW_ATE_float);
    case llvm::Type::FP128TyID:
@@ -298,6 +299,9 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
                                  llvm::dwarf::DW_ATE_float);
    case llvm::Type::X86_MMXTyID:
       return DI->createBasicType("mmx", T->getScalarSizeInBits(),
+                                 llvm::dwarf::DW_ATE_unsigned);
+   case llvm::Type::X86_AMXTyID:
+      return DI->createBasicType("amx", T->getScalarSizeInBits(),
                                  llvm::dwarf::DW_ATE_unsigned);
    case llvm::Type::PointerTyID:
       return DI->createPointerType(
@@ -366,10 +370,17 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
           T->getArrayNumElements(), DL->getPrefTypeAlignment(T),
           getTypeDI(T->getArrayElementType()), DI->getOrCreateArray({}));
    }
-   case llvm::Type::VectorTyID: {
+   case llvm::Type::FixedVectorTyID: {
+      auto *V = cast<llvm::FixedVectorType>(T);
       return DI->createVectorType(
-          T->getVectorNumElements(), DL->getPrefTypeAlignment(T),
-          getTypeDI(T->getVectorElementType()), DI->getOrCreateArray({}));
+          V->getNumElements(), DL->getPrefTypeAlignment(T),
+          getTypeDI(V->getElementType()), DI->getOrCreateArray({}));
+   }
+   case llvm::Type::ScalableVectorTyID: {
+      auto *V = cast<llvm::ScalableVectorType>(T);
+      return DI->createVectorType(
+          0, DL->getPrefTypeAlignment(T),
+          getTypeDI(V->getElementType()), DI->getOrCreateArray({}));
    }
    }
 }
