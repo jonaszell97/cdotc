@@ -21,7 +21,7 @@ C• (pronouced _see-dot_) is a multi-paradigm systems programming language with
 
 C• binaries are compiled to machine code using LLVM, which means that the powerful optimization infrastructure of LLVM is automatically applied to every program you write.
 
-For code examples and further documentation, please refer to the [docs](https://jonaszell97.github.io). 
+For code examples and further documentation, please refer to the [docs](https://cdotc.jonaszell.dev/). 
 
 - [Building cdotc](#building-cdotc)
   - [macOS](#macos)
