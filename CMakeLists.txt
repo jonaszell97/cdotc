@@ -2,6 +2,17 @@ cmake_minimum_required(VERSION 3.7)
 
 project(CDot)
 
+include(FindLibXml2)
+find_package(LibXml2 REQUIRED)
+
+if(NOT TARGET LibXml2::LibXml2)
+  add_library(LibXml2::LibXml2 UNKNOWN IMPORTED)
+  set_target_properties(LibXml2::LibXml2 PROPERTIES
+    IMPORTED_LOCATION "${LIBXML2_LIBRARIES}"
+    INTERFACE_INCLUDE_DIRECTORIES "${LIBXML2_INCLUDE_DIR}"
+  )
+endif()
+
 # find tblgen
 find_package(TblGen REQUIRED CONFIG)
 include_directories("${TBLGEN_INCLUDE_DIR}")
@@ -19,7 +30,7 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Found LLVM libs ${llvm_libs}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-include_directories(${LLVM_INCLUDE_DIRS})
+include_directories(include ${LLVM_INCLUDE_DIRS} ${LIBXML2_INCLUDE_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
 # find clang
@@ -64,10 +75,15 @@ if(clang_libs)
 endif()
 
 # set CXX flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -pedantic")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -Wall -pedantic")
 if(UNIX AND NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare")
 endif()
+
+# set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # set Linker flags
 if(UNIX AND NOT APPLE)
@@ -75,9 +91,6 @@ if(UNIX AND NOT APPLE)
 else()
     set(linker_flags "")
 endif()
-
-# add include directories
-include_directories(include)
 
 # find source files
 file(GLOB_RECURSE CDot_SRC "src/*.cpp")
@@ -91,7 +104,7 @@ set(CDOTC_TBLGENS_SOURCE_FILES
         tools/TableGenBackends/AttributesBackend.cpp
         tools/TableGenBackends/QueryBackend.cpp)
 
-set (RUNTIME_SUPPORT_SOURCE_FILES
+set(RUNTIME_SUPPORT_SOURCE_FILES
         Runtime/RuntimeSupport.cpp)
 
 add_executable(cdotc src/Driver/main.cpp ${SOURCE_FILES})
@@ -121,19 +134,19 @@ target_compile_options(cdotc_coverage
         PUBLIC "-fvisibility=hidden"
         PUBLIC "-fno-rtti")
 
-target_link_libraries(cdotc ${llvm_libs} ${clang_libs} -fvisibility=hidden -w ${linker_flags})
+target_link_libraries(cdotc ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES} -fvisibility=hidden -w ${linker_flags})
 target_link_libraries(cdotc-tblgens LLVMSupport -fvisibility=hidden)
 
 target_link_libraries(cdotc_asan
-        ${llvm_libs} ${clang_libs}
+        ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
         -fsanitize=address
         -fno-omit-frame-pointer
         -fvisibility=hidden)
 target_link_libraries(cdotc_ubsan
-        ${llvm_libs} ${clang_libs}
+        ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
         -fsanitize=undefined
         -fno-omit-frame-pointer
         -fvisibility=hidden)
 
-target_link_libraries(cdotc_coverage ${llvm_libs} ${clang_libs}
+target_link_libraries(cdotc_coverage ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
         "-fprofile-instr-generate" "-fcoverage-mapping" -fvisibility=hidden)

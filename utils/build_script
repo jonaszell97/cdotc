@@ -144,7 +144,7 @@ def build_rt_lib(opts, cmake, build_dir):
         "--", "-j", cpu_count,
     ], check=True, cwd=build_dir)
 
-    run_subprocess(opts, ["sudo", "ln", "-sf", build_dir + "/libcdotrt." + dylib_ext, sys_lib_dir], check=True)
+    run_subprocess(opts, ["ln", "-sf", build_dir + "/libcdotrt." + dylib_ext, sys_lib_dir], check=True)
 
 def build_tblgen_files(opts, tblgen, src_dir, inc_dir, tblgen_lib):
     # Attributes
@@ -267,7 +267,7 @@ def build_cdot_module(opts, cdotc, mod_name, mod_dir, build_dir, args=[]):
         *args,
     ], check=True)
 
-    run_subprocess(opts, ["sudo", "ln", "-sf",
+    run_subprocess(opts, ["ln", "-sf",
                           app_dir + "/lib/libcdot" + mod_name + "." + dylib_ext,
                           sys_lib_dir], check=True)
 
@@ -416,6 +416,8 @@ def main():
     except subprocess.CalledProcessError as err:
         print("error building tblgen libs: %s" % (err))
         return 1
+    
+    return 0
 
     # Build TblGen files
     try:
