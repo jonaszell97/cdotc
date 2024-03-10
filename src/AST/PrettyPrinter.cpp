@@ -414,7 +414,10 @@ void PrettyPrinterImpl::visitParenExpr(ast::ParenExpr* expr)
 
 void PrettyPrinterImpl::visitIntegerLiteral(IntegerLiteral* expr)
 {
-   out << expr->getValue().toString(10, !expr->getType()->isUnsigned());
+   llvm::SmallString<128> str;
+   expr->getValue().toString(str, 10, !expr->getType()->isUnsigned());
+
+   out << str;
 }
 
 void PrettyPrinterImpl::visitFPLiteral(FPLiteral* expr)

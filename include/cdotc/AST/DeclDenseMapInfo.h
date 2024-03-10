@@ -19,7 +19,7 @@ enum { RecordDeclAlign = 2 };
 }
 
 template<typename T> struct PointerLikeTypeTraits;
-template<class T> struct DenseMapInfo;
+template<class T, typename Enable> struct DenseMapInfo;
 
 template<> struct PointerLikeTypeTraits<::cdot::ast::Statement*> {
 public:
@@ -60,7 +60,7 @@ public:
    enum { NumLowBitsAvailable = detail::RecordDeclAlign };
 };
 
-template<> struct DenseMapInfo<::cdot::ast::RecordDecl*> {
+template<> struct DenseMapInfo<::cdot::ast::RecordDecl*, void> {
    static ::cdot::ast::RecordDecl* getEmptyKey()
    {
       uintptr_t Val = static_cast<uintptr_t>(-1);
@@ -102,7 +102,7 @@ public:
    enum { NumLowBitsAvailable = detail::RecordDeclAlign };
 };
 
-template<> struct DenseMapInfo<::cdot::ast::ProtocolDecl*> {
+template<> struct DenseMapInfo<::cdot::ast::ProtocolDecl*, void> {
    static ::cdot::ast::ProtocolDecl* getEmptyKey()
    {
       uintptr_t Val = static_cast<uintptr_t>(-1);

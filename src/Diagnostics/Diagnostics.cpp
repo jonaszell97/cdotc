@@ -692,7 +692,11 @@ DiagnosticBuilder& DiagnosticBuilder::operator<<(const NamedDecl* decl)
 DiagnosticBuilder& DiagnosticBuilder::operator<<(llvm::APInt const& API)
 {
    Engine.ArgKinds[Engine.NumArgs] = DiagnosticsEngine::ak_string;
-   Engine.StringArgs[Engine.NumArgs] = API.toString(10, true);
+
+   llvm::SmallString<128> str;
+   API.toString(str, 10, true);
+
+   Engine.StringArgs[Engine.NumArgs] = str.str().str();
    ++Engine.NumArgs;
 
    return *this;

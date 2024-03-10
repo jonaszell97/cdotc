@@ -132,7 +132,7 @@ public:
 namespace llvm {
 
 template<typename T> struct PointerLikeTypeTraits;
-template<class T> struct DenseMapInfo;
+template<class T, typename Enable> struct DenseMapInfo;
 class raw_ostream;
 
 template<> struct PointerLikeTypeTraits<::cdot::SourceLocation> {
@@ -151,7 +151,7 @@ public:
    enum { NumLowBitsAvailable = 0 };
 };
 
-template<> struct DenseMapInfo<::cdot::SourceLocation> {
+template<> struct DenseMapInfo<::cdot::SourceLocation, void> {
    static ::cdot::SourceLocation getEmptyKey()
    {
       return ::cdot::SourceLocation(static_cast<uint32_t>(-1));

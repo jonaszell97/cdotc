@@ -117,7 +117,7 @@ static void ensureSufficientStack()
 static void ensureSufficientStack() {}
 #endif
 
-static void LLVMErrorHandler(void* UserData, const std::string& Message,
+static void LLVMErrorHandler(void* UserData, const char *Message,
                              bool GenCrashDiag)
 {
    auto& CU = *static_cast<CompilerInstance*>(UserData);

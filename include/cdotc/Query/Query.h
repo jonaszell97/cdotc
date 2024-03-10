@@ -5,6 +5,7 @@
 #include "cdotc/AST/Type.h"
 #include "cdotc/Sema/Lookup.h"
 #include "cdotc/Sema/Template.h"
+#include "cdotc/Support/Optional.h"
 
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/FoldingSet.h>
@@ -305,7 +306,7 @@ template<class T> struct SimpleQueryResult : public QueryResult {
 
 private:
    /// The result value.
-   llvm::Optional<T> Value;
+   Optional<T> Value;
 };
 
 class Query {

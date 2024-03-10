@@ -582,7 +582,7 @@ template<> struct hash<::cdot::QualType> {
 namespace llvm {
 
 template<class T> struct simplify_type;
-template<class T> struct DenseMapInfo;
+template<class T, typename Enable> struct DenseMapInfo;
 
 // teach isa etc. to treat QualType like a type
 template<> struct simplify_type<::cdot::QualType> {
@@ -630,7 +630,7 @@ public:
    enum { NumLowBitsAvailable = 0 };
 };
 
-template<> struct DenseMapInfo<::cdot::QualType> {
+template<> struct DenseMapInfo<::cdot::QualType, void> {
    static ::cdot::QualType getEmptyKey()
    {
       uintptr_t Val = static_cast<uintptr_t>(-1);
@@ -656,7 +656,7 @@ template<> struct DenseMapInfo<::cdot::QualType> {
    }
 };
 
-template<> struct DenseMapInfo<::cdot::CanType> {
+template<> struct DenseMapInfo<::cdot::CanType, void> {
    static ::cdot::CanType getEmptyKey()
    {
       uintptr_t Val = static_cast<uintptr_t>(-1);

@@ -22,8 +22,8 @@
 #include "cdotc/Support/Various.h"
 
 #include <llvm/Support/Allocator.h>
-#include <llvm/Support/Host.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/TargetParser/Host.h>
 
 #include <cmath>
 #include <cstring>

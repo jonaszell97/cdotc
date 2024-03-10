@@ -243,8 +243,8 @@ QualType ImporterImpl::getType(clang::QualType Ty)
 
          for (clang::FieldDecl* F : RecTy->getDecl()->fields()) {
             auto ByteSize = ASTCtx.getTypeSizeInCharsIfKnown(F->getType());
-            if (ByteSize.hasValue()) {
-               Size += ByteSize.getValue().getQuantity();
+            if (ByteSize.has_value()) {
+               Size += ByteSize.value().getQuantity();
             }
          }
 

@@ -729,7 +729,7 @@ void SemaPass::ActOnFunctionDecl(DeclContext* DC, FunctionDecl* F)
    ActOnCallableDecl(*this, F);
 
    if (F->getDeclName().isSimpleIdentifier()
-       && F->getDeclName().getIdentifierInfo()->getIdentifier().startswith(
+       && F->getDeclName().getIdentifierInfo()->getIdentifier().starts_with(
               "llvm.")) {
       diagnose(F, err_llvm_function_name_reserved, F->getSourceLoc());
    }

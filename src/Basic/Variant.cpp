@@ -182,8 +182,11 @@ string Variant::toString(unsigned char opts) const
       if ((opts & Opt_IntAsPtr) != 0) {
          string s;
          llvm::raw_string_ostream ss(s);
-         ss << "0x" << getAPSInt().toString(16);
 
+         llvm::SmallString<128> str;
+         getAPSInt().toString(str, 16);
+
+         ss << "0x" << str;
          return ss.str();
       }
 
@@ -204,8 +207,11 @@ string Variant::toString(unsigned char opts) const
       if (bitwidth == 1) {
          return getSExtValue() ? "true" : "false";
       }
-
-      return getAPSInt().toString(10);
+      
+      llvm::SmallString<128> str;
+      getAPSInt().toString(str, 10);
+      
+      return str.str().str();
    }
    case VariantType::MetaType:
       return getMetaType().toString();
@@ -432,7 +438,7 @@ Variant Variant::applyBinaryOp(const Variant& rhs, const string& op) const
 
          if (rhs.kind == VariantType::Int) {
             str += getString();
-            str += rhs.getAPSInt().toString(10);
+            getAPSInt().toString(str, 10);
          }
          if (rhs.kind == VariantType::Floating) {
             str += getString();
@@ -447,7 +453,7 @@ Variant Variant::applyBinaryOp(const Variant& rhs, const string& op) const
          llvm::SmallString<128> str;
 
          if (rhs.kind == VariantType::Int) {
-            str += getAPSInt().toString(10);
+            getAPSInt().toString(str, 10);
             str += rhs.getString();
          }
          if (rhs.kind == VariantType::Floating) {

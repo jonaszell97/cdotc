@@ -3231,7 +3231,7 @@ void ILGenPass::DefineLazyGlobal(il::GlobalVariable* glob,
    ModuleRAII MR(*this, glob->getParent());
 
    auto GlobalName = glob->getName();
-   assert(GlobalName.startswith("_C"));
+   assert(GlobalName.starts_with("_C"));
 
    SmallString<64> Str;
    Str += "_CIF";
@@ -4922,104 +4922,104 @@ il::Value* ILGenPass::HandleIntrinsic(CallExpr* node)
       auto Name = Fn->getDeclName().getIdentifierInfo()->getIdentifier();
 
       // Arithmetic operatins.
-      if (Name.startswith("add") || Name.startswith("fadd")) {
+      if (Name.starts_with("add") || Name.starts_with("fadd")) {
          return Builder.CreateAdd(args[0], args[1]);
       }
-      if (Name.startswith("sub") || Name.startswith("fsub")) {
+      if (Name.starts_with("sub") || Name.starts_with("fsub")) {
          return Builder.CreateSub(args[0], args[1]);
       }
-      if (Name.startswith("mul") || Name.startswith("fmul")) {
+      if (Name.starts_with("mul") || Name.starts_with("fmul")) {
          return Builder.CreateMul(args[0], args[1]);
       }
-      if (Name.startswith("div") || Name.startswith("fdiv")) {
+      if (Name.starts_with("div") || Name.starts_with("fdiv")) {
          return Builder.CreateDiv(args[0], args[1]);
       }
-      if (Name.startswith("rem") || Name.startswith("frem")) {
+      if (Name.starts_with("rem") || Name.starts_with("frem")) {
          return Builder.CreateMod(args[0], args[1]);
       }
 
-      if (Name.startswith("shl")) {
+      if (Name.starts_with("shl")) {
          return Builder.CreateShl(args[0], args[1]);
       }
-      if (Name.startswith("ashr")) {
+      if (Name.starts_with("ashr")) {
          return Builder.CreateAShr(args[0], args[1]);
       }
-      if (Name.startswith("lshr")) {
+      if (Name.starts_with("lshr")) {
          return Builder.CreateLShr(args[0], args[1]);
       }
-      if (Name.startswith("and")) {
+      if (Name.starts_with("and")) {
          return Builder.CreateAnd(args[0], args[1]);
       }
-      if (Name.startswith("or")) {
+      if (Name.starts_with("or")) {
          return Builder.CreateOr(args[0], args[1]);
       }
-      if (Name.startswith("xor")) {
+      if (Name.starts_with("xor")) {
          return Builder.CreateXor(args[0], args[1]);
       }
 
-      if (Name.startswith("icmp_eq") || Name.startswith("fcmp_oeq")
-          || Name.startswith("fcmp_ueq")) {
+      if (Name.starts_with("icmp_eq") || Name.starts_with("fcmp_oeq")
+          || Name.starts_with("fcmp_ueq")) {
          return Builder.CreateCompEQ(args[0], args[1]);
       }
-      if (Name.startswith("icmp_ne") || Name.startswith("fcmp_one")
-          || Name.startswith("fcmp_une")) {
+      if (Name.starts_with("icmp_ne") || Name.starts_with("fcmp_one")
+          || Name.starts_with("fcmp_une")) {
          return Builder.CreateCompNE(args[0], args[1]);
       }
-      if (Name.startswith("icmp_sgt") || Name.startswith("icmp_ugt")
-          || Name.startswith("fcmp_ogt") || Name.startswith("fcmp_ugt")) {
+      if (Name.starts_with("icmp_sgt") || Name.starts_with("icmp_ugt")
+          || Name.starts_with("fcmp_ogt") || Name.starts_with("fcmp_ugt")) {
          return Builder.CreateCompGT(args[0], args[1]);
       }
-      if (Name.startswith("icmp_sge") || Name.startswith("icmp_uge")
-          || Name.startswith("fcmp_oge") || Name.startswith("fcmp_uge")) {
+      if (Name.starts_with("icmp_sge") || Name.starts_with("icmp_uge")
+          || Name.starts_with("fcmp_oge") || Name.starts_with("fcmp_uge")) {
          return Builder.CreateCompGE(args[0], args[1]);
       }
-      if (Name.startswith("icmp_slt") || Name.startswith("icmp_ult")
-          || Name.startswith("fcmp_olt") || Name.startswith("fcmp_ult")) {
+      if (Name.starts_with("icmp_slt") || Name.starts_with("icmp_ult")
+          || Name.starts_with("fcmp_olt") || Name.starts_with("fcmp_ult")) {
          return Builder.CreateCompLT(args[0], args[1]);
       }
-      if (Name.startswith("icmp_sle") || Name.startswith("icmp_ule")
-          || Name.startswith("fcmp_ole") || Name.startswith("fcmp_ule")) {
+      if (Name.starts_with("icmp_sle") || Name.starts_with("icmp_ule")
+          || Name.starts_with("fcmp_ole") || Name.starts_with("fcmp_ule")) {
          return Builder.CreateCompLE(args[0], args[1]);
       }
 
-      if (Name.startswith("fneg")) {
+      if (Name.starts_with("fneg")) {
          return Builder.CreateMin(args[0]);
       }
 
       // Conversions.
-      if (Name.startswith("trunc")) {
+      if (Name.starts_with("trunc")) {
          return Builder.CreateTrunc(args[0], Fn->getReturnType());
       }
-      if (Name.startswith("fptrunc")) {
+      if (Name.starts_with("fptrunc")) {
          return Builder.CreateFPTrunc(args[0], Fn->getReturnType());
       }
 
-      if (Name.startswith("sext") || Name.startswith("zext")) {
+      if (Name.starts_with("sext") || Name.starts_with("zext")) {
          return Builder.CreateExt(args[0], Fn->getReturnType());
       }
-      if (Name.startswith("fpext")) {
+      if (Name.starts_with("fpext")) {
          return Builder.CreateFPExt(args[0], Fn->getReturnType());
       }
 
-      if (Name.startswith("signcast")) {
+      if (Name.starts_with("signcast")) {
          return Builder.CreateSignFlip(args[0], Fn->getReturnType());
       }
 
-      if (Name.startswith("fptoi")) {
+      if (Name.starts_with("fptoi")) {
          return Builder.CreateFPToInt(args[0], Fn->getReturnType());
       }
-      if (Name.startswith("itofp")) {
+      if (Name.starts_with("itofp")) {
          return Builder.CreateIntToFP(args[0], Fn->getReturnType());
       }
 
-      if (Name.startswith("ptrtoint")) {
+      if (Name.starts_with("ptrtoint")) {
          return Builder.CreatePtrToInt(args[0], Fn->getReturnType());
       }
-      if (Name.startswith("inttoptr")) {
+      if (Name.starts_with("inttoptr")) {
          return Builder.CreateIntToPtr(args[0], Fn->getReturnType());
       }
 
-      if (Name.startswith("bitcast")) {
+      if (Name.starts_with("bitcast")) {
          return Builder.CreateBitCast(CastKind::BitCast, args[0],
                                       Fn->getReturnType());
       }

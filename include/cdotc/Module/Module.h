@@ -3,6 +3,7 @@
 
 #include "cdotc/Basic/IdentifierInfo.h"
 #include "cdotc/Lex/SourceLocation.h"
+#include "cdotc/Support/Optional.h"
 #include "cdotc/Support/LLVM.h"
 
 #include <llvm/ADT/ArrayRef.h>
@@ -126,7 +127,7 @@ public:
 
 private:
    /// Information for a test module.
-   llvm::Optional<TestInfo> testInfo;
+   Optional<TestInfo> testInfo;
 
 public:
    /// Create a new module.
@@ -237,7 +238,7 @@ public:
    const TestInfo &getTestInfo() const { return *testInfo; }
 
    /// \return Whether or not this is a test module.
-   bool isTestModule() const { return testInfo.hasValue(); }
+   bool isTestModule() const { return testInfo.has_value(); }
 
    /// Update the test info.
    void setTestInfo(TestInfo &&Info) { testInfo = std::move(Info); }

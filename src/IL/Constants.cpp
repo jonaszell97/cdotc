@@ -29,7 +29,7 @@ ConstantInt* ConstantInt::get(ValueType ty, llvm::APSInt&& value)
    }
 
    auto Val = new ConstantInt(ty, std::move(value));
-   if (Val->getValue().isNullValue()) {
+   if (!Val->getValue()) {
       Val->ConstBits.AllZeros = true;
    }
 

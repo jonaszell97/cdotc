@@ -208,7 +208,7 @@ class CDotLexer(Lexer):
                     tok_type = self.ident_map[spelling]
                 elif type in self.token_map:
                     tok_type = self.token_map[type]
-                elif type.startswith("kw_"):
+                elif type.starts_with("kw_"):
                     tok_type = token.Keyword
                 else:
                     tok_type = None

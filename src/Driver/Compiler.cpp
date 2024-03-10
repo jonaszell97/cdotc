@@ -276,7 +276,7 @@ CompilerInstance::CompilerInstance(int argc, char** argv)
          fs::makeAbsolute(ScratchBuf);
 
          auto FileName = ScratchBuf.str();
-         if (ScratchBuf.endswith("dotm")) {
+         if (ScratchBuf.ends_with("dotm")) {
             if (FoundModule) {
                Sema->diagnose(err_only_one_module);
             }
@@ -635,7 +635,7 @@ public:
    /// Check if a line comment adds an expected diagnostic.
    void HandleLineComment(StringRef Comment, SourceRange SR) override
    {
-      if (!Comment.startswith("// expected-")) {
+      if (!Comment.starts_with("// expected-")) {
          return;
       }
 
@@ -649,25 +649,25 @@ public:
       ExpectedDiagnostic Diag;
       Diag.RawLoc = SR;
 
-      if (Comment.startswith("error")) {
+      if (Comment.starts_with("error")) {
          Diag.Severity = diag::SeverityLevel::Error;
          if (DROP(Comment, "error")) {
             return DiagnoseInvalidExpectedComment(SR);
          }
       }
-      else if (Comment.startswith("fatal")) {
+      else if (Comment.starts_with("fatal")) {
          Diag.Severity = diag::SeverityLevel::Fatal;
          if (DROP(Comment, "fatal")) {
             return DiagnoseInvalidExpectedComment(SR);
          }
       }
-      else if (Comment.startswith("warning")) {
+      else if (Comment.starts_with("warning")) {
          Diag.Severity = diag::SeverityLevel::Warning;
          if (DROP(Comment, "warning")) {
             return DiagnoseInvalidExpectedComment(SR);
          }
       }
-      else if (Comment.startswith("note")) {
+      else if (Comment.starts_with("note")) {
          Diag.Severity = diag::SeverityLevel::Note;
          if (DROP(Comment, "note")) {
             return DiagnoseInvalidExpectedComment(SR);
@@ -715,7 +715,7 @@ public:
              Diag.Loc.getColumn());
       }
 
-      if (!Comment.startswith(" {{") || DROP(Comment, " {{")) {
+      if (!Comment.starts_with(" {{") || DROP(Comment, " {{")) {
          return DiagnoseInvalidExpectedComment(SR);
       }
 

@@ -19,15 +19,40 @@ include_directories("${TBLGEN_INCLUDE_DIR}")
 message(STATUS "Found TblGen ${TBLGEN_MAIN_INCLUDE_DIR}")
 
 # find LLVM
-find_package(LLVM 12 REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG)
 
 # llvm libraries
-set(llvm_libs ${LLVM_AVAILABLE_LIBS})
-string(REPLACE ";LLVM;" ";" llvm_libs "${llvm_libs}")
-string(REPLACE ";LLVM-C" "" llvm_libs "${llvm_libs}")
+# set(llvm_libs LLVMX86AsmParser # MC, MCParser, Support, X86Desc, X86Info
+#         LLVMX86Desc # MC, Support, X86AsmPrinter, X86Info
+#         LLVMX86Info # MC, Support, Target
+#         LLVMipo
+#         LLVMScalarOpts
+#         LLVMInstCombine
+#         LLVMTransformUtils
+#         LLVMAnalysis
+#         LLVMTarget
+#         LLVMOption # Support
+#         LLVMMCParser # MC, Support
+#         LLVMMC # Object, Support
+#         LLVMObject # BitReader, Core, Support
+#         LLVMBitReader # Core, Support
+#         LLVMCore # Support
+#         LLVMSupport)
+
+execute_process(COMMAND llvm-config --libnames OUTPUT_VARIABLE llvm_libs)
+string(STRIP ${llvm_libs} llvm_libs)
+# string(REPLACE " " ";" llvm_components "${llvm_components}")
+
+# llvm_map_components_to_libnames(llvm_libs ${llvm_components})
+
+                # set(llvm_libs LLVM-12)
+# string(REPLACE ";LLVM;" ";" llvm_libs "${llvm_libs}")
+# string(REPLACE ";LLVM-C" "" llvm_libs "${llvm_libs}")
+# string(REPLACE " " "" llvm_libs "${llvm_libs}")
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Found LLVM libs ${llvm_libs}")
+message(STATUS "Found LLVM own the libs ${LLVM_LIBRARIES}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
 include_directories(include ${LLVM_INCLUDE_DIRS} ${LIBXML2_INCLUDE_DIR})
@@ -75,7 +100,7 @@ if(clang_libs)
 endif()
 
 # set CXX flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -Wall -pedantic")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -fno-rtti -Wno-unqualified-std-cast-call -Wno-deprecated-declarations")
 if(UNIX AND NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-compare")
 endif()
@@ -87,7 +112,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # set Linker flags
 if(UNIX AND NOT APPLE)
-    set(linker_flags "-fuse-ld=/usr/bin/ld.lld-12 -Wl,--start-group")
+    set(linker_flags "-Wl,--start-group")
 else()
     set(linker_flags "")
 endif()
@@ -117,36 +142,43 @@ add_library(cdotrt SHARED ${RUNTIME_SUPPORT_SOURCE_FILES})
 
 target_compile_options(cdotc
         PUBLIC "-fvisibility=hidden"
-        PUBLIC "-fno-rtti")
+        PUBLIC "-fno-rtti"
+        PUBLIC "-stdlib=libc++")
 target_compile_options(cdotc_asan
         PUBLIC "-fsanitize=address"
         PUBLIC "-fno-omit-frame-pointer"
         PUBLIC "-fvisibility=hidden"
-        PUBLIC "-fno-rtti")
+        PUBLIC "-fno-rtti"
+        PUBLIC "-stdlib=libc++")
 target_compile_options(cdotc_ubsan
         PUBLIC "-fsanitize=undefined"
         PUBLIC "-fno-omit-frame-pointer"
         PUBLIC "-fvisibility=hidden"
-        PUBLIC "-fno-rtti")
+        PUBLIC "-fno-rtti"
+        PUBLIC "-stdlib=libc++")
 target_compile_options(cdotc_coverage
         PUBLIC "-fprofile-instr-generate"
         PUBLIC "-fcoverage-mapping"
         PUBLIC "-fvisibility=hidden"
-        PUBLIC "-fno-rtti")
+        PUBLIC "-fno-rtti"
+        PUBLIC "-stdlib=libc++")
 
-target_link_libraries(cdotc ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES} -fvisibility=hidden -w ${linker_flags})
-target_link_libraries(cdotc-tblgens LLVMSupport -fvisibility=hidden)
+target_link_libraries(cdotc ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
+        -fvisibility=hidden -stdlib=libc++ -v -w ${linker_flags})
+target_link_libraries(cdotc-tblgens LLVMSupport LLVMCore -fvisibility=default)
 
 target_link_libraries(cdotc_asan
         ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
         -fsanitize=address
         -fno-omit-frame-pointer
-        -fvisibility=hidden)
+        -fvisibility=hidden
+        -stdlib=libc++)
 target_link_libraries(cdotc_ubsan
         ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
         -fsanitize=undefined
         -fno-omit-frame-pointer
-        -fvisibility=hidden)
+        -fvisibility=hidden
+        -stdlib=libc++)
 
 target_link_libraries(cdotc_coverage ${llvm_libs} ${clang_libs} ${LIBXML2_LIBRARIES}
-        "-fprofile-instr-generate" "-fcoverage-mapping" -fvisibility=hidden)
+        "-fprofile-instr-generate" "-fcoverage-mapping" -fvisibility=hidden -stdlib=libc++)

@@ -143,7 +143,7 @@ void Module::writeToFile(const char* FileName) const
 
    if (EC) {
       llvm::report_fatal_error(
-         "error opening output file '" + fileName + "': " + EC.message());
+         StringRef("error opening output file '" + fileName + "': " + EC.message()));
    }
 
    writeTo(OS);
