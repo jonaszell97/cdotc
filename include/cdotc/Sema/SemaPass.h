@@ -1625,7 +1625,7 @@ private:
    const IdentifierInfo* BuiltinIdents[64];
    bool BuiltinIdentsInitialized = false;
 
-   llvm::Optional<bool> canUseClassVal;
+   Optional<bool> canUseClassVal;
 
    void initBuiltinIdents();
    ExprResult HandleBuiltinCall(CallExpr* C);

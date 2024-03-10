@@ -79,7 +79,7 @@ public:
 namespace llvm {
 
 template<typename T> struct PointerLikeTypeTraits;
-template<class T> struct DenseMapInfo;
+template<class T, typename Enable> struct DenseMapInfo;
 
 template<> struct PointerLikeTypeTraits<::cdot::il::MemoryLocation> {
 public:
@@ -96,7 +96,7 @@ public:
    enum { NumLowBitsAvailable = 0 };
 };
 
-template<> struct DenseMapInfo<::cdot::il::MemoryLocation> {
+template<> struct DenseMapInfo<::cdot::il::MemoryLocation, void> {
    static ::cdot::il::MemoryLocation getEmptyKey()
    {
       return ::cdot::il::MemoryLocation::getFromOpaquePtr(

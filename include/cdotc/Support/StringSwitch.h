@@ -1,6 +1,8 @@
 #ifndef CDOT_STRINGSWITCH_H
 #define CDOT_STRINGSWITCH_H
 
+#include "cdotc/Support/Optional.h"
+
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Compiler.h>
 
@@ -35,7 +37,7 @@ template<typename T, typename R = T> class StringSwitch {
 
    /// The pointer to the result of this switch statement, once known,
    /// null before that.
-   llvm::Optional<T> Result;
+   Optional<T> Result;
 
 public:
    LLVM_ATTRIBUTE_ALWAYS_INLINE
@@ -68,7 +70,7 @@ public:
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    StringSwitch& EndsWith(llvm::StringLiteral S, T Value)
    {
-      if (!Result && Str.endswith(S)) {
+      if (!Result && Str.ends_with(S)) {
          Result = std::move(Value);
       }
       return *this;
@@ -77,7 +79,7 @@ public:
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    StringSwitch& StartsWith(llvm::StringLiteral S, T Value)
    {
-      if (!Result && Str.startswith(S)) {
+      if (!Result && Str.starts_with(S)) {
          Result = std::move(Value);
       }
       return *this;
@@ -161,7 +163,7 @@ public:
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    StringSwitch& CaseLower(llvm::StringLiteral S, T Value)
    {
-      if (!Result && Str.equals_lower(S))
+      if (!Result && Str.equals_insensitive(S))
          Result = std::move(Value);
 
       return *this;
@@ -170,7 +172,7 @@ public:
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    StringSwitch& EndsWithLower(llvm::StringLiteral S, T Value)
    {
-      if (!Result && Str.endswith_lower(S))
+      if (!Result && Str.ends_with_insensitive(S))
          Result = Value;
 
       return *this;
@@ -179,7 +181,7 @@ public:
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    StringSwitch& StartsWithLower(llvm::StringLiteral S, T Value)
    {
-      if (!Result && Str.startswith_lower(S))
+      if (!Result && Str.starts_with_insensitive(S))
          Result = std::move(Value);
 
       return *this;
@@ -215,7 +217,7 @@ public:
       return CaseLower(S0, Value).CasesLower(S1, S2, S3, S4, Value);
    }
 
-   LLVM_NODISCARD
+   [[nodiscard]]
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    R Default(T Value)
    {
@@ -224,7 +226,7 @@ public:
       return Value;
    }
 
-   LLVM_NODISCARD
+   [[nodiscard]]
    LLVM_ATTRIBUTE_ALWAYS_INLINE
    operator R()
    {

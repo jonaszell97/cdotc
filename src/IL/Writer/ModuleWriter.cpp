@@ -378,15 +378,10 @@ void ModuleWriterImpl::WriteConstant(const il::Constant* C)
          out << (Int->getBoolValue() ? "true" : "false");
       }
       else {
-         if (Int->getValue().isAllOnesValue()) {
-            out << "-1";
-         }
-         else {
-            llvm::SmallString<64> str;
-            Int->getValue().toString(str, 10);
+         llvm::SmallString<64> str;
+         Int->getValue().toString(str, 10);
 
-            out << str.str();
-         }
+         out << str.str();
       }
 
       break;

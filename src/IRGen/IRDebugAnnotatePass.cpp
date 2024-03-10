@@ -46,7 +46,7 @@ public:
       OS = std::make_unique<llvm::raw_fd_ostream>(OutFile, EC);
 
       if (EC) {
-         llvm::report_fatal_error(EC.message());
+         llvm::report_fatal_error(llvm::StringRef(EC.message()));
       }
    }
 
@@ -101,8 +101,8 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module& M)
    ++CurLine;
 
    // Start annotating globals, one on each line.
-   for (auto& G : M.getGlobalList()) {
-      (void)G;
+   for (auto Global = M.global_begin(); Global != M.global_end(); ++Global) {
+      (void)Global;
       ++CurLine;
    }
 
@@ -121,7 +121,7 @@ bool IRDebugAnnotatePass::runOnModule(llvm::Module& M)
          ++CurLine;
 
       const llvm::AttributeList& Attrs = F.getAttributes();
-      if (Attrs.hasAttributes(llvm::AttributeList::FunctionIndex)) {
+      if (Attrs.hasFnAttrs()) {
          llvm::AttributeSet AS = Attrs.getFnAttributes();
          std::string AttrStr;
 
@@ -235,7 +235,7 @@ void IRDebugAnnotatePass::annotateInstruction(llvm::Instruction& I,
 
       auto DIVar = DI->createAutoVariable(
           FnDI, Name, DebugScope, I.getDebugLoc()->getLine(),
-          getTypeDI(I.getType()->getPointerElementType()));
+          getTypeDI(I.getType()->getNonOpaquePointerElementType()));
 
       assert(I.getNextNode() && "terminator with non-void type?");
       DI->insertDeclare(&I, DIVar, DI->createExpression(), I.getDebugLoc(),
@@ -305,7 +305,7 @@ llvm::DIType* IRDebugAnnotatePass::getTypeDIImpl(llvm::Type* T)
                                  llvm::dwarf::DW_ATE_unsigned);
    case llvm::Type::PointerTyID:
       return DI->createPointerType(
-          getTypeDI(T->getPointerElementType()),
+          getTypeDI(T->getNonOpaquePointerElementType()),
           DL->getPointerTypeSizeInBits(T),
           DL->getPointerPrefAlignment(T->getPointerAddressSpace()).value());
    case llvm::Type::VoidTyID:

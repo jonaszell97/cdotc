@@ -361,7 +361,7 @@ static void ParseTasks(Test *T, StringRef File,
          return;
       }
 
-      if (TaskStr.startswith("RUN")) {
+      if (TaskStr.starts_with("RUN")) {
          Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
          TaskStr = TaskStr.drop_front(3);
 
@@ -373,13 +373,13 @@ static void ParseTasks(Test *T, StringRef File,
          for (auto &Arg : Args)
             Task->Args.emplace_back(Arg);
       }
-      else if (TaskStr.startswith("VERIFY-IL")) {
+      else if (TaskStr.starts_with("VERIFY-IL")) {
          Tasks.emplace_back(std::make_unique<Task>(T, Task::VERIFY_IL));
       }
-      else if (TaskStr.startswith("VERIFY")) {
+      else if (TaskStr.starts_with("VERIFY")) {
          Tasks.emplace_back(std::make_unique<Task>(T, Task::VERIFY));
       }
-      else if (TaskStr.startswith("CHECK-EXIT")) {
+      else if (TaskStr.starts_with("CHECK-EXIT")) {
          if (Tasks.empty() || Tasks.back()->Kind != Task::RUN) {
             Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
          }
@@ -387,7 +387,7 @@ static void ParseTasks(Test *T, StringRef File,
          TaskStr = TaskStr.drop_front(11);
          Tasks.back()->ExitCode = std::stoi(TaskStr.str());
       }
-      else if (TaskStr.startswith("CHECK-NEXT")) {
+      else if (TaskStr.starts_with("CHECK-NEXT")) {
          if (Tasks.empty() || Tasks.back()->OutputChecks.empty()) {
             continue;
          }
@@ -396,7 +396,7 @@ static void ParseTasks(Test *T, StringRef File,
          Tasks.back()->OutputChecks.back() += "\n";
          Tasks.back()->OutputChecks.back() += TaskStr;
       }
-      else if (TaskStr.startswith("CHECK")) {
+      else if (TaskStr.starts_with("CHECK")) {
          if (Tasks.empty() || Tasks.back()->Kind != Task::RUN) {
             Tasks.emplace_back(std::make_unique<Task>(T, Task::RUN));
          }
@@ -404,7 +404,7 @@ static void ParseTasks(Test *T, StringRef File,
          TaskStr = TaskStr.drop_front(6);
          Tasks.back()->OutputChecks.push_back(TaskStr.str());
       }
-      else if (TaskStr.startswith("SKIP")) {
+      else if (TaskStr.starts_with("SKIP")) {
          Tasks.clear();
          return;
       }
@@ -603,10 +603,10 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
 
            auto &RunRedirect = Task.Redirects[::Task::EXEC];
            RunRedirect = fs::getTmpFileName("txt");
-           llvm::Optional<StringRef> RunRedirects[] = {
-               llvm::Optional<StringRef>(""),
-               llvm::Optional<StringRef>(RunRedirect),
-               llvm::Optional<StringRef>(RunRedirect),
+           Optional<StringRef> RunRedirects[] = {
+               Optional<StringRef>(""),
+               Optional<StringRef>(RunRedirect),
+               Optional<StringRef>(RunRedirect),
            };
 
            Executor.Execute(Task.Executable, Args, RunRedirects,
@@ -619,10 +619,10 @@ static void RunTestsForModule(QueryContext &QC, Module *M,
          StdoutRedirect = fs::getTmpFileName("txt");
          StderrRedirect = fs::getTmpFileName("txt");
 
-         llvm::Optional<StringRef> Redirects[] = {
-             llvm::Optional<StringRef>(""),
-             llvm::Optional<StringRef>(StdoutRedirect),
-             llvm::Optional<StringRef>(StderrRedirect),
+         Optional<StringRef> Redirects[] = {
+             Optional<StringRef>(""),
+             Optional<StringRef>(StdoutRedirect),
+             Optional<StringRef>(StderrRedirect),
          };
 
          Executor.Execute(cdotc, Task.CompileArgs, Redirects, move(callback));

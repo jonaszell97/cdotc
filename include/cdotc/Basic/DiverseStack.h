@@ -8,6 +8,7 @@
 
 #include <llvm/Support/PointerLikeTypeTraits.h>
 
+#include <utility>
 #include <cassert>
 #include <cstring>
 

@@ -430,7 +430,7 @@ std::string getApplicationDir()
    SmallString<64> Out;
    llvm::sys::fs::expand_tilde(Path, Out);
 
-   return Out.str();
+   return Out.str().str();
 #else
 #  error "unsupported platform"
 #endif
@@ -497,7 +497,7 @@ std::string getTmpFileName(StringRef Ext)
    llvm::SmallString<128> TmpFile;
    auto EC = getPotentiallyUniqueTempFileName("cdot-tmp", Ext, TmpFile);
    if (EC) {
-      llvm::report_fatal_error("could not open temporary file: " + EC.message());
+      llvm::report_fatal_error(StringRef("could not open temporary file: " + EC.message()));
    }
 
    return TmpFile.str().str();

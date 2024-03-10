@@ -2068,7 +2068,7 @@ bool MacroExpander::checkBuiltinMacro(StringRef MacroName,
       auto FileName = Tokens.front().getText();
       std::string realFile;
 
-      if (!FileName.startswith(StringRef(&fs::PathSeperator, 1))) {
+      if (!FileName.starts_with(StringRef(&fs::PathSeperator, 1))) {
          auto includeDirs
              = SP.getCompilerInstance().getOptions().getIncludeDirs().vec();
 

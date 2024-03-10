@@ -10,6 +10,7 @@
 #include "cdotc/Support/Timer.h"
 
 #include <clang/Basic/TargetInfo.h>
+#include <clang/Basic/LangOptions.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdefaulted-function-deleted"
@@ -319,8 +320,10 @@ void ImporterImpl::Initialize()
    this->ClangDiags = ClangDiags.get();
 
    // Create a new Clang compiler invocation.
-   auto Invocation = clang::createInvocationFromCommandLine(
-      ArgCStrings, ClangDiags, nullptr);
+   clang::CreateInvocationOptions Opts;
+   Opts.Diags = ClangDiags;
+
+   auto Invocation = clang::createInvocation(ArgCStrings, Opts);
 
    // We passed ownership of the diagnostics.
    ClangDiags.resetWithoutRelease();
@@ -351,11 +354,10 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
       ppOpts.addRemappedFile(DummyFileName, buf.release());
    }
 
-   clang::InputKind InputKind(IsCXX ? clang::Language::CXX : clang::Language::C);
    clang::LangOptions Opts;
    std::vector<std::string> includes;
-   clang::CompilerInvocation::setLangDefaults(
-       Opts, InputKind, CI.getContext().getTargetInfo().getTriple(),
+   clang::LangOptions::setLangDefaults(
+       Opts, IsCXX ? clang::Language::CXX : clang::Language::C, CI.getContext().getTargetInfo().getTriple(),
        includes);
 
    auto PCHContainerOperations
@@ -385,7 +387,7 @@ bool ImporterImpl::importModule(StringRef File, DeclContext* IntoMod,
       return true;
 
    // Inform the target of the language options.
-   Instance.getTarget().adjust(Instance.getLangOpts());
+   Instance.getTarget().adjust(*ClangDiags, Instance.getLangOpts());
 
    bool canBegin = action->BeginSourceFile(Instance, InputFile);
    if (!canBegin) {

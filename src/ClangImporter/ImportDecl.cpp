@@ -113,12 +113,12 @@ static FunctionDecl* importFunctionDecl(ImporterImpl& I,
       }
 
       IdentifierInfo* Label = nullptr;
-      if (Name && !Name.getIdentifierInfo()->getIdentifier().startswith("_")) {
+      if (Name && !Name.getIdentifierInfo()->getIdentifier().starts_with("_")) {
          Label = Name.getIdentifierInfo();
       }
 
       Expression *DefaultVal = nullptr;
-      if (auto NK = Param->getType()->getNullability(ClangFn->getASTContext())) {
+      if (auto NK = Param->getType()->getNullability()) {
          if (NK == clang::NullabilityKind::Nullable) {
             DefaultVal = BuiltinIdentExpr::Create(
                 Ctx, Loc, BuiltinIdentifier::defaultValue);
@@ -706,7 +706,7 @@ AliasDecl* ImporterImpl::importTypedef(clang::TypedefNameDecl* ClangTD)
          ClangTD->getUnderlyingType().print(OS, clang::PrintingPolicy(Instance->getLangOpts()));
       }
 
-      if (!ClangTD->getName().startswith("__")) {
+      if (!ClangTD->getName().starts_with("__")) {
          CI.getSema().diagnose(
             diag::warn_generic_warn, "type '" + s + "' cannot be imported",
             getSourceLoc(
@@ -775,11 +775,11 @@ Decl* ImporterImpl::importDecl(clang::Decl* D)
    case clang::Decl::Record: {
       auto* R = cast<clang::RecordDecl>(D);
       switch (R->getTagKind()) {
-      case clang::TTK_Struct:
+      case clang::TagTypeKind::Struct:
          return importStruct(R);
-      case clang::TTK_Enum:
+      case clang::TagTypeKind::Enum:
          return importEnum(cast<clang::EnumDecl>(R));
-      case clang::TTK_Union:
+      case clang::TagTypeKind::Union:
          return importUnion(R);
       default:
          break;

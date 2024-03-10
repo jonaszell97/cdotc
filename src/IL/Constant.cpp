@@ -137,15 +137,10 @@ llvm::raw_ostream& operator<<(llvm::raw_ostream& OS, il::Constant& C)
          OS << (Int.getBoolValue() ? "true" : "false");
       }
       else {
-         if (Int.getValue().isAllOnesValue()) {
-            OS << "-1";
-         }
-         else {
             llvm::SmallString<64> str;
             Int.getValue().toString(str, 10);
 
             OS << str.str();
-         }
 
          if (Int.getType() != Int.getASTCtx().getIntTy()) {
             if (Int.isUnsigned()) {

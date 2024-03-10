@@ -72,10 +72,9 @@ class CleanupBuffer {
    llvm::SmallVector<char, sizeof(Cleanup) + 10 * sizeof(void*)> data;
 
 public:
-   CleanupBuffer(const Cleanup& cleanup)
+   CleanupBuffer(const Cleanup& cleanup) : data(cleanup.allocated_size())
    {
       size_t size = cleanup.allocated_size();
-      data.set_size(size);
       memcpy(data.data(), reinterpret_cast<const void*>(&cleanup), size);
    }
 

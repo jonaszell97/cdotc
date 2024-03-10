@@ -16,16 +16,16 @@ static cl::opt<std::string> DebugLog(
     cl::desc("see Log.h for possible values(for debugging purposes only)"),
     cl::value_desc("logs"), cl::init("0"), cl::Hidden);
 
-static llvm::Optional<uint64_t> resolvedLogs;
+static Optional<uint64_t> resolvedLogs;
 
 uint64_t ActiveLogs()
 {
-   if (resolvedLogs.hasValue()) {
-      return resolvedLogs.getValue();
+   if (resolvedLogs.has_value()) {
+      return resolvedLogs.get_value();
    }
 
    llvm::SmallVector<llvm::StringRef, 4> splitValues;
-   llvm::StringRef(DebugLog.getValue()).split(splitValues, '|');
+   llvm::StringRef(DebugLog.get_value()).split(splitValues, '|');
 
    uint64_t val = 0;
    for (llvm::StringRef substr : splitValues) {

@@ -353,8 +353,10 @@ bool DumperImpl::visitParenExpr(ParenExpr* expr) { return true; }
 
 bool DumperImpl::visitIntegerLiteral(IntegerLiteral* expr)
 {
-   out << "[" << expr->getValue().toString(10, !expr->getType()->isUnsigned())
-       << "]";
+   llvm::SmallString<128> str;
+   expr->getValue().toString(str, 10, !expr->getType()->isUnsigned());
+
+   out << "[" << str << "]";
 
    return true;
 }

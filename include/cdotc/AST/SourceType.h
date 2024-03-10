@@ -97,7 +97,7 @@ private:
 namespace llvm {
 
 template<class T> struct simplify_type;
-template<class T> struct DenseMapInfo;
+template<class T, typename Enable> struct DenseMapInfo;
 
 // teach isa etc. to treat QualType like a type
 template<> struct simplify_type<::cdot::ast::SourceType> {
@@ -125,7 +125,7 @@ public:
    enum { NumLowBitsAvailable = 0 };
 };
 
-template<> struct DenseMapInfo<::cdot::ast::SourceType> {
+template<> struct DenseMapInfo<::cdot::ast::SourceType, void> {
    static ::cdot::ast::SourceType getEmptyKey()
    {
       uintptr_t Val = static_cast<uintptr_t>(-1);

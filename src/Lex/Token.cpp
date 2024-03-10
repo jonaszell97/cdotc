@@ -283,7 +283,7 @@ bool Token::isIdentifierStartingWith(llvm::StringRef str) const
    if (!isIdentifier())
       return false;
 
-   return getIdentifierInfo()->getIdentifier().startswith(str);
+   return getIdentifierInfo()->getIdentifier().starts_with(str);
 }
 
 bool Token::isIdentifierEndingWith(llvm::StringRef str) const
@@ -291,7 +291,7 @@ bool Token::isIdentifierEndingWith(llvm::StringRef str) const
    if (!isIdentifier())
       return false;
 
-   return getIdentifierInfo()->getIdentifier().endswith(str);
+   return getIdentifierInfo()->getIdentifier().ends_with(str);
 }
 
 bool Token::isWhitespace() const

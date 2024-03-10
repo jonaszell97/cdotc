@@ -9,7 +9,7 @@
 #include "cdotc/Support/Casting.h"
 #include "cdotc/Support/Log.h"
 
-#include <llvm/Support/Host.h>
+#include <llvm/TargetParser/Host.h>
 
 using namespace cdot::support;
 

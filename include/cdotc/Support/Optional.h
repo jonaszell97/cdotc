@@ -1,12 +1,12 @@
 #ifndef CDOT_OPTIONAL_H
 #define CDOT_OPTIONAL_H
 
-#include <llvm/ADT/Optional.h>
+#include <optional>
 
 namespace cdot {
 
-template<class T> using Optional = llvm::Optional<T>;
-const llvm::NoneType None = llvm::None;
+template<class T> using Optional = std::optional<T>;
+const std::nullopt_t None = std::nullopt;
 
 namespace detail {
 

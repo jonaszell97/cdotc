@@ -1080,7 +1080,7 @@ static bool applyConversions(SemaPass& SP, CandidateSet& CandSet,
 
             // Special case - builtin || and && operators
             if (auto *BA = Cand.getFunc()->getAttribute<_BuiltinAttr>()) {
-               isBuiltinShortCircuitingOp = BA->getBuiltinName().startswith("Bool.infix");
+               isBuiltinShortCircuitingOp = BA->getBuiltinName().starts_with("Bool.infix");
             }
 
             if (!isBuiltinShortCircuitingOp) {

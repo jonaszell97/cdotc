@@ -392,7 +392,7 @@ Module* Parser::parseModuleFile(Module* ParentMod, bool IsMainModule)
          case Kind::regular_file:
          case Kind::symlink_file:
          case Kind::character_file:
-            if (!path.endswith(".dot")) {
+            if (!path.ends_with(".dot")) {
                break;
             }
 
