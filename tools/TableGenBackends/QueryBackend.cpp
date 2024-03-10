@@ -4,6 +4,7 @@
 #include "tblgen/Type.h"
 #include "tblgen/Value.h"
 
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/Twine.h>
@@ -274,7 +275,7 @@ void QueryClassEmitter::Setup()
 
       llvm::StringRef TypeName(Info.Type.data(), Info.Type.size());
       Info.NeedsStableCaching =
-          TypeName.startswith("std::vector") || TypeName.startswith("llvm::SmallVector");
+          TypeName.starts_with("std::vector") || TypeName.starts_with("llvm::SmallVector");
 
       auto* TrailingObjects
           = cast<ListLiteral>(Query->getFieldValue("trailingObjects"));
@@ -481,7 +482,7 @@ void QueryClassEmitter::EmitDecl(Record* Query)
    OS << Info.Fields;
    if (Info.Type != "void") {
       // Result field value.
-      OS << "   llvm::Optional<" << Info.Type << "> Result;\n";
+      OS << "   Optional<" << Info.Type << "> Result;\n";
    }
 
    if (Info.CanBeCached && !Info.ParamStr.empty()) {
@@ -525,7 +526,7 @@ QueryClassEmitter::ParamKind QueryClassEmitter::getParamKind(StringRef Str)
 
 bool QueryClassEmitter::shouldBeMoved(StringRef TypeName)
 {
-   if (TypeName.startswith("std::unique_ptr")) {
+   if (TypeName.starts_with("std::unique_ptr")) {
       return true;
    }
 
@@ -565,7 +566,7 @@ void QueryClassEmitter::appendParam(ParamKind K, std::ostream& OS,
       else if (TypeName.back() == '&') {
          OS << "ID.AddPointer(&" << VarName << ");";
       }
-      else if (TypeName.endswith("Kind")) {
+      else if (TypeName.ends_with("Kind")) {
          OS << "ID.AddInteger((uint64_t)" << VarName << ");";
       }
       else if (TypeName == "SourceLocation") {
@@ -656,7 +657,7 @@ void QueryClassEmitter::appendString(ParamKind K, std::ostream& OS,
          OS << "OS << QC.CI.getFileMgr().getSourceLocationAsString(" << VarName
             << ");";
       }
-      else if (TypeName.endswith("Kind")) {
+      else if (TypeName.ends_with("Kind")) {
          OS << "OS << (uint64_t)" << VarName << ";";
       }
       else {
@@ -962,7 +963,7 @@ void QueryClassEmitter::EmitQueryContextFields()
                OS << "bool Ran" << Q->getName() << "Query = false;\n";
             }
             else {
-               OS << "llvm::Optional<" << Info.Type << "> " << Q->getName()
+               OS << "Optional<" << Info.Type << "> " << Q->getName()
                   << "Result = nullptr;\n";
             }
          }
