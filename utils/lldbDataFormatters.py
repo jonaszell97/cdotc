@@ -20,7 +20,7 @@ def __lldb_init_module(debugger, internal_dict):
                            '-x "^llvm::ArrayRef<.+>$"')
     debugger.HandleCommand('type summary add -w llvm '
                            '-F lldbDataFormatters.OptionalSummaryProvider '
-                           '-x "^llvm::Optional<.+>$"')
+                           '-x "^Optional<.+>$"')
     debugger.HandleCommand('type summary add -w llvm '
                            '-F lldbDataFormatters.SmallStringSummaryProvider '
                            '-x "^llvm::SmallString<.+>$"')
