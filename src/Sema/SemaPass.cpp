@@ -2772,7 +2772,7 @@ static ExprResult tryGraphemeCluster(SemaPass& Sema, CharLiteral* Expr,
 
 static ExprResult tryASCII(SemaPass& Sema, CharLiteral* Expr, QualType Ty)
 {
-   if (!::isascii(Expr->getWide())) {
+   if (!isascii(Expr->getWide())) {
       return ExprError();
    }
 

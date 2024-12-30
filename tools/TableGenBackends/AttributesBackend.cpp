@@ -1534,4 +1534,5 @@ void EmitAttributeSerialize(std::ostream& out, RecordKeeper& RK)
 
    out << s;
 }
+
 };
