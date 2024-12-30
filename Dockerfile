@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -qq -y gcc-9 g++-9 && apt-get clean
 # install libxml2
 RUN apt-get update && apt-get install -y libxml2 libxml2-dev libxml2++ libxml2++-dev && apt-get clean
 
-ARG LLVM_VERSION="-18"
-ARG LLVM_VERSION_NUM="18"
+ARG LLVM_VERSION="-12"
+ARG LLVM_VERSION_NUM="12"
 
 # add llvm repository
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
@@ -76,7 +76,7 @@ WORKDIR /cdotc/utils
 # # build CMake target
 # WORKDIR /cdotc/.build
 # RUN cmake .. -DCMAKE_BUILD_TYPE=REe
-RUN mkdir guuux
+RUN mkdir guuuxm
 
 # clean
 RUN ./build_script --clean

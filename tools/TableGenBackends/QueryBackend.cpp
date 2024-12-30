@@ -275,7 +275,7 @@ void QueryClassEmitter::Setup()
 
       llvm::StringRef TypeName(Info.Type.data(), Info.Type.size());
       Info.NeedsStableCaching =
-          TypeName.starts_with("std::vector") || TypeName.starts_with("llvm::SmallVector");
+          TypeName.startswith("std::vector") || TypeName.startswith("llvm::SmallVector");
 
       auto* TrailingObjects
           = cast<ListLiteral>(Query->getFieldValue("trailingObjects"));
@@ -482,7 +482,7 @@ void QueryClassEmitter::EmitDecl(Record* Query)
    OS << Info.Fields;
    if (Info.Type != "void") {
       // Result field value.
-      OS << "   Optional<" << Info.Type << "> Result;\n";
+      OS << "   llvm::Optional<" << Info.Type << "> Result;\n";
    }
 
    if (Info.CanBeCached && !Info.ParamStr.empty()) {
@@ -526,7 +526,7 @@ QueryClassEmitter::ParamKind QueryClassEmitter::getParamKind(StringRef Str)
 
 bool QueryClassEmitter::shouldBeMoved(StringRef TypeName)
 {
-   if (TypeName.starts_with("std::unique_ptr")) {
+   if (TypeName.startswith("std::unique_ptr")) {
       return true;
    }
 
@@ -566,7 +566,7 @@ void QueryClassEmitter::appendParam(ParamKind K, std::ostream& OS,
       else if (TypeName.back() == '&') {
          OS << "ID.AddPointer(&" << VarName << ");";
       }
-      else if (TypeName.ends_with("Kind")) {
+      else if (TypeName.endswith("Kind")) {
          OS << "ID.AddInteger((uint64_t)" << VarName << ");";
       }
       else if (TypeName == "SourceLocation") {
@@ -657,7 +657,7 @@ void QueryClassEmitter::appendString(ParamKind K, std::ostream& OS,
          OS << "OS << QC.CI.getFileMgr().getSourceLocationAsString(" << VarName
             << ");";
       }
-      else if (TypeName.ends_with("Kind")) {
+      else if (TypeName.endswith("Kind")) {
          OS << "OS << (uint64_t)" << VarName << ";";
       }
       else {
@@ -963,7 +963,7 @@ void QueryClassEmitter::EmitQueryContextFields()
                OS << "bool Ran" << Q->getName() << "Query = false;\n";
             }
             else {
-               OS << "Optional<" << Info.Type << "> " << Q->getName()
+               OS << "llvm::Optional<" << Info.Type << "> " << Q->getName()
                   << "Result = nullptr;\n";
             }
          }

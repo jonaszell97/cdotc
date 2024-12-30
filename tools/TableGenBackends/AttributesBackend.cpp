@@ -454,7 +454,7 @@ void AttrClassEmitter::emitAttrDecl(Record* Attr, Class* Base)
       std::string init = Name;
       init += "(";
 
-      if (ArgTypeName.ends_with("&&")) {
+      if (ArgTypeName.endswith("&&")) {
          init += "std::move(";
          init += Name;
          init += ")";
@@ -685,7 +685,7 @@ void AttrClassEmitter::emitCloneImpl(Record* Attr, Class*)
       auto ArgType = getCXXArgType(ArgVal);
 
       // check if we need to make a copy
-      if (ArgType.ends_with("&&")) {
+      if (ArgType.endswith("&&")) {
          ArgType = ArgType.drop_back(2);
          out << ArgType << "(" << Name << ")";
       }
